@@ -17,11 +17,15 @@ const config = {
   serversDir: resolve(process.env.SERVERSENTINEL_SERVERS_DIR ?? "/data/servers"),
   serversDockerVolume: process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME ?? "",
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
-  modrinthApiKey: process.env.MODRINTH_API_KEY ?? "",
   port: Number(process.env.PORT ?? "8080")
 };
 
 const serversFile = join(config.configDir, "servers.json");
+const settingsFile = join(config.configDir, "settings.json");
+
+type AppSettings = {
+  modrinthApiKey?: string;
+};
 
 type AttachedServer = {
   id: string;
@@ -92,6 +96,28 @@ async function writeServers(servers: AttachedServer[]) {
   await writeFile(serversFile, `${JSON.stringify(servers, null, 2)}\n`, "utf8");
 }
 
+async function readSettings() {
+  await mkdir(config.configDir, { recursive: true });
+  if (!existsSync(settingsFile)) {
+    const initial: AppSettings = {
+      modrinthApiKey: process.env.MODRINTH_API_KEY || undefined
+    };
+    await writeFile(settingsFile, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
+    return initial;
+  }
+  return JSON.parse(await readFile(settingsFile, "utf8")) as AppSettings;
+}
+
+async function writeSettings(settings: AppSettings) {
+  await mkdir(config.configDir, { recursive: true });
+  await writeFile(settingsFile, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+}
+
+async function modrinthApiKey() {
+  const settings = await readSettings();
+  return settings.modrinthApiKey || process.env.MODRINTH_API_KEY || "";
+}
+
 function slugify(input: string) {
   const slug = input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || randomUUID();
@@ -133,6 +159,20 @@ function dockerAvailable() {
   return existsSync(config.dockerSocket);
 }
 
+function dockerErrorMessage(body: string, statusCode?: number) {
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { message?: string };
+      if (parsed.message) {
+        return parsed.message;
+      }
+    } catch {
+      return body;
+    }
+  }
+  return `Docker API returned ${statusCode ?? "an error"}`;
+}
+
 async function dockerRequest<T>(
   method: "GET" | "POST",
   path: string,
@@ -156,7 +196,7 @@ async function dockerRequest<T>(
         response.on("end", () => {
           const body = Buffer.concat(chunks).toString("utf8");
           if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(body || `Docker API returned ${response.statusCode}`));
+            rejectRequest(new Error(dockerErrorMessage(body, response.statusCode)));
             return;
           }
           resolveRequest(body ? (JSON.parse(body) as T) : ({} as T));
@@ -187,7 +227,7 @@ async function dockerBufferRequest(method: "GET" | "POST", path: string, expecte
         response.on("end", () => {
           const body = Buffer.concat(chunks);
           if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(body.toString("utf8") || `Docker API returned ${response.statusCode}`));
+            rejectRequest(new Error(dockerErrorMessage(body.toString("utf8"), response.statusCode)));
             return;
           }
           resolveRequest(body);
@@ -228,7 +268,7 @@ async function dockerJsonRequest<T>(
         response.on("end", () => {
           const responseBody = Buffer.concat(chunks).toString("utf8");
           if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(responseBody || `Docker API returned ${response.statusCode}`));
+            rejectRequest(new Error(dockerErrorMessage(responseBody, response.statusCode)));
             return;
           }
           resolveRequest(responseBody ? (JSON.parse(responseBody) as T) : ({} as T));
@@ -250,6 +290,23 @@ function dockerContainerName(server: AttachedServer) {
 
 function dockerControlConfigured(server: AttachedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
+}
+
+function serverDockerMountSource(server: AttachedServer) {
+  if (server.dockerMountSource && server.dockerMountSource !== server.serverDir) {
+    return server.dockerMountSource;
+  }
+  return config.serversDockerVolume || server.dockerMountSource || server.serverDir;
+}
+
+function serverDockerWorkingDir(server: AttachedServer) {
+  if (server.dockerWorkingDir) {
+    return server.dockerWorkingDir;
+  }
+  if (config.serversDockerVolume && server.storageName) {
+    return `/data/servers/${server.storageName}`;
+  }
+  return "/data/server";
 }
 
 function splitImage(image: string) {
@@ -312,7 +369,7 @@ async function ensureDockerContainer(server: AttachedServer) {
   if (existing) {
     return;
   }
-  if (!server.dockerMountSource || !server.serverJar) {
+  if (!serverDockerMountSource(server) || !server.serverJar) {
     throw new Error("Docker managed control requires Docker mount source and server jar filename");
   }
 
@@ -321,8 +378,9 @@ async function ensureDockerContainer(server: AttachedServer) {
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
   const javaArgs = server.javaArgs || "-Xms2G -Xmx4G";
   const command = `java ${javaArgs} -jar ${server.serverJar} nogui`;
-  const workingDir = server.dockerWorkingDir || "/data/server";
-  const bindTarget = server.dockerWorkingDir ? "/data/servers" : "/data/server";
+  const workingDir = serverDockerWorkingDir(server);
+  const usesSharedServersVolume = workingDir.startsWith("/data/servers/");
+  const bindTarget = usesSharedServersVolume ? "/data/servers" : "/data/server";
 
   await dockerJsonRequest(
     "POST",
@@ -339,7 +397,7 @@ async function ensureDockerContainer(server: AttachedServer) {
       Tty: false,
       ExposedPorts: exposedPorts,
       HostConfig: {
-        Binds: [`${server.dockerMountSource}:${bindTarget}`],
+        Binds: [`${serverDockerMountSource(server)}:${bindTarget}`],
         PortBindings: portBindings
       },
       Labels: {
@@ -450,6 +508,7 @@ function streamLatestServerLog(server: AttachedServer, client: Client) {
   const logPath = ensureInsideServer(server, "logs/latest.log");
   let offset = 0;
   let closed = false;
+  let announcedEmpty = false;
 
   const send = (text: string) => {
     if (text && client.readyState === 1) {
@@ -475,12 +534,13 @@ function streamLatestServerLog(server: AttachedServer, client: Client) {
         const chunk = await readFileRange(logPath, start, logStat.size - 1);
         offset = logStat.size;
         send(chunk.toString("utf8"));
-      } else if (offset === 0) {
+      } else if (offset === 0 && !announcedEmpty) {
         offset = logStat.size;
+        announcedEmpty = true;
         client.send(JSON.stringify({
-          type: "log",
+          type: "empty",
           source: "latest.log",
-          text: "Watching logs/latest.log. The file is currently empty.",
+          text: "logs/latest.log is empty.",
           at: new Date().toISOString()
         }));
       }
@@ -549,13 +609,14 @@ function streamDockerLogs(server: AttachedServer, client: Client) {
 }
 
 async function modrinthFetch(url: string) {
-  if (!config.modrinthApiKey) {
+  const apiKey = await modrinthApiKey();
+  if (!apiKey) {
     throw new Error("MODRINTH_API_KEY is not configured; Modrinth search and install are disabled");
   }
   const response = await fetch(url, {
     headers: {
       "User-Agent": "ServerSentinel/0.2.0 (attached Fabric server admin)",
-      Authorization: config.modrinthApiKey
+      Authorization: apiKey
     }
   });
   if (!response.ok) {
@@ -625,9 +686,20 @@ app.get("/api/app", async () => {
   const servers = await readServers();
   return {
     servers: servers.map(publicServer),
-    modrinthApiConfigured: Boolean(config.modrinthApiKey),
+    modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable()
   };
+});
+
+app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (request) => {
+  const key = request.body.modrinthApiKey?.trim();
+  if (!key) {
+    throw new Error("Modrinth API key is required");
+  }
+  const settings = await readSettings();
+  settings.modrinthApiKey = key;
+  await writeSettings(settings);
+  return { ok: true, modrinthApiConfigured: true };
 });
 
 app.get("/api/fabric/versions", async () => {
@@ -710,6 +782,70 @@ app.post<{
   servers.push(server);
   await writeServers(servers);
   return publicServer(server);
+});
+
+app.put<{
+  Params: { id: string };
+  Body: {
+    displayName?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    installerVersion?: string;
+    serverJar?: string;
+    dockerContainer?: string;
+    dockerImage?: string;
+    dockerPorts?: string;
+    javaArgs?: string;
+    serverPort?: string;
+  };
+}>("/api/servers/:id", async (request) => {
+  const servers = await readServers();
+  const index = servers.findIndex((candidate) => candidate.id === request.params.id);
+  if (index === -1) {
+    throw new Error("Server not found");
+  }
+
+  const current = servers[index];
+  const minecraftVersion = request.body.minecraftVersion?.trim() || current.minecraftVersion;
+  const loaderVersion = request.body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
+  const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
+  const serverJar = request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar";
+  const serverPort = request.body.serverPort?.trim();
+  if (serverPort && (!/^\d{1,5}$/.test(serverPort) || Number(serverPort) < 1 || Number(serverPort) > 65535)) {
+    throw new Error("Server port must be a valid TCP port");
+  }
+
+  const jarChanged = current.minecraftVersion !== minecraftVersion
+    || current.loaderVersion !== loaderVersion
+    || current.installerVersion !== installerVersion
+    || current.serverJar !== serverJar;
+
+  const updated: AttachedServer = {
+    ...current,
+    displayName: request.body.displayName?.trim() || current.displayName,
+    minecraftVersion,
+    loaderVersion,
+    installerVersion,
+    serverJar,
+    dockerContainer: request.body.dockerContainer?.trim() || current.dockerContainer,
+    dockerImage: request.body.dockerImage?.trim() || current.dockerImage || "eclipse-temurin:21-jre",
+    dockerPorts: request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts),
+    javaArgs: request.body.javaArgs?.trim() || current.javaArgs,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (jarChanged) {
+    await downloadFabricServerJar(updated);
+  }
+  if (serverPort) {
+    await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    });
+  }
+
+  servers[index] = updated;
+  await writeServers(servers);
+  return publicServer(updated);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {

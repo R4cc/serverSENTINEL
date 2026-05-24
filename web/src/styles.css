@@ -50,7 +50,7 @@ textarea {
 }
 
 textarea {
-  min-height: 390px;
+  min-height: 520px;
   width: 100%;
   resize: vertical;
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
@@ -59,9 +59,9 @@ textarea {
 }
 
 .shell {
-  max-width: 1500px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 18px;
+  padding: 18px 24px 28px;
 }
 
 .topbar {
@@ -129,16 +129,114 @@ h2 {
   margin-bottom: 14px;
 }
 
+.toastRegion {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 28px));
+}
+
+.toast {
+  border: 1px solid #3b454b;
+  border-radius: 6px;
+  background: #182026;
+  padding: 10px 12px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+  font-size: 13px;
+}
+
+.toast.success {
+  border-color: #376c4a;
+  color: #b8f2cb;
+}
+
+.toast.error {
+  border-color: #805543;
+  color: #ffd0bf;
+}
+
+.warn {
+  color: #f2c86f;
+}
+
+.welcome {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 460px);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.welcome.single {
+  grid-template-columns: minmax(420px, 760px);
+}
+
+.welcomePanel p {
+  color: #aeb9c0;
+  margin: 10px 0 12px;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.statusItem {
+  border: 1px solid #2f383d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.statusItem span {
+  color: #8e9aa1;
+  font-size: 12px;
+}
+
+.keyForm {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
+.keyForm label {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  color: #aeb9c0;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
 .serverBar {
   display: flex;
-  gap: 10px;
-  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
   border-bottom: 1px solid #2f383d;
   padding-bottom: 12px;
   margin-bottom: 12px;
 }
 
-.serverBar label,
+.serverPicker {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.serverPickerRow,
+.serverActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.eyebrow,
 .attachForm label {
   display: grid;
   gap: 5px;
@@ -151,11 +249,33 @@ h2 {
   min-width: 260px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(420px, 1fr) minmax(420px, 1.2fr);
-  gap: 12px;
-  align-items: start;
+.serverPath {
+  color: #8e9aa1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 760px;
+}
+
+.runtimeBadge {
+  border: 1px solid #3b454b;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #aeb9c0;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.runtimeBadge.running {
+  color: #7ee0a1;
+  border-color: #376c4a;
+}
+
+.runtimeBadge.stopped {
+  color: #f08b86;
+  border-color: #805543;
 }
 
 .panel {
@@ -166,26 +286,17 @@ h2 {
 }
 
 .controls,
-.filesPanel {
-  grid-column: 1;
-}
-
 .consolePanel,
-.editorPanel {
-  grid-column: 2;
-}
-
-.modsPanel {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-}
-
+.filesPanel,
+.editorPanel,
+.modsPanel,
 .settingsPanel {
-  grid-column: 3;
+  min-width: 0;
 }
 
 .attachPanel {
   max-width: 720px;
+  margin-bottom: 12px;
 }
 
 .attachPanel h2 {
@@ -225,14 +336,59 @@ h2 {
   margin-top: 10px;
 }
 
+.editSettings {
+  margin-top: 12px;
+}
+
 .buttonRow,
 .commandLine,
 .fileActions,
 .modSearch,
-.panelHeader {
+.panelHeader,
+.tabs {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.tabs {
+  border-bottom: 1px solid #2f383d;
+  margin-bottom: 12px;
+}
+
+.tabs button {
+  border-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: transparent;
+  color: #aeb9c0;
+}
+
+.tabs button.active {
+  border-color: #2f383d;
+  border-bottom-color: #171c20;
+  background: #171c20;
+  color: #f4f7f8;
+}
+
+.tabPage {
+  display: grid;
+  gap: 12px;
+}
+
+.overviewPage,
+.filesPage {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.settingsPage {
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.settingsPage.single {
+  grid-template-columns: minmax(320px, 520px);
 }
 
 .panelHeader {
@@ -263,7 +419,7 @@ h2 {
 }
 
 .console {
-  height: 312px;
+  height: 460px;
   overflow: auto;
   border-radius: 6px;
   background: #0b0e10;
@@ -286,6 +442,10 @@ h2 {
 .mods {
   display: grid;
   gap: 6px;
+}
+
+.mods {
+  max-width: 980px;
 }
 
 .fileRow {
@@ -359,25 +519,21 @@ h2 {
 }
 
 @media (max-width: 1100px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .controls,
-  .filesPanel,
-  .consolePanel,
-  .editorPanel,
-  .modsPanel,
-  .settingsPanel {
-    grid-column: auto;
-    grid-row: auto;
-  }
-
   .topbar,
+  .welcome,
   .serverBar,
-  .modSearch {
+  .modSearch,
+  .keyForm {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .welcome,
+  .welcome.compact,
+  .overviewPage,
+  .filesPage,
+  .settingsPage {
+    grid-template-columns: 1fr;
   }
 
   .modSearch input:nth-child(2) {

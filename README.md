@@ -90,6 +90,33 @@ docker compose up --build
 
 Open `http://localhost:8080`.
 
+For Portainer or any host where you pull the published image instead of building from source, use:
+
+```yaml
+services:
+  serversentinel:
+    image: nl2109/serversentinel:latest
+    container_name: serversentinel
+    ports:
+      - "8085:8080"
+    environment:
+      SERVERSENTINEL_CONFIG_DIR: /config
+      SERVERSENTINEL_SERVERS_DIR: /data/servers
+      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
+      PORT: 8080
+      MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
+    volumes:
+      - serversentinel-config:/config
+      - minecraft-servers:/data/servers
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  serversentinel-config:
+  minecraft-servers:
+    name: serversentinel-minecraft-servers
+```
+
 To enable Docker-managed runtime creation/status/control/logs, uncomment this volume in `docker-compose.yml`:
 
 ```yaml
