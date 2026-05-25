@@ -214,6 +214,10 @@ function defaultDockerImageForMinecraftVersion(version?: string) {
   return "eclipse-temurin:17-jre";
 }
 
+function clientId() {
+  return globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function replaceMemoryArgs(javaArgs: string, memoryGb: number) {
   const xms = `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G`;
   const xmx = `-Xmx${memoryGb}G`;
@@ -290,6 +294,7 @@ export default function App() {
   const [gameVersion, setGameVersion] = useState("1.21.4");
   const [mods, setMods] = useState<ModrinthHit[]>([]);
   const [commandInput, setCommandInput] = useState("");
+  const [commandInputFocused, setCommandInputFocused] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => {
     const raw = window.localStorage.getItem("serversentinel-command-history");
     return raw ? JSON.parse(raw) as string[] : [];
@@ -300,6 +305,7 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [provisionJob, setProvisionJob] = useState<ProvisionJob | null>(null);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
+  const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>("server");
   const [activeTab, setActiveTab] = useState<"overview" | "files" | "mods" | "schedule" | "settings">("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -361,8 +367,11 @@ export default function App() {
   }, [activeServer?.id, consoleStreamVersion]);
 
   useEffect(() => {
-    consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
-  }, [logs]);
+    if (activeTab !== "overview") return;
+    window.requestAnimationFrame(() => {
+      consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
+    });
+  }, [logs, activeTab]);
 
   useEffect(() => {
     const query = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -546,6 +555,7 @@ export default function App() {
     if (isProvisioning) return;
     if (!activeServer) return;
     setNotice("");
+    setRuntimeAction(action);
     try {
       await api(`/api/servers/${activeServer.id}/${action}`, { method: "POST" });
       await refreshStatus(activeServer.id);
@@ -555,6 +565,8 @@ export default function App() {
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+    } finally {
+      setRuntimeAction(null);
     }
   }
 
@@ -958,9 +970,17 @@ export default function App() {
                 <strong>{activeServer.displayName}</strong>
                 <span>{activeServer.minecraftVersion || "Version unknown"} · Fabric</span>
               </div>
-              <span className={`runtimeBadge ${runtimeTone(status, appState.dockerSocketMounted)}`}>
-                {runtimeLabel(status, appState.dockerSocketMounted)}
-              </span>
+              <div className="activeServerRuntime">
+                <span className={`runtimeBadge ${runtimeTone(status, appState.dockerSocketMounted)}`}>
+                  {runtimeLabel(status, appState.dockerSocketMounted)}
+                </span>
+                <RuntimeControls
+                  status={status}
+                  isProvisioning={isProvisioning}
+                  busyAction={runtimeAction}
+                  onAction={runContainerAction}
+                />
+              </div>
             </div>
 
             <nav className="tabs">
@@ -998,11 +1018,6 @@ export default function App() {
                       <strong>{status?.controlAvailable ? "Start, stop, restart" : "File tools only"}</strong>
                     </div>
                   </div>
-                  <div className="buttonRow">
-                    <button onClick={() => runContainerAction("start")} disabled={isProvisioning || !status?.controlAvailable || status.docker.running}>Start</button>
-                    <button onClick={() => runContainerAction("stop")} disabled={isProvisioning || !status?.controlAvailable || !status.docker.running}>Stop</button>
-                    <button onClick={() => runContainerAction("restart")} disabled={isProvisioning || !status?.controlAvailable}>Restart</button>
-                  </div>
                 </section>
 
                 <section className="panel consolePanel">
@@ -1024,12 +1039,14 @@ export default function App() {
                             setHistoryIndex(null);
                           }}
                           onKeyDown={handleCommandKeyDown}
+                          onFocus={() => setCommandInputFocused(true)}
+                          onBlur={() => window.setTimeout(() => setCommandInputFocused(false), 120)}
                           placeholder={status?.commandInputAvailable ? "Enter command" : "Console input unavailable"}
                           disabled={isProvisioning || !status?.commandInputAvailable}
                           spellCheck={false}
                           autoComplete="off"
                         />
-                        {status?.commandInputAvailable && commandSuggestions.length > 0 && (
+                        {commandInputFocused && status?.commandInputAvailable && commandSuggestions.length > 0 && (
                           <div className="suggestions">
                             {commandSuggestions.map((suggestion) => (
                               <button
@@ -1182,6 +1199,51 @@ function Notifications({ notices }: { notices: Notice[] }) {
   );
 }
 
+function ControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
+  if (action === "start") {
+    return <span className="controlGlyph play" aria-hidden="true" />;
+  }
+  if (action === "stop") {
+    return <span className="controlGlyph stop" aria-hidden="true" />;
+  }
+  return <span className="controlGlyph restart" aria-hidden="true" />;
+}
+
+function RuntimeControls({
+  status,
+  isProvisioning,
+  busyAction,
+  onAction
+}: {
+  status: ServerStatus | null;
+  isProvisioning: boolean;
+  busyAction: "start" | "stop" | "restart" | null;
+  onAction: (action: "start" | "stop" | "restart") => void;
+}) {
+  const disabled = isProvisioning || Boolean(busyAction) || !status?.controlAvailable;
+  return (
+    <div className="runtimeControls" aria-label="Runtime controls">
+      {(["start", "stop", "restart"] as const).map((action) => {
+        const actionDisabled = disabled
+          || (action === "start" && Boolean(status?.docker.running))
+          || (action === "stop" && !status?.docker.running);
+        return (
+          <button
+            key={action}
+            type="button"
+            className={`runtimeControlButton ${action}`}
+            onClick={() => onAction(action)}
+            disabled={actionDisabled}
+          >
+            {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <ControlIcon action={action} />}
+            <span>{action}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProvisionProgress({ job }: { job: ProvisionJob }) {
   return (
     <section className={`provisionPanel ${job.status}`}>
@@ -1230,7 +1292,7 @@ function SchedulePage({
   disabled: boolean;
   commandInputMessage: string;
 }) {
-  const [commandIds, setCommandIds] = useState(() => [crypto.randomUUID()]);
+  const [commandIds, setCommandIds] = useState(() => [clientId()]);
 
   return (
     <section className="tabPage schedulePage">
@@ -1272,7 +1334,7 @@ function SchedulePage({
                   )}
                 </div>
               ))}
-              <button type="button" className="secondaryButton" onClick={() => setCommandIds((ids) => [...ids, crypto.randomUUID()])}>
+              <button type="button" className="secondaryButton" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
                 + Additional Command
               </button>
             </div>

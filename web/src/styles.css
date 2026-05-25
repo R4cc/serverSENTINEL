@@ -449,6 +449,10 @@ code {
   background:
     linear-gradient(90deg, var(--accent) 0 8px, transparent 8px),
     var(--surface-muted);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
 }
 
 .activeServerStrip > div {
@@ -468,6 +472,109 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.activeServerRuntime {
+  display: flex !important;
+  align-items: center;
+  justify-content: end;
+  gap: var(--space-3);
+}
+
+.runtimeControls {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.runtimeControlButton {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: 999px;
+  padding: 0 var(--space-3);
+}
+
+.runtimeControlButton span:last-child {
+  text-transform: uppercase;
+}
+
+.runtimeControlButton.start {
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.runtimeControlButton.stop {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.runtimeControlButton.restart {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.runtimeControlButton:hover:not(:disabled) {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.controlGlyph {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.controlGlyph.play {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid currentColor;
+}
+
+.controlGlyph.stop {
+  background: currentColor;
+}
+
+.controlGlyph.restart {
+  border: 2px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 999px;
+  position: relative;
+}
+
+.controlGlyph.restart::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.buttonSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sidebarCollapsed {
@@ -1433,12 +1540,24 @@ code {
   }
 
   .workspaceHeader,
-  .activeServerStrip,
   .systemBanner,
   .modSearch,
   .keyForm {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .activeServerStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .activeServerRuntime {
+    justify-content: start;
+    flex-wrap: wrap;
+  }
+
+  .runtimeControls {
+    flex-wrap: wrap;
   }
 
   .systemBanner {
