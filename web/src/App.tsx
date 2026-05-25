@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type AttachedServer = {
   id: string;
@@ -100,6 +100,7 @@ type InstalledMod = {
   enabled: boolean;
   size: number;
   modifiedAt: string;
+  iconUrl?: string;
 };
 
 type FabricVersions = {
@@ -216,6 +217,22 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+function isEditableFile(entry: FileEntry) {
+  if (entry.type !== "file" || entry.size > 2 * 1024 * 1024) return false;
+  const extension = entry.name.split(".").pop()?.toLowerCase() ?? "";
+  return ["txt", "json", "json5", "properties", "toml", "yml", "yaml", "cfg", "conf", "log", "md", "csv", "env"].includes(extension)
+    || !entry.name.includes(".");
+}
+
+function bufferToBase64(buffer: ArrayBuffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return window.btoa(binary);
 }
 
 function formatMegabytes(value: number) {
@@ -343,6 +360,7 @@ export default function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const modUploadRef = useRef<HTMLInputElement>(null);
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = provisionJob?.status === "running";
   const modsLocked = isProvisioning || !status || Boolean(status.docker.running);
@@ -458,6 +476,33 @@ export default function App() {
       window.clearInterval(interval);
     };
   }, [activeServer?.id, activePage, activeTab]);
+
+  useEffect(() => {
+    if (!activeServer || activeTab !== "mods" || modsView !== "search" || !appState.modrinthApiConfigured) return;
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setModSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await api<{ hits: ModrinthHit[] }>(
+          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}`
+        );
+        if (!cancelled) setModSearchResults(result.hits);
+      } catch (error) {
+        if (!cancelled) {
+          setNotice((error as Error).message);
+          notify("error", (error as Error).message);
+        }
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [activeServer?.id, activeTab, appState.modrinthApiConfigured, modsView, query]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -730,6 +775,28 @@ export default function App() {
     }
   }
 
+  async function deleteFileEntry(entry: FileEntry) {
+    if (isProvisioning || !activeServer) return;
+    if (!window.confirm(`Delete ${entry.name}? This cannot be undone.`)) return;
+    setNotice("");
+    try {
+      await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}`, {
+        method: "DELETE"
+      });
+      if (selectedPath === entry.path) {
+        setSelectedPath("");
+        setEditorText("");
+        setDirty(false);
+      }
+      notify("success", `Deleted ${entry.name}`);
+      await loadFiles(activeServer.id, listing.path);
+      await loadInstalledMods(activeServer.id);
+    } catch (error) {
+      setNotice((error as Error).message);
+      notify("error", (error as Error).message);
+    }
+  }
+
   async function saveFile() {
     if (isProvisioning) return;
     if (!activeServer) return;
@@ -759,6 +826,30 @@ export default function App() {
         `/api/modrinth/search?query=${encodeURIComponent(query)}&serverId=${encodeURIComponent(activeServer.id)}`
       );
       setModSearchResults(result.hits);
+    } catch (error) {
+      setNotice((error as Error).message);
+      notify("error", (error as Error).message);
+    }
+  }
+
+  async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
+    if (modsLocked || !activeServer) return;
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.name.endsWith(".jar")) {
+      notify("error", "Only .jar mod files can be uploaded");
+      return;
+    }
+    setNotice("");
+    try {
+      await api(`/api/servers/${activeServer.id}/mods/upload`, {
+        method: "POST",
+        body: JSON.stringify({ filename: file.name, contentBase64: bufferToBase64(await file.arrayBuffer()) })
+      });
+      notify("success", `Uploaded ${file.name}`);
+      await loadInstalledMods(activeServer.id);
+      await loadFiles(activeServer.id, "/mods");
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
@@ -1207,10 +1298,17 @@ export default function App() {
                   </div>
                   <div className="fileList">
                     {listing.entries.map((entry) => (
-                      <button key={entry.path} className="fileRow" onClick={() => entry.type === "directory" ? loadFiles(activeServer.id, entry.path) : openFile(entry.path)} disabled={isProvisioning}>
-                        <span>{entry.type === "directory" ? "[dir]" : "[file]"} {entry.name}</span>
-                        <small>{entry.type === "file" ? formatBytes(entry.size) : ""}</small>
-                      </button>
+                      <article key={entry.path} className="fileRow">
+                        <button
+                          className="fileOpenButton"
+                          onClick={() => entry.type === "directory" ? loadFiles(activeServer.id, entry.path) : openFile(entry.path)}
+                          disabled={isProvisioning || (entry.type === "file" && !isEditableFile(entry))}
+                        >
+                          <span>{entry.type === "directory" ? "[dir]" : "[file]"} {entry.name}</span>
+                          <small>{entry.type === "file" ? formatBytes(entry.size) : ""}</small>
+                        </button>
+                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning} title={`Delete ${entry.name}`}>X</button>
+                      </article>
                     ))}
                   </div>
                 </section>
@@ -1249,6 +1347,8 @@ export default function App() {
                       <button className={modsView === "manager" ? "active" : ""} onClick={() => setModsView("manager")}>Installed</button>
                       <button className={modsView === "search" ? "active" : ""} onClick={() => setModsView("search")} disabled={!appState.modrinthApiConfigured}>Search</button>
                     </div>
+                    <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />
+                    <button onClick={() => modUploadRef.current?.click()} disabled={modsLocked}>Upload</button>
                     <span className="muted">Fabric {activeServer.loaderVersion || "loader unknown"} - Minecraft {activeServer.minecraftVersion || "version unknown"}</span>
                   </div>
 
@@ -1266,7 +1366,7 @@ export default function App() {
                       )}
                       {installedMods.map((mod) => (
                         <article key={mod.filename} className={`modRow ${mod.enabled ? "" : "disabled"}`}>
-                          <div className="modFileIcon">JAR</div>
+                          {mod.iconUrl ? <img src={mod.iconUrl} alt="" /> : <div className="modFileIcon">JAR</div>}
                           <div>
                             <strong>{mod.displayName}</strong>
                             <p>{mod.enabled ? "Enabled" : "Disabled"} - {formatBytes(mod.size)} - Modified {new Date(mod.modifiedAt).toLocaleString()}</p>
@@ -1289,7 +1389,7 @@ export default function App() {
                     <>
                       <form onSubmit={searchMods} className="modSearch">
                         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search compatible Fabric mods" disabled={isProvisioning || !appState.modrinthApiConfigured} />
-                        <button disabled={isProvisioning || !appState.modrinthApiConfigured || !query.trim()}>Search</button>
+                        <button disabled={isProvisioning || !appState.modrinthApiConfigured || !query.trim()}>Refresh</button>
                       </form>
                       <div className="mods">
                         {modSearchResults.map((mod) => (

@@ -16,7 +16,7 @@ Without Docker socket access:
 - View and edit UTF-8 text files in the browser.
 - Read and stream each server's `logs/latest.log` file.
 - Search Modrinth using a server-side `MODRINTH_API_KEY`.
-- Manage installed Fabric `.jar` files, enable/disable/remove mods while the server is stopped, and install compatible mods from Modrinth.
+- Manage installed Fabric `.jar` files, enable/disable/remove mods while the server is stopped, manually upload `.jar` mods, and install compatible mods from Modrinth.
 
 With Docker socket access:
 
@@ -60,6 +60,7 @@ ServerSentinel itself remains only the web panel and orchestrator.
 - File operations are scoped to the active managed server directory.
 - Requests that try to escape a managed server directory are rejected.
 - Mod downloads only write beneath the active server's `mods` folder.
+- Manual mod uploads only accept `.jar` files and write beneath the active server's `mods` folder.
 - Browser editing rejects binary files and files larger than 2 MiB.
 - `MODRINTH_API_KEY` is read only by the backend and is never sent to the frontend.
 - ServerSentinel does not require Java and does not execute Minecraft inside its own container.

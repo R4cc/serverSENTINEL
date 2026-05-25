@@ -1402,6 +1402,15 @@ code {
 .fileRow {
   display: grid;
   grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  width: 100%;
+  align-items: center;
+}
+
+.fileOpenButton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   align-items: center;
@@ -1409,8 +1418,18 @@ code {
   color: var(--text);
 }
 
-.fileRow small {
+.fileOpenButton span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileOpenButton small {
   color: currentColor;
+}
+
+.hiddenInput {
+  display: none;
 }
 
 .editorPanel .buttonRow {

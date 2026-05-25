@@ -1,11 +1,11 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -255,6 +255,63 @@ function safeInstalledModFilename(name?: string) {
     throw new Error("A valid mod filename is required");
   }
   return filename;
+}
+
+function modIconKey(filename: string) {
+  return Buffer.from(filename.replace(/\.jar\.disabled$/, ".jar"), "utf8").toString("base64url");
+}
+
+async function modIconUrl(server: AttachedServer, filename: string) {
+  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  if (!existsSync(iconsDir)) return undefined;
+  const key = modIconKey(filename);
+  const icon = (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`));
+  return icon ? `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}` : undefined;
+}
+
+async function deleteModIcon(server: AttachedServer, filename: string) {
+  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  if (!existsSync(iconsDir)) return;
+  const key = modIconKey(filename);
+  const icons = await readdir(iconsDir);
+  await Promise.all(icons.filter((entry) => entry.startsWith(`${key}.`)).map((entry) => rm(join(iconsDir, entry), { force: true })));
+}
+
+function iconExtension(iconUrl: string, contentType: string | null) {
+  if (contentType?.includes("webp")) return ".webp";
+  if (contentType?.includes("jpeg")) return ".jpg";
+  if (contentType?.includes("png")) return ".png";
+  const extension = extname(new URL(iconUrl).pathname).toLowerCase();
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension) ? extension : ".png";
+}
+
+async function saveModIcon(server: AttachedServer, filename: string, iconUrl?: string | null) {
+  if (!iconUrl || !iconUrl.startsWith("https://")) return;
+  const response = await fetch(iconUrl, {
+    headers: { "User-Agent": "ServerSentinel/0.3.0 (Fabric mod manager)" }
+  });
+  if (!response.ok || !response.body) return;
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > 1024 * 1024) return;
+  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  await mkdir(iconsDir, { recursive: true });
+  await deleteModIcon(server, filename);
+  await writeFile(join(iconsDir, `${modIconKey(filename)}${iconExtension(iconUrl, response.headers.get("content-type"))}`), bytes);
+}
+
+async function ensureModrinthIconForFile(server: AttachedServer, filename: string, filePath: string) {
+  if (await modIconUrl(server, filename)) return;
+  try {
+    const hash = createHash("sha1").update(await readFile(filePath)).digest("hex");
+    const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+    const version = await versionResponse.json() as { project_id?: string };
+    if (!version.project_id) return;
+    const projectResponse = await modrinthFetch(`https://api.modrinth.com/v2/project/${encodeURIComponent(version.project_id)}`);
+    const project = await projectResponse.json() as { icon_url?: string | null };
+    await saveModIcon(server, filename, project.icon_url);
+  } catch {
+    // Non-Modrinth/manual mods simply keep the generic JAR icon.
+  }
 }
 
 function isValidServerPort(port: string) {
@@ -1258,7 +1315,7 @@ async function tickSchedules() {
   }
 }
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 180 * 1024 * 1024 });
 await app.register(websocket);
 
 app.get("/api/app", async () => {
@@ -1595,6 +1652,20 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
   return { ok: true, path: toPublicPath(server, target) };
 });
 
+app.delete<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
+  const server = await getServer(request.params.id);
+  const target = ensureInsideServer(server, request.query.path ?? "");
+  if (resolve(target) === resolve(server.serverDir)) {
+    throw new Error("Refusing to delete the server root directory");
+  }
+  const publicPath = toPublicPath(server, target);
+  await rm(target, { recursive: true, force: true });
+  if (publicPath.startsWith("/mods/") && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
+    await deleteModIcon(server, basename(publicPath));
+  }
+  return { ok: true, path: publicPath };
+});
+
 app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
   const server = await getServer(request.params.id);
   const modsDir = ensureInsideServer(server, "mods");
@@ -1606,17 +1677,36 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
         .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map(async (entry) => {
-          const modStat = await stat(join(modsDir, entry.name));
+          const modPath = join(modsDir, entry.name);
+          await ensureModrinthIconForFile(server, entry.name, modPath);
+          const modStat = await stat(modPath);
           return {
             filename: entry.name,
             displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
             enabled: entry.name.endsWith(".jar"),
             size: modStat.size,
-            modifiedAt: modStat.mtime.toISOString()
+            modifiedAt: modStat.mtime.toISOString(),
+            iconUrl: await modIconUrl(server, entry.name)
           };
         })
     )
   };
+});
+
+app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
+  const server = await getServer(request.params.id);
+  const filename = safeInstalledModFilename(request.query.filename);
+  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  const key = modIconKey(filename);
+  const icon = existsSync(iconsDir) ? (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`)) : undefined;
+  if (!icon) {
+    reply.code(404);
+    return { error: "Icon not found" };
+  }
+  const extension = extname(icon).toLowerCase();
+  const contentType = extension === ".webp" ? "image/webp" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "image/png";
+  reply.header("Content-Type", contentType);
+  return reply.send(createReadStream(join(iconsDir, icon)));
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", async (request) => {
@@ -1644,7 +1734,27 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   const filename = safeInstalledModFilename(request.query.filename);
   const target = ensureInsideServer(server, join("mods", filename));
   await rm(target, { force: true });
+  await deleteModIcon(server, filename);
   return { ok: true, filename };
+});
+
+app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", async (request) => {
+  const server = await getServer(request.params.id);
+  await ensureServerStoppedForModChanges(server);
+  const filename = safeModFilename(safeInstalledModFilename(request.body.filename));
+  if (!request.body.contentBase64) {
+    throw new Error("Uploaded mod content is required");
+  }
+  const content = Buffer.from(request.body.contentBase64, "base64");
+  if (!content.length || content.length > 128 * 1024 * 1024) {
+    throw new Error("Uploaded mod must be between 1 byte and 128 MiB");
+  }
+  const modsDir = ensureInsideServer(server, "mods");
+  await mkdir(modsDir, { recursive: true });
+  const destination = ensureInsideServer(server, join("mods", filename));
+  await writeFile(destination, content);
+  await deleteModIcon(server, filename);
+  return { ok: true, filename: basename(destination), path: toPublicPath(server, destination) };
 });
 
 app.get<{ Querystring: { query?: string; serverId?: string } }>("/api/modrinth/search", async (request) => {
@@ -1677,9 +1787,11 @@ app.post<{ Body: { serverId?: string; projectId?: string } }>("/api/modrinth/ins
   }
 
   const versionsUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
+  const projectUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`);
   versionsUrl.searchParams.set("loaders", JSON.stringify(["fabric"]));
   versionsUrl.searchParams.set("game_versions", JSON.stringify([server.minecraftVersion]));
-  const versionsResponse = await modrinthFetch(versionsUrl.toString());
+  const [versionsResponse, projectResponse] = await Promise.all([modrinthFetch(versionsUrl.toString()), modrinthFetch(projectUrl.toString())]);
+  const project = await projectResponse.json() as { icon_url?: string | null };
   const versions = (await versionsResponse.json()) as Array<{
     version_number: string;
     files: Array<{ url: string; filename: string; primary: boolean }>;
@@ -1705,6 +1817,7 @@ app.post<{ Body: { serverId?: string; projectId?: string } }>("/api/modrinth/ins
     Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
     createWriteStream(destination)
   );
+  await saveModIcon(server, basename(destination), project.icon_url);
 
   return {
     ok: true,
