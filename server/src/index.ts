@@ -47,12 +47,20 @@ type AttachedServer = {
   updatedAt: string;
 };
 
-type PublicServer = Omit<AttachedServer, "serverDir"> & {
+type PublicServer = Omit<AttachedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
 };
 
 type DockerState = "running" | "exited" | "created" | "paused" | "restarting" | "removing" | "dead" | "unknown";
+
+type DockerExecCreate = {
+  Id: string;
+};
+
+type DockerExecInspect = {
+  ExitCode?: number | null;
+};
 
 type Client = {
   send: (payload: string) => void;
@@ -70,14 +78,12 @@ function publicServer(server: AttachedServer): PublicServer {
     serverJar: server.serverJar,
     dockerContainer: server.dockerContainer,
     dockerImage: server.dockerImage,
-    dockerMountSource: server.dockerMountSource,
-    dockerWorkingDir: server.dockerWorkingDir,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     serverType: server.serverType,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
-    directoryLabel: server.serverDir,
+    directoryLabel: server.storageName || server.displayName,
     hasDockerContainer: Boolean(server.dockerContainer)
   };
 }
@@ -386,7 +392,7 @@ async function ensureDockerContainer(server: AttachedServer) {
   await ensureDockerImage(image);
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
   const javaArgs = server.javaArgs || "-Xms2G -Xmx4G";
-  const command = `java ${javaArgs} -jar ${server.serverJar} nogui`;
+  const command = `exec java ${javaArgs} -jar ${server.serverJar} nogui`;
   const workingDir = serverDockerWorkingDir(server);
   const usesSharedServersVolume = workingDir.startsWith("/data/servers/");
   const bindTarget = usesSharedServersVolume ? "/data/servers" : "/data/server";
@@ -473,6 +479,49 @@ async function dockerAction(server: AttachedServer, action: "start" | "stop" | "
   }
   await dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
   return dockerStatus(server);
+}
+
+async function sendDockerStdinCommand(server: AttachedServer, command: string) {
+  if (!dockerControlConfigured(server)) {
+    throw new Error("Command input is not configured for this server");
+  }
+  if (!dockerAvailable()) {
+    throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable console input");
+  }
+
+  const status = await dockerStatus(server);
+  if (!status.running) {
+    throw new Error("The Minecraft runtime container must be running before commands can be sent");
+  }
+
+  const line = command.trim();
+  if (!line) {
+    throw new Error("Command is required");
+  }
+  if (/[\r\n]/.test(line)) {
+    throw new Error("Only one console command can be sent at a time");
+  }
+
+  const payload = Buffer.from(`${line}\n`, "utf8").toString("base64");
+  const shellCommand = `printf %s ${payload} | base64 -d > /proc/1/fd/0`;
+  const exec = await dockerJsonRequest<DockerExecCreate>(
+    "POST",
+    `/containers/${encodeURIComponent(dockerContainerName(server))}/exec`,
+    {
+      AttachStdin: false,
+      AttachStdout: false,
+      AttachStderr: false,
+      Tty: false,
+      Cmd: ["sh", "-lc", shellCommand]
+    },
+    201
+  );
+  await dockerJsonRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
+  const inspect = await dockerRequest<DockerExecInspect>("GET", `/exec/${encodeURIComponent(exec.Id)}/json`, 200);
+  if (inspect.ExitCode) {
+    throw new Error("Docker could not write to the Minecraft console stdin");
+  }
+  return { ok: true };
 }
 
 async function dockerRecentLogs(server: AttachedServer) {
@@ -890,13 +939,18 @@ app.delete<{
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
   const server = await getServer(request.params.id);
   const latestLogPath = ensureInsideServer(server, "logs/latest.log");
+  const docker = await dockerStatus(server);
   return {
     server: publicServer(server),
-    docker: await dockerStatus(server),
+    docker: docker,
     fileLogsAvailable: existsSync(latestLogPath),
     controlAvailable: Boolean(dockerControlConfigured(server) && dockerAvailable()),
-    commandInputAvailable: false,
-    commandInputMessage: "Live stdin commands are not implemented for attached servers in this MVP"
+    commandInputAvailable: Boolean(dockerControlConfigured(server) && dockerAvailable() && docker.running),
+    commandInputMessage: dockerControlConfigured(server) && dockerAvailable()
+      ? docker.running
+        ? "Console command input is enabled for the running Docker runtime container"
+        : "Start the runtime container before sending console commands"
+      : "Console command input requires Docker control and a mounted Docker socket"
   };
 });
 
@@ -912,8 +966,9 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", async (request)
   return dockerAction(await getServer(request.params.id), "restart");
 });
 
-app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", async () => {
-  throw new Error("Live stdin commands are not implemented for attached Docker containers in this MVP");
+app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", async (request) => {
+  const server = await getServer(request.params.id);
+  return sendDockerStdinCommand(server, request.body.command ?? "");
 });
 
 app.get("/ws/console", { websocket: true }, async (socket, request) => {

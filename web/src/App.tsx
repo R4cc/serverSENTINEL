@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type AttachedServer = {
   id: string;
@@ -11,7 +11,6 @@ type AttachedServer = {
   serverJar?: string;
   dockerContainer?: string;
   dockerImage?: string;
-  dockerMountSource?: string;
   dockerPorts?: string;
   javaArgs?: string;
   serverType: "fabric";
@@ -77,12 +76,64 @@ type Notice = {
 };
 
 type ActivePage = "servers" | "server" | "settings";
+type ThemePreference = "light" | "dark" | "system";
 
 const emptyApp: AppState = {
   servers: [],
   modrinthApiConfigured: false,
   dockerSocketMounted: false
 };
+
+const minecraftCommandSuggestions = [
+  { command: "help", description: "Show available server commands" },
+  { command: "list", description: "List online players" },
+  { command: "say ", description: "Broadcast a message" },
+  { command: "tellraw @a ", description: "Send JSON chat text" },
+  { command: "stop", description: "Gracefully stop the server" },
+  { command: "save-all", description: "Save world data" },
+  { command: "save-off", description: "Disable automatic saving" },
+  { command: "save-on", description: "Enable automatic saving" },
+  { command: "whitelist on", description: "Enable the whitelist" },
+  { command: "whitelist off", description: "Disable the whitelist" },
+  { command: "whitelist list", description: "List whitelisted players" },
+  { command: "whitelist add ", description: "Add a player to whitelist" },
+  { command: "whitelist remove ", description: "Remove a player from whitelist" },
+  { command: "whitelist reload", description: "Reload whitelist file" },
+  { command: "op ", description: "Grant operator status" },
+  { command: "deop ", description: "Remove operator status" },
+  { command: "kick ", description: "Kick a player" },
+  { command: "ban ", description: "Ban a player" },
+  { command: "pardon ", description: "Unban a player" },
+  { command: "ban-ip ", description: "Ban an IP address" },
+  { command: "pardon-ip ", description: "Unban an IP address" },
+  { command: "banlist", description: "Show ban list" },
+  { command: "seed", description: "Show world seed" },
+  { command: "reload", description: "Reload datapacks" },
+  { command: "defaultgamemode ", description: "Set default game mode" },
+  { command: "gamemode survival ", description: "Set player game mode" },
+  { command: "gamerule ", description: "Change a game rule" },
+  { command: "difficulty ", description: "Set difficulty" },
+  { command: "time set day", description: "Set time to day" },
+  { command: "time set night", description: "Set time to night" },
+  { command: "weather clear", description: "Clear weather" },
+  { command: "weather rain", description: "Start rain" },
+  { command: "tp ", description: "Teleport entities" },
+  { command: "give ", description: "Give items" },
+  { command: "clear ", description: "Clear inventory items" },
+  { command: "effect give ", description: "Apply an effect" },
+  { command: "enchant ", description: "Enchant held item" },
+  { command: "xp add ", description: "Add experience" },
+  { command: "summon ", description: "Summon an entity" },
+  { command: "setblock ", description: "Set a block" },
+  { command: "fill ", description: "Fill an area" },
+  { command: "locate structure ", description: "Locate a structure" },
+  { command: "locate biome ", description: "Locate a biome" },
+  { command: "scoreboard ", description: "Manage scoreboards" },
+  { command: "team ", description: "Manage teams" },
+  { command: "tag ", description: "Manage entity tags" },
+  { command: "datapack list", description: "List datapacks" },
+  { command: "function ", description: "Run a function" }
+];
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -124,6 +175,40 @@ function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   return status.docker.running ? "running" : "stopped";
 }
 
+function SidebarIcon({ name }: { name: "servers" | "settings" }) {
+  if (name === "servers") {
+    return (
+      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="4" rx="1.5" />
+        <rect x="4" y="10" width="16" height="4" rx="1.5" />
+        <rect x="4" y="15" width="16" height="4" rx="1.5" />
+        <circle cx="7" cy="7" r="0.8" />
+        <circle cx="7" cy="12" r="0.8" />
+        <circle cx="7" cy="17" r="0.8" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+      <path d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.5 1a8 8 0 0 0-2.6-1.5L14 2.3h-4l-.4 2.7A8 8 0 0 0 7 6.5l-2.5-1-2 3.5 2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.5-1a8 8 0 0 0 2.6 1.5l.4 2.7h4l.4-2.7A8 8 0 0 0 17 17.5l2.5 1 2-3.5-2.1-1.5Z" />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg className="toggleIcon" viewBox="0 0 24 24" aria-hidden="true">
+      {collapsed ? <path d="M9 5l7 7-7 7" /> : <path d="M15 5l-7 7 7 7" />}
+    </svg>
+  );
+}
+
+function readThemePreference(): ThemePreference {
+  const saved = window.localStorage.getItem("serversentinel-theme");
+  return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
+}
+
 export default function App() {
   const [appState, setAppState] = useState<AppState>(emptyApp);
   const [activeServerId, setActiveServerId] = useState("");
@@ -136,6 +221,12 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [gameVersion, setGameVersion] = useState("1.21.4");
   const [mods, setMods] = useState<ModrinthHit[]>([]);
+  const [commandInput, setCommandInput] = useState("");
+  const [commandHistory, setCommandHistory] = useState<string[]>(() => {
+    const raw = window.localStorage.getItem("serversentinel-command-history");
+    return raw ? JSON.parse(raw) as string[] : [];
+  });
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -143,13 +234,22 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>("server");
   const [activeTab, setActiveTab] = useState<"overview" | "files" | "mods" | "settings">("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("serversentinel-theme") !== "light");
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
 
   const activeServer = useMemo(
     () => appState.servers.find((server) => server.id === activeServerId) ?? appState.servers[0],
     [activeServerId, appState.servers]
   );
+  const commandSuggestions = useMemo(() => {
+    const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
+    const matches = value
+      ? minecraftCommandSuggestions.filter((suggestion) => suggestion.command.toLowerCase().startsWith(value))
+      : minecraftCommandSuggestions.slice(0, 8);
+    return matches.slice(0, 8);
+  }, [commandInput]);
 
   useEffect(() => {
     refreshApp();
@@ -195,8 +295,21 @@ export default function App() {
   }, [logs]);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
+    const query = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!query) return;
+    const update = () => setSystemDark(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("serversentinel-theme", themePreference);
+  }, [themePreference]);
+
+  useEffect(() => {
+    window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
+  }, [commandHistory]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -324,7 +437,54 @@ export default function App() {
 
   async function sendCommand(event: FormEvent) {
     event.preventDefault();
-    setNotice(status?.commandInputMessage ?? "Live stdin commands are not implemented for attached servers in this MVP");
+    if (!activeServer) return;
+    const command = commandInput.trim().replace(/^\//, "");
+    if (!command) return;
+    setNotice("");
+    try {
+      await api(`/api/servers/${activeServer.id}/command`, {
+        method: "POST",
+        body: JSON.stringify({ command })
+      });
+      setLogs((current) => [...current.slice(-499), `[command] > ${command}`]);
+      setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
+      setHistoryIndex(null);
+      setCommandInput("");
+      notify("success", `Sent command: ${command}`);
+    } catch (error) {
+      setNotice((error as Error).message);
+      notify("error", (error as Error).message);
+    }
+  }
+
+  function handleCommandKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!commandHistory.length) return;
+      const nextIndex = historyIndex === null ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+      setHistoryIndex(nextIndex);
+      setCommandInput(commandHistory[nextIndex]);
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (historyIndex === null) return;
+      const nextIndex = historyIndex + 1;
+      if (nextIndex >= commandHistory.length) {
+        setHistoryIndex(null);
+        setCommandInput("");
+      } else {
+        setHistoryIndex(nextIndex);
+        setCommandInput(commandHistory[nextIndex]);
+      }
+    }
+    if (event.key === "Tab") {
+      const suggestion = commandSuggestions[0];
+      if (suggestion) {
+        event.preventDefault();
+        setCommandInput(suggestion.command);
+        setHistoryIndex(null);
+      }
+    }
   }
 
   async function loadFiles(serverId: string, path: string) {
@@ -438,27 +598,21 @@ export default function App() {
             </div>
           </div>
           <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
-            {sidebarCollapsed ? ">" : "<"}
+            <SidebarToggleIcon collapsed={sidebarCollapsed} />
           </button>
         </div>
         <nav className="sideNav">
           <button className={activePage === "servers" ? "active" : ""} onClick={() => setActivePage("servers")}>
+            <SidebarIcon name="servers" />
             <span>Servers</span>
-            <small>{appState.servers.length}</small>
-          </button>
-          <button className={activePage === "server" ? "active" : ""} onClick={() => setActivePage("server")} disabled={!activeServer}>
-            <span>Active Server</span>
-            <small>{activeServer?.displayName ?? "None"}</small>
-          </button>
-          <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")}>
-            <span>General Settings</span>
-            <small>{appState.modrinthApiConfigured ? "Modrinth ready" : "Needs key"}</small>
           </button>
         </nav>
-        <div className="sidebarStatus">
-          <StatusItem label="Docker" ok={appState.dockerSocketMounted} good="Connected" bad="Not mounted" />
-          <StatusItem label="Modrinth" ok={appState.modrinthApiConfigured} good="Configured" bad="Not configured" />
-        </div>
+        <nav className="sideNav sideNavBottom">
+          <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")}>
+            <SidebarIcon name="settings" />
+            <span>Settings</span>
+          </button>
+        </nav>
       </aside>
 
       <section className="workspace">
@@ -467,11 +621,11 @@ export default function App() {
             <h2>
               {activePage === "servers" && "Servers"}
               {activePage === "server" && (activeServer?.displayName ?? "No Server Selected")}
-              {activePage === "settings" && "General Settings"}
+              {activePage === "settings" && "Settings"}
             </h2>
             <p>
               {activePage === "servers" && "Create, select, and review managed Fabric servers."}
-              {activePage === "server" && (activeServer ? activeServer.directoryLabel : "Create a server to begin.")}
+              {activePage === "server" && (activeServer ? "Monitor runtime, logs, files, and mods." : "Create a server to begin.")}
               {activePage === "settings" && "App-wide preferences and integrations."}
             </p>
           </div>
@@ -480,6 +634,13 @@ export default function App() {
             {activePage === "server" && activeServer && <button onClick={() => refreshStatus()}>Refresh</button>}
           </div>
         </header>
+
+        {!appState.dockerSocketMounted && (
+          <section className="systemBanner warning">
+            <strong>Docker integration is not connected.</strong>
+            <span>Server files, editing, and configured integrations still work. Runtime creation, status, controls, Docker logs, and console input are limited until the Docker socket is mounted.</span>
+          </section>
+        )}
 
         {notice && <div className="notice">{notice}</div>}
 
@@ -497,7 +658,6 @@ export default function App() {
                 >
                   <strong>{server.displayName}</strong>
                   <span>{server.minecraftVersion || "Version unknown"} · Fabric</span>
-                  <small>{server.directoryLabel}</small>
                 </button>
               ))}
               {!appState.servers.length && (
@@ -521,17 +681,62 @@ export default function App() {
         )}
 
         {activePage === "settings" && (
-          <section className="tabPage settingsPage">
-            <section className="panel settingsPanel">
-              <h2>Appearance</h2>
-              <label className="toggleRow">
-                <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
-                Dark mode
+          <section className="settingsList">
+            <section className="panel settingsGroup">
+              <div className="settingsGroupHeader">
+                <span>01</span>
+                <div>
+                  <h2>Interface</h2>
+                  <p>Display preferences for this browser.</p>
+                </div>
+              </div>
+              <label className="settingsRow">
+                <div>
+                  <strong>Theme</strong>
+                  <span>Choose a fixed theme or follow your operating system.</span>
+                </div>
+                <select value={themePreference} onChange={(event) => setThemePreference(event.target.value as ThemePreference)}>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="system">System</option>
+                </select>
               </label>
             </section>
-            <section className="panel settingsPanel">
-              <h2>Integrations</h2>
-              <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} />
+
+            <section className="panel settingsGroup">
+              <div className="settingsGroupHeader">
+                <span>02</span>
+                <div>
+                  <h2>Integrations</h2>
+                  <p>External services used by optional server tools.</p>
+                </div>
+              </div>
+              <div className="settingsRow">
+                <div>
+                  <strong>Modrinth API key</strong>
+                  <span>{appState.modrinthApiConfigured ? "Configured. Enter a new key to replace it." : "Required for mod search and installation."}</span>
+                </div>
+                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} />
+              </div>
+            </section>
+
+            <section className="panel settingsGroup">
+              <div className="settingsGroupHeader">
+                <span>03</span>
+                <div>
+                  <h2>Runtime</h2>
+                  <p>Host-level capabilities available to ServerSentinel.</p>
+                </div>
+              </div>
+              <div className="settingsRow readOnly">
+                <div>
+                  <strong>Docker socket</strong>
+                  <span>Enables runtime creation, container status, controls, Docker logs, and console input.</span>
+                </div>
+                <span className={`settingsStatus ${appState.dockerSocketMounted ? "ready" : "limited"}`}>
+                  {appState.dockerSocketMounted ? "Connected" : "Not mounted"}
+                </span>
+              </div>
             </section>
           </section>
         )}
@@ -549,7 +754,7 @@ export default function App() {
             <div className="activeServerStrip">
               <div>
                 <strong>{activeServer.displayName}</strong>
-                <span>{activeServer.minecraftVersion || "Version unknown"} · {activeServer.directoryLabel}</span>
+                <span>{activeServer.minecraftVersion || "Version unknown"} · Fabric</span>
               </div>
               <span className={`runtimeBadge ${runtimeTone(status, appState.dockerSocketMounted)}`}>
                 {runtimeLabel(status, appState.dockerSocketMounted)}
@@ -566,40 +771,86 @@ export default function App() {
             {activeTab === "overview" && (
               <section className="tabPage overviewPage">
                 <section className="panel controls">
-                  <h2>Managed Server</h2>
-                  <dl className="meta">
-                    <dt>Directory</dt>
-                    <dd>{activeServer.directoryLabel}</dd>
-                    <dt>Version</dt>
-                    <dd>{activeServer.minecraftVersion || "Manual / unknown"}</dd>
-                    <dt>Fabric loader</dt>
-                    <dd>{activeServer.loaderVersion || "Latest stable"}</dd>
-                    <dt>Docker</dt>
-                    <dd>{status?.docker.message || status?.docker.container || "Not configured"}</dd>
-                    <dt>Runtime image</dt>
-                    <dd>{activeServer.dockerImage || "eclipse-temurin:21-jre"}</dd>
-                  </dl>
+                  <div className="panelHeader">
+                    <h2>Server Control</h2>
+                    <span className={`runtimeBadge ${runtimeTone(status, appState.dockerSocketMounted)}`}>
+                      {runtimeLabel(status, appState.dockerSocketMounted)}
+                    </span>
+                  </div>
+                  <div className="serverSummary">
+                    <div className="summaryTile">
+                      <span>State</span>
+                      <strong>{status?.docker.running ? "Running" : status?.docker.state === "unknown" ? "Unknown" : "Stopped"}</strong>
+                    </div>
+                    <div className="summaryTile">
+                      <span>Minecraft</span>
+                      <strong>{activeServer.minecraftVersion || "Unknown"}</strong>
+                    </div>
+                    <div className="summaryTile">
+                      <span>Fabric loader</span>
+                      <strong>{activeServer.loaderVersion || "Latest stable"}</strong>
+                    </div>
+                    <div className="summaryTile">
+                      <span>Control</span>
+                      <strong>{status?.controlAvailable ? "Start, stop, restart" : "File tools only"}</strong>
+                    </div>
+                  </div>
                   <div className="buttonRow">
                     <button onClick={() => runContainerAction("start")} disabled={!status?.controlAvailable || status.docker.running}>Start</button>
                     <button onClick={() => runContainerAction("stop")} disabled={!status?.controlAvailable || !status.docker.running}>Stop</button>
                     <button onClick={() => runContainerAction("restart")} disabled={!status?.controlAvailable}>Restart</button>
                   </div>
-                  <form onSubmit={sendCommand} className="commandLine">
-                    <input placeholder="Live stdin commands are unavailable in this MVP" disabled />
-                    <button disabled>Send</button>
-                  </form>
-                  <p className="muted">{status?.commandInputMessage}</p>
                 </section>
 
                 <section className="panel consolePanel">
-                  <h2>Console Logs</h2>
-                  <div className="console" ref={consoleRef}>
-                    {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="muted">No log output yet.</span>}
+                  <div className="panelHeader">
+                    <h2>Console</h2>
+                    <span className="muted">{status?.commandInputAvailable ? "Command input enabled" : status?.commandInputMessage}</span>
+                  </div>
+                  <div className="terminal">
+                    <div className="console" ref={consoleRef}>
+                      {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No log output yet.</span>}
+                    </div>
+                    <form onSubmit={sendCommand} className="terminalPrompt">
+                      <span>&gt;</span>
+                      <div className="commandInputWrap">
+                        <input
+                          value={commandInput}
+                          onChange={(event) => {
+                            setCommandInput(event.target.value);
+                            setHistoryIndex(null);
+                          }}
+                          onKeyDown={handleCommandKeyDown}
+                          placeholder={status?.commandInputAvailable ? "Enter command" : "Console input unavailable"}
+                          disabled={!status?.commandInputAvailable}
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                        {status?.commandInputAvailable && commandSuggestions.length > 0 && (
+                          <div className="suggestions">
+                            {commandSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.command}
+                                type="button"
+                                onClick={() => {
+                                  setCommandInput(suggestion.command);
+                                  setHistoryIndex(null);
+                                }}
+                              >
+                                <strong>{suggestion.command}</strong>
+                                <span>{suggestion.description}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button disabled={!status?.commandInputAvailable || !commandInput.trim()}>Send</button>
+                    </form>
                   </div>
                   <p className="muted">
                     {status?.docker.configured && appState.dockerSocketMounted
                       ? "Streaming Docker container logs."
-                      : "Streaming logs/latest.log when the server writes output."}
+                      : "Waiting for server log output."}
                   </p>
                 </section>
               </section>
@@ -649,10 +900,16 @@ export default function App() {
                       API key {appState.modrinthApiConfigured ? "configured" : "not configured"}
                     </span>
                   </div>
+                  {!appState.modrinthApiConfigured && (
+                    <section className="systemBanner accent">
+                      <strong>Modrinth API key is not configured.</strong>
+                      <span>Mod search and installation are disabled. Add a key in Settings to enable this page.</span>
+                    </section>
+                  )}
                   <form onSubmit={searchMods} className="modSearch">
-                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Fabric mods" />
-                    <input value={gameVersion} onChange={(event) => setGameVersion(event.target.value)} placeholder="Minecraft version" />
-                    <button disabled={!query.trim() || !gameVersion.trim()}>Search</button>
+                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Fabric mods" disabled={!appState.modrinthApiConfigured} />
+                    <input value={gameVersion} onChange={(event) => setGameVersion(event.target.value)} placeholder="Minecraft version" disabled={!appState.modrinthApiConfigured} />
+                    <button disabled={!appState.modrinthApiConfigured || !query.trim() || !gameVersion.trim()}>Search</button>
                   </form>
                   <div className="mods">
                     {mods.map((mod) => (
@@ -663,7 +920,7 @@ export default function App() {
                           <p>{mod.description}</p>
                           <small>{mod.downloads.toLocaleString()} downloads</small>
                         </div>
-                        <button onClick={() => installMod(mod.project_id, mod.title)}>Install</button>
+                        <button onClick={() => installMod(mod.project_id, mod.title)} disabled={!appState.modrinthApiConfigured}>Install</button>
                       </article>
                     ))}
                   </div>
@@ -688,8 +945,8 @@ export default function App() {
                     <dd>{activeServer.javaArgs || "-Xms2G -Xmx4G"}</dd>
                     <dt>Ports</dt>
                     <dd>{activeServer.dockerPorts || "25565:25565/tcp"}</dd>
-                    <dt>File logs</dt>
-                    <dd>{status?.fileLogsAvailable ? "logs/latest.log found" : "logs/latest.log not found"}</dd>
+                    <dt>Log file</dt>
+                    <dd>{status?.fileLogsAvailable ? "Available" : "Not found"}</dd>
                     <dt>Control</dt>
                     <dd>{status?.controlAvailable ? "Docker container control enabled" : "Not configured"}</dd>
                   </dl>
@@ -711,25 +968,6 @@ function Notifications({ notices }: { notices: Notice[] }) {
       {notices.map((notice) => (
         <div key={notice.id} className={`toast ${notice.type}`}>{notice.text}</div>
       ))}
-    </div>
-  );
-}
-
-function StatusItem({
-  label,
-  ok,
-  good,
-  bad
-}: {
-  label: string;
-  ok: boolean;
-  good: string;
-  bad: string;
-}) {
-  return (
-    <div className="statusItem">
-      <span>{label}</span>
-      <strong className={ok ? "ok" : "warn"}>{ok ? good : bad}</strong>
     </div>
   );
 }

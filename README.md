@@ -24,8 +24,11 @@ With Docker socket access:
 - Read Minecraft runtime container status.
 - Start, stop, and restart the runtime container.
 - Read and stream Docker container logs.
+- Send Minecraft console commands to a running managed runtime container.
 
-Live stdin command input is not implemented in this MVP. The UI shows this explicitly instead of pretending command sending works.
+Console command input is available for Docker-managed runtime containers while they are running. Server console commands should be entered without a leading `/`; the UI strips a leading slash if one is typed.
+
+The console input supports common Minecraft server command suggestions, Tab completion, and Up/Down history navigation.
 
 ## Runtime Model
 
@@ -78,7 +81,7 @@ PORT=8080
 
 Mounting `/var/run/docker.sock` gives ServerSentinel powerful control over Docker on the host. Treat it as trusted-admin access. Only enable it in local or otherwise trusted environments.
 
-If the socket is not mounted, ServerSentinel still works for file creation, files, editing, Modrinth installs, and `logs/latest.log` viewing. Runtime container creation, status, and start/stop/restart require the socket.
+If the socket is not mounted, ServerSentinel still works for file creation, files, editing, Modrinth installs, and `logs/latest.log` viewing. Runtime container creation, status, start/stop/restart, Docker logs, and console command input require the socket.
 
 ## Docker
 
@@ -167,6 +170,4 @@ npm run build
 
 - No authentication. Do not expose this service directly to the public internet.
 - Server creation is Fabric-only.
-- No live stdin command bridge for runtime containers yet.
 - No mod dependency/conflict resolver; installs the latest Modrinth version matching Fabric and the requested Minecraft version.
-- No deletion flow for servers yet; edit the JSON config in `SERVERSENTINEL_CONFIG_DIR/servers.json` if needed.
