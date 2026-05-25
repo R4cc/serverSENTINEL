@@ -127,6 +127,7 @@ type ProvisionJob = {
 type ActivePage = "servers" | "server" | "settings" | "create";
 type ThemePreference = "light" | "dark" | "system";
 
+const appVersion = "0.1.0";
 const demoServerId = "demo-survival";
 
 const emptyApp: AppState = {
@@ -658,6 +659,7 @@ export default function App() {
     [activeServerId, effectiveAppState.servers]
   );
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
+  const serverSettingsLocked = isProvisioning || Boolean(status?.docker.running);
   const modsLocked = isProvisioning || !status || Boolean(status.docker.running);
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
@@ -760,6 +762,12 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("serversentinel-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    if (activeTab === "settings" && serverSettingsLocked) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, serverSettingsLocked]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
@@ -1561,6 +1569,7 @@ export default function App() {
             <SidebarIcon name="settings" />
             <span>Settings</span>
           </button>
+          <span className="sidebarVersion">v{appVersion}</span>
         </nav>
       </aside>
 
@@ -1663,6 +1672,12 @@ export default function App() {
                   {demoMode ? "Enabled" : "Disabled"}
                 </span>
               </label>
+              <div className="settingsRow readOnly">
+                <div>
+                  <strong>version</strong>
+                </div>
+                <span className="settingsStatus">v{appVersion}</span>
+              </div>
             </section>
 
             <section className="panel settingsGroup">
@@ -1732,7 +1747,14 @@ export default function App() {
               <button className={activeTab === "files" ? "active" : ""} onClick={() => setActiveTab("files")} disabled={isProvisioning}>Files</button>
               <button className={activeTab === "mods" ? "active" : ""} onClick={() => setActiveTab("mods")} disabled={isProvisioning}>Mods</button>
               <button className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")} disabled={isProvisioning}>Scheduling</button>
-              <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")} disabled={isProvisioning}>Server Settings</button>
+              <button
+                className={activeTab === "settings" ? "active" : ""}
+                onClick={() => setActiveTab("settings")}
+                disabled={serverSettingsLocked}
+                title={status?.docker.running ? "Stop the server to edit settings" : undefined}
+              >
+                Server Settings
+              </button>
             </nav>
 
             {activeTab === "overview" && (
@@ -1995,9 +2017,9 @@ export default function App() {
                     <dt>Control</dt>
                     <dd>{activeServerIsDemo ? "Demo runtime control enabled" : status?.controlAvailable ? "Docker container control enabled" : "Not configured"}</dd>
                   </dl>
-                  <ServerEditForm server={activeServer} versions={fabricVersions} totalMemory={effectiveAppState.totalMemory} onSubmit={updateServer} disabled={isProvisioning} />
+                  <ServerEditForm server={activeServer} versions={fabricVersions} totalMemory={effectiveAppState.totalMemory} onSubmit={updateServer} disabled={serverSettingsLocked} />
                 </section>
-                <DeleteServerPanel server={activeServer} onSubmit={deleteServer} disabled={isProvisioning} />
+                <DeleteServerPanel server={activeServer} onSubmit={deleteServer} disabled={serverSettingsLocked} />
               </section>
             )}
           </>

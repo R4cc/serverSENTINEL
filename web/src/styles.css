@@ -290,6 +290,20 @@ code {
   font-weight: 800;
 }
 
+.sidebarVersion {
+  justify-self: center;
+  border: var(--border-strong) solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 5px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 .iconButton {
   width: 44px;
   min-width: 44px;
@@ -611,6 +625,7 @@ button .buttonIcon {
 
 .sidebarCollapsed .brandBlock h1,
 .sidebarCollapsed .brandBlock p,
+.sidebarCollapsed .sidebarVersion,
 .sidebarCollapsed .sideNav small,
 .sidebarCollapsed .sideNav span {
   display: none;
