@@ -90,7 +90,7 @@ type DockerContainerInspect = {
 
 type DockerStats = {
   read?: string;
-  memory_stats?: { usage?: number; limit?: number };
+  memory_stats?: { usage?: number; limit?: number; stats?: { cache?: number; inactive_file?: number } };
   cpu_stats?: {
     online_cpus?: number;
     cpu_usage?: { total_usage?: number };
@@ -753,7 +753,15 @@ async function dockerRecentLogs(server: AttachedServer) {
 
 async function dockerResourceStats(server: AttachedServer) {
   if (!dockerControlConfigured(server)) {
-    throw new Error("Container stats are not configured for this server");
+    return {
+      available: false,
+      running: false,
+      cpuPercent: 0,
+      memoryUsageBytes: 0,
+      memoryLimitBytes: 0,
+      readAt: new Date().toISOString(),
+      message: "Docker container stats are not configured for this server"
+    };
   }
   const status = await dockerStatus(server);
   if (!status.running) {
@@ -763,27 +771,46 @@ async function dockerResourceStats(server: AttachedServer) {
       cpuPercent: 0,
       memoryUsageBytes: 0,
       memoryLimitBytes: 0,
-      readAt: new Date().toISOString()
+      readAt: new Date().toISOString(),
+      container: dockerContainerName(server),
+      message: status.message || "Container is not running"
     };
   }
 
-  const stats = await dockerRequest<DockerStats>(
-    "GET",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/stats?stream=false`,
-    200
-  );
+  let stats: DockerStats;
+  try {
+    stats = await dockerRequest<DockerStats>(
+      "GET",
+      `/containers/${encodeURIComponent(dockerContainerName(server))}/stats?stream=false`,
+      200
+    );
+  } catch (error) {
+    return {
+      available: false,
+      running: true,
+      cpuPercent: 0,
+      memoryUsageBytes: 0,
+      memoryLimitBytes: 0,
+      readAt: new Date().toISOString(),
+      container: dockerContainerName(server),
+      message: (error as Error).message || "Docker stats are unavailable"
+    };
+  }
   const cpuDelta = (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
   const systemDelta = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
   const onlineCpus = stats.cpu_stats?.online_cpus || 1;
-  const cpuPercent = systemDelta > 0 && cpuDelta > 0 ? (cpuDelta / systemDelta) * onlineCpus * 100 : 0;
+  const rawCpuPercent = systemDelta > 0 && cpuDelta > 0 ? (cpuDelta / systemDelta) * onlineCpus * 100 : 0;
+  const memoryUsage = stats.memory_stats?.usage ?? 0;
+  const reclaimableCache = stats.memory_stats?.stats?.cache ?? stats.memory_stats?.stats?.inactive_file ?? 0;
 
   return {
     available: true,
     running: true,
-    cpuPercent,
-    memoryUsageBytes: stats.memory_stats?.usage ?? 0,
+    cpuPercent: Number.isFinite(rawCpuPercent) ? Math.max(0, rawCpuPercent) : 0,
+    memoryUsageBytes: Math.max(0, memoryUsage - reclaimableCache),
     memoryLimitBytes: stats.memory_stats?.limit ?? 0,
-    readAt: stats.read ?? new Date().toISOString()
+    readAt: stats.read ?? new Date().toISOString(),
+    container: dockerContainerName(server)
   };
 }
 

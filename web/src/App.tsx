@@ -65,6 +65,8 @@ type ResourceStats = {
   memoryUsageBytes: number;
   memoryLimitBytes: number;
   readAt: string;
+  container?: string;
+  message?: string;
 };
 
 type ResourceSample = ResourceStats & {
@@ -126,6 +128,8 @@ const emptyApp: AppState = {
 const defaultServerPort = 25565;
 const minServerPort = 1000;
 const maxServerPort = 65000;
+const resourcePollMs = 5_000;
+const maxResourceSamples = 60;
 
 const minecraftCommandSuggestions = [
   { command: "help", description: "Show available server commands" },
@@ -412,28 +416,31 @@ export default function App() {
 
   useEffect(() => {
     if (!activeServer || activePage !== "server" || activeTab !== "overview") return;
+    const serverId = activeServer.id;
     let cancelled = false;
+    setResourceSamples([]);
     async function pollStats() {
       try {
-        const stats = await api<ResourceStats>(`/api/servers/${activeServer!.id}/stats`);
+        const stats = await api<ResourceStats>(`/api/servers/${serverId}/stats`);
         if (cancelled) return;
-        setResourceSamples((current) => [...current.slice(-59), { ...stats, sampledAt: Date.now() }]);
-      } catch {
+        setResourceSamples((current) => [...current.slice(1 - maxResourceSamples), { ...stats, sampledAt: Date.now() }]);
+      } catch (error) {
         if (!cancelled) {
-          setResourceSamples((current) => [...current.slice(-59), {
+          setResourceSamples((current) => [...current.slice(1 - maxResourceSamples), {
             available: false,
             running: false,
             cpuPercent: 0,
             memoryUsageBytes: 0,
             memoryLimitBytes: 0,
             readAt: new Date().toISOString(),
+            message: (error as Error).message || "Container stats are unavailable",
             sampledAt: Date.now()
           }]);
         }
       }
     }
     void pollStats();
-    const interval = window.setInterval(() => void pollStats(), 5_000);
+    const interval = window.setInterval(() => void pollStats(), resourcePollMs);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -1070,7 +1077,7 @@ export default function App() {
                   </div>
                 </section>
 
-                <ResourcePanel samples={resourceSamples} />
+                <ResourcePanel samples={resourceSamples} status={status} dockerSocketMounted={appState.dockerSocketMounted} />
 
                 <section className="panel consolePanel">
                   <div className="panelHeader">
@@ -1307,29 +1314,50 @@ function MiniChart({
 }) {
   const width = 360;
   const height = 120;
-  const points = samples.map((sample, index) => {
+  const chartSamples = samples.filter((sample) => sample.available && sample.running);
+  const points = chartSamples.map((sample, index) => {
     const raw = metric === "cpu" ? sample.cpuPercent : sample.memoryUsageBytes;
-    const x = samples.length <= 1 ? 0 : (index / (samples.length - 1)) * width;
+    const x = chartSamples.length <= 1 ? width : (index / (chartSamples.length - 1)) * width;
     const y = height - (Math.min(raw, max) / Math.max(max, 1)) * height;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
+  const latestPoint = points.split(" ").at(-1);
 
   return (
     <svg className="resourceChart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${metric} usage over time`}>
       <line x1="0" y1={height - 1} x2={width} y2={height - 1} />
       <line x1="0" y1="1" x2={width} y2="1" />
       {points && <polyline points={points} />}
+      {latestPoint && <circle cx={latestPoint.split(",")[0]} cy={latestPoint.split(",")[1]} r="4" />}
+      {!points && <text x={width / 2} y={height / 2} textAnchor="middle">No live samples</text>}
     </svg>
   );
 }
 
-function ResourcePanel({ samples }: { samples: ResourceSample[] }) {
+function ResourcePanel({
+  samples,
+  status,
+  dockerSocketMounted
+}: {
+  samples: ResourceSample[];
+  status: ServerStatus | null;
+  dockerSocketMounted: boolean;
+}) {
   const latest = samples.at(-1);
+  const chartSamples = samples.filter((sample) => sample.available && sample.running);
   const cpu = latest?.cpuPercent ?? 0;
   const memoryUsage = latest?.memoryUsageBytes ?? 0;
   const memoryLimit = latest?.memoryLimitBytes ?? 0;
-  const memoryMax = Math.max(memoryLimit, ...samples.map((sample) => sample.memoryUsageBytes), 1);
-  const cpuMax = Math.max(100, ...samples.map((sample) => sample.cpuPercent), 1);
+  const memoryMax = Math.max(memoryLimit, ...chartSamples.map((sample) => sample.memoryUsageBytes), 1);
+  const cpuMax = Math.max(100, ...chartSamples.map((sample) => sample.cpuPercent), 1);
+  const historyMinutes = Math.max(1, Math.ceil((maxResourceSamples * resourcePollMs) / 60_000));
+  const sampleAge = latest ? Math.max(0, Math.round((Date.now() - latest.sampledAt) / 1000)) : null;
+  const statusMessage = latest?.message
+    || (!dockerSocketMounted
+      ? "Docker socket is not mounted, so live container stats are unavailable."
+      : status?.docker.running
+        ? "Collecting Docker stats."
+        : status?.docker.message || "Start the container to collect live stats.");
 
   return (
     <section className="panel resourcePanel">
@@ -1347,13 +1375,24 @@ function ResourcePanel({ samples }: { samples: ResourceSample[] }) {
           <strong>{cpu.toFixed(1)}%</strong>
         </div>
       </div>
+      <div className="resourceMeta">
+        <span>{chartSamples.length} samples over up to {historyMinutes} min</span>
+        <span>{sampleAge === null ? "Not sampled yet" : `Last sample ${sampleAge}s ago`}</span>
+      </div>
+      {!latest?.available && <p className="resourceMessage">{statusMessage}</p>}
       <div className="resourceCharts">
         <div>
-          <span>Memory over time</span>
+          <div className="chartHeader">
+            <span>Memory over time</span>
+            <strong>{memoryLimit ? `${Math.round((memoryUsage / memoryLimit) * 100)}%` : "No limit"}</strong>
+          </div>
           <MiniChart samples={samples} metric="memory" max={memoryMax} />
         </div>
         <div>
-          <span>CPU over time</span>
+          <div className="chartHeader">
+            <span>CPU over time</span>
+            <strong>{cpu.toFixed(1)}%</strong>
+          </div>
           <MiniChart samples={samples} metric="cpu" max={cpuMax} />
         </div>
       </div>

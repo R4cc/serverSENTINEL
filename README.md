@@ -22,6 +22,7 @@ With Docker socket access:
 
 - Create a separate runtime container for each server.
 - Read Minecraft runtime container status.
+- Read current CPU and memory usage for the overview dashboard.
 - Start, stop, and restart the runtime container.
 - Read and stream Docker container logs.
 - Send Minecraft console commands to a running managed runtime container.
@@ -81,7 +82,7 @@ PORT=8080
 
 Mounting `/var/run/docker.sock` gives ServerSentinel powerful control over Docker on the host. Treat it as trusted-admin access. Only enable it in local or otherwise trusted environments.
 
-If the socket is not mounted, ServerSentinel still works for file creation, files, editing, Modrinth installs, and `logs/latest.log` viewing. Runtime container creation, status, start/stop/restart, Docker logs, and console command input require the socket.
+If the socket is not mounted, ServerSentinel still works for file creation, files, editing, Modrinth installs, and `logs/latest.log` viewing. Runtime container creation, status, start/stop/restart, Docker logs, overview CPU/memory stats, and console command input require the socket.
 
 ## Docker
 
