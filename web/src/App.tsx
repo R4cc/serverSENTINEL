@@ -95,6 +95,10 @@ const emptyApp: AppState = {
   totalMemory: 0
 };
 
+const defaultServerPort = 25565;
+const minServerPort = 1000;
+const maxServerPort = 65000;
+
 const minecraftCommandSuggestions = [
   { command: "help", description: "Show available server commands" },
   { command: "list", description: "List online players" },
@@ -173,6 +177,25 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+function totalMemoryGb(totalMemory: number) {
+  return Math.max(1, totalMemory ? Math.round(totalMemory / (1024 * 1024 * 1024)) : 16);
+}
+
+function parseMaxMemoryGb(javaArgs?: string) {
+  const match = (javaArgs || "").match(/-Xmx(\d+)G/);
+  return match ? parseInt(match[1], 10) : 4;
+}
+
+function memoryArgs(memoryGb: number) {
+  return `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G -Xmx${memoryGb}G`;
+}
+
+function isValidServerPort(port: string) {
+  if (!/^\d+$/.test(port)) return false;
+  const value = Number(port);
+  return value >= minServerPort && value <= maxServerPort;
 }
 
 function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
@@ -375,6 +398,13 @@ export default function App() {
     event.preventDefault();
     setNotice("");
     const form = new FormData(event.currentTarget);
+    const serverPort = String(form.get("serverPort") ?? "");
+    if (!isValidServerPort(serverPort)) {
+      const message = `Server port must be between ${minServerPort} and ${maxServerPort}.`;
+      setNotice(message);
+      notify("error", message);
+      return;
+    }
     setProvisionJob({
       id: "local",
       status: "running",
@@ -1069,6 +1099,65 @@ function ModrinthKeyForm({
   );
 }
 
+function MemorySelector({
+  totalMemory,
+  initialMemoryGb = 4
+}: {
+  totalMemory: number;
+  initialMemoryGb?: number;
+}) {
+  const totalRamGb = totalMemoryGb(totalMemory);
+  const [memoryGb, setMemoryGb] = useState(() => Math.min(Math.max(1, initialMemoryGb), totalRamGb));
+
+  useEffect(() => {
+    setMemoryGb((current) => Math.min(Math.max(1, current), totalRamGb));
+  }, [totalRamGb]);
+
+  function updateMemory(value: number) {
+    if (!Number.isFinite(value)) return;
+    setMemoryGb(Math.min(Math.max(1, Math.round(value)), totalRamGb));
+  }
+
+  return (
+    <div className="memorySelector">
+      <div className="memorySelectorHeader">
+        <label htmlFor="memoryGb">Memory</label>
+        <span className="totalRamLabel">Machine RAM: {totalRamGb} GB total</span>
+      </div>
+      <div className="memorySelectorControls">
+        <input
+          id="memoryGb"
+          type="range"
+          min="1"
+          max={totalRamGb}
+          value={memoryGb}
+          onChange={(event) => updateMemory(Number(event.target.value))}
+          className="memorySlider"
+        />
+        <div className="memoryInputWrap">
+          <input
+            type="number"
+            min="1"
+            max={totalRamGb}
+            value={memoryGb}
+            onChange={(event) => updateMemory(Number(event.target.value))}
+            className="memoryNumberInput"
+          />
+          <span className="unit">GB</span>
+        </div>
+      </div>
+      <input type="hidden" name="javaArgs" value={memoryArgs(memoryGb)} />
+      <p className="safelyAllocateTip">
+        {memoryGb > totalRamGb * 0.8 ? (
+          <span className="warn">Allocating over 80% of RAM may cause host instability.</span>
+        ) : (
+          <span className="ok">Safe allocation level for this host.</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 function ServerEditForm({
   server,
   versions,
@@ -1082,11 +1171,6 @@ function ServerEditForm({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   disabled?: boolean;
 }) {
-  const totalRamGb = totalMemory ? Math.round(totalMemory / (1024 * 1024 * 1024)) : 16;
-  const match = (server.javaArgs || "").match(/-Xmx(\d+)G/);
-  const initialMemory = match ? parseInt(match[1], 10) : 4;
-  const [memoryGb, setMemoryGb] = useState(() => Math.min(initialMemory, totalRamGb));
-
   return (
     <form onSubmit={onSubmit} className="attachForm">
       <fieldset disabled={disabled}>
@@ -1120,50 +1204,7 @@ function ServerEditForm({
           ))}
         </select>
       </label>
-      <div className="memorySelector">
-        <div className="memorySelectorHeader">
-          <label>Memory</label>
-          <span className="totalRamLabel">Host Total: {totalRamGb} GB</span>
-        </div>
-        <div className="memorySelectorControls">
-          <input
-            type="range"
-            min="1"
-            max={totalRamGb}
-            value={memoryGb}
-            onChange={(e) => setMemoryGb(Number(e.target.value))}
-            className="memorySlider"
-          />
-          <div className="memoryInputWrap">
-            <input
-              type="number"
-              min="1"
-              max={totalRamGb}
-              value={memoryGb}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                if (val >= 1 && val <= totalRamGb) {
-                  setMemoryGb(val);
-                } else if (val < 1) {
-                  setMemoryGb(1);
-                } else if (val > totalRamGb) {
-                  setMemoryGb(totalRamGb);
-                }
-              }}
-              className="memoryNumberInput"
-            />
-            <span className="unit">GB</span>
-          </div>
-        </div>
-        <input type="hidden" name="javaArgs" value={`-Xms${Math.max(1, Math.floor(memoryGb / 2))}G -Xmx${memoryGb}G`} />
-        <p className="safelyAllocateTip">
-          {memoryGb > totalRamGb * 0.8 ? (
-            <span className="warn">⚠️ Allocating over 80% of RAM may cause host instability.</span>
-          ) : (
-            <span className="ok">✓ Safe allocation level for this host.</span>
-          )}
-        </p>
-      </div>
+      <MemorySelector totalMemory={totalMemory} initialMemoryGb={parseMaxMemoryGb(server.javaArgs)} />
       <label>
         Docker runtime image
         <select name="dockerImage" defaultValue={server.dockerImage || "eclipse-temurin:21-jre"}>
@@ -1224,7 +1265,7 @@ function AttachForm({
   onSubmit,
   dockerSocketMounted,
   versions,
-  totalMemory: _totalMemory,
+  totalMemory = 0,
   provisioning = false
 }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1238,11 +1279,8 @@ function AttachForm({
     { value: "eclipse-temurin:17-jre", label: "Java 17 runtime" },
     { value: "eclipse-temurin:25-jre", label: "Java 25 runtime" }
   ];
-  const memoryProfiles = [
-    { value: "-Xms1G -Xmx2G", label: "Small - 2 GB max" },
-    { value: "-Xms2G -Xmx4G", label: "Standard - 4 GB max" },
-    { value: "-Xms4G -Xmx8G", label: "Large - 8 GB max" }
-  ];
+  const [serverPort, setServerPort] = useState(String(defaultServerPort));
+  const serverPortValid = isValidServerPort(serverPort);
 
   return (
     <form onSubmit={onSubmit} className="attachForm">
@@ -1259,22 +1297,22 @@ function AttachForm({
           )) : <option value="1.21.4">1.21.4</option>}
         </select>
       </label>
-      <label>
-        Memory
-        <select name="javaArgs" defaultValue="-Xms2G -Xmx4G">
-          {memoryProfiles.map((profile) => (
-            <option key={profile.value} value={profile.value}>{profile.label}</option>
-          ))}
-        </select>
-      </label>
+      <MemorySelector totalMemory={totalMemory} />
       <label>
         Server port
-        <select name="serverPort" defaultValue="25565">
-          <option value="25565">25565 - default Minecraft</option>
-          <option value="25566">25566</option>
-          <option value="25567">25567</option>
-          <option value="25568">25568</option>
-        </select>
+        <input
+          name="serverPort"
+          type="number"
+          min={minServerPort}
+          max={maxServerPort}
+          value={serverPort}
+          onChange={(event) => setServerPort(event.target.value)}
+          aria-invalid={!serverPortValid}
+          required
+        />
+        {!serverPortValid && (
+          <span className="fieldError">Use a port from {minServerPort} to {maxServerPort}.</span>
+        )}
       </label>
       <label className="checkLine">
         <input name="acceptEula" type="checkbox" required />
@@ -1324,7 +1362,7 @@ function AttachForm({
       <p className="muted">
         Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create/start a separate runtime container." : "not mounted; server files will be created, but runtime control needs Docker."}
       </p>
-      <button>{provisioning ? "Setting up..." : "Create Server"}</button>
+      <button disabled={!serverPortValid}>{provisioning ? "Setting up..." : "Create Server"}</button>
       </fieldset>
     </form>
   );

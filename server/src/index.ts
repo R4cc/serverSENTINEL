@@ -23,6 +23,8 @@ const config = {
 
 const serversFile = join(config.configDir, "servers.json");
 const settingsFile = join(config.configDir, "settings.json");
+const minServerPort = 1000;
+const maxServerPort = 65000;
 
 type AppSettings = {
   modrinthApiKey?: string;
@@ -196,6 +198,12 @@ function toPublicPath(server: AttachedServer, absolutePath: string) {
 
 function safeModFilename(name: string) {
   return basename(name).replace(/[^a-zA-Z0-9._ -]/g, "_");
+}
+
+function isValidServerPort(port: string) {
+  if (!/^\d+$/.test(port)) return false;
+  const value = Number(port);
+  return value >= minServerPort && value <= maxServerPort;
 }
 
 function dockerAvailable() {
@@ -800,8 +808,8 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const installerVersion = input.installerVersion?.trim() || await latestFabricVersion("installer");
   const serverJar = input.serverJar?.trim() || "fabric-server-launch.jar";
   const serverPort = input.serverPort?.trim() || "25565";
-  if (!/^\d{1,5}$/.test(serverPort) || Number(serverPort) < 1 || Number(serverPort) > 65535) {
-    throw new Error("Server port must be a valid TCP port");
+  if (!isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
 
   const now = new Date().toISOString();
@@ -969,8 +977,8 @@ app.put<{
   const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
   const serverJar = request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar";
   const serverPort = request.body.serverPort?.trim();
-  if (serverPort && (!/^\d{1,5}$/.test(serverPort) || Number(serverPort) < 1 || Number(serverPort) > 65535)) {
-    throw new Error("Server port must be a valid TCP port");
+  if (serverPort && !isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
 
   const jarChanged = current.minecraftVersion !== minecraftVersion

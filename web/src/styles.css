@@ -133,6 +133,10 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+input[aria-invalid="true"] {
+  border-color: var(--sentinel-danger);
+}
+
 textarea {
   min-height: 520px;
   resize: vertical;
@@ -1459,4 +1463,12 @@ code {
 
 .safelyAllocateTip .ok {
   color: var(--sentinel-success);
+}
+
+.fieldError {
+  color: var(--sentinel-danger);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-transform: none;
 }
