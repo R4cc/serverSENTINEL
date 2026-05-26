@@ -13,15 +13,29 @@ import { fileURLToPath } from "node:url";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
 
+const defaultServersDir = "/data/servers";
+const legacyDefaultServersDockerVolume = "serversentinel-minecraft-servers";
+
+function defaultServersDockerVolume(serversDir: string) {
+  const configuredVolume = process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME?.trim();
+  if (configuredVolume !== undefined) {
+    return configuredVolume;
+  }
+  const usesDefaultContainerLayout = serversDir === resolve(defaultServersDir)
+    && (existsSync("/.dockerenv") || process.env.SERVERSENTINEL_CONFIG_DIR === "/config");
+  return usesDefaultContainerLayout ? legacyDefaultServersDockerVolume : "";
+}
+
+const configuredServersDir = resolve(process.env.SERVERSENTINEL_SERVERS_DIR ?? defaultServersDir);
+
 const config = {
   configDir: resolve(process.env.SERVERSENTINEL_CONFIG_DIR ?? "/config"),
-  serversDir: resolve(process.env.SERVERSENTINEL_SERVERS_DIR ?? "/data/servers"),
-  serversDockerVolume: process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME?.trim() ?? "",
+  serversDir: configuredServersDir,
+  serversDockerVolume: defaultServersDockerVolume(configuredServersDir),
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
   port: Number(process.env.PORT ?? "8080")
 };
 
-const legacyDefaultServersDockerVolume = "serversentinel-minecraft-servers";
 const serversFile = join(config.configDir, "servers.json");
 const settingsFile = join(config.configDir, "settings.json");
 const usersFile = join(config.configDir, "users.json");
