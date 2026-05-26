@@ -3,7 +3,7 @@ import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
@@ -2181,7 +2181,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
   return { ok: true, path: toPublicPath(server, target) };
 });
 
-app.delete<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
+app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = ensureInsideServer(server, request.query.path ?? "");
@@ -2189,7 +2189,26 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string } }>("/api/ser
     throw new Error("Refusing to delete the server root directory");
   }
   const publicPath = toPublicPath(server, target);
-  await rm(target, { recursive: true, force: true });
+  const targetStat = await stat(target);
+  if (targetStat.isDirectory()) {
+    if (request.query.recursive === "true") {
+      await rm(target, { recursive: true, force: false });
+    } else {
+      try {
+        await rmdir(target);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOTEMPTY" || code === "EEXIST") {
+          throw new Error("Directory is not empty. Recursive deletion requires recursive=true and explicit confirmation.");
+        }
+        throw error;
+      }
+    }
+  } else if (targetStat.isFile()) {
+    await rm(target, { force: false });
+  } else {
+    throw new Error("Only files and directories can be deleted from the browser file manager");
+  }
   if (publicPath.startsWith("/mods/") && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
     await deleteModIcon(server, basename(publicPath));
   }

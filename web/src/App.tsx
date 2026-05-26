@@ -1633,7 +1633,10 @@ export default function App() {
 
   async function deleteFileEntry(entry: FileEntry) {
     if (isProvisioning || dockerOperationalLock || !canManager || !activeServer) return;
-    if (!window.confirm(`Delete ${entry.name}? This cannot be undone.`)) return;
+    const confirmation = entry.type === "directory"
+      ? `Delete empty directory "${entry.name}"?\n\nOnly this directory will be removed. Non-empty directories are blocked in the browser file manager.`
+      : `Delete file "${entry.name}"?\n\nThis will permanently delete ${entry.path}.`;
+    if (!window.confirm(confirmation)) return;
     setNotice("");
     if (activeServerIsDemo) {
       if (entry.path.startsWith("/mods/")) {
