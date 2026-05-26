@@ -16,11 +16,12 @@ import { totalmem } from "node:os";
 const config = {
   configDir: resolve(process.env.SERVERSENTINEL_CONFIG_DIR ?? "/config"),
   serversDir: resolve(process.env.SERVERSENTINEL_SERVERS_DIR ?? "/data/servers"),
-  serversDockerVolume: process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME ?? "serversentinel-minecraft-servers",
+  serversDockerVolume: process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME?.trim() ?? "",
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
   port: Number(process.env.PORT ?? "8080")
 };
 
+const legacyDefaultServersDockerVolume = "serversentinel-minecraft-servers";
 const serversFile = join(config.configDir, "servers.json");
 const settingsFile = join(config.configDir, "settings.json");
 const usersFile = join(config.configDir, "users.json");
@@ -702,11 +703,22 @@ function dockerContainerName(server: AttachedServer) {
   return defaultContainerName(server.displayName);
 }
 
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 function dockerControlConfigured(server: AttachedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
 }
 
+function usesLegacyUnconfiguredServersVolume(server: AttachedServer) {
+  return !config.serversDockerVolume && server.dockerMountSource === legacyDefaultServersDockerVolume;
+}
+
 function serverDockerMountSource(server: AttachedServer) {
+  if (usesLegacyUnconfiguredServersVolume(server)) {
+    return server.serverDir;
+  }
   if (server.dockerMountSource && server.dockerMountSource !== server.serverDir) {
     return server.dockerMountSource;
   }
@@ -714,6 +726,9 @@ function serverDockerMountSource(server: AttachedServer) {
 }
 
 function serverDockerWorkingDir(server: AttachedServer) {
+  if (usesLegacyUnconfiguredServersVolume(server)) {
+    return "/data/server";
+  }
   if (server.dockerWorkingDir) {
     return server.dockerWorkingDir;
   }
@@ -829,7 +844,8 @@ async function ensureDockerContainer(server: AttachedServer) {
   await ensureDockerImage(image);
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
   const javaArgs = server.javaArgs || "-Xms2G -Xmx4G";
-  const command = `exec java ${javaArgs} -jar ${server.serverJar} nogui`;
+  const quotedServerJar = shellQuote(server.serverJar);
+  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${server.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
   const workingDir = serverDockerWorkingDir(server);
   const bindTarget = serverDockerBindTarget(server);
 
@@ -1366,6 +1382,10 @@ async function downloadFabricServerJar(server: AttachedServer) {
     Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>),
     createWriteStream(target)
   );
+  const downloaded = await stat(target);
+  if (!downloaded.isFile() || downloaded.size === 0) {
+    throw new Error("Fabric server launcher download did not produce a runnable jar");
+  }
 }
 
 async function ensureServerStoppedForModChanges(server: AttachedServer) {

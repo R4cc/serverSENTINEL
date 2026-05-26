@@ -1449,6 +1449,8 @@ export default function App() {
       await refreshConsoleLogs(activeServer.id);
       notify("success", `Sent ${action} request`);
     } catch (error) {
+      setConsoleStreamVersion((version) => version + 1);
+      await refreshConsoleLogs(activeServer.id);
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
     } finally {
