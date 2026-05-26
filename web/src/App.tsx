@@ -618,6 +618,8 @@ export default function App() {
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
   const [commandInput, setCommandInput] = useState("");
   const [commandInputFocused, setCommandInputFocused] = useState(false);
+  const [consolePinnedToBottom, setConsolePinnedToBottom] = useState(true);
+  const [pendingConsoleEntries, setPendingConsoleEntries] = useState(0);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => {
     const raw = window.localStorage.getItem("serversentinel-command-history");
     return raw ? JSON.parse(raw) as string[] : [];
@@ -640,6 +642,7 @@ export default function App() {
   const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const previousLogCountRef = useRef(0);
   const modUploadRef = useRef<HTMLInputElement>(null);
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = provisionJob?.status === "running";
@@ -745,10 +748,41 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab !== "overview") return;
+    if (!consolePinnedToBottom) return;
     window.requestAnimationFrame(() => {
       consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
+      setPendingConsoleEntries(0);
     });
   }, [logs, activeTab]);
+
+  useEffect(() => {
+    const previousCount = previousLogCountRef.current;
+    const addedEntries = Math.max(0, logs.length - previousCount);
+    previousLogCountRef.current = logs.length;
+    if (!addedEntries) return;
+    if (!consolePinnedToBottom && activeTab === "overview") {
+      setPendingConsoleEntries((current) => current + addedEntries);
+    }
+  }, [logs, activeTab, consolePinnedToBottom]);
+
+  function handleConsoleScroll() {
+    const element = consoleRef.current;
+    if (!element) return;
+    const threshold = 24;
+    const pinned = element.scrollTop + element.clientHeight >= element.scrollHeight - threshold;
+    setConsolePinnedToBottom(pinned);
+    if (pinned) {
+      setPendingConsoleEntries(0);
+    }
+  }
+
+  function jumpToLatestLogs() {
+    const element = consoleRef.current;
+    if (!element) return;
+    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+    setConsolePinnedToBottom(true);
+    setPendingConsoleEntries(0);
+  }
 
   useEffect(() => {
     const query = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -1794,9 +1828,14 @@ export default function App() {
                     <span className="muted">{status?.commandInputAvailable ? "Command input enabled" : status?.commandInputMessage}</span>
                   </div>
                   <div className="terminal">
-                    <div className="console" ref={consoleRef}>
+                    <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
                       {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No log output yet.</span>}
                     </div>
+                    {pendingConsoleEntries > 0 && (
+                      <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
+                        {pendingConsoleEntries} new {pendingConsoleEntries === 1 ? "entry" : "entries"} • Jump to latest
+                      </button>
+                    )}
                     <form onSubmit={sendCommand} className="terminalPrompt">
                       <span>&gt;</span>
                       <div className="commandInputWrap">
@@ -1814,7 +1853,7 @@ export default function App() {
                           spellCheck={false}
                           autoComplete="off"
                         />
-                        {commandInputFocused && status?.commandInputAvailable && commandSuggestions.length > 0 && (
+                        {commandInputFocused && commandInput.trim().length > 0 && status?.commandInputAvailable && commandSuggestions.length > 0 && (
                           <div className="suggestions">
                             {commandSuggestions.map((suggestion) => (
                               <button

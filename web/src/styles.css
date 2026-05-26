@@ -1399,6 +1399,17 @@ button .buttonIcon {
   color: #9a9a9a;
 }
 
+.consoleNotice {
+  margin: 0 var(--space-3) var(--space-2);
+  align-self: flex-start;
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border-color: var(--sentinel-accent-muted);
+  background: transparent;
+  color: var(--sentinel-accent-muted);
+  font-size: 12px;
+}
+
 .commandInputWrap {
   position: relative;
   flex: 1;
