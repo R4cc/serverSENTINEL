@@ -1092,7 +1092,8 @@ export default function App() {
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canAdmin) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api<PublicUser>("/api/users", {
         method: "POST",
@@ -1102,7 +1103,7 @@ export default function App() {
           role: form.get("role")
         })
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setUserModal(null);
       notify("success", "User account created");
       await loadUsers();
@@ -2087,15 +2088,6 @@ export default function App() {
                   <option value="fr-FR">Français (France)</option>
                   <option value="ja-JP">日本語 (日本)</option>
                 </select>
-              </label>
-              <label className="settingsRow">
-                <div>
-                  <strong>Demo mode</strong>
-                </div>
-                <span className="settingsToggle">
-                  <input type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} disabled={!authSession.authenticated} />
-                  {demoMode ? "Enabled" : "Disabled"}
-                </span>
               </label>
               <div className="settingsRow readOnly">
                 <div>
