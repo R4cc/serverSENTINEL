@@ -86,6 +86,8 @@ type FileListing = {
   entries: FileEntry[];
 };
 
+type ReleaseChannel = "release" | "beta" | "alpha";
+
 type ModrinthHit = {
   project_id: string;
   title: string;
@@ -101,6 +103,14 @@ type InstalledMod = {
   size: number;
   modifiedAt: string;
   iconUrl?: string;
+  preferredChannel?: ReleaseChannel;
+  versionInfo?: {
+    currentVersion?: string;
+    currentChannel?: ReleaseChannel;
+    latestVersion?: string;
+    latestChannel?: ReleaseChannel;
+    upToDate?: boolean;
+  } | null;
 };
 
 type FabricVersions = {
@@ -616,6 +626,7 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
   const [modSearchResults, setModSearchResults] = useState<ModrinthHit[]>([]);
+  const [modInstallChannel, setModInstallChannel] = useState<ReleaseChannel>("release");
   const [isSearchingMods, setIsSearchingMods] = useState(false);
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [modsView, setModsView] = useState<"manager" | "search">("manager");
@@ -1443,11 +1454,11 @@ export default function App() {
       return;
     }
     try {
-      const result = await api<{ filename: string; version: string }>("/api/modrinth/install", {
+      const result = await api<{ filename: string; version: string; channel: ReleaseChannel }>("/api/modrinth/install", {
         method: "POST",
-        body: JSON.stringify({ serverId: activeServer.id, projectId })
+        body: JSON.stringify({ serverId: activeServer.id, projectId, channel: modInstallChannel })
       });
-      setNotice(`Installed ${title} ${result.version} as ${result.filename}`);
+      setNotice(`Installed ${title} ${result.version} (${result.channel}) as ${result.filename}`);
       notify("success", `Installed ${title}`);
       setModsView("manager");
       await loadInstalledMods(activeServer.id);
@@ -1456,6 +1467,17 @@ export default function App() {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
     }
+  }
+
+  async function updateModChannel(mod: InstalledMod, channel: ReleaseChannel) {
+    if (!activeServer || !mod.filename) return;
+    if (activeServerIsDemo) {
+      setInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
+      setDemoInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
+      return;
+    }
+    await api(`/api/servers/${activeServer.id}/mods/channel`, { method: "PUT", body: JSON.stringify({ filename: mod.filename, channel }) });
+    await loadInstalledMods(activeServer.id);
   }
 
   async function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
@@ -2061,11 +2083,23 @@ export default function App() {
                             <strong>{mod.displayName}</strong>
                             <p>{mod.enabled ? "Enabled" : "Disabled"} - {formatBytes(mod.size)} - Modified {formatDisplayDate(mod.modifiedAt)}</p>
                             <small>{mod.filename}</small>
+                            {mod.versionInfo && (
+                              <small className={mod.versionInfo.upToDate ? "ok" : "warn"}>
+                                {mod.versionInfo.upToDate
+                                  ? `Up-to-date: ${mod.versionInfo.currentVersion || "unknown"}`
+                                  : `${mod.versionInfo.currentVersion || "unknown"} → ${mod.versionInfo.latestVersion || "unknown"} (${mod.versionInfo.latestChannel || "unknown"})`}
+                              </small>
+                            )}
                           </div>
                           <div className="modActions">
                             <button onClick={() => setInstalledModEnabled(mod, !mod.enabled)} disabled={modsLocked}>
                               {mod.enabled ? "Disable" : "Enable"}
                             </button>
+                            <select value={mod.preferredChannel || "release"} onChange={(event) => updateModChannel(mod, event.target.value as ReleaseChannel)} disabled={isProvisioning}>
+                              <option value="release">Release</option>
+                              <option value="beta">Beta</option>
+                              <option value="alpha">Alpha</option>
+                            </select>
                             <button className="dangerTextButton" onClick={() => removeInstalledMod(mod)} disabled={modsLocked}>
                               Remove
                             </button>
@@ -2079,6 +2113,11 @@ export default function App() {
                     <>
                       <form onSubmit={searchMods} className="modSearch">
                         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search compatible Fabric mods" disabled={isProvisioning || !effectiveAppState.modrinthApiConfigured} />
+                        <select value={modInstallChannel} onChange={(event) => setModInstallChannel(event.target.value as ReleaseChannel)} disabled={isProvisioning}>
+                          <option value="release">Release</option>
+                          <option value="beta">Beta</option>
+                          <option value="alpha">Alpha</option>
+                        </select>
                         <button disabled={isProvisioning || isSearchingMods || !effectiveAppState.modrinthApiConfigured || !query.trim()}>{isSearchingMods ? "Searching" : "Refresh"}</button>
                       </form>
                       <div className="mods">

@@ -30,6 +30,12 @@ type AppSettings = {
   modrinthApiKey?: string;
 };
 
+type ReleaseChannel = "release" | "beta" | "alpha";
+
+type ModPreference = {
+  channel: ReleaseChannel;
+};
+
 type AttachedServer = {
   id: string;
   displayName: string;
@@ -1666,11 +1672,59 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string } }>("/api/ser
   return { ok: true, path: publicPath };
 });
 
+
+
+function normalizeReleaseChannel(channel?: string): ReleaseChannel {
+  return channel === "alpha" || channel === "beta" ? channel : "release";
+}
+
+async function readModPreferences(server: AttachedServer): Promise<Record<string, ModPreference>> {
+  const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(await readFile(path, "utf8")) as Record<string, ModPreference>;
+  } catch {
+    return {};
+  }
+}
+
+async function writeModPreferences(server: AttachedServer, data: Record<string, ModPreference>) {
+  const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
+  await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+function versionChannel(versionType?: string): ReleaseChannel {
+  return normalizeReleaseChannel(versionType);
+}
+
+async function lookupModrinthUpdate(server: AttachedServer, modPath: string, preferredChannel: ReleaseChannel) {
+  if (!server.minecraftVersion) return null;
+  const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
+  const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+  const current = await currentRes.json() as { project_id?: string; version_number?: string; version_type?: string };
+  if (!current.project_id) return null;
+  const versionsUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(current.project_id)}/version`);
+  versionsUrl.searchParams.set("loaders", JSON.stringify(["fabric"]));
+  versionsUrl.searchParams.set("game_versions", JSON.stringify([server.minecraftVersion]));
+  const versionsRes = await modrinthFetch(versionsUrl.toString());
+  const versions = await versionsRes.json() as Array<{ version_number: string; version_type: string }>;
+  const channelRank: Record<ReleaseChannel, number> = { release: 0, beta: 1, alpha: 2 };
+  const target = versions.find((v) => channelRank[versionChannel(v.version_type)] <= channelRank[preferredChannel]);
+  return {
+    projectId: current.project_id,
+    currentVersion: current.version_number,
+    currentChannel: versionChannel(current.version_type),
+    latestVersion: target?.version_number,
+    latestChannel: target ? versionChannel(target.version_type) : undefined,
+    upToDate: Boolean(target && current.version_number === target.version_number)
+  };
+}
 app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
   const server = await getServer(request.params.id);
   const modsDir = ensureInsideServer(server, "mods");
   await mkdir(modsDir, { recursive: true });
   const entries = await readdir(modsDir, { withFileTypes: true });
+  const prefs = await readModPreferences(server);
   return {
     mods: await Promise.all(
       entries
@@ -1680,13 +1734,18 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
           const modPath = join(modsDir, entry.name);
           await ensureModrinthIconForFile(server, entry.name, modPath);
           const modStat = await stat(modPath);
+          const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
+          let versionInfo: any = null;
+          try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel); } catch { versionInfo = null; }
           return {
             filename: entry.name,
             displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
             enabled: entry.name.endsWith(".jar"),
             size: modStat.size,
             modifiedAt: modStat.mtime.toISOString(),
-            iconUrl: await modIconUrl(server, entry.name)
+            iconUrl: await modIconUrl(server, entry.name),
+            preferredChannel,
+            versionInfo
           };
         })
     )
@@ -1726,6 +1785,17 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   const target = ensureInsideServer(server, join("mods", safeInstalledModFilename(targetName)));
   await rename(source, target);
   return { ok: true, filename: basename(target), enabled };
+});
+
+
+app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", async (request) => {
+  const server = await getServer(request.params.id);
+  const filename = safeInstalledModFilename(request.body.filename);
+  const channel = normalizeReleaseChannel(request.body.channel);
+  const prefs = await readModPreferences(server);
+  prefs[filename] = { channel };
+  await writeModPreferences(server, prefs);
+  return { ok: true, filename, channel };
 });
 
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", async (request) => {
@@ -1778,7 +1848,7 @@ app.get<{ Querystring: { query?: string; serverId?: string } }>("/api/modrinth/s
   return response.json();
 });
 
-app.post<{ Body: { serverId?: string; projectId?: string } }>("/api/modrinth/install", async (request) => {
+app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel } }>("/api/modrinth/install", async (request) => {
   const server = await getServer(request.body.serverId);
   await ensureServerStoppedForModChanges(server);
   const projectId = request.body.projectId?.trim();
@@ -1794,9 +1864,12 @@ app.post<{ Body: { serverId?: string; projectId?: string } }>("/api/modrinth/ins
   const project = await projectResponse.json() as { icon_url?: string | null };
   const versions = (await versionsResponse.json()) as Array<{
     version_number: string;
+    version_type: string;
     files: Array<{ url: string; filename: string; primary: boolean }>;
   }>;
-  const version = versions[0];
+  const selectedChannel = normalizeReleaseChannel(request.body.channel);
+  const channelRank: Record<ReleaseChannel, number> = { release: 0, beta: 1, alpha: 2 };
+  const version = versions.find((candidate) => channelRank[versionChannel(candidate.version_type)] <= channelRank[selectedChannel]);
   const file = version?.files.find((candidate) => candidate.primary && candidate.filename.endsWith(".jar"))
     ?? version?.files.find((candidate) => candidate.filename.endsWith(".jar"));
   if (!version || !file) {
@@ -1824,7 +1897,8 @@ app.post<{ Body: { serverId?: string; projectId?: string } }>("/api/modrinth/ins
     projectId,
     version: version.version_number,
     filename: basename(destination),
-    path: toPublicPath(server, destination)
+    path: toPublicPath(server, destination),
+    channel: versionChannel(version.version_type)
   };
 });
 
