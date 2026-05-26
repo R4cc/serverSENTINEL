@@ -184,6 +184,11 @@ type ThemePreference = "light" | "dark" | "system";
 
 const appVersion = "0.1.1";
 const demoServerId = "demo-survival";
+const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
+
+function isServerWorkspacePage(page: ActivePage) {
+  return serverWorkspacePages.includes(page);
+}
 
 const emptyApp: AppState = {
   servers: [],
@@ -2075,14 +2080,14 @@ export default function App() {
             <h2>
               {activePage === "servers" && "Servers"}
               {activePage === "create" && "New Server"}
-              {["overview","console","files","mods","schedule","properties"].includes(activePage) && (activeServer?.displayName ?? "No Server Selected")}
+              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (effectiveAppState.servers.length === 0 ? "Welcome" : "No Server Selected"))}
               {activePage === "settings" && "Settings"}
             </h2>
           </div>
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>New server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {["overview","console","files","mods","schedule","properties"].includes(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
+            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
         </header>
 
@@ -2249,7 +2254,15 @@ export default function App() {
           </section>
         )}
 
-        {["overview","console","files","mods","schedule","properties"].includes(activePage) && !activeServer && (
+        {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
+          <section className="emptyState">
+            <h2>Welcome to ServerSentinel</h2>
+            <p>You do not have any servers yet. Create your first Fabric server to start managing files, mods, schedules, and runtime controls.</p>
+            <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Server</button>
+          </section>
+        )}
+
+        {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <section className="emptyState">
             <h2>No Server Selected</h2>
             <p>Create or select a server from the Servers page.</p>
@@ -2257,7 +2270,7 @@ export default function App() {
           </section>
         )}
 
-        {["overview","console","files","mods","schedule","properties"].includes(activePage) && activeServer && (
+        {isServerWorkspacePage(activePage) && activeServer && (
           <>
             <div className="activeServerStrip">
               <div>
