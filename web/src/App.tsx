@@ -154,7 +154,7 @@ type ProvisionJob = {
 type ActivePage = "servers" | "settings" | "create" | "overview" | "console" | "files" | "mods" | "schedule";
 type ThemePreference = "light" | "dark" | "system";
 
-const appVersion = "0.1.0";
+const appVersion = "0.1.1";
 const demoServerId = "demo-survival";
 
 const emptyApp: AppState = {
@@ -1031,7 +1031,8 @@ export default function App() {
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const username = String(form.get("username") || "");
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
@@ -1062,7 +1063,7 @@ export default function App() {
       }
       setDemoMode(false);
       setAuthSession(session);
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) {
       setAuthNotice((error as Error).message);
     }
@@ -1947,7 +1948,10 @@ export default function App() {
         <nav className="sideNav sideNavBottom">
           <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning}>
             <SidebarIcon name="settings" />
-            <span className="navLabel">Settings</span>
+            <span className="navLabel settingsNavLabel">
+              <span>Settings</span>
+              <span className="settingsVersionText">v{appVersion}</span>
+            </span>
           </button>
           <div className="accountChip">
             <span className="accountIcon" aria-hidden="true">
@@ -1965,7 +1969,6 @@ export default function App() {
               </svg>
             </button>
           </div>
-          <span className="sidebarVersion">v{appVersion}</span>
         </nav>
       </aside>
 

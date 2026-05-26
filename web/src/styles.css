@@ -316,20 +316,6 @@ code {
   font-weight: 800;
 }
 
-.sidebarVersion {
-  justify-self: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: var(--surface);
-  padding: 5px 7px;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
 .iconButton {
   width: 44px;
   min-width: 44px;
@@ -686,7 +672,6 @@ button .buttonIcon {
 
 .sidebarCollapsed .brandBlock h1,
 .sidebarCollapsed .brandBlock p,
-.sidebarCollapsed .sidebarVersion,
 .sidebarCollapsed .navLabel,
 .sidebarCollapsed .serverPicker small,
 .sidebarCollapsed .serverPicker {
@@ -721,6 +706,7 @@ button .buttonIcon {
 }
 
 .sidebarCollapsed .accountChip {
+  grid-template-columns: 34px;
   justify-content: center;
   padding: var(--space-1);
 }
@@ -1011,11 +997,13 @@ button .buttonIcon {
   border-radius: var(--radius-md);
   background: var(--surface);
   padding: var(--space-1);
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
   gap: var(--space-2);
   min-height: 46px;
   min-width: 0;
+  width: 100%;
 }
 
 .accountIcon {
@@ -1042,7 +1030,6 @@ button .buttonIcon {
 
 .accountName {
   min-width: 0;
-  flex: 1;
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -1054,6 +1041,7 @@ button .buttonIcon {
 .accountLogoutButton {
   width: 34px;
   min-width: 34px;
+  max-width: 34px;
   min-height: 34px;
   padding: 0;
   border-radius: var(--radius-sm);
@@ -1061,6 +1049,28 @@ button .buttonIcon {
   place-items: center;
   background: var(--surface);
   color: var(--text);
+}
+
+.sideNav .accountLogoutButton {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.settingsNavLabel {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.settingsVersionText {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .usersSettings {
@@ -2220,7 +2230,7 @@ button .buttonIcon {
   .sidebarCollapsed .serverPicker,
   .sidebarCollapsed .accountName,
   .sidebarCollapsed .accountLogoutButton,
-  .sidebarCollapsed .sidebarVersion {
+  .sidebarCollapsed .settingsVersionText {
     display: block;
   }
 
@@ -2246,6 +2256,7 @@ button .buttonIcon {
   }
 
   .sidebarCollapsed .accountChip {
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
     justify-content: flex-start;
   }
 
