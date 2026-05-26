@@ -730,13 +730,13 @@ export default function App() {
       setActiveTab("overview");
     } else if (activeServerId === demoServerId) {
       setActiveServerId("");
-      setActivePage("servers");
       setStatus(null);
       setLogs([]);
       setListing({ path: "/", entries: [] });
       setSelectedPath("");
       setEditorText("");
       setDirty(false);
+      void refreshApp();
     }
   }, [demoMode]);
 
