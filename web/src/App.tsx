@@ -37,6 +37,23 @@ type AppState = {
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;
   totalMemory: number;
+  currentUser?: PublicUser;
+};
+
+type UserRole = "admin" | "basic" | "expanded" | "manager";
+
+type PublicUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt: string;
+};
+
+type AuthSession = {
+  authenticated: boolean;
+  setupRequired: boolean;
+  demo?: boolean;
+  user: PublicUser | null;
 };
 
 type DockerStatus = {
@@ -394,6 +411,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   };
   const response = await fetch(path, {
     headers,
+    credentials: "same-origin",
     ...init
   });
   const payload = await response.json().catch(() => ({}));
@@ -602,8 +620,15 @@ function readThemePreference(): ThemePreference {
 }
 
 function readDemoMode() {
-  return window.localStorage.getItem("serversentinel-demo-mode") === "true";
+  return false;
 }
+
+const roleRanks: Record<UserRole, number> = {
+  basic: 1,
+  expanded: 2,
+  manager: 3,
+  admin: 4
+};
 
 type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
 
@@ -615,6 +640,9 @@ function readLocalePreference(key: "serversentinel-date-locale" | "serversentine
 }
 
 export default function App() {
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [authNotice, setAuthNotice] = useState("");
+  const [users, setUsers] = useState<PublicUser[]>([]);
   const [appState, setAppState] = useState<AppState>(emptyApp);
   const [activeServerId, setActiveServerId] = useState("");
   const [status, setStatus] = useState<ServerStatus | null>(null);
@@ -678,9 +706,16 @@ export default function App() {
     [activeServerId, effectiveAppState.servers]
   );
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
-  const dockerOperationalLock = !effectiveAppState.dockerSocketMounted;
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || Boolean(status?.docker.running);
-  const modsLocked = isProvisioning || dockerOperationalLock || !status || Boolean(status.docker.running);
+  const currentRole = authSession?.user?.role;
+  const canBasic = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.basic : false);
+  const canExpanded = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.expanded : false);
+  const canManager = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.manager : false);
+  const canManageReal = currentRole ? roleRanks[currentRole] >= roleRanks.manager : false;
+  const canAdmin = currentRole === "admin";
+  const authOperationalLock = !demoMode && !authSession?.authenticated;
+  const dockerOperationalLock = authOperationalLock || !effectiveAppState.dockerSocketMounted;
+  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(status?.docker.running);
+  const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !status || Boolean(status.docker.running);
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
     const matches = value
@@ -710,6 +745,11 @@ export default function App() {
     return `${formatDisplayNumber(Math.round(value / 1024 / 1024))} MB`;
   }
   useEffect(() => {
+    void refreshAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!authSession || (!authSession.authenticated && !demoMode)) return;
     refreshApp();
     api<FabricVersions>("/api/fabric/versions").then(setFabricVersions).catch(() => {
       setFabricVersions({
@@ -718,7 +758,10 @@ export default function App() {
         installer: []
       });
     });
-  }, []);
+    if (authSession.user?.role === "admin") {
+      void loadUsers();
+    }
+  }, [authSession?.authenticated, authSession?.user?.role, demoMode]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-demo-mode", String(demoMode));
@@ -843,12 +886,6 @@ export default function App() {
   }, [numberLocalePreference]);
 
   useEffect(() => {
-    if (activePage === "settings" && serverSettingsLocked) {
-      setActivePage("overview");
-    }
-  }, [activePage, serverSettingsLocked]);
-
-  useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
   }, [commandHistory]);
 
@@ -944,6 +981,85 @@ export default function App() {
     }, 5000);
   }
 
+  async function refreshAuth() {
+    try {
+      const session = await api<AuthSession>("/api/auth/session");
+      setAuthSession(session);
+    } catch (error) {
+      setAuthNotice((error as Error).message);
+      setAuthSession({ authenticated: false, setupRequired: false, user: null });
+    }
+  }
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const username = String(form.get("username") || "");
+    const password = String(form.get("password") || "");
+    const setupRequired = authSession?.setupRequired ?? false;
+    const demoLogin = username === "demo" && password === "demo";
+    setAuthNotice("");
+    try {
+      const session = await api<AuthSession>(setupRequired && !demoLogin ? "/api/auth/register-first" : "/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password })
+      });
+      if (session.demo) {
+        setDemoMode(true);
+        setAuthSession({ ...session, setupRequired: false });
+        setActiveServerId(demoServerId);
+        setActivePage("overview");
+        return;
+      }
+      setDemoMode(false);
+      setAuthSession(session);
+      event.currentTarget.reset();
+    } catch (error) {
+      setAuthNotice((error as Error).message);
+    }
+  }
+
+  async function logout() {
+    await api("/api/auth/logout", { method: "POST" }).catch(() => null);
+    setDemoMode(false);
+    setAuthSession({ authenticated: false, setupRequired: false, user: null });
+    setAppState(emptyApp);
+    setActiveServerId("");
+    setStatus(null);
+    setLogs([]);
+  }
+
+  async function loadUsers() {
+    if (!canAdmin) return;
+    try {
+      const result = await api<{ users: PublicUser[] }>("/api/users");
+      setUsers(result.users);
+    } catch (error) {
+      notify("error", (error as Error).message);
+    }
+  }
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canAdmin) return;
+    const form = new FormData(event.currentTarget);
+    try {
+      await api<PublicUser>("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          username: form.get("username"),
+          password: form.get("password"),
+          role: form.get("role")
+        })
+      });
+      event.currentTarget.reset();
+      notify("success", "User account created");
+      await loadUsers();
+    } catch (error) {
+      notify("error", (error as Error).message);
+    }
+  }
+
   async function refreshApp() {
     setNotice("");
     if (demoMode) {
@@ -1027,7 +1143,7 @@ export default function App() {
 
   async function attachServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (dockerOperationalLock) return;
+    if (dockerOperationalLock || !canManageReal) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
     const serverPort = String(form.get("serverPort") ?? "");
@@ -1086,7 +1202,7 @@ export default function App() {
 
   async function updateServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning) return;
+    if (isProvisioning || !canManager) return;
     if (!activeServer) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
@@ -1121,6 +1237,7 @@ export default function App() {
 
   async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManageReal) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     try {
@@ -1137,7 +1254,7 @@ export default function App() {
   }
 
   async function runContainerAction(action: "start" | "stop" | "restart") {
-    if (isProvisioning || dockerOperationalLock) return;
+    if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
     setNotice("");
     setRuntimeAction(action);
@@ -1170,7 +1287,7 @@ export default function App() {
 
   async function sendCommand(event: FormEvent) {
     event.preventDefault();
-    if (isProvisioning) return;
+    if (isProvisioning || !canExpanded) return;
     if (!activeServer) return;
     const command = commandInput.trim().replace(/^\//, "");
     if (!command) return;
@@ -1294,7 +1411,7 @@ export default function App() {
   }
 
   async function deleteFileEntry(entry: FileEntry) {
-    if (isProvisioning || dockerOperationalLock || !activeServer) return;
+    if (isProvisioning || dockerOperationalLock || !canManager || !activeServer) return;
     if (!window.confirm(`Delete ${entry.name}? This cannot be undone.`)) return;
     setNotice("");
     if (activeServerIsDemo) {
@@ -1337,7 +1454,7 @@ export default function App() {
   }
 
   async function saveFile() {
-    if (isProvisioning || dockerOperationalLock) return;
+    if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
     setNotice("");
     if (activeServerIsDemo) {
@@ -1396,7 +1513,7 @@ export default function App() {
   }
 
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
-    if (modsLocked || !activeServer) return;
+    if (modsLocked || !canManager || !activeServer) return;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -1435,7 +1552,7 @@ export default function App() {
   }
 
   async function installMod(projectId: string, title: string) {
-    if (modsLocked) return;
+    if (modsLocked || !canManager) return;
     if (!activeServer) return;
     setNotice("");
     if (activeServerIsDemo) {
@@ -1471,7 +1588,7 @@ export default function App() {
   }
 
   async function updateModChannel(mod: InstalledMod, channel: ReleaseChannel) {
-    if (!activeServer || !mod.filename) return;
+    if (!canManager || !activeServer || !mod.filename) return;
     if (activeServerIsDemo) {
       setInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
       setDemoInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
@@ -1482,7 +1599,7 @@ export default function App() {
   }
 
   async function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
-    if (modsLocked || !activeServer) return;
+    if (modsLocked || !canManager || !activeServer) return;
     setNotice("");
     if (activeServerIsDemo) {
       const update = (current: InstalledMod[]) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, enabled } : candidate);
@@ -1506,7 +1623,7 @@ export default function App() {
   }
 
   async function removeInstalledMod(mod: InstalledMod) {
-    if (modsLocked || !activeServer) return;
+    if (modsLocked || !canManager || !activeServer) return;
     setNotice("");
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
@@ -1529,7 +1646,7 @@ export default function App() {
 
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || !activeServer) return;
+    if (isProvisioning || !canExpanded || !activeServer) return;
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -1571,7 +1688,7 @@ export default function App() {
   }
 
   async function updateSchedule(schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) {
-    if (isProvisioning || !activeServer) return;
+    if (isProvisioning || !canExpanded || !activeServer) return;
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.map((candidate) => (
         candidate.id === schedule.id
@@ -1602,7 +1719,7 @@ export default function App() {
   }
 
   async function deleteSchedule(schedule: ScheduledExecution) {
-    if (isProvisioning || dockerOperationalLock || !activeServer) return;
+    if (isProvisioning || dockerOperationalLock || !canExpanded || !activeServer) return;
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
       notify("success", `Deleted ${schedule.name}`);
@@ -1620,7 +1737,7 @@ export default function App() {
 
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || dockerOperationalLock) return;
+    if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
@@ -1649,6 +1766,27 @@ export default function App() {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
     }
+  }
+
+  if (!authSession) {
+    return (
+      <AuthPanel
+        setupRequired={false}
+        notice={authNotice || "Checking session..."}
+        onSubmit={submitAuth}
+        busy
+      />
+    );
+  }
+
+  if (!authSession.authenticated && !demoMode) {
+    return (
+      <AuthPanel
+        setupRequired={authSession.setupRequired}
+        notice={authNotice}
+        onSubmit={submitAuth}
+      />
+    );
   }
 
   return (
@@ -1699,6 +1837,13 @@ export default function App() {
             <SidebarIcon name="settings" />
             <span>Settings</span>
           </button>
+          <div className="accountBadge">
+            <strong>{demoMode ? "Demo" : authSession.user?.username}</strong>
+            <span>{demoMode ? "simulated mode" : authSession.user?.role}</span>
+          </div>
+          <button type="button" className="secondaryButton" onClick={logout} disabled={isProvisioning}>
+            <span>{demoMode ? "Exit demo" : "Log out"}</span>
+          </button>
           <span className="sidebarVersion">v{appVersion}</span>
         </nav>
       </aside>
@@ -1714,7 +1859,7 @@ export default function App() {
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock}>New server</button>}
+            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>New server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
             {["overview","console","files","mods","schedule"].includes(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
@@ -1756,7 +1901,7 @@ export default function App() {
               <div className="emptyState">
                 <h2>No Servers Yet</h2>
                 <p>Create a Fabric server to start managing files, mods, and runtime control.</p>
-                <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock}>Create Server</button>
+                <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Server</button>
               </div>
             )}
           </section>
@@ -1769,7 +1914,7 @@ export default function App() {
               dockerSocketMounted={effectiveAppState.dockerSocketMounted}
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
-              provisioning={isProvisioning}
+              provisioning={isProvisioning || !canManageReal}
             />
           </section>
         )}
@@ -1824,7 +1969,7 @@ export default function App() {
                   <strong>Demo mode</strong>
                 </div>
                 <span className="settingsToggle">
-                  <input type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} />
+                  <input type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} disabled={!authSession.authenticated} />
                   {demoMode ? "Enabled" : "Disabled"}
                 </span>
               </label>
@@ -1847,13 +1992,25 @@ export default function App() {
                 <div>
                   <strong>Modrinth API key</strong>
                 </div>
-                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} />
+                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageReal} />
               </div>
             </section>
 
+            {canAdmin && (
+              <section className="panel settingsGroup">
+                <div className="settingsGroupHeader">
+                  <span>03</span>
+                  <div>
+                    <h2>Users</h2>
+                  </div>
+                </div>
+                <UserManagement users={users} onCreate={createUser} />
+              </section>
+            )}
+
             <section className="panel settingsGroup">
               <div className="settingsGroupHeader">
-                <span>03</span>
+                <span>{canAdmin ? "04" : "03"}</span>
                 <div>
                   <h2>Container</h2>
                 </div>
@@ -1891,7 +2048,7 @@ export default function App() {
                 </span>
                 <RuntimeControls
                   status={status}
-                  isProvisioning={isProvisioning}
+                  isProvisioning={isProvisioning || !canBasic}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
                 />
@@ -1963,7 +2120,7 @@ export default function App() {
                           onFocus={() => setCommandInputFocused(true)}
                           onBlur={() => window.setTimeout(() => setCommandInputFocused(false), 120)}
                           placeholder={status?.commandInputAvailable ? "Enter command" : "Console input unavailable"}
-                          disabled={isProvisioning || !status?.commandInputAvailable}
+                          disabled={isProvisioning || !canExpanded || !status?.commandInputAvailable}
                           spellCheck={false}
                           autoComplete="off"
                         />
@@ -1985,7 +2142,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <button disabled={isProvisioning || !status?.commandInputAvailable || !commandInput.trim()}>Send</button>
+                      <button disabled={isProvisioning || !canExpanded || !status?.commandInputAvailable || !commandInput.trim()}>Send</button>
                     </form>
                   </div>
                 </section>
@@ -2000,8 +2157,8 @@ export default function App() {
                     <code>{listing.path}</code>
                   </div>
                   <div className="fileActions">
-                    <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || dockerOperationalLock || listing.path === "/"}>Up</button>
-                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || dockerOperationalLock}>Refresh</button>
+                    <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"}>Up</button>
+                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning}>Refresh</button>
                   </div>
                   <div className="fileList">
                     {listing.entries.map((entry) => (
@@ -2015,7 +2172,7 @@ export default function App() {
                           <span className="fileName">{entry.name}</span>
                           <small>{entry.type === "file" ? formatBytes(entry.size) : ""}</small>
                         </button>
-                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning || dockerOperationalLock} title={`Delete ${entry.name}`} aria-label={`Delete ${entry.name}`}>
+                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning || dockerOperationalLock || !canManager} title={`Delete ${entry.name}`} aria-label={`Delete ${entry.name}`}>
                           <AppIcon name="x" />
                         </button>
                       </article>
@@ -2028,12 +2185,12 @@ export default function App() {
                     <h2>Editor</h2>
                     <code>{selectedPath || "No file selected"}</code>
                   </div>
-                  <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !selectedPath} spellCheck={false} />
+                  <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath} spellCheck={false} />
                   <div className="buttonRow">
                     {dirty && (
                       <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
                     )}
-                    <button onClick={saveFile} disabled={isProvisioning || dockerOperationalLock || !selectedPath || !dirty}>Save</button>
+                    <button onClick={saveFile} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>Save</button>
                   </div>
                 </section>
               </section>
@@ -2057,7 +2214,7 @@ export default function App() {
                   <div className="modsToolbar">
                     <div className="segmentedControl">
                       <button className={modsView === "manager" ? "active" : ""} onClick={() => setModsView("manager")}>Installed</button>
-                      <button className={modsView === "search" ? "active" : ""} onClick={() => setModsView("search")} disabled={!effectiveAppState.modrinthApiConfigured}>Search</button>
+                      <button className={modsView === "search" ? "active" : ""} onClick={() => setModsView("search")} disabled={!effectiveAppState.modrinthApiConfigured || !canManager}>Search</button>
                     </div>
                     <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />
                     <span className="muted">Fabric {activeServer.loaderVersion || "loader unknown"} - Minecraft {activeServer.minecraftVersion || "version unknown"}</span>
@@ -2066,7 +2223,7 @@ export default function App() {
                   {modsView === "manager" && (
                     <div className="mods">
                       <div className="modActionGrid">
-                        <button className="modRow addModRow" onClick={() => setModsView("search")} disabled={isProvisioning || !effectiveAppState.modrinthApiConfigured}>
+                        <button className="modRow addModRow" onClick={() => setModsView("search")} disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured}>
                           <span className="addIcon"><AppIcon name="plus" /></span>
                           <div>
                             <strong>Add mod</strong>
@@ -2103,7 +2260,7 @@ export default function App() {
                             <button onClick={() => setInstalledModEnabled(mod, !mod.enabled)} disabled={modsLocked}>
                               {mod.enabled ? "Disable" : "Enable"}
                             </button>
-                            <select value={mod.preferredChannel || "release"} onChange={(event) => updateModChannel(mod, event.target.value as ReleaseChannel)} disabled={isProvisioning}>
+                            <select value={mod.preferredChannel || "release"} onChange={(event) => updateModChannel(mod, event.target.value as ReleaseChannel)} disabled={isProvisioning || !canManager}>
                               <option value="release">Release</option>
                               <option value="beta">Beta</option>
                               <option value="alpha">Alpha</option>
@@ -2120,13 +2277,13 @@ export default function App() {
                   {modsView === "search" && (
                     <>
                       <form onSubmit={searchMods} className="modSearch">
-                        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search compatible Fabric mods" disabled={isProvisioning || !effectiveAppState.modrinthApiConfigured} />
-                        <select value={modInstallChannel} onChange={(event) => setModInstallChannel(event.target.value as ReleaseChannel)} disabled={isProvisioning}>
+                        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search compatible Fabric mods" disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured} />
+                        <select value={modInstallChannel} onChange={(event) => setModInstallChannel(event.target.value as ReleaseChannel)} disabled={isProvisioning || !canManager}>
                           <option value="release">Release</option>
                           <option value="beta">Beta</option>
                           <option value="alpha">Alpha</option>
                         </select>
-                        <button disabled={isProvisioning || isSearchingMods || !effectiveAppState.modrinthApiConfigured || !query.trim()}>{isSearchingMods ? "Searching" : "Refresh"}</button>
+                        <button disabled={isProvisioning || !canManager || isSearchingMods || !effectiveAppState.modrinthApiConfigured || !query.trim()}>{isSearchingMods ? "Searching" : "Refresh"}</button>
                       </form>
                       <div className="mods">
                         {isSearchingMods && Array.from({ length: 4 }, (_, index) => (
@@ -2164,7 +2321,7 @@ export default function App() {
                 onCreate={createSchedule}
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onDelete={deleteSchedule}
-                disabled={isProvisioning}
+                disabled={isProvisioning || !canExpanded}
                 commandInputMessage={status?.commandInputAvailable ? "" : status?.commandInputMessage || "Scheduled commands need Docker command input when they run."}
               />
             )}
@@ -2173,6 +2330,90 @@ export default function App() {
         )}
       </section>
     </main>
+  );
+}
+
+function AuthPanel({
+  setupRequired,
+  notice,
+  onSubmit,
+  busy = false
+}: {
+  setupRequired: boolean;
+  notice: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  busy?: boolean;
+}) {
+  return (
+    <main className="authShell">
+      <section className="authPanel">
+        <div className="brandLockup">
+          <img className="brandLogo" src="/logo.png" alt="" />
+          <div>
+            <h1>ServerSentinel</h1>
+            <p>{setupRequired ? "Create the first admin account" : "Sign in to manage servers"}</p>
+          </div>
+        </div>
+        {notice && <div className="notice">{notice}</div>}
+        <form onSubmit={onSubmit} className="attachForm">
+          <fieldset disabled={busy}>
+            <label>
+              Username
+              <input name="username" autoComplete="username" required minLength={3} placeholder={setupRequired ? "admin" : "Username"} />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autoComplete={setupRequired ? "new-password" : "current-password"} required minLength={1} placeholder={setupRequired ? "At least 8 characters" : "Password"} />
+            </label>
+            <button>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
+          </fieldset>
+        </form>
+        <p className="muted">Use demo / demo to enter simulated mode without creating a real session.</p>
+      </section>
+    </main>
+  );
+}
+
+function UserManagement({
+  users,
+  onCreate
+}: {
+  users: PublicUser[];
+  onCreate: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="userManagement">
+      <form onSubmit={onCreate} className="attachForm">
+        <fieldset>
+          <label>
+            Username
+            <input name="username" autoComplete="off" required minLength={3} />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autoComplete="new-password" required minLength={8} />
+          </label>
+          <label>
+            Role
+            <select name="role" defaultValue="basic">
+              <option value="basic">Basic operations</option>
+              <option value="expanded">Expanded</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button>Create user</button>
+        </fieldset>
+      </form>
+      <div className="userList">
+        {users.map((user) => (
+          <article key={user.id} className="userRow">
+            <strong>{user.username}</strong>
+            <span>{user.role}</span>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -2292,10 +2533,12 @@ function ProvisionProgress({ job }: { job: ProvisionJob }) {
 
 function ModrinthKeyForm({
   onSubmit,
-  configured
+  configured,
+  disabled = false
 }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   configured: boolean;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(!configured);
 
@@ -2315,13 +2558,14 @@ function ModrinthKeyForm({
           <span className="settingsStatus ready">Configured</span>
           <code aria-hidden="true">**** **** **** ****</code>
         </div>
-        <button type="button" className="secondaryButton" onClick={() => setEditing(true)}>Replace key</button>
+        <button type="button" className="secondaryButton" onClick={() => setEditing(true)} disabled={disabled}>Replace key</button>
       </div>
     );
   }
 
   return (
     <form onSubmit={submitKey} className="keyForm">
+      <fieldset disabled={disabled}>
       <label>
         {configured ? "New Modrinth API key" : "Modrinth API key"}
         <input
@@ -2336,6 +2580,7 @@ function ModrinthKeyForm({
         {configured && <button type="button" className="secondaryButton" onClick={() => setEditing(false)}>Cancel</button>}
         <button>{configured ? "Save replacement" : "Save key"}</button>
       </div>
+      </fieldset>
     </form>
   );
 }

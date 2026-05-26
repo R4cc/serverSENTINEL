@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -23,11 +23,39 @@ const config = {
 
 const serversFile = join(config.configDir, "servers.json");
 const settingsFile = join(config.configDir, "settings.json");
+const usersFile = join(config.configDir, "users.json");
 const minServerPort = 1000;
 const maxServerPort = 65000;
 
 type AppSettings = {
   modrinthApiKey?: string;
+};
+
+type UserRole = "admin" | "basic" | "expanded" | "manager";
+
+type Permission = "basic" | "expanded" | "manager" | "admin";
+
+type StoredUser = {
+  id: string;
+  username: string;
+  passwordHash: string;
+  salt: string;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type PublicUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt: string;
+};
+
+type Session = {
+  id: string;
+  userId: string;
+  createdAt: string;
 };
 
 type ReleaseChannel = "release" | "beta" | "alpha";
@@ -139,6 +167,117 @@ type Client = {
 };
 
 const provisionJobs = new Map<string, ProvisionJob>();
+const sessions = new Map<string, Session>();
+const sessionCookieName = "serversentinel_session";
+const passwordHashKeyLength = 64;
+const roleRanks: Record<UserRole, number> = {
+  basic: 1,
+  expanded: 2,
+  manager: 3,
+  admin: 4
+};
+
+function publicUser(user: StoredUser): PublicUser {
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    createdAt: user.createdAt
+  };
+}
+
+function normalizeRole(role?: string): UserRole {
+  return role === "basic" || role === "expanded" || role === "manager" || role === "admin" ? role : "basic";
+}
+
+function validateUsername(username?: string) {
+  const value = username?.trim();
+  if (!value || value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_.-]+$/.test(value)) {
+    throw new Error("Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores");
+  }
+  return value;
+}
+
+function validatePassword(password?: string) {
+  if (!password || password.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+  return password;
+}
+
+function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
+  const hash = scryptSync(password, salt, passwordHashKeyLength).toString("hex");
+  return { salt, passwordHash: hash };
+}
+
+function verifyPassword(password: string, user: StoredUser) {
+  const attempted = Buffer.from(hashPassword(password, user.salt).passwordHash, "hex");
+  const stored = Buffer.from(user.passwordHash, "hex");
+  return attempted.length === stored.length && timingSafeEqual(attempted, stored);
+}
+
+async function readUsers() {
+  await mkdir(config.configDir, { recursive: true });
+  if (!existsSync(usersFile)) {
+    await writeFile(usersFile, "[]\n", "utf8");
+  }
+  return JSON.parse(await readFile(usersFile, "utf8")) as StoredUser[];
+}
+
+async function writeUsers(users: StoredUser[]) {
+  await mkdir(config.configDir, { recursive: true });
+  await writeFile(usersFile, `${JSON.stringify(users, null, 2)}\n`, "utf8");
+}
+
+function parseCookies(cookieHeader?: string) {
+  const cookies = new Map<string, string>();
+  for (const part of (cookieHeader ?? "").split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (!rawName || rawValue.length === 0) continue;
+    cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
+  }
+  return cookies;
+}
+
+function sessionCookie(sessionId: string, maxAgeSeconds: number) {
+  return `${sessionCookieName}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+}
+
+async function currentUserFromCookie(cookieHeader?: string) {
+  const sessionId = parseCookies(cookieHeader).get(sessionCookieName);
+  if (!sessionId) return null;
+  const session = sessions.get(sessionId);
+  if (!session) return null;
+  const users = await readUsers();
+  return users.find((user) => user.id === session.userId) ?? null;
+}
+
+async function requireAuthenticated(cookieHeader?: string) {
+  const user = await currentUserFromCookie(cookieHeader);
+  if (!user) {
+    const error = new Error("Authentication required") as Error & { statusCode?: number };
+    error.statusCode = 401;
+    throw error;
+  }
+  return user;
+}
+
+function requirePermission(user: StoredUser, permission: Permission) {
+  const requiredRank = permission === "admin" ? roleRanks.admin : roleRanks[permission];
+  if (roleRanks[user.role] < requiredRank) {
+    const error = new Error("You do not have permission to perform this action") as Error & { statusCode?: number };
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+async function requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission) {
+  const user = await requireAuthenticated(request.headers.cookie);
+  if (permission) {
+    requirePermission(user, permission);
+  }
+  return user;
+}
 
 function publicServer(server: AttachedServer): PublicServer {
   return {
@@ -1324,17 +1463,120 @@ async function tickSchedules() {
 const app = Fastify({ logger: true, bodyLimit: 180 * 1024 * 1024 });
 await app.register(websocket);
 
-app.get("/api/app", async () => {
+app.get("/api/auth/session", async (request) => {
+  const users = await readUsers();
+  const user = await currentUserFromCookie(request.headers.cookie);
+  return {
+    authenticated: Boolean(user),
+    setupRequired: users.length === 0,
+    user: user ? publicUser(user) : null
+  };
+});
+
+app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", async (request, reply) => {
+  const users = await readUsers();
+  if (users.length > 0) {
+    const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
+    error.statusCode = 403;
+    throw error;
+  }
+  const username = validateUsername(request.body.username);
+  const password = validatePassword(request.body.password);
+  const now = new Date().toISOString();
+  const passwordData = hashPassword(password);
+  const user: StoredUser = {
+    id: randomUUID(),
+    username,
+    role: "admin",
+    createdAt: now,
+    updatedAt: now,
+    ...passwordData
+  };
+  await writeUsers([user]);
+  const sessionId = randomBytes(32).toString("base64url");
+  sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
+  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14));
+  return { authenticated: true, setupRequired: false, user: publicUser(user) };
+});
+
+app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", async (request, reply) => {
+  const username = request.body.username?.trim() ?? "";
+  const password = request.body.password ?? "";
+  if (username === "demo" && password === "demo") {
+    return { authenticated: false, setupRequired: (await readUsers()).length === 0, demo: true, user: null };
+  }
+  const users = await readUsers();
+  const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
+  if (!user || !verifyPassword(password, user)) {
+    const error = new Error("Invalid username or password") as Error & { statusCode?: number };
+    error.statusCode = 401;
+    throw error;
+  }
+  const sessionId = randomBytes(32).toString("base64url");
+  const now = new Date().toISOString();
+  sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
+  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14));
+  return { authenticated: true, setupRequired: false, user: publicUser(user) };
+});
+
+app.post("/api/auth/logout", async (request, reply) => {
+  const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
+  if (sessionId) {
+    sessions.delete(sessionId);
+  }
+  reply.header("Set-Cookie", sessionCookie("", 0));
+  return { ok: true };
+});
+
+app.get("/api/users", async (request) => {
+  await requireRequestPermission(request, "admin");
+  return { users: (await readUsers()).map(publicUser) };
+});
+
+app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/api/users", async (request) => {
+  await requireRequestPermission(request, "admin");
+  const username = validateUsername(request.body.username);
+  const password = validatePassword(request.body.password);
+  const role = normalizeRole(request.body.role);
+  const users = await readUsers();
+  if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
+    throw new Error("A user with that username already exists");
+  }
+  const now = new Date().toISOString();
+  const user: StoredUser = {
+    id: randomUUID(),
+    username,
+    role,
+    createdAt: now,
+    updatedAt: now,
+    ...hashPassword(password)
+  };
+  users.push(user);
+  await writeUsers(users);
+  return publicUser(user);
+});
+
+app.addHook("preHandler", async (request) => {
+  if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
+    return;
+  }
+  await requireRequestPermission(request);
+});
+
+app.get("/api/app", async (request) => {
+  const user = await requireRequestPermission(request);
   const servers = await readServers();
   return {
     servers: servers.map(publicServer),
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
-    totalMemory: totalmem()
+    totalMemory: totalmem(),
+    currentUser: publicUser(user)
   };
 });
 
 app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (request) => {
+  await requireRequestPermission(request, "manager");
   const key = request.body.modrinthApiKey?.trim();
   if (!key) {
     throw new Error("Modrinth API key is required");
@@ -1361,11 +1603,13 @@ app.get("/api/fabric/versions", async () => {
 app.post<{
   Body: CreateServerInput;
 }>("/api/servers", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await createManagedServer(request.body);
   return publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", async (request) => {
+  await requireRequestPermission(request, "manager");
   const job = startProvisionJob(request.body);
   return job;
 });
@@ -1393,6 +1637,7 @@ app.put<{
     serverPort?: string;
   };
 }>("/api/servers/:id", async (request) => {
+  await requireRequestPermission(request, "manager");
   const servers = await readServers();
   const index = servers.findIndex((candidate) => candidate.id === request.params.id);
   if (index === -1) {
@@ -1449,6 +1694,7 @@ app.delete<{
     deleteFiles?: boolean;
   };
 }>("/api/servers/:id", async (request) => {
+  await requireRequestPermission(request, "manager");
   const servers = await readServers();
   const index = servers.findIndex((candidate) => candidate.id === request.params.id);
   if (index === -1) {
@@ -1492,18 +1738,22 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", async (request) => {
+  await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "start");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", async (request) => {
+  await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "stop");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", async (request) => {
+  await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "restart");
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", async (request) => {
+  await requireRequestPermission(request, "expanded");
   const server = await getServer(request.params.id);
   return sendDockerStdinCommand(server, request.body.command ?? "");
 });
@@ -1517,6 +1767,7 @@ app.post<{
   Params: { id: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", async (request) => {
+  await requireRequestPermission(request, "expanded");
   const servers = await readServers();
   const index = servers.findIndex((candidate) => candidate.id === request.params.id);
   if (index === -1) {
@@ -1533,6 +1784,7 @@ app.put<{
   Params: { id: string; scheduleId: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", async (request) => {
+  await requireRequestPermission(request, "expanded");
   const servers = await readServers();
   const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
   if (serverIndex === -1) {
@@ -1551,6 +1803,7 @@ app.put<{
 });
 
 app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", async (request) => {
+  await requireRequestPermission(request, "expanded");
   const servers = await readServers();
   const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
   if (serverIndex === -1) {
@@ -1567,6 +1820,7 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   const url = new URL(request.url, "http://localhost");
   const serverId = url.searchParams.get("serverId") ?? undefined;
   try {
+    await requireAuthenticated(request.headers.cookie);
     const server = await getServer(serverId);
     client.send(JSON.stringify({ type: "status", status: await dockerStatus(server) }));
     if (dockerControlConfigured(server) && dockerAvailable()) {
@@ -1645,6 +1899,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = ensureInsideServer(server, request.body.path ?? "");
   if (typeof request.body.content !== "string") {
@@ -1659,6 +1914,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = ensureInsideServer(server, request.query.path ?? "");
   if (resolve(target) === resolve(server.serverDir)) {
@@ -1769,6 +2025,7 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.body.filename);
@@ -1789,6 +2046,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 
 
 app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.body.filename);
   const channel = normalizeReleaseChannel(request.body.channel);
@@ -1799,6 +2057,7 @@ app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseCh
 });
 
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.query.filename);
@@ -1809,6 +2068,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeModFilename(safeInstalledModFilename(request.body.filename));
@@ -1849,6 +2109,7 @@ app.get<{ Querystring: { query?: string; serverId?: string } }>("/api/modrinth/s
 });
 
 app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel } }>("/api/modrinth/install", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.body.serverId);
   await ensureServerStoppedForModChanges(server);
   const projectId = request.body.projectId?.trim();
@@ -1920,7 +2181,8 @@ if (existsSync(webDist)) {
 
 app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);
-  reply.code(400).send({ error: error instanceof Error ? error.message : "Request failed" });
+  const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : 400;
+  reply.code(statusCode).send({ error: error instanceof Error ? error.message : "Request failed" });
 });
 
 setInterval(() => {

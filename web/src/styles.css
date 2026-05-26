@@ -188,6 +188,32 @@ code {
   color: var(--text);
 }
 
+.authShell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+.authPanel {
+  width: min(460px, 100%);
+  border: var(--border-heavy) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.authPanel .brandLockup {
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.authPanel .notice {
+  margin: 0;
+}
+
 .appShell.themeDark {
   color-scheme: dark;
   --surface: #1b1d22;
@@ -883,6 +909,16 @@ button .buttonIcon {
   align-items: end;
 }
 
+.keyForm fieldset {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  gap: var(--space-2);
+  align-items: end;
+}
+
 .keyForm label {
   display: grid;
   flex: 1;
@@ -920,6 +956,66 @@ button .buttonIcon {
   color: var(--text-muted);
   font-size: 13px;
   letter-spacing: 0.08em;
+}
+
+.accountBadge {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-2) var(--space-3);
+  display: grid;
+  gap: 2px;
+}
+
+.accountBadge strong {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accountBadge span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.userManagement {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.userList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.userRow {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-3);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.userRow strong,
+.userRow span {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.userRow span {
+  color: var(--text-muted);
 }
 
 .serverPath {
@@ -2017,7 +2113,8 @@ button .buttonIcon {
   .overviewPage,
   .filesPage,
   .schedulePage,
-  .settingsPage {
+  .settingsPage,
+  .userManagement {
     grid-template-columns: 1fr;
   }
 
