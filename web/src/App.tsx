@@ -679,8 +679,9 @@ export default function App() {
     [activeServerId, effectiveAppState.servers]
   );
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
-  const serverSettingsLocked = isProvisioning || Boolean(status?.docker.running);
-  const modsLocked = isProvisioning || !status || Boolean(status.docker.running);
+  const dockerOperationalLock = !effectiveAppState.dockerSocketMounted;
+  const serverSettingsLocked = isProvisioning || dockerOperationalLock || Boolean(status?.docker.running);
+  const modsLocked = isProvisioning || dockerOperationalLock || !status || Boolean(status.docker.running);
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
     const matches = value
@@ -1027,6 +1028,7 @@ export default function App() {
 
   async function attachServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (dockerOperationalLock) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
     const serverPort = String(form.get("serverPort") ?? "");
@@ -1136,7 +1138,7 @@ export default function App() {
   }
 
   async function runContainerAction(action: "start" | "stop" | "restart") {
-    if (isProvisioning) return;
+    if (isProvisioning || dockerOperationalLock) return;
     if (!activeServer) return;
     setNotice("");
     setRuntimeAction(action);
@@ -1293,7 +1295,7 @@ export default function App() {
   }
 
   async function deleteFileEntry(entry: FileEntry) {
-    if (isProvisioning || !activeServer) return;
+    if (isProvisioning || dockerOperationalLock || !activeServer) return;
     if (!window.confirm(`Delete ${entry.name}? This cannot be undone.`)) return;
     setNotice("");
     if (activeServerIsDemo) {
@@ -1336,7 +1338,7 @@ export default function App() {
   }
 
   async function saveFile() {
-    if (isProvisioning) return;
+    if (isProvisioning || dockerOperationalLock) return;
     if (!activeServer) return;
     setNotice("");
     if (activeServerIsDemo) {
@@ -1601,7 +1603,7 @@ export default function App() {
   }
 
   async function deleteSchedule(schedule: ScheduledExecution) {
-    if (isProvisioning || !activeServer) return;
+    if (isProvisioning || dockerOperationalLock || !activeServer) return;
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
       notify("success", `Deleted ${schedule.name}`);
@@ -1619,7 +1621,7 @@ export default function App() {
 
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning) return;
+    if (isProvisioning || dockerOperationalLock) return;
     if (!activeServer) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
@@ -1693,7 +1695,7 @@ export default function App() {
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning}>New server</button>}
+            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock}>New server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
             {activePage === "server" && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
@@ -1704,9 +1706,9 @@ export default function App() {
         )}
 
         {!effectiveAppState.dockerSocketMounted && (
-          <section className="systemBanner warning">
+          <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
-            <span>Server files, editing, and configured integrations still work. Container creation, status, controls, Docker logs, and console input are limited until the Docker socket is mounted.</span>
+            <span>Operational changes are blocked until Docker is connected. Creating, editing, deleting, and runtime control actions are disabled until the Docker socket is mounted.</span>
           </section>
         )}
 
@@ -1735,7 +1737,7 @@ export default function App() {
               <div className="emptyState">
                 <h2>No Servers Yet</h2>
                 <p>Create a Fabric server to start managing files, mods, and runtime control.</p>
-                <button onClick={() => setActivePage("create")} disabled={isProvisioning}>Create Server</button>
+                <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock}>Create Server</button>
               </div>
             )}
           </section>
@@ -1897,9 +1899,6 @@ export default function App() {
                 <section className="panel controls">
                   <div className="panelHeader">
                     <h2>Server Overview</h2>
-                    <span className={`runtimeBadge ${runtimeTone(status, effectiveAppState.dockerSocketMounted)}`}>
-                      {runtimeLabel(status, effectiveAppState.dockerSocketMounted)}
-                    </span>
                   </div>
                   <div className="serverSummary">
                     <div className="summaryTile">
@@ -1992,8 +1991,8 @@ export default function App() {
                     <code>{listing.path}</code>
                   </div>
                   <div className="fileActions">
-                    <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"}>Up</button>
-                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning}>Refresh</button>
+                    <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || dockerOperationalLock || listing.path === "/"}>Up</button>
+                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || dockerOperationalLock}>Refresh</button>
                   </div>
                   <div className="fileList">
                     {listing.entries.map((entry) => (
@@ -2001,13 +2000,13 @@ export default function App() {
                         <button
                           className="fileOpenButton"
                           onClick={() => entry.type === "directory" ? loadFiles(activeServer.id, entry.path) : openFile(entry.path)}
-                          disabled={isProvisioning || (entry.type === "file" && !isEditableFile(entry))}
+                          disabled={isProvisioning || dockerOperationalLock || (entry.type === "file" && !isEditableFile(entry))}
                         >
                           <FileTypeIcon entry={entry} />
                           <span className="fileName">{entry.name}</span>
                           <small>{entry.type === "file" ? formatBytes(entry.size) : ""}</small>
                         </button>
-                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning} title={`Delete ${entry.name}`} aria-label={`Delete ${entry.name}`}>
+                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning || dockerOperationalLock} title={`Delete ${entry.name}`} aria-label={`Delete ${entry.name}`}>
                           <AppIcon name="x" />
                         </button>
                       </article>
@@ -2020,12 +2019,12 @@ export default function App() {
                     <h2>Editor</h2>
                     <code>{selectedPath || "No file selected"}</code>
                   </div>
-                  <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || !selectedPath} spellCheck={false} />
+                  <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !selectedPath} spellCheck={false} />
                   <div className="buttonRow">
                     {dirty && (
-                      <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || !selectedPath}>Cancel</button>
+                      <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
                     )}
-                    <button onClick={saveFile} disabled={isProvisioning || !selectedPath || !dirty}>Save</button>
+                    <button onClick={saveFile} disabled={isProvisioning || dockerOperationalLock || !selectedPath || !dirty}>Save</button>
                   </div>
                 </section>
               </section>

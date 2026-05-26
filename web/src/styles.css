@@ -522,15 +522,17 @@ button .buttonIcon {
 }
 
 .runtimeControlButton.start {
-  border-color: #007a4d;
-  background: #007a4d;
+  border-color: #005f3b;
+  background: #006840;
   color: var(--swiss-white);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.28);
 }
 
 .runtimeControlButton.stop {
-  border-color: #c22727;
-  background: #c22727;
+  border-color: #9d1616;
+  background: #b81f1f;
   color: var(--swiss-white);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.28);
 }
 
 .runtimeControlButton.restart {
@@ -740,6 +742,14 @@ button .buttonIcon {
   background:
     repeating-linear-gradient(45deg, rgb(56 88 233 / 0.08) 0 1px, transparent 1px 10px),
     var(--sentinel-accent-soft);
+}
+
+.systemBanner.error {
+  border-color: var(--sentinel-danger);
+  background:
+    repeating-linear-gradient(45deg, rgb(185 74 72 / 0.15) 0 1px, transparent 1px 10px),
+    color-mix(in srgb, var(--surface) 82%, var(--sentinel-danger) 18%);
+  color: var(--sentinel-danger);
 }
 
 .systemBanner.accent {
