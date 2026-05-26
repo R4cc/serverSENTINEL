@@ -2,7 +2,7 @@
 
 ServerSentinel is a Dockerized, single-user WebUI for creating and managing Fabric Minecraft servers.
 
-It does not run Minecraft inside the ServerSentinel container. Instead, ServerSentinel creates server folders under its managed server storage and, when Docker integration is enabled, starts a separate Java runtime container per Minecraft server. This follows the same broad shape as panels such as PufferPanel: the panel owns the server definition and orchestrates an isolated runtime.
+NOTE: This project is entirely coded with AI and it's recommended to only be used in a secure environment.
 
 This MVP intentionally has no authentication, no multi-user model, and no database.
 
