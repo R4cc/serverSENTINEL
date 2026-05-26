@@ -949,6 +949,25 @@ export default function App() {
     }
   }
 
+  function downloadConsoleLogs() {
+    if (!activeServer || logs.length === 0) return;
+    const safeServerName = (activeServer.displayName || activeServer.id)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "server";
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${safeServerName}-console-${timestamp}.log`;
+    const blob = new Blob([`${logs.join("\n")}\n`], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function waitForProvisionJob(jobId: string) {
     for (;;) {
       const job = await api<ProvisionJob>(`/api/provision/${jobId}`);
@@ -1825,7 +1844,12 @@ export default function App() {
                 <section className="panel consolePanel">
                   <div className="panelHeader">
                     <h2>Console</h2>
-                    <span className="muted">{status?.commandInputAvailable ? "Command input enabled" : status?.commandInputMessage}</span>
+                    <div className="consoleHeaderActions">
+                      <button type="button" onClick={downloadConsoleLogs} disabled={logs.length === 0}>
+                        Download log
+                      </button>
+                      <span className="muted">{status?.commandInputAvailable ? "Command input enabled" : status?.commandInputMessage}</span>
+                    </div>
                   </div>
                   <div className="terminal">
                     <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
