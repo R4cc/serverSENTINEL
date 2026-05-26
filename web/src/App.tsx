@@ -1542,6 +1542,7 @@ export default function App() {
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+      await refreshStatus(activeServer.id);
     }
   }
 

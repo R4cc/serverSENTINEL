@@ -172,7 +172,7 @@ type DockerContainerInspect = {
   Id?: string;
   State?: { Status?: DockerState; Running?: boolean; StartedAt?: string; FinishedAt?: string };
   Name?: string;
-  Config?: { Labels?: Record<string, string> };
+  Config?: { Labels?: Record<string, string>; OpenStdin?: boolean; AttachStdin?: boolean; Tty?: boolean };
   Mounts?: Array<{ Type?: string; Name?: string; Source?: string; Destination?: string }>;
 };
 
@@ -749,6 +749,48 @@ async function dockerJsonRequest<T>(
   });
 }
 
+async function dockerJsonBufferRequest(
+  method: "POST",
+  path: string,
+  body: unknown,
+  expectedStatus: number | number[] = 200
+) {
+  if (!dockerAvailable()) {
+    throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
+  }
+
+  const payload = JSON.stringify(body);
+  const okStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+  return new Promise<Buffer>((resolveRequest, rejectRequest) => {
+    const request = http.request(
+      {
+        socketPath: config.dockerSocket,
+        path,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
+        }
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () => {
+          const bodyBuffer = Buffer.concat(chunks);
+          if (!okStatuses.includes(response.statusCode ?? 0)) {
+            rejectRequest(new Error(dockerErrorMessage(bodyBuffer.toString("utf8"), response.statusCode)));
+            return;
+          }
+          resolveRequest(bodyBuffer);
+        });
+      }
+    );
+    request.on("error", rejectRequest);
+    request.write(payload);
+    request.end();
+  });
+}
+
 function dockerContainerName(server: AttachedServer) {
   if (server.dockerContainer?.trim()) {
     return server.dockerContainer.trim();
@@ -1001,6 +1043,50 @@ async function dockerAction(server: AttachedServer, action: "start" | "stop" | "
   return dockerStatus(server);
 }
 
+async function dockerCommandInputCapability(server: AttachedServer, currentStatus?: Awaited<ReturnType<typeof dockerStatus>>) {
+  if (!dockerControlConfigured(server) || !dockerAvailable()) {
+    return {
+      available: false,
+      message: "Console command input requires Docker control and a mounted Docker socket"
+    };
+  }
+
+  const status = currentStatus ?? await dockerStatus(server);
+  if (!status.running) {
+    return {
+      available: false,
+      message: "Start the runtime container before sending console commands"
+    };
+  }
+
+  const details = await inspectDockerContainer(server);
+  if (!details) {
+    return {
+      available: false,
+      message: "Runtime container was not found"
+    };
+  }
+
+  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") {
+    return {
+      available: false,
+      message: "Console command input is best-effort only for non-managed containers and is disabled"
+    };
+  }
+
+  if (!details.Config?.OpenStdin || !details.Config.AttachStdin || details.Config.Tty) {
+    return {
+      available: false,
+      message: "Runtime container was not created with reliable stdin settings"
+    };
+  }
+
+  return {
+    available: true,
+    message: "Console command input is available for this managed runtime container"
+  };
+}
+
 async function sendDockerStdinCommand(server: AttachedServer, command: string) {
   if (!dockerControlConfigured(server)) {
     throw new Error("Command input is not configured for this server");
@@ -1012,6 +1098,10 @@ async function sendDockerStdinCommand(server: AttachedServer, command: string) {
   const status = await dockerStatus(server);
   if (!status.running) {
     throw new Error("The Minecraft runtime container must be running before commands can be sent");
+  }
+  const capability = await dockerCommandInputCapability(server, status);
+  if (!capability.available) {
+    throw new Error(capability.message);
   }
 
   const line = command.trim();
@@ -1029,17 +1119,18 @@ async function sendDockerStdinCommand(server: AttachedServer, command: string) {
     `/containers/${encodeURIComponent(dockerContainerName(server))}/exec`,
     {
       AttachStdin: false,
-      AttachStdout: false,
-      AttachStderr: false,
+      AttachStdout: true,
+      AttachStderr: true,
       Tty: false,
       Cmd: ["sh", "-lc", shellCommand]
     },
     201
   );
-  await dockerJsonRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
+  const output = await dockerJsonBufferRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
   const inspect = await dockerRequest<DockerExecInspect>("GET", `/exec/${encodeURIComponent(exec.Id)}/json`, 200);
   if (inspect.ExitCode) {
-    throw new Error("Docker could not write to the Minecraft console stdin");
+    const detail = stripDockerLogHeaders(output).toString("utf8").trim();
+    throw new Error(`Docker could not write to the Minecraft console stdin${detail ? `: ${detail}` : ""}`);
   }
   return { ok: true };
 }
@@ -1991,17 +2082,14 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
   const server = await getServer(request.params.id);
   const latestLogPath = ensureInsideServer(server, "logs/latest.log");
   const docker = await dockerStatus(server);
+  const commandInput = await dockerCommandInputCapability(server, docker);
   return {
     server: publicServer(server),
     docker: docker,
     fileLogsAvailable: existsSync(latestLogPath),
     controlAvailable: Boolean(dockerControlConfigured(server) && dockerAvailable()),
-    commandInputAvailable: Boolean(dockerControlConfigured(server) && dockerAvailable() && docker.running),
-    commandInputMessage: dockerControlConfigured(server) && dockerAvailable()
-      ? docker.running
-        ? "Console command input is enabled for the running Docker runtime container"
-        : "Start the runtime container before sending console commands"
-      : "Console command input requires Docker control and a mounted Docker socket"
+    commandInputAvailable: commandInput.available,
+    commandInputMessage: commandInput.message
   };
 });
 

@@ -63,6 +63,12 @@ Mounting `/var/run/docker.sock` gives ServerSentinel powerful control over Docke
 
 If the socket is not mounted, ServerSentinel still works for file creation, files, editing, Modrinth installs, and `logs/latest.log` viewing. Runtime container creation, status, start/stop/restart, Docker logs, overview CPU/memory stats, and console command input require the socket.
 
+## Console Command Input
+
+ServerSentinel sends console commands to managed Minecraft runtime containers by creating a short-lived Docker exec process that writes one command line to `/proc/1/fd/0` inside the runtime container. This is supported for containers created by ServerSentinel because they are configured with `OpenStdin: true`, `AttachStdin: true`, and `Tty: false`.
+
+Command input is intentionally marked unavailable for non-managed containers or containers that were not created with those stdin settings. If Docker cannot write to stdin, the command request fails and the UI shows the error; ServerSentinel does not report command success unless the Docker exec exits successfully. Logs continue to stream from Docker logs or `logs/latest.log` even when command input is unavailable.
+
 ## Docker
 
 Build and run:
