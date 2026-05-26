@@ -923,7 +923,7 @@ button .buttonIcon {
 
 .statusItem span,
 .eyebrow,
-.attachForm label,
+.appForm label,
 .keyForm label,
 .summaryTile span,
 .meta dt {
@@ -1345,22 +1345,22 @@ button .buttonIcon {
 }
 
 .toggleRow input,
-.attachForm .checkLine input {
+.appForm .checkLine input {
   width: auto;
   accent-color: var(--accent);
 }
 
-.attachPanel {
+.createServerPanel {
   max-width: 820px;
   margin-bottom: var(--space-4);
 }
 
-.attachForm {
+.appForm {
   display: grid;
   gap: var(--space-3);
 }
 
-.attachForm fieldset {
+.appForm fieldset {
   border: 0;
   padding: 0;
   margin: 0;
@@ -1369,12 +1369,12 @@ button .buttonIcon {
   min-width: 0;
 }
 
-.attachForm label {
+.appForm label {
   display: grid;
   gap: var(--space-2);
 }
 
-.attachForm .checkLine {
+.appForm .checkLine {
   display: flex;
   align-items: center;
   gap: var(--space-2);

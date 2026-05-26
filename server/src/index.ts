@@ -126,7 +126,7 @@ type ModrinthProject = {
   icon_url?: string | null;
 };
 
-type AttachedServer = {
+type ManagedServer = {
   id: string;
   displayName: string;
   serverDir: string;
@@ -161,7 +161,7 @@ type ScheduledExecution = {
   lastMessage?: string;
 };
 
-type PublicServer = Omit<AttachedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
+type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
 };
@@ -367,7 +367,7 @@ async function requireRequestPermission(request: { headers: { cookie?: string } 
   return user;
 }
 
-function publicServer(server: AttachedServer): PublicServer {
+function publicServer(server: ManagedServer): PublicServer {
   return {
     id: server.id,
     displayName: server.displayName,
@@ -394,11 +394,11 @@ async function readServers() {
   if (!existsSync(serversFile)) {
     await writeFile(serversFile, "[]\n", "utf8");
   }
-  const parsed = JSON.parse(await readFile(serversFile, "utf8")) as AttachedServer[];
+  const parsed = JSON.parse(await readFile(serversFile, "utf8")) as ManagedServer[];
   return parsed;
 }
 
-async function writeServers(servers: AttachedServer[]) {
+async function writeServers(servers: ManagedServer[]) {
   await mkdir(config.configDir, { recursive: true });
   await writeFile(serversFile, `${JSON.stringify(servers, null, 2)}\n`, "utf8");
 }
@@ -449,12 +449,12 @@ async function getServer(serverId?: string) {
   const servers = await readServers();
   const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
   if (!server) {
-    throw new Error("No attached server is registered");
+    throw new Error("No managed server instance is registered");
   }
   return server;
 }
 
-function ensureManagedServerDirectory(server: AttachedServer) {
+function ensureManagedServerDirectory(server: ManagedServer) {
   const serversDir = resolve(config.serversDir);
   const serverDir = resolve(server.serverDir);
   if (serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
@@ -463,7 +463,7 @@ function ensureManagedServerDirectory(server: AttachedServer) {
   return serverDir;
 }
 
-function toPublicPath(server: AttachedServer, absolutePath: string) {
+function toPublicPath(server: ManagedServer, absolutePath: string) {
   const rel = relative(resolve(server.serverDir), absolutePath).replaceAll("\\", "/");
   return rel ? `/${rel}` : "/";
 }
@@ -472,7 +472,7 @@ function modIconKey(filename: string) {
   return Buffer.from(filename.replace(/\.jar\.disabled$/, ".jar"), "utf8").toString("base64url");
 }
 
-async function modIconUrl(server: AttachedServer, filename: string) {
+async function modIconUrl(server: ManagedServer, filename: string) {
   const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
   if (!existsSync(iconsDir)) return undefined;
   const key = modIconKey(filename);
@@ -480,7 +480,7 @@ async function modIconUrl(server: AttachedServer, filename: string) {
   return icon ? `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}` : undefined;
 }
 
-async function deleteModIcon(server: AttachedServer, filename: string) {
+async function deleteModIcon(server: ManagedServer, filename: string) {
   const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
   if (!existsSync(iconsDir)) return;
   const key = modIconKey(filename);
@@ -496,7 +496,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
   return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension) ? extension : ".png";
 }
 
-async function saveModIcon(server: AttachedServer, filename: string, iconUrl?: string | null) {
+async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
     headers: { "User-Agent": "ServerSentinel/0.3.0 (Fabric mod manager)" }
@@ -510,7 +510,7 @@ async function saveModIcon(server: AttachedServer, filename: string, iconUrl?: s
   await writeFile(join(iconsDir, `${modIconKey(filename)}${iconExtension(iconUrl, response.headers.get("content-type"))}`), bytes);
 }
 
-async function ensureModrinthIconForFile(server: AttachedServer, filename: string, filePath: string) {
+async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string) {
   if (await modIconUrl(server, filename)) return;
   try {
     const hash = createHash("sha1").update(await readFile(filePath)).digest("hex");
@@ -715,7 +715,7 @@ async function dockerJsonBufferRequest(
   });
 }
 
-function dockerContainerName(server: AttachedServer) {
+function dockerContainerName(server: ManagedServer) {
   if (server.dockerContainer?.trim()) {
     return server.dockerContainer.trim();
   }
@@ -726,15 +726,15 @@ function shellQuote(value: string) {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function dockerControlConfigured(server: AttachedServer) {
+function dockerControlConfigured(server: ManagedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
 }
 
-function usesLegacyUnconfiguredServersVolume(server: AttachedServer) {
+function usesLegacyUnconfiguredServersVolume(server: ManagedServer) {
   return !config.serversDockerVolume && server.dockerMountSource === legacyDefaultServersDockerVolume;
 }
 
-function serverDockerMountSource(server: AttachedServer) {
+function serverDockerMountSource(server: ManagedServer) {
   if (usesLegacyUnconfiguredServersVolume(server)) {
     return server.serverDir;
   }
@@ -744,7 +744,7 @@ function serverDockerMountSource(server: AttachedServer) {
   return config.serversDockerVolume || server.dockerMountSource || server.serverDir;
 }
 
-function serverDockerWorkingDir(server: AttachedServer) {
+function serverDockerWorkingDir(server: ManagedServer) {
   if (usesLegacyUnconfiguredServersVolume(server)) {
     return "/data/server";
   }
@@ -757,11 +757,11 @@ function serverDockerWorkingDir(server: AttachedServer) {
   return "/data/server";
 }
 
-function serverDockerBindTarget(server: AttachedServer) {
+function serverDockerBindTarget(server: ManagedServer) {
   return serverDockerWorkingDir(server).startsWith("/data/servers/") ? "/data/servers" : "/data/server";
 }
 
-function dockerContainerMountValid(server: AttachedServer, details: DockerContainerInspect) {
+function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
   const expectedDestination = serverDockerBindTarget(server);
   const expectedSource = serverDockerMountSource(server);
   return Boolean(details.Mounts?.some((mount) => {
@@ -773,11 +773,11 @@ function dockerContainerMountValid(server: AttachedServer, details: DockerContai
   }));
 }
 
-async function removeDockerContainer(server: AttachedServer) {
+async function removeDockerContainer(server: ManagedServer) {
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(dockerContainerName(server))}?force=1`, 204);
 }
 
-async function removeManagedDockerContainer(server: AttachedServer) {
+async function removeManagedDockerContainer(server: ManagedServer) {
   const existing = await inspectDockerContainer(server);
   if (!existing) {
     return false;
@@ -812,7 +812,7 @@ async function ensureDockerImage(image: string) {
   }
 }
 
-async function inspectDockerContainer(server: AttachedServer) {
+async function inspectDockerContainer(server: ManagedServer) {
   try {
     return await dockerRequest<DockerContainerInspect>(
       "GET",
@@ -828,7 +828,7 @@ async function inspectDockerContainer(server: AttachedServer) {
   }
 }
 
-async function ensureDockerContainer(server: AttachedServer) {
+async function ensureDockerContainer(server: ManagedServer) {
   const existing = await inspectDockerContainer(server);
   if (existing) {
     if (dockerContainerMountValid(server, existing)) {
@@ -885,14 +885,14 @@ async function ensureDockerContainer(server: AttachedServer) {
   );
 }
 
-async function dockerStatus(server: AttachedServer) {
+async function dockerStatus(server: ManagedServer) {
   if (!dockerControlConfigured(server)) {
     return {
       configured: false,
       available: dockerAvailable(),
       controllable: false,
       state: "unknown" as DockerState,
-      message: "No Docker control is configured for this attached server"
+      message: "No Docker integration is configured for this managed server instance"
     };
   }
 
@@ -931,9 +931,9 @@ async function dockerStatus(server: AttachedServer) {
   };
 }
 
-async function dockerAction(server: AttachedServer, action: "start" | "stop" | "restart") {
+async function dockerAction(server: ManagedServer, action: "start" | "stop" | "restart") {
   if (!dockerControlConfigured(server)) {
-    throw new Error("Control is not configured for this attached server");
+    throw new Error("Docker integration is not configured for this managed server instance");
   }
   if (action === "start") {
     await ensureDockerContainer(server);
@@ -951,11 +951,11 @@ async function dockerAction(server: AttachedServer, action: "start" | "stop" | "
   return dockerStatus(server);
 }
 
-async function dockerCommandInputCapability(server: AttachedServer, currentStatus?: Awaited<ReturnType<typeof dockerStatus>>) {
+async function dockerCommandInputCapability(server: ManagedServer, currentStatus?: Awaited<ReturnType<typeof dockerStatus>>) {
   if (!dockerControlConfigured(server) || !dockerAvailable()) {
     return {
       available: false,
-      message: "Console command input requires Docker control and a mounted Docker socket"
+      message: "Console command input requires Docker integration and a mounted Docker socket"
     };
   }
 
@@ -995,7 +995,7 @@ async function dockerCommandInputCapability(server: AttachedServer, currentStatu
   };
 }
 
-async function sendDockerStdinCommand(server: AttachedServer, command: string) {
+async function sendDockerStdinCommand(server: ManagedServer, command: string) {
   if (!dockerControlConfigured(server)) {
     throw new Error("Command input is not configured for this server");
   }
@@ -1043,9 +1043,9 @@ async function sendDockerStdinCommand(server: AttachedServer, command: string) {
   return { ok: true };
 }
 
-async function dockerRecentLogs(server: AttachedServer) {
+async function dockerRecentLogs(server: ManagedServer) {
   if (!dockerControlConfigured(server)) {
-    throw new Error("Console logs are not configured for this attached server");
+    throw new Error("Console logs are not configured for this managed server instance");
   }
   const response = await dockerBufferRequest(
     "GET",
@@ -1055,7 +1055,7 @@ async function dockerRecentLogs(server: AttachedServer) {
   return stripDockerLogHeaders(response).toString("utf8");
 }
 
-async function dockerResourceStats(server: AttachedServer) {
+async function dockerResourceStats(server: ManagedServer) {
   if (!dockerControlConfigured(server)) {
     return {
       available: false,
@@ -1139,7 +1139,7 @@ function readFileRange(filePath: string, start: number, end: number) {
   });
 }
 
-async function readLatestServerLog(server: AttachedServer) {
+async function readLatestServerLog(server: ManagedServer) {
   const logPath = ensureInsideServer(server, "logs/latest.log");
   const logStat = await stat(logPath);
   if (!logStat.isFile()) {
@@ -1171,7 +1171,7 @@ function parseProperties(text: string) {
   return values;
 }
 
-function normalizeJavaRuntime(server: AttachedServer) {
+function normalizeJavaRuntime(server: ManagedServer) {
   const image = server.dockerImage || "";
   if (/temurin/i.test(image)) {
     const version = image.match(/temurin:([^,\s]+)/i)?.[1];
@@ -1220,7 +1220,7 @@ function parseLogEvent(line: string, source: ServerEvent["source"], index: numbe
   return null;
 }
 
-async function serverOverviewData(server: AttachedServer) {
+async function serverOverviewData(server: ManagedServer) {
   const [fileLog, dockerLog, properties, eula, dockerInspect] = await Promise.allSettled([
     readLatestServerLog(server),
     dockerRecentLogs(server),
@@ -1259,7 +1259,7 @@ async function serverOverviewData(server: AttachedServer) {
   return { events, activity };
 }
 
-async function onlinePlayerCount(server: AttachedServer) {
+async function onlinePlayerCount(server: ManagedServer) {
   await sendDockerStdinCommand(server, "list");
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const logs = await Promise.allSettled([
@@ -1273,7 +1273,7 @@ async function onlinePlayerCount(server: AttachedServer) {
   return parseOnlinePlayerCount(text);
 }
 
-function streamLatestServerLog(server: AttachedServer, client: Client) {
+function streamLatestServerLog(server: ManagedServer, client: Client) {
   const logPath = ensureInsideServer(server, "logs/latest.log");
   let offset = 0;
   let closed = false;
@@ -1343,7 +1343,7 @@ function stripDockerLogHeaders(buffer: Buffer) {
   return chunks.length ? Buffer.concat(chunks) : buffer;
 }
 
-function streamDockerLogs(server: AttachedServer, client: Client) {
+function streamDockerLogs(server: ManagedServer, client: Client) {
   if (!dockerControlConfigured(server) || !dockerAvailable()) {
     client.send(JSON.stringify({ type: "unavailable", message: "Docker logs are not configured for this server" }));
     return undefined;
@@ -1384,7 +1384,7 @@ async function modrinthFetch(url: string) {
   }
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "ServerSentinel/0.2.0 (attached Fabric server admin)",
+      "User-Agent": "ServerSentinel/0.2.0 (managed Fabric server panel)",
       Authorization: apiKey
     }
   });
@@ -1415,7 +1415,7 @@ async function latestFabricVersion(kind: "loader" | "installer") {
   return version.version;
 }
 
-async function downloadFabricServerJar(server: AttachedServer) {
+async function downloadFabricServerJar(server: ManagedServer) {
   if (!server.minecraftVersion || !server.loaderVersion || !server.installerVersion || !server.serverJar) {
     throw new Error("Minecraft, loader, installer, and server jar versions are required");
   }
@@ -1440,7 +1440,7 @@ async function downloadFabricServerJar(server: AttachedServer) {
   }
 }
 
-async function ensureServerStoppedForModChanges(server: AttachedServer) {
+async function ensureServerStoppedForModChanges(server: ManagedServer) {
   const status = await dockerStatus(server);
   if (status.running) {
     throw new Error("Stop the server before enabling, disabling, or removing mods");
@@ -1448,7 +1448,7 @@ async function ensureServerStoppedForModChanges(server: AttachedServer) {
 }
 
 async function createServerFiles(
-  server: AttachedServer,
+  server: ManagedServer,
   acceptEula: boolean,
   serverPort: string,
   report?: (progress: number, task: string) => void
@@ -1499,7 +1499,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   }
 
   const now = new Date().toISOString();
-  const server: AttachedServer = {
+  const server: ManagedServer = {
     id: randomUUID(),
     displayName,
     serverDir: resolvedServerDir,
@@ -1524,7 +1524,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     report?.(78, "Pulling runtime image and creating Docker container");
     await ensureDockerContainer(server);
   } else {
-    report?.(78, "Skipping Docker container creation; Docker socket is not mounted");
+    report?.(78, "Runtime management unavailable; Docker socket is not mounted");
   }
 
   report?.(92, "Saving server registration");
@@ -1611,7 +1611,7 @@ function scheduleFromBody(body: {
   };
 }
 
-async function runScheduledExecution(server: AttachedServer, schedule: ScheduledExecution) {
+async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution) {
   try {
     if (schedule.onlyWhenNoPlayers) {
       const count = await onlinePlayerCount(server);
@@ -1926,7 +1926,7 @@ app.put<{
     || current.installerVersion !== installerVersion
     || current.serverJar !== serverJar;
 
-  const updated: AttachedServer = {
+  const updated: ManagedServer = {
     ...current,
     displayName: request.body.displayName?.trim() || current.displayName,
     minecraftVersion,
@@ -2202,7 +2202,7 @@ function normalizeReleaseChannel(channel?: string): ReleaseChannel {
   return channel === "alpha" || channel === "beta" ? channel : "release";
 }
 
-async function readModPreferences(server: AttachedServer): Promise<Record<string, ModPreference>> {
+async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
   const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
   if (!existsSync(path)) return {};
   try {
@@ -2212,7 +2212,7 @@ async function readModPreferences(server: AttachedServer): Promise<Record<string
   }
 }
 
-async function writeModPreferences(server: AttachedServer, data: Record<string, ModPreference>) {
+async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
   const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
@@ -2232,7 +2232,7 @@ function modrinthJarFile(version?: ModrinthVersion) {
     ?? version?.files.find((candidate) => candidate.filename.endsWith(".jar"));
 }
 
-function analyzeModrinthCompatibility(server: AttachedServer, versions: ModrinthVersion[], selectedChannel: ReleaseChannel): ModCompatibility {
+function analyzeModrinthCompatibility(server: ManagedServer, versions: ModrinthVersion[], selectedChannel: ReleaseChannel): ModCompatibility {
   const minecraftVersion = server.minecraftVersion || "unknown";
   const eligibleVersions = versions.filter((version) => allowedForChannel(version, selectedChannel) && modrinthJarFile(version));
   const fabricVersions = eligibleVersions.filter((version) => version.loaders.includes("fabric"));
@@ -2251,7 +2251,7 @@ function analyzeModrinthCompatibility(server: AttachedServer, versions: Modrinth
   return { status: "incompatible", compatible: false, reason: `No compatible Fabric build for Minecraft ${minecraftVersion}` };
 }
 
-function selectModrinthVersion(server: AttachedServer, versions: ModrinthVersion[], selectedChannel: ReleaseChannel, forceIncompatible: boolean) {
+function selectModrinthVersion(server: ManagedServer, versions: ModrinthVersion[], selectedChannel: ReleaseChannel, forceIncompatible: boolean) {
   const minecraftVersion = server.minecraftVersion || "";
   const eligibleVersions = versions.filter((version) => allowedForChannel(version, selectedChannel) && modrinthJarFile(version));
   const compatible = eligibleVersions.find((version) => version.loaders.includes("fabric") && version.game_versions.includes(minecraftVersion));
@@ -2263,7 +2263,7 @@ function selectModrinthVersion(server: AttachedServer, versions: ModrinthVersion
     ?? eligibleVersions[0];
 }
 
-function installedModCompatibility(server: AttachedServer, metadata?: InstalledModMetadata): ModCompatibility {
+function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
   if (!metadata) {
     return { status: "unknown", compatible: false, reason: "Compatibility could not be verified." };
   }
@@ -2287,7 +2287,7 @@ function installedModCompatibility(server: AttachedServer, metadata?: InstalledM
   return { status: "compatible", compatible: true, reason: "Compatibility verified for this server." };
 }
 
-async function lookupModrinthUpdate(server: AttachedServer, modPath: string, preferredChannel: ReleaseChannel) {
+async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel) {
   if (!server.minecraftVersion) return null;
   const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
   const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);

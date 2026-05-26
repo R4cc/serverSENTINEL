@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type AttachedServer = {
+type ManagedServer = {
   id: string;
   displayName: string;
   directoryLabel: string;
@@ -33,7 +33,7 @@ type ScheduledExecution = {
 };
 
 type AppState = {
-  servers: AttachedServer[];
+  servers: ManagedServer[];
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;
   totalMemory: number;
@@ -67,7 +67,7 @@ type DockerStatus = {
 };
 
 type ServerStatus = {
-  server: AttachedServer;
+  server: ManagedServer;
   docker: DockerStatus;
   fileLogsAvailable: boolean;
   controlAvailable: boolean;
@@ -193,7 +193,7 @@ type ProvisionJob = {
   status: "running" | "succeeded" | "failed";
   progress: number;
   task: string;
-  server?: AttachedServer;
+  server?: ManagedServer;
   error?: string;
 };
 
@@ -289,7 +289,7 @@ const initialDemoFiles: Record<string, string> = {
   ].join("\n")
 };
 
-function demoServer(schedules: ScheduledExecution[] = initialDemoSchedules): AttachedServer {
+function demoServer(schedules: ScheduledExecution[] = initialDemoSchedules): ManagedServer {
   return {
     id: demoServerId,
     displayName: "Demo Survival",
@@ -309,7 +309,7 @@ function demoServer(schedules: ScheduledExecution[] = initialDemoSchedules): Att
   };
 }
 
-function demoStatus(server: AttachedServer, running: boolean): ServerStatus {
+function demoStatus(server: ManagedServer, running: boolean): ServerStatus {
   return {
     server,
     docker: {
@@ -319,7 +319,7 @@ function demoStatus(server: AttachedServer, running: boolean): ServerStatus {
       state: running ? "running" : "exited",
       running,
       container: "serversentinel-demo",
-      message: "Demo mode simulates runtime control without Docker."
+      message: "Demo mode simulates runtime container control without Docker."
     },
     fileLogsAvailable: true,
     controlAvailable: true,
@@ -1359,7 +1359,7 @@ export default function App() {
     }
   }
 
-  async function attachServer(event: FormEvent<HTMLFormElement>) {
+  async function createServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (dockerOperationalLock || !canManageReal) return;
     setNotice("");
@@ -1429,7 +1429,7 @@ export default function App() {
       return;
     }
     try {
-      const server = await api<AttachedServer>(`/api/servers/${activeServer.id}`, {
+      const server = await api<ManagedServer>(`/api/servers/${activeServer.id}`, {
         method: "PUT",
         body: JSON.stringify({
           displayName: form.get("displayName"),
@@ -2023,7 +2023,7 @@ export default function App() {
             <img className="brandLogo" src="/logo.png" alt="" />
             <div>
               <h1>ServerSentinel</h1>
-              <p>Fabric server control</p>
+              <p>Managed server web panel</p>
             </div>
           </div>
           <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning}>
@@ -2033,7 +2033,7 @@ export default function App() {
         <nav className="sideNav">
           <div className="serverPickerRow">
             <label className="serverPicker">
-              <small>Active server</small>
+              <small>Active managed server</small>
               <select
                 value={activeServerId}
                 onChange={(event) => {
@@ -2042,7 +2042,7 @@ export default function App() {
                 }}
                 disabled={isProvisioning || effectiveAppState.servers.length === 0}
               >
-                <option value="">Select server</option>
+                <option value="">Select managed server</option>
                 {effectiveAppState.servers.map((server) => (
                   <option key={server.id} value={server.id}>{server.displayName}</option>
                 ))}
@@ -2116,13 +2116,13 @@ export default function App() {
           <div>
             <h2>
               {activePage === "servers" && "Servers"}
-              {activePage === "create" && "New Server"}
-              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (effectiveAppState.servers.length === 0 ? "Welcome" : "No Server Selected"))}
+              {activePage === "create" && "New Managed Server"}
+              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (effectiveAppState.servers.length === 0 ? "Welcome" : "No Managed Server Selected"))}
               {activePage === "settings" && "Settings"}
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>New server</button>}
+            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
             {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
@@ -2135,7 +2135,7 @@ export default function App() {
         {!effectiveAppState.dockerSocketMounted && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
-            <span>Operational changes are blocked until Docker is connected. Creating, editing, deleting, and runtime control actions are disabled until the Docker socket is mounted.</span>
+            <span>Runtime management is unavailable until the Docker socket is mounted. Creating runtime containers, starting, stopping, restarting, logs, stats, and console command input require Docker integration.</span>
           </section>
         )}
 
@@ -2162,18 +2162,18 @@ export default function App() {
               </section>
             ) : (
               <div className="emptyState">
-                <h2>No Servers Yet</h2>
-                <p>Create a Fabric server to start managing files, mods, and runtime control.</p>
-                <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Server</button>
+                <h2>No Managed Servers Yet</h2>
+                <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
+                <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Managed Server</button>
               </div>
             )}
           </section>
         )}
 
         {activePage === "create" && (
-          <section className="panel attachPanel">
-            <AttachForm
-              onSubmit={attachServer}
+          <section className="panel createServerPanel">
+            <ManagedServerForm
+              onSubmit={createServer}
               dockerSocketMounted={effectiveAppState.dockerSocketMounted}
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
@@ -2294,8 +2294,8 @@ export default function App() {
         {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
-            <p>You do not have any servers yet. Create your first Fabric server to start managing files, mods, schedules, and runtime controls.</p>
-            <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Server</button>
+            <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
+            <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>Create Managed Server</button>
           </section>
         )}
 
@@ -2679,7 +2679,7 @@ function AuthPanel({
           </div>
         </div>
         {notice && <div className="notice">{notice}</div>}
-        <form onSubmit={onSubmit} className="attachForm">
+        <form onSubmit={onSubmit} className="appForm">
           <fieldset disabled={busy}>
             <label>
               Username
@@ -2795,7 +2795,7 @@ function UserManagement({
                 <AppIcon name="x" />
               </button>
             </div>
-            <form onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)} className="attachForm">
+            <form onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)} className="appForm">
               <fieldset>
                 <label>
                   Username
@@ -2939,7 +2939,7 @@ function OverviewSummary({
   activity,
   formatDate
 }: {
-  server: AttachedServer;
+  server: ManagedServer;
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
@@ -2995,7 +2995,7 @@ function ResourcePanel({
   dockerSocketMounted,
   formatNumber
 }: {
-  server: AttachedServer;
+  server: ManagedServer;
   samples: ResourceSample[];
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
@@ -3206,7 +3206,7 @@ function SchedulePage({
             <span>{commandInputMessage}</span>
           </section>
         )}
-        <form onSubmit={onCreate} className="attachForm scheduleForm">
+        <form onSubmit={onCreate} className="appForm scheduleForm">
           <fieldset disabled={disabled}>
             <label>
               Name
@@ -3367,7 +3367,7 @@ function ServerEditForm({
   onSubmit,
   disabled = false
 }: {
-  server: AttachedServer;
+  server: ManagedServer;
   versions: FabricVersions;
   totalMemory: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -3376,7 +3376,7 @@ function ServerEditForm({
   const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
 
   return (
-    <form onSubmit={onSubmit} className="attachForm">
+    <form onSubmit={onSubmit} className="appForm">
       <fieldset disabled={disabled}>
       <label>
         Display name
@@ -3456,7 +3456,7 @@ function DeleteServerPanel({
   onSubmit,
   disabled = false
 }: {
-  server: AttachedServer;
+  server: ManagedServer;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   disabled?: boolean;
 }) {
@@ -3471,7 +3471,7 @@ function DeleteServerPanel({
     <section className="panel dangerPanel">
       <h2>Delete Server</h2>
       <p className="muted">This removes the server from ServerSentinel. File deletion is optional and cannot be undone.</p>
-      <form onSubmit={onSubmit} className="attachForm">
+      <form onSubmit={onSubmit} className="appForm">
         <fieldset disabled={disabled}>
         <label>
           Type server name to confirm
@@ -3494,7 +3494,7 @@ function DeleteServerPanel({
   );
 }
 
-function AttachForm({
+function ManagedServerForm({
   onSubmit,
   dockerSocketMounted,
   versions,
@@ -3527,7 +3527,7 @@ function AttachForm({
   }, [versions.game]);
 
   return (
-    <form onSubmit={onSubmit} className="attachForm">
+    <form onSubmit={onSubmit} className="appForm">
       <fieldset disabled={provisioning}>
       <label>
         Display name
@@ -3628,9 +3628,9 @@ function AttachForm({
         </label>
       </details>
       <p className="muted">
-        Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create/start a separate runtime container." : "not mounted; server files will be created, but runtime control needs Docker."}
+        Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create and control the Minecraft runtime container." : "not mounted; runtime management is unavailable until Docker integration is connected."}
       </p>
-      <button disabled={!serverPortValid}>{provisioning ? "Setting up..." : "Create Server"}</button>
+      <button disabled={!serverPortValid}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
       </fieldset>
     </form>
   );
