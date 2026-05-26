@@ -430,11 +430,6 @@ function bufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-function formatMegabytes(value: number) {
-  if (!value) return "0 MB";
-  return `${Math.round(value / 1024 / 1024).toLocaleString()} MB`;
-}
-
 function totalMemoryGb(totalMemory: number) {
   return Math.max(1, totalMemory ? Math.round(totalMemory / (1024 * 1024 * 1024)) : 16);
 }
@@ -600,6 +595,15 @@ function readDemoMode() {
   return window.localStorage.getItem("serversentinel-demo-mode") === "true";
 }
 
+type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
+
+function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {
+  const saved = window.localStorage.getItem(key);
+  return saved === "en-US" || saved === "en-GB" || saved === "de-DE" || saved === "fr-FR" || saved === "ja-JP" || saved === "user"
+    ? saved
+    : "user";
+}
+
 export default function App() {
   const [appState, setAppState] = useState<AppState>(emptyApp);
   const [activeServerId, setActiveServerId] = useState("");
@@ -636,6 +640,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
+  const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
+  const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [demoRunning, setDemoRunning] = useState(true);
   const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => initialDemoFiles);
   const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => initialDemoMods);
@@ -672,6 +678,26 @@ export default function App() {
     return matches.slice(0, 8);
   }, [commandInput]);
 
+
+
+  const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
+  const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
+
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short" }), [resolvedDateLocale]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
+
+  function formatDisplayDate(value: string | number | Date) {
+    return dateTimeFormatter.format(new Date(value));
+  }
+
+  function formatDisplayNumber(value: number) {
+    return numberFormatter.format(value);
+  }
+
+  function formatDisplayMegabytes(value: number) {
+    if (!value) return "0 MB";
+    return `${formatDisplayNumber(Math.round(value / 1024 / 1024))} MB`;
+  }
   useEffect(() => {
     refreshApp();
     api<FabricVersions>("/api/fabric/versions").then(setFabricVersions).catch(() => {
@@ -796,6 +822,14 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("serversentinel-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    window.localStorage.setItem("serversentinel-date-locale", dateLocalePreference);
+  }, [dateLocalePreference]);
+
+  useEffect(() => {
+    window.localStorage.setItem("serversentinel-number-locale", numberLocalePreference);
+  }, [numberLocalePreference]);
 
   useEffect(() => {
     if (activeTab === "settings" && serverSettingsLocked) {
@@ -1718,6 +1752,32 @@ export default function App() {
               </label>
               <label className="settingsRow">
                 <div>
+                  <strong>Date format</strong>
+                </div>
+                <select value={dateLocalePreference} onChange={(event) => setDateLocalePreference(event.target.value as LocalePreference)}>
+                  <option value="user">Use browser default</option>
+                  <option value="en-US">English (US)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="de-DE">Deutsch (Deutschland)</option>
+                  <option value="fr-FR">Français (France)</option>
+                  <option value="ja-JP">日本語 (日本)</option>
+                </select>
+              </label>
+              <label className="settingsRow">
+                <div>
+                  <strong>Number format</strong>
+                </div>
+                <select value={numberLocalePreference} onChange={(event) => setNumberLocalePreference(event.target.value as LocalePreference)}>
+                  <option value="user">Use browser default</option>
+                  <option value="en-US">English (US)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="de-DE">Deutsch (Deutschland)</option>
+                  <option value="fr-FR">Français (France)</option>
+                  <option value="ja-JP">日本語 (日本)</option>
+                </select>
+              </label>
+              <label className="settingsRow">
+                <div>
                   <strong>Demo mode</strong>
                 </div>
                 <span className="settingsToggle">
@@ -1839,7 +1899,7 @@ export default function App() {
                   </div>
                 </section>
 
-                <ResourcePanel server={activeServer} samples={resourceSamples} status={status} dockerSocketMounted={effectiveAppState.dockerSocketMounted} />
+                <ResourcePanel server={activeServer} samples={resourceSamples} status={status} dockerSocketMounted={effectiveAppState.dockerSocketMounted} formatNumber={formatDisplayNumber} />
 
                 <section className="panel consolePanel">
                   <div className="panelHeader">
@@ -1999,7 +2059,7 @@ export default function App() {
                           {mod.iconUrl ? <img src={mod.iconUrl} alt="" /> : <div className="modFileIcon">JAR</div>}
                           <div>
                             <strong>{mod.displayName}</strong>
-                            <p>{mod.enabled ? "Enabled" : "Disabled"} - {formatBytes(mod.size)} - Modified {new Date(mod.modifiedAt).toLocaleString()}</p>
+                            <p>{mod.enabled ? "Enabled" : "Disabled"} - {formatBytes(mod.size)} - Modified {formatDisplayDate(mod.modifiedAt)}</p>
                             <small>{mod.filename}</small>
                           </div>
                           <div className="modActions">
@@ -2039,7 +2099,7 @@ export default function App() {
                             <div>
                               <strong>{mod.title}</strong>
                               <p>{mod.description}</p>
-                              <small>{mod.downloads.toLocaleString()} downloads</small>
+                              <small>{formatDisplayNumber(mod.downloads)} downloads</small>
                             </div>
                             <button onClick={() => installMod(mod.project_id, mod.title)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Install</button>
                           </article>
@@ -2151,12 +2211,14 @@ function ResourcePanel({
   server,
   samples,
   status,
-  dockerSocketMounted
+  dockerSocketMounted,
+  formatNumber
 }: {
   server: AttachedServer;
   samples: ResourceSample[];
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
+  formatNumber: (value: number) => string;
 }) {
   const latest = samples.at(-1);
   const cpu = latest?.cpuPercent ?? 0;
@@ -2177,7 +2239,7 @@ function ResourcePanel({
       <div className="resourceStats">
         <div className="resourceMetric">
           <span>Memory</span>
-          <strong>{formatMegabytes(memoryUsage)} / {formatMegabytes(configuredMemoryBytes)}</strong>
+          <strong>{`${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB`} / {`${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</strong>
         </div>
         <div className="resourceMetric">
           <span>CPU</span>
