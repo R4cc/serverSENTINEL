@@ -134,7 +134,7 @@ type ProvisionJob = {
   error?: string;
 };
 
-type ActivePage = "servers" | "server" | "settings" | "create";
+type ActivePage = "servers" | "settings" | "create" | "overview" | "console" | "files" | "mods" | "schedule";
 type ThemePreference = "light" | "dark" | "system";
 
 const appVersion = "0.1.0";
@@ -646,8 +646,7 @@ export default function App() {
   const [provisionJob, setProvisionJob] = useState<ProvisionJob | null>(null);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
-  const [activePage, setActivePage] = useState<ActivePage>("server");
-  const [activeTab, setActiveTab] = useState<"overview" | "files" | "mods" | "schedule" | "settings">("overview");
+  const [activePage, setActivePage] = useState<ActivePage>("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
@@ -726,8 +725,8 @@ export default function App() {
     if (demoMode) {
       setNotice("");
       setActiveServerId(demoServerId);
-      setActivePage("server");
-      setActiveTab("overview");
+      setActivePage("overview");
+      setActivePage("overview");
     } else if (activeServerId === demoServerId) {
       setActiveServerId("");
       setStatus(null);
@@ -785,23 +784,23 @@ export default function App() {
   }, [activeServer?.id, consoleStreamVersion, demoMode]);
 
   useEffect(() => {
-    if (activeTab !== "overview") return;
+    if (activePage !== "overview" && activePage !== "console") return;
     if (!consolePinnedToBottom) return;
     window.requestAnimationFrame(() => {
       consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
       setPendingConsoleEntries(0);
     });
-  }, [logs, activeTab]);
+  }, [logs, activePage]);
 
   useEffect(() => {
     const previousCount = previousLogCountRef.current;
     const addedEntries = Math.max(0, logs.length - previousCount);
     previousLogCountRef.current = logs.length;
     if (!addedEntries) return;
-    if (!consolePinnedToBottom && activeTab === "overview") {
+    if (!consolePinnedToBottom && (activePage === "overview" || activePage === "console")) {
       setPendingConsoleEntries((current) => current + addedEntries);
     }
-  }, [logs, activeTab, consolePinnedToBottom]);
+  }, [logs, activePage, consolePinnedToBottom]);
 
   function handleConsoleScroll() {
     const element = consoleRef.current;
@@ -844,17 +843,17 @@ export default function App() {
   }, [numberLocalePreference]);
 
   useEffect(() => {
-    if (activeTab === "settings" && serverSettingsLocked) {
-      setActiveTab("overview");
+    if (activePage === "settings" && serverSettingsLocked) {
+      setActivePage("overview");
     }
-  }, [activeTab, serverSettingsLocked]);
+  }, [activePage, serverSettingsLocked]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
   }, [commandHistory]);
 
   useEffect(() => {
-    if (!activeServer || activePage !== "server" || activeTab !== "overview") return;
+    if (!activeServer || (activePage !== "overview" && activePage !== "console")) return;
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples([demoStats(demoRunning)]);
       const interval = window.setInterval(() => setResourceSamples([demoStats(demoRunning)]), resourcePollMs);
@@ -889,10 +888,10 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activePage, activeTab, demoMode, demoRunning]);
+  }, [activeServer?.id, activePage, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (!activeServer || activeTab !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
+    if (!activeServer || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
       setModSearchResults([]);
@@ -935,7 +934,7 @@ export default function App() {
       setIsSearchingMods(false);
       window.clearTimeout(timeout);
     };
-  }, [activeServer?.id, activeTab, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo]);
+  }, [activeServer?.id, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -1071,8 +1070,8 @@ export default function App() {
       }
       await refreshApp();
       setActiveServerId(server.id);
-      setActivePage("server");
-      setActiveTab("overview");
+      setActivePage("overview");
+      setActivePage("overview");
       setConsoleStreamVersion((version) => version + 1);
       await refreshStatus(server.id);
       await refreshConsoleLogs(server.id);
@@ -1644,7 +1643,6 @@ export default function App() {
       });
       notify("success", result.deletedFiles ? `Deleted ${activeServer.displayName} and its files` : `Removed ${activeServer.displayName}`);
       setActiveServerId("");
-      setActiveTab("overview");
       setActivePage("servers");
       await refreshApp();
     } catch (error) {
@@ -1674,6 +1672,27 @@ export default function App() {
             <SidebarIcon name="servers" />
             <span>Servers</span>
           </button>
+          <label className="serverPicker">
+            <small>Active server</small>
+            <select
+              value={activeServerId}
+              onChange={(event) => {
+                setActiveServerId(event.target.value);
+                if (event.target.value) setActivePage("overview");
+              }}
+              disabled={isProvisioning || effectiveAppState.servers.length === 0}
+            >
+              <option value="">Select server</option>
+              {effectiveAppState.servers.map((server) => (
+                <option key={server.id} value={server.id}>{server.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer}>Overview</button>
+          <button className={activePage === "console" ? "active" : ""} onClick={() => setActivePage("console")} disabled={isProvisioning || !activeServer}>Console</button>
+          <button className={activePage === "files" ? "active" : ""} onClick={() => setActivePage("files")} disabled={isProvisioning || !activeServer}>Files</button>
+          <button className={activePage === "mods" ? "active" : ""} onClick={() => setActivePage("mods")} disabled={isProvisioning || !activeServer}>Mods</button>
+          <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")} disabled={isProvisioning || !activeServer}>Schedules</button>
         </nav>
         <nav className="sideNav sideNavBottom">
           <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning}>
@@ -1690,14 +1709,14 @@ export default function App() {
             <h2>
               {activePage === "servers" && "Servers"}
               {activePage === "create" && "New Server"}
-              {activePage === "server" && (activeServer?.displayName ?? "No Server Selected")}
+              {["overview","console","files","mods","schedule"].includes(activePage) && (activeServer?.displayName ?? "No Server Selected")}
               {activePage === "settings" && "Settings"}
             </h2>
           </div>
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock}>New server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {activePage === "server" && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
+            {["overview","console","files","mods","schedule"].includes(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
         </header>
 
@@ -1725,7 +1744,7 @@ export default function App() {
                     disabled={isProvisioning}
                     onClick={() => {
                       setActiveServerId(server.id);
-                      setActivePage("server");
+                      setActivePage("overview");
                     }}
                   >
                     <strong>{server.displayName}</strong>
@@ -1851,7 +1870,7 @@ export default function App() {
           </section>
         )}
 
-        {activePage === "server" && !activeServer && (
+        {["overview","console","files","mods","schedule"].includes(activePage) && !activeServer && (
           <section className="emptyState">
             <h2>No Server Selected</h2>
             <p>Create or select a server from the Servers page.</p>
@@ -1859,7 +1878,7 @@ export default function App() {
           </section>
         )}
 
-        {activePage === "server" && activeServer && (
+        {["overview","console","files","mods","schedule"].includes(activePage) && activeServer && (
           <>
             <div className="activeServerStrip">
               <div>
@@ -1879,22 +1898,7 @@ export default function App() {
               </div>
             </div>
 
-            <nav className="tabs">
-              <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")} disabled={isProvisioning}>Overview</button>
-              <button className={activeTab === "files" ? "active" : ""} onClick={() => setActiveTab("files")} disabled={isProvisioning}>Files</button>
-              <button className={activeTab === "mods" ? "active" : ""} onClick={() => setActiveTab("mods")} disabled={isProvisioning}>Mods</button>
-              <button className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")} disabled={isProvisioning}>Scheduling</button>
-              <button
-                className={activeTab === "settings" ? "active" : ""}
-                onClick={() => setActiveTab("settings")}
-                disabled={serverSettingsLocked}
-                title={status?.docker.running ? "Stop the server to edit settings" : undefined}
-              >
-                Server Settings
-              </button>
-            </nav>
-
-            {activeTab === "overview" && (
+            {activePage === "overview" && (
               <section className="tabPage overviewPage">
                 <section className="panel controls">
                   <div className="panelHeader">
@@ -1922,6 +1926,11 @@ export default function App() {
 
                 <ResourcePanel server={activeServer} samples={resourceSamples} status={status} dockerSocketMounted={effectiveAppState.dockerSocketMounted} formatNumber={formatDisplayNumber} />
 
+              </section>
+            )}
+
+            {activePage === "console" && (
+              <section className="tabPage">
                 <section className="panel consolePanel">
                   <div className="panelHeader">
                     <h2>Console</h2>
@@ -1983,7 +1992,7 @@ export default function App() {
               </section>
             )}
 
-            {activeTab === "files" && (
+            {activePage === "files" && (
               <section className="tabPage filesPage">
                 <section className="panel filesPanel">
                   <div className="panelHeader">
@@ -2030,7 +2039,7 @@ export default function App() {
               </section>
             )}
 
-            {activeTab === "mods" && (
+            {activePage === "mods" && (
               <section className="tabPage">
                 <section className="panel modsPanel">
                   <div className="panelHeader">
@@ -2149,7 +2158,7 @@ export default function App() {
               </section>
             )}
 
-            {activeTab === "schedule" && (
+            {activePage === "schedule" && (
               <SchedulePage
                 schedules={activeServer.schedules ?? []}
                 onCreate={createSchedule}
@@ -2160,29 +2169,6 @@ export default function App() {
               />
             )}
 
-            {activeTab === "settings" && (
-              <section className="tabPage settingsPage">
-                <section className="panel settingsPanel">
-                  <h2>Server Settings</h2>
-                  <dl className="meta">
-                    <dt>Server type</dt>
-                    <dd>Fabric</dd>
-                    <dt>Jar metadata</dt>
-                    <dd>{activeServer.serverJar || "Not set"}</dd>
-                    <dt>Storage</dt>
-                    <dd>{activeServer.storageName || "Not set"}</dd>
-                    <dt>Ports</dt>
-                    <dd>{activeServer.dockerPorts || "25565:25565/tcp"}</dd>
-                    <dt>Log file</dt>
-                    <dd>{status?.fileLogsAvailable ? "Available" : "Not found"}</dd>
-                    <dt>Control</dt>
-                    <dd>{activeServerIsDemo ? "Demo runtime control enabled" : status?.controlAvailable ? "Docker container control enabled" : "Not configured"}</dd>
-                  </dl>
-                  <ServerEditForm server={activeServer} versions={fabricVersions} totalMemory={effectiveAppState.totalMemory} onSubmit={updateServer} disabled={serverSettingsLocked} />
-                </section>
-                <DeleteServerPanel server={activeServer} onSubmit={deleteServer} disabled={serverSettingsLocked} />
-              </section>
-            )}
           </>
         )}
       </section>
