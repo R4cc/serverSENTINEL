@@ -179,7 +179,7 @@ type ProvisionJob = {
   error?: string;
 };
 
-type ActivePage = "servers" | "settings" | "create" | "overview" | "console" | "files" | "mods" | "schedule";
+type ActivePage = "servers" | "settings" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
 type ThemePreference = "light" | "dark" | "system";
 
 const appVersion = "0.1.1";
@@ -566,7 +566,7 @@ function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   return status.docker.running ? "running" : "stopped";
 }
 
-function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "settings" }) {
+function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" }) {
   if (name === "overview") {
     return (
       <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -613,6 +613,16 @@ function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods"
         <path d="M16 3v4" />
         <path d="M4 10h16" />
         <path d="M9 15h3l2-2" />
+      </svg>
+    );
+  }
+  if (name === "properties") {
+    return (
+      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 4h12v16H6z" />
+        <path d="M9 8h6" />
+        <path d="M9 12h6" />
+        <path d="M9 16h3" />
       </svg>
     );
   }
@@ -2027,6 +2037,10 @@ export default function App() {
             <SidebarIcon name="schedule" />
             <span className="navLabel">Schedules</span>
           </button>
+          <button className={activePage === "properties" ? "active" : ""} onClick={() => setActivePage("properties")} disabled={isProvisioning || !activeServer}>
+            <SidebarIcon name="properties" />
+            <span className="navLabel">Properties</span>
+          </button>
         </nav>
         <nav className="sideNav sideNavBottom">
           <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning}>
@@ -2061,14 +2075,14 @@ export default function App() {
             <h2>
               {activePage === "servers" && "Servers"}
               {activePage === "create" && "New Server"}
-              {["overview","console","files","mods","schedule"].includes(activePage) && (activeServer?.displayName ?? "No Server Selected")}
+              {["overview","console","files","mods","schedule","properties"].includes(activePage) && (activeServer?.displayName ?? "No Server Selected")}
               {activePage === "settings" && "Settings"}
             </h2>
           </div>
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={isProvisioning || dockerOperationalLock || !canManageReal}>New server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {["overview","console","files","mods","schedule"].includes(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
+            {["overview","console","files","mods","schedule","properties"].includes(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
         </header>
 
@@ -2235,7 +2249,7 @@ export default function App() {
           </section>
         )}
 
-        {["overview","console","files","mods","schedule"].includes(activePage) && !activeServer && (
+        {["overview","console","files","mods","schedule","properties"].includes(activePage) && !activeServer && (
           <section className="emptyState">
             <h2>No Server Selected</h2>
             <p>Create or select a server from the Servers page.</p>
@@ -2243,7 +2257,7 @@ export default function App() {
           </section>
         )}
 
-        {["overview","console","files","mods","schedule"].includes(activePage) && activeServer && (
+        {["overview","console","files","mods","schedule","properties"].includes(activePage) && activeServer && (
           <>
             <div className="activeServerStrip">
               <div>
@@ -2525,6 +2539,26 @@ export default function App() {
                 disabled={isProvisioning || !canExpanded}
                 commandInputMessage={status?.commandInputAvailable ? "" : status?.commandInputMessage || "Scheduled commands need Docker command input when they run."}
               />
+            )}
+
+            {activePage === "properties" && (
+              <section className="settingsPage">
+                <section className="panel">
+                  <h2>Server Properties</h2>
+                  <ServerEditForm
+                    server={activeServer}
+                    versions={fabricVersions}
+                    totalMemory={effectiveAppState.totalMemory}
+                    onSubmit={updateServer}
+                    disabled={isProvisioning || dockerOperationalLock || !canManager}
+                  />
+                </section>
+                <DeleteServerPanel
+                  server={activeServer}
+                  onSubmit={deleteServer}
+                  disabled={isProvisioning || dockerOperationalLock || !canManager}
+                />
+              </section>
             )}
 
           </>
