@@ -4,14 +4,17 @@ on:
   push:
     branches:
       - main
+      - dev
   workflow_dispatch:
 
 jobs:
   docker:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +28,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Set Docker tags
+        id: meta
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "tags=nl2109/serversentinel:latest,nl2109/serversentinel:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
+            echo "tags=nl2109/serversentinel:dev,nl2109/serversentinel:dev-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unsupported branch: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -32,6 +47,4 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            nl2109/serversentinel:latest
-            nl2109/serversentinel:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
