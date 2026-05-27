@@ -149,6 +149,10 @@ export default function App() {
   const previousLogCountRef = useRef(0);
   const modUploadRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
+  const modToggleStateQueueRef = useRef<Record<string, {
+    targetEnabled: boolean;
+    inFlightEnabled: boolean | null;
+  }>>({});
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && job.status === "running");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
@@ -188,6 +192,7 @@ export default function App() {
   const dockerOperationalLock = authOperationalLock || !effectiveAppState.dockerSocketMounted;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
+  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
     const matches = value
@@ -1453,28 +1458,72 @@ export default function App() {
     await loadInstalledMods(activeServer.id);
   }
 
-  async function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
-    if (modsLocked || !canManager || !activeServer) return;
-    setNotice("");
-    if (activeServerIsDemo) {
-      const update = (current: InstalledMod[]) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, enabled } : candidate);
-      setDemoInstalledMods(update);
-      setInstalledMods(update);
-      notify("success", `${enabled ? "Enabled" : "Disabled"} ${mod.displayName}`);
+  async function processModToggleQueue(filename: string, modDisplayName: string) {
+    const queueItem = modToggleStateQueueRef.current[filename];
+    if (!queueItem || queueItem.inFlightEnabled !== null) {
       return;
     }
-    try {
-      await api(`/api/servers/${activeServer.id}/mods`, {
-        method: "PATCH",
-        body: JSON.stringify({ filename: mod.filename, enabled })
-      });
-      notify("success", `${enabled ? "Enabled" : "Disabled"} ${mod.displayName}`);
-      await loadInstalledMods(activeServer.id);
-      await loadFiles(activeServer.id, "/mods");
-    } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+
+    while (queueItem.targetEnabled !== queueItem.inFlightEnabled) {
+      const runEnabled = queueItem.targetEnabled;
+      queueItem.inFlightEnabled = runEnabled;
+
+      if (activeServerIsDemo) {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+      } else if (activeServer) {
+        try {
+          await api(`/api/servers/${activeServer.id}/mods`, {
+            method: "PATCH",
+            body: JSON.stringify({ filename, enabled: runEnabled })
+          });
+          void loadFiles(activeServer.id, "/mods");
+        } catch (error) {
+          const errorMsg = (error as Error).message;
+          setNotice(`Failed to toggle mod ${modDisplayName}: ${errorMsg}`);
+          notify("error", `Failed to toggle mod ${modDisplayName}: ${errorMsg}`);
+
+          const rollBackTo = !runEnabled;
+          setInstalledMods((current) => current.map((m) => m.filename === filename ? { ...m, enabled: rollBackTo } : m));
+          if (demoMode) {
+            setDemoInstalledMods((current) => current.map((m) => m.filename === filename ? { ...m, enabled: rollBackTo } : m));
+          }
+          queueItem.targetEnabled = rollBackTo;
+        }
+      }
+
+      queueItem.inFlightEnabled = null;
     }
+
+    delete modToggleStateQueueRef.current[filename];
+    if (activeServer && !activeServerIsDemo) {
+      void loadInstalledMods(activeServer.id);
+    }
+  }
+
+  async function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
+    if (modToggleLocked || !canManager || !activeServer) return;
+    setNotice("");
+
+    // Optimistically update UI instantly
+    setInstalledMods((current) => current.map((m) => m.filename === mod.filename ? { ...m, enabled } : m));
+    if (demoMode) {
+      setDemoInstalledMods((current) => current.map((m) => m.filename === mod.filename ? { ...m, enabled } : m));
+    }
+
+    // Initialize or update queue
+    let queueItem = modToggleStateQueueRef.current[mod.filename];
+    if (!queueItem) {
+      queueItem = {
+        targetEnabled: enabled,
+        inFlightEnabled: null
+      };
+      modToggleStateQueueRef.current[mod.filename] = queueItem;
+    } else {
+      queueItem.targetEnabled = enabled;
+    }
+
+    // Trigger processing
+    void processModToggleQueue(mod.filename, mod.displayName);
   }
 
   async function removeInstalledMod(mod: InstalledMod) {
@@ -2313,7 +2362,7 @@ export default function App() {
                                       type="checkbox"
                                       checked={mod.enabled}
                                       onChange={() => setInstalledModEnabled(mod, !mod.enabled)}
-                                      disabled={modsLocked}
+                                      disabled={modToggleLocked}
                                     />
                                     <span className="slider"></span>
                                     <span style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: mod.enabled ? "var(--sentinel-success)" : "var(--text-soft)" }}>
