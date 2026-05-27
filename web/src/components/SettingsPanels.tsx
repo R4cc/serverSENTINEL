@@ -1,20 +1,4 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { ProvisionJob } from '../types';
-
-export function ProvisionProgress({ job }: { job: ProvisionJob }) {
-  return (
-    <section className={`provisionPanel ${job.status}`}>
-      <div>
-        <strong>{job.status === "failed" ? "Setup stopped" : job.status === "succeeded" ? "Setup complete" : "Setting up server"}</strong>
-        <span>{job.error || job.task}</span>
-      </div>
-      <div className="progressTrack" aria-label="Server setup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.progress} role="progressbar">
-        <span style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} />
-      </div>
-      <small>{Math.round(job.progress)}%</small>
-    </section>
-  );
-}
 
 export function ModrinthKeyForm({
   onSubmit,

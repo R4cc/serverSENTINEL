@@ -9,7 +9,7 @@ import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./compone
 import { Notifications } from "./components/Notifications";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
-import { ModrinthKeyForm, ProvisionProgress } from "./components/SettingsPanels";
+import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
@@ -126,6 +126,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [notices, setNotices] = useState<Notice[]>([]);
   const [provisionJob, setProvisionJob] = useState<ProvisionJob | null>(null);
+  const [provisioningError, setProvisioningError] = useState("");
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>("overview");
@@ -715,6 +716,7 @@ export default function App() {
       notify("error", message);
       return;
     }
+    setProvisioningError("");
     setProvisionJob({
       id: "local",
       status: "running",
@@ -756,9 +758,11 @@ export default function App() {
       notify("success", `Created ${server.displayName}`);
       window.setTimeout(() => setProvisionJob(null), 1200);
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
-      setProvisionJob((current) => current ? { ...current, status: "failed", task: "Server setup failed", error: (error as Error).message } : null);
+      const message = (error as Error).message;
+      setNotice(message);
+      setProvisioningError(message);
+      notify("error", message);
+      setProvisionJob((current) => current ? { ...current, status: "failed", task: "Server setup failed", error: message } : null);
     }
   }
 
@@ -1372,7 +1376,7 @@ export default function App() {
 
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
-      <Notifications notices={notices} />
+      <Notifications notices={notices} provisioningJob={provisionJob} onDismissProvisioning={() => setProvisionJob(null)} />
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
@@ -1491,14 +1495,17 @@ export default function App() {
           </div>
         </header>
 
-        {provisionJob && (
-          <ProvisionProgress job={provisionJob} />
-        )}
-
         {!effectiveAppState.dockerSocketMounted && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
             <span>Runtime management is unavailable until the Docker socket is mounted. Creating runtime containers, starting, stopping, restarting, logs, stats, and console command input require Docker integration.</span>
+          </section>
+        )}
+
+        {provisioningError && activePage === "overview" && (
+          <section className="systemBanner error" role="alert">
+            <strong>Server setup failed.</strong>
+            <span>{provisioningError}</span>
           </section>
         )}
 

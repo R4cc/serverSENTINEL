@@ -823,43 +823,6 @@ button .buttonIcon {
   color: var(--swiss-white);
 }
 
-.provisionPanel {
-  border: var(--border-strong) solid var(--accent);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  display: grid;
-  grid-template-columns: minmax(220px, 0.42fr) minmax(160px, 1fr) auto;
-  gap: var(--space-4);
-  align-items: center;
-}
-
-.provisionPanel strong,
-.provisionPanel small {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.provisionPanel span {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.provisionPanel.failed {
-  border-color: var(--sentinel-danger);
-}
-
-.provisionPanel.failed strong,
-.provisionPanel.failed small {
-  color: var(--sentinel-danger);
-}
-
 .progressTrack {
   height: 14px;
   border: var(--border-strong) solid var(--border);
@@ -893,6 +856,85 @@ button .buttonIcon {
   font-size: 13px;
   font-weight: 800;
   box-shadow: none;
+}
+
+.provisioningToast {
+  display: grid;
+  gap: var(--space-2);
+  border-color: var(--accent);
+  background:
+    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
+}
+
+.provisioningToastHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.provisioningToastHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.provisioningToast strong,
+.provisioningToast small,
+.provisioningToastHeader span {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.provisioningToastHeader span {
+  color: var(--text-muted);
+}
+
+.provisioningToast p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.provisioningToast.failed {
+  border-color: var(--sentinel-danger);
+}
+
+.provisioningToast.failed strong,
+.provisioningToast.failed small,
+.provisioningToast.failed .provisioningToastHeader span {
+  color: var(--sentinel-danger);
+}
+
+.provisioningToast.failed .progressTrack span {
+  background: var(--sentinel-danger);
+}
+
+.provisioningToast.succeeded {
+  border-color: var(--sentinel-success);
+}
+
+.provisioningToast.succeeded strong,
+.provisioningToast.succeeded small,
+.provisioningToast.succeeded .provisioningToastHeader span {
+  color: var(--sentinel-success);
+}
+
+.provisioningToast.succeeded .progressTrack span {
+  background: var(--sentinel-success);
+}
+
+.toastDismissButton {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  line-height: 1;
 }
 
 .toast.success {
@@ -2682,11 +2724,6 @@ details.compatibilityBadge p {
 
   .systemBanner {
     grid-template-columns: 1fr;
-  }
-
-  .provisionPanel {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
   }
 
   .overviewPage,
