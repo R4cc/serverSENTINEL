@@ -3,7 +3,7 @@ import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
@@ -15,9 +15,13 @@ import { totalmem } from "node:os";
 import {
   cronMatches,
   ensureInsideServer,
+  ensureWritableInsideServer,
+  ensureWritableResolvedInsideServer,
   parseDockerPorts,
   safeInstalledModFilename,
   safeModFilename,
+  validateExistingInsideServer,
+  validateExistingResolvedInsideServer,
   validateCron
 } from "./core.js";
 
@@ -472,20 +476,37 @@ function modIconKey(filename: string) {
   return Buffer.from(filename.replace(/\.jar\.disabled$/, ".jar"), "utf8").toString("base64url");
 }
 
+function isMissingPathError(error: unknown) {
+  return (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
 async function modIconUrl(server: ManagedServer, filename: string) {
-  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
-  if (!existsSync(iconsDir)) return undefined;
+  let iconsDir: string;
+  try {
+    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    return undefined;
+  }
   const key = modIconKey(filename);
   const icon = (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`));
   return icon ? `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}` : undefined;
 }
 
 async function deleteModIcon(server: ManagedServer, filename: string) {
-  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
-  if (!existsSync(iconsDir)) return;
+  let iconsDir: string;
+  try {
+    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    return;
+  }
   const key = modIconKey(filename);
   const icons = await readdir(iconsDir);
-  await Promise.all(icons.filter((entry) => entry.startsWith(`${key}.`)).map((entry) => rm(join(iconsDir, entry), { force: true })));
+  await Promise.all(icons.filter((entry) => entry.startsWith(`${key}.`)).map(async (entry) => {
+    const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, entry));
+    await rm(iconPath, { force: true });
+  }));
 }
 
 function iconExtension(iconUrl: string, contentType: string | null) {
@@ -504,16 +525,20 @@ async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: st
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > 1024 * 1024) return;
+  await validateExistingInsideServer(server, "mods");
   const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
   await mkdir(iconsDir, { recursive: true });
+  await validateExistingInsideServer(server, "mods/.serversentinel-icons");
   await deleteModIcon(server, filename);
-  await writeFile(join(iconsDir, `${modIconKey(filename)}${iconExtension(iconUrl, response.headers.get("content-type"))}`), bytes);
+  const iconPath = await ensureWritableResolvedInsideServer(server, join(iconsDir, `${modIconKey(filename)}${iconExtension(iconUrl, response.headers.get("content-type"))}`));
+  await writeFile(iconPath, bytes);
 }
 
 async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string) {
   if (await modIconUrl(server, filename)) return;
   try {
-    const hash = createHash("sha1").update(await readFile(filePath)).digest("hex");
+    const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
+    const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
     const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
     const version = await versionResponse.json() as { project_id?: string };
     if (!version.project_id) return;
@@ -1140,7 +1165,7 @@ function readFileRange(filePath: string, start: number, end: number) {
 }
 
 async function readLatestServerLog(server: ManagedServer) {
-  const logPath = ensureInsideServer(server, "logs/latest.log");
+  const logPath = await validateExistingInsideServer(server, "logs/latest.log");
   const logStat = await stat(logPath);
   if (!logStat.isFile()) {
     throw new Error("logs/latest.log is not a file");
@@ -1224,8 +1249,8 @@ async function serverOverviewData(server: ManagedServer) {
   const [fileLog, dockerLog, properties, eula, dockerInspect] = await Promise.allSettled([
     readLatestServerLog(server),
     dockerRecentLogs(server),
-    readFile(ensureInsideServer(server, "server.properties"), "utf8"),
-    readFile(ensureInsideServer(server, "eula.txt"), "utf8"),
+    validateExistingInsideServer(server, "server.properties").then((path) => readFile(path, "utf8")),
+    validateExistingInsideServer(server, "eula.txt").then((path) => readFile(path, "utf8")),
     dockerControlConfigured(server) ? dockerRequest<DockerContainerInspect>("GET", `/containers/${encodeURIComponent(dockerContainerName(server))}/json`, 200) : Promise.resolve(null)
   ]);
   const logSources: Array<{ source: ServerEvent["source"]; text: string }> = [];
@@ -1274,7 +1299,6 @@ async function onlinePlayerCount(server: ManagedServer) {
 }
 
 function streamLatestServerLog(server: ManagedServer, client: Client) {
-  const logPath = ensureInsideServer(server, "logs/latest.log");
   let offset = 0;
   let closed = false;
   let announcedEmpty = false;
@@ -1288,6 +1312,7 @@ function streamLatestServerLog(server: ManagedServer, client: Client) {
   const poll = async () => {
     if (closed) return;
     try {
+      const logPath = await validateExistingInsideServer(server, "logs/latest.log");
       const logStat = await stat(logPath);
       if (!logStat.isFile()) {
         client.send(JSON.stringify({ type: "unavailable", message: "logs/latest.log is not a file" }));
@@ -1988,13 +2013,13 @@ app.delete<{
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
   const server = await getServer(request.params.id);
-  const latestLogPath = ensureInsideServer(server, "logs/latest.log");
+  const latestLogPath = await validateExistingInsideServer(server, "logs/latest.log").catch(() => "");
   const docker = await dockerStatus(server);
   const commandInput = await dockerCommandInputCapability(server, docker);
   return {
     server: publicServer(server),
     docker: docker,
-    fileLogsAvailable: existsSync(latestLogPath),
+    fileLogsAvailable: Boolean(latestLogPath && existsSync(latestLogPath)),
     controlAvailable: Boolean(dockerControlConfigured(server) && dockerAvailable()),
     commandInputAvailable: commandInput.available,
     commandInputMessage: commandInput.message
@@ -2118,7 +2143,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) =
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
-  const target = ensureInsideServer(server, request.query.path ?? ".");
+  const target = await validateExistingInsideServer(server, request.query.path ?? ".");
   const targetStat = await stat(target);
   if (!targetStat.isDirectory()) {
     throw new Error("Path is not a directory");
@@ -2132,7 +2157,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
         .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
         .map(async (entry) => {
           const absolutePath = join(target, entry.name);
-          const entryStat = await stat(absolutePath);
+          const entryStat = await lstat(absolutePath);
           return {
             name: entry.name,
             path: toPublicPath(server, absolutePath),
@@ -2147,7 +2172,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
   const server = await getServer(request.params.id);
-  const target = ensureInsideServer(server, request.query.path ?? "");
+  const target = await validateExistingInsideServer(server, request.query.path ?? "");
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
@@ -2169,7 +2194,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
-  const target = ensureInsideServer(server, request.body.path ?? "");
+  const target = await validateExistingInsideServer(server, request.body.path ?? "");
   if (typeof request.body.content !== "string") {
     throw new Error("Content is required");
   }
@@ -2184,7 +2209,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
-  const target = ensureInsideServer(server, request.query.path ?? "");
+  const target = await validateExistingInsideServer(server, request.query.path ?? "");
   if (resolve(target) === resolve(server.serverDir)) {
     throw new Error("Refusing to delete the server root directory");
   }
@@ -2222,7 +2247,13 @@ function normalizeReleaseChannel(channel?: string): ReleaseChannel {
 }
 
 async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
-  const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
+  let path: string;
+  try {
+    path = await validateExistingInsideServer(server, "mods/.serversentinel-mods.json");
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    return {};
+  }
   if (!existsSync(path)) return {};
   try {
     return JSON.parse(await readFile(path, "utf8")) as Record<string, ModPreference>;
@@ -2232,7 +2263,7 @@ async function readModPreferences(server: ManagedServer): Promise<Record<string,
 }
 
 async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
-  const path = ensureInsideServer(server, "mods/.serversentinel-mods.json");
+  const path = await ensureWritableInsideServer(server, "mods/.serversentinel-mods.json");
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
@@ -2330,8 +2361,8 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
 }
 app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
   const server = await getServer(request.params.id);
-  const modsDir = ensureInsideServer(server, "mods");
-  await mkdir(modsDir, { recursive: true });
+  await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
+  const modsDir = await validateExistingInsideServer(server, "mods");
   const entries = await readdir(modsDir, { withFileTypes: true });
   const prefs = await readModPreferences(server);
   return {
@@ -2340,7 +2371,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
         .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map(async (entry) => {
-          const modPath = join(modsDir, entry.name);
+          const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
           await ensureModrinthIconForFile(server, entry.name, modPath);
           const modStat = await stat(modPath);
           const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
@@ -2367,7 +2398,14 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.query.filename);
-  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  let iconsDir: string;
+  try {
+    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    reply.code(404);
+    return { error: "Icon not found" };
+  }
   const key = modIconKey(filename);
   const icon = existsSync(iconsDir) ? (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`)) : undefined;
   if (!icon) {
@@ -2377,7 +2415,8 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
   const extension = extname(icon).toLowerCase();
   const contentType = extension === ".webp" ? "image/webp" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "image/png";
   reply.header("Content-Type", contentType);
-  return reply.send(createReadStream(join(iconsDir, icon)));
+  const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
+  return reply.send(createReadStream(iconPath));
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", async (request) => {
@@ -2386,7 +2425,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.body.filename);
   const enabled = Boolean(request.body.enabled);
-  const source = ensureInsideServer(server, join("mods", filename));
+  const source = await validateExistingInsideServer(server, join("mods", filename));
   const targetName = enabled
     ? filename.replace(/\.jar\.disabled$/, ".jar")
     : filename.endsWith(".jar.disabled")
@@ -2395,7 +2434,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   if (filename === targetName) {
     return { ok: true, filename: targetName, enabled };
   }
-  const target = ensureInsideServer(server, join("mods", safeInstalledModFilename(targetName)));
+  const target = await ensureWritableInsideServer(server, join("mods", safeInstalledModFilename(targetName)));
   await rename(source, target);
   const prefs = await readModPreferences(server);
   if (prefs[filename]) {
@@ -2426,7 +2465,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.query.filename);
-  const target = ensureInsideServer(server, join("mods", filename));
+  const target = await validateExistingInsideServer(server, join("mods", filename));
   await rm(target, { force: true });
   await deleteModIcon(server, filename);
   const prefs = await readModPreferences(server);
@@ -2449,9 +2488,9 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
   if (!content.length || content.length > 128 * 1024 * 1024) {
     throw new Error("Uploaded mod must be between 1 byte and 128 MiB");
   }
-  const modsDir = ensureInsideServer(server, "mods");
-  await mkdir(modsDir, { recursive: true });
-  const destination = ensureInsideServer(server, join("mods", filename));
+  await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
+  await validateExistingInsideServer(server, "mods");
+  const destination = await ensureWritableInsideServer(server, join("mods", filename));
   await writeFile(destination, content);
   await deleteModIcon(server, filename);
   const prefs = await readModPreferences(server);
@@ -2535,9 +2574,9 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
     throw new Error("Refusing to download a non-HTTPS mod file");
   }
 
-  const modsDir = ensureInsideServer(server, "mods");
-  await mkdir(modsDir, { recursive: true });
-  const destination = ensureInsideServer(server, join("mods", safeModFilename(file.filename)));
+  await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
+  await validateExistingInsideServer(server, "mods");
+  const destination = await ensureWritableInsideServer(server, join("mods", safeModFilename(file.filename)));
   const downloadResponse = await modrinthFetch(file.url);
   if (!downloadResponse.body) {
     throw new Error("Mod download returned no body");

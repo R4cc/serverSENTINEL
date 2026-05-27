@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { resolve } from "node:path";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   cronMatches,
   ensureInsideServer,
+  ensureWritableInsideServer,
   parseDockerPorts,
   safeInstalledModFilename,
+  validateExistingInsideServer,
   validateCron
 } from "./core.js";
 
@@ -21,6 +25,37 @@ describe("path safety", () => {
 
   it("rejects native absolute path escapes", () => {
     expect(() => ensureInsideServer(server, resolve(server.serverDir, "..", "outside.txt"))).toThrow("Path escapes");
+  });
+
+  it("rejects symlink escapes for existing paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "serversentinel-path-"));
+    try {
+      const serverDir = join(root, "server");
+      const outsideDir = join(root, "outside");
+      await mkdir(serverDir);
+      await mkdir(outsideDir);
+      await writeFile(join(outsideDir, "secret.txt"), "outside");
+      await symlink(outsideDir, join(serverDir, "escape"), process.platform === "win32" ? "junction" : "dir");
+
+      await expect(validateExistingInsideServer({ serverDir }, "escape/secret.txt")).rejects.toThrow("symlink");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects writes through a symlinked parent directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "serversentinel-write-"));
+    try {
+      const serverDir = join(root, "server");
+      const outsideDir = join(root, "outside");
+      await mkdir(serverDir);
+      await mkdir(outsideDir);
+      await symlink(outsideDir, join(serverDir, "mods"), process.platform === "win32" ? "junction" : "dir");
+
+      await expect(ensureWritableInsideServer({ serverDir }, "mods/evil.jar")).rejects.toThrow("symlink");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 

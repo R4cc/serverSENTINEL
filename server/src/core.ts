@@ -1,4 +1,5 @@
-import { basename, resolve, sep } from "node:path";
+import { realpath } from "node:fs/promises";
+import { basename, dirname, resolve, sep } from "node:path";
 
 export type ServerPathScope = {
   serverDir: string;
@@ -8,8 +9,97 @@ export function ensureInsideServer(server: ServerPathScope, userPath = ".") {
   const serverDir = resolve(server.serverDir);
   const trimmed = userPath.replace(/^[/\\]+/, "");
   const target = resolve(serverDir, trimmed || ".");
-  if (target !== serverDir && !target.startsWith(serverDir + sep)) {
-    throw new Error("Path escapes the registered server directory");
+  assertPathInside(serverDir, target, "Path escapes the registered server directory");
+  return target;
+}
+
+function normalizedPath(value: string) {
+  const resolved = resolve(value);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function assertPathInside(root: string, target: string, message: string) {
+  const normalizedRoot = normalizedPath(root);
+  const normalizedTarget = normalizedPath(target);
+  if (normalizedTarget !== normalizedRoot && !normalizedTarget.startsWith(normalizedRoot + sep)) {
+    throw new Error(message);
+  }
+}
+
+function pathSafetyError(message: string, code?: string) {
+  const error = new Error(message) as NodeJS.ErrnoException;
+  if (code) error.code = code;
+  return error;
+}
+
+function ensureResolvedInsideServer(server: ServerPathScope, targetPath: string) {
+  const serverDir = resolve(server.serverDir);
+  const target = resolve(targetPath);
+  assertPathInside(serverDir, target, "Path escapes the registered server directory");
+  return target;
+}
+
+async function realServerDir(server: ServerPathScope) {
+  try {
+    return await realpath(server.serverDir);
+  } catch {
+    throw pathSafetyError("Managed server root directory is not accessible", "ENOENT");
+  }
+}
+
+export async function validateExistingInsideServer(server: ServerPathScope, userPath = ".") {
+  const target = ensureInsideServer(server, userPath);
+  return validateExistingResolvedInsideServer(server, target);
+}
+
+export async function validateExistingResolvedInsideServer(server: ServerPathScope, targetPath: string) {
+  const target = ensureResolvedInsideServer(server, targetPath);
+  const serverDir = await realServerDir(server);
+  let realTarget: string;
+  try {
+    realTarget = await realpath(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw pathSafetyError("Path does not exist inside the managed server directory", "ENOENT");
+    }
+    throw error;
+  }
+  assertPathInside(serverDir, realTarget, "Path escapes the managed server directory through a symlink");
+  return target;
+}
+
+export async function ensureWritableInsideServer(server: ServerPathScope, userPath = ".") {
+  const target = ensureInsideServer(server, userPath);
+  const serverDir = await realServerDir(server);
+  let realParent: string;
+  try {
+    realParent = await realpath(dirname(target));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
+    }
+    throw error;
+  }
+  if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
+    assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
+  }
+  return target;
+}
+
+export async function ensureWritableResolvedInsideServer(server: ServerPathScope, targetPath: string) {
+  const target = ensureResolvedInsideServer(server, targetPath);
+  const serverDir = await realServerDir(server);
+  let realParent: string;
+  try {
+    realParent = await realpath(dirname(target));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
+    }
+    throw error;
+  }
+  if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
+    assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
   }
   return target;
 }
