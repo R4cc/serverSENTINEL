@@ -1,0 +1,96 @@
+import type { ModCompatibility, ServerStatus, ThemePreference, UserRole, LocalePreference } from '../types';
+
+export const defaultServerPort = 25565;
+
+export const minServerPort = 1000;
+
+export const maxServerPort = 65000;
+
+export const resourcePollMs = 5_000;
+
+export function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+export function compatibilityLabel(compatibility?: ModCompatibility) {
+  if (!compatibility) return "Could not verify compatibility";
+  if (compatibility.compatible) return "Compatible";
+  if (compatibility.status === "unknown") return "Could not verify compatibility";
+  return "Incompatible";
+}
+
+export function compatibilityClass(compatibility?: ModCompatibility) {
+  if (compatibility?.compatible) return "ok";
+  return "danger";
+}
+
+export function totalMemoryGb(totalMemory: number) {
+  return Math.max(1, totalMemory ? Math.round(totalMemory / (1024 * 1024 * 1024)) : 16);
+}
+
+export function parseMaxMemoryGb(javaArgs?: string) {
+  const match = (javaArgs || "").match(/-Xmx(\d+)G/);
+  return match ? parseInt(match[1], 10) : 4;
+}
+
+export function memoryArgs(memoryGb: number) {
+  return `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G -Xmx${memoryGb}G`;
+}
+
+export function defaultDockerImageForMinecraftVersion(version?: string) {
+  const [major, minor, patch] = (version ?? "").split(".").map((part) => Number(part));
+  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
+  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) return "eclipse-temurin:21-jre";
+  return "eclipse-temurin:17-jre";
+}
+
+export function replaceMemoryArgs(javaArgs: string, memoryGb: number) {
+  const xms = `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G`;
+  const xmx = `-Xmx${memoryGb}G`;
+  const withoutXms = javaArgs.replace(/(^|\s)-Xms\S+/g, "").trim();
+  const withoutMemory = withoutXms.replace(/(^|\s)-Xmx\S+/g, "").trim();
+  return [xms, xmx, withoutMemory].filter(Boolean).join(" ");
+}
+
+export function isValidServerPort(port: string) {
+  if (!/^\d+$/.test(port)) return false;
+  const value = Number(port);
+  return value >= minServerPort && value <= maxServerPort;
+}
+
+export function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
+  if (!status) return "Checking container";
+  if (status.docker.container === "serversentinel-demo") return status.docker.running ? "Demo server running" : "Demo server stopped";
+  if (!dockerSocketMounted) return "Docker socket not mounted";
+  if (!status.docker.configured) return "Container control not configured";
+  if (!status.docker.available) return status.docker.message || "Container unavailable";
+  if (status.docker.running) return "Container running";
+  if (status.docker.state && status.docker.state !== "unknown") return `Container ${status.docker.state}`;
+  return "Container status unavailable";
+}
+
+export function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
+  if (!status || !dockerSocketMounted || !status.docker.configured || !status.docker.available) return "neutral";
+  return status.docker.running ? "running" : "stopped";
+}
+
+export function readThemePreference(): ThemePreference {
+  const saved = window.localStorage.getItem("serversentinel-theme");
+  return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
+}
+
+export const roleRanks: Record<UserRole, number> = {
+  basic: 1,
+  expanded: 2,
+  manager: 3,
+  admin: 4
+};
+
+export function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {
+  const saved = window.localStorage.getItem(key);
+  return saved === "en-US" || saved === "en-GB" || saved === "de-DE" || saved === "fr-FR" || saved === "ja-JP" || saved === "user"
+    ? saved
+    : "user";
+}

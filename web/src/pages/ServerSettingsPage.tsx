@@ -1,0 +1,343 @@
+import { FormEvent, useEffect, useState } from 'react';
+import type { FabricVersions, ManagedServer } from '../types';
+import { defaultDockerImageForMinecraftVersion, defaultServerPort, isValidServerPort, maxServerPort, memoryArgs, minServerPort, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb } from '../utils/format';
+
+export function MemorySelector({
+  totalMemory,
+  initialMemoryGb = 4,
+  javaArgs,
+  onJavaArgsChange
+}: {
+  totalMemory: number;
+  initialMemoryGb?: number;
+  javaArgs: string;
+  onJavaArgsChange: (value: string) => void;
+}) {
+  const totalRamGb = totalMemoryGb(totalMemory);
+  const [memoryGb, setMemoryGb] = useState(() => Math.min(Math.max(1, initialMemoryGb), totalRamGb));
+
+  useEffect(() => {
+    setMemoryGb((current) => Math.min(Math.max(1, current), totalRamGb));
+  }, [totalRamGb]);
+
+  function updateMemory(value: number) {
+    if (!Number.isFinite(value)) return;
+    const nextMemoryGb = Math.min(Math.max(1, Math.round(value)), totalRamGb);
+    setMemoryGb(nextMemoryGb);
+    onJavaArgsChange(replaceMemoryArgs(javaArgs, nextMemoryGb));
+  }
+
+  return (
+    <div className="memorySelector">
+      <div className="memorySelectorHeader">
+        <label htmlFor="memoryGb">Memory</label>
+        <span className="totalRamLabel">Machine RAM: {totalRamGb} GB total</span>
+      </div>
+      <div className="memorySelectorControls">
+        <input
+          id="memoryGb"
+          type="range"
+          min="1"
+          max={totalRamGb}
+          value={memoryGb}
+          onChange={(event) => updateMemory(Number(event.target.value))}
+          className="memorySlider"
+        />
+        <div className="memoryInputWrap">
+          <input
+            type="number"
+            min="1"
+            max={totalRamGb}
+            value={memoryGb}
+            onChange={(event) => updateMemory(Number(event.target.value))}
+            className="memoryNumberInput"
+          />
+          <span className="unit">GB</span>
+        </div>
+      </div>
+      <p className="safelyAllocateTip">
+        {memoryGb > totalRamGb * 0.8 ? (
+          <span className="warn">Allocating over 80% of RAM may cause host instability.</span>
+        ) : (
+          <span className="ok">Safe allocation level for this host.</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+export function ServerEditForm({
+  server,
+  versions,
+  totalMemory,
+  onSubmit,
+  disabled = false
+}: {
+  server: ManagedServer;
+  versions: FabricVersions;
+  totalMemory: number;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  disabled?: boolean;
+}) {
+  const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
+
+  return (
+    <form onSubmit={onSubmit} className="appForm">
+      <fieldset disabled={disabled}>
+      <label>
+        Display name
+        <input name="displayName" defaultValue={server.displayName} required />
+      </label>
+      <label>
+        Minecraft version
+        <select name="minecraftVersion" defaultValue={server.minecraftVersion}>
+          {versions.game.length ? versions.game.map((version) => (
+            <option key={version.version} value={version.version}>{version.version}</option>
+          )) : <option value={server.minecraftVersion}>{server.minecraftVersion}</option>}
+        </select>
+      </label>
+      <label>
+        Fabric loader version
+        <select name="loaderVersion" defaultValue={server.loaderVersion ?? ""}>
+          <option value="">Latest stable</option>
+          {versions.loader.map((version) => (
+            <option key={version.version} value={version.version}>{version.version}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Fabric installer version
+        <select name="installerVersion" defaultValue={server.installerVersion ?? ""}>
+          <option value="">Latest stable</option>
+          {versions.installer.map((version) => (
+            <option key={version.version} value={version.version}>{version.version}</option>
+          ))}
+        </select>
+      </label>
+      <MemorySelector
+        totalMemory={totalMemory}
+        initialMemoryGb={parseMaxMemoryGb(javaArgs)}
+        javaArgs={javaArgs}
+        onJavaArgsChange={setJavaArgs}
+      />
+      <label>
+        Java arguments
+        <textarea
+          className="javaArgsInput"
+          name="javaArgs"
+          value={javaArgs}
+          onChange={(event) => setJavaArgs(event.target.value)}
+          rows={4}
+          spellCheck={false}
+        />
+      </label>
+      <label>
+        Docker runtime image
+        <select name="dockerImage" defaultValue={server.dockerImage || "eclipse-temurin:21-jre"}>
+          <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
+          <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
+          <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
+        </select>
+      </label>
+      <label>
+        Server jar filename
+        <input name="serverJar" defaultValue={server.serverJar || "fabric-server-launch.jar"} />
+      </label>
+      <label>
+        Docker container name
+        <input name="dockerContainer" defaultValue={server.dockerContainer || ""} />
+      </label>
+      <label>
+        Port bindings
+        <input name="dockerPorts" defaultValue={server.dockerPorts || "25565:25565/tcp"} />
+      </label>
+      <button>Save server settings</button>
+      </fieldset>
+    </form>
+  );
+}
+
+export function DeleteServerPanel({
+  server,
+  onSubmit,
+  disabled = false
+}: {
+  server: ManagedServer;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  disabled?: boolean;
+}) {
+  const [confirmName, setConfirmName] = useState("");
+  const deleteConfirmed = confirmName === server.displayName;
+
+  useEffect(() => {
+    setConfirmName("");
+  }, [server.id]);
+
+  return (
+    <section className="panel dangerPanel">
+      <h2>Delete Server</h2>
+      <p className="muted">This removes the server from ServerSentinel. File deletion is optional and cannot be undone.</p>
+      <form onSubmit={onSubmit} className="appForm">
+        <fieldset disabled={disabled}>
+        <label>
+          Type server name to confirm
+          <input
+            name="confirmName"
+            placeholder={server.displayName}
+            value={confirmName}
+            onChange={(event) => setConfirmName(event.target.value)}
+            required
+          />
+        </label>
+        <label className="checkLine dangerCheck">
+          <input name="deleteFiles" type="checkbox" />
+          Also delete this server's files from disk
+        </label>
+        <button className="dangerButton" disabled={!deleteConfirmed}>Delete Server</button>
+        </fieldset>
+      </form>
+    </section>
+  );
+}
+
+export function ManagedServerForm({
+  onSubmit,
+  dockerSocketMounted,
+  versions,
+  totalMemory = 0,
+  provisioning = false
+}: {
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  dockerSocketMounted: boolean;
+  versions: FabricVersions;
+  totalMemory?: number;
+  provisioning?: boolean;
+}) {
+  const runtimeImages = [
+    { value: "eclipse-temurin:21-jre", label: "Java 21 runtime (recommended)" },
+    { value: "eclipse-temurin:17-jre", label: "Java 17 runtime" },
+    { value: "eclipse-temurin:25-jre", label: "Java 25 runtime" }
+  ];
+  const defaultMinecraftVersion = versions.game[0]?.version ?? "1.21.4";
+  const [minecraftVersion, setMinecraftVersion] = useState(defaultMinecraftVersion);
+  const [dockerImage, setDockerImage] = useState(defaultDockerImageForMinecraftVersion(defaultMinecraftVersion));
+  const [serverPort, setServerPort] = useState(String(defaultServerPort));
+  const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
+  const serverPortValid = isValidServerPort(serverPort);
+
+  useEffect(() => {
+    const nextVersion = versions.game[0]?.version;
+    if (!nextVersion) return;
+    setMinecraftVersion((current) => current === "1.21.4" ? nextVersion : current || nextVersion);
+    setDockerImage(defaultDockerImageForMinecraftVersion(nextVersion));
+  }, [versions.game]);
+
+  return (
+    <form onSubmit={onSubmit} className="appForm">
+      <fieldset disabled={provisioning}>
+      <label>
+        Display name
+        <input name="displayName" placeholder="Survival" required />
+      </label>
+      <label>
+        Minecraft version
+        <select
+          name="minecraftVersion"
+          required
+          value={minecraftVersion}
+          onChange={(event) => {
+            setMinecraftVersion(event.target.value);
+            setDockerImage(defaultDockerImageForMinecraftVersion(event.target.value));
+          }}
+        >
+          {versions.game.length ? versions.game.map((version) => (
+            <option key={version.version} value={version.version}>{version.version}</option>
+          )) : <option value="1.21.4">1.21.4</option>}
+        </select>
+      </label>
+      <label>
+        Server port
+        <input
+          name="serverPort"
+          type="number"
+          min={minServerPort}
+          max={maxServerPort}
+          value={serverPort}
+          onChange={(event) => setServerPort(event.target.value)}
+          aria-invalid={!serverPortValid}
+          required
+        />
+        {!serverPortValid && (
+          <span className="fieldError">Use a port from {minServerPort} to {maxServerPort}.</span>
+        )}
+      </label>
+      <label className="checkLine">
+        <input name="acceptEula" type="checkbox" required />
+        I accept the Minecraft EULA for this server.
+      </label>
+      <details className="advanced">
+        <summary>Advanced settings</summary>
+        <MemorySelector
+          totalMemory={totalMemory}
+          initialMemoryGb={parseMaxMemoryGb(javaArgs)}
+          javaArgs={javaArgs}
+          onJavaArgsChange={setJavaArgs}
+        />
+        <label>
+          Java arguments
+          <textarea
+            className="javaArgsInput"
+            name="javaArgs"
+            value={javaArgs}
+            onChange={(event) => setJavaArgs(event.target.value)}
+            rows={4}
+            spellCheck={false}
+          />
+        </label>
+        <label>
+          Fabric loader version
+          <select name="loaderVersion" defaultValue="">
+            <option value="">Latest stable</option>
+            {versions.loader.map((version) => (
+              <option key={version.version} value={version.version}>{version.version}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Fabric installer version
+          <select name="installerVersion" defaultValue="">
+            <option value="">Latest stable</option>
+            {versions.installer.map((version) => (
+              <option key={version.version} value={version.version}>{version.version}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Server jar filename
+          <input name="serverJar" placeholder="fabric-server-launch.jar" />
+        </label>
+        <label>
+          Docker container name
+          <input name="dockerContainer" placeholder="serversentinel-survival" />
+        </label>
+        <label>
+          Docker runtime image
+          <select name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)}>
+            {runtimeImages.map((image) => (
+              <option key={image.value} value={image.value}>{image.label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Port bindings
+          <input name="dockerPorts" placeholder="25565:25565/tcp" />
+        </label>
+      </details>
+      <p className="muted">
+        Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create and control the Minecraft runtime container." : "not mounted; runtime management is unavailable until Docker integration is connected."}
+      </p>
+      <button disabled={!serverPortValid}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
+      </fieldset>
+    </form>
+  );
+}
