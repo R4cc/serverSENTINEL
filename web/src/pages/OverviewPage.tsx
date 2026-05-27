@@ -1,6 +1,6 @@
 import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '../types';
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
-import { runtimeLabel, runtimeTone } from '../utils/format';
+import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionSourceLabel, versionValue } from '../utils/format';
 
 function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!dockerSocketMounted) return "Unavailable";
@@ -44,6 +44,8 @@ export function OverviewSummary({
     : activity.maxPlayers
       ? `${activity.playersOnline} / ${activity.maxPlayers}`
       : String(activity.playersOnline);
+  const minecraftVersion = minecraftVersionInfo(server);
+  const fabricLoaderVersion = fabricLoaderVersionInfo(server);
   return (
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
@@ -53,13 +55,13 @@ export function OverviewSummary({
       </div>
       <div className="summaryTile">
         <span>Minecraft version</span>
-        <strong>{server.minecraftVersion || "Unknown"}</strong>
-        <small>Release</small>
+        <strong>{versionValue(minecraftVersion)}</strong>
+        <small>{versionSourceLabel(minecraftVersion.source)}</small>
       </div>
       <div className="summaryTile">
         <span>Fabric loader</span>
-        <strong>{server.loaderVersion || "Unknown"}</strong>
-        <small>{server.loaderVersion ? "Configured" : "Latest stable may be used"}</small>
+        <strong>{versionValue(fabricLoaderVersion)}</strong>
+        <small>{versionSourceLabel(fabricLoaderVersion.source)}</small>
       </div>
       <div className="summaryTile">
         <span>Uptime</span>

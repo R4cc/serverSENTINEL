@@ -3,7 +3,7 @@ import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
 import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference } from "./types";
 import { bufferToBase64, clientId, isEditableFile, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, defaultServerPort, formatBytes, isValidServerPort, maxServerPort, minServerPort, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, minecraftVersionInfo, minServerPort, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { Notifications } from "./components/Notifications";
@@ -166,6 +166,8 @@ export default function App() {
     [activeServerId, demoMode, effectiveAppState.servers]
   );
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
+  const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
+  const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
   const activeStatus = status?.server.id === activeServer?.id ? status : null;
   const currentRole = authSession?.user?.role;
   const canBasic = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.basic : false);
@@ -1508,6 +1510,7 @@ export default function App() {
               <section className="serverList">
                 {effectiveAppState.servers.map((server) => {
                   const lockedByDemo = demoMode && server.id !== demoServerId;
+                  const minecraftVersion = versionValue(minecraftVersionInfo(server));
                   return (
                     <button
                       key={server.id}
@@ -1523,7 +1526,7 @@ export default function App() {
                       }}
                     >
                       <strong>{server.displayName}</strong>
-                      <span>{server.minecraftVersion || "Version unknown"} - Fabric</span>
+                      <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - Fabric</span>
                       {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
                     </button>
                   );
@@ -1689,7 +1692,7 @@ export default function App() {
             <div className="activeServerStrip">
               <div>
                 <strong>{activeServer.displayName}</strong>
-                <span>{activeServer.minecraftVersion || "Version unknown"} · Fabric</span>
+                <span>{activeMinecraftVersion === "Unknown" ? "Version unknown" : activeMinecraftVersion} · Fabric</span>
               </div>
               <div className="activeServerRuntime">
                 <span className={`runtimeBadge ${runtimeTone(activeStatus, effectiveAppState.dockerSocketMounted)}`}>
@@ -1860,7 +1863,7 @@ export default function App() {
                       <button className={modsView === "search" ? "active" : ""} onClick={() => setModsView("search")} disabled={!effectiveAppState.modrinthApiConfigured || !canManager}>Search</button>
                     </div>
                     <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />
-                    <span className="muted">Fabric {activeServer.loaderVersion || "loader unknown"} - Minecraft {activeServer.minecraftVersion || "version unknown"}</span>
+                    <span className="muted">Fabric {activeFabricLoaderVersion === "Unknown" ? "loader unknown" : activeFabricLoaderVersion} - Minecraft {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}</span>
                   </div>
 
                   {modsView === "manager" && (

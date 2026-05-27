@@ -8,6 +8,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
+import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, legacyDefaultServersDockerVolume, maxServerPort, minServerPort } from "./config.js";
@@ -31,6 +32,7 @@ import type {
   PublicServer,
   PublicUser,
   ReleaseChannel,
+  ResolvedServerVersions,
   ScheduledExecution,
   Session,
   StoredUser,
@@ -51,6 +53,7 @@ import {
 
 const serversFile = join(config.configDir, "servers.json");
 const usersFile = join(config.configDir, "users.json");
+const versionMetadataFilename = ".serversentinel-version.json";
 
 
 type DockerContainerInspect = {
@@ -109,6 +112,13 @@ type CreateServerInput = {
   javaArgs?: string;
   acceptEula?: boolean;
   serverPort?: string;
+};
+
+type VersionMetadata = {
+  minecraftVersion?: string;
+  fabricLoaderVersion?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type ProvisionJob = {
@@ -244,7 +254,145 @@ async function requireRequestPermission(request: { headers: { cookie?: string } 
   return user;
 }
 
-function publicServer(server: ManagedServer): PublicServer {
+function versionResolution(version: string | undefined, source: ResolvedServerVersions["minecraftVersion"]["source"], lastCheckedAt: string) {
+  return { version: version || undefined, source: version ? source : "unknown", lastCheckedAt };
+}
+
+function parseVersionMetadataText(text: string): VersionMetadata {
+  try {
+    const parsed = JSON.parse(text) as VersionMetadata;
+    return {
+      minecraftVersion: typeof parsed.minecraftVersion === "string" ? parsed.minecraftVersion : undefined,
+      fabricLoaderVersion: typeof parsed.fabricLoaderVersion === "string" ? parsed.fabricLoaderVersion : undefined,
+      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : undefined,
+      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : undefined
+    };
+  } catch {
+    const values = parseProperties(text);
+    return {
+      minecraftVersion: values.minecraftVersion || values["minecraft-version"] || values["game-version"],
+      fabricLoaderVersion: values.fabricLoaderVersion || values["fabric-loader-version"] || values.loaderVersion
+    };
+  }
+}
+
+async function readVersionMetadataFile(server: ManagedServer) {
+  try {
+    const metadataPath = await validateExistingInsideServer(server, versionMetadataFilename);
+    return parseVersionMetadataText(await readFile(metadataPath, "utf8"));
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    return {};
+  }
+}
+
+async function writeVersionMetadataFile(server: ManagedServer) {
+  const now = new Date().toISOString();
+  let existing: VersionMetadata = {};
+  try {
+    existing = await readVersionMetadataFile(server);
+  } catch {
+    existing = {};
+  }
+  const metadata: VersionMetadata = {
+    minecraftVersion: server.minecraftVersion,
+    fabricLoaderVersion: server.loaderVersion,
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now
+  };
+  const target = await ensureWritableInsideServer(server, versionMetadataFilename);
+  await writeFile(target, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+}
+
+function readZipEntry(buffer: Buffer, entryName: string) {
+  let offset = 0;
+  while (offset + 30 <= buffer.length) {
+    const signature = buffer.readUInt32LE(offset);
+    if (signature !== 0x04034b50) {
+      offset += 1;
+      continue;
+    }
+    const compressionMethod = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const fileNameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + fileNameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > buffer.length) return undefined;
+    const name = buffer.subarray(nameStart, nameStart + fileNameLength).toString("utf8");
+    if (name === entryName) {
+      const data = buffer.subarray(dataStart, dataEnd);
+      if (compressionMethod === 0) return data;
+      if (compressionMethod === 8) return inflateRawSync(data);
+      return undefined;
+    }
+    offset = dataEnd;
+  }
+  return undefined;
+}
+
+async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
+  if (!server.serverJar) return {};
+  try {
+    const jarPath = await validateExistingInsideServer(server, server.serverJar);
+    const jarStat = await stat(jarPath);
+    if (!jarStat.isFile() || jarStat.size > 16 * 1024 * 1024) return {};
+    const installProperties = readZipEntry(await readFile(jarPath), "install.properties");
+    if (!installProperties) return {};
+    const values = parseProperties(installProperties.toString("utf8"));
+    return {
+      minecraftVersion: values["game-version"],
+      fabricLoaderVersion: values["fabric-loader-version"]
+    };
+  } catch {
+    return {};
+  }
+}
+
+function detectVersionsFromLogText(logText: string): VersionMetadata {
+  const minecraftMatches = [...logText.matchAll(/Starting minecraft server version\s+([^\s]+)/gi)];
+  const loaderMatches = [
+    ...logText.matchAll(/Loading Fabric Loader\s+([^\s]+)/gi),
+    ...logText.matchAll(/Fabric Loader[^0-9]*(\d+(?:\.\d+)+(?:[-+][\w.-]+)?)/gi)
+  ];
+  return {
+    minecraftVersion: minecraftMatches.at(-1)?.[1],
+    fabricLoaderVersion: loaderMatches.at(-1)?.[1]
+  };
+}
+
+async function detectVersionsFromLogs(server: ManagedServer) {
+  const logs = await Promise.allSettled([
+    readLatestServerLog(server),
+    dockerRecentLogs(server)
+  ]);
+  const text = logs
+    .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
+    .map((result) => result.value)
+    .join("\n");
+  return detectVersionsFromLogText(text);
+}
+
+async function resolveServerVersions(server: ManagedServer): Promise<ResolvedServerVersions> {
+  const lastCheckedAt = new Date().toISOString();
+  const detected = await detectVersionsFromLauncherJar(server);
+  const metadata = detected.minecraftVersion && detected.fabricLoaderVersion
+    ? {}
+    : await readVersionMetadataFile(server);
+  const logs = detected.minecraftVersion && detected.fabricLoaderVersion
+    ? {}
+    : await detectVersionsFromLogs(server);
+
+  const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : server.minecraftVersion || metadata.minecraftVersion ? "stored" : "unknown";
+  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : server.loaderVersion || metadata.fabricLoaderVersion ? "stored" : "unknown";
+  return {
+    minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || server.minecraftVersion || metadata.minecraftVersion, minecraftSource, lastCheckedAt),
+    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || server.loaderVersion || metadata.fabricLoaderVersion, fabricSource, lastCheckedAt)
+  };
+}
+
+async function publicServer(server: ManagedServer): Promise<PublicServer> {
   return {
     id: server.id,
     displayName: server.displayName,
@@ -262,7 +410,8 @@ function publicServer(server: ManagedServer): PublicServer {
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     directoryLabel: server.storageName || server.displayName,
-    hasDockerContainer: Boolean(server.dockerContainer)
+    hasDockerContainer: Boolean(server.dockerContainer),
+    resolvedVersions: await resolveServerVersions(server)
   };
 }
 
@@ -1146,6 +1295,7 @@ async function createServerFiles(
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
   });
   await writeFile(ensureInsideServer(server, "eula.txt"), `# Managed by ServerSentinel\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`, "utf8");
+  await writeVersionMetadataFile(server);
   await writeFile(ensureInsideServer(server, "logs/latest.log"), "", { flag: "a" });
 }
 
@@ -1241,12 +1391,12 @@ function startProvisionJob(input: CreateServerInput) {
 
   void createManagedServer(input, (progress, task) => {
     updateProvisionJob(id, { progress, task });
-  }).then((server) => {
+  }).then(async (server) => {
     updateProvisionJob(id, {
       status: "succeeded",
       progress: 100,
       task: "Server setup complete",
-      server: publicServer(server)
+      server: await publicServer(server)
     });
     setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).catch((error: unknown) => {
@@ -1530,7 +1680,7 @@ app.get("/api/app", async (request) => {
   const user = demoMode ? null : await requireRequestPermission(request);
   const servers = await readServers();
   return {
-    servers: servers.map(publicServer),
+    servers: await Promise.all(servers.map(publicServer)),
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
     totalMemory: totalmem(),
@@ -1639,6 +1789,7 @@ app.put<{
   if (jarChanged) {
     await downloadFabricServerJar(updated);
   }
+  await writeVersionMetadataFile(updated);
   if (serverPort) {
     await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
@@ -1688,7 +1839,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
   const docker = await dockerStatus(server);
   const commandInput = await dockerCommandInputCapability(server, docker);
   return {
-    server: publicServer(server),
+    server: await publicServer(server),
     docker: docker,
     fileLogsAvailable: Boolean(latestLogPath && existsSync(latestLogPath)),
     controlAvailable: Boolean(docker.controllable),

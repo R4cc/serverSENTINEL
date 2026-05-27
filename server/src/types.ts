@@ -112,6 +112,20 @@ export type ScheduledExecution = {
 export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
+  resolvedVersions?: ResolvedServerVersions;
+};
+
+export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
+
+export type VersionResolution = {
+  version?: string;
+  source: VersionSource;
+  lastCheckedAt: string;
+};
+
+export type ResolvedServerVersions = {
+  minecraftVersion: VersionResolution;
+  fabricLoaderVersion: VersionResolution;
 };
 
 export type DockerState = "running" | "exited" | "created" | "paused" | "restarting" | "removing" | "dead" | "unknown";

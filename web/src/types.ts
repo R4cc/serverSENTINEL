@@ -14,6 +14,20 @@ export type ManagedServer = {
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   hasDockerContainer: boolean;
+  resolvedVersions?: ResolvedServerVersions;
+};
+
+export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
+
+export type VersionResolution = {
+  version?: string;
+  source: VersionSource;
+  lastCheckedAt: string;
+};
+
+export type ResolvedServerVersions = {
+  minecraftVersion: VersionResolution;
+  fabricLoaderVersion: VersionResolution;
 };
 
 export type ScheduledExecution = {

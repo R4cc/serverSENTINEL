@@ -1,4 +1,4 @@
-import type { ModCompatibility, ServerStatus, ThemePreference, UserRole, LocalePreference } from '../types';
+import type { ManagedServer, ModCompatibility, ServerStatus, ThemePreference, UserRole, LocalePreference, VersionResolution, VersionSource } from '../types';
 
 export const defaultServerPort = 25565;
 
@@ -74,6 +74,42 @@ export function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: b
 export function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!status || !dockerSocketMounted || !status.docker.configured || !status.docker.available) return "neutral";
   return status.docker.running ? "running" : "stopped";
+}
+
+function bestVersion(resolved: VersionResolution | undefined, stored: string | undefined): VersionResolution {
+  if (resolved) return resolved;
+  return {
+    version: stored || undefined,
+    source: stored ? "stored" : "unknown",
+    lastCheckedAt: ""
+  };
+}
+
+export function minecraftVersionInfo(server: ManagedServer) {
+  return bestVersion(server.resolvedVersions?.minecraftVersion, server.minecraftVersion);
+}
+
+export function fabricLoaderVersionInfo(server: ManagedServer) {
+  return bestVersion(server.resolvedVersions?.fabricLoaderVersion, server.loaderVersion);
+}
+
+export function versionValue(version: VersionResolution | undefined) {
+  return version?.version || "Unknown";
+}
+
+export function versionSourceLabel(source: VersionSource) {
+  switch (source) {
+    case "detected":
+      return "Detected from server files";
+    case "log":
+      return "Detected from logs";
+    case "stored":
+      return "Stored fallback";
+    case "demo":
+      return "Demo value";
+    default:
+      return "Unknown";
+  }
 }
 
 export function readThemePreference(): ThemePreference {

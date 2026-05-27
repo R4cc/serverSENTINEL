@@ -92,7 +92,19 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     javaArgs: "-Xms2G -Xmx4G",
     schedules,
     serverType: "fabric",
-    hasDockerContainer: true
+    hasDockerContainer: true,
+    resolvedVersions: {
+      minecraftVersion: {
+        version: "1.21.4",
+        source: "demo",
+        lastCheckedAt: new Date(demoStartedAt).toISOString()
+      },
+      fabricLoaderVersion: {
+        version: "0.16.10",
+        source: "demo",
+        lastCheckedAt: new Date(demoStartedAt).toISOString()
+      }
+    }
   };
 }
 

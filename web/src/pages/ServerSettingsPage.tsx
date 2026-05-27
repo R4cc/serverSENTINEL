@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { FabricVersions, ManagedServer } from '../types';
-import { defaultDockerImageForMinecraftVersion, defaultServerPort, isValidServerPort, maxServerPort, memoryArgs, minServerPort, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 
 export function MemorySelector({
   totalMemory,
@@ -80,6 +80,8 @@ export function ServerEditForm({
   disabled?: boolean;
 }) {
   const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
+  const detectedMinecraftVersion = minecraftVersionInfo(server);
+  const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
 
   return (
     <form onSubmit={onSubmit} className="appForm">
@@ -95,6 +97,7 @@ export function ServerEditForm({
             <option key={version.version} value={version.version}>{version.version}</option>
           )) : <option value={server.minecraftVersion}>{server.minecraftVersion}</option>}
         </select>
+        <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
       </label>
       <label>
         Fabric loader version
@@ -104,6 +107,7 @@ export function ServerEditForm({
             <option key={version.version} value={version.version}>{version.version}</option>
           ))}
         </select>
+        <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
       </label>
       <label>
         Fabric installer version
