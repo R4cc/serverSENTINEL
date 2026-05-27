@@ -834,11 +834,16 @@ button .buttonIcon {
 }
 
 .progressTrack span {
+  display: block;
   height: 100%;
   min-width: 4px;
   margin: 0;
   background: var(--accent);
   transition: width 200ms linear;
+}
+
+.provisioningToast.running .progressTrack span {
+  background: var(--sentinel-success);
 }
 
 .toastRegion {
