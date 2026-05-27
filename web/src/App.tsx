@@ -1660,7 +1660,8 @@ export default function App() {
                   {runtimeLabel(status, effectiveAppState.dockerSocketMounted)}
                 </span>
                 <RuntimeControls
-                  status={status}
+                  status={status?.server.id === activeServer.id ? status : null}
+                  controlAvailableFallback={effectiveAppState.dockerSocketMounted && activeServer.hasDockerContainer}
                   isProvisioning={isProvisioning || !canBasic}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}

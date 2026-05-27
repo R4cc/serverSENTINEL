@@ -1438,22 +1438,32 @@ button .buttonIcon {
 .overviewPage {
   grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: start;
+  gap: var(--space-4);
 }
 
 .overviewSummary {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-3);
+  align-items: stretch;
 }
 
 .overviewPage > .resourcePanel {
-  grid-column: span 7;
+  grid-column: 1 / span 8;
+  grid-row: 2 / span 2;
 }
 
-.overviewPage > .activityPanel,
+.overviewPage > .activityPanel {
+  grid-column: 9 / -1;
+  grid-row: 2;
+  align-self: stretch;
+}
+
 .overviewPage > .eventsPanel {
-  grid-column: span 5;
+  grid-column: 9 / -1;
+  grid-row: 3;
+  align-self: stretch;
 }
 
 .overviewPage .consolePanel {
@@ -1608,14 +1618,14 @@ button .buttonIcon {
 }
 
 .summaryTile {
-  min-height: 108px;
+  min-height: 118px;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
   display: grid;
-  align-content: space-between;
-  gap: var(--space-1);
+  grid-template-rows: auto minmax(30px, 1fr) auto;
+  gap: var(--space-2);
   position: relative;
   overflow: hidden;
 }
@@ -1638,6 +1648,11 @@ button .buttonIcon {
   background: var(--sentinel-danger);
 }
 
+.summaryTile.danger::before,
+.summaryTile.state.danger::before {
+  background: var(--sentinel-danger);
+}
+
 .summaryTile.neutral::before {
   background: var(--text-muted);
 }
@@ -1653,11 +1668,12 @@ button .buttonIcon {
 
 .summaryTile strong {
   color: var(--text);
-  font-size: 22px;
+  font-size: clamp(18px, 1.5vw, 22px);
   line-height: 1.05;
   font-weight: 900;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+  align-self: center;
 }
 
 .summaryTile small {
@@ -1684,14 +1700,16 @@ button .buttonIcon {
   padding: var(--space-3);
   background: var(--surface-muted);
   display: grid;
-  grid-template-columns: minmax(180px, 0.34fr) minmax(220px, 1fr);
-  gap: var(--space-3);
+  grid-template-columns: minmax(210px, 0.38fr) minmax(240px, 1fr);
+  gap: var(--space-4);
   align-items: center;
+  min-height: 86px;
 }
 
 .resourceMetricLabel {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
 }
 
 .resourceMetricLabel span,
@@ -1707,9 +1725,9 @@ button .buttonIcon {
 }
 
 .resourceMetricLabel strong {
-  font-size: 22px;
+  font-size: clamp(17px, 1.35vw, 21px);
   font-weight: 900;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -1721,8 +1739,9 @@ button .buttonIcon {
 
 .sparkline {
   width: 100%;
-  height: 52px;
+  height: 50px;
   border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
   background:
     linear-gradient(var(--border-muted) 1px, transparent 1px) 0 50% / 100% 50%,
     var(--surface);
@@ -1740,14 +1759,24 @@ button .buttonIcon {
 }
 
 .sparklineEmpty {
-  min-height: 52px;
+  min-height: 50px;
   border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-muted);
   display: grid;
   place-items: center;
   font-size: 12px;
   font-weight: 800;
+  text-align: center;
+  padding: 0 var(--space-2);
+}
+
+.resourceRow.unavailable .sparkline,
+.resourceRow.unavailable .sparklineEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.035) 0 1px, transparent 1px 10px),
+    var(--surface);
 }
 
 .activityGrid {
@@ -1761,7 +1790,7 @@ button .buttonIcon {
 }
 
 .activityItem {
-  min-height: 76px;
+  min-height: 74px;
   padding: var(--space-3);
   display: grid;
   align-content: center;
@@ -1793,10 +1822,10 @@ button .buttonIcon {
 
 .eventRow {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-columns: 14px minmax(0, 1fr) minmax(92px, auto);
   gap: var(--space-2);
-  align-items: center;
-  min-height: 36px;
+  align-items: start;
+  min-height: 40px;
   border-bottom: var(--border-subtle) solid var(--border-muted);
   padding: var(--space-2) 0;
 }
@@ -1811,6 +1840,7 @@ button .buttonIcon {
   border-radius: 999px;
   background: var(--accent);
   justify-self: center;
+  margin-top: 6px;
 }
 
 .eventRow.success .eventMarker {
@@ -1827,8 +1857,12 @@ button .buttonIcon {
 
 .eventRow strong {
   font-size: 14px;
-  line-height: 1.3;
+  line-height: 1.35;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .eventRow small,
@@ -1838,11 +1872,20 @@ button .buttonIcon {
   font-weight: 800;
 }
 
+.eventRow small {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .eventEmpty {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
-  padding: var(--space-3);
+  padding: var(--space-4);
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  text-align: center;
 }
 
 .textLinkButton {
@@ -1866,7 +1909,7 @@ button .buttonIcon {
 }
 
 .resourceMessage {
-  margin: 0 0 var(--space-3);
+  margin: var(--space-3) 0 0;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
@@ -2550,6 +2593,7 @@ details.compatibilityBadge p {
   .overviewPage > .activityPanel,
   .overviewPage > .eventsPanel {
     grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   .overviewSummary {
@@ -2657,6 +2701,7 @@ details.compatibilityBadge p {
   .overviewPage > .activityPanel,
   .overviewPage > .eventsPanel {
     grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   .settingsGroupHeader,

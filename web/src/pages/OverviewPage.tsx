@@ -2,6 +2,28 @@ import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '.
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
 import { runtimeLabel, runtimeTone } from '../utils/format';
 
+function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
+  if (!dockerSocketMounted) return "Unavailable";
+  if (!status) return "Unknown";
+  if (!status.docker.configured) return "Unconfigured";
+  if (!status.docker.available) return "Unavailable";
+  if (status.docker.running) return "Running";
+  if (status.docker.state === "created") return "Created";
+  if (status.docker.state === "restarting") return "Restarting";
+  if (status.docker.state === "paused") return "Paused";
+  if (status.docker.state === "dead") return "Crashed";
+  if (status.docker.state === "exited") return "Stopped";
+  if (status.docker.state === "removing") return "Stopping";
+  return "Unknown";
+}
+
+function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
+  if (!dockerSocketMounted || !status || !status.docker.available || !status.docker.configured) return "neutral";
+  if (status.docker.running) return "running";
+  if (status.docker.state === "dead") return "danger";
+  return "stopped";
+}
+
 export function OverviewSummary({
   server,
   status,
@@ -16,7 +38,7 @@ export function OverviewSummary({
   formatDate: (value: string | number | Date) => string;
 }) {
   const running = Boolean(status?.docker.running);
-  const state = running ? "Running" : status?.docker.state === "unknown" ? "Unknown" : "Stopped";
+  const state = dockerStateLabel(status, dockerSocketMounted);
   const players = activity.playersOnline === null || activity.playersOnline === undefined
     ? "Unknown"
     : activity.maxPlayers
@@ -24,10 +46,10 @@ export function OverviewSummary({
       : String(activity.playersOnline);
   return (
     <section className="overviewSummary">
-      <div className={`summaryTile state ${running ? "running" : "stopped"}`}>
+      <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
         <span>State</span>
         <strong>{state}</strong>
-        <small>{running ? `Since ${formatActivityDate(activity.lastStartedAt, formatDate)}` : status?.docker.message || "Not currently running"}</small>
+        <small>{running ? `Since ${formatActivityDate(activity.lastStartedAt, formatDate)}` : status?.docker.message || "Not running"}</small>
       </div>
       <div className="summaryTile">
         <span>Minecraft version</span>
@@ -41,13 +63,13 @@ export function OverviewSummary({
       </div>
       <div className="summaryTile">
         <span>Uptime</span>
-        <strong>{formatUptime(activity.lastStartedAt, running)}</strong>
+        <strong>{running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
         <small>{running ? "Container start time" : "Unavailable while stopped"}</small>
       </div>
       <div className="summaryTile">
         <span>Players online</span>
         <strong>{players}</strong>
-        <small>{activity.maxPlayers ? "Max players" : "From recent server output"}</small>
+        <small>{players === "Unknown" ? "Player count unavailable" : activity.maxPlayers ? "Max players" : "From recent server output"}</small>
       </div>
       <div className={`summaryTile ${runtimeTone(status, dockerSocketMounted)}`}>
         <span>Runtime status</span>
@@ -87,17 +109,18 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
 }
 
 export function RecentEventsPanel({ events, onOpenConsole }: { events: ServerEvent[]; onOpenConsole: () => void }) {
+  const displayEvents = events.slice(0, 8);
   return (
     <section className="panel eventsPanel">
       <div className="panelHeader">
         <h2>Recent Events</h2>
       </div>
       <div className="eventList">
-        {events.length ? events.map((event) => (
+        {displayEvents.length ? displayEvents.map((event) => (
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
-            <small>{event.timestamp || event.source}</small>
+            <small>{event.timestamp || "No timestamp"}</small>
           </div>
         )) : (
           <div className="eventEmpty">No recent server events found.</div>

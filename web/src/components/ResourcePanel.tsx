@@ -26,9 +26,19 @@ export function formatRate(bytesPerSecond?: number) {
   return `${(bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`;
 }
 
-export function Sparkline({ samples, value, tone = "blue" }: { samples: ResourceSample[]; value: (sample: ResourceSample) => number; tone?: "blue" | "green" }) {
-  const values = samples.map(value).filter((item) => Number.isFinite(item));
-  if (values.length < 2) return <div className="sparklineEmpty">No history yet</div>;
+export function Sparkline({
+  samples,
+  value,
+  tone = "blue",
+  emptyLabel = "No history yet"
+}: {
+  samples: ResourceSample[];
+  value: (sample: ResourceSample) => number;
+  tone?: "blue" | "green";
+  emptyLabel?: string;
+}) {
+  const values = samples.filter((sample) => sample.available && sample.running).map(value).filter((item) => Number.isFinite(item));
+  if (values.length < 2) return <div className="sparklineEmpty">{emptyLabel}</div>;
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const range = Math.max(1, max - min);
@@ -58,18 +68,31 @@ export function ResourcePanel({
   formatNumber: (value: number) => string;
 }) {
   const latest = samples.at(-1);
-  const cpu = latest?.cpuPercent ?? 0;
-  const memoryUsage = latest?.memoryUsageBytes ?? 0;
+  const hasStats = Boolean(latest?.available && latest.running);
+  const statsUnavailableLabel = !dockerSocketMounted ? "Unavailable" : status?.docker.running ? "Collecting" : "Not running";
+  const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
+  const memoryUsage = hasStats ? latest?.memoryUsageBytes ?? 0 : 0;
   const configuredMemoryBytes = latest?.memoryLimitBytes || parseMaxMemoryGb(server.javaArgs) * 1024 * 1024 * 1024;
-  const memoryPercent = configuredMemoryBytes ? (memoryUsage / configuredMemoryBytes) * 100 : 0;
-  const previousNetworkSample = [...samples].reverse().find((sample) => sample !== latest && sample.networkRxBytes !== undefined && sample.networkTxBytes !== undefined);
+  const memoryPercent = hasStats && configuredMemoryBytes ? (memoryUsage / configuredMemoryBytes) * 100 : 0;
+  const previousNetworkSample = [...samples].reverse().find((sample) => (
+    sample !== latest
+    && sample.available
+    && sample.running
+    && sample.networkRxBytes !== undefined
+    && sample.networkTxBytes !== undefined
+  ));
   const secondsBetweenSamples = latest && previousNetworkSample ? Math.max(1, (latest.sampledAt - previousNetworkSample.sampledAt) / 1000) : undefined;
-  const rxRate = latest?.networkRxBytes !== undefined && previousNetworkSample?.networkRxBytes !== undefined && secondsBetweenSamples
+  const rxRate = hasStats && latest?.networkRxBytes !== undefined && previousNetworkSample?.networkRxBytes !== undefined && secondsBetweenSamples
     ? Math.max(0, (latest.networkRxBytes - previousNetworkSample.networkRxBytes) / secondsBetweenSamples)
     : undefined;
-  const txRate = latest?.networkTxBytes !== undefined && previousNetworkSample?.networkTxBytes !== undefined && secondsBetweenSamples
+  const txRate = hasStats && latest?.networkTxBytes !== undefined && previousNetworkSample?.networkTxBytes !== undefined && secondsBetweenSamples
     ? Math.max(0, (latest.networkTxBytes - previousNetworkSample.networkTxBytes) / secondsBetweenSamples)
     : undefined;
+  const networkValue = hasStats && txRate !== undefined && rxRate !== undefined
+    ? `Up ${formatRate(txRate)} / Down ${formatRate(rxRate)}`
+    : hasStats
+      ? "Collecting"
+      : statsUnavailableLabel;
   const statusMessage = latest?.message
     || (!dockerSocketMounted
       ? "Docker socket is not mounted, so live container stats are unavailable."
@@ -83,32 +106,32 @@ export function ResourcePanel({
         <h2>Resource Usage</h2>
       </div>
       <div className="resourceRows">
-        <div className="resourceRow">
+        <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
             <span>Memory usage</span>
-            <strong>{`${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB`} / {`${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</strong>
-            <small>{memoryPercent.toFixed(1)}%</small>
+            <strong>{hasStats ? `${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB / ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB` : statsUnavailableLabel}</strong>
+            <small>{hasStats ? `${memoryPercent.toFixed(1)}%` : `Configured limit ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.memoryUsageBytes} />
+          <Sparkline samples={samples} value={(sample) => sample.memoryUsageBytes} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
-        <div className="resourceRow">
+        <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
             <span>CPU usage</span>
-            <strong>{cpu.toFixed(1)}%</strong>
-            <small>Average</small>
+            <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
+            <small>{hasStats ? "Current sample" : "Live Docker stats"}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.cpuPercent} />
+          <Sparkline samples={samples} value={(sample) => sample.cpuPercent} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
-        <div className="resourceRow">
+        <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
             <span>Network activity</span>
-            <strong>{`↑ ${formatRate(txRate)} / ↓ ${formatRate(rxRate)}`}</strong>
-            <small>Current transfer rate</small>
+            <strong>{networkValue}</strong>
+            <small>{hasStats ? "Current transfer rate" : "Network counters unavailable"}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.networkRxBytes ?? 0} tone="green" />
+          <Sparkline samples={samples} value={(sample) => sample.networkRxBytes ?? 0} tone="green" emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
       </div>
-      {!latest?.available && <p className="resourceMessage">{statusMessage}</p>}
+      {!hasStats && <p className="resourceMessage">{statusMessage}</p>}
     </section>
   );
 }
