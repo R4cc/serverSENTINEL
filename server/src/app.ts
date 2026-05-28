@@ -19,7 +19,8 @@ import {
   normalizeReleaseChannel,
   resolveModrinthProjectCompatibility,
   unknownCompatibility,
-  versionChannel
+  versionChannel,
+  fetchProject
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
@@ -2103,16 +2104,43 @@ async function writeModPreferences(server: ManagedServer, data: Record<string, M
 
 function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
   if (!metadata) {
-    return { status: "unknown", compatible: false, reason: "Compatibility could not be verified." };
+    return { status: "unknown", compatible: false, reason: "Server-side support unknown" };
+  }
+  const serverSide = metadata.serverSide;
+  const clientSide = metadata.clientSide;
+
+  if (serverSide === "unsupported") {
+    return {
+      status: "incompatible",
+      compatible: false,
+      reason: metadata.installedWithForceIncompatible
+        ? (metadata.incompatibilityReason ? `This mod was force installed: ${metadata.incompatibilityReason}` : "Client-only mod; server-side support is unsupported")
+        : "Client-only mod; server-side support is unsupported",
+      serverSide,
+      clientSide
+    };
+  }
+  if (serverSide === "unknown") {
+    return {
+      status: "unknown",
+      compatible: false,
+      reason: metadata.installedWithForceIncompatible
+        ? (metadata.incompatibilityReason ? `This mod was force installed: ${metadata.incompatibilityReason}` : "Server-side support could not be verified")
+        : "Server-side support could not be verified",
+      serverSide,
+      clientSide
+    };
   }
   if (!metadata.loaders.includes("fabric")) {
-    return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support." };
+    return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
   }
   if (server.minecraftVersion && !metadata.gameVersions.includes(server.minecraftVersion)) {
     return {
       status: "no_minecraft_version",
       compatible: false,
-      reason: `This mod was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${server.minecraftVersion}.`
+      reason: `This mod was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${server.minecraftVersion}.`,
+      serverSide,
+      clientSide
     };
   }
   if (metadata.installedWithForceIncompatible) {
@@ -2121,10 +2149,12 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
       compatible: false,
       reason: metadata.incompatibilityReason
         ? `This mod was force installed: ${metadata.incompatibilityReason}`
-        : "This mod was force installed even though ServerSentinel could not confirm compatibility."
+        : "This mod was force installed even though ServerSentinel could not confirm compatibility.",
+      serverSide,
+      clientSide
     };
   }
-  return { status: "compatible", compatible: true, reason: "Compatibility verified for this server." };
+  return { status: "compatible", compatible: true, reason: "Compatibility verified for this server.", serverSide, clientSide };
 }
 
 async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel) {
@@ -2154,34 +2184,76 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
   const modsDir = await validateExistingInsideServer(server, "mods");
   const entries = await readdir(modsDir, { withFileTypes: true });
   const prefs = await readModPreferences(server);
-  return {
-    mods: await Promise.all(
-      entries
-        .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map(async (entry) => {
-          const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
-          await ensureModrinthIconForFile(server, entry.name, modPath);
-          const modStat = await stat(modPath);
-          const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
-          const metadata = prefs[entry.name]?.modrinth;
-          let versionInfo: any = null;
-          try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel); } catch { versionInfo = null; }
-          return {
-            filename: entry.name,
-            displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
-            enabled: entry.name.endsWith(".jar"),
-            size: modStat.size,
-            modifiedAt: modStat.mtime.toISOString(),
-            iconUrl: await modIconUrl(server, entry.name),
-            preferredChannel,
-            compatibility: installedModCompatibility(server, metadata),
-            modrinth: metadata,
-            versionInfo
-          };
-        })
-    )
-  };
+  let prefsModified = false;
+
+  const mods = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(async (entry) => {
+        const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
+        await ensureModrinthIconForFile(server, entry.name, modPath);
+        const modStat = await stat(modPath);
+        const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
+        let metadata = prefs[entry.name]?.modrinth;
+
+        if (!metadata) {
+          try {
+            const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
+            const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+            if (currentRes.ok) {
+              const current = await currentRes.json() as any;
+              if (current && current.project_id) {
+                const project = await fetchProject(current.project_id);
+                metadata = {
+                  projectId: current.project_id,
+                  versionId: current.id,
+                  filename: entry.name,
+                  versionNumber: current.version_number,
+                  versionType: normalizeReleaseChannel(current.version_type),
+                  gameVersions: current.game_versions,
+                  loaders: current.loaders,
+                  hashes: current.files?.find((f: any) => f.hashes?.sha1 === hash || f.primary)?.hashes || { sha1: hash },
+                  installedAt: new Date().toISOString(),
+                  installedWithForceIncompatible: false,
+                  clientSide: project.client_side,
+                  serverSide: project.server_side
+                };
+                prefs[entry.name] = {
+                  ...(prefs[entry.name] || {}),
+                  channel: preferredChannel,
+                  modrinth: metadata
+                };
+                prefsModified = true;
+              }
+            }
+          } catch (e) {
+            // Ignore backfill failures
+          }
+        }
+
+        let versionInfo: any = null;
+        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel); } catch { versionInfo = null; }
+        return {
+          filename: entry.name,
+          displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
+          enabled: entry.name.endsWith(".jar"),
+          size: modStat.size,
+          modifiedAt: modStat.mtime.toISOString(),
+          iconUrl: await modIconUrl(server, entry.name),
+          preferredChannel,
+          compatibility: installedModCompatibility(server, metadata),
+          modrinth: metadata,
+          versionInfo
+        };
+      })
+  );
+
+  if (prefsModified) {
+    await writeModPreferences(server, prefs);
+  }
+
+  return { mods };
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
@@ -2293,7 +2365,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
   return { ok: true, filename: basename(destination), path: toPublicPath(server, destination) };
 });
 
-app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel } }>("/api/modrinth/search", async (request) => {
+app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
   const query = request.query.query?.trim();
   if (!query) {
     return { hits: [], status: "no_project_found" };
@@ -2304,11 +2376,22 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   }
   const minecraftVersion = server.minecraftVersion;
   const selectedChannel = normalizeReleaseChannel(request.query.channel);
+  const compatibilityFilter = request.query.compatibility;
 
   const url = new URL("https://api.modrinth.com/v2/search");
   url.searchParams.set("query", query);
   url.searchParams.set("limit", "20");
-  url.searchParams.set("facets", JSON.stringify([["project_type:mod"]]));
+  
+  const facets: string[][] = [
+    ["project_type:mod"],
+    ["categories:fabric"],
+    [`versions:${minecraftVersion}`]
+  ];
+  if (compatibilityFilter !== "all") {
+    facets.push(["server_side:required", "server_side:optional"]);
+  }
+  url.searchParams.set("facets", JSON.stringify(facets));
+
   const response = await modrinthFetch(url.toString());
   const body = await response.json() as { hits?: ModrinthProject[] };
   const hits = await Promise.all((body.hits ?? []).map(async (hit) => {
@@ -2391,7 +2474,10 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
       hashes: file.hashes,
       installedAt: new Date().toISOString(),
       installedWithForceIncompatible: !compatibility.compatible,
-      incompatibilityReason: compatibility.compatible ? undefined : compatibility.reason
+      incompatibilityReason: compatibility.compatible ? undefined : compatibility.reason,
+      clientSide: compatibility.clientSide,
+      serverSide: compatibility.serverSide,
+      forceIncompatible: !compatibility.compatible
     }
   };
   await writeModPreferences(server, prefs);

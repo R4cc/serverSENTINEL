@@ -48,6 +48,9 @@ export type InstalledModMetadata = {
   installedAt: string;
   installedWithForceIncompatible: boolean;
   incompatibilityReason?: string;
+  clientSide?: string;
+  serverSide?: string;
+  forceIncompatible?: boolean;
 };
 
 export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";
@@ -67,6 +70,8 @@ export type ModCompatibility = {
     size?: number;
     hashes?: Record<string, string>;
   };
+  serverSide?: string;
+  clientSide?: string;
 };
 
 export type ModrinthVersion = {
@@ -87,6 +92,8 @@ export type ModrinthProject = {
   downloads?: number;
   icon_url?: string | null;
   date_modified?: string;
+  client_side?: string;
+  server_side?: string;
 };
 
 export type ManagedServer = {

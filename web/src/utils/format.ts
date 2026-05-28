@@ -15,15 +15,20 @@ export function formatBytes(value: number) {
 }
 
 export function compatibilityLabel(compatibility?: ModCompatibility) {
-  if (!compatibility) return "Could not verify compatibility";
+  if (!compatibility) return "Unknown server support";
+  if (compatibility.serverSide === "unsupported") return "Client-only";
+  if (compatibility.serverSide === "unknown") return "Unknown server support";
+  if (compatibility.status === "unknown") return "Unknown server support";
   if (compatibility.compatible) return "Compatible";
-  if (compatibility.status === "unknown") return "Could not verify compatibility";
   return "Incompatible";
 }
 
 export function compatibilityClass(compatibility?: ModCompatibility) {
-  if (compatibility?.compatible) return "ok";
-  if (!compatibility || compatibility.status === "unknown") return "unknown";
+  if (!compatibility) return "unknown";
+  if (compatibility.serverSide === "unsupported") return "danger";
+  if (compatibility.serverSide === "unknown") return "unknown";
+  if (compatibility.status === "unknown") return "unknown";
+  if (compatibility.compatible) return "ok";
   return "danger";
 }
 

@@ -160,6 +160,8 @@ export type ModCompatibility = {
     size?: number;
     hashes?: Record<string, string>;
   };
+  serverSide?: string;
+  clientSide?: string;
 };
 
 export type ModrinthHit = {
@@ -170,6 +172,8 @@ export type ModrinthHit = {
   icon_url?: string;
   date_modified?: string;
   compatibility?: ModCompatibility;
+  client_side?: string;
+  server_side?: string;
 };
 
 export type InstalledMod = {
@@ -194,6 +198,9 @@ export type InstalledMod = {
     installedAt: string;
     installedWithForceIncompatible: boolean;
     incompatibilityReason?: string;
+    clientSide?: string;
+    serverSide?: string;
+    forceIncompatible?: boolean;
   };
   versionInfo?: {
     currentVersion?: string;

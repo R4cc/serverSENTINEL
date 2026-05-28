@@ -247,7 +247,6 @@ export default function App() {
   }
 
   function modCompatibilityNote(mod: ModrinthHit) {
-    if (mod.compatibility?.compatible) return "Compatible with this server";
     return mod.compatibility?.reason || "Compatibility could not be verified.";
   }
 
@@ -507,7 +506,7 @@ export default function App() {
     const timeout = window.setTimeout(async () => {
       try {
         const result = await api<{ hits: ModrinthHit[] }>(
-          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}`
+          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
         );
         if (!cancelled) setModSearchResults(result.hits);
       } catch (error) {
@@ -526,7 +525,7 @@ export default function App() {
       setIsSearchingMods(false);
       window.clearTimeout(timeout);
     };
-  }, [activeServer?.id, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modInstallChannel]);
+  }, [activeServer?.id, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modInstallChannel, modCompatibilityFilter]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -1186,7 +1185,7 @@ export default function App() {
     }
     try {
       const result = await api<{ hits: ModrinthHit[] }>(
-        `/api/modrinth/search?query=${encodeURIComponent(query)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}`
+        `/api/modrinth/search?query=${encodeURIComponent(query)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
       );
       setModSearchResults(result.hits);
     } catch (error) {
@@ -2405,7 +2404,13 @@ export default function App() {
 
                                 <div className="modsTableCell" data-label="Compatibility">
                                   <div className="compatCol">
-                                    <span className={`compatStatus ${isComp ? "compatible" : compStatus === "unknown" ? "unknown" : "incompatible"}`}>
+                                    <span className={`compatStatus ${
+                                      isComp
+                                        ? "compatible"
+                                        : (compStatus === "unknown" || mod.compatibility?.serverSide === "unknown" || mod.compatibility?.reason === "Server-side support unknown")
+                                          ? "unknown"
+                                          : "incompatible"
+                                    }`}>
                                       {isComp ? (
                                         <>
                                           <svg className="buttonIcon" style={{ strokeWidth: 3, width: 14, height: 14, marginRight: "4px" }} viewBox="0 0 24 24">
@@ -2413,14 +2418,19 @@ export default function App() {
                                           </svg>
                                           <span>Compatible</span>
                                         </>
-                                      ) : compStatus === "unknown" ? (
-                                        <span>Unknown</span>
+                                      ) : (compStatus === "unknown" || mod.compatibility?.serverSide === "unknown" || mod.compatibility?.reason === "Server-side support unknown") ? (
+                                        <>
+                                          <svg className="buttonIcon" style={{ strokeWidth: 3, width: 14, height: 14, marginRight: "4px" }} viewBox="0 0 24 24">
+                                            <path d="M12 9v4m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                          <span>{compatibilityLabel(mod.compatibility)}</span>
+                                        </>
                                       ) : (
                                         <>
                                           <svg className="buttonIcon" style={{ strokeWidth: 3, width: 14, height: 14, marginRight: "4px" }} viewBox="0 0 24 24">
                                             <path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" />
                                           </svg>
-                                          <span>Incompatible</span>
+                                          <span>{compatibilityLabel(mod.compatibility)}</span>
                                         </>
                                       )}
                                     </span>
@@ -2635,7 +2645,9 @@ export default function App() {
                     <div className="modalBackdrop" role="presentation">
                       <section className="modalPanel forceInstallModal" role="dialog" aria-modal="true" aria-labelledby="force-install-title">
                         <div className="panelHeader">
-                          <h2 id="force-install-title">Review incompatible mod</h2>
+                          <h2 id="force-install-title">
+                            {forceInstallMod.compatibility?.serverSide === "unsupported" ? "Review client-only mod" : forceInstallMod.compatibility?.serverSide === "unknown" ? "Review unknown side support" : "Review incompatible mod"}
+                          </h2>
                           <button type="button" className="iconButton" onClick={() => setForceInstallProjectId(null)} aria-label="Close force install review">
                             <AppIcon name="x" />
                           </button>
@@ -2643,7 +2655,13 @@ export default function App() {
                         <div className="forceInstallWarning">
                           <strong>{forceInstallMod.title}</strong>
                           <p>{modCompatibilityNote(forceInstallMod)}</p>
-                          <p>This mod may crash the server or prevent startup. Only force install it if you have reviewed the project and understand the risk.</p>
+                          <p>
+                            {forceInstallMod.compatibility?.serverSide === "unsupported"
+                              ? "Client-only mods are designed for the Minecraft client and may crash the server or do nothing if installed. Only force install if you are sure this mod is safe for the server."
+                              : forceInstallMod.compatibility?.serverSide === "unknown"
+                                ? "Server-side support for this mod could not be verified. It may crash the server or prevent startup. Only force install if you have verified it supports Minecraft servers."
+                                : "This mod may crash the server or prevent startup. Only force install it if you have reviewed the project and understand the risk."}
+                          </p>
                         </div>
                         <div className="buttonRow">
                           <button type="button" className="secondaryButton" onClick={() => setForceInstallProjectId(null)}>Cancel</button>

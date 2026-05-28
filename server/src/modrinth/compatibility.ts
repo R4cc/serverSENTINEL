@@ -35,6 +35,20 @@ type CachedVersions = {
 };
 
 const versionCache = new Map<string, CachedVersions>();
+const projectCache = new Map<string, any>();
+
+export async function fetchProject(projectId: string): Promise<any> {
+  let cached = projectCache.get(projectId);
+  if (cached) return cached;
+  const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`;
+  const response = await modrinthFetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch project ${projectId}: ${response.statusText}`);
+  }
+  const data = await response.json();
+  projectCache.set(projectId, data);
+  return data;
+}
 
 export function normalizeReleaseChannel(channel?: string): ReleaseChannel {
   return channel === "alpha" || channel === "beta" ? channel : "release";
@@ -53,21 +67,32 @@ export function modrinthJarFile(version?: ModrinthVersion): ModrinthJarFile | un
     ?? version?.files.find((candidate) => candidate.filename.endsWith(".jar"));
 }
 
-function compatibleResult(version: ModrinthVersion, file: ModrinthJarFile): ModrinthCompatibilityMatch {
+function compatibleResult(
+  version: ModrinthVersion,
+  file: ModrinthJarFile,
+  projectSides?: { server_side?: string; client_side?: string }
+): ModrinthCompatibilityMatch {
   return {
     status: "compatible",
     compatible: true,
-    reason: "Compatible with this server",
+    reason: "Compatible server-side Fabric mod",
     matchedVersionId: version.id,
     matchedVersionNumber: version.version_number,
     matchedVersionType: versionChannel(version.version_type),
     matchedLoaders: version.loaders,
     matchedGameVersions: version.game_versions,
-    file
+    file,
+    serverSide: projectSides?.server_side,
+    clientSide: projectSides?.client_side
   };
 }
 
-function incompatible(status: ModCompatibility["status"], reason: string, fallbackVersion?: ModrinthVersion): ModrinthCompatibilityMatch {
+function incompatible(
+  status: ModCompatibility["status"],
+  reason: string,
+  fallbackVersion?: ModrinthVersion,
+  projectSides?: { server_side?: string; client_side?: string }
+): ModrinthCompatibilityMatch {
   const file = modrinthJarFile(fallbackVersion);
   return {
     status,
@@ -78,7 +103,9 @@ function incompatible(status: ModCompatibility["status"], reason: string, fallba
     matchedVersionType: fallbackVersion ? versionChannel(fallbackVersion.version_type) : undefined,
     matchedLoaders: fallbackVersion?.loaders,
     matchedGameVersions: fallbackVersion?.game_versions,
-    file
+    file,
+    serverSide: projectSides?.server_side,
+    clientSide: projectSides?.client_side
   };
 }
 
@@ -90,15 +117,52 @@ export function unknownCompatibility(): ModrinthCompatibilityMatch {
   };
 }
 
-export function resolveCompatibilityFromVersions(versions: ModrinthVersion[], options: VersionCompatibilityOptions): ModrinthCompatibilityMatch {
+export function resolveCompatibilityFromVersions(
+  versions: ModrinthVersion[],
+  options: VersionCompatibilityOptions,
+  projectSides?: { server_side?: string; client_side?: string }
+): ModrinthCompatibilityMatch {
   const loaderVersions = versions.filter((version) => version.loaders.includes(options.loader));
   const loaderAndGameVersions = loaderVersions.filter((version) => version.game_versions.includes(options.minecraftVersion));
   const loaderGameJarVersions = loaderAndGameVersions.filter((version) => modrinthJarFile(version));
   const matchingVersion = loaderGameJarVersions.find((version) => allowedForChannel(version, options.channel));
   const matchingFile = modrinthJarFile(matchingVersion);
 
+  const serverSide = projectSides?.server_side;
+  const clientSide = projectSides?.client_side;
+
   if (matchingVersion && matchingFile) {
-    return compatibleResult(matchingVersion, matchingFile);
+    if (serverSide === "unsupported") {
+      return {
+        status: "incompatible",
+        compatible: false,
+        reason: "Client-only mod; server-side support is unsupported",
+        serverSide,
+        clientSide,
+        matchedVersionId: matchingVersion.id,
+        matchedVersionNumber: matchingVersion.version_number,
+        matchedVersionType: versionChannel(matchingVersion.version_type),
+        matchedLoaders: matchingVersion.loaders,
+        matchedGameVersions: matchingVersion.game_versions,
+        file: matchingFile
+      };
+    }
+    if (serverSide === "unknown") {
+      return {
+        status: "unknown",
+        compatible: false,
+        reason: "Server-side support could not be verified",
+        serverSide,
+        clientSide,
+        matchedVersionId: matchingVersion.id,
+        matchedVersionNumber: matchingVersion.version_number,
+        matchedVersionType: versionChannel(matchingVersion.version_type),
+        matchedLoaders: matchingVersion.loaders,
+        matchedGameVersions: matchingVersion.game_versions,
+        file: matchingFile
+      };
+    }
+    return compatibleResult(matchingVersion, matchingFile, projectSides);
   }
 
   const fallbackVersion = loaderGameJarVersions[0]
@@ -108,15 +172,15 @@ export function resolveCompatibilityFromVersions(versions: ModrinthVersion[], op
     ?? versions.find((version) => modrinthJarFile(version));
 
   if (loaderVersions.length === 0) {
-    return incompatible("no_fabric", "No Fabric version available", fallbackVersion);
+    return incompatible("no_fabric", "No Fabric version available", fallbackVersion, projectSides);
   }
   if (loaderAndGameVersions.length === 0) {
-    return incompatible("no_minecraft_version", `Not available for Minecraft ${options.minecraftVersion}`, fallbackVersion);
+    return incompatible("no_minecraft_version", `Not available for Minecraft ${options.minecraftVersion}`, fallbackVersion, projectSides);
   }
   if (loaderGameJarVersions.length === 0) {
-    return incompatible("incompatible", "No installable .jar file was found", fallbackVersion);
+    return incompatible("incompatible", "No installable .jar file was found", fallbackVersion, projectSides);
   }
-  return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion);
+  return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion, projectSides);
 }
 
 async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }) {
@@ -138,18 +202,25 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
   versionCache.set(cacheKey, cached);
 
   try {
+    const project = await fetchProject(options.projectId);
+    const projectSides = {
+      server_side: project.server_side,
+      client_side: project.client_side
+    };
+
     cached.filtered ??= await fetchProjectVersions(options.projectId, {
       loader: options.loader,
       minecraftVersion: options.minecraftVersion
     });
-    const filteredResult = resolveCompatibilityFromVersions(cached.filtered, options);
-    if (filteredResult.compatible) {
+    const filteredResult = resolveCompatibilityFromVersions(cached.filtered, options, projectSides);
+    if (filteredResult.compatible || filteredResult.matchedVersionId) {
       return filteredResult;
     }
 
     cached.all ??= await fetchProjectVersions(options.projectId);
-    return resolveCompatibilityFromVersions(cached.all, options);
-  } catch {
+    return resolveCompatibilityFromVersions(cached.all, options, projectSides);
+  } catch (err) {
+    console.error(err);
     return unknownCompatibility();
   }
 }

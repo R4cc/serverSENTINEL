@@ -158,7 +158,15 @@ export const demoSearchResults: ModrinthHit[] = [
     description: "Client and server rendering performance mod shown here as demo data.",
     downloads: 42_500_000,
     date_modified: new Date(demoStartedAt - 2 * 86_400_000).toISOString(),
-    compatibility: { status: "compatible", compatible: true, reason: "Compatible with this server" }
+    compatibility: {
+      status: "compatible",
+      compatible: true,
+      reason: "Compatible server-side Fabric mod",
+      serverSide: "required",
+      clientSide: "optional"
+    },
+    server_side: "required",
+    client_side: "optional"
   },
   {
     project_id: "demo-ferritecore",
@@ -166,7 +174,47 @@ export const demoSearchResults: ModrinthHit[] = [
     description: "Memory optimization mod included in the simulated Modrinth search.",
     downloads: 18_250_000,
     date_modified: new Date(demoStartedAt - 7 * 86_400_000).toISOString(),
-    compatibility: { status: "compatible", compatible: true, reason: "Compatible with this server" }
+    compatibility: {
+      status: "compatible",
+      compatible: true,
+      reason: "Compatible server-side Fabric mod",
+      serverSide: "optional",
+      clientSide: "optional"
+    },
+    server_side: "optional",
+    client_side: "optional"
+  },
+  {
+    project_id: "demo-iris",
+    title: "Iris Shaders",
+    description: "A modern shaders mod for Minecraft. It is a client-only mod and cannot run on a server.",
+    downloads: 25_100_000,
+    date_modified: new Date(demoStartedAt - 3 * 86_400_000).toISOString(),
+    compatibility: {
+      status: "incompatible",
+      compatible: false,
+      reason: "Client-only mod; server-side support is unsupported",
+      serverSide: "unsupported",
+      clientSide: "required"
+    },
+    server_side: "unsupported",
+    client_side: "required"
+  },
+  {
+    project_id: "demo-unknown-side",
+    title: "Mystery Mod",
+    description: "A mod whose server-side compatibility could not be verified.",
+    downloads: 500_000,
+    date_modified: new Date(demoStartedAt - 12 * 86_400_000).toISOString(),
+    compatibility: {
+      status: "unknown",
+      compatible: false,
+      reason: "Server-side support could not be verified",
+      serverSide: "unknown",
+      clientSide: "unknown"
+    },
+    server_side: "unknown",
+    client_side: "unknown"
   },
   {
     project_id: "demo-clumps",
@@ -174,7 +222,15 @@ export const demoSearchResults: ModrinthHit[] = [
     description: "Groups XP orbs together to reduce server work in busy worlds.",
     downloads: 31_100_000,
     date_modified: new Date(demoStartedAt - 14 * 86_400_000).toISOString(),
-    compatibility: { status: "no_minecraft_version", compatible: false, reason: "Not available for Minecraft 1.21.4" }
+    compatibility: {
+      status: "no_minecraft_version",
+      compatible: false,
+      reason: "Not available for Minecraft 1.21.4",
+      serverSide: "required",
+      clientSide: "optional"
+    },
+    server_side: "required",
+    client_side: "optional"
   }
 ];
 

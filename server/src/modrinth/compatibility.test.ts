@@ -19,12 +19,20 @@ function version(input: Partial<ModrinthVersion> & { id: string; loaders: string
   };
 }
 
-function resolve(versions: ModrinthVersion[], channel: ReleaseChannel = "release") {
-  return resolveCompatibilityFromVersions(versions, {
-    loader: "fabric",
-    minecraftVersion: "1.21.4",
-    channel
-  });
+function resolve(
+  versions: ModrinthVersion[],
+  channel: ReleaseChannel = "release",
+  projectSides?: { server_side?: string; client_side?: string }
+) {
+  return resolveCompatibilityFromVersions(
+    versions,
+    {
+      loader: "fabric",
+      minecraftVersion: "1.21.4",
+      channel
+    },
+    projectSides ?? { server_side: "required" }
+  );
 }
 
 describe("Modrinth compatibility resolver", () => {
@@ -79,5 +87,49 @@ describe("Modrinth compatibility resolver", () => {
     expect(result.compatible).toBe(false);
     expect(result.status).toBe("unknown");
     expect(result.reason).toBe("Compatibility could not be verified.");
+  });
+
+  it("accepts server_side=required as compatible", () => {
+    const result = resolve(
+      [version({ id: "fabric-release", loaders: ["fabric"], game_versions: ["1.21.4"] })],
+      "release",
+      { server_side: "required", client_side: "optional" }
+    );
+    expect(result.compatible).toBe(true);
+    expect(result.serverSide).toBe("required");
+    expect(result.clientSide).toBe("optional");
+  });
+
+  it("accepts server_side=optional as compatible", () => {
+    const result = resolve(
+      [version({ id: "fabric-release", loaders: ["fabric"], game_versions: ["1.21.4"] })],
+      "release",
+      { server_side: "optional", client_side: "required" }
+    );
+    expect(result.compatible).toBe(true);
+    expect(result.serverSide).toBe("optional");
+    expect(result.clientSide).toBe("required");
+  });
+
+  it("rejects server_side=unsupported as incompatible/client-only", () => {
+    const result = resolve(
+      [version({ id: "fabric-release", loaders: ["fabric"], game_versions: ["1.21.4"] })],
+      "release",
+      { server_side: "unsupported", client_side: "required" }
+    );
+    expect(result.compatible).toBe(false);
+    expect(result.status).toBe("incompatible");
+    expect(result.reason).toBe("Client-only mod; server-side support is unsupported");
+  });
+
+  it("rejects server_side=unknown as warning/review required", () => {
+    const result = resolve(
+      [version({ id: "fabric-release", loaders: ["fabric"], game_versions: ["1.21.4"] })],
+      "release",
+      { server_side: "unknown" }
+    );
+    expect(result.compatible).toBe(false);
+    expect(result.status).toBe("unknown");
+    expect(result.reason).toBe("Server-side support could not be verified");
   });
 });
