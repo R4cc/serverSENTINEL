@@ -290,7 +290,6 @@ export default function App() {
       setNotice("");
       setActiveServerId(demoServerId);
       setActivePage("overview");
-      void refreshApp();
     } else if (activeServerId === demoServerId) {
       setActiveServerId("");
       setStatus(null);
@@ -575,6 +574,7 @@ export default function App() {
         body: JSON.stringify({ username, password })
       });
       if (session.demo) {
+        window.localStorage.setItem("serversentinel-demo-mode", "true");
         setAuthNotice("");
         setNotice("");
         setAppStateLoaded(false);
@@ -597,6 +597,7 @@ export default function App() {
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.localStorage.setItem("serversentinel-demo-mode", "false");
     setDemoMode(false);
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
     setAppState(emptyApp);
@@ -679,6 +680,9 @@ export default function App() {
   }
 
   async function refreshApp() {
+    if (!demoMode && (!authSession || !authSession.authenticated)) {
+      return;
+    }
     setNotice("");
     try {
       const next = await api<AppState>("/api/app");
@@ -1731,7 +1735,7 @@ export default function App() {
         <nav className="sideNav">
           <div className="serverPickerRow">
             <label className="serverPicker">
-              <small>Active managed server</small>
+              <small>{effectiveAppState.servers.length === 0 ? "No servers created" : "Active managed server"}</small>
               <select
                 value={activeServerId}
                 onChange={(event) => {
@@ -1745,7 +1749,6 @@ export default function App() {
                 }}
                 disabled={isProvisioning || effectiveAppState.servers.length === 0}
               >
-                <option value="">Select managed server</option>
                 {effectiveAppState.servers.map((server) => (
                   <option key={server.id} value={server.id} disabled={demoMode && server.id !== demoServerId}>
                     {server.displayName}{demoMode && server.id !== demoServerId ? " (demo mode enabled)" : ""}
@@ -2051,7 +2054,7 @@ export default function App() {
                     </span>
                   </div>
                   <small className="serverStripMeta">
-                    ID: {activeServer.id} • Fabric {activeMinecraftVersion === "Unknown" ? "" : activeMinecraftVersion}
+                    Fabric {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}
                   </small>
                 </div>
               </div>
@@ -2139,7 +2142,7 @@ export default function App() {
                 />
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />
-                <RecentEventsPanel events={overviewData.events} onOpenConsole={() => setActivePage("console")} />
+                <RecentEventsPanel events={overviewData.events} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} />
 
               </section>
             )}

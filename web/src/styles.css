@@ -556,7 +556,7 @@ button .buttonIcon {
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  flex: 1;
+  flex: 1 1 280px;
 }
 
 .serverStripIcon {
@@ -627,6 +627,10 @@ button .buttonIcon {
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 2;
 }
 
 /* Quick action Console button */
@@ -646,12 +650,61 @@ button .buttonIcon {
   align-items: center;
   gap: var(--space-2);
   border-radius: 999px;
-  transition: all 150ms ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .quickActionButton:hover:not(:disabled) {
+  transform: translateY(-2px);
   background: var(--text);
   color: var(--surface);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.quickActionButton:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Specific console styling to make it cooler, neon accents and rich gradients */
+.quickActionButton.consoleLink {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.quickActionButton.consoleLink:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  color: #ffffff;
+  border-color: #0ea5e9;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4);
+}
+
+.quickActionButton.consoleLink.active {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff;
+  border-color: #0ea5e9;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.quickActionButton.consoleLink:disabled {
+  background: #334155;
+  color: #64748b;
+  border-color: #475569;
+  box-shadow: none;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Prevent activeServerStrip span from overriding button text styling and colors */
+.activeServerStrip .runtimeControlButton span,
+.activeServerStrip .quickActionButton.consoleLink span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
 }
 
 .quickActionButton.active {
@@ -663,6 +716,7 @@ button .buttonIcon {
 /* Overflow Menu Container and Dropdown */
 .overflowMenuContainer {
   position: relative;
+  z-index: 5;
 }
 
 .overflowButton {
@@ -694,7 +748,7 @@ button .buttonIcon {
   display: flex;
   flex-direction: column;
   min-width: 180px;
-  z-index: 100;
+  z-index: 30;
   padding: var(--space-2);
 }
 
@@ -738,6 +792,8 @@ button .buttonIcon {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  position: relative;
+  z-index: 2;
 }
 
 .runtimeControlButton {
@@ -747,47 +803,92 @@ button .buttonIcon {
   gap: var(--space-2);
   border-radius: 999px;
   padding: 0 var(--space-4);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .runtimeControlButton span:last-child {
   text-transform: uppercase;
 }
 
+.runtimeControlButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.runtimeControlButton:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .runtimeControlButton.start {
-  border-color: #005f3b;
-  background: #006840;
-  color: var(--swiss-white);
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.28);
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border-color: #059669;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+}
+
+.runtimeControlButton.start:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  color: #ffffff;
 }
 
 .runtimeControlButton.stop {
-  border-color: #9d1616;
-  background: #b81f1f;
-  color: var(--swiss-white);
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.28);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+}
+
+.runtimeControlButton.stop:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  color: #ffffff;
 }
 
 .runtimeControlButton.restart {
-  border-color: var(--accent);
-  background: var(--surface);
-  color: var(--accent);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
 }
 
-.runtimeControlButton:hover:not(:disabled) {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--surface);
+.runtimeControlButton.restart:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #3730a3);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+  color: #ffffff;
 }
 
-.runtimeControlButton.start:disabled,
+.runtimeControlButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.runtimeControlButton.start:disabled {
+  background: linear-gradient(135deg, #6ee7b7, #34d399);
+  border-color: #34d399;
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .runtimeControlButton.stop:disabled {
-  color: var(--swiss-white);
-  opacity: 0.62;
+  background: linear-gradient(135deg, #fca5a5, #f87171);
+  border-color: #f87171;
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.runtimeControlButton.start:hover:not(:disabled),
-.runtimeControlButton.stop:hover:not(:disabled) {
-  color: var(--swiss-white);
+.runtimeControlButton.restart:disabled {
+  background: linear-gradient(135deg, #c7d2fe, #a5b4fc);
+  border-color: #a5b4fc;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .controlGlyph {
@@ -1975,7 +2076,7 @@ button .buttonIcon {
 .resourceRows,
 .eventList {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .resourceRow {
@@ -2109,9 +2210,9 @@ button .buttonIcon {
   grid-template-columns: 14px minmax(0, 1fr) minmax(92px, auto);
   gap: var(--space-2);
   align-items: start;
-  min-height: 40px;
+  min-height: 30px;
   border-bottom: var(--border-subtle) solid var(--border-muted);
-  padding: var(--space-2) 0;
+  padding: 6px 0;
 }
 
 .eventRow:first-child {
@@ -2124,7 +2225,7 @@ button .buttonIcon {
   border-radius: 999px;
   background: var(--accent);
   justify-self: center;
-  margin-top: 6px;
+  margin-top: 5px;
 }
 
 .eventRow.success .eventMarker {

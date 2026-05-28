@@ -1057,11 +1057,20 @@ function normalizeJavaRuntime(server: ManagedServer) {
   return undefined;
 }
 
+function logTimestampToday(time: string | undefined) {
+  if (!time) return undefined;
+  const [hours, minutes, seconds] = time.split(":").map((part) => Number(part));
+  if (![hours, minutes, seconds].every(Number.isFinite)) return undefined;
+  const date = new Date();
+  date.setHours(hours, minutes, seconds, 0);
+  return date.toISOString();
+}
+
 function parseLogEvent(line: string, source: ServerEvent["source"], index: number): ServerEvent | null {
   const ansiStripped = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!ansiStripped) return null;
   const parsed = ansiStripped.match(/^\[(?<time>\d{2}:\d{2}:\d{2})\]\s+\[[^\]]+\]\s+\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/);
-  const timestamp = parsed?.groups?.time;
+  const timestamp = logTimestampToday(parsed?.groups?.time);
   const level = parsed?.groups?.level ?? "";
   const message = parsed?.groups?.message ?? ansiStripped;
   const id = `${source}-${index}-${timestamp ?? ""}-${createHash("sha1").update(message).digest("hex").slice(0, 8)}`;

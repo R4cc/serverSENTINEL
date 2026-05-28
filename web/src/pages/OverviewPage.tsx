@@ -110,7 +110,22 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
   );
 }
 
-export function RecentEventsPanel({ events, onOpenConsole }: { events: ServerEvent[]; onOpenConsole: () => void }) {
+function formatEventTimestamp(value: string | undefined, formatDate: (value: string | number | Date) => string) {
+  if (!value) return "No timestamp";
+  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value.slice(0, 5);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : formatDate(value);
+}
+
+export function RecentEventsPanel({
+  events,
+  formatDate,
+  onOpenConsole
+}: {
+  events: ServerEvent[];
+  formatDate: (value: string | number | Date) => string;
+  onOpenConsole: () => void;
+}) {
   const displayEvents = events.slice(0, 8);
   return (
     <section className="panel eventsPanel">
@@ -122,7 +137,7 @@ export function RecentEventsPanel({ events, onOpenConsole }: { events: ServerEve
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
-            <small>{event.timestamp || "No timestamp"}</small>
+            <small>{formatEventTimestamp(event.timestamp, formatDate)}</small>
           </div>
         )) : (
           <div className="eventEmpty">No recent server events found.</div>
