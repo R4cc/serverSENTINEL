@@ -1,5 +1,18 @@
 import type { Notice, GeneralJob } from '../types';
 
+const noticeLabels: Record<Notice["type"], string> = {
+  error: "Error",
+  info: "Info",
+  success: "Success",
+  warning: "Warning"
+};
+
+const jobStatusLabels: Record<GeneralJob["status"], string> = {
+  failed: "Failed",
+  running: "Running",
+  succeeded: "Complete"
+};
+
 export function Notifications({
   notices,
   activeJobs,
@@ -13,12 +26,13 @@ export function Notifications({
     <div className="toastRegion">
       {activeJobs.map((job) => {
         const progress = Math.max(0, Math.min(100, job.progress));
+        const statusLabel = jobStatusLabels[job.status];
         return (
-          <div key={job.id} className={`toast provisioningToast ${job.status}`} role="status" aria-live="polite">
-            <div className="provisioningToastHeader">
-              <div>
+          <div key={job.id} className={`toast provisioningToast toast-${job.status}`} role="status" aria-live="polite">
+            <div className="toastHeader">
+              <div className="toastTitleGroup">
                 <strong>{job.title}</strong>
-                <span>{job.status === "succeeded" ? "Complete" : job.status === "failed" ? "Failed" : "Running"}</span>
+                <span>{statusLabel}</span>
               </div>
               {job.dismissible && (
                 <button
@@ -27,16 +41,16 @@ export function Notifications({
                   onClick={() => onDismissJob(job.id)}
                   aria-label={`Dismiss ${job.title} notification`}
                 >
-                  x
+                  <span aria-hidden="true">&times;</span>
                 </button>
               )}
             </div>
             {job.subject && (
-              <p style={{ fontWeight: 800, margin: "2px 0 6px", textTransform: "none", letterSpacing: "normal", color: "var(--text)" }}>
+              <p className="toastSubject">
                 {job.subject}
               </p>
             )}
-            <p>{job.error || job.task}</p>
+            <p className="toastMessage">{job.error || job.task}</p>
             <div
               className="progressTrack"
               aria-label={`${job.title} progress`}
@@ -52,7 +66,19 @@ export function Notifications({
         );
       })}
       {notices.map((notice) => (
-        <div key={notice.id} className={`toast ${notice.type}`}>{notice.text}</div>
+        <div
+          key={notice.id}
+          className={`toast toast-${notice.type}`}
+          role={notice.type === "error" ? "alert" : "status"}
+          aria-live={notice.type === "error" ? "assertive" : "polite"}
+        >
+          <div className="toastHeader">
+            <div className="toastTitleGroup">
+              <strong>{noticeLabels[notice.type]}</strong>
+            </div>
+          </div>
+          <p className="toastMessage">{notice.text}</p>
+        </div>
       ))}
     </div>
   );

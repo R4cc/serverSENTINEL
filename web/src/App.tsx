@@ -540,10 +540,12 @@ export default function App() {
   async function refreshAuth() {
     try {
       const session = await api<AuthSession>("/api/auth/session");
+      setAuthNotice("");
       setAuthSession(session);
     } catch (error) {
-      setAuthNotice((error as Error).message);
+      setAuthNotice("");
       setAuthSession({ authenticated: false, setupRequired: false, user: null });
+      setAppStateLoaded(false);
     }
   }
 
@@ -573,12 +575,18 @@ export default function App() {
         body: JSON.stringify({ username, password })
       });
       if (session.demo) {
+        setAuthNotice("");
+        setNotice("");
+        setAppStateLoaded(false);
         setDemoMode(true);
         setAuthSession({ ...session, setupRequired: false });
         setActiveServerId(demoServerId);
         setActivePage("overview");
         return;
       }
+      setAuthNotice("");
+      setNotice("");
+      setAppStateLoaded(false);
       setDemoMode(false);
       setAuthSession(session);
       formElement.reset();

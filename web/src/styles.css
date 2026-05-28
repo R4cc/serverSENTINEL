@@ -1032,7 +1032,7 @@ button .buttonIcon {
   transition: width 200ms linear;
 }
 
-.provisioningToast.running .progressTrack span {
+.provisioningToast.toast-running .progressTrack span {
   background: var(--sentinel-success);
 }
 
@@ -1047,83 +1047,100 @@ button .buttonIcon {
 }
 
 .toast {
+  display: grid;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   font-size: 13px;
-  font-weight: 800;
+  line-height: 1.4;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .provisioningToast {
-  display: grid;
-  gap: var(--space-2);
   border-color: var(--accent);
   background:
     linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
 }
 
-.provisioningToastHeader {
+.toastHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: start;
 }
 
-.provisioningToastHeader > div {
+.toastTitleGroup {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
 
-.provisioningToast strong,
-.provisioningToast small,
-.provisioningToastHeader span {
+.toast strong,
+.toast small,
+.toastTitleGroup span {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.provisioningToastHeader span {
-  color: var(--text-muted);
-}
-
-.provisioningToast p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
-.provisioningToast.failed {
+.toastTitleGroup span {
+  color: var(--text-muted);
+}
+
+.toastMessage,
+.toastSubject {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.toastMessage {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.toastSubject {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.provisioningToast.toast-failed,
+.toast.toast-error {
   border-color: var(--sentinel-danger);
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--sentinel-danger) 12%, var(--surface-raised)), var(--surface-raised));
 }
 
-.provisioningToast.failed strong,
-.provisioningToast.failed small,
-.provisioningToast.failed .provisioningToastHeader span {
+.provisioningToast.toast-failed strong,
+.provisioningToast.toast-failed small,
+.provisioningToast.toast-failed .toastTitleGroup span,
+.toast.toast-error strong {
   color: var(--sentinel-danger);
 }
 
-.provisioningToast.failed .progressTrack span {
+.provisioningToast.toast-failed .progressTrack span {
   background: var(--sentinel-danger);
 }
 
-.provisioningToast.succeeded {
+.provisioningToast.toast-succeeded,
+.toast.toast-success {
   border-color: var(--sentinel-success);
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--sentinel-success) 12%, var(--surface-raised)), var(--surface-raised));
 }
 
-.provisioningToast.succeeded strong,
-.provisioningToast.succeeded small,
-.provisioningToast.succeeded .provisioningToastHeader span {
+.provisioningToast.toast-succeeded strong,
+.provisioningToast.toast-succeeded small,
+.provisioningToast.toast-succeeded .toastTitleGroup span,
+.toast.toast-success strong {
   color: var(--sentinel-success);
 }
 
-.provisioningToast.succeeded .progressTrack span {
+.provisioningToast.toast-succeeded .progressTrack span {
   background: var(--sentinel-success);
 }
 
@@ -1149,23 +1166,23 @@ button .buttonIcon {
   color: var(--text);
 }
 
-.toast.success {
-  border-color: var(--sentinel-success);
-  color: var(--sentinel-success);
-}
-
-.toast.error {
-  border-color: var(--sentinel-danger);
-  color: var(--sentinel-danger);
-}
-
-.toast.warning {
+.toast.toast-warning {
   border-color: var(--sentinel-warning);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--sentinel-warning) 14%, var(--surface-raised)), var(--surface-raised));
+}
+
+.toast.toast-warning strong {
   color: var(--sentinel-warning);
 }
 
-.toast.info {
+.toast.toast-info {
   border-color: var(--accent);
+  background:
+    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
+}
+
+.toast.toast-info strong {
   color: var(--accent);
 }
 
