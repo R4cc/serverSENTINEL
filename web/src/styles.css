@@ -204,9 +204,10 @@ code {
 .appShell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   background: transparent;
   color: var(--text);
+  transition: grid-template-columns 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .authShell {
@@ -268,10 +269,10 @@ code {
   position: sticky;
   top: 0;
   height: 100vh;
-  width: 280px;
+  width: 100%;
   overflow-x: hidden;
   white-space: nowrap;
-  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1), padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   border-right: var(--border-heavy) solid var(--border);
   background:
     repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
@@ -280,6 +281,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  box-sizing: border-box;
 }
 
 .themeDark .sidebar {
@@ -303,33 +305,22 @@ code {
 }
 
 .brandBlock {
-  position: relative;
-  height: 60px;
-  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
   padding-bottom: var(--space-4);
   border-bottom: var(--border-strong) solid var(--border);
-  transition: height 0.18s cubic-bezier(0.4, 0, 0.2, 1), padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.brandBlock .iconButton {
-  position: absolute;
-  top: 0;
-  right: 0;
-  transition: top 0.18s cubic-bezier(0.4, 0, 0.2, 1), right 0.18s cubic-bezier(0.4, 0, 0.2, 1), left 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brandLockup {
   min-width: 0;
-  flex: 1;
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  position: relative;
-  top: 0;
-  left: 0;
-  width: auto;
-  padding-right: 48px;
-  transition: left 0.18s cubic-bezier(0.4, 0, 0.2, 1), width 0.18s cubic-bezier(0.4, 0, 0.2, 1), gap 0.18s cubic-bezier(0.4, 0, 0.2, 1), padding-right 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1), gap 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brandLockup > div {
@@ -464,7 +455,7 @@ button .buttonIcon {
 }
 
 .sideNav button {
-  transition: padding 0.18s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, border-color 0.2s, color 0.2s;
+  transition: padding 0.18s cubic-bezier(0.4, 0, 0.2, 1), gap 0.18s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .navLabel {
@@ -1004,25 +995,22 @@ button .buttonIcon {
 }
 
 .sidebarCollapsed {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 
 .sidebarCollapsed .sidebar {
-  width: 76px;
   padding: var(--space-3);
 }
 
 .sidebarCollapsed .brandBlock {
-  height: 108px;
+  justify-content: center;
+  gap: var(--space-2);
   padding-bottom: var(--space-3);
-  display: block;
 }
 
 .sidebarCollapsed .brandLockup {
-  left: 3px;
   width: 44px;
   gap: 0;
-  padding-right: 0;
 }
 
 .sidebarCollapsed .brandLockup > div {
@@ -1036,13 +1024,9 @@ button .buttonIcon {
   height: 44px;
 }
 
-.sidebarCollapsed .brandBlock .iconButton {
-  top: 52px;
-  right: 3px;
-}
-
 .sidebarCollapsed .sideNav button {
   padding: 10px 14px;
+  gap: 0;
 }
 
 .sidebarCollapsed .navLabel {
@@ -1053,6 +1037,7 @@ button .buttonIcon {
 
 .sidebarCollapsed .serverPickerRow {
   gap: 0;
+  justify-content: center;
 }
 
 .sidebarCollapsed .serverPicker {
@@ -3344,6 +3329,7 @@ details.compatibilityBadge p {
   .sidebarCollapsed .sideNav button {
     justify-content: flex-start;
     padding: 10px 12px;
+    gap: var(--space-3) !important;
   }
 
   .sidebarCollapsed .serverPickerRow {
