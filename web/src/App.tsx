@@ -1487,7 +1487,8 @@ export default function App() {
       return;
     }
 
-    while (queueItem.targetEnabled !== queueItem.inFlightEnabled) {
+    let currentFilename = filename;
+    while (true) {
       const runEnabled = queueItem.targetEnabled;
       queueItem.inFlightEnabled = runEnabled;
 
@@ -1495,10 +1496,18 @@ export default function App() {
         await new Promise((resolve) => window.setTimeout(resolve, 300));
       } else if (activeServer) {
         try {
-          await api(`/api/servers/${activeServer.id}/mods`, {
+          const result = await api<{ filename: string; enabled: boolean }>(`/api/servers/${activeServer.id}/mods`, {
             method: "PATCH",
-            body: JSON.stringify({ filename, enabled: runEnabled })
+            body: JSON.stringify({ filename: currentFilename, enabled: runEnabled })
           });
+          const nextFilename = result.filename || currentFilename;
+          setInstalledMods((current) => current.map((m) => m.filename === currentFilename ? {
+            ...m,
+            filename: nextFilename,
+            displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"),
+            enabled: result.enabled
+          } : m));
+          currentFilename = nextFilename;
           void loadFiles(activeServer.id, "/mods");
         } catch (error) {
           const errorMsg = (error as Error).message;
@@ -1506,15 +1515,18 @@ export default function App() {
           notify("error", `Failed to toggle mod ${modDisplayName}: ${errorMsg}`);
 
           const rollBackTo = !runEnabled;
-          setInstalledMods((current) => current.map((m) => m.filename === filename ? { ...m, enabled: rollBackTo } : m));
+          setInstalledMods((current) => current.map((m) => m.filename === currentFilename ? { ...m, enabled: rollBackTo } : m));
           if (demoMode) {
-            setDemoInstalledMods((current) => current.map((m) => m.filename === filename ? { ...m, enabled: rollBackTo } : m));
+            setDemoInstalledMods((current) => current.map((m) => m.filename === currentFilename ? { ...m, enabled: rollBackTo } : m));
           }
-          queueItem.targetEnabled = rollBackTo;
+          break;
         }
       }
 
       queueItem.inFlightEnabled = null;
+      if (queueItem.targetEnabled === runEnabled) {
+        break;
+      }
     }
 
     delete modToggleStateQueueRef.current[filename];

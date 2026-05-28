@@ -2214,24 +2214,27 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.body.filename);
   const enabled = Boolean(request.body.enabled);
-  const source = await validateExistingInsideServer(server, join("mods", filename));
+  const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join("mods", filename)))
+    ? `${filename}.disabled`
+    : filename;
+  const source = await validateExistingInsideServer(server, join("mods", sourceName));
   const targetName = enabled
-    ? filename.replace(/\.jar\.disabled$/, ".jar")
-    : filename.endsWith(".jar.disabled")
-      ? filename
-      : `${filename}.disabled`;
-  if (filename === targetName) {
+    ? sourceName.replace(/\.jar\.disabled$/, ".jar")
+    : sourceName.endsWith(".jar.disabled")
+      ? sourceName
+      : `${sourceName}.disabled`;
+  if (sourceName === targetName) {
     return { ok: true, filename: targetName, enabled };
   }
   const target = await ensureWritableInsideServer(server, join("mods", safeInstalledModFilename(targetName)));
   await rename(source, target);
   const prefs = await readModPreferences(server);
-  if (prefs[filename]) {
+  if (prefs[sourceName]) {
     prefs[targetName] = {
-      ...prefs[filename],
-      modrinth: prefs[filename].modrinth ? { ...prefs[filename].modrinth, filename: targetName } : undefined
+      ...prefs[sourceName],
+      modrinth: prefs[sourceName].modrinth ? { ...prefs[sourceName].modrinth, filename: targetName } : undefined
     };
-    delete prefs[filename];
+    delete prefs[sourceName];
     await writeModPreferences(server, prefs);
   }
   return { ok: true, filename: basename(target), enabled };
