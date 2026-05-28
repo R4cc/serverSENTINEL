@@ -37,7 +37,7 @@ export function AuthPanel({
             {setupRequired && (
               <label>
                 Confirm password
-                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={1} placeholder="Repeat password" />
+                <input name="confirmPassword" type="password" autoComplete="new-password" minLength={1} placeholder="Repeat password" />
               </label>
             )}
             <button>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
