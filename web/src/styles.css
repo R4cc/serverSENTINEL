@@ -1241,6 +1241,59 @@ button .buttonIcon {
   color: var(--swiss-white);
 }
 
+.inlineState {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.inlineState div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inlineState strong {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inlineState span {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.inlineState-loading {
+  border-color: var(--accent);
+  background:
+    repeating-linear-gradient(45deg, rgb(56 88 233 / 0.08) 0 1px, transparent 1px 10px),
+    var(--surface);
+}
+
+.inlineState-error {
+  border-color: var(--sentinel-danger);
+  color: var(--sentinel-danger);
+  background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-danger) 14%);
+}
+
+.inlineState-warning {
+  border-color: var(--sentinel-warning);
+  background: color-mix(in srgb, var(--surface) 88%, var(--sentinel-warning) 12%);
+}
+
+.inlineState-empty {
+  border-style: dashed;
+}
+
 .progressTrack {
   height: 14px;
   border: var(--border-strong) solid var(--border);

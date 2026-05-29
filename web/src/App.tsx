@@ -94,6 +94,50 @@ function readCommandHistory() {
   }
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : "";
+  if (!message) return fallback;
+  if (/timeout|timed out/i.test(message)) {
+    return "The request timed out. The server may still be busy.";
+  }
+  if (/docker|socket/i.test(message)) {
+    return message.includes("not mounted")
+      ? "Docker socket is not mounted. Runtime controls are unavailable."
+      : message;
+  }
+  return message;
+}
+
+function InlineState({
+  tone = "info",
+  title,
+  message,
+  actionLabel,
+  onAction,
+  busy = false
+}: {
+  tone?: "info" | "loading" | "error" | "warning" | "empty";
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <div className={`inlineState inlineState-${tone}`} role={tone === "error" ? "alert" : "status"}>
+      <div>
+        <strong>{title}</strong>
+        <span>{message}</span>
+      </div>
+      {onAction && actionLabel && (
+        <button type="button" className="secondaryButton" onClick={onAction} disabled={busy}>
+          {busy ? "Working..." : actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
@@ -120,9 +164,25 @@ export default function App() {
   const [installedQuery, setInstalledQuery] = useState("");
   const [detailsMod, setDetailsMod] = useState<InstalledMod | null>(null);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
+  const [appLoadError, setAppLoadError] = useState("");
+  const [appRefreshing, setAppRefreshing] = useState(false);
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const [consoleLoading, setConsoleLoading] = useState(false);
+  const [consoleError, setConsoleError] = useState("");
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState("");
+  const [fileReadError, setFileReadError] = useState("");
+  const [fileSaving, setFileSaving] = useState(false);
+  const [modsLoading, setModsLoading] = useState(false);
+  const [modsError, setModsError] = useState("");
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
   const [commandInput, setCommandInput] = useState("");
+  const [commandSending, setCommandSending] = useState(false);
   const [commandInputFocused, setCommandInputFocused] = useState(false);
   const [consolePinnedToBottom, setConsolePinnedToBottom] = useState(true);
   const [pendingConsoleEntries, setPendingConsoleEntries] = useState(0);
@@ -133,6 +193,7 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
+  const [scheduleBusy, setScheduleBusy] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>("overview");
@@ -490,13 +551,21 @@ export default function App() {
     }
     const serverId = activeServer.id;
     let cancelled = false;
-    setOverviewData({ events: [], activity: {} });
+    setOverviewLoading(!overviewData.events.length && Object.keys(overviewData.activity).length === 0);
+    setOverviewError("");
     async function loadOverviewData() {
       try {
         const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
-        if (!cancelled) setOverviewData(data);
-      } catch {
-        if (!cancelled) setOverviewData({ events: [], activity: {} });
+        if (!cancelled) {
+          setOverviewData(data);
+          setOverviewError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
+        }
+      } finally {
+        if (!cancelled) setOverviewLoading(false);
       }
     }
     void loadOverviewData();
@@ -541,7 +610,7 @@ export default function App() {
         if (!cancelled) setModSearchResults(result.hits);
       } catch (error) {
         if (!cancelled) {
-          const message = (error as Error).message;
+          const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
           setModSearchError(message);
           setNotice(message);
           notify("error", message);
@@ -638,11 +707,17 @@ export default function App() {
 
   async function loadUsers() {
     if (!canAdmin) return;
+    setUsersLoading(true);
+    setUsersError("");
     try {
       const result = await api<{ users: PublicUser[] }>("/api/users");
       setUsers(result.users);
     } catch (error) {
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not load users. Check your permissions and try again.");
+      setUsersError(message);
+      notify("error", message);
+    } finally {
+      setUsersLoading(false);
     }
   }
 
@@ -712,19 +787,25 @@ export default function App() {
     if (!demoMode && (!authSession || !authSession.authenticated)) {
       return;
     }
+    setAppRefreshing(true);
     setNotice("");
     try {
       const next = await api<AppState>("/api/app");
       setAppState(next);
       setAppStateLoaded(true);
+      setAppLoadError("");
       if (demoMode) {
         setActiveServerId(demoServerId);
       } else if (!activeServerId && next.servers[0]) {
         setActiveServerId(next.servers[0].id);
       }
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not load the application state. Check the server connection and retry.");
+      setAppLoadError(message);
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      setAppRefreshing(false);
     }
   }
 
@@ -741,9 +822,12 @@ export default function App() {
       const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`);
       if (activeServerIdRef.current === serverId) {
         setStatus(nextStatus);
+        setStatusError("");
       }
     } catch (error) {
-      setNotice((error as Error).message);
+      if (activeServerIdRef.current === serverId) {
+        setStatusError(errorMessage(error, "Could not refresh server status. Existing status is preserved."));
+      }
     }
   }
 
@@ -758,13 +842,20 @@ export default function App() {
       }
       return;
     }
+    setConsoleLoading(logs.length === 0);
+    setConsoleError("");
     try {
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
       setLogs(lines.map((line) => `[${result.source}] ${line}`));
-    } catch {
+    } catch (error) {
+      if (activeServerIdRef.current === serverId) {
+        setConsoleError(errorMessage(error, "Could not load console logs. Runtime logs may be unavailable."));
+      }
       setConsoleStreamVersion((version) => version + 1);
+    } finally {
+      if (activeServerIdRef.current === serverId) setConsoleLoading(false);
     }
   }
 
@@ -984,10 +1075,11 @@ export default function App() {
 
   async function sendCommand(event: FormEvent) {
     event.preventDefault();
-    if (isProvisioning || !canExpanded) return;
+    if (isProvisioning || commandSending || !canExpanded) return;
     if (!activeServer) return;
     const command = commandInput.trim().replace(/^\//, "");
     if (!command) return;
+    setCommandSending(true);
     setNotice("");
     try {
       if (activeServerIsDemo) {
@@ -1017,9 +1109,12 @@ export default function App() {
       setCommandInput("");
       notify("success", `Sent command: ${command}`);
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not send the console command. Refresh server status and try again.");
+      setNotice(message);
+      notify("error", message);
       await refreshStatus(activeServer.id);
+    } finally {
+      setCommandSending(false);
     }
   }
 
@@ -1055,46 +1150,63 @@ export default function App() {
 
   async function loadFiles(serverId: string, path: string) {
     if (isProvisioning) return;
+    setFilesLoading(true);
+    setFilesError("");
     setNotice("");
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
         setListing(demoListing(path, demoFiles, demoInstalledMods));
       }
+      setFilesLoading(false);
       return;
     }
     try {
       const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
+        setFilesError("");
       }
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
+      setFilesError(message);
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      if (activeServerIdRef.current === serverId) setFilesLoading(false);
     }
   }
 
   async function loadInstalledMods(serverId: string) {
     if (isProvisioning) return;
+    setModsLoading(true);
+    setModsError("");
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
         setInstalledMods(demoInstalledMods);
       }
+      setModsLoading(false);
       return;
     }
     try {
       const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods`);
       if (activeServerIdRef.current === serverId) {
         setInstalledMods(result.mods);
+        setModsError("");
       }
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
+      setModsError(message);
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      if (activeServerIdRef.current === serverId) setModsLoading(false);
     }
   }
 
   async function openFile(path: string) {
     if (isProvisioning) return;
     if (!activeServer) return;
+    setFileReadError("");
     setNotice("");
     if (activeServerIsDemo) {
       const content = demoFiles[path] ?? `Demo binary or generated file: ${path}`;
@@ -1113,7 +1225,9 @@ export default function App() {
       setSavedEditorText(file.content);
       setDirty(false);
     } catch (error) {
-      setNotice((error as Error).message);
+      const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
+      setFileReadError(message);
+      setNotice(message);
     }
   }
 
@@ -1166,6 +1280,8 @@ export default function App() {
   async function saveFile() {
     if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
+    if (fileSaving) return;
+    setFileSaving(true);
     setNotice("");
     if (activeServerIsDemo) {
       setDemoFiles((current) => ({ ...current, [selectedPath]: editorText }));
@@ -1173,6 +1289,7 @@ export default function App() {
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
+      setFileSaving(false);
       return;
     }
     try {
@@ -1186,8 +1303,11 @@ export default function App() {
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not save the file. Review the path and try again.");
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      setFileSaving(false);
     }
   }
 
@@ -1219,7 +1339,7 @@ export default function App() {
       );
       setModSearchResults(result.hits);
     } catch (error) {
-      const message = (error as Error).message;
+      const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
       setModSearchError(message);
       setNotice(message);
       notify("error", message);
@@ -1614,8 +1734,9 @@ export default function App() {
 
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || !canExpanded || !activeServer) return;
     setNotice("");
+    setScheduleBusy(true);
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     if (activeServerIsDemo) {
@@ -1633,6 +1754,7 @@ export default function App() {
       setDemoSchedules((current) => [schedule, ...current]);
       formElement.reset();
       notify("success", "Demo scheduled execution created");
+      setScheduleBusy(false);
       return;
     }
     try {
@@ -1650,13 +1772,17 @@ export default function App() {
       notify("success", "Scheduled execution created");
       await refreshApp();
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not create the schedule. Check the cron expression and commands.");
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      setScheduleBusy(false);
     }
   }
 
   async function updateSchedule(schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) {
-    if (isProvisioning || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || !canExpanded || !activeServer) return;
+    setScheduleBusy(true);
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.map((candidate) => (
         candidate.id === schedule.id
@@ -1664,6 +1790,7 @@ export default function App() {
           : candidate
       )));
       notify("success", patch.enabled ? "Schedule enabled" : "Schedule disabled");
+      setScheduleBusy(false);
       return;
     }
     try {
@@ -1681,16 +1808,21 @@ export default function App() {
       notify("success", next.enabled ? "Schedule enabled" : "Schedule disabled");
       await refreshApp();
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not update the schedule. Try again after refreshing.");
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      setScheduleBusy(false);
     }
   }
 
   async function deleteSchedule(schedule: ScheduledExecution) {
-    if (isProvisioning || dockerOperationalLock || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return;
+    setScheduleBusy(true);
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
       notify("success", `Deleted ${schedule.name}`);
+      setScheduleBusy(false);
       return;
     }
     try {
@@ -1698,8 +1830,11 @@ export default function App() {
       notify("success", `Deleted ${schedule.name}`);
       await refreshApp();
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not delete the schedule. Try again after refreshing.");
+      setNotice(message);
+      notify("error", message);
+    } finally {
+      setScheduleBusy(false);
     }
   }
 
@@ -1893,6 +2028,25 @@ export default function App() {
 
         {notice && <div className="notice">{notice}</div>}
 
+        {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && (
+          <InlineState
+            tone="loading"
+            title="Loading application"
+            message="Loading servers, settings, and runtime availability."
+          />
+        )}
+
+        {appLoadError && (
+          <InlineState
+            tone="error"
+            title="Could not load application state"
+            message={appLoadError}
+            actionLabel="Retry"
+            onAction={() => void refreshApp()}
+            busy={appRefreshing}
+          />
+        )}
+
         {activePage === "servers" && (
           <section className="pageStack">
             {effectiveAppState.servers.length > 0 ? (
@@ -2028,6 +2182,19 @@ export default function App() {
                   </div>
                   <button type="button" onClick={() => setUserModal("create")}>New user</button>
                 </div>
+                {usersLoading && (
+                  <InlineState tone="loading" title="Loading users" message="Loading user accounts and permissions." />
+                )}
+                {usersError && (
+                  <InlineState
+                    tone="error"
+                    title="Could not load users"
+                    message={usersError}
+                    actionLabel="Retry"
+                    onAction={() => void loadUsers()}
+                    busy={usersLoading}
+                  />
+                )}
                 <UserManagement
                   users={users}
                   currentUserId={authSession.user?.id}
@@ -2166,8 +2333,42 @@ export default function App() {
               </div>
             </div>
 
+            {statusError && (
+              <InlineState
+                tone="warning"
+                title="Status refresh failed"
+                message={statusError}
+                actionLabel="Refresh status"
+                onAction={() => void refreshStatus()}
+              />
+            )}
+
             {activePage === "overview" && (
               <section className="tabPage overviewPage">
+                {overviewLoading && (
+                  <InlineState
+                    tone="loading"
+                    title="Loading overview"
+                    message="Loading activity, health, and recent events."
+                  />
+                )}
+                {overviewError && (
+                  <InlineState
+                    tone="warning"
+                    title="Overview refresh failed"
+                    message={overviewError}
+                    actionLabel="Retry"
+                    onAction={() => {
+                      setOverviewError("");
+                      setOverviewLoading(true);
+                      void api<ServerOverviewData>(`/api/servers/${activeServer.id}/events`)
+                        .then((data) => setOverviewData(data))
+                        .catch((error) => setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved.")))
+                        .finally(() => setOverviewLoading(false));
+                    }}
+                    busy={overviewLoading}
+                  />
+                )}
                 <OverviewSummary
                   server={activeServer}
                   status={activeStatus}
@@ -2209,6 +2410,19 @@ export default function App() {
                       </span>
                     </div>
                   </div>
+                  {consoleLoading && (
+                    <InlineState tone="loading" title="Loading logs" message="Loading recent console output." />
+                  )}
+                  {consoleError && (
+                    <InlineState
+                      tone="warning"
+                      title="Could not load logs"
+                      message={consoleError}
+                      actionLabel="Retry"
+                      onAction={() => void refreshConsoleLogs(activeServer.id)}
+                      busy={consoleLoading}
+                    />
+                  )}
                   <div className="terminal">
                     <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
                       {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No log output yet.</span>}
@@ -2261,7 +2475,9 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <button disabled={isProvisioning || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()}>Send</button>
+                      <button disabled={commandSending || isProvisioning || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()}>
+                        {commandSending ? "Sending" : "Send"}
+                      </button>
                     </form>
                   </div>
                 </section>
@@ -2277,9 +2493,25 @@ export default function App() {
                   </div>
                   <div className="fileActions">
                     <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"}>Up</button>
-                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning}>Refresh</button>
+                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading}>{filesLoading ? "Refreshing" : "Refresh"}</button>
                   </div>
+                  {filesLoading && listing.entries.length === 0 && (
+                    <InlineState tone="loading" title="Loading files" message="Loading the current server directory." />
+                  )}
+                  {filesError && (
+                    <InlineState
+                      tone="error"
+                      title="Could not load server files"
+                      message={filesError}
+                      actionLabel="Retry"
+                      onAction={() => void loadFiles(activeServer.id, listing.path)}
+                      busy={filesLoading}
+                    />
+                  )}
                   <div className="fileList">
+                    {!filesLoading && !filesError && listing.entries.length === 0 && (
+                      <InlineState tone="empty" title="Directory is empty" message="No files or folders were found at this path." />
+                    )}
                     {listing.entries.map((entry) => (
                       <article key={entry.path} className="fileRow">
                         <button
@@ -2305,11 +2537,20 @@ export default function App() {
                     <code>{selectedPath || "No file selected"}</code>
                   </div>
                   <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath} spellCheck={false} />
+                  {fileReadError && (
+                    <InlineState
+                      tone="error"
+                      title="Could not open file"
+                      message={fileReadError}
+                      actionLabel={selectedPath ? "Retry" : undefined}
+                      onAction={selectedPath ? () => void openFile(selectedPath) : undefined}
+                    />
+                  )}
                   <div className="buttonRow">
                     {dirty && (
                       <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
                     )}
-                    <button onClick={saveFile} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>Save</button>
+                    <button onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>{fileSaving ? "Saving" : "Save"}</button>
                   </div>
                 </section>
               </section>
@@ -2397,6 +2638,20 @@ export default function App() {
                           />
                         </div>
                       </div>
+
+                      {modsLoading && installedMods.length === 0 && (
+                        <InlineState tone="loading" title="Loading installed mods" message="Reading the server mods folder and compatibility metadata." />
+                      )}
+                      {modsError && (
+                        <InlineState
+                          tone="error"
+                          title="Could not load installed mods"
+                          message={modsError}
+                          actionLabel="Retry"
+                          onAction={() => void loadInstalledMods(activeServer.id)}
+                          busy={modsLoading}
+                        />
+                      )}
 
                       <div className="modsTable">
                         <div className="modsTableHeader">
@@ -2625,10 +2880,17 @@ export default function App() {
                           </div>
                         )}
                         {!isSearchingMods && modSearchError && (
-                          <div className="emptyInline">
-                            <strong>Search request failed</strong>
-                            <span>{modSearchError}</span>
-                          </div>
+                          <InlineState
+                            tone="error"
+                            title="Search request failed"
+                            message={modSearchError}
+                            actionLabel={query.trim() ? "Retry search" : undefined}
+                            onAction={query.trim() ? () => {
+                              setModSearchError("");
+                              void searchMods({ preventDefault() {} } as FormEvent);
+                            } : undefined}
+                            busy={isSearchingMods}
+                          />
                         )}
                         {!isSearchingMods && !modSearchError && query.trim() && modSearchResults.length === 0 && (
                           <div className="emptyInline">
@@ -2818,7 +3080,7 @@ export default function App() {
                 onCreate={createSchedule}
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onDelete={deleteSchedule}
-                disabled={isProvisioning || !canExpanded}
+                disabled={scheduleBusy || isProvisioning || !canExpanded}
                 commandInputMessage={activeStatus?.commandInputAvailable ? "" : activeStatus?.commandInputMessage || "Scheduled commands need Docker command input when they run."}
               />
             )}
