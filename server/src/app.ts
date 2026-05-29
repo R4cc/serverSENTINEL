@@ -27,7 +27,6 @@ import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
 import type {
-  AppSettings,
   DockerExecCreate,
   DockerExecInspect,
   DockerState,
@@ -465,7 +464,7 @@ function detectVersionsFromLogText(logText: string): VersionMetadata {
 async function detectVersionsFromLogs(server: ManagedServer) {
   const logs = await Promise.allSettled([
     readLatestServerLog(server),
-    dockerRecentLogs(server)
+    dockerControlConfigured(server) ? dockerRecentLogs(server) : Promise.resolve("")
   ]);
   const text = logs
     .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
@@ -1295,7 +1294,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
 async function serverOverviewData(server: ManagedServer) {
   const [fileLog, dockerLog, properties, eula, dockerInspect] = await Promise.allSettled([
     readLatestServerLog(server),
-    dockerRecentLogs(server),
+    dockerControlConfigured(server) ? dockerRecentLogs(server) : Promise.resolve(""),
     validateExistingInsideServer(server, "server.properties").then((path) => readFile(path, "utf8")),
     validateExistingInsideServer(server, "eula.txt").then((path) => readFile(path, "utf8")),
     dockerControlConfigured(server) ? dockerRequest<DockerContainerInspect>("GET", `/containers/${encodeURIComponent(dockerContainerName(server))}/json`, 200) : Promise.resolve(null)
