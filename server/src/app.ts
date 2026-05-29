@@ -25,7 +25,7 @@ import {
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
-import { modrinthApiKey, readSettings, writeSettings } from "./storage/settingsStore.js";
+import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
 import type {
   AppSettings,
   DockerExecCreate,
@@ -57,12 +57,16 @@ import {
   safeModFilename,
   validateExistingInsideServer,
   validateExistingResolvedInsideServer,
-  validateCron
+  validateCron,
+  AsyncQueue
 } from "./core.js";
 
 const serversFile = join(config.configDir, "servers.json");
 const usersFile = join(config.configDir, "users.json");
 const versionMetadataFilename = ".serversentinel-version.json";
+
+const serversQueue = new AsyncQueue();
+const usersQueue = new AsyncQueue();
 
 
 type DockerContainerInspect = {
@@ -288,6 +292,18 @@ async function writeUsers(users: StoredUser[]) {
   await writeFile(usersFile, `${JSON.stringify(users, null, 2)}\n`, "utf8");
 }
 
+function queuedReadUsers() {
+  return usersQueue.enqueue(() => readUsers());
+}
+
+async function updateUsers(updater: (users: StoredUser[]) => Promise<void> | void) {
+  return usersQueue.enqueue(async () => {
+    const users = await readUsers();
+    await updater(users);
+    await writeUsers(users);
+  });
+}
+
 function parseCookies(cookieHeader?: string) {
   const cookies = new Map<string, string>();
   for (const part of (cookieHeader ?? "").split(";")) {
@@ -298,8 +314,8 @@ function parseCookies(cookieHeader?: string) {
   return cookies;
 }
 
-function sessionCookie(sessionId: string, maxAgeSeconds: number) {
-  return `${sessionCookieName}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+function sessionCookie(sessionId: string, maxAgeSeconds: number, secure = false) {
+  return `${sessionCookieName}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${secure ? "; Secure" : ""}`;
 }
 
 async function currentUserFromCookie(cookieHeader?: string) {
@@ -307,7 +323,7 @@ async function currentUserFromCookie(cookieHeader?: string) {
   if (!sessionId) return null;
   const session = sessions.get(sessionId);
   if (!session) return null;
-  const users = await readUsers();
+  const users = await queuedReadUsers();
   return users.find((user) => user.id === session.userId) ?? null;
 }
 
@@ -513,6 +529,18 @@ async function writeServers(servers: ManagedServer[]) {
   await writeFile(serversFile, `${JSON.stringify(servers, null, 2)}\n`, "utf8");
 }
 
+function queuedReadServers() {
+  return serversQueue.enqueue(() => readServers());
+}
+
+async function updateServers(updater: (servers: ManagedServer[]) => Promise<void> | void) {
+  return serversQueue.enqueue(async () => {
+    const servers = await readServers();
+    await updater(servers);
+    await writeServers(servers);
+  });
+}
+
 function slugify(input: string) {
   const slug = input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || randomUUID();
@@ -534,7 +562,7 @@ function defaultDockerImageForMinecraftVersion(version?: string) {
 }
 
 async function getServer(serverId?: string) {
-  const servers = await readServers();
+  const servers = await queuedReadServers();
   const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
   if (!server) {
     throw new Error("No managed server instance is registered");
@@ -1555,9 +1583,9 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     }
 
     report?.(92, "Saving server registration");
-    const servers = await readServers();
-    servers.push(server);
-    await writeServers(servers);
+    await updateServers((servers) => {
+      servers.push(server);
+    });
     report?.(100, "Server setup complete");
     logInfo({ ...serverLogFields(server), jobId, durationMs: durationSince(startedAt), status: "succeeded" }, "Provisioning succeeded");
     return server;
@@ -1647,6 +1675,11 @@ function scheduleFromBody(body: {
 async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution) {
   const startedAt = Date.now();
   try {
+    const status = await dockerStatus(server);
+    if (!status.running) {
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
+      return { status: "skipped", message: "Skipped because Minecraft server is stopped" };
+    }
     if (schedule.onlyWhenNoPlayers) {
       const count = await onlinePlayerCount(server);
       if (count === null) {
@@ -1675,7 +1708,7 @@ const runningSchedules = new Set<string>();
 async function tickSchedules() {
   const now = new Date();
   const runKey = now.toISOString().slice(0, 16);
-  const servers = await readServers();
+  const servers = await queuedReadServers();
   let changed = false;
 
   for (const server of servers) {
@@ -1706,7 +1739,21 @@ async function tickSchedules() {
   }
 
   if (changed) {
-    await writeServers(servers);
+    await updateServers((currentServers) => {
+      for (const server of servers) {
+        const currentServer = currentServers.find((s) => s.id === server.id);
+        if (!currentServer) continue;
+        for (const schedule of server.schedules ?? []) {
+          const currentSchedule = currentServer.schedules?.find((sch) => sch.id === schedule.id);
+          if (currentSchedule) {
+            currentSchedule.lastRunAt = schedule.lastRunAt;
+            currentSchedule.lastStatus = schedule.lastStatus;
+            currentSchedule.lastMessage = schedule.lastMessage;
+            currentSchedule.updatedAt = schedule.updatedAt;
+          }
+        }
+      }
+    });
   }
 }
 
@@ -1728,8 +1775,24 @@ const app = Fastify({
 appLogger = app.log;
 await app.register(websocket);
 
+app.addHook("onRequest", async (request, reply) => {
+  if (request.method === "GET" && !request.url.startsWith("/api/")) {
+    return;
+  }
+  if (request.url.startsWith("/ws/")) {
+    return;
+  }
+  if (request.url.startsWith("/api/")) {
+    const requestedWith = request.headers["x-requested-with"];
+    if (requestedWith !== "XMLHttpRequest") {
+      reply.code(400);
+      throw new Error("CSRF protection: missing or invalid X-Requested-With header");
+    }
+  }
+});
+
 app.get("/api/auth/session", async (request) => {
-  const users = await readUsers();
+  const users = await queuedReadUsers();
   const user = await currentUserFromCookie(request.headers.cookie);
   return {
     authenticated: Boolean(user),
@@ -1739,12 +1802,6 @@ app.get("/api/auth/session", async (request) => {
 });
 
 app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", async (request, reply) => {
-  const users = await readUsers();
-  if (users.length > 0) {
-    const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
-    error.statusCode = 403;
-    throw error;
-  }
   const username = validateUsername(request.body.username);
   const password = validatePassword(request.body.password);
   const now = new Date().toISOString();
@@ -1757,10 +1814,18 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register
     updatedAt: now,
     ...passwordData
   };
-  await writeUsers([user]);
+  await updateUsers((users) => {
+    if (users.length > 0) {
+      const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
+      error.statusCode = 403;
+      throw error;
+    }
+    users.push(user);
+  });
   const sessionId = randomBytes(32).toString("base64url");
   sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
-  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14));
+  const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
+  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
   logInfo({ userId: user.id, username: user.username, role: user.role, action: "register_first" }, "Initial admin user created");
   return { authenticated: true, setupRequired: false, user: publicUser(user) };
 });
@@ -1770,9 +1835,9 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", 
   const password = request.body.password ?? "";
   if (username === "demo" && password === "demo") {
     logInfo({ username: "demo", action: "login_demo" }, "Demo login requested");
-    return { authenticated: false, setupRequired: (await readUsers()).length === 0, demo: true, user: null };
+    return { authenticated: false, setupRequired: (await queuedReadUsers()).length === 0, demo: true, user: null };
   }
-  const users = await readUsers();
+  const users = await queuedReadUsers();
   const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
   if (!user || !verifyPassword(password, user)) {
     logWarn({ username, action: "login", status: "failed" }, "Login failed");
@@ -1783,7 +1848,8 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", 
   const sessionId = randomBytes(32).toString("base64url");
   const now = new Date().toISOString();
   sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
-  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14));
+  const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
+  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
   logInfo({ userId: user.id, username: user.username, role: user.role, action: "login", status: "succeeded" }, "Login succeeded");
   return { authenticated: true, setupRequired: false, user: publicUser(user) };
 });
@@ -1800,7 +1866,7 @@ app.post("/api/auth/logout", async (request, reply) => {
 
 app.get("/api/users", async (request) => {
   await requireRequestPermission(request, "admin");
-  return { users: (await readUsers()).map(publicUser) };
+  return { users: (await queuedReadUsers()).map(publicUser) };
 });
 
 app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/api/users", async (request) => {
@@ -1808,84 +1874,92 @@ app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/
   const username = validateUsername(request.body.username);
   const password = validatePassword(request.body.password);
   const role = normalizeRole(request.body.role);
-  const users = await readUsers();
-  if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
-    const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  const now = new Date().toISOString();
-  const user: StoredUser = {
-    id: randomUUID(),
-    username,
-    role,
-    createdAt: now,
-    updatedAt: now,
-    ...hashPassword(password)
-  };
-  users.push(user);
-  await writeUsers(users);
-  logInfo({ userId: user.id, username: user.username, role: user.role, action: "create_user" }, "User created");
-  return publicUser(user);
+  let createdUser: StoredUser | null = null;
+  await updateUsers((users) => {
+    if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
+      const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
+      error.statusCode = 400;
+      throw error;
+    }
+    const now = new Date().toISOString();
+    createdUser = {
+      id: randomUUID(),
+      username,
+      role,
+      createdAt: now,
+      updatedAt: now,
+      ...hashPassword(password)
+    };
+    users.push(createdUser);
+  });
+  logInfo({ userId: createdUser!.id, username: createdUser!.username, role: createdUser!.role, action: "create_user" }, "User created");
+  return publicUser(createdUser!);
 });
 
 app.put<{ Params: { id: string }; Body: { username?: string; password?: string; role?: UserRole } }>("/api/users/:id", async (request) => {
   await requireRequestPermission(request, "admin");
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === request.params.id);
-  if (index === -1) {
-    const error = new Error("User not found") as Error & { statusCode?: number };
-    error.statusCode = 404;
-    throw error;
-  }
-  const current = users[index];
-  const username = request.body.username === undefined ? current.username : validateUsername(request.body.username);
-  const role = request.body.role === undefined ? current.role : normalizeRole(request.body.role);
-  const password = request.body.password?.trim() ? validatePassword(request.body.password) : undefined;
-  if (users.some((user) => user.id !== current.id && user.username.toLowerCase() === username.toLowerCase())) {
-    const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  const adminCount = users.filter((user) => user.role === "admin").length;
-  if (current.role === "admin" && role !== "admin" && adminCount <= 1) {
-    const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  users[index] = {
-    ...current,
-    username,
-    role,
-    updatedAt: new Date().toISOString(),
-    ...(password ? hashPassword(password) : {})
-  };
-  await writeUsers(users);
-  logInfo({ userId: users[index].id, username: users[index].username, role: users[index].role, action: "update_user" }, "User updated");
-  return publicUser(users[index]);
+  let updatedUser: StoredUser | null = null;
+  await updateUsers((users) => {
+    const index = users.findIndex((user) => user.id === request.params.id);
+    if (index === -1) {
+      const error = new Error("User not found") as Error & { statusCode?: number };
+      error.statusCode = 404;
+      throw error;
+    }
+    const current = users[index];
+    const username = request.body.username === undefined ? current.username : validateUsername(request.body.username);
+    const role = request.body.role === undefined ? current.role : normalizeRole(request.body.role);
+    const password = request.body.password?.trim() ? validatePassword(request.body.password) : undefined;
+    if (users.some((user) => user.id !== current.id && user.username.toLowerCase() === username.toLowerCase())) {
+      const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
+      error.statusCode = 400;
+      throw error;
+    }
+    const adminCount = users.filter((user) => user.role === "admin").length;
+    if (current.role === "admin" && role !== "admin" && adminCount <= 1) {
+      const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
+      error.statusCode = 400;
+      throw error;
+    }
+    users[index] = {
+      ...current,
+      username,
+      role,
+      updatedAt: new Date().toISOString(),
+      ...(password ? hashPassword(password) : {})
+    };
+    updatedUser = users[index];
+  });
+  logInfo({ userId: updatedUser!.id, username: updatedUser!.username, role: updatedUser!.role, action: "update_user" }, "User updated");
+  return publicUser(updatedUser!);
 });
 
 app.delete<{ Params: { id: string } }>("/api/users/:id", async (request) => {
   await requireRequestPermission(request, "admin");
-  const users = await readUsers();
-  const user = users.find((candidate) => candidate.id === request.params.id);
-  if (!user) {
-    const error = new Error("User not found") as Error & { statusCode?: number };
-    error.statusCode = 404;
-    throw error;
-  }
-  if (user.role === "admin" && users.filter((candidate) => candidate.role === "admin").length <= 1) {
-    const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  await writeUsers(users.filter((candidate) => candidate.id !== request.params.id));
+  let deletedUser: StoredUser | null = null;
+  await updateUsers((users) => {
+    const index = users.findIndex((candidate) => candidate.id === request.params.id);
+    if (index === -1) {
+      const error = new Error("User not found") as Error & { statusCode?: number };
+      error.statusCode = 404;
+      throw error;
+    }
+    const user = users[index];
+    if (user.role === "admin" && users.filter((candidate) => candidate.role === "admin").length <= 1) {
+      const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
+      error.statusCode = 400;
+      throw error;
+    }
+    users.splice(index, 1);
+    deletedUser = user;
+  });
+
   for (const [sessionId, session] of sessions) {
     if (session.userId === request.params.id) {
       sessions.delete(sessionId);
     }
   }
-  logInfo({ userId: user.id, username: user.username, action: "delete_user" }, "User deleted");
+  logInfo({ userId: deletedUser!.id, username: deletedUser!.username, action: "delete_user" }, "User deleted");
   return { ok: true };
 });
 
@@ -1908,7 +1982,7 @@ app.addHook("preHandler", async (request) => {
 app.get("/api/app", async (request) => {
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
   const user = demoMode ? null : await requireRequestPermission(request);
-  const servers = await readServers();
+  const servers = await queuedReadServers();
   return {
     servers: await Promise.all(servers.map(publicServer)),
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
@@ -1924,9 +1998,9 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
   if (!key) {
     throw new Error("Modrinth API key is required");
   }
-  const settings = await readSettings();
-  settings.modrinthApiKey = key;
-  await writeSettings(settings);
+  await updateSettings((settings) => {
+    settings.modrinthApiKey = key;
+  });
   logInfo({ action: "configure_modrinth", status: "succeeded" }, "Modrinth API configuration updated");
   return { ok: true, modrinthApiConfigured: true };
 });
@@ -1983,54 +2057,60 @@ app.put<{
   };
 }>("/api/servers/:id", async (request) => {
   await requireRequestPermission(request, "manager");
-  const servers = await readServers();
-  const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-  if (index === -1) {
-    throw new Error("Server not found");
-  }
+  let updatedServer: ManagedServer | null = null;
+  await updateServers(async (servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
+    if (index === -1) {
+      throw new Error("Server not found");
+    }
 
-  const current = servers[index];
-  const minecraftVersion = request.body.minecraftVersion?.trim() || current.minecraftVersion;
-  const loaderVersion = request.body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
-  const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
-  const serverJar = request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar";
-  const serverPort = request.body.serverPort?.trim();
-  if (serverPort && !isValidServerPort(serverPort)) {
-    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-  }
+    const current = servers[index];
+    const status = await dockerStatus(current);
+    if (status.running) {
+      throw new Error("Stop the server before changing its configuration");
+    }
+    const minecraftVersion = request.body.minecraftVersion?.trim() || current.minecraftVersion;
+    const loaderVersion = request.body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
+    const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
+    const serverJar = request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar";
+    const serverPort = request.body.serverPort?.trim();
+    if (serverPort && !isValidServerPort(serverPort)) {
+      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+    }
 
-  const jarChanged = current.minecraftVersion !== minecraftVersion
-    || current.loaderVersion !== loaderVersion
-    || current.installerVersion !== installerVersion
-    || current.serverJar !== serverJar;
+    const jarChanged = current.minecraftVersion !== minecraftVersion
+      || current.loaderVersion !== loaderVersion
+      || current.installerVersion !== installerVersion
+      || current.serverJar !== serverJar;
 
-  const updated: ManagedServer = {
-    ...current,
-    displayName: request.body.displayName?.trim() || current.displayName,
-    minecraftVersion,
-    loaderVersion,
-    installerVersion,
-    serverJar,
-    dockerContainer: request.body.dockerContainer?.trim() || current.dockerContainer,
-    dockerImage: request.body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion),
-    dockerPorts: request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts),
-    javaArgs: request.body.javaArgs?.trim() || current.javaArgs,
-    updatedAt: new Date().toISOString()
-  };
+    const updated: ManagedServer = {
+      ...current,
+      displayName: request.body.displayName?.trim() || current.displayName,
+      minecraftVersion,
+      loaderVersion,
+      installerVersion,
+      serverJar,
+      dockerContainer: request.body.dockerContainer?.trim() || current.dockerContainer,
+      dockerImage: request.body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion),
+      dockerPorts: request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts),
+      javaArgs: request.body.javaArgs?.trim() || current.javaArgs,
+      updatedAt: new Date().toISOString()
+    };
 
-  if (jarChanged) {
-    await downloadFabricServerJar(updated);
-  }
-  await writeVersionMetadataFile(updated);
-  if (serverPort) {
-    await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    });
-  }
+    if (jarChanged) {
+      await downloadFabricServerJar(updated);
+    }
+    await writeVersionMetadataFile(updated);
+    if (serverPort) {
+      await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      });
+    }
 
-  servers[index] = updated;
-  await writeServers(servers);
-  return publicServer(updated);
+    servers[index] = updated;
+    updatedServer = updated;
+  });
+  return publicServer(updatedServer!);
 });
 
 app.delete<{
@@ -2041,28 +2121,37 @@ app.delete<{
   };
 }>("/api/servers/:id", async (request) => {
   await requireRequestPermission(request, "manager");
-  const servers = await readServers();
-  const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-  if (index === -1) {
-    throw new Error("Server not found");
-  }
-
-  const server = servers[index];
-  if (request.body.confirmName !== server.displayName) {
-    throw new Error(`Type "${server.displayName}" to confirm deletion`);
-  }
-
-  const deletedContainer = dockerAvailable() ? await removeManagedDockerContainer(server) : false;
+  let deletedContainer = false;
   let deletedFiles = false;
-  if (request.body.deleteFiles) {
-    const directory = ensureManagedServerDirectory(server);
-    await rm(directory, { recursive: true, force: true });
-    deletedFiles = true;
-  }
+  let serverFields: Record<string, unknown> = {};
 
-  servers.splice(index, 1);
-  await writeServers(servers);
-  logInfo({ ...serverLogFields(server), deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
+  await updateServers(async (servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
+    if (index === -1) {
+      throw new Error("Server not found");
+    }
+
+    const server = servers[index];
+    serverFields = serverLogFields(server);
+    const status = await dockerStatus(server);
+    if (status.running) {
+      throw new Error("Stop the server before deleting it");
+    }
+    if (request.body.confirmName !== server.displayName) {
+      throw new Error(`Type "${server.displayName}" to confirm deletion`);
+    }
+
+    deletedContainer = dockerAvailable() ? await removeManagedDockerContainer(server) : false;
+    if (request.body.deleteFiles) {
+      const directory = ensureManagedServerDirectory(server);
+      await rm(directory, { recursive: true, force: true });
+      deletedFiles = true;
+    }
+
+    servers.splice(index, 1);
+  });
+
+  logInfo({ ...serverFields, deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
   return { ok: true, deletedFiles, deletedContainer };
 });
 
@@ -2120,17 +2209,21 @@ app.post<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", async (request) => {
   await requireRequestPermission(request, "expanded");
-  const servers = await readServers();
-  const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-  if (index === -1) {
-    throw new Error("Server not found");
-  }
-  const schedule = scheduleFromBody(request.body);
-  servers[index].schedules = [...(servers[index].schedules ?? []), schedule];
-  servers[index].updatedAt = new Date().toISOString();
-  await writeServers(servers);
-  logInfo({ ...serverLogFields(servers[index]), scheduleId: schedule.id, enabled: schedule.enabled, action: "create_schedule" }, "Schedule created");
-  return schedule;
+  let createdSchedule: ScheduledExecution | null = null;
+  let serverLog: Record<string, unknown> = {};
+  await updateServers((servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
+    if (index === -1) {
+      throw new Error("Server not found");
+    }
+    const schedule = scheduleFromBody(request.body);
+    servers[index].schedules = [...(servers[index].schedules ?? []), schedule];
+    servers[index].updatedAt = new Date().toISOString();
+    createdSchedule = schedule;
+    serverLog = serverLogFields(servers[index]);
+  });
+  logInfo({ ...serverLog, scheduleId: createdSchedule!.id, enabled: createdSchedule!.enabled, action: "create_schedule" }, "Schedule created");
+  return createdSchedule!;
 });
 
 app.put<{
@@ -2138,35 +2231,41 @@ app.put<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", async (request) => {
   await requireRequestPermission(request, "expanded");
-  const servers = await readServers();
-  const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-  if (serverIndex === -1) {
-    throw new Error("Server not found");
-  }
-  const schedules = servers[serverIndex].schedules ?? [];
-  const scheduleIndex = schedules.findIndex((candidate) => candidate.id === request.params.scheduleId);
-  if (scheduleIndex === -1) {
-    throw new Error("Schedule not found");
-  }
-  schedules[scheduleIndex] = scheduleFromBody(request.body, schedules[scheduleIndex]);
-  servers[serverIndex].schedules = schedules;
-  servers[serverIndex].updatedAt = new Date().toISOString();
-  await writeServers(servers);
-  logInfo({ ...serverLogFields(servers[serverIndex]), scheduleId: schedules[scheduleIndex].id, enabled: schedules[scheduleIndex].enabled, action: "update_schedule" }, "Schedule updated");
-  return schedules[scheduleIndex];
+  let updatedSchedule: ScheduledExecution | null = null;
+  let serverLog: Record<string, unknown> = {};
+  await updateServers((servers) => {
+    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
+    if (serverIndex === -1) {
+      throw new Error("Server not found");
+    }
+    const schedules = servers[serverIndex].schedules ?? [];
+    const scheduleIndex = schedules.findIndex((candidate) => candidate.id === request.params.scheduleId);
+    if (scheduleIndex === -1) {
+      throw new Error("Schedule not found");
+    }
+    schedules[scheduleIndex] = scheduleFromBody(request.body, schedules[scheduleIndex]);
+    servers[serverIndex].schedules = schedules;
+    servers[serverIndex].updatedAt = new Date().toISOString();
+    updatedSchedule = schedules[scheduleIndex];
+    serverLog = serverLogFields(servers[serverIndex]);
+  });
+  logInfo({ ...serverLog, scheduleId: updatedSchedule!.id, enabled: updatedSchedule!.enabled, action: "update_schedule" }, "Schedule updated");
+  return updatedSchedule!;
 });
 
 app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", async (request) => {
   await requireRequestPermission(request, "expanded");
-  const servers = await readServers();
-  const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-  if (serverIndex === -1) {
-    throw new Error("Server not found");
-  }
-  servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== request.params.scheduleId);
-  servers[serverIndex].updatedAt = new Date().toISOString();
-  await writeServers(servers);
-  logInfo({ ...serverLogFields(servers[serverIndex]), scheduleId: request.params.scheduleId, action: "delete_schedule" }, "Schedule deleted");
+  let serverLog: Record<string, unknown> = {};
+  await updateServers((servers) => {
+    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
+    if (serverIndex === -1) {
+      throw new Error("Server not found");
+    }
+    servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== request.params.scheduleId);
+    servers[serverIndex].updatedAt = new Date().toISOString();
+    serverLog = serverLogFields(servers[serverIndex]);
+  });
+  logInfo({ ...serverLog, scheduleId: request.params.scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
 });
 
@@ -2777,9 +2876,18 @@ app.setErrorHandler((error, _request, reply) => {
   reply.code(statusCode).send({ error: error instanceof Error ? error.message : "Request failed" });
 });
 
-setInterval(() => {
-  void tickSchedules().catch((error: unknown) => app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed"));
-}, 30_000).unref();
+function scheduleNextTick() {
+  setTimeout(async () => {
+    try {
+      await tickSchedules();
+    } catch (error: unknown) {
+      app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
+    } finally {
+      scheduleNextTick();
+    }
+  }, 30_000).unref();
+}
+scheduleNextTick();
 
 const startupUsers = await readUsers().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));

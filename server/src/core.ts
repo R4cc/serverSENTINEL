@@ -201,3 +201,12 @@ function isValidPort(value: string) {
   const port = Number(value);
   return port >= 1 && port <= 65535;
 }
+
+export class AsyncQueue {
+  private promise: Promise<unknown> = Promise.resolve();
+  enqueue<T>(task: () => Promise<T> | T): Promise<T> {
+    const next = this.promise.then(task);
+    this.promise = next.catch(() => {});
+    return next;
+  }
+}

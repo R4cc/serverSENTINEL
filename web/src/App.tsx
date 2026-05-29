@@ -305,7 +305,7 @@ export default function App() {
   const dockerOperationalLock = authOperationalLock || !effectiveAppState.dockerSocketMounted;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
-  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
+  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
     const matches = value
@@ -3147,13 +3147,13 @@ export default function App() {
                     versions={fabricVersions}
                     totalMemory={effectiveAppState.totalMemory}
                     onSubmit={updateServer}
-                    disabled={isProvisioning || dockerOperationalLock || !canManager}
+                    disabled={serverSettingsLocked}
                   />
                 </section>
                 <DeleteServerPanel
                   server={activeServer}
                   onSubmit={deleteServer}
-                  disabled={isProvisioning || dockerOperationalLock || !canManager}
+                  disabled={serverSettingsLocked}
                 />
               </section>
             )}

@@ -35,7 +35,8 @@ export async function dockerRequest<T>(
       {
         socketPath: config.dockerSocket,
         path,
-        method
+        method,
+        timeout: 15000
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -50,6 +51,9 @@ export async function dockerRequest<T>(
         });
       }
     );
+    request.on("timeout", () => {
+      request.destroy(new Error("Docker socket request timed out"));
+    });
     request.on("error", rejectRequest);
     request.end();
   });
@@ -66,7 +70,8 @@ export async function dockerBufferRequest(method: "GET" | "POST", path: string, 
       {
         socketPath: config.dockerSocket,
         path,
-        method
+        method,
+        timeout: 15000
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -81,6 +86,9 @@ export async function dockerBufferRequest(method: "GET" | "POST", path: string, 
         });
       }
     );
+    request.on("timeout", () => {
+      request.destroy(new Error("Docker socket request timed out"));
+    });
     request.on("error", rejectRequest);
     request.end();
   });
@@ -104,6 +112,7 @@ export async function dockerJsonRequest<T>(
         socketPath: config.dockerSocket,
         path,
         method,
+        timeout: 15000,
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(payload)
@@ -122,6 +131,9 @@ export async function dockerJsonRequest<T>(
         });
       }
     );
+    request.on("timeout", () => {
+      request.destroy(new Error("Docker socket request timed out"));
+    });
     request.on("error", rejectRequest);
     request.write(payload);
     request.end();
@@ -146,6 +158,7 @@ export async function dockerJsonBufferRequest(
         socketPath: config.dockerSocket,
         path,
         method,
+        timeout: 15000,
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(payload)
@@ -164,6 +177,9 @@ export async function dockerJsonBufferRequest(
         });
       }
     );
+    request.on("timeout", () => {
+      request.destroy(new Error("Docker socket request timed out"));
+    });
     request.on("error", rejectRequest);
     request.write(payload);
     request.end();
