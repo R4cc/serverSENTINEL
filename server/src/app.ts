@@ -1778,6 +1778,9 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && !request.url.startsWith("/api/")) {
     return;
   }
+  if (request.method === "GET" && request.url.includes("/mods/icon")) {
+    return;
+  }
   if (request.url.startsWith("/ws/")) {
     return;
   }
