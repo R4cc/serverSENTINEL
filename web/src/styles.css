@@ -1060,6 +1060,7 @@ button .buttonIcon {
   grid-template-columns: 34px;
   grid-auto-rows: 0;
   gap: 0;
+  padding: 0;
   justify-content: center;
   justify-items: center;
   align-items: center;
@@ -1994,6 +1995,10 @@ button .buttonIcon {
   gap: var(--space-4);
 }
 
+.overviewPage > .inlineState {
+  grid-column: 1 / -1;
+}
+
 .overviewSummary {
   grid-column: 1 / -1;
   display: grid;
@@ -2004,18 +2009,16 @@ button .buttonIcon {
 
 .overviewPage > .resourcePanel {
   grid-column: 1 / span 8;
-  grid-row: 2 / span 2;
+  grid-row: span 2;
 }
 
 .overviewPage > .activityPanel {
   grid-column: 9 / -1;
-  grid-row: 2;
   align-self: stretch;
 }
 
 .overviewPage > .eventsPanel {
   grid-column: 9 / -1;
-  grid-row: 3;
   align-self: stretch;
 }
 
@@ -3423,6 +3426,7 @@ details.compatibilityBadge p {
     grid-template-columns: 34px minmax(0, 1fr) 34px;
     justify-content: flex-start;
     gap: var(--space-2) !important;
+    padding: var(--space-1);
   }
 
   .sidebarCollapsed .serverPicker {
