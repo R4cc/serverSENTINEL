@@ -193,7 +193,7 @@ function errorCategory(error: unknown, statusCode?: number) {
 
 function isExpectedUserError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return /required|not found|invalid|refusing|stop the server|must be|cannot be|larger than|binary files|not configured|unavailable|incompatible/i.test(message);
+  return /required|not found|invalid|refusing|stop the server|must be|cannot be|larger than|binary files|not configured|unavailable|incompatible|already exists|duplicate/i.test(message);
 }
 
 function logOperationFailure(fields: LogFields, message: string, error: unknown) {
@@ -1780,6 +1780,9 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   if (input.acceptEula !== true) {
     throw new Error("You must confirm Minecraft EULA acceptance to create a runnable server");
   }
+  if ((await queuedReadServers()).some((server) => server.displayName.toLowerCase() === displayName.toLowerCase())) {
+    throw new Error("A managed server with this display name already exists");
+  }
 
   report?.(15, "Reserving server storage");
   await mkdir(config.serversDir, { recursive: true });
@@ -2350,6 +2353,9 @@ app.put<{
     }
 
     const current = servers[index];
+    if (servers.some((server) => server.id !== current.id && server.displayName.toLowerCase() === (request.body.displayName?.trim() || current.displayName).toLowerCase())) {
+      throw new Error("A managed server with this display name already exists");
+    }
     const status = await dockerStatus(current);
     if (status.running) {
       throw new Error("Stop the server before changing its configuration");
@@ -2681,6 +2687,9 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
+  if (request.query.recursive !== undefined && request.query.recursive !== "true" && request.query.recursive !== "false") {
+    throw new Error("recursive must be true or false");
+  }
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
   if (resolve(target) === resolve(server.serverDir)) {
     throw new Error("Refusing to delete the server root directory");

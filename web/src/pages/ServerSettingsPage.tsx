@@ -88,7 +88,7 @@ export function ServerEditForm({
       <fieldset disabled={disabled}>
       <label>
         Display name
-        <input name="displayName" defaultValue={server.displayName} required />
+        <input name="displayName" defaultValue={server.displayName} required maxLength={80} />
       </label>
       <label>
         Minecraft version
@@ -145,15 +145,15 @@ export function ServerEditForm({
       </label>
       <label>
         Server jar filename
-        <input name="serverJar" defaultValue={server.serverJar || "fabric-server-launch.jar"} />
+        <input name="serverJar" defaultValue={server.serverJar || "fabric-server-launch.jar"} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
       </label>
       <label>
         Docker container name
-        <input name="dockerContainer" defaultValue={server.dockerContainer || ""} />
+        <input name="dockerContainer" defaultValue={server.dockerContainer || ""} pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
       </label>
       <label>
         Port bindings
-        <input name="dockerPorts" defaultValue={server.dockerPorts || "25565:25565/tcp"} />
+        <input name="dockerPorts" defaultValue={server.dockerPorts || "25565:25565/tcp"} title="Use formats like 25565 or 25565:25565/tcp. Separate multiple bindings with commas." />
       </label>
       <button>Save server settings</button>
       </fieldset>
@@ -241,7 +241,7 @@ export function ManagedServerForm({
       <fieldset disabled={provisioning}>
       <label>
         Display name
-        <input name="displayName" placeholder="Survival" required />
+        <input name="displayName" placeholder="Survival" required maxLength={80} />
       </label>
       <label>
         Minecraft version
@@ -318,11 +318,11 @@ export function ManagedServerForm({
         </label>
         <label>
           Server jar filename
-          <input name="serverJar" placeholder="fabric-server-launch.jar" />
+          <input name="serverJar" placeholder="fabric-server-launch.jar" pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
         </label>
         <label>
           Docker container name
-          <input name="dockerContainer" placeholder="serversentinel-survival" />
+          <input name="dockerContainer" placeholder="serversentinel-survival" pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
         </label>
         <label>
           Docker runtime image
@@ -334,7 +334,7 @@ export function ManagedServerForm({
         </label>
         <label>
           Port bindings
-          <input name="dockerPorts" placeholder="25565:25565/tcp" />
+          <input name="dockerPorts" placeholder="25565:25565/tcp" title="Use formats like 25565 or 25565:25565/tcp. Separate multiple bindings with commas." />
         </label>
       </details>
       <p className="muted">

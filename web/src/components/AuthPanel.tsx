@@ -28,16 +28,16 @@ export function AuthPanel({
           <fieldset disabled={busy}>
             <label>
               Username
-              <input name="username" autoComplete="username" required minLength={3} placeholder={setupRequired ? "admin" : "Username"} />
+              <input name="username" autoComplete="username" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" placeholder={setupRequired ? "admin" : "Username"} />
             </label>
             <label>
               Password
-              <input name="password" type="password" autoComplete={setupRequired ? "new-password" : "current-password"} required minLength={1} placeholder={setupRequired ? "At least 8 characters" : "Password"} />
+              <input name="password" type="password" autoComplete={setupRequired ? "new-password" : "current-password"} required minLength={setupRequired ? 8 : 1} placeholder={setupRequired ? "At least 8 characters" : "Password"} />
             </label>
             {setupRequired && (
               <label>
                 Confirm password
-                <input name="confirmPassword" type="password" autoComplete="new-password" minLength={1} placeholder="Repeat password" />
+                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} placeholder="Repeat password" />
               </label>
             )}
             <button>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
@@ -57,11 +57,13 @@ export function UserManagement({
   onCloseModal,
   onCreate,
   onUpdate,
-  onDelete
+  onDelete,
+  busy = false
 }: {
   users: PublicUser[];
   currentUserId?: string;
   editingUser: "create" | PublicUser | null;
+  busy?: boolean;
   onOpenEdit: (user: PublicUser) => void;
   onCloseModal: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
@@ -115,12 +117,12 @@ export function UserManagement({
               </td>
               <td data-label="Actions">
                 <div className="userActions">
-                  <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)}>Edit</button>
+                  <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy}>Edit</button>
                   <button
                     type="button"
                     className="dangerTextButton"
                     onClick={() => onDelete(user)}
-                    disabled={user.id === currentUserId}
+                    disabled={busy || user.id === currentUserId}
                   >
                     Delete
                   </button>
@@ -141,10 +143,10 @@ export function UserManagement({
               </button>
             </div>
             <form onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)} className="appForm">
-              <fieldset>
+              <fieldset disabled={busy}>
                 <label>
                   Username
-                  <input name="username" autoComplete="off" required minLength={3} defaultValue={modalUser?.username ?? ""} />
+                  <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={modalUser?.username ?? ""} />
                 </label>
                 <label>
                   Password
@@ -153,7 +155,7 @@ export function UserManagement({
                     type="password"
                     autoComplete="new-password"
                     required={!modalUser}
-                    minLength={modalUser ? 0 : 8}
+                    minLength={8}
                     placeholder={modalUser ? "Leave blank to keep current password" : "At least 8 characters"}
                   />
                 </label>
@@ -168,7 +170,7 @@ export function UserManagement({
                 </label>
                 <div className="buttonRow">
                   <button type="button" className="secondaryButton" onClick={onCloseModal}>Cancel</button>
-                  <button>{modalUser ? "Save user" : "Create user"}</button>
+                  <button>{busy ? "Saving..." : modalUser ? "Save user" : "Create user"}</button>
                 </div>
               </fieldset>
             </form>

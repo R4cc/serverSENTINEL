@@ -3,7 +3,8 @@ import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
 import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, isEditableFile, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, minecraftVersionInfo, minServerPort, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateRuntimeJarFilename, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
@@ -59,6 +60,41 @@ function errorMessage(error: unknown, fallback: string) {
   return message;
 }
 
+function firstValidationMessage(errors: Array<{ message: string }>) {
+  return errors[0]?.message ?? "";
+}
+
+function setValidationNotice(form: HTMLFormElement, errors: Array<{ field: string; message: string }>, setMessage: (message: string) => void) {
+  if (!errors.length) return false;
+  applyFormErrors(form, errors);
+  setMessage(firstValidationMessage(errors));
+  return true;
+}
+
+function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string) {
+  const displayName = trimFormValue(form, "displayName");
+  const errors: Array<{ field: string; message: string }> = [];
+  const displayError = validateDisplayName(displayName);
+  if (displayError) errors.push({ field: "displayName", message: displayError });
+  if (displayName && displayName.toLowerCase() !== currentName?.toLowerCase() && existingNames.some((name) => name.toLowerCase() === displayName.toLowerCase())) {
+    errors.push({ field: "displayName", message: "A managed server with this display name already exists." });
+  }
+  const port = trimFormValue(form, "serverPort");
+  if (port) {
+    const portError = validateServerPort(port);
+    if (portError) errors.push({ field: "serverPort", message: portError });
+  }
+  const jarError = validateRuntimeJarFilename(trimFormValue(form, "serverJar"));
+  if (jarError) errors.push({ field: "serverJar", message: jarError });
+  const containerError = validateDockerContainerName(trimFormValue(form, "dockerContainer"));
+  if (containerError) errors.push({ field: "dockerContainer", message: containerError });
+  const portsError = validateDockerPorts(trimFormValue(form, "dockerPorts"));
+  if (portsError) errors.push({ field: "dockerPorts", message: portsError });
+  const javaArgsError = validateJavaArgs(trimFormValue(form, "javaArgs"));
+  if (javaArgsError) errors.push({ field: "javaArgs", message: javaArgsError });
+  return errors;
+}
+
 function hasPotentialEvent(text: string): boolean {
   const lowercase = text.toLowerCase();
   return (
@@ -80,6 +116,7 @@ function hasPotentialEvent(text: string): boolean {
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [userModal, setUserModal] = useState<"create" | PublicUser | null>(null);
   const [appState, setAppState] = useState<AppState>(emptyApp);
@@ -120,6 +157,7 @@ export default function App() {
   const [modsError, setModsError] = useState("");
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
+  const [userSaving, setUserSaving] = useState(false);
   const [commandInput, setCommandInput] = useState("");
   const [commandSending, setCommandSending] = useState(false);
   const [commandInputFocused, setCommandInputFocused] = useState(false);
@@ -133,6 +171,7 @@ export default function App() {
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
   const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>("overview");
@@ -618,24 +657,29 @@ export default function App() {
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authSubmitting) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const username = String(form.get("username") || "");
+    const username = String(form.get("username") || "").trim();
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
     const setupRequired = authSession?.setupRequired ?? false;
     const demoLogin = username === "demo" && password === "demo";
     setAuthNotice("");
+    if (!demoLogin) {
+      const errors = [
+        validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
+        validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null
+      ].filter((error): error is { field: string; message: string } => Boolean(error));
+      if (setValidationNotice(formElement, errors, setAuthNotice)) return;
+    }
     if (setupRequired && !demoLogin) {
-      if (password.length < 8) {
-        setAuthNotice("Password must be at least 8 characters");
-        return;
-      }
       if (password !== confirmPassword) {
-        setAuthNotice("Passwords do not match");
+        setValidationNotice(formElement, [{ field: "confirmPassword", message: "Passwords do not match." }], setAuthNotice);
         return;
       }
     }
+    setAuthSubmitting(true);
     try {
       const session = await api<AuthSession>(setupRequired && !demoLogin ? "/api/auth/register-first" : "/api/auth/login", {
         method: "POST",
@@ -660,6 +704,8 @@ export default function App() {
       formElement.reset();
     } catch (error) {
       setAuthNotice((error as Error).message);
+    } finally {
+      setAuthSubmitting(false);
     }
   }
 
@@ -693,15 +739,23 @@ export default function App() {
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canAdmin) return;
+    if (!canAdmin || userSaving) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const username = trimFormValue(form, "username");
+    const password = String(form.get("password") || "");
+    const errors = [
+      validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
+      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null
+    ].filter((error): error is { field: string; message: string } => Boolean(error));
+    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
+    setUserSaving(true);
     try {
       await api<PublicUser>("/api/users", {
         method: "POST",
         body: JSON.stringify({
-          username: form.get("username"),
-          password: form.get("password"),
+          username,
+          password,
           role: form.get("role")
         })
       });
@@ -711,19 +765,30 @@ export default function App() {
       await loadUsers();
     } catch (error) {
       notify("error", (error as Error).message);
+    } finally {
+      setUserSaving(false);
     }
   }
 
   async function updateUser(event: FormEvent<HTMLFormElement>, user: PublicUser) {
     event.preventDefault();
-    if (!canAdmin) return;
+    if (!canAdmin || userSaving) return;
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
+    const username = trimFormValue(form, "username");
+    const password = String(form.get("password") || "");
+    const errors = [
+      validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
+      validatePassword(password, false) ? { field: "password", message: validatePassword(password, false)! } : null
+    ].filter((error): error is { field: string; message: string } => Boolean(error));
+    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
+    setUserSaving(true);
     try {
       await api<PublicUser>(`/api/users/${user.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          username: form.get("username"),
-          password: form.get("password"),
+          username,
+          password,
           role: form.get("role")
         })
       });
@@ -735,12 +800,15 @@ export default function App() {
       }
     } catch (error) {
       notify("error", (error as Error).message);
+    } finally {
+      setUserSaving(false);
     }
   }
 
   async function deleteUser(user: PublicUser) {
-    if (!canAdmin) return;
-    if (!window.confirm(`Delete user ${user.username}?`)) return;
+    if (!canAdmin || userSaving) return;
+    if (!window.confirm(`Delete user ${user.username}?\n\nThis immediately removes their account and invalidates their sessions.`)) return;
+    setUserSaving(true);
     try {
       await api(`/api/users/${user.id}`, { method: "DELETE" });
       notify("success", `Deleted ${user.username}`);
@@ -750,6 +818,8 @@ export default function App() {
       }
     } catch (error) {
       notify("error", (error as Error).message);
+    } finally {
+      setUserSaving(false);
     }
   }
 
@@ -876,16 +946,17 @@ export default function App() {
     }
     if (dockerOperationalLock || !canManageReal) return;
     setNotice("");
-    const form = new FormData(event.currentTarget);
-    const serverPort = String(form.get("serverPort") ?? "");
-    if (!isValidServerPort(serverPort)) {
-      const message = `Server port must be between ${minServerPort} and ${maxServerPort}.`;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName));
+    if (setValidationNotice(formElement, errors, (message) => {
       setNotice(message);
       notify("error", message);
+    })) {
       return;
     }
     setProvisioningError("");
-    const displayName = String(form.get("displayName") || "");
+    const displayName = trimFormValue(form, "displayName");
     const initialJob: GeneralJob = {
       id: "local",
       type: "provision",
@@ -958,14 +1029,23 @@ export default function App() {
 
   async function updateServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || !canManager) return;
+    if (isProvisioning || serverSettingsSaving || !canManager) return;
     if (!activeServer) return;
     setNotice("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName), activeServer.displayName);
+    if (setValidationNotice(formElement, errors, (message) => {
+      setNotice(message);
+      notify("error", message);
+    })) {
+      return;
+    }
     if (activeServerIsDemo) {
       notify("success", `Updated ${String(form.get("displayName") || activeServer.displayName)} in demo mode`);
       return;
     }
+    setServerSettingsSaving(true);
     try {
       const server = await api<ManagedServer>(`/api/servers/${activeServer.id}`, {
         method: "PUT",
@@ -988,6 +1068,8 @@ export default function App() {
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+    } finally {
+      setServerSettingsSaving(false);
     }
   }
 
@@ -996,10 +1078,12 @@ export default function App() {
     if (!canManageReal) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const key = trimFormValue(form, "modrinthApiKey");
+    if (setValidationNotice(formElement, key ? [] : [{ field: "modrinthApiKey", message: "Modrinth API key is required." }], (message) => notify("error", message))) return;
     try {
       await api("/api/settings/modrinth", {
         method: "PUT",
-        body: JSON.stringify({ modrinthApiKey: form.get("modrinthApiKey") })
+        body: JSON.stringify({ modrinthApiKey: key })
       });
       formElement.reset();
       notify("success", "Modrinth API key saved");
@@ -1176,6 +1260,12 @@ export default function App() {
   async function openFile(path: string) {
     if (isProvisioning) return;
     if (!activeServer) return;
+    const pathError = validateSafePath(path);
+    if (pathError) {
+      setFileReadError(pathError);
+      setNotice(pathError);
+      return;
+    }
     setFileReadError("");
     setNotice("");
     if (activeServerIsDemo) {
@@ -1203,6 +1293,12 @@ export default function App() {
 
   async function deleteFileEntry(entry: FileEntry) {
     if (isProvisioning || dockerOperationalLock || !canManager || !activeServer) return;
+    const pathError = validateSafePath(entry.path);
+    if (pathError) {
+      setNotice(pathError);
+      notify("error", pathError);
+      return;
+    }
     const confirmation = entry.type === "directory"
       ? `Delete empty directory "${entry.name}"?\n\nOnly this directory will be removed. Non-empty directories are blocked in the browser file manager.`
       : `Delete file "${entry.name}"?\n\nThis will permanently delete ${entry.path}.`;
@@ -1253,6 +1349,20 @@ export default function App() {
     if (fileSaving) return;
     setFileSaving(true);
     setNotice("");
+    const pathError = validateSafePath(selectedPath);
+    if (pathError) {
+      setNotice(pathError);
+      notify("error", pathError);
+      setFileSaving(false);
+      return;
+    }
+    if (new Blob([editorText]).size > 2 * 1024 * 1024) {
+      const message = "File content is larger than the 2 MiB editor limit.";
+      setNotice(message);
+      notify("error", message);
+      setFileSaving(false);
+      return;
+    }
     if (activeServerIsDemo) {
       setDemoFiles((current) => ({ ...current, [selectedPath]: editorText }));
       setSavedEditorText(editorText);
@@ -1294,10 +1404,24 @@ export default function App() {
     setNotice("");
     setModSearchError("");
     setForceInstallProjectId(null);
+    const searchQuery = query.trim();
+    if (!effectiveAppState.modrinthApiConfigured) {
+      const message = "Modrinth API is not configured. Add an API key in settings.";
+      setModSearchError(message);
+      setNotice(message);
+      notify("error", message);
+      return;
+    }
+    if (!searchQuery) {
+      const message = "Enter a mod name or keyword to search.";
+      setModSearchError(message);
+      setNotice(message);
+      return;
+    }
     setIsSearchingMods(true);
     if (activeServerIsDemo) {
       window.setTimeout(() => {
-        const value = query.trim().toLowerCase();
+        const value = searchQuery.toLowerCase();
         setModSearchResults(demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value)));
         setIsSearchingMods(false);
       }, 250);
@@ -1305,7 +1429,7 @@ export default function App() {
     }
     try {
       const result = await api<{ hits: ModrinthHit[] }>(
-        `/api/modrinth/search?query=${encodeURIComponent(query)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
+        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
       );
       setModSearchResults(result.hits);
     } catch (error) {
@@ -1323,8 +1447,17 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.name.endsWith(".jar")) {
-      notify("error", "Only .jar mod files can be uploaded");
+    const filenameError = validateJarFilename(file.name);
+    if (filenameError) {
+      notify("error", filenameError);
+      return;
+    }
+    if (file.size <= 0 || file.size > 128 * 1024 * 1024) {
+      notify("error", "Uploaded mod must be between 1 byte and 128 MiB.");
+      return;
+    }
+    if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) {
+      notify("error", "A mod with that filename is already installed.");
       return;
     }
     setNotice("");
@@ -1709,12 +1842,27 @@ export default function App() {
     setScheduleBusy(true);
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const scheduleName = trimFormValue(form, "name");
+    const cron = trimFormValue(form, "cron");
+    const commands = form.getAll("commands").map(String);
+    const scheduleErrors = [
+      scheduleName ? null : { field: "name", message: "Schedule name is required." },
+      validateCronExpression(cron) ? { field: "cron", message: validateCronExpression(cron)! } : null,
+      validateCommandList(commands) ? { field: "commands", message: validateCommandList(commands)! } : null
+    ].filter((error): error is { field: string; message: string } => Boolean(error));
+    if (setValidationNotice(formElement, scheduleErrors, (message) => {
+      setNotice(message);
+      notify("error", message);
+    })) {
+      setScheduleBusy(false);
+      return;
+    }
     if (activeServerIsDemo) {
       const schedule: ScheduledExecution = {
         id: clientId(),
-        name: String(form.get("name") || "Demo schedule"),
-        cron: String(form.get("cron") || "* * * * *"),
-        commands: form.getAll("commands").map(String).filter(Boolean),
+        name: scheduleName,
+        cron,
+        commands: commands.map((command) => command.trim()).filter(Boolean),
         onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
         enabled: form.get("enabled") === "on",
         createdAt: new Date().toISOString(),
@@ -1732,8 +1880,8 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           name: form.get("name"),
-          cron: form.get("cron"),
-          commands: form.getAll("commands"),
+          cron,
+          commands,
           onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
           enabled: form.get("enabled") === "on"
         })
@@ -1788,6 +1936,7 @@ export default function App() {
 
   async function deleteSchedule(schedule: ScheduledExecution) {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return;
+    if (!window.confirm(`Delete scheduled execution "${schedule.name}"?\n\nThis cannot be undone.`)) return;
     setScheduleBusy(true);
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
@@ -1810,7 +1959,7 @@ export default function App() {
 
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || dockerOperationalLock || !canManager) return;
+    if (isProvisioning || serverSettingsSaving || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
@@ -1823,6 +1972,7 @@ export default function App() {
       notify("success", "Demo mode disabled");
       return;
     }
+    setServerSettingsSaving(true);
     try {
       const result = await api<{ ok: boolean; deletedFiles: boolean }>(`/api/servers/${activeServer.id}`, {
         method: "DELETE",
@@ -1838,6 +1988,8 @@ export default function App() {
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+    } finally {
+      setServerSettingsSaving(false);
     }
   }
 
@@ -1858,6 +2010,7 @@ export default function App() {
         setupRequired={authSession.setupRequired}
         notice={authNotice}
         onSubmit={submitAuth}
+        busy={authSubmitting}
       />
     );
   }
@@ -2150,7 +2303,7 @@ export default function App() {
                   <div>
                     <h2>Users</h2>
                   </div>
-                  <button type="button" onClick={() => setUserModal("create")}>New user</button>
+                  <button type="button" onClick={() => setUserModal("create")} disabled={userSaving}>New user</button>
                 </div>
                 {usersLoading && (
                   <InlineState tone="loading" title="Loading users" message="Loading user accounts and permissions." />
@@ -2169,6 +2322,7 @@ export default function App() {
                   users={users}
                   currentUserId={authSession.user?.id}
                   editingUser={userModal}
+                  busy={userSaving}
                   onOpenEdit={(user) => setUserModal(user)}
                   onCloseModal={() => setUserModal(null)}
                   onCreate={createUser}
@@ -3063,13 +3217,13 @@ export default function App() {
                     versions={fabricVersions}
                     totalMemory={effectiveAppState.totalMemory}
                     onSubmit={updateServer}
-                    disabled={serverSettingsLocked}
+                    disabled={serverSettingsLocked || serverSettingsSaving}
                   />
                 </section>
                 <DeleteServerPanel
                   server={activeServer}
                   onSubmit={deleteServer}
-                  disabled={serverSettingsLocked}
+                  disabled={serverSettingsLocked || serverSettingsSaving}
                 />
               </section>
             )}

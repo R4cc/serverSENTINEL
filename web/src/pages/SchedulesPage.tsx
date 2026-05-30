@@ -37,17 +37,17 @@ export function SchedulePage({
           <fieldset disabled={disabled}>
             <label>
               Name
-              <input name="name" placeholder="Nightly maintenance" required />
+              <input name="name" placeholder="Nightly maintenance" required maxLength={80} />
             </label>
             <label>
               Cron schedule
-              <input name="cron" placeholder="0 4 * * *" required />
+              <input name="cron" placeholder="0 4 * * *" required pattern="^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$" title="Use five cron fields: minute hour day month weekday." />
             </label>
             <div className="commandStack">
               <span className="fieldLabel">Commands</span>
               {commandIds.map((id, index) => (
                 <div key={id} className="commandInputRow">
-                  <input name="commands" placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} />
+                  <input name="commands" placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
                   {index > 0 && (
                     <button
                       type="button"
