@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseLogEvent } from "./app.js";
+import {
+  parseLogEvent,
+  requireStrictBoolean,
+  validateDockerContainerName,
+  validateJavaArgs,
+  validateModrinthProjectId,
+  validateRuntimeJarFilename
+} from "./app.js";
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
@@ -86,5 +93,32 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("ignores Fabric dependency tree lines and JVM informational messages", () => {
     expect(parseLogEvent("|-- fabric-crash-report-info-v1 1.0.3+9f78a5a839", "logs/latest.log", 9)).toBeNull();
     expect(parseLogEvent("[12:34:56] [main/INFO]: Distant Horizons: G1 Garbage collector detected.", "logs/latest.log", 10)).toBeNull();
+  });
+});
+
+describe("security validation helpers", () => {
+  it("requires true booleans instead of truthy strings", () => {
+    expect(requireStrictBoolean(true, "forceIncompatible")).toBe(true);
+    expect(requireStrictBoolean(false, "forceIncompatible")).toBe(false);
+    expect(() => requireStrictBoolean("false", "forceIncompatible")).toThrow("must be a boolean");
+  });
+
+  it("rejects unsafe Java shell metacharacters", () => {
+    expect(validateJavaArgs("-Xms2G -Xmx4G")).toBe("-Xms2G -Xmx4G");
+    expect(() => validateJavaArgs("-Xmx4G; curl example.test")).toThrow("unsafe shell characters");
+    expect(() => validateJavaArgs("$(touch owned)")).toThrow("unsafe shell characters");
+  });
+
+  it("validates Docker and Modrinth identifiers conservatively", () => {
+    expect(validateDockerContainerName("serversentinel-main.1")).toBe("serversentinel-main.1");
+    expect(() => validateDockerContainerName("../docker")).toThrow("Docker container name");
+    expect(validateModrinthProjectId("fabric-api")).toBe("fabric-api");
+    expect(() => validateModrinthProjectId("bad/project")).toThrow("Modrinth project id");
+  });
+
+  it("requires runtime server jar names to stay local jar filenames", () => {
+    expect(validateRuntimeJarFilename("fabric-server-launch.jar")).toBe("fabric-server-launch.jar");
+    expect(() => validateRuntimeJarFilename("../fabric-server-launch.jar")).toThrow("local .jar filename");
+    expect(() => validateRuntimeJarFilename("server.txt")).toThrow("local .jar filename");
   });
 });

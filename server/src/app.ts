@@ -1,12 +1,14 @@
 import Fastify from "fastify";
 import type { FastifyBaseLogger, FastifyRequest } from "fastify";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { inflateRawSync } from "node:zlib";
@@ -135,12 +137,20 @@ const sessions = new Map<string, Session>();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
 const passwordHashKeyLength = 64;
+const editorFileSizeLimit = 2 * 1024 * 1024;
+const modFileSizeLimit = 128 * 1024 * 1024;
 const roleRanks: Record<UserRole, number> = {
   basic: 1,
   expanded: 2,
   manager: 3,
   admin: 4
 };
+const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+const provisionRateLimit = { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } };
+const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
+const destructiveRateLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
+const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } };
+const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
 
 type LogFields = Record<string, unknown>;
 
@@ -204,6 +214,20 @@ function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields
   };
 }
 
+function assertSameOriginRequest(request: FastifyRequest) {
+  const origin = request.headers.origin;
+  if (!origin) return;
+  const host = request.headers["x-forwarded-host"] ?? request.headers.host;
+  if (!host || Array.isArray(host)) {
+    forbidden("CSRF protection: invalid request host");
+  }
+  const protocol = request.headers["x-forwarded-proto"] === "https" || request.protocol === "https" ? "https" : "http";
+  const expected = `${protocol}://${host}`;
+  if (origin !== expected) {
+    forbidden("CSRF protection: cross-origin request rejected");
+  }
+}
+
 function serverLogFields(server: ManagedServer): LogFields {
   return {
     serverId: server.id,
@@ -226,7 +250,7 @@ function publicUser(user: StoredUser): PublicUser {
 }
 
 function normalizeRole(role?: string): UserRole {
-  return role === "basic" || role === "expanded" || role === "manager" || role === "admin" ? role : "basic";
+  return role === undefined ? "basic" : validateRoleInput(role);
 }
 
 function validateUsername(username?: string) {
@@ -246,6 +270,152 @@ function validatePassword(password?: string) {
     throw error;
   }
   return password;
+}
+
+function badRequest(message: string): never {
+  const error = new Error(message) as Error & { statusCode?: number };
+  error.statusCode = 400;
+  throw error;
+}
+
+function forbidden(message: string): never {
+  const error = new Error(message) as Error & { statusCode?: number };
+  error.statusCode = 403;
+  throw error;
+}
+
+export function requireStrictBoolean(value: unknown, fieldName: string) {
+  if (typeof value !== "boolean") {
+    badRequest(`${fieldName} must be a boolean`);
+  }
+  return value;
+}
+
+function optionalStrictBoolean(value: unknown, fieldName: string, fallback: boolean) {
+  return value === undefined ? fallback : requireStrictBoolean(value, fieldName);
+}
+
+function validateRoleInput(role: unknown): UserRole {
+  if (role === "basic" || role === "expanded" || role === "manager" || role === "admin") return role;
+  badRequest("Role must be one of basic, expanded, manager, or admin");
+}
+
+function optionalReleaseChannel(channel: unknown): ReleaseChannel {
+  if (channel === undefined) return "release";
+  if (channel === "release" || channel === "beta" || channel === "alpha") return channel;
+  badRequest("Release channel must be one of release, beta, or alpha");
+}
+
+function optionalCompatibilityFilter(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === "all" || value === "compatible") return value;
+  badRequest("Compatibility filter must be all or compatible");
+}
+
+function validateServerId(id: unknown) {
+  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
+    badRequest("A valid server id is required");
+  }
+  return id;
+}
+
+function validateScheduleId(id: unknown) {
+  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
+    badRequest("A valid schedule id is required");
+  }
+  return id;
+}
+
+function validateProvisionJobId(id: unknown) {
+  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
+    badRequest("A valid provisioning job id is required");
+  }
+  return id;
+}
+
+export function validateModrinthProjectId(projectId: unknown) {
+  if (typeof projectId !== "string" || !/^[a-zA-Z0-9_-]{3,64}$/.test(projectId.trim())) {
+    badRequest("A valid Modrinth project id is required");
+  }
+  return projectId.trim();
+}
+
+export function validateRuntimeJarFilename(filename: unknown) {
+  const value = typeof filename === "string" ? filename.trim() : "";
+  if (!value || basename(value) !== value || !value.endsWith(".jar")) {
+    badRequest("Server jar filename must be a local .jar filename");
+  }
+  return value;
+}
+
+export function validateDockerContainerName(name: unknown) {
+  const value = typeof name === "string" ? name.trim() : "";
+  if (!value || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(value)) {
+    badRequest("Docker container name contains invalid characters");
+  }
+  return value;
+}
+
+export function validateDockerImageName(image: unknown) {
+  const value = typeof image === "string" ? image.trim() : "";
+  if (!value || value.length > 255 || /\s/.test(value) || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(value)) {
+    badRequest("Docker image name contains invalid characters");
+  }
+  return value;
+}
+
+export function validateJavaArgs(args: unknown) {
+  const value = typeof args === "string" ? args.trim() : "";
+  if (!value) return "-Xms2G -Xmx4G";
+  if (value.length > 512 || /[\r\n;&|`$<>\\]/.test(value)) {
+    badRequest("Java arguments contain unsafe shell characters");
+  }
+  return value;
+}
+
+function validateBase64Content(value: unknown) {
+  if (typeof value !== "string" || !value || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
+    badRequest("Uploaded mod content must be valid base64");
+  }
+  return value;
+}
+
+function assertJarBuffer(buffer: Buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b || ![0x03, 0x05, 0x07].includes(buffer[2])) {
+    badRequest("Uploaded mod must be a valid .jar file");
+  }
+}
+
+async function verifyDownloadedJar(destination: string, file: { size?: number; hashes?: Record<string, string> }) {
+  const downloaded = await stat(destination);
+  if (!downloaded.isFile() || downloaded.size === 0 || downloaded.size > modFileSizeLimit) {
+    await rm(destination, { force: true }).catch(() => {});
+    throw new Error(`Downloaded mod must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+  }
+  const buffer = await readFile(destination);
+  assertJarBuffer(buffer);
+  const expectedSha1 = file.hashes?.sha1;
+  if (expectedSha1) {
+    const actualSha1 = createHash("sha1").update(buffer).digest("hex");
+    if (actualSha1 !== expectedSha1) {
+      await rm(destination, { force: true }).catch(() => {});
+      throw new Error("Downloaded mod hash did not match Modrinth metadata");
+    }
+  }
+}
+
+function sizeLimitTransform(maxBytes: number) {
+  let bytes = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        callback(new Error(`Downloaded mod is larger than ${Math.floor(maxBytes / 1024 / 1024)} MiB`));
+        return;
+      }
+      callback(null, chunk);
+    }
+  });
 }
 
 function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
@@ -542,6 +712,9 @@ function defaultDockerImageForMinecraftVersion(version?: string) {
 }
 
 async function getServer(serverId?: string) {
+  if (serverId !== undefined) {
+    validateServerId(serverId);
+  }
   const servers = await queuedReadServers();
   const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
   if (!server) {
@@ -666,7 +839,7 @@ function sanitizeCommands(commands: unknown) {
 
 function dockerContainerName(server: ManagedServer) {
   if (server.dockerContainer?.trim()) {
-    return server.dockerContainer.trim();
+    return validateDockerContainerName(server.dockerContainer);
   }
   return defaultContainerName(server.displayName);
 }
@@ -797,10 +970,10 @@ async function ensureDockerContainer(server: ManagedServer) {
   }
 
   const startedAt = Date.now();
-  const image = server.dockerImage || defaultDockerImageForMinecraftVersion(server.minecraftVersion);
+  const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(server.minecraftVersion));
   await ensureDockerImage(image);
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
-  const javaArgs = server.javaArgs || "-Xms2G -Xmx4G";
+  const javaArgs = validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G");
   const quotedServerJar = shellQuote(server.serverJar);
   const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${server.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
   const workingDir = serverDockerWorkingDir(server);
@@ -823,6 +996,8 @@ async function ensureDockerContainer(server: ManagedServer) {
         Tty: false,
         ExposedPorts: exposedPorts,
         HostConfig: {
+          Privileged: false,
+          NetworkMode: "bridge",
           PortBindings: portBindings,
           Mounts: [
             {
@@ -1599,10 +1774,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   report?.(5, "Validating server settings");
   const displayName = input.displayName?.trim();
   const minecraftVersion = input.minecraftVersion?.trim();
-  if (!displayName || !minecraftVersion) {
+  if (!displayName || displayName.length > 80 || !minecraftVersion) {
     throw new Error("Display name and Minecraft version are required");
   }
-  if (!input.acceptEula) {
+  if (input.acceptEula !== true) {
     throw new Error("You must confirm Minecraft EULA acceptance to create a runnable server");
   }
 
@@ -1620,11 +1795,16 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const resolvedServerDir = resolve(config.serversDir, storageName);
   const loaderVersion = input.loaderVersion?.trim() || await latestFabricVersion("loader");
   const installerVersion = input.installerVersion?.trim() || await latestFabricVersion("installer");
-  const serverJar = input.serverJar?.trim() || "fabric-server-launch.jar";
+  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || "fabric-server-launch.jar");
   const serverPort = input.serverPort?.trim() || "25565";
   if (!isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(minecraftVersion));
+  const dockerPorts = input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`;
+  parseDockerPorts(dockerPorts);
+  const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
 
   const now = new Date().toISOString();
   const server: ManagedServer = {
@@ -1636,12 +1816,12 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     loaderVersion,
     installerVersion,
     serverJar,
-    dockerContainer: input.dockerContainer?.trim() || defaultContainerName(displayName),
-    dockerImage: input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(minecraftVersion),
+    dockerContainer,
+    dockerImage,
     dockerMountSource: config.serversDockerVolume || resolvedServerDir,
     dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${storageName}` : undefined,
-    dockerPorts: input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`,
-    javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
+    dockerPorts,
+    javaArgs,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
@@ -1738,8 +1918,8 @@ function scheduleFromBody(body: {
     name,
     cron,
     commands: sanitizeCommands(body.commands),
-    onlyWhenNoPlayers: Boolean(body.onlyWhenNoPlayers),
-    enabled: body.enabled ?? existing?.enabled ?? true,
+    onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
+    enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     lastRunAt: existing?.lastRunAt,
@@ -1849,6 +2029,27 @@ const app = Fastify({
   bodyLimit: 180 * 1024 * 1024
 });
 appLogger = app.log;
+await app.register(helmet, {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:"]
+    }
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  xFrameOptions: { action: "deny" }
+});
+await app.register(rateLimit, {
+  global: true,
+  max: 600,
+  timeWindow: "1 minute"
+});
 await app.register(websocket);
 
 app.addHook("onRequest", async (request, reply) => {
@@ -1859,9 +2060,13 @@ app.addHook("onRequest", async (request, reply) => {
     return;
   }
   if (request.url.startsWith("/ws/")) {
+    assertSameOriginRequest(request);
     return;
   }
   if (request.url.startsWith("/api/")) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      assertSameOriginRequest(request);
+    }
     const requestedWith = request.headers["x-requested-with"];
     if (requestedWith !== "XMLHttpRequest") {
       reply.code(400);
@@ -1880,7 +2085,7 @@ app.get("/api/auth/session", async (request) => {
   };
 });
 
-app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", async (request, reply) => {
+app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", authRateLimit, async (request, reply) => {
   const username = validateUsername(request.body.username);
   const password = validatePassword(request.body.password);
   const now = new Date().toISOString();
@@ -1909,7 +2114,7 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register
   return { authenticated: true, setupRequired: false, user: publicUser(user) };
 });
 
-app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", async (request, reply) => {
+app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", authRateLimit, async (request, reply) => {
   const username = request.body.username?.trim() ?? "";
   const password = request.body.password ?? "";
   if (username === "demo" && password === "demo") {
@@ -1948,7 +2153,7 @@ app.get("/api/users", async (request) => {
   return { users: (await queuedReadUsers()).map(publicUser) };
 });
 
-app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/api/users", async (request) => {
+app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/api/users", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "admin");
   const username = validateUsername(request.body.username);
   const password = validatePassword(request.body.password);
@@ -1975,7 +2180,7 @@ app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/
   return publicUser(createdUser!);
 });
 
-app.put<{ Params: { id: string }; Body: { username?: string; password?: string; role?: UserRole } }>("/api/users/:id", async (request) => {
+app.put<{ Params: { id: string }; Body: { username?: string; password?: string; role?: UserRole } }>("/api/users/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "admin");
   let updatedUser: StoredUser | null = null;
   await updateUsers((users) => {
@@ -2013,7 +2218,7 @@ app.put<{ Params: { id: string }; Body: { username?: string; password?: string; 
   return publicUser(updatedUser!);
 });
 
-app.delete<{ Params: { id: string } }>("/api/users/:id", async (request) => {
+app.delete<{ Params: { id: string } }>("/api/users/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "admin");
   let deletedUser: StoredUser | null = null;
   await updateUsers((users) => {
@@ -2099,21 +2304,22 @@ app.get("/api/fabric/versions", async () => {
 
 app.post<{
   Body: CreateServerInput;
-}>("/api/servers", async (request) => {
+}>("/api/servers", provisionRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await createManagedServer(request.body);
   logInfo(serverLogFields(server), "Managed server created");
   return publicServer(server);
 });
 
-app.post<{ Body: CreateServerInput }>("/api/servers/provision", async (request) => {
+app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const job = startProvisionJob(request.body);
   return job;
 });
 
 app.get<{ Params: { id: string } }>("/api/provision/:id", async (request, reply) => {
-  const job = provisionJobs.get(request.params.id);
+  await requireRequestPermission(request, "manager");
+  const job = provisionJobs.get(validateProvisionJobId(request.params.id));
   if (!job) {
     return reply.code(404).send({ error: "Provisioning job not found" });
   }
@@ -2134,7 +2340,7 @@ app.put<{
     javaArgs?: string;
     serverPort?: string;
   };
-}>("/api/servers/:id", async (request) => {
+}>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   let updatedServer: ManagedServer | null = null;
   await updateServers(async (servers) => {
@@ -2151,11 +2357,16 @@ app.put<{
     const minecraftVersion = request.body.minecraftVersion?.trim() || current.minecraftVersion;
     const loaderVersion = request.body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
     const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
-    const serverJar = request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar";
+    const serverJar = validateRuntimeJarFilename(request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar");
     const serverPort = request.body.serverPort?.trim();
     if (serverPort && !isValidServerPort(serverPort)) {
       throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
     }
+    const dockerContainer = validateDockerContainerName(request.body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
+    const dockerImage = validateDockerImageName(request.body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion));
+    const dockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
+    if (dockerPorts) parseDockerPorts(dockerPorts);
+    const javaArgs = validateJavaArgs(request.body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
 
     const jarChanged = current.minecraftVersion !== minecraftVersion
       || current.loaderVersion !== loaderVersion
@@ -2169,10 +2380,10 @@ app.put<{
       loaderVersion,
       installerVersion,
       serverJar,
-      dockerContainer: request.body.dockerContainer?.trim() || current.dockerContainer,
-      dockerImage: request.body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion),
-      dockerPorts: request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts),
-      javaArgs: request.body.javaArgs?.trim() || current.javaArgs,
+      dockerContainer,
+      dockerImage,
+      dockerPorts,
+      javaArgs,
       updatedAt: new Date().toISOString()
     };
 
@@ -2198,7 +2409,7 @@ app.delete<{
     confirmName?: string;
     deleteFiles?: boolean;
   };
-}>("/api/servers/:id", async (request) => {
+}>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   let deletedContainer = false;
   let deletedFiles = false;
@@ -2221,7 +2432,8 @@ app.delete<{
     }
 
     deletedContainer = dockerAvailable() ? await removeManagedDockerContainer(server) : false;
-    if (request.body.deleteFiles) {
+    const deleteFiles = optionalStrictBoolean(request.body.deleteFiles, "deleteFiles", false);
+    if (deleteFiles) {
       const directory = ensureManagedServerDirectory(server);
       await rm(directory, { recursive: true, force: true });
       deletedFiles = true;
@@ -2249,22 +2461,22 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
   };
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/start", async (request) => {
+app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "start");
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/stop", async (request) => {
+app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "stop");
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/restart", async (request) => {
+app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "basic");
   return dockerAction(await getServer(request.params.id), "restart");
 });
 
-app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", async (request) => {
+app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
   await requireRequestPermission(request, "expanded");
   const server = await getServer(request.params.id);
   const startedAt = Date.now();
@@ -2279,6 +2491,7 @@ app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
+  await requireRequestPermission(request, "expanded");
   const server = await getServer(request.params.id);
   return { schedules: server.schedules ?? [] };
 });
@@ -2286,7 +2499,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request
 app.post<{
   Params: { id: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
-}>("/api/servers/:id/schedules", async (request) => {
+}>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "expanded");
   let createdSchedule: ScheduledExecution | null = null;
   let serverLog: Record<string, unknown> = {};
@@ -2308,7 +2521,7 @@ app.post<{
 app.put<{
   Params: { id: string; scheduleId: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
-}>("/api/servers/:id/schedules/:scheduleId", async (request) => {
+}>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "expanded");
   let updatedSchedule: ScheduledExecution | null = null;
   let serverLog: Record<string, unknown> = {};
@@ -2317,8 +2530,9 @@ app.put<{
     if (serverIndex === -1) {
       throw new Error("Server not found");
     }
+    const scheduleId = validateScheduleId(request.params.scheduleId);
     const schedules = servers[serverIndex].schedules ?? [];
-    const scheduleIndex = schedules.findIndex((candidate) => candidate.id === request.params.scheduleId);
+    const scheduleIndex = schedules.findIndex((candidate) => candidate.id === scheduleId);
     if (scheduleIndex === -1) {
       throw new Error("Schedule not found");
     }
@@ -2332,19 +2546,20 @@ app.put<{
   return updatedSchedule!;
 });
 
-app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", async (request) => {
+app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "expanded");
   let serverLog: Record<string, unknown> = {};
+  const scheduleId = validateScheduleId(request.params.scheduleId);
   await updateServers((servers) => {
     const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
     if (serverIndex === -1) {
       throw new Error("Server not found");
     }
-    servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== request.params.scheduleId);
+    servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== scheduleId);
     servers[serverIndex].updatedAt = new Date().toISOString();
     serverLog = serverLogFields(servers[serverIndex]);
   });
-  logInfo({ ...serverLog, scheduleId: request.params.scheduleId, action: "delete_schedule" }, "Schedule deleted");
+  logInfo({ ...serverLog, scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
 });
 
@@ -2388,6 +2603,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) =
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? ".");
   const targetStat = await stat(target);
@@ -2417,13 +2633,14 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
   }
-  if (targetStat.size > 2 * 1024 * 1024) {
+  if (targetStat.size > editorFileSizeLimit) {
     logWarn({ ...serverLogFields(server), path: toPublicPath(server, target), size: targetStat.size, reason: "editor_size_limit" }, "File edit rejected");
     throw new Error("File is larger than the 2 MiB editor limit");
   }
@@ -2439,12 +2656,18 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   };
 });
 
-app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", async (request) => {
+app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.body.path ?? "");
   if (typeof request.body.content !== "string") {
     throw new Error("Content is required");
+  }
+  if (Buffer.byteLength(request.body.content, "utf8") > editorFileSizeLimit) {
+    throw new Error("File content is larger than the 2 MiB editor limit");
+  }
+  if (request.body.content.includes("\0")) {
+    throw new Error("Binary files cannot be edited in the browser editor");
   }
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
@@ -2455,7 +2678,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
   return { ok: true, path: toPublicPath(server, target) };
 });
 
-app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", async (request) => {
+app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
@@ -2590,6 +2813,7 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
   };
 }
 app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, "mods");
@@ -2668,6 +2892,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
+  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.query.filename);
   let iconsDir: string;
@@ -2691,12 +2916,12 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
   return reply.send(createReadStream(iconPath));
 });
 
-app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", async (request) => {
+app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.body.filename);
-  const enabled = Boolean(request.body.enabled);
+  const enabled = requireStrictBoolean(request.body.enabled, "enabled");
   const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join("mods", filename)))
     ? `${filename}.disabled`
     : filename;
@@ -2725,11 +2950,11 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 });
 
 
-app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", async (request) => {
+app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.body.filename);
-  const channel = normalizeReleaseChannel(request.body.channel);
+  const channel = optionalReleaseChannel(request.body.channel);
   const prefs = await readModPreferences(server);
   prefs[filename] = { ...prefs[filename], channel };
   await writeModPreferences(server, prefs);
@@ -2737,7 +2962,7 @@ app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseCh
   return { ok: true, filename, channel };
 });
 
-app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", async (request) => {
+app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
@@ -2754,7 +2979,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   return { ok: true, filename };
 });
 
-app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", async (request) => {
+app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const startedAt = Date.now();
@@ -2763,16 +2988,18 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     await ensureServerStoppedForModChanges(server);
     filename = safeModFilename(safeInstalledModFilename(request.body.filename));
     logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, "Manual mod upload started");
-    if (!request.body.contentBase64) {
-      throw new Error("Uploaded mod content is required");
+    const contentBase64 = validateBase64Content(request.body.contentBase64);
+    const content = Buffer.from(contentBase64, "base64");
+    if (!content.length || content.length > modFileSizeLimit) {
+      throw new Error(`Uploaded mod must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
     }
-    const content = Buffer.from(request.body.contentBase64, "base64");
-    if (!content.length || content.length > 128 * 1024 * 1024) {
-      throw new Error("Uploaded mod must be between 1 byte and 128 MiB");
-    }
+    assertJarBuffer(content);
     await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
     await validateExistingInsideServer(server, "mods");
     const destination = await ensureWritableInsideServer(server, join("mods", filename));
+    if (existsSync(destination)) {
+      throw new Error("A mod with that filename already exists");
+    }
     await writeFile(destination, content);
     await deleteModIcon(server, filename);
     const prefs = await readModPreferences(server);
@@ -2789,6 +3016,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
 });
 
 app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
+  await requireRequestPermission(request, "manager");
   const query = request.query.query?.trim();
   if (!query) {
     return { hits: [], status: "no_project_found" };
@@ -2798,8 +3026,8 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     throw new Error("Minecraft and Fabric loader versions are required before searching compatible mods");
   }
   const minecraftVersion = server.minecraftVersion;
-  const selectedChannel = normalizeReleaseChannel(request.query.channel);
-  const compatibilityFilter = request.query.compatibility;
+  const selectedChannel = optionalReleaseChannel(request.query.channel);
+  const compatibilityFilter = optionalCompatibilityFilter(request.query.compatibility);
   const startedAt = Date.now();
   logDebug({ ...serverLogFields(server), queryLength: query.length, channel: selectedChannel, compatibilityFilter, action: "modrinth_search" }, "Modrinth search started");
 
@@ -2847,31 +3075,35 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   }
 });
 
-app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", async (request) => {
+app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "manager");
   const server = await getServer(request.body.serverId);
   const startedAt = Date.now();
-  const projectId = request.body.projectId?.trim();
+  const projectId = validateModrinthProjectId(request.body.projectId);
+  const forceIncompatible = optionalStrictBoolean(request.body.forceIncompatible, "forceIncompatible", false);
   try {
     await ensureServerStoppedForModChanges(server);
     if (!projectId || !server.minecraftVersion || !server.loaderVersion) {
       throw new Error("projectId, Minecraft version, and Fabric loader version are required for compatible Fabric installs");
     }
     const minecraftVersion = server.minecraftVersion;
-    logInfo({ ...serverLogFields(server), projectId, channel: request.body.channel, forceIncompatible: Boolean(request.body.forceIncompatible), action: "modrinth_install" }, "Modrinth install started");
+    const selectedChannel = optionalReleaseChannel(request.body.channel);
+    logInfo({ ...serverLogFields(server), projectId, channel: selectedChannel, forceIncompatible, action: "modrinth_install" }, "Modrinth install started");
 
     const projectUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`);
     const projectResponse = await modrinthFetch(projectUrl.toString());
+    if (!projectResponse.ok) {
+      throw new Error(`Modrinth project lookup failed: ${projectResponse.statusText}`);
+    }
     const project = await projectResponse.json() as { icon_url?: string | null };
-    const selectedChannel = normalizeReleaseChannel(request.body.channel);
     const compatibility = await resolveModrinthProjectCompatibility({
       projectId,
       minecraftVersion,
       loader: "fabric",
       channel: selectedChannel
     });
-    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, compatibility: compatibility.status, forceIncompatible: Boolean(request.body.forceIncompatible), action: "modrinth_install" }, "Modrinth compatibility decision");
-    if (!compatibility.compatible && !request.body.forceIncompatible) {
+    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, compatibility: compatibility.status, forceIncompatible, action: "modrinth_install" }, "Modrinth compatibility decision");
+    if (!compatibility.compatible && !forceIncompatible) {
       logWarn({ ...serverLogFields(server), projectId, compatibility: compatibility.status, reason: compatibility.reason, action: "modrinth_install" }, "Modrinth install rejected as incompatible");
       throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
     }
@@ -2882,19 +3114,36 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
     if (!file.url.startsWith("https://")) {
       throw new Error("Refusing to download a non-HTTPS mod file");
     }
+    if (file.size && file.size > modFileSizeLimit) {
+      throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+    }
     const downloadHost = new URL(file.url).host;
 
     await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
     await validateExistingInsideServer(server, "mods");
     const destination = await ensureWritableInsideServer(server, join("mods", safeModFilename(file.filename)));
+    if (existsSync(destination)) {
+      throw new Error("A mod with that filename already exists");
+    }
     const downloadResponse = await modrinthFetch(file.url);
     if (!downloadResponse.body) {
       throw new Error("Mod download returned no body");
     }
-    await pipeline(
-      Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
-      createWriteStream(destination)
-    );
+    const contentLength = Number(downloadResponse.headers.get("content-length") ?? "0");
+    if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
+      throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+    }
+    try {
+      await pipeline(
+        Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
+        sizeLimitTransform(modFileSizeLimit),
+        createWriteStream(destination)
+      );
+      await verifyDownloadedJar(destination, file);
+    } catch (error) {
+      await rm(destination, { force: true }).catch(() => {});
+      throw error;
+    }
     const filename = basename(destination);
     await saveModIcon(server, filename, project.icon_url);
     const prefs = await readModPreferences(server);
@@ -2910,16 +3159,16 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
         loaders: compatibility.matchedLoaders ?? [],
         hashes: file.hashes,
         installedAt: new Date().toISOString(),
-        installedWithForceIncompatible: !compatibility.compatible,
+        installedWithForceIncompatible: forceIncompatible && !compatibility.compatible,
         incompatibilityReason: compatibility.compatible ? undefined : compatibility.reason,
         clientSide: compatibility.clientSide,
         serverSide: compatibility.serverSide,
-        forceIncompatible: !compatibility.compatible
+        forceIncompatible: forceIncompatible && !compatibility.compatible
       }
     };
     await writeModPreferences(server, prefs);
 
-    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, filename, downloadHost, durationMs: durationSince(startedAt), forceIncompatible: !compatibility.compatible, action: "modrinth_install", status: "succeeded" }, "Modrinth install succeeded");
+    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, filename, downloadHost, durationMs: durationSince(startedAt), forceIncompatible: forceIncompatible && !compatibility.compatible, action: "modrinth_install", status: "succeeded" }, "Modrinth install succeeded");
     return {
       ok: true,
       projectId,
@@ -2930,7 +3179,7 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
       compatibility
     };
   } catch (error) {
-    logOperationFailure({ ...serverLogFields(server), projectId, durationMs: durationSince(startedAt), forceIncompatible: Boolean(request.body.forceIncompatible), action: "modrinth_install", status: "failed" }, "Modrinth install failed", error);
+    logOperationFailure({ ...serverLogFields(server), projectId, durationMs: durationSince(startedAt), forceIncompatible, action: "modrinth_install", status: "failed" }, "Modrinth install failed", error);
     throw error;
   }
 });
@@ -2938,7 +3187,8 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
 await registerStaticFrontend(app);
 
 app.setErrorHandler((error, _request, reply) => {
-  const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : 400;
+  const expectedUserError = isExpectedUserError(error);
+  const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
   const errorMessage = error instanceof Error ? error.message : String(error);
   const fields = {
     ...routeLogFields(_request, statusCode),
@@ -2952,7 +3202,7 @@ app.setErrorHandler((error, _request, reply) => {
   } else {
     app.log.warn(fields, "API request rejected");
   }
-  reply.code(statusCode).send({ error: error instanceof Error ? error.message : "Request failed" });
+  reply.code(statusCode).send({ error: statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed" });
 });
 
 function scheduleNextTick() {
