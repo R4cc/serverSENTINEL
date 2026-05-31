@@ -18,7 +18,7 @@ import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages
 import { SchedulePage } from "./pages/SchedulesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 
-const appVersion = "0.1.1";
+const appVersion = "0.2.0";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 type ModCompatibilityFilter = "all" | "compatible" | "incompatible";
 type FileSortKey = "name" | "modifiedAt" | "type" | "size";
@@ -3072,7 +3072,6 @@ export default function App() {
                             {fileSort.key === key ? (fileSort.direction === "asc" ? " ↑" : " ↓") : ""}
                           </button>
                         ))}
-                        <span>Status</span>
                       </div>
                       {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
                         <InlineState tone="empty" title="Directory is empty" message="No files or folders were found at this path." />
@@ -3098,7 +3097,6 @@ export default function App() {
                             <span>{dateTimeFormatter.format(new Date(entry.modifiedAt))}</span>
                             <span>{fileDisplayType(entry)}</span>
                             <span>{entry.type === "file" ? formatBytes(entry.size) : "-"}</span>
-                            <span className={`fileStatus ${entry.status ?? "ok"}`}>{fileStatusLabel(entry)}</span>
                           </div>
                         );
                       })}

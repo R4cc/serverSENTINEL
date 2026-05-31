@@ -2987,7 +2987,7 @@ button .buttonIcon {
 .fileTableHead,
 .fileTableRow {
   display: grid;
-  grid-template-columns: 42px minmax(220px, 1.4fr) minmax(160px, 0.7fr) minmax(120px, 0.55fr) minmax(90px, 0.4fr) minmax(96px, 0.4fr);
+  grid-template-columns: 42px minmax(220px, 1.6fr) minmax(160px, 0.8fr) minmax(120px, 0.6fr) minmax(90px, 0.4fr);
   align-items: center;
 }
 
