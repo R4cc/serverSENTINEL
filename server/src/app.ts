@@ -3571,7 +3571,7 @@ const startupUsers = await readUsers().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
-  appVersion: process.env.npm_package_version ?? "0.1.0",
+  appVersion: process.env.npm_package_version ?? "0.2.0",
   configDir: config.configDir,
   managedServersDir: config.serversDir,
   dockerSocketMounted,
