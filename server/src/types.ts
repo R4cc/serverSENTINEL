@@ -2,8 +2,6 @@ export type AppSettings = {
   modrinthApiKey?: string;
 };
 
-export type UserRole = "admin" | "basic" | "expanded" | "manager";
-
 export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
 
 export type Permission =
@@ -43,11 +41,6 @@ export type StoredUser = {
   displayName?: string;
   passwordHash: string;
   salt: string;
-  /**
-   * Compatibility alias for the current frontend. Backend authorization uses
-   * permissions as the source of truth.
-   */
-  role: UserRole;
   rolePreset: RolePreset;
   permissions: Permission[];
   serverAccess?: ServerAccess;
@@ -59,11 +52,6 @@ export type PublicUser = {
   id: string;
   username: string;
   displayName?: string;
-  /**
-   * Compatibility alias for the current frontend. Backend authorization uses
-   * permissions as the source of truth.
-   */
-  role: UserRole;
   rolePreset: RolePreset;
   permissions: Permission[];
   serverAccess?: ServerAccess;

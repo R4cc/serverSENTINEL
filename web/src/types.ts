@@ -52,8 +52,6 @@ export type AppState = {
   currentUser?: PublicUser;
 };
 
-export type UserRole = "admin" | "basic" | "expanded" | "manager";
-
 export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
 
 export type PermissionKey =
@@ -91,9 +89,8 @@ export type PublicUser = {
   id: string;
   username: string;
   displayName?: string;
-  role: UserRole;
-  rolePreset?: RolePreset;
-  permissions?: PermissionKey[];
+  rolePreset: RolePreset;
+  permissions: PermissionKey[];
   serverAccess?: ServerAccess;
   createdAt: string;
 };

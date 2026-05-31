@@ -4,7 +4,7 @@ ServerSentinel is a Dockerized web panel for creating and managing Fabric Minecr
 
 NOTE: This project is *entirely* coded with AI and it's recommended to only be used in a secure environment.
 
-ServerSentinel stores its lightweight configuration, users, and managed server definitions on disk. It does not require an external database.
+ServerSentinel stores its lightweight configuration, users, and managed server definitions as validated JSON files on disk. It does not require an external database.
 
 <img width="2652" height="1799" alt="image" src="https://github.com/user-attachments/assets/191c1f82-c15c-4392-a78b-758e5f820fe5" />
 
@@ -39,7 +39,7 @@ Each managed server instance has its own managed server files and Minecraft runt
 ## Safety Boundaries
 
 - Server definitions are persisted in ServerSentinel config storage at `SERVERSENTINEL_CONFIG_DIR`.
-- Users have role presets and explicit permissions. Backend authorization checks permissions, not role names.
+- Users have role presets and explicit permissions. Backend authorization checks permissions.
 - Server files are created under `SERVERSENTINEL_SERVERS_DIR`.
 - File operations are scoped to the active managed server directory.
 - Requests that try to escape a managed server directory are rejected.
@@ -63,6 +63,12 @@ PORT=8080
 ```
 
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` should match the Docker volume mounted into ServerSentinel at `SERVERSENTINEL_SERVERS_DIR`. This lets Minecraft runtime containers mount the same managed server files by name.
+
+## Storage
+
+ServerSentinel is pre-release and does not maintain compatibility with old local development data. The config directory contains `settings.json`, `users.json`, and `servers.json`; per-server metadata such as installed Modrinth mod preferences is stored inside the managed server directory under `mods/.serversentinel-mods.json`, and detected Fabric/Minecraft version metadata is stored in `.serversentinel-version.json`.
+
+Persisted JSON is validated when it is read and written. Invalid or outdated pre-release records should be recreated instead of migrated. For local development, stop the app and delete the configured config and server data directories, for example `.local-config` and `.local-servers`, then start ServerSentinel and create a new admin user and managed server. For Docker volumes, remove and recreate the ServerSentinel config volume and managed server files volume.
 
 ## Docker Socket Security
 

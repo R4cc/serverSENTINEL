@@ -425,7 +425,7 @@ export default function App() {
     if (canViewUsers) {
       void loadUsers();
     }
-  }, [authSession?.authenticated, authSession?.user?.role, authSession?.user?.rolePreset, canViewUsers, demoMode]);
+  }, [authSession?.authenticated, authSession?.user?.rolePreset, canViewUsers, demoMode]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-demo-mode", String(demoMode));

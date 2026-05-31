@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const defaultServersDir = "/data/servers";
-export const legacyDefaultServersDockerVolume = "serversentinel-minecraft-servers";
+export const defaultServersDockerVolumeName = "serversentinel-minecraft-servers";
 
 function defaultServersDockerVolume(serversDir: string) {
   const configuredVolume = process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME?.trim();
@@ -11,7 +11,7 @@ function defaultServersDockerVolume(serversDir: string) {
   }
   const usesDefaultContainerLayout = serversDir === resolve(defaultServersDir)
     && (existsSync("/.dockerenv") || process.env.SERVERSENTINEL_CONFIG_DIR === "/config");
-  return usesDefaultContainerLayout ? legacyDefaultServersDockerVolume : "";
+  return usesDefaultContainerLayout ? defaultServersDockerVolumeName : "";
 }
 
 const configuredServersDir = resolve(process.env.SERVERSENTINEL_SERVERS_DIR ?? defaultServersDir);

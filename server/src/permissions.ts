@@ -1,4 +1,4 @@
-import type { Permission, RolePreset, StoredUser, UserRole } from "./types.js";
+import type { Permission, RolePreset, StoredUser } from "./types.js";
 
 export const ALL_PERMISSIONS = [
   "servers.view",
@@ -170,43 +170,6 @@ export function rolePresetFromUnknown(value: unknown): RolePreset {
     return value;
   }
   throwPermissionError("Role preset must be one of viewer, operator, maintainer, manager, admin, or custom", 400);
-}
-
-export function legacyRoleToPermissions(role: UserRole) {
-  switch (role) {
-    case "admin":
-      return ROLE_PRESETS.admin;
-    case "manager":
-      return ROLE_PRESETS.manager;
-    case "expanded":
-      return normalizePermissions(["servers.control", "console.command", "schedules.manage", "settings.view", "files.view", "mods.view"]);
-    case "basic":
-      return normalizePermissions(["servers.control", "console.view", "files.view", "mods.view", "schedules.view", "settings.view"]);
-  }
-}
-
-export function legacyRoleFromPermissions(permissions: readonly Permission[]): UserRole {
-  const normalized = normalizePermissions(permissions);
-  if (normalized.includes("users.manage")) return "admin";
-  if (normalized.some((permission) =>
-    permission === "servers.create"
-    || permission === "servers.delete"
-    || permission === "servers.editSettings"
-    || permission === "files.edit"
-    || permission === "files.delete"
-    || permission === "files.upload"
-    || permission === "files.download"
-    || permission === "mods.install"
-    || permission === "mods.upload"
-    || permission === "mods.enableDisable"
-    || permission === "mods.remove"
-    || permission === "mods.update"
-    || permission === "schedules.manage"
-  )) {
-    return "manager";
-  }
-  if (normalized.includes("console.command")) return "expanded";
-  return "basic";
 }
 
 export function hasPermission(user: Pick<StoredUser, "permissions">, permission: Permission) {

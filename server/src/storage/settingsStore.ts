@@ -1,23 +1,14 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../config.js";
 import type { AppSettings } from "../types.js";
 import { AsyncQueue } from "../core.js";
+import { asObject, optionalString, readJsonFile, writeJsonFile } from "./jsonFile.js";
 
 const settingsFile = join(config.configDir, "settings.json");
 const settingsQueue = new AsyncQueue();
 
 export async function readSettings() {
-  await mkdir(config.configDir, { recursive: true });
-  if (!existsSync(settingsFile)) {
-    const initial: AppSettings = {
-      modrinthApiKey: process.env.MODRINTH_API_KEY || undefined
-    };
-    await writeFile(settingsFile, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
-    return initial;
-  }
-  return JSON.parse(await readFile(settingsFile, "utf8")) as AppSettings;
+  return readJsonFile(settingsFile, initialSettings(), validateSettings);
 }
 
 export function queuedReadSettings() {
@@ -25,8 +16,7 @@ export function queuedReadSettings() {
 }
 
 export async function writeSettings(settings: AppSettings) {
-  await mkdir(config.configDir, { recursive: true });
-  await writeFile(settingsFile, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await writeJsonFile(settingsFile, validateSettings(settings));
 }
 
 export async function updateSettings(updater: (settings: AppSettings) => Promise<void> | void) {
@@ -40,4 +30,17 @@ export async function updateSettings(updater: (settings: AppSettings) => Promise
 export async function modrinthApiKey() {
   const settings = await queuedReadSettings();
   return settings.modrinthApiKey || process.env.MODRINTH_API_KEY || "";
+}
+
+function initialSettings(): AppSettings {
+  return {
+    modrinthApiKey: process.env.MODRINTH_API_KEY || undefined
+  };
+}
+
+function validateSettings(value: unknown): AppSettings {
+  const settings = asObject(value, "settings.json");
+  return {
+    modrinthApiKey: optionalString(settings.modrinthApiKey, "settings.modrinthApiKey")?.trim() || undefined
+  };
 }

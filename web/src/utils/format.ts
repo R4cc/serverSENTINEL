@@ -1,4 +1,4 @@
-import type { ManagedServer, ModCompatibility, ServerStatus, ThemePreference, UserRole, LocalePreference, VersionResolution, VersionSource } from '../types';
+import type { ManagedServer, ModCompatibility, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
 
 export const defaultServerPort = 25565;
 
@@ -138,13 +138,6 @@ export function readThemePreference(): ThemePreference {
   const saved = window.localStorage.getItem("serversentinel-theme");
   return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
 }
-
-export const roleRanks: Record<UserRole, number> = {
-  basic: 1,
-  expanded: 2,
-  manager: 3,
-  admin: 4
-};
 
 export function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {
   const saved = window.localStorage.getItem(key);

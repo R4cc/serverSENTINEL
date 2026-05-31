@@ -14,7 +14,7 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
-import { config, legacyDefaultServersDockerVolume, maxServerPort, minServerPort } from "./config.js";
+import { config, maxServerPort, minServerPort } from "./config.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
 import { fabricMeta, latestFabricVersion } from "./fabric/fabricClient.js";
 import {
@@ -30,8 +30,6 @@ import {
   ROLE_PRESETS,
   inferRolePreset,
   isFullAccessUser,
-  legacyRoleFromPermissions,
-  legacyRoleToPermissions,
   normalizePermissions,
   permissionsForRolePreset,
   requirePermission as requireUserPermission,
@@ -39,6 +37,7 @@ import {
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
+import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
 import type {
   DockerExecCreate,
   DockerExecInspect,
@@ -59,8 +58,7 @@ import type {
   ServerEvent,
   ScheduledExecution,
   Session,
-  StoredUser,
-  UserRole
+  StoredUser
 } from "./types.js";
 import {
   cronMatches,
@@ -254,16 +252,11 @@ function publicUser(user: StoredUser): PublicUser {
     id: normalized.id,
     username: normalized.username,
     displayName: normalized.displayName,
-    role: normalized.role,
     rolePreset: normalized.rolePreset,
     permissions: normalized.permissions,
     serverAccess: normalized.serverAccess,
     createdAt: normalized.createdAt
   };
-}
-
-function normalizeRole(role?: string): UserRole {
-  return role === undefined ? "basic" : validateRoleInput(role);
 }
 
 function normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined {
@@ -283,37 +276,38 @@ function normalizeDisplayName(displayName?: unknown) {
   return value;
 }
 
-function normalizeStoredUser(user: StoredUser): StoredUser {
-  const legacyRole = validateRoleInput(user.role ?? "basic");
-  let permissions: Permission[];
-  if (Array.isArray(user.permissions)) {
-    permissions = normalizePermissions(user.permissions);
-  } else {
-    permissions = normalizePermissions(legacyRoleToPermissions(legacyRole));
-  }
+function normalizeStoredUser(value: unknown): StoredUser {
+  const user = asObject(value, "stored user");
+  const permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
   const inferredPreset = inferRolePreset(permissions);
   const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
   const effectivePreset = rolePreset === "custom" || inferRolePreset(permissions) === rolePreset ? rolePreset : "custom";
+  const rawServerAccess = user.serverAccess === undefined ? undefined : asObject(user.serverAccess, "user.serverAccess");
+  const serverAccess = rawServerAccess?.mode === "selected"
+    ? { mode: "selected" as const, serverIds: asArray(rawServerAccess.serverIds, "user.serverAccess.serverIds").map((id) => requiredString(id, "user.serverAccess.serverIds[]")) }
+    : rawServerAccess?.mode === "all"
+      ? { mode: "all" as const, serverIds: [] }
+      : undefined;
   return {
-    ...user,
-    role: legacyRoleFromPermissions(permissions),
+    id: requiredString(user.id, "user.id"),
+    username: validateUsername(optionalString(user.username, "user.username")),
+    displayName: normalizeDisplayName(user.displayName),
+    passwordHash: requiredString(user.passwordHash, "user.passwordHash"),
+    salt: requiredString(user.salt, "user.salt"),
     rolePreset: effectivePreset,
     permissions,
-    serverAccess: user.serverAccess?.mode === "selected"
-      ? { mode: "selected", serverIds: Array.isArray(user.serverAccess.serverIds) ? user.serverAccess.serverIds.filter((id) => typeof id === "string") : [] }
-      : user.serverAccess?.mode === "all"
-        ? { mode: "all", serverIds: [] }
-        : undefined
+    serverAccess,
+    createdAt: requiredString(user.createdAt, "user.createdAt"),
+    updatedAt: requiredString(user.updatedAt, "user.updatedAt")
   };
 }
 
-function buildUserPermissions(input: { role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser) {
+function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser) {
   if (input.permissions !== undefined) {
     const permissions = normalizePermissions(input.permissions);
     return {
       permissions,
-      rolePreset: inferRolePreset(permissions),
-      role: legacyRoleFromPermissions(permissions)
+      rolePreset: inferRolePreset(permissions)
     };
   }
 
@@ -321,17 +315,7 @@ function buildUserPermissions(input: { role?: UserRole; rolePreset?: RolePreset;
     const permissions = permissionsForRolePreset(input.rolePreset, fallback?.permissions ?? []);
     return {
       permissions,
-      rolePreset: inferRolePreset(permissions),
-      role: legacyRoleFromPermissions(permissions)
-    };
-  }
-
-  if (input.role !== undefined) {
-    const permissions = normalizePermissions(legacyRoleToPermissions(input.role));
-    return {
-      permissions,
-      rolePreset: inferRolePreset(permissions),
-      role: legacyRoleFromPermissions(permissions)
+      rolePreset: inferRolePreset(permissions)
     };
   }
 
@@ -339,16 +323,14 @@ function buildUserPermissions(input: { role?: UserRole; rolePreset?: RolePreset;
     const normalized = normalizeStoredUser(fallback);
     return {
       permissions: normalized.permissions,
-      rolePreset: normalized.rolePreset,
-      role: normalized.role
+      rolePreset: normalized.rolePreset
     };
   }
 
   const permissions = normalizePermissions(ROLE_PRESETS.viewer);
   return {
     permissions,
-    rolePreset: inferRolePreset(permissions),
-    role: legacyRoleFromPermissions(permissions)
+    rolePreset: inferRolePreset(permissions)
   };
 }
 
@@ -392,11 +374,6 @@ export function requireStrictBoolean(value: unknown, fieldName: string) {
 
 function optionalStrictBoolean(value: unknown, fieldName: string, fallback: boolean) {
   return value === undefined ? fallback : requireStrictBoolean(value, fieldName);
-}
-
-function validateRoleInput(role: unknown): UserRole {
-  if (role === "basic" || role === "expanded" || role === "manager" || role === "admin") return role;
-  badRequest("Role must be one of basic, expanded, manager, or admin");
 }
 
 function optionalReleaseChannel(channel: unknown): ReleaseChannel {
@@ -529,25 +506,15 @@ function verifyPassword(password: string, user: StoredUser) {
 }
 
 async function readUsers() {
-  await mkdir(config.configDir, { recursive: true });
-  if (!existsSync(usersFile)) {
-    await writeFile(usersFile, "[]\n", "utf8");
-  }
-  const parsed = JSON.parse(await readFile(usersFile, "utf8")) as StoredUser[];
-  const users = parsed.map(normalizeStoredUser);
-  if (JSON.stringify(parsed) !== JSON.stringify(users)) {
-    await writeFile(usersFile, `${JSON.stringify(users, null, 2)}\n`, "utf8");
-  }
-  return users;
+  return readJsonFile(usersFile, [], (value) => asArray(value, "users.json").map(normalizeStoredUser));
 }
 
 async function writeUsers(users: StoredUser[]) {
-  await mkdir(config.configDir, { recursive: true });
   const normalized = users.map(normalizeStoredUser);
   if (normalized.length > 0 && !normalized.some(isFullAccessUser)) {
     badRequest("At least one full-access admin user is required");
   }
-  await writeFile(usersFile, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await writeJsonFile(usersFile, normalized);
 }
 
 function queuedReadUsers() {
@@ -764,18 +731,64 @@ async function publicServer(server: ManagedServer): Promise<PublicServer> {
   };
 }
 
-async function readServers() {
-  await mkdir(config.configDir, { recursive: true });
-  if (!existsSync(serversFile)) {
-    await writeFile(serversFile, "[]\n", "utf8");
+function normalizeSchedule(value: unknown): ScheduledExecution {
+  const schedule = asObject(value, "schedule");
+  return {
+    id: validateScheduleId(schedule.id),
+    name: requiredString(schedule.name, "schedule.name"),
+    cron: requiredString(schedule.cron, "schedule.cron"),
+    commands: sanitizeCommands(asArray(schedule.commands, "schedule.commands")),
+    onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
+    enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
+    createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
+    updatedAt: requiredString(schedule.updatedAt, "schedule.updatedAt"),
+    lastRunAt: optionalString(schedule.lastRunAt, "schedule.lastRunAt"),
+    lastStatus: optionalString(schedule.lastStatus, "schedule.lastStatus"),
+    lastMessage: optionalString(schedule.lastMessage, "schedule.lastMessage")
+  };
+}
+
+function normalizeManagedServer(value: unknown): ManagedServer {
+  const server = asObject(value, "managed server");
+  const serverType = server.serverType ?? "fabric";
+  if (serverType !== "fabric") {
+    throw new Error("managed server serverType must be fabric");
   }
-  const parsed = JSON.parse(await readFile(serversFile, "utf8")) as ManagedServer[];
-  return parsed;
+  const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
+  if (dockerPorts) parseDockerPorts(dockerPorts);
+  const serversDir = resolve(config.serversDir);
+  const serverDir = resolve(requiredString(server.serverDir, "server.serverDir"));
+  if (serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
+    throw new Error("managed server serverDir must be inside SERVERSENTINEL_SERVERS_DIR");
+  }
+  return {
+    id: validateServerId(server.id),
+    displayName: requiredString(server.displayName, "server.displayName"),
+    serverDir,
+    storageName: optionalString(server.storageName, "server.storageName"),
+    minecraftVersion: optionalString(server.minecraftVersion, "server.minecraftVersion"),
+    loaderVersion: optionalString(server.loaderVersion, "server.loaderVersion"),
+    installerVersion: optionalString(server.installerVersion, "server.installerVersion"),
+    serverJar: server.serverJar === undefined ? undefined : validateRuntimeJarFilename(server.serverJar),
+    dockerContainer: server.dockerContainer === undefined ? undefined : validateDockerContainerName(server.dockerContainer),
+    dockerImage: server.dockerImage === undefined ? undefined : validateDockerImageName(server.dockerImage),
+    dockerMountSource: optionalString(server.dockerMountSource, "server.dockerMountSource"),
+    dockerWorkingDir: optionalString(server.dockerWorkingDir, "server.dockerWorkingDir"),
+    dockerPorts,
+    javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
+    schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
+    serverType,
+    createdAt: requiredString(server.createdAt, "server.createdAt"),
+    updatedAt: requiredString(server.updatedAt, "server.updatedAt")
+  };
+}
+
+async function readServers() {
+  return readJsonFile(serversFile, [], (value) => asArray(value, "servers.json").map(normalizeManagedServer));
 }
 
 async function writeServers(servers: ManagedServer[]) {
-  await mkdir(config.configDir, { recursive: true });
-  await writeFile(serversFile, `${JSON.stringify(servers, null, 2)}\n`, "utf8");
+  await writeJsonFile(serversFile, servers.map(normalizeManagedServer));
 }
 
 function queuedReadServers() {
@@ -1009,14 +1022,7 @@ function dockerControlConfigured(server: ManagedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
 }
 
-function usesLegacyUnconfiguredServersVolume(server: ManagedServer) {
-  return !config.serversDockerVolume && server.dockerMountSource === legacyDefaultServersDockerVolume;
-}
-
 function serverDockerMountSource(server: ManagedServer) {
-  if (usesLegacyUnconfiguredServersVolume(server)) {
-    return server.serverDir;
-  }
   if (server.dockerMountSource && server.dockerMountSource !== server.serverDir) {
     return server.dockerMountSource;
   }
@@ -1024,9 +1030,6 @@ function serverDockerMountSource(server: ManagedServer) {
 }
 
 function serverDockerWorkingDir(server: ManagedServer) {
-  if (usesLegacyUnconfiguredServersVolume(server)) {
-    return "/data/server";
-  }
   if (server.dockerWorkingDir) {
     return server.dockerWorkingDir;
   }
@@ -2257,7 +2260,6 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register
   const user: StoredUser = {
     id: randomUUID(),
     username,
-    role: "admin",
     rolePreset: "admin",
     permissions: normalizePermissions(ROLE_PRESETS.admin),
     createdAt: now,
@@ -2276,7 +2278,7 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register
   sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
   const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
   reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
-  logInfo({ userId: user.id, username: user.username, role: user.role, action: "register_first" }, "Initial admin user created");
+  logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
   return { authenticated: true, setupRequired: false, user: publicUser(user) };
 });
 
@@ -2300,7 +2302,7 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", 
   sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
   const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
   reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
-  logInfo({ userId: user.id, username: user.username, role: user.role, action: "login", status: "succeeded" }, "Login succeeded");
+  logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
   return { authenticated: true, setupRequired: false, user: publicUser(user) };
 });
 
@@ -2319,14 +2321,13 @@ app.get("/api/users", async (request) => {
   return { users: (await queuedReadUsers()).map(publicUser) };
 });
 
-app.post<{ Body: { username?: string; displayName?: string; password?: string; role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
+app.post<{ Body: { username?: string; displayName?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const username = validateUsername(request.body.username);
   const displayName = normalizeDisplayName(request.body.displayName);
   const password = validatePassword(request.body.password);
   const rolePreset = normalizeRolePreset(request.body.rolePreset);
   const permissionData = buildUserPermissions({
-    role: request.body.role === undefined ? undefined : normalizeRole(request.body.role),
     rolePreset,
     permissions: request.body.permissions
   });
@@ -2342,7 +2343,6 @@ app.post<{ Body: { username?: string; displayName?: string; password?: string; r
       id: randomUUID(),
       username,
       displayName,
-      role: permissionData.role,
       rolePreset: permissionData.rolePreset,
       permissions: permissionData.permissions,
       createdAt: now,
@@ -2355,7 +2355,7 @@ app.post<{ Body: { username?: string; displayName?: string; password?: string; r
   return publicUser(createdUser!);
 });
 
-app.put<{ Params: { id: string }; Body: { username?: string; displayName?: string; password?: string; role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
+app.put<{ Params: { id: string }; Body: { username?: string; displayName?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   let updatedUser: StoredUser | null = null;
   await updateUsers((users) => {
@@ -2370,7 +2370,6 @@ app.put<{ Params: { id: string }; Body: { username?: string; displayName?: strin
     const displayName = request.body.displayName === undefined ? current.displayName : normalizeDisplayName(request.body.displayName);
     const rolePreset = normalizeRolePreset(request.body.rolePreset);
     const permissionData = buildUserPermissions({
-      role: request.body.role === undefined ? undefined : normalizeRole(request.body.role),
       rolePreset,
       permissions: request.body.permissions
     }, current);
@@ -2384,7 +2383,6 @@ app.put<{ Params: { id: string }; Body: { username?: string; displayName?: strin
       ...current,
       username,
       displayName,
-      role: permissionData.role,
       rolePreset: permissionData.rolePreset,
       permissions: permissionData.permissions,
       updatedAt: new Date().toISOString(),
@@ -3036,16 +3034,55 @@ async function readModPreferences(server: ManagedServer): Promise<Record<string,
     return {};
   }
   if (!existsSync(path)) return {};
-  try {
-    return JSON.parse(await readFile(path, "utf8")) as Record<string, ModPreference>;
-  } catch {
-    return {};
-  }
+  return normalizeModPreferences(JSON.parse(await readFile(path, "utf8")) as unknown);
 }
 
 async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
   const path = await ensureWritableInsideServer(server, "mods/.serversentinel-mods.json");
-  await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, normalizeModPreferences(data));
+}
+
+function normalizeModPreferences(value: unknown): Record<string, ModPreference> {
+  const raw = asObject(value, "mod preferences");
+  const normalized: Record<string, ModPreference> = {};
+  for (const [filename, preference] of Object.entries(raw)) {
+    const safeFilename = safeInstalledModFilename(filename);
+    const item = asObject(preference, `mod preferences.${filename}`);
+    normalized[safeFilename] = {
+      channel: normalizeReleaseChannel(optionalString(item.channel, `mod preferences.${filename}.channel`)),
+      modrinth: item.modrinth === undefined ? undefined : normalizeInstalledModMetadata(item.modrinth)
+    };
+  }
+  return normalized;
+}
+
+function normalizeInstalledModMetadata(value: unknown): InstalledModMetadata {
+  const metadata = asObject(value, "installed mod metadata");
+  return {
+    projectId: requiredString(metadata.projectId, "modrinth.projectId"),
+    versionId: requiredString(metadata.versionId, "modrinth.versionId"),
+    filename: safeInstalledModFilename(requiredString(metadata.filename, "modrinth.filename")),
+    versionNumber: requiredString(metadata.versionNumber, "modrinth.versionNumber"),
+    versionType: metadata.versionType === undefined ? undefined : normalizeReleaseChannel(optionalString(metadata.versionType, "modrinth.versionType")),
+    gameVersions: asArray(metadata.gameVersions, "modrinth.gameVersions").map((version) => requiredString(version, "modrinth.gameVersions[]")),
+    loaders: asArray(metadata.loaders, "modrinth.loaders").map((loader) => requiredString(loader, "modrinth.loaders[]")),
+    hashes: metadata.hashes === undefined ? undefined : normalizeStringRecord(metadata.hashes, "modrinth.hashes"),
+    installedAt: requiredString(metadata.installedAt, "modrinth.installedAt"),
+    installedWithForceIncompatible: requireStrictBoolean(metadata.installedWithForceIncompatible, "modrinth.installedWithForceIncompatible"),
+    incompatibilityReason: optionalString(metadata.incompatibilityReason, "modrinth.incompatibilityReason"),
+    clientSide: optionalString(metadata.clientSide, "modrinth.clientSide"),
+    serverSide: optionalString(metadata.serverSide, "modrinth.serverSide"),
+    forceIncompatible: metadata.forceIncompatible === undefined ? undefined : requireStrictBoolean(metadata.forceIncompatible, "modrinth.forceIncompatible")
+  };
+}
+
+function normalizeStringRecord(value: unknown, label: string) {
+  const raw = asObject(value, label);
+  const normalized: Record<string, string> = {};
+  for (const [key, item] of Object.entries(raw)) {
+    normalized[key] = requiredString(item, `${label}.${key}`);
+  }
+  return normalized;
 }
 
 function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {

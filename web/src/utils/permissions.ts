@@ -1,4 +1,4 @@
-import type { PermissionKey, PublicUser, RolePreset, UserRole } from "../types";
+import type { PermissionKey, PublicUser, RolePreset } from "../types";
 
 export const ALL_PERMISSIONS = [
   "servers.view",
@@ -191,22 +191,8 @@ export function permissionsForPreset(preset: RolePreset) {
   return preset === "custom" ? [] : normalizePermissions(ROLE_PRESETS[preset]);
 }
 
-export function legacyRoleToPermissions(role?: UserRole) {
-  switch (role) {
-    case "admin":
-      return ROLE_PRESETS.admin;
-    case "manager":
-      return ROLE_PRESETS.manager;
-    case "expanded":
-      return normalizePermissions(["servers.control", "console.command", "schedules.manage", "settings.view", "files.view", "mods.view"]);
-    case "basic":
-    default:
-      return normalizePermissions(["servers.control", "console.view", "files.view", "mods.view", "schedules.view", "settings.view"]);
-  }
-}
-
 export function userPermissions(user?: PublicUser | null) {
-  return normalizePermissions(user?.permissions?.length ? user.permissions : legacyRoleToPermissions(user?.role));
+  return normalizePermissions(user?.permissions ?? []);
 }
 
 export function hasPermission(user: PublicUser | null | undefined, permission: PermissionKey) {
