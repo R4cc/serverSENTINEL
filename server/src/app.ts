@@ -26,6 +26,17 @@ import {
   fetchProject
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
+import {
+  ROLE_PRESETS,
+  inferRolePreset,
+  isFullAccessUser,
+  legacyRoleFromPermissions,
+  legacyRoleToPermissions,
+  normalizePermissions,
+  permissionsForRolePreset,
+  requirePermission as requireUserPermission,
+  rolePresetFromUnknown
+} from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
 import type {
@@ -42,6 +53,7 @@ import type {
   PublicServer,
   PublicUser,
   ReleaseChannel,
+  RolePreset,
   ResolvedServerVersions,
   ServerActivity,
   ServerEvent,
@@ -141,12 +153,6 @@ const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const modFileSizeLimit = 128 * 1024 * 1024;
-const roleRanks: Record<UserRole, number> = {
-  basic: 1,
-  expanded: 2,
-  manager: 3,
-  admin: 4
-};
 const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 const provisionRateLimit = { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } };
 const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
@@ -243,16 +249,107 @@ function durationSince(startedAt: number) {
 }
 
 function publicUser(user: StoredUser): PublicUser {
+  const normalized = normalizeStoredUser(user);
   return {
-    id: user.id,
-    username: user.username,
-    role: user.role,
-    createdAt: user.createdAt
+    id: normalized.id,
+    username: normalized.username,
+    displayName: normalized.displayName,
+    role: normalized.role,
+    rolePreset: normalized.rolePreset,
+    permissions: normalized.permissions,
+    serverAccess: normalized.serverAccess,
+    createdAt: normalized.createdAt
   };
 }
 
 function normalizeRole(role?: string): UserRole {
   return role === undefined ? "basic" : validateRoleInput(role);
+}
+
+function normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined {
+  return rolePreset === undefined ? undefined : rolePresetFromUnknown(rolePreset);
+}
+
+function normalizeDisplayName(displayName?: unknown) {
+  if (displayName === undefined) return undefined;
+  if (typeof displayName !== "string") {
+    badRequest("Display name must be a string");
+  }
+  const value = displayName.trim();
+  if (!value) return undefined;
+  if (value.length > 64) {
+    badRequest("Display name must be 64 characters or fewer");
+  }
+  return value;
+}
+
+function normalizeStoredUser(user: StoredUser): StoredUser {
+  const legacyRole = validateRoleInput(user.role ?? "basic");
+  let permissions: Permission[];
+  if (Array.isArray(user.permissions)) {
+    permissions = normalizePermissions(user.permissions);
+  } else {
+    permissions = normalizePermissions(legacyRoleToPermissions(legacyRole));
+  }
+  const inferredPreset = inferRolePreset(permissions);
+  const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
+  const effectivePreset = rolePreset === "custom" || inferRolePreset(permissions) === rolePreset ? rolePreset : "custom";
+  return {
+    ...user,
+    role: legacyRoleFromPermissions(permissions),
+    rolePreset: effectivePreset,
+    permissions,
+    serverAccess: user.serverAccess?.mode === "selected"
+      ? { mode: "selected", serverIds: Array.isArray(user.serverAccess.serverIds) ? user.serverAccess.serverIds.filter((id) => typeof id === "string") : [] }
+      : user.serverAccess?.mode === "all"
+        ? { mode: "all", serverIds: [] }
+        : undefined
+  };
+}
+
+function buildUserPermissions(input: { role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser) {
+  if (input.permissions !== undefined) {
+    const permissions = normalizePermissions(input.permissions);
+    return {
+      permissions,
+      rolePreset: inferRolePreset(permissions),
+      role: legacyRoleFromPermissions(permissions)
+    };
+  }
+
+  if (input.rolePreset !== undefined) {
+    const permissions = permissionsForRolePreset(input.rolePreset, fallback?.permissions ?? []);
+    return {
+      permissions,
+      rolePreset: inferRolePreset(permissions),
+      role: legacyRoleFromPermissions(permissions)
+    };
+  }
+
+  if (input.role !== undefined) {
+    const permissions = normalizePermissions(legacyRoleToPermissions(input.role));
+    return {
+      permissions,
+      rolePreset: inferRolePreset(permissions),
+      role: legacyRoleFromPermissions(permissions)
+    };
+  }
+
+  if (fallback) {
+    const normalized = normalizeStoredUser(fallback);
+    return {
+      permissions: normalized.permissions,
+      rolePreset: normalized.rolePreset,
+      role: normalized.role
+    };
+  }
+
+  const permissions = normalizePermissions(ROLE_PRESETS.viewer);
+  return {
+    permissions,
+    rolePreset: inferRolePreset(permissions),
+    role: legacyRoleFromPermissions(permissions)
+  };
 }
 
 function validateUsername(username?: string) {
@@ -436,12 +533,21 @@ async function readUsers() {
   if (!existsSync(usersFile)) {
     await writeFile(usersFile, "[]\n", "utf8");
   }
-  return JSON.parse(await readFile(usersFile, "utf8")) as StoredUser[];
+  const parsed = JSON.parse(await readFile(usersFile, "utf8")) as StoredUser[];
+  const users = parsed.map(normalizeStoredUser);
+  if (JSON.stringify(parsed) !== JSON.stringify(users)) {
+    await writeFile(usersFile, `${JSON.stringify(users, null, 2)}\n`, "utf8");
+  }
+  return users;
 }
 
 async function writeUsers(users: StoredUser[]) {
   await mkdir(config.configDir, { recursive: true });
-  await writeFile(usersFile, `${JSON.stringify(users, null, 2)}\n`, "utf8");
+  const normalized = users.map(normalizeStoredUser);
+  if (normalized.length > 0 && !normalized.some(isFullAccessUser)) {
+    badRequest("At least one full-access admin user is required");
+  }
+  await writeFile(usersFile, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
 }
 
 function queuedReadUsers() {
@@ -489,19 +595,10 @@ async function requireAuthenticated(cookieHeader?: string) {
   return user;
 }
 
-function requirePermission(user: StoredUser, permission: Permission) {
-  const requiredRank = permission === "admin" ? roleRanks.admin : roleRanks[permission];
-  if (roleRanks[user.role] < requiredRank) {
-    const error = new Error("You do not have permission to perform this action") as Error & { statusCode?: number };
-    error.statusCode = 403;
-    throw error;
-  }
-}
-
 async function requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission) {
   const user = await requireAuthenticated(request.headers.cookie);
   if (permission) {
-    requirePermission(user, permission);
+    requireUserPermission(permission)(user);
   }
   return user;
 }
@@ -737,6 +834,41 @@ function ensureManagedServerDirectory(server: ManagedServer) {
 function toPublicPath(server: ManagedServer, absolutePath: string) {
   const rel = relative(resolve(server.serverDir), absolutePath).replaceAll("\\", "/");
   return rel ? `/${rel}` : "/";
+}
+
+function isModsPath(server: ManagedServer, absolutePath: string) {
+  const publicPath = toPublicPath(server, absolutePath);
+  return publicPath === "/mods" || publicPath.startsWith("/mods/");
+}
+
+function isServerSettingsFile(server: ManagedServer, absolutePath: string) {
+  const publicPath = toPublicPath(server, absolutePath);
+  return publicPath === "/server.properties";
+}
+
+function fileRenamePermission(server: ManagedServer, source: string, target: string): Permission {
+  if (isServerSettingsFile(server, source) || isServerSettingsFile(server, target)) return "servers.editSettings";
+  if (isModsPath(server, source) || isModsPath(server, target)) return "mods.enableDisable";
+  return "files.edit";
+}
+
+async function requireFilePathPermission(request: { headers: { cookie?: string } }, server: ManagedServer, absolutePath: string, permission: Permission) {
+  if (!isModsPath(server, absolutePath)) {
+    return requireRequestPermission(request, permission);
+  }
+  if (permission === "files.view" || permission === "files.download") {
+    return requireRequestPermission(request, "mods.view");
+  }
+  if (permission === "files.edit") {
+    return requireRequestPermission(request, "mods.enableDisable");
+  }
+  if (permission === "files.upload") {
+    return requireRequestPermission(request, "mods.upload");
+  }
+  if (permission === "files.delete") {
+    return requireRequestPermission(request, "mods.remove");
+  }
+  return requireRequestPermission(request, permission);
 }
 
 function safeFileManagerName(name?: string) {
@@ -2126,6 +2258,8 @@ app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register
     id: randomUUID(),
     username,
     role: "admin",
+    rolePreset: "admin",
+    permissions: normalizePermissions(ROLE_PRESETS.admin),
     createdAt: now,
     updatedAt: now,
     ...passwordData
@@ -2181,15 +2315,21 @@ app.post("/api/auth/logout", async (request, reply) => {
 });
 
 app.get("/api/users", async (request) => {
-  await requireRequestPermission(request, "admin");
+  await requireRequestPermission(request, "users.view");
   return { users: (await queuedReadUsers()).map(publicUser) };
 });
 
-app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/api/users", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "admin");
+app.post<{ Body: { username?: string; displayName?: string; password?: string; role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
   const username = validateUsername(request.body.username);
+  const displayName = normalizeDisplayName(request.body.displayName);
   const password = validatePassword(request.body.password);
-  const role = normalizeRole(request.body.role);
+  const rolePreset = normalizeRolePreset(request.body.rolePreset);
+  const permissionData = buildUserPermissions({
+    role: request.body.role === undefined ? undefined : normalizeRole(request.body.role),
+    rolePreset,
+    permissions: request.body.permissions
+  });
   let createdUser: StoredUser | null = null;
   await updateUsers((users) => {
     if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
@@ -2201,19 +2341,22 @@ app.post<{ Body: { username?: string; password?: string; role?: UserRole } }>("/
     createdUser = {
       id: randomUUID(),
       username,
-      role,
+      displayName,
+      role: permissionData.role,
+      rolePreset: permissionData.rolePreset,
+      permissions: permissionData.permissions,
       createdAt: now,
       updatedAt: now,
       ...hashPassword(password)
     };
     users.push(createdUser);
   });
-  logInfo({ userId: createdUser!.id, username: createdUser!.username, role: createdUser!.role, action: "create_user" }, "User created");
+  logInfo({ userId: createdUser!.id, username: createdUser!.username, rolePreset: createdUser!.rolePreset, action: "create_user" }, "User created");
   return publicUser(createdUser!);
 });
 
-app.put<{ Params: { id: string }; Body: { username?: string; password?: string; role?: UserRole } }>("/api/users/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "admin");
+app.put<{ Params: { id: string }; Body: { username?: string; displayName?: string; password?: string; role?: UserRole; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
   let updatedUser: StoredUser | null = null;
   await updateUsers((users) => {
     const index = users.findIndex((user) => user.id === request.params.id);
@@ -2224,34 +2367,37 @@ app.put<{ Params: { id: string }; Body: { username?: string; password?: string; 
     }
     const current = users[index];
     const username = request.body.username === undefined ? current.username : validateUsername(request.body.username);
-    const role = request.body.role === undefined ? current.role : normalizeRole(request.body.role);
+    const displayName = request.body.displayName === undefined ? current.displayName : normalizeDisplayName(request.body.displayName);
+    const rolePreset = normalizeRolePreset(request.body.rolePreset);
+    const permissionData = buildUserPermissions({
+      role: request.body.role === undefined ? undefined : normalizeRole(request.body.role),
+      rolePreset,
+      permissions: request.body.permissions
+    }, current);
     const password = request.body.password?.trim() ? validatePassword(request.body.password) : undefined;
     if (users.some((user) => user.id !== current.id && user.username.toLowerCase() === username.toLowerCase())) {
       const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
       error.statusCode = 400;
       throw error;
     }
-    const adminCount = users.filter((user) => user.role === "admin").length;
-    if (current.role === "admin" && role !== "admin" && adminCount <= 1) {
-      const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
-      error.statusCode = 400;
-      throw error;
-    }
     users[index] = {
       ...current,
       username,
-      role,
+      displayName,
+      role: permissionData.role,
+      rolePreset: permissionData.rolePreset,
+      permissions: permissionData.permissions,
       updatedAt: new Date().toISOString(),
       ...(password ? hashPassword(password) : {})
     };
     updatedUser = users[index];
   });
-  logInfo({ userId: updatedUser!.id, username: updatedUser!.username, role: updatedUser!.role, action: "update_user" }, "User updated");
+  logInfo({ userId: updatedUser!.id, username: updatedUser!.username, rolePreset: updatedUser!.rolePreset, action: "update_user" }, "User updated");
   return publicUser(updatedUser!);
 });
 
 app.delete<{ Params: { id: string } }>("/api/users/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "admin");
+  await requireRequestPermission(request, "users.manage");
   let deletedUser: StoredUser | null = null;
   await updateUsers((users) => {
     const index = users.findIndex((candidate) => candidate.id === request.params.id);
@@ -2261,7 +2407,7 @@ app.delete<{ Params: { id: string } }>("/api/users/:id", destructiveRateLimit, a
       throw error;
     }
     const user = users[index];
-    if (user.role === "admin" && users.filter((candidate) => candidate.role === "admin").length <= 1) {
+    if (isFullAccessUser(user) && users.filter(isFullAccessUser).length <= 1) {
       const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
       error.statusCode = 400;
       throw error;
@@ -2297,7 +2443,7 @@ app.addHook("preHandler", async (request) => {
 
 app.get("/api/app", async (request) => {
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
-  const user = demoMode ? null : await requireRequestPermission(request);
+  const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
   const servers = await queuedReadServers();
   return {
     servers: await Promise.all(servers.map(publicServer)),
@@ -2309,7 +2455,7 @@ app.get("/api/app", async (request) => {
 });
 
 app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "integrations.manage");
   const key = request.body.modrinthApiKey?.trim();
   if (!key) {
     throw new Error("Modrinth API key is required");
@@ -2321,7 +2467,10 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
   return { ok: true, modrinthApiConfigured: true };
 });
 
-app.get("/api/fabric/versions", async () => {
+app.get("/api/fabric/versions", async (request) => {
+  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+    await requireRequestPermission(request, "servers.create");
+  }
   const [game, loader, installer] = await Promise.all([
     fabricMeta<Array<{ version: string; stable: boolean }>>("/v2/versions/game"),
     fabricMeta<Array<{ version: string; stable: boolean }>>("/v2/versions/loader"),
@@ -2337,20 +2486,20 @@ app.get("/api/fabric/versions", async () => {
 app.post<{
   Body: CreateServerInput;
 }>("/api/servers", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "servers.create");
   const server = await createManagedServer(request.body);
   logInfo(serverLogFields(server), "Managed server created");
   return publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "servers.create");
   const job = startProvisionJob(request.body);
   return job;
 });
 
 app.get<{ Params: { id: string } }>("/api/provision/:id", async (request, reply) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "servers.create");
   const job = provisionJobs.get(validateProvisionJobId(request.params.id));
   if (!job) {
     return reply.code(404).send({ error: "Provisioning job not found" });
@@ -2373,7 +2522,7 @@ app.put<{
     serverPort?: string;
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "servers.editSettings");
   let updatedServer: ManagedServer | null = null;
   await updateServers(async (servers) => {
     const index = servers.findIndex((candidate) => candidate.id === request.params.id);
@@ -2445,7 +2594,7 @@ app.delete<{
     deleteFiles?: boolean;
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "servers.delete");
   let deletedContainer = false;
   let deletedFiles = false;
   let serverFields: Record<string, unknown> = {};
@@ -2482,6 +2631,7 @@ app.delete<{
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
+  await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
   const latestLogPath = await validateExistingInsideServer(server, "logs/latest.log").catch(() => "");
   const docker = await dockerStatus(server);
@@ -2497,22 +2647,22 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "basic");
+  await requireRequestPermission(request, "servers.control");
   return dockerAction(await getServer(request.params.id), "start");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "basic");
+  await requireRequestPermission(request, "servers.control");
   return dockerAction(await getServer(request.params.id), "stop");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "basic");
+  await requireRequestPermission(request, "servers.control");
   return dockerAction(await getServer(request.params.id), "restart");
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
-  await requireRequestPermission(request, "expanded");
+  await requireRequestPermission(request, "console.command");
   const server = await getServer(request.params.id);
   const startedAt = Date.now();
   try {
@@ -2526,7 +2676,7 @@ app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
-  await requireRequestPermission(request, "expanded");
+  await requireRequestPermission(request, "schedules.view");
   const server = await getServer(request.params.id);
   return { schedules: server.schedules ?? [] };
 });
@@ -2535,7 +2685,7 @@ app.post<{
   Params: { id: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "expanded");
+  await requireRequestPermission(request, "schedules.manage");
   let createdSchedule: ScheduledExecution | null = null;
   let serverLog: Record<string, unknown> = {};
   await updateServers((servers) => {
@@ -2557,7 +2707,7 @@ app.put<{
   Params: { id: string; scheduleId: string };
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "expanded");
+  await requireRequestPermission(request, "schedules.manage");
   let updatedSchedule: ScheduledExecution | null = null;
   let serverLog: Record<string, unknown> = {};
   await updateServers((servers) => {
@@ -2582,7 +2732,7 @@ app.put<{
 });
 
 app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "expanded");
+  await requireRequestPermission(request, "schedules.manage");
   let serverLog: Record<string, unknown> = {};
   const scheduleId = validateScheduleId(request.params.scheduleId);
   await updateServers((servers) => {
@@ -2603,7 +2753,7 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   const url = new URL(request.url, "http://localhost");
   const serverId = url.searchParams.get("serverId") ?? undefined;
   try {
-    await requireAuthenticated(request.headers.cookie);
+    await requireRequestPermission(request, "console.view");
     const server = await getServer(serverId);
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
     client.send(JSON.stringify({ type: "status", status: await dockerStatus(server) }));
@@ -2622,6 +2772,7 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/logs", async (request) => {
+  await requireRequestPermission(request, "console.view");
   const server = await getServer(request.params.id);
   if (dockerControlConfigured(server) && dockerAvailable()) {
     return { text: await dockerRecentLogs(server), source: "docker" };
@@ -2630,17 +2781,19 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/logs", async (request) => 
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/stats", async (request) => {
+  await requireRequestPermission(request, "servers.view");
   return dockerResourceStats(await getServer(request.params.id));
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
+  await requireRequestPermission(request, "servers.view");
   return serverOverviewData(await getServer(request.params.id));
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? ".");
+  await requireFilePathPermission(request, server, target, "files.view");
   const targetStat = await stat(target);
   if (!targetStat.isDirectory()) {
     throw new Error("Path is not a directory");
@@ -2670,9 +2823,9 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.view");
   const targetStat = await stat(target);
   const publicPath = toPublicPath(server, target);
   if (!targetStat.isFile()) {
@@ -2697,9 +2850,9 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", async (request, reply) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.download");
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Only files can be downloaded");
@@ -2713,9 +2866,9 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.view");
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
@@ -2737,9 +2890,9 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
 });
 
 app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const target = await validateExistingInsideServer(server, request.body.path ?? "");
+  await requireFilePathPermission(request, server, target, isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   if (typeof request.body.content !== "string") {
     throw new Error("Content is required");
   }
@@ -2759,9 +2912,9 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
+  await requireFilePathPermission(request, server, parent, "files.upload");
   const parentStat = await stat(parent);
   if (!parentStat.isDirectory()) {
     throw new Error("Parent path is not a directory");
@@ -2774,7 +2927,6 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
   const parentStat = await stat(parent);
@@ -2782,6 +2934,8 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
     throw new Error("Upload path is not a directory");
   }
   const filename = safeFileManagerName(request.body.filename);
+  const uploadPermission: Permission = isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
+  await requireFilePathPermission(request, server, parent, uploadPermission);
   if (typeof request.body.contentBase64 !== "string") {
     throw new Error("File content is required");
   }
@@ -2799,7 +2953,6 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
 });
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const source = await validateExistingInsideServer(server, request.body.path ?? "");
   if (resolve(source) === resolve(server.serverDir)) {
@@ -2807,6 +2960,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   }
   const targetName = safeFileManagerName(request.body.name);
   const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
+  await requireFilePathPermission(request, server, source, fileRenamePermission(server, source, target));
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
@@ -2816,9 +2970,9 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   const source = await validateExistingInsideServer(server, request.body.path ?? "");
+  await requireFilePathPermission(request, server, source, isModsPath(server, source) ? "mods.upload" : "files.upload");
   const sourceStat = await stat(source);
   if (!sourceStat.isFile()) {
     throw new Error("Only files can be duplicated from the browser file manager");
@@ -2834,12 +2988,12 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
   const server = await getServer(request.params.id);
   if (request.query.recursive !== undefined && request.query.recursive !== "true" && request.query.recursive !== "false") {
     throw new Error("recursive must be true or false");
   }
   const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, isModsPath(server, target) ? "mods.remove" : "files.delete");
   if (resolve(target) === resolve(server.serverDir)) {
     throw new Error("Refusing to delete the server root directory");
   }
@@ -2971,7 +3125,7 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
   };
 }
 app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, "mods");
@@ -3050,7 +3204,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.query.filename);
   let iconsDir: string;
@@ -3075,7 +3229,7 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.body.filename);
@@ -3109,7 +3263,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 
 
 app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.params.id);
   const filename = safeInstalledModFilename(request.body.filename);
   const channel = optionalReleaseChannel(request.body.channel);
@@ -3121,7 +3275,7 @@ app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseCh
 });
 
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(request.query.filename);
@@ -3138,7 +3292,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
   const startedAt = Date.now();
   let filename: string | undefined;
@@ -3174,7 +3328,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
 });
 
 app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.view");
   const query = request.query.query?.trim();
   if (!query) {
     return { hits: [], status: "no_project_found" };
@@ -3234,7 +3388,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 });
 
 app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "manager");
+  await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
   const startedAt = Date.now();
   const projectId = validateModrinthProjectId(request.body.projectId);

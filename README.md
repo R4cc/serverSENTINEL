@@ -1,10 +1,10 @@
 # ServerSentinel
 
-ServerSentinel is a Dockerized, single-user web panel for creating and managing Fabric Minecraft managed server instances.
+ServerSentinel is a Dockerized web panel for creating and managing Fabric Minecraft managed server instances.
 
 NOTE: This project is *entirely* coded with AI and it's recommended to only be used in a secure environment.
 
-This MVP intentionally has no authentication, no multi-user model, and no database.
+ServerSentinel stores its lightweight configuration, users, and managed server definitions on disk. It does not require an external database.
 
 <img width="2652" height="1799" alt="image" src="https://github.com/user-attachments/assets/191c1f82-c15c-4392-a78b-758e5f820fe5" />
 
@@ -39,6 +39,7 @@ Each managed server instance has its own managed server files and Minecraft runt
 ## Safety Boundaries
 
 - Server definitions are persisted in ServerSentinel config storage at `SERVERSENTINEL_CONFIG_DIR`.
+- Users have role presets and explicit permissions. Backend authorization checks permissions, not role names.
 - Server files are created under `SERVERSENTINEL_SERVERS_DIR`.
 - File operations are scoped to the active managed server directory.
 - Requests that try to escape a managed server directory are rejected.
@@ -174,7 +175,7 @@ npm run build
 
 ## Current MVP Limitations
 
-- No authentication. Do not expose this service directly to the public internet.
+- Authentication is local and permission-based, but the Docker socket still grants powerful host access. Do not expose this service directly to the public internet.
 - Managed server creation is Fabric-only.
 - Managing arbitrary existing or already-running external Minecraft servers is not supported.
 - No mod dependency/conflict resolver; installs the latest Modrinth version matching Fabric and the selected Minecraft version.

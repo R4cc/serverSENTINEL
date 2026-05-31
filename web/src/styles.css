@@ -1617,6 +1617,12 @@ button .buttonIcon {
   text-transform: uppercase;
 }
 
+.usernameMeta {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .roleCell {
   display: inline-flex;
   gap: var(--space-2);
@@ -1652,6 +1658,26 @@ button .buttonIcon {
 .roleBadge.admin {
   border-color: var(--sentinel-success);
   color: var(--sentinel-success);
+}
+
+.roleBadge.viewer {
+  border-color: var(--text-muted);
+}
+
+.roleBadge.operator {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.roleBadge.maintainer,
+.roleBadge.manager {
+  border-color: var(--sentinel-accent-strong);
+  color: var(--sentinel-accent-strong);
+}
+
+.roleBadge.custom {
+  border-color: var(--sentinel-warning);
+  color: var(--sentinel-warning);
 }
 
 .roleInfoWrap {
@@ -1729,6 +1755,162 @@ button .buttonIcon {
   background: var(--surface-raised);
   padding: var(--space-5);
   box-shadow: var(--shadow-elevated);
+}
+
+.userModalPanel {
+  width: min(720px, calc(100vw - 32px));
+  padding: 0;
+}
+
+.userModalForm {
+  display: flex;
+  min-height: 0;
+  max-height: calc(100vh - 48px);
+  flex-direction: column;
+}
+
+.userModalHeader,
+.userModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.userModalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.userModalHeader h2 {
+  margin: 0;
+}
+
+.userModalFooter {
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface);
+}
+
+.userModalBody {
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.userModalFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.presetSummary {
+  align-self: end;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.presetSummary strong {
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.permissionWarning {
+  margin-top: var(--space-3);
+  border: var(--border-strong) solid var(--sentinel-warning);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--sentinel-warning);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.permissionsSection {
+  margin-top: var(--space-4);
+}
+
+.permissionsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.permissionsHeader h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.permissionsHeader span {
+  color: var(--sentinel-danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.permissionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.permissionGroup {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+}
+
+.permissionGroup h4 {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.permissionRows {
+  display: grid;
+  gap: 7px;
+}
+
+.permissionRow {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.permissionRow input {
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.permissionRow span {
+  min-width: 0;
+}
+
+.permissionRow small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.permissionRow.dependent {
+  padding-left: var(--space-2);
 }
 
 .serverPath {
@@ -3900,6 +4082,20 @@ details.compatibilityBadge p {
   .usersGroupHeader button {
     grid-column: 1 / -1;
     justify-self: stretch;
+  }
+
+  .userModalFields,
+  .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .userModalHeader,
+  .userModalFooter {
+    padding: var(--space-3);
+  }
+
+  .userModalBody {
+    padding: var(--space-3);
   }
 
   .modRow button {

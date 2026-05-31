@@ -4,14 +4,53 @@ export type AppSettings = {
 
 export type UserRole = "admin" | "basic" | "expanded" | "manager";
 
-export type Permission = "basic" | "expanded" | "manager" | "admin";
+export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
+
+export type Permission =
+  | "servers.view"
+  | "servers.control"
+  | "servers.create"
+  | "servers.delete"
+  | "servers.editSettings"
+  | "console.view"
+  | "console.command"
+  | "files.view"
+  | "files.edit"
+  | "files.delete"
+  | "files.upload"
+  | "files.download"
+  | "mods.view"
+  | "mods.install"
+  | "mods.upload"
+  | "mods.enableDisable"
+  | "mods.remove"
+  | "mods.update"
+  | "schedules.view"
+  | "schedules.manage"
+  | "settings.view"
+  | "integrations.manage"
+  | "users.view"
+  | "users.manage";
+
+export type ServerAccess = {
+  mode: "all" | "selected";
+  serverIds: string[];
+};
 
 export type StoredUser = {
   id: string;
   username: string;
+  displayName?: string;
   passwordHash: string;
   salt: string;
+  /**
+   * Compatibility alias for the current frontend. Backend authorization uses
+   * permissions as the source of truth.
+   */
   role: UserRole;
+  rolePreset: RolePreset;
+  permissions: Permission[];
+  serverAccess?: ServerAccess;
   createdAt: string;
   updatedAt: string;
 };
@@ -19,7 +58,15 @@ export type StoredUser = {
 export type PublicUser = {
   id: string;
   username: string;
+  displayName?: string;
+  /**
+   * Compatibility alias for the current frontend. Backend authorization uses
+   * permissions as the source of truth.
+   */
   role: UserRole;
+  rolePreset: RolePreset;
+  permissions: Permission[];
+  serverAccess?: ServerAccess;
   createdAt: string;
 };
 

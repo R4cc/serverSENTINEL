@@ -1,6 +1,18 @@
-import { FormEvent } from 'react';
-import type { PublicUser, UserRole } from '../types';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
+import {
+  PERMISSION_DEPENDENCIES,
+  PERMISSION_GROUPS,
+  dependentPermissions,
+  displayedRolePreset,
+  expandPermissions,
+  inferRolePreset,
+  isPermissionKey,
+  permissionsForPreset,
+  rolePresetLabel,
+  userPermissions
+} from '../utils/permissions';
 
 export function AuthPanel({
   setupRequired,
@@ -53,6 +65,7 @@ export function UserManagement({
   users,
   currentUserId,
   editingUser,
+  canManageUsers = true,
   onOpenEdit,
   onCloseModal,
   onCreate,
@@ -64,18 +77,13 @@ export function UserManagement({
   currentUserId?: string;
   editingUser: "create" | PublicUser | null;
   busy?: boolean;
+  canManageUsers?: boolean;
   onOpenEdit: (user: PublicUser) => void;
   onCloseModal: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onUpdate: (event: FormEvent<HTMLFormElement>, user: PublicUser) => void;
   onDelete: (user: PublicUser) => void;
 }) {
-  const roleMeta: Record<UserRole, { label: string; description: string }> = {
-    basic: { label: "Basic", description: "Can start, stop, and restart assigned servers." },
-    expanded: { label: "Expanded", description: "Basic access plus console commands and scheduled commands." },
-    manager: { label: "Manager", description: "Can manage server settings, files, mods, and server lifecycle." },
-    admin: { label: "Admin", description: "Full access, including user management." }
-  };
   const modalUser = editingUser && editingUser !== "create" ? editingUser : null;
 
   return (
@@ -93,36 +101,38 @@ export function UserManagement({
             <tr key={user.id}>
               <td data-label="User">
                 <div className="userNameCell">
-                  <strong>{user.username}</strong>
+                  <strong>{user.displayName || user.username}</strong>
+                  {user.displayName && <span className="usernameMeta">{user.username}</span>}
                   {user.id === currentUserId && <span className="currentUserMark">Current user</span>}
                 </div>
               </td>
               <td data-label="Role">
                 <div className="roleCell">
-                  <span className={`roleBadge ${user.role}`}>{roleMeta[user.role].label}</span>
+                  <span className={`roleBadge ${displayedRolePreset(user)}`}>{rolePresetLabel(displayedRolePreset(user))}</span>
                   <span className="roleInfoWrap">
                     <button
                       type="button"
                       className="roleInfoButton"
-                      aria-label={`${roleMeta[user.role].label} role details`}
+                      aria-label={`${rolePresetLabel(displayedRolePreset(user))} preset details`}
                       aria-describedby={`role-tip-${user.id}`}
                     >
                       i
                     </button>
                     <span id={`role-tip-${user.id}`} role="tooltip" className="roleTooltip">
-                      {roleMeta[user.role].description}
+                      Roles are presets. Actual access is controlled by permissions.
                     </span>
                   </span>
                 </div>
               </td>
               <td data-label="Actions">
                 <div className="userActions">
-                  <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy}>Edit</button>
+                  <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</button>
                   <button
                     type="button"
                     className="dangerTextButton"
                     onClick={() => onDelete(user)}
-                    disabled={busy || user.id === currentUserId}
+                    disabled={busy || user.id === currentUserId || !canManageUsers}
+                    title={user.id === currentUserId ? "You cannot delete your current user" : !canManageUsers ? "Manage users permission is required" : "Delete user"}
                   >
                     Delete
                   </button>
@@ -130,53 +140,194 @@ export function UserManagement({
               </td>
             </tr>
           ))}
+          {users.length === 0 && (
+            <tr>
+              <td colSpan={3}>
+                <div className="emptyInline noBorder">No users found.</div>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
       {editingUser && (
-        <div className="modalBackdrop" role="presentation">
-          <section className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
-            <div className="panelHeader">
-              <h2 id="user-modal-title">{modalUser ? "Edit User" : "New User"}</h2>
-              <button type="button" className="iconButton" onClick={onCloseModal} aria-label="Close user dialog">
-                <AppIcon name="x" />
-              </button>
-            </div>
-            <form onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)} className="appForm">
-              <fieldset disabled={busy}>
-                <label>
-                  Username
-                  <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={modalUser?.username ?? ""} />
-                </label>
-                <label>
-                  Password
-                  <input
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required={!modalUser}
-                    minLength={8}
-                    placeholder={modalUser ? "Leave blank to keep current password" : "At least 8 characters"}
-                  />
-                </label>
-                <label>
-                  Role
-                  <select name="role" defaultValue={modalUser?.role ?? "basic"}>
-                    <option value="basic">Basic operations</option>
-                    <option value="expanded">Expanded</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
-                <div className="buttonRow">
-                  <button type="button" className="secondaryButton" onClick={onCloseModal}>Cancel</button>
-                  <button>{busy ? "Saving..." : modalUser ? "Save user" : "Create user"}</button>
-                </div>
-              </fieldset>
-            </form>
-          </section>
-        </div>
+        <UserPermissionModal
+          user={modalUser}
+          busy={busy}
+          onClose={onCloseModal}
+          onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)}
+        />
       )}
     </div>
   );
+}
+
+function UserPermissionModal({
+  user,
+  busy,
+  onClose,
+  onSubmit
+}: {
+  user: PublicUser | null;
+  busy?: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const initialPermissions = useMemo(() => userPermissions(user), [user]);
+  const [permissions, setPermissions] = useState<PermissionKey[]>(initialPermissions);
+  const [selectedPreset, setSelectedPreset] = useState<RolePreset>(inferRolePreset(initialPermissions));
+  const displayedPermissions = useMemo(() => new Set(permissions), [permissions]);
+  const unknownPermissions = useMemo(() => {
+    const raw = (user?.permissions ?? []) as string[];
+    return raw.filter((permission) => !isPermissionKey(permission));
+  }, [user]);
+  const inferredPreset = inferRolePreset(permissions);
+  const canSave = permissions.length > 0;
+
+  useEffect(() => {
+    const nextPermissions = userPermissions(user);
+    setPermissions(nextPermissions);
+    setSelectedPreset(inferRolePreset(nextPermissions));
+  }, [user]);
+
+  function changePreset(event: ChangeEvent<HTMLSelectElement>) {
+    const preset = event.target.value as RolePreset;
+    setSelectedPreset(preset);
+    if (preset !== "custom") {
+      setPermissions(permissionsForPreset(preset));
+    }
+  }
+
+  function togglePermission(permission: PermissionKey, checked: boolean) {
+    const next = new Set(permissions);
+    if (checked) {
+      next.add(permission);
+      expandPermissions([permission]).forEach((dependency) => next.add(dependency));
+    } else {
+      next.delete(permission);
+      const removeDependents = (base: PermissionKey) => {
+        for (const dependent of dependentPermissions(base)) {
+          next.delete(dependent);
+          removeDependents(dependent);
+        }
+      };
+      removeDependents(permission);
+    }
+    const normalized = expandPermissions([...next]);
+    setPermissions(normalized);
+    setSelectedPreset(inferRolePreset(normalized));
+  }
+
+  return (
+    <div className="modalBackdrop" role="presentation">
+      <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+        <form onSubmit={onSubmit} className="userModalForm">
+          <div className="userModalHeader">
+            <h2 id="user-modal-title">{user ? "Edit User" : "New User"}</h2>
+            <button type="button" className="iconButton" onClick={onClose} aria-label="Close user dialog">
+              <AppIcon name="x" />
+            </button>
+          </div>
+
+          <fieldset disabled={busy} className="userModalBody">
+            <input type="hidden" name="rolePreset" value={inferredPreset} />
+            <input type="hidden" name="permissions" value={JSON.stringify(permissions)} />
+
+            <div className="userModalFields">
+              <label>
+                Username
+                <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={user?.username ?? ""} />
+              </label>
+              <label>
+                Display name <span className="muted">(optional)</span>
+                <input name="displayName" autoComplete="off" maxLength={64} defaultValue={user?.displayName ?? ""} />
+              </label>
+              {!user && (
+                <label>
+                  Password
+                  <input name="password" type="password" autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
+                </label>
+              )}
+              {user && (
+                <label>
+                  New password <span className="muted">(optional)</span>
+                  <input name="password" type="password" autoComplete="new-password" minLength={8} placeholder="Leave blank to keep current password" />
+                </label>
+              )}
+              <label>
+                Role preset
+                <select name="presetPicker" value={selectedPreset} onChange={changePreset}>
+                  <option value="viewer">Viewer</option>
+                  <option value="operator">Operator</option>
+                  <option value="maintainer">Maintainer</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <div className="presetSummary" aria-live="polite">
+                Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong>
+              </div>
+            </div>
+
+            {unknownPermissions.length > 0 && (
+              <div className="permissionWarning">
+                This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
+              </div>
+            )}
+
+            <div className="permissionsSection">
+              <div className="permissionsHeader">
+                <h3>Permissions</h3>
+                {!canSave && <span>Choose at least one permission.</span>}
+              </div>
+              <div className="permissionGrid">
+                {PERMISSION_GROUPS.map((group) => (
+                  <section className="permissionGroup" key={group.title}>
+                    <h4>{group.title}</h4>
+                    <div className="permissionRows">
+                      {group.permissions.map(({ key, label }) => {
+                        const dependency = PERMISSION_DEPENDENCIES[key][0];
+                        const dependents = dependentPermissions(key);
+                        const title = dependency
+                          ? `Requires ${permissionShortLabel(dependency)}`
+                          : dependents.length > 0
+                            ? "Disabling this also disables dependent actions"
+                            : undefined;
+                        return (
+                          <label className={`permissionRow ${dependency ? "dependent" : ""}`} key={key} title={title}>
+                            <input
+                              type="checkbox"
+                              checked={displayedPermissions.has(key)}
+                              onChange={(event) => togglePermission(key, event.target.checked)}
+                            />
+                            <span>
+                              {label}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          </fieldset>
+
+          <div className="userModalFooter">
+            <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
+            <button disabled={busy || !canSave}>{busy ? "Saving..." : user ? "Save changes" : "Create user"}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function permissionShortLabel(permission: PermissionKey) {
+  for (const group of PERMISSION_GROUPS) {
+    const found = group.permissions.find((item) => item.key === permission);
+    if (found) return found.label;
+  }
+  return permission;
 }

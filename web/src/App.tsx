@@ -1,9 +1,10 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateRuntimeJarFilename, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
@@ -281,12 +282,15 @@ export default function App() {
   const activeModContext = `Fabric ${activeFabricLoaderVersion === "Unknown" ? "unknown" : activeFabricLoaderVersion} · Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
   const activeModVersionsUnknown = activeFabricLoaderVersion === "Unknown" || activeMinecraftVersion === "Unknown";
   const activeStatus = status?.server.id === activeServer?.id ? status : null;
-  const currentRole = authSession?.user?.role;
-  const canBasic = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.basic : false);
-  const canExpanded = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.expanded : false);
-  const canManager = activeServerIsDemo || (currentRole ? roleRanks[currentRole] >= roleRanks.manager : false);
-  const canManageReal = !demoMode && (currentRole ? roleRanks[currentRole] >= roleRanks.manager : false);
-  const canAdmin = currentRole === "admin";
+  const permissionUser = appState.currentUser ?? authSession?.user ?? null;
+  const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
+  const canExpanded = activeServerIsDemo || hasPermission(permissionUser, "console.command");
+  const canManager = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings") || hasPermission(permissionUser, "files.edit") || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "schedules.manage");
+  const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
+  const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
+  const canViewUsers = hasPermission(permissionUser, "users.view");
+  const canManageUsers = hasPermission(permissionUser, "users.manage");
+  const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const dockerOperationalLock = authOperationalLock || !effectiveAppState.dockerSocketMounted;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
@@ -418,10 +422,10 @@ export default function App() {
         installer: []
       });
     });
-    if (authSession.user?.role === "admin") {
+    if (canViewUsers) {
       void loadUsers();
     }
-  }, [authSession?.authenticated, authSession?.user?.role, demoMode]);
+  }, [authSession?.authenticated, authSession?.user?.role, authSession?.user?.rolePreset, canViewUsers, demoMode]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-demo-mode", String(demoMode));
@@ -794,8 +798,17 @@ export default function App() {
     setLogs([]);
   }
 
+  function parsePermissionsField(form: FormData): PermissionKey[] {
+    try {
+      const parsed = JSON.parse(String(form.get("permissions") || "[]"));
+      return Array.isArray(parsed) ? normalizePermissions(parsed) : [];
+    } catch {
+      return [];
+    }
+  }
+
   async function loadUsers() {
-    if (!canAdmin) return;
+    if (!canViewUsers) return;
     setUsersLoading(true);
     setUsersError("");
     try {
@@ -812,14 +825,18 @@ export default function App() {
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canAdmin || userSaving) return;
+    if (!canManageUsers || userSaving) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const username = trimFormValue(form, "username");
+    const displayName = trimFormValue(form, "displayName");
     const password = String(form.get("password") || "");
+    const permissions = parsePermissionsField(form);
     const errors = [
       validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null
+      displayName.length > 64 ? { field: "displayName", message: "Display name must be 64 characters or fewer." } : null,
+      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null,
+      permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
     ].filter((error): error is { field: string; message: string } => Boolean(error));
     if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
     setUserSaving(true);
@@ -828,8 +845,10 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           username,
+          displayName,
           password,
-          role: form.get("role")
+          rolePreset: form.get("rolePreset"),
+          permissions
         })
       });
       formElement.reset();
@@ -845,24 +864,33 @@ export default function App() {
 
   async function updateUser(event: FormEvent<HTMLFormElement>, user: PublicUser) {
     event.preventDefault();
-    if (!canAdmin || userSaving) return;
+    if (!canManageUsers || userSaving) return;
     const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     const username = trimFormValue(form, "username");
+    const displayName = trimFormValue(form, "displayName");
     const password = String(form.get("password") || "");
+    const permissions = parsePermissionsField(form);
     const errors = [
       validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      validatePassword(password, false) ? { field: "password", message: validatePassword(password, false)! } : null
+      displayName.length > 64 ? { field: "displayName", message: "Display name must be 64 characters or fewer." } : null,
+      validatePassword(password, false) ? { field: "password", message: validatePassword(password, false)! } : null,
+      permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
     ].filter((error): error is { field: string; message: string } => Boolean(error));
     if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
+    if (authSession?.user?.id === user.id && !permissions.includes("users.manage")) {
+      if (!window.confirm("Save changes without your own Manage users permission?\n\nThe backend may reject this if it would remove the last full-access admin.")) return;
+    }
     setUserSaving(true);
     try {
       await api<PublicUser>(`/api/users/${user.id}`, {
         method: "PUT",
         body: JSON.stringify({
           username,
+          displayName,
           password,
-          role: form.get("role")
+          rolePreset: form.get("rolePreset"),
+          permissions
         })
       });
       setUserModal(null);
@@ -879,7 +907,7 @@ export default function App() {
   }
 
   async function deleteUser(user: PublicUser) {
-    if (!canAdmin || userSaving) return;
+    if (!canManageUsers || userSaving) return;
     if (!window.confirm(`Delete user ${user.username}?\n\nThis immediately removes their account and invalidates their sessions.`)) return;
     setUserSaving(true);
     try {
@@ -1017,7 +1045,7 @@ export default function App() {
       notify("error", "Demo mode is enabled. Exit demo mode before creating managed servers.");
       return;
     }
-    if (dockerOperationalLock || !canManageReal) return;
+    if (dockerOperationalLock || !canCreateServers) return;
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -1148,7 +1176,7 @@ export default function App() {
 
   async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canManageReal) return;
+    if (!canManageIntegrations) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const key = trimFormValue(form, "modrinthApiKey");
@@ -2393,7 +2421,7 @@ export default function App() {
               type="button"
               className="iconButton addServerButton"
               onClick={() => setActivePage("create")}
-              disabled={demoMode || isProvisioning || dockerOperationalLock || !canManageReal}
+              disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}
               aria-label="Add server"
               title="Add server"
             >
@@ -2463,7 +2491,7 @@ export default function App() {
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canManageReal}>New managed server</button>}
+            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
             {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
@@ -2536,7 +2564,7 @@ export default function App() {
               <div className="emptyState">
                 <h2>No Managed Servers Yet</h2>
                 <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
-                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canManageReal}>Create Managed Server</button>
+                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>Create Managed Server</button>
               </div>
             )}
           </section>
@@ -2549,7 +2577,7 @@ export default function App() {
               dockerSocketMounted={effectiveAppState.dockerSocketMounted}
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
-              provisioning={isProvisioning || !canManageReal}
+              provisioning={isProvisioning || !canCreateServers}
             />
           </section>
         )}
@@ -2626,7 +2654,7 @@ export default function App() {
                 <div>
                   <strong>Modrinth API key</strong>
                 </div>
-                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageReal} />
+                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageIntegrations} />
               </div>
             </section>
 
@@ -2637,7 +2665,7 @@ export default function App() {
                   <div>
                     <h2>Users</h2>
                   </div>
-                  <button type="button" onClick={() => setUserModal("create")} disabled={userSaving}>New user</button>
+                  <button type="button" onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</button>
                 </div>
                 {usersLoading && (
                   <InlineState tone="loading" title="Loading users" message="Loading user accounts and permissions." />
@@ -2657,6 +2685,7 @@ export default function App() {
                   currentUserId={authSession.user?.id}
                   editingUser={userModal}
                   busy={userSaving}
+                  canManageUsers={canManageUsers}
                   onOpenEdit={(user) => setUserModal(user)}
                   onCloseModal={() => setUserModal(null)}
                   onCreate={createUser}
@@ -2689,7 +2718,7 @@ export default function App() {
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
             <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
-            <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canManageReal}>Create Managed Server</button>
+            <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>Create Managed Server</button>
           </section>
         )}
 

@@ -54,10 +54,47 @@ export type AppState = {
 
 export type UserRole = "admin" | "basic" | "expanded" | "manager";
 
+export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
+
+export type PermissionKey =
+  | "servers.view"
+  | "servers.control"
+  | "servers.create"
+  | "servers.delete"
+  | "servers.editSettings"
+  | "console.view"
+  | "console.command"
+  | "files.view"
+  | "files.edit"
+  | "files.delete"
+  | "files.upload"
+  | "files.download"
+  | "mods.view"
+  | "mods.install"
+  | "mods.upload"
+  | "mods.enableDisable"
+  | "mods.remove"
+  | "mods.update"
+  | "schedules.view"
+  | "schedules.manage"
+  | "settings.view"
+  | "integrations.manage"
+  | "users.view"
+  | "users.manage";
+
+export type ServerAccess = {
+  mode: "all" | "selected";
+  serverIds: string[];
+};
+
 export type PublicUser = {
   id: string;
   username: string;
+  displayName?: string;
   role: UserRole;
+  rolePreset?: RolePreset;
+  permissions?: PermissionKey[];
+  serverAccess?: ServerAccess;
   createdAt: string;
 };
 
