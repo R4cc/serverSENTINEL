@@ -69,11 +69,26 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus" | "x" | "fileUp" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus" | "x" | "fileUp" | "arrowUp" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
       {name === "chevronRight" && <path d="m9 5 7 7-7 7" />}
+      {name === "arrowUp" && (
+        <>
+          <path d="m12 5-7 7" />
+          <path d="m12 5 7 7" />
+          <path d="M12 5v14" />
+        </>
+      )}
+      {name === "refresh" && (
+        <>
+          <path d="M20 6v5h-5" />
+          <path d="M4 18v-5h5" />
+          <path d="M18 11a6 6 0 0 0-10-4L4 11" />
+          <path d="M6 13a6 6 0 0 0 10 4l4-4" />
+        </>
+      )}
       {name === "plus" && (
         <>
           <path d="M12 5v14" />
@@ -94,6 +109,47 @@ export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus
           <path d="m9 13 3-3 3 3" />
         </>
       )}
+      {name === "download" && (
+        <>
+          <path d="M12 4v11" />
+          <path d="m8 11 4 4 4-4" />
+          <path d="M5 20h14" />
+        </>
+      )}
+      {name === "folderPlus" && (
+        <>
+          <path d="M3 7h7l2 2h9v10H3z" />
+          <path d="M12 14h6" />
+          <path d="M15 11v6" />
+        </>
+      )}
+      {name === "edit" && (
+        <>
+          <path d="M5 19h4l10-10-4-4L5 15z" />
+          <path d="m13 7 4 4" />
+        </>
+      )}
+      {name === "trash" && (
+        <>
+          <path d="M4 7h16" />
+          <path d="M9 7V4h6v3" />
+          <path d="M7 7l1 13h8l1-13" />
+        </>
+      )}
+      {name === "copy" && (
+        <>
+          <rect x="8" y="8" width="11" height="11" rx="1.5" />
+          <path d="M5 15H4V4h11v1" />
+        </>
+      )}
+      {name === "rename" && (
+        <>
+          <path d="M4 17h16" />
+          <path d="M9 7h6" />
+          <path d="M12 7v10" />
+        </>
+      )}
+      {name === "check" && <path d="m5 12 4 4L19 6" />}
     </svg>
   );
 }

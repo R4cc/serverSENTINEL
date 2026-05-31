@@ -1,8 +1,8 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
-import { bufferToBase64, clientId, isEditableFile, parentPath } from "./utils/files";
+import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, roleRanks, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateRuntimeJarFilename, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
@@ -20,6 +20,13 @@ import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/Se
 const appVersion = "0.1.1";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 type ModCompatibilityFilter = "all" | "compatible" | "incompatible";
+type FileSortKey = "name" | "modifiedAt" | "type" | "size";
+type FilePreviewState = {
+  path: string;
+  loading: boolean;
+  data: FilePreview | null;
+  error: string;
+};
 
 function isServerWorkspacePage(page: ActivePage) {
   return serverWorkspacePages.includes(page);
@@ -69,6 +76,22 @@ function setValidationNotice(form: HTMLFormElement, errors: Array<{ field: strin
   applyFormErrors(form, errors);
   setMessage(firstValidationMessage(errors));
   return true;
+}
+
+function fileNameValidation(name: string) {
+  const value = name.trim();
+  if (!value) return "A file or folder name is required.";
+  if (value === "." || value === ".." || value.length > 160) return "Use a normal file or folder name.";
+  if (/[<>:"/\\|?*\u0000-\u001f]/.test(value)) return "The name contains characters that are not safe for server files.";
+  return "";
+}
+
+function defaultDuplicateName(name: string) {
+  const dot = name.lastIndexOf(".");
+  if (dot > 0) {
+    return `${name.slice(0, dot)} copy${name.slice(dot)}`;
+  }
+  return `${name} copy`;
 }
 
 function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string) {
@@ -124,6 +147,12 @@ export default function App() {
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [listing, setListing] = useState<FileListing>({ path: "/", entries: [] });
+  const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
+  const [fileBackStack, setFileBackStack] = useState<string[]>([]);
+  const [fileForwardStack, setFileForwardStack] = useState<string[]>([]);
+  const [fileSort, setFileSort] = useState<{ key: FileSortKey; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
+  const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
+  const [fileOperationBusy, setFileOperationBusy] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
@@ -189,6 +218,7 @@ export default function App() {
   const consoleRef = useRef<HTMLDivElement>(null);
   const previousLogCountRef = useRef(0);
   const modUploadRef = useRef<HTMLInputElement>(null);
+  const fileUploadRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
@@ -262,6 +292,32 @@ export default function App() {
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
+  const selectedEntries = useMemo(() => {
+    const selected = new Set(selectedFilePaths);
+    return listing.entries.filter((entry) => selected.has(entry.path));
+  }, [listing.entries, selectedFilePaths]);
+  const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  const sortedFileEntries = useMemo(() => {
+    const direction = fileSort.direction === "asc" ? 1 : -1;
+    return [...listing.entries].sort((a, b) => {
+      const folderOrder = Number(b.type === "directory") - Number(a.type === "directory");
+      if (folderOrder !== 0) return folderOrder;
+      let result = 0;
+      if (fileSort.key === "name") result = a.name.localeCompare(b.name);
+      if (fileSort.key === "modifiedAt") result = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
+      if (fileSort.key === "type") result = fileDisplayType(a).localeCompare(fileDisplayType(b));
+      if (fileSort.key === "size") result = a.size - b.size;
+      return result === 0 ? a.name.localeCompare(b.name) : result * direction;
+    });
+  }, [fileSort, listing.entries]);
+  const fileBreadcrumbs = useMemo(() => {
+    const parts = listing.path.split("/").filter(Boolean);
+    return [
+      { label: "/", path: "/" },
+      ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
+    ];
+  }, [listing.path]);
   const commandSuggestions = useMemo(() => {
     const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
     const matches = value
@@ -299,6 +355,23 @@ export default function App() {
 
   const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short" }), [resolvedDateLocale]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
+
+  useEffect(() => {
+    if (!selectedEntry) {
+      setFilePreview({ path: "", loading: false, data: null, error: "" });
+      return;
+    }
+    if (selectedEntry.type === "directory") {
+      setFilePreview({
+        path: selectedEntry.path,
+        loading: false,
+        data: { path: selectedEntry.path, preview: "unsupported", message: "Preview unavailable" },
+        error: ""
+      });
+      return;
+    }
+    void loadFilePreview(selectedEntry);
+  }, [selectedEntry?.path, selectedEntry?.modifiedAt, selectedEntry?.size, activeServer?.id, demoFiles]);
 
   function formatDisplayDate(value: string | number | Date) {
     return dateTimeFormatter.format(new Date(value));
@@ -1202,14 +1275,21 @@ export default function App() {
     }
   }
 
-  async function loadFiles(serverId: string, path: string) {
+  async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace") {
     if (isProvisioning) return;
+    const previousPath = listing.path;
     setFilesLoading(true);
     setFilesError("");
     setNotice("");
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
-        setListing(demoListing(path, demoFiles, demoInstalledMods));
+        const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+        setListing(nextListing);
+        setSelectedFilePaths([]);
+        if (historyMode === "push" && nextListing.path !== previousPath) {
+          setFileBackStack((current) => [...current, previousPath].slice(-50));
+          setFileForwardStack([]);
+        }
       }
       setFilesLoading(false);
       return;
@@ -1218,7 +1298,12 @@ export default function App() {
       const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
+        setSelectedFilePaths([]);
         setFilesError("");
+        if (historyMode === "push" && nextListing.path !== previousPath) {
+          setFileBackStack((current) => [...current, previousPath].slice(-50));
+          setFileForwardStack([]);
+        }
       }
     } catch (error) {
       const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
@@ -1228,6 +1313,27 @@ export default function App() {
     } finally {
       if (activeServerIdRef.current === serverId) setFilesLoading(false);
     }
+  }
+
+  async function navigateFiles(path: string) {
+    if (!activeServer) return;
+    await loadFiles(activeServer.id, path, "push");
+  }
+
+  async function navigateBackFiles() {
+    if (!activeServer || fileBackStack.length === 0) return;
+    const target = fileBackStack[fileBackStack.length - 1];
+    setFileBackStack((current) => current.slice(0, -1));
+    setFileForwardStack((current) => [listing.path, ...current].slice(0, 50));
+    await loadFiles(activeServer.id, target, "back");
+  }
+
+  async function navigateForwardFiles() {
+    if (!activeServer || fileForwardStack.length === 0) return;
+    const target = fileForwardStack[0];
+    setFileForwardStack((current) => current.slice(1));
+    setFileBackStack((current) => [...current, listing.path].slice(-50));
+    await loadFiles(activeServer.id, target, "forward");
   }
 
   async function loadInstalledMods(serverId: string) {
@@ -1257,9 +1363,36 @@ export default function App() {
     }
   }
 
+  function confirmDiscardFileChanges() {
+    return !dirty || window.confirm("Discard unsaved changes to the current file?");
+  }
+
+  async function loadFilePreview(entry: FileEntry) {
+    if (!activeServer) return;
+    setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
+    if (activeServerIsDemo) {
+      const content = demoFiles[entry.path] ?? "";
+      if (!isPreviewableFile(entry)) {
+        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "unsupported", message: "Preview unavailable" }, error: "" });
+      } else if (new Blob([content]).size > 96 * 1024) {
+        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "too_large", message: "File too large to preview" }, error: "" });
+      } else {
+        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "text", content }, error: "" });
+      }
+      return;
+    }
+    try {
+      const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`);
+      setFilePreview({ path: entry.path, loading: false, data: preview, error: "" });
+    } catch (error) {
+      setFilePreview({ path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") });
+    }
+  }
+
   async function openFile(path: string) {
     if (isProvisioning) return;
     if (!activeServer) return;
+    if (selectedPath && selectedPath !== path && !confirmDiscardFileChanges()) return;
     const pathError = validateSafePath(path);
     if (pathError) {
       setFileReadError(pathError);
@@ -1274,6 +1407,7 @@ export default function App() {
       setEditorText(content);
       setSavedEditorText(content);
       setDirty(false);
+      setSelectedFilePaths([path]);
       return;
     }
     try {
@@ -1284,6 +1418,7 @@ export default function App() {
       setEditorText(file.content);
       setSavedEditorText(file.content);
       setDirty(false);
+      setSelectedFilePaths([file.path]);
     } catch (error) {
       const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
       setFileReadError(message);
@@ -1305,14 +1440,15 @@ export default function App() {
     if (!window.confirm(confirmation)) return;
     setNotice("");
     if (activeServerIsDemo) {
+      let nextFiles = demoFiles;
       if (entry.path.startsWith("/mods/")) {
         setDemoInstalledMods((current) => current.filter((mod) => `/mods/${mod.filename}` !== entry.path));
       } else {
-        setDemoFiles((current) => {
-          const next = { ...current };
-          delete next[entry.path];
-          return next;
-        });
+        nextFiles = { ...demoFiles };
+        for (const path of Object.keys(nextFiles)) {
+          if (path === entry.path || path.startsWith(`${entry.path}/`)) delete nextFiles[path];
+        }
+        setDemoFiles(nextFiles);
       }
       if (selectedPath === entry.path) {
         setSelectedPath("");
@@ -1320,8 +1456,9 @@ export default function App() {
         setSavedEditorText("");
         setDirty(false);
       }
+      setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
       notify("success", `Deleted ${entry.name}`);
-      setListing(demoListing(listing.path, demoFiles, demoInstalledMods.filter((mod) => `/mods/${mod.filename}` !== entry.path)));
+      setListing(demoListing(listing.path, nextFiles, demoInstalledMods.filter((mod) => `/mods/${mod.filename}` !== entry.path)));
       return;
     }
     try {
@@ -1334,12 +1471,207 @@ export default function App() {
         setSavedEditorText("");
         setDirty(false);
       }
+      setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
       notify("success", `Deleted ${entry.name}`);
       await loadFiles(activeServer.id, listing.path);
       await loadInstalledMods(activeServer.id);
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+    }
+  }
+
+  async function deleteSelectedFiles() {
+    if (selectedEntries.length === 0) return;
+    for (const entry of selectedEntries) {
+      await deleteFileEntry(entry);
+    }
+    setSelectedFilePaths([]);
+  }
+
+  async function createFolder() {
+    if (!activeServer || fileOperationBusy) return;
+    const name = window.prompt("New folder name");
+    if (name === null) return;
+    const nameError = fileNameValidation(name);
+    if (nameError) {
+      notify("error", nameError);
+      return;
+    }
+    setFileOperationBusy("new-folder");
+    try {
+      if (activeServerIsDemo) {
+        const folderPath = joinPublicPath(listing.path, name.trim());
+        const nextFiles = { ...demoFiles, [joinPublicPath(folderPath, ".serversentinel-folder")]: "" };
+        setDemoFiles(nextFiles);
+        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      } else {
+        await api(`/api/servers/${activeServer.id}/folder`, {
+          method: "POST",
+          body: JSON.stringify({ path: listing.path, name: name.trim() })
+        });
+        await loadFiles(activeServer.id, listing.path);
+      }
+      notify("success", `Created ${name.trim()}`);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not create the folder."));
+    } finally {
+      setFileOperationBusy("");
+    }
+  }
+
+  async function uploadFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeServer || fileOperationBusy) return;
+    const nameError = fileNameValidation(file.name);
+    if (nameError) {
+      notify("error", nameError);
+      return;
+    }
+    if (file.size > 32 * 1024 * 1024) {
+      notify("error", "Upload is larger than the 32 MiB file manager limit.");
+      return;
+    }
+    setFileOperationBusy("upload");
+    try {
+      const targetPath = joinPublicPath(listing.path, file.name);
+      if (activeServerIsDemo) {
+        const content = await file.text();
+        const nextFiles = { ...demoFiles, [targetPath]: content };
+        setDemoFiles(nextFiles);
+        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      } else {
+        const contentBase64 = bufferToBase64(await file.arrayBuffer());
+        await api(`/api/servers/${activeServer.id}/files/upload`, {
+          method: "POST",
+          body: JSON.stringify({ path: listing.path, filename: file.name, contentBase64 })
+        });
+        await loadFiles(activeServer.id, listing.path);
+      }
+      setSelectedFilePaths([targetPath]);
+      notify("success", `Uploaded ${file.name}`);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not upload the file."));
+    } finally {
+      setFileOperationBusy("");
+    }
+  }
+
+  async function downloadSelectedFile() {
+    if (!activeServer || selectedEntries.length !== 1) return;
+    const entry = selectedEntries[0];
+    if (entry.type !== "file") return;
+    setFileOperationBusy("download");
+    try {
+      if (activeServerIsDemo) {
+        const blob = new Blob([demoFiles[entry.path] ?? ""], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = entry.name;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const response = await fetch(`/api/servers/${activeServer.id}/file/download?path=${encodeURIComponent(entry.path)}`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            ...(demoMode ? { "X-ServerSentinel-Demo-Mode": "true" } : {})
+          },
+          credentials: "same-origin"
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.message ?? payload.error ?? `Request failed with ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = entry.name;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not download the selected file."));
+    } finally {
+      setFileOperationBusy("");
+    }
+  }
+
+  async function renameSelectedFile() {
+    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+    const entry = selectedEntries[0];
+    const name = window.prompt("Rename item", entry.name);
+    if (name === null || name.trim() === entry.name) return;
+    const nameError = fileNameValidation(name);
+    if (nameError) {
+      notify("error", nameError);
+      return;
+    }
+    setFileOperationBusy("rename");
+    try {
+      const targetPath = joinPublicPath(parentPath(entry.path), name.trim());
+      if (activeServerIsDemo) {
+        const nextFiles = { ...demoFiles };
+        for (const path of Object.keys(nextFiles)) {
+          if (path === entry.path || path.startsWith(`${entry.path}/`)) {
+            const replacement = path.replace(entry.path, targetPath);
+            nextFiles[replacement] = nextFiles[path];
+            delete nextFiles[path];
+          }
+        }
+        setDemoFiles(nextFiles);
+        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      } else {
+        await api(`/api/servers/${activeServer.id}/file`, {
+          method: "PATCH",
+          body: JSON.stringify({ path: entry.path, name: name.trim() })
+        });
+        await loadFiles(activeServer.id, listing.path);
+      }
+      setSelectedFilePaths([targetPath]);
+      if (selectedPath === entry.path) setSelectedPath(targetPath);
+      notify("success", `Renamed to ${name.trim()}`);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not rename the selected item."));
+    } finally {
+      setFileOperationBusy("");
+    }
+  }
+
+  async function duplicateSelectedFile() {
+    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+    const entry = selectedEntries[0];
+    if (entry.type !== "file") return;
+    const suggestedName = defaultDuplicateName(entry.name);
+    const name = window.prompt("Duplicate file as", suggestedName);
+    if (name === null) return;
+    const nameError = fileNameValidation(name);
+    if (nameError) {
+      notify("error", nameError);
+      return;
+    }
+    setFileOperationBusy("duplicate");
+    try {
+      const targetPath = joinPublicPath(parentPath(entry.path), name.trim());
+      if (activeServerIsDemo) {
+        const nextFiles = { ...demoFiles, [targetPath]: demoFiles[entry.path] ?? "" };
+        setDemoFiles(nextFiles);
+        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      } else {
+        await api(`/api/servers/${activeServer.id}/file/duplicate`, {
+          method: "POST",
+          body: JSON.stringify({ path: entry.path, name: name.trim() })
+        });
+        await loadFiles(activeServer.id, listing.path);
+      }
+      setSelectedFilePaths([targetPath]);
+      notify("success", `Duplicated ${entry.name}`);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not duplicate the selected file."));
+    } finally {
+      setFileOperationBusy("");
     }
   }
 
@@ -1364,11 +1696,13 @@ export default function App() {
       return;
     }
     if (activeServerIsDemo) {
-      setDemoFiles((current) => ({ ...current, [selectedPath]: editorText }));
+      const nextFiles = { ...demoFiles, [selectedPath]: editorText };
+      setDemoFiles(nextFiles);
       setSavedEditorText(editorText);
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
+      setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
       setFileSaving(false);
       return;
     }
@@ -2610,73 +2944,221 @@ export default function App() {
 
             {activePage === "files" && (
               <section className="tabPage filesPage">
-                <section className="panel filesPanel">
-                  <div className="panelHeader">
-                    <h2>Files</h2>
-                    <code>{listing.path}</code>
-                  </div>
-                  <div className="fileActions">
-                    <button onClick={() => loadFiles(activeServer.id, parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"}>Up</button>
-                    <button onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading}>{filesLoading ? "Refreshing" : "Refresh"}</button>
-                  </div>
-                  {filesLoading && listing.entries.length === 0 && (
-                    <InlineState tone="loading" title="Loading files" message="Loading the current server directory." />
-                  )}
-                  {filesError && (
-                    <InlineState
-                      tone="error"
-                      title="Could not load server files"
-                      message={filesError}
-                      actionLabel="Retry"
-                      onAction={() => void loadFiles(activeServer.id, listing.path)}
-                      busy={filesLoading}
-                    />
-                  )}
-                  <div className="fileList">
-                    {!filesLoading && !filesError && listing.entries.length === 0 && (
-                      <InlineState tone="empty" title="Directory is empty" message="No files or folders were found at this path." />
-                    )}
-                    {listing.entries.map((entry) => (
-                      <article key={entry.path} className="fileRow">
-                        <button
-                          className={`fileOpenButton ${entry.path === selectedPath ? "active" : ""}`}
-                          onClick={() => entry.type === "directory" ? loadFiles(activeServer.id, entry.path) : openFile(entry.path)}
-                          disabled={isProvisioning || dockerOperationalLock || (entry.type === "file" && !isEditableFile(entry))}
-                        >
-                          <FileTypeIcon entry={entry} />
-                          <span className="fileName">{entry.name}</span>
-                          <small>{entry.type === "file" ? formatBytes(entry.size) : ""}</small>
+                <section className="filesExplorer">
+                  <section className="panel filesPanel">
+                    <div className="fileNavBar">
+                      <div className="fileNavButtons">
+                        <button type="button" className="iconOnlyButton" onClick={navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
+                          <AppIcon name="chevronLeft" />
                         </button>
-                        <button className="iconDangerButton" onClick={() => deleteFileEntry(entry)} disabled={isProvisioning || dockerOperationalLock || !canManager} title={`Delete ${entry.name}`} aria-label={`Delete ${entry.name}`}>
+                        <button type="button" className="iconOnlyButton" onClick={navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
+                          <AppIcon name="chevronRight" />
+                        </button>
+                        <button type="button" className="iconOnlyButton" onClick={() => void navigateFiles(parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Up one level"} aria-label="Up one level">
+                          <AppIcon name="arrowUp" />
+                        </button>
+                      </div>
+                      <div className="fileBreadcrumbs" aria-label="Current folder">
+                        {fileBreadcrumbs.map((crumb) => (
+                          <button key={crumb.path} type="button" onClick={() => void navigateFiles(crumb.path)} className={crumb.path === listing.path ? "active" : ""} title={crumb.path}>
+                            {crumb.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="fileToolbar">
+                        <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
+                        <button type="button" className="secondaryButton compactButton" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Upload a file to this folder"}>
+                          <AppIcon name="fileUp" />
+                          Upload
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Create a folder here"}>
+                          <AppIcon name="folderPlus" />
+                          New Folder
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={selectedEntries.length !== 1 || selectedEntries[0]?.type !== "file" || Boolean(fileOperationBusy)} title={selectedEntries.length === 1 ? "Download selected file" : "Select one file to download"}>
+                          <AppIcon name="download" />
+                          Download
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
+                          <AppIcon name="refresh" />
+                          {filesLoading ? "Refreshing" : "Refresh"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedEntries.length > 0 && (
+                      <div className="selectionActionBar">
+                        <span>{selectedEntries.length} selected</span>
+                        <small>{selectedTotalSize > 0 ? formatBytes(selectedTotalSize) : "No file size"}</small>
+                        <div>
+                          <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!selectedEntry || selectedEntry.type !== "file" || !isEditableFile(selectedEntry) || !canManager} title={selectedEntry?.type === "file" && !isEditableFile(selectedEntry) ? "Only small text files can be edited" : "Edit selected file"}>
+                            <AppIcon name="edit" />
+                            Edit
+                          </button>
+                          <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!selectedEntry || selectedEntry.type !== "file" || Boolean(fileOperationBusy)} title={selectedEntry?.type === "directory" ? "Directory duplication is not supported" : "Duplicate selected file"}>
+                            <AppIcon name="copy" />
+                            Duplicate
+                          </button>
+                          <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!selectedEntry || Boolean(fileOperationBusy)} title="Rename selected item">
+                            <AppIcon name="rename" />
+                            Rename
+                          </button>
+                          <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Delete selected item"}>
+                            <AppIcon name="trash" />
+                            Delete
+                          </button>
+                        </div>
+                        <button type="button" className="linkButton" onClick={() => setSelectedFilePaths(sortedFileEntries.map((entry) => entry.path))}>Select all</button>
+                        <button type="button" className="iconOnlyButton" onClick={() => setSelectedFilePaths([])} title="Clear selection" aria-label="Clear selection">
                           <AppIcon name="x" />
                         </button>
-                      </article>
-                    ))}
-                  </div>
+                      </div>
+                    )}
+
+                    {filesLoading && listing.entries.length === 0 && (
+                      <InlineState tone="loading" title="Loading files" message="Loading the current server directory." />
+                    )}
+                    {filesError && (
+                      <InlineState
+                        tone="error"
+                        title="Could not load server files"
+                        message={filesError}
+                        actionLabel="Retry"
+                        onAction={() => void loadFiles(activeServer.id, listing.path)}
+                        busy={filesLoading}
+                      />
+                    )}
+
+                    <div className="fileTable" role="table" aria-label="Server files">
+                      <div className="fileTableHead" role="row">
+                        <span aria-hidden="true" />
+                        {([
+                          ["name", "Name"],
+                          ["modifiedAt", "Date Modified"],
+                          ["type", "Type"],
+                          ["size", "Size"]
+                        ] as Array<[FileSortKey, string]>).map(([key, label]) => (
+                          <button key={key} type="button" onClick={() => setFileSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" })}>
+                            {label}
+                            {fileSort.key === key ? (fileSort.direction === "asc" ? " ↑" : " ↓") : ""}
+                          </button>
+                        ))}
+                        <span>Status</span>
+                      </div>
+                      {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
+                        <InlineState tone="empty" title="Directory is empty" message="No files or folders were found at this path." />
+                      )}
+                      {sortedFileEntries.map((entry) => {
+                        const selected = selectedFilePaths.includes(entry.path);
+                        return (
+                          <div key={entry.path} className={`fileTableRow ${selected ? "selected" : ""}`} role="row" onDoubleClick={() => entry.type === "directory" ? navigateFiles(entry.path) : openFile(entry.path)}>
+                            <label className="fileCheckboxCell" aria-label={`Select ${entry.name}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setSelectedFilePaths((current) => checked ? [...new Set([...current, entry.path])] : current.filter((path) => path !== entry.path));
+                                }}
+                              />
+                            </label>
+                            <button type="button" className="fileNameCell" onClick={() => entry.type === "directory" ? navigateFiles(entry.path) : setSelectedFilePaths([entry.path])} title={entry.path}>
+                              <FileTypeIcon entry={entry} />
+                              <span>{entry.name}</span>
+                            </button>
+                            <span>{dateTimeFormatter.format(new Date(entry.modifiedAt))}</span>
+                            <span>{fileDisplayType(entry)}</span>
+                            <span>{entry.type === "file" ? formatBytes(entry.size) : "-"}</span>
+                            <span className={`fileStatus ${entry.status ?? "ok"}`}>{fileStatusLabel(entry)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="fileTableFooter">
+                      <span>{sortedFileEntries.length} items</span>
+                      <span>{selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
+                    </div>
+                  </section>
+
+                  {selectedPath && (
+                    <section className="panel editorPanel">
+                      <div className="panelHeader">
+                        <h2>{dirty ? "Editor *" : "Editor"}</h2>
+                        <code>{selectedPath}</code>
+                      </div>
+                      <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath} spellCheck={false} />
+                      {fileReadError && (
+                        <InlineState
+                          tone="error"
+                          title="Could not open file"
+                          message={fileReadError}
+                          actionLabel={selectedPath ? "Retry" : undefined}
+                          onAction={selectedPath ? () => void openFile(selectedPath) : undefined}
+                        />
+                      )}
+                      <div className="buttonRow">
+                        {dirty && (
+                          <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
+                        )}
+                        <button onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>{fileSaving ? "Saving" : "Save"}</button>
+                      </div>
+                    </section>
+                  )}
                 </section>
 
-                <section className="panel editorPanel">
-                  <div className="panelHeader">
-                    <h2>Editor</h2>
-                    <code>{selectedPath || "No file selected"}</code>
-                  </div>
-                  <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath} spellCheck={false} />
-                  {fileReadError && (
-                    <InlineState
-                      tone="error"
-                      title="Could not open file"
-                      message={fileReadError}
-                      actionLabel={selectedPath ? "Retry" : undefined}
-                      onAction={selectedPath ? () => void openFile(selectedPath) : undefined}
-                    />
+                <aside className="panel fileDetailsPanel">
+                  {!selectedEntry && selectedEntries.length === 0 && (
+                    <div className="fileDetailsEmpty">
+                      <h2>No file selected</h2>
+                      <p>Select a file to view details and preview.</p>
+                    </div>
                   )}
-                  <div className="buttonRow">
-                    {dirty && (
-                      <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
-                    )}
-                    <button onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>{fileSaving ? "Saving" : "Save"}</button>
-                  </div>
-                </section>
+                  {selectedEntries.length > 1 && (
+                    <div className="fileDetailsContent">
+                      <h2>{selectedEntries.length} items selected</h2>
+                      <dl>
+                        <div><dt>Total file size</dt><dd>{formatBytes(selectedTotalSize)}</dd></div>
+                        <div><dt>Folders</dt><dd>{selectedEntries.filter((entry) => entry.type === "directory").length}</dd></div>
+                        <div><dt>Files</dt><dd>{selectedEntries.filter((entry) => entry.type === "file").length}</dd></div>
+                      </dl>
+                    </div>
+                  )}
+                  {selectedEntry && (
+                    <div className="fileDetailsContent">
+                      <div className="fileDetailsTitle">
+                        <FileTypeIcon entry={selectedEntry} />
+                        <div>
+                          <h2>{selectedEntry.name}</h2>
+                          <span>{fileDisplayType(selectedEntry)}</span>
+                        </div>
+                      </div>
+                      <dl>
+                        <div><dt>Location</dt><dd>{selectedEntry.path}</dd></div>
+                        <div><dt>Type</dt><dd>{fileDisplayType(selectedEntry)}</dd></div>
+                        <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "-"}</dd></div>
+                        <div><dt>Modified</dt><dd>{dateTimeFormatter.format(new Date(selectedEntry.modifiedAt))}</dd></div>
+                        {selectedEntry.permissions && <div><dt>Permissions</dt><dd>{selectedEntry.permissions}</dd></div>}
+                        {selectedEntry.owner && <div><dt>Owner</dt><dd>{selectedEntry.owner}</dd></div>}
+                        <div><dt>Status</dt><dd>{fileStatusLabel(selectedEntry)}</dd></div>
+                      </dl>
+                      <section className="filePreviewPanel">
+                        <h3>Preview</h3>
+                        {filePreview.loading && <InlineState tone="loading" title="Loading preview" message="Reading a small preview of the selected file." />}
+                        {filePreview.error && <InlineState tone="error" title="Preview failed" message={filePreview.error} />}
+                        {!filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
+                          <pre>
+                            {(filePreview.data.content ?? "").split(/\r?\n/).slice(0, 80).map((line, index) => (
+                              <span key={`${index}-${line.slice(0, 8)}`}><b>{index + 1}</b>{line || " "}</span>
+                            ))}
+                          </pre>
+                        )}
+                        {!filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
+                          <div className="previewUnavailable">{filePreview.data?.message ?? "Preview unavailable"}</div>
+                        )}
+                      </section>
+                    </div>
+                  )}
+                </aside>
               </section>
             )}
 

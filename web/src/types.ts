@@ -141,11 +141,22 @@ export type FileEntry = {
   type: "directory" | "file";
   size: number;
   modifiedAt: string;
+  permissions?: string;
+  owner?: string;
+  status?: "ok" | "locked" | "binary" | "too_large" | "unknown";
 };
 
 export type FileListing = {
   path: string;
   entries: FileEntry[];
+};
+
+export type FilePreview = {
+  path: string;
+  preview: "text" | "unsupported" | "binary" | "too_large";
+  content?: string;
+  message?: string;
+  modifiedAt?: string;
 };
 
 export type ReleaseChannel = "release" | "beta" | "alpha";

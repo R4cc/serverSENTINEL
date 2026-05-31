@@ -5,7 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -138,6 +138,8 @@ const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
 const passwordHashKeyLength = 64;
 const editorFileSizeLimit = 2 * 1024 * 1024;
+const filePreviewSizeLimit = 96 * 1024;
+const fileUploadSizeLimit = 32 * 1024 * 1024;
 const modFileSizeLimit = 128 * 1024 * 1024;
 const roleRanks: Record<UserRole, number> = {
   basic: 1,
@@ -735,6 +737,29 @@ function ensureManagedServerDirectory(server: ManagedServer) {
 function toPublicPath(server: ManagedServer, absolutePath: string) {
   const rel = relative(resolve(server.serverDir), absolutePath).replaceAll("\\", "/");
   return rel ? `/${rel}` : "/";
+}
+
+function safeFileManagerName(name?: string) {
+  const filename = basename(name ?? "").trim();
+  if (!filename || filename !== name || filename === "." || filename === "..") {
+    throw new Error("A valid file or folder name is required");
+  }
+  if (filename.length > 160 || /[<>:"/\\|?*\u0000-\u001f]/.test(filename)) {
+    throw new Error("File or folder name contains unsafe characters");
+  }
+  return filename;
+}
+
+function isTextLikeServerFile(name: string) {
+  return /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(name) || !name.includes(".");
+}
+
+function fileManagerStatus(entryStat: Awaited<ReturnType<typeof lstat>>, name: string) {
+  if (entryStat.isDirectory()) return "ok";
+  if (!entryStat.isFile()) return "unknown";
+  if (entryStat.size > editorFileSizeLimit) return "too_large";
+  if (!isTextLikeServerFile(name)) return "binary";
+  return "ok";
 }
 
 function modIconKey(filename: string) {
@@ -2635,11 +2660,56 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
             path: toPublicPath(server, absolutePath),
             type: entry.isDirectory() ? "directory" : "file",
             size: entryStat.size,
-            modifiedAt: entryStat.mtime.toISOString()
+            modifiedAt: entryStat.mtime.toISOString(),
+            permissions: `0${(entryStat.mode & 0o777).toString(8)}`,
+            status: fileManagerStatus(entryStat, entry.name)
           };
         })
     )
   };
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  const targetStat = await stat(target);
+  const publicPath = toPublicPath(server, target);
+  if (!targetStat.isFile()) {
+    return { path: publicPath, preview: "unsupported", message: "Preview unavailable" };
+  }
+  if (!isTextLikeServerFile(basename(target))) {
+    return { path: publicPath, preview: "unsupported", message: "Preview unavailable" };
+  }
+  if (targetStat.size > filePreviewSizeLimit) {
+    return { path: publicPath, preview: "too_large", message: "File too large to preview" };
+  }
+  const buffer = await readFile(target);
+  if (buffer.includes(0)) {
+    return { path: publicPath, preview: "binary", message: "Preview unavailable" };
+  }
+  return {
+    path: publicPath,
+    preview: "text",
+    content: buffer.toString("utf8"),
+    modifiedAt: targetStat.mtime.toISOString()
+  };
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", async (request, reply) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const target = await validateExistingInsideServer(server, request.query.path ?? "");
+  const targetStat = await stat(target);
+  if (!targetStat.isFile()) {
+    throw new Error("Only files can be downloaded");
+  }
+  const filename = basename(target);
+  return reply
+    .header("Content-Type", "application/octet-stream")
+    .header("Content-Length", targetStat.size)
+    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`)
+    .send(createReadStream(target));
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
@@ -2685,6 +2755,81 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("
   }
   await writeFile(target, request.body.content, "utf8");
   logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "write_file" }, "Server file written");
+  return { ok: true, path: toPublicPath(server, target) };
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
+  const parentStat = await stat(parent);
+  if (!parentStat.isDirectory()) {
+    throw new Error("Parent path is not a directory");
+  }
+  const folderName = safeFileManagerName(request.body.name);
+  const target = await ensureWritableResolvedInsideServer(server, join(parent, folderName));
+  await mkdir(target, { recursive: false });
+  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "create_folder" }, "Server folder created");
+  return { ok: true, path: toPublicPath(server, target) };
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
+  const parentStat = await stat(parent);
+  if (!parentStat.isDirectory()) {
+    throw new Error("Upload path is not a directory");
+  }
+  const filename = safeFileManagerName(request.body.filename);
+  if (typeof request.body.contentBase64 !== "string") {
+    throw new Error("File content is required");
+  }
+  const content = Buffer.from(request.body.contentBase64, "base64");
+  if (content.length > fileUploadSizeLimit) {
+    throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
+  }
+  const target = await ensureWritableResolvedInsideServer(server, join(parent, filename));
+  if (existsSync(target)) {
+    throw new Error("A file or folder with that name already exists");
+  }
+  await writeFile(target, content);
+  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), size: content.length, action: "upload_file" }, "Server file uploaded");
+  return { ok: true, path: toPublicPath(server, target), size: content.length };
+});
+
+app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const source = await validateExistingInsideServer(server, request.body.path ?? "");
+  if (resolve(source) === resolve(server.serverDir)) {
+    throw new Error("Refusing to rename the server root directory");
+  }
+  const targetName = safeFileManagerName(request.body.name);
+  const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
+  if (existsSync(target)) {
+    throw new Error("A file or folder with that name already exists");
+  }
+  await rename(source, target);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "rename_file" }, "Server file renamed");
+  return { ok: true, path: toPublicPath(server, target) };
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "manager");
+  const server = await getServer(request.params.id);
+  const source = await validateExistingInsideServer(server, request.body.path ?? "");
+  const sourceStat = await stat(source);
+  if (!sourceStat.isFile()) {
+    throw new Error("Only files can be duplicated from the browser file manager");
+  }
+  const targetName = safeFileManagerName(request.body.name);
+  const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
+  if (existsSync(target)) {
+    throw new Error("A file or folder with that name already exists");
+  }
+  await copyFile(source, target);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "duplicate_file" }, "Server file duplicated");
   return { ok: true, path: toPublicPath(server, target) };
 });
 

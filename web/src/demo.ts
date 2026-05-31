@@ -353,55 +353,70 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
 }
 
 export function demoListing(path: string, files: Record<string, string>, mods: InstalledMod[]): FileListing {
-  if (path === "/mods") {
-    return {
-      path,
-      entries: mods.map((mod) => ({
+  const normalizedPath = path === "/" ? "/" : `/${path.split("/").filter(Boolean).join("/")}`;
+  const entries = new Map<string, FileListing["entries"][number]>();
+  const addDirectory = (directoryPath: string, modifiedAt = new Date(demoStartedAt).toISOString()) => {
+    if (directoryPath === normalizedPath || directoryPath === "/") return;
+    entries.set(directoryPath, {
+      name: directoryPath.split("/").filter(Boolean).at(-1) ?? directoryPath,
+      path: directoryPath,
+      type: "directory",
+      size: 0,
+      modifiedAt,
+      status: "ok"
+    });
+  };
+  const addFile = (filePath: string, content: string, modifiedAt = new Date(demoStartedAt - 7_200_000).toISOString()) => {
+    if (filePath.endsWith("/.serversentinel-folder")) return;
+    entries.set(filePath, {
+      name: filePath.split("/").filter(Boolean).at(-1) ?? filePath,
+      path: filePath,
+      type: "file",
+      size: new Blob([content]).size,
+      modifiedAt,
+      permissions: "0644",
+      status: "ok"
+    });
+  };
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const parts = filePath.split("/").filter(Boolean);
+    const parentPath = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
+    if (parentPath === normalizedPath) {
+      addFile(filePath, content);
+      continue;
+    }
+    if (normalizedPath === "/" && parts.length > 1) {
+      addDirectory(`/${parts[0]}`);
+      continue;
+    }
+    if (parentPath.startsWith(`${normalizedPath === "/" ? "" : normalizedPath}/`)) {
+      const relative = parentPath.slice(normalizedPath === "/" ? 1 : normalizedPath.length + 1).split("/")[0];
+      if (relative) addDirectory(`${normalizedPath === "/" ? "" : normalizedPath}/${relative}`);
+    }
+  }
+
+  if (normalizedPath === "/") {
+    addDirectory("/config");
+    addDirectory("/logs", new Date().toISOString());
+    addDirectory("/mods");
+  }
+  if (normalizedPath === "/mods") {
+    for (const mod of mods) {
+      entries.set(`/mods/${mod.filename}`, {
         name: mod.filename,
         path: `/mods/${mod.filename}`,
         type: "file",
         size: mod.size,
-        modifiedAt: mod.modifiedAt
-      }))
-    };
+        modifiedAt: mod.modifiedAt,
+        permissions: "0644",
+        status: "binary"
+      });
+    }
   }
-  if (path === "/config") {
-    return {
-      path,
-      entries: [{
-        name: "serversentinel-demo.toml",
-        path: "/config/serversentinel-demo.toml",
-        type: "file",
-        size: files["/config/serversentinel-demo.toml"]?.length ?? 0,
-        modifiedAt: new Date(demoStartedAt - 12_000_000).toISOString()
-      }]
-    };
-  }
-  if (path === "/logs") {
-    return {
-      path,
-      entries: [{
-        name: "latest.log",
-        path: "/logs/latest.log",
-        type: "file",
-        size: files["/logs/latest.log"]?.length ?? 0,
-        modifiedAt: new Date().toISOString()
-      }]
-    };
-  }
+
   return {
-    path: "/",
-    entries: [
-      { name: "config", path: "/config", type: "directory", size: 0, modifiedAt: new Date(demoStartedAt).toISOString() },
-      { name: "logs", path: "/logs", type: "directory", size: 0, modifiedAt: new Date().toISOString() },
-      { name: "mods", path: "/mods", type: "directory", size: 0, modifiedAt: new Date(demoStartedAt).toISOString() },
-      {
-        name: "server.properties",
-        path: "/server.properties",
-        type: "file",
-        size: files["/server.properties"]?.length ?? 0,
-        modifiedAt: new Date(demoStartedAt - 7_200_000).toISOString()
-      }
-    ]
+    path: normalizedPath,
+    entries: [...entries.values()].sort((a, b) => Number(b.type === "directory") - Number(a.type === "directory") || a.name.localeCompare(b.name))
   };
 }

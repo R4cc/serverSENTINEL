@@ -1937,7 +1937,7 @@ button .buttonIcon {
 }
 
 .filesPage {
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   align-items: start;
 }
 
@@ -2703,6 +2703,350 @@ button .buttonIcon {
   white-space: nowrap;
 }
 
+.filesExplorer {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.filesPanel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.fileNavBar {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-3);
+}
+
+.fileNavButtons,
+.fileToolbar,
+.selectionActionBar,
+.selectionActionBar > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.iconOnlyButton {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+}
+
+.fileBreadcrumbs {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  min-width: 0;
+  padding: var(--space-1);
+}
+
+.fileBreadcrumbs button {
+  min-height: 34px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-color: var(--border-muted);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.fileBreadcrumbs button.active {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.selectionActionBar {
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  background: var(--surface-muted);
+  padding: var(--space-2) var(--space-3);
+}
+
+.selectionActionBar span,
+.selectionActionBar small {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.selectionActionBar small {
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
+.linkButton {
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0 var(--space-2);
+}
+
+.linkButton:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  transform: none;
+}
+
+.fileTable {
+  min-width: 760px;
+  overflow: auto;
+}
+
+.fileTableHead,
+.fileTableRow {
+  display: grid;
+  grid-template-columns: 42px minmax(220px, 1.4fr) minmax(160px, 0.7fr) minmax(120px, 0.55fr) minmax(90px, 0.4fr) minmax(96px, 0.4fr);
+  align-items: center;
+}
+
+.fileTableHead {
+  min-height: 44px;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  background: var(--surface-muted);
+}
+
+.fileTableHead button,
+.fileTableHead span {
+  justify-content: start;
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 var(--space-3);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.fileTableRow {
+  min-height: 48px;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  background: var(--surface);
+}
+
+.fileTableRow:hover {
+  background: var(--surface-muted);
+}
+
+.fileTableRow.selected {
+  background: var(--sentinel-accent-soft);
+}
+
+.fileTableRow > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.fileCheckboxCell {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.fileCheckboxCell input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.fileNameCell {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: start;
+  min-height: 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 var(--space-3);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.fileNameCell:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent);
+  transform: none;
+}
+
+.fileNameCell span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.fileStatus {
+  color: var(--sentinel-success) !important;
+  font-weight: 900;
+}
+
+.fileStatus.binary,
+.fileStatus.too_large,
+.fileStatus.unknown {
+  color: var(--text-muted) !important;
+}
+
+.fileStatus.locked {
+  color: var(--sentinel-danger) !important;
+}
+
+.fileTableFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: 12px;
+  border-top: var(--border-strong) solid var(--border);
+}
+
+.fileDetailsPanel {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  min-height: 520px;
+  max-height: calc(100vh - 150px);
+  overflow: hidden;
+}
+
+.fileDetailsEmpty,
+.fileDetailsContent {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.fileDetailsEmpty {
+  place-content: center;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.fileDetailsTitle {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.fileDetailsTitle h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileDetailsTitle span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.fileDetailsContent dl {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.fileDetailsContent dl div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.fileDetailsContent dt {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.fileDetailsContent dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filePreviewPanel {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 0;
+  border-top: var(--border-strong) solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.filePreviewPanel h3 {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filePreviewPanel pre {
+  display: grid;
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.filePreviewPanel pre span {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-2);
+  white-space: pre-wrap;
+}
+
+.filePreviewPanel pre b {
+  color: var(--text-soft);
+  font-weight: 700;
+  text-align: right;
+  user-select: none;
+}
+
+.previewUnavailable {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .hiddenInput {
   display: none;
 }
@@ -3415,6 +3759,19 @@ details.compatibilityBadge p {
     grid-row: auto;
   }
 
+  .fileDetailsPanel {
+    position: static;
+    max-height: none;
+  }
+
+  .fileNavBar {
+    grid-template-columns: 1fr;
+  }
+
+  .fileToolbar {
+    justify-content: start;
+  }
+
   .settingsGroupHeader,
   .settingsRow {
     grid-template-columns: 1fr;
@@ -3461,6 +3818,8 @@ details.compatibilityBadge p {
   .workspaceActions,
   .buttonRow,
   .fileActions,
+  .fileToolbar,
+  .selectionActionBar,
   .tabs {
     align-items: stretch;
     flex-direction: column;
@@ -3470,6 +3829,8 @@ details.compatibilityBadge p {
   .workspaceActions button,
   .buttonRow button,
   .fileActions button,
+  .fileToolbar button,
+  .selectionActionBar button,
   .keyFormActions button,
   .keyFormConfigured button {
     width: 100%;
