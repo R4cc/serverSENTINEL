@@ -131,8 +131,26 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
+export type NodeType = "local";
+
+export type NodeStatus = "online" | "offline" | "unknown";
+
+export type ManagedNode = {
+  id: string;
+  name: string;
+  type: NodeType;
+  status: NodeStatus;
+  isInternal: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt?: string;
+};
+
+export type PublicNode = ManagedNode;
+
 export type ManagedServer = {
   id: string;
+  nodeId: string;
   displayName: string;
   serverDir: string;
   storageName?: string;
@@ -169,6 +187,7 @@ export type ScheduledExecution = {
 export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
+  nodeName?: string;
   resolvedVersions?: ResolvedServerVersions;
 };
 

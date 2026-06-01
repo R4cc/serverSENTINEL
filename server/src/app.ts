@@ -43,12 +43,14 @@ import type {
   DockerExecInspect,
   DockerState,
   InstalledModMetadata,
+  ManagedNode,
   ManagedServer,
   ModCompatibility,
   ModPreference,
   ModrinthProject,
   ModrinthVersion,
   Permission,
+  PublicNode,
   PublicServer,
   PublicUser,
   ReleaseChannel,
@@ -74,11 +76,14 @@ import {
   AsyncQueue
 } from "./core.js";
 
+const localNodeId = "local";
 const serversFile = join(config.configDir, "servers.json");
+const nodesFile = join(config.configDir, "nodes.json");
 const usersFile = join(config.configDir, "users.json");
 const versionMetadataFilename = ".serversentinel-version.json";
 
 const serversQueue = new AsyncQueue();
+const nodesQueue = new AsyncQueue();
 const usersQueue = new AsyncQueue();
 
 
@@ -574,6 +579,105 @@ function versionResolution(version: string | undefined, source: ResolvedServerVe
   return { version: version || undefined, source: version ? source : "unknown", lastCheckedAt };
 }
 
+function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
+  return {
+    id: localNodeId,
+    name: "Internal Node",
+    type: "local",
+    status: "online",
+    isInternal: true,
+    createdAt: now,
+    updatedAt: now,
+    lastSeenAt: now
+  };
+}
+
+function normalizeNode(value: unknown): ManagedNode {
+  const node = asObject(value, "managed node");
+  const type = node.type ?? "local";
+  if (type !== "local") {
+    throw new Error("managed node type must be local");
+  }
+  const status = node.status ?? "unknown";
+  if (status !== "online" && status !== "offline" && status !== "unknown") {
+    throw new Error("managed node status must be online, offline, or unknown");
+  }
+  return {
+    id: requiredString(node.id, "node.id"),
+    name: requiredString(node.name, "node.name"),
+    type,
+    status,
+    isInternal: requireStrictBoolean(node.isInternal, "node.isInternal"),
+    createdAt: requiredString(node.createdAt, "node.createdAt"),
+    updatedAt: requiredString(node.updatedAt, "node.updatedAt"),
+    lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt")
+  };
+}
+
+function ensureDefaultInternalNode(nodes: ManagedNode[]) {
+  const now = new Date().toISOString();
+  const localIndex = nodes.findIndex((node) => node.id === localNodeId);
+  if (localIndex === -1) {
+    nodes.unshift(defaultInternalNode(now));
+    return true;
+  }
+
+  const current = nodes[localIndex];
+  const normalized: ManagedNode = {
+    ...current,
+    name: current.name || "Internal Node",
+    type: "local",
+    status: "online",
+    isInternal: true,
+    updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
+    lastSeenAt: current.lastSeenAt ?? now
+  };
+  const changed = JSON.stringify(current) !== JSON.stringify(normalized);
+  nodes[localIndex] = normalized;
+  return changed;
+}
+
+function publicNode(node: ManagedNode): PublicNode {
+  return normalizeNode(node);
+}
+
+async function readNodes() {
+  const nodes = await readJsonFile(nodesFile, [defaultInternalNode()], (value) => asArray(value, "nodes.json").map(normalizeNode));
+  const normalized = nodes.map(normalizeNode);
+  if (ensureDefaultInternalNode(normalized)) {
+    await writeJsonFile(nodesFile, normalized);
+  }
+  return normalized;
+}
+
+async function writeNodes(nodes: ManagedNode[]) {
+  const normalized = nodes.map(normalizeNode);
+  ensureDefaultInternalNode(normalized);
+  await writeJsonFile(nodesFile, normalized);
+}
+
+function queuedReadNodes() {
+  return nodesQueue.enqueue(() => readNodes());
+}
+
+async function updateNodes(updater: (nodes: ManagedNode[]) => Promise<void> | void) {
+  return nodesQueue.enqueue(async () => {
+    const nodes = await readNodes();
+    await updater(nodes);
+    await writeNodes(nodes);
+  });
+}
+
+function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
+  return nodes.find((node) => node.id === server.nodeId);
+}
+
+function assertLocalServerNode(server: ManagedServer) {
+  if (server.nodeId !== localNodeId) {
+    throw new Error(`Server ${server.displayName} is assigned to unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
+  }
+}
+
 function parseVersionMetadataText(text: string): VersionMetadata {
   try {
     const parsed = JSON.parse(text) as VersionMetadata;
@@ -708,9 +812,12 @@ async function resolveServerVersions(server: ManagedServer): Promise<ResolvedSer
   };
 }
 
-async function publicServer(server: ManagedServer): Promise<PublicServer> {
+async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer> {
+  const availableNodes = nodes ?? await queuedReadNodes();
+  const node = findServerNode(server, availableNodes);
   return {
     id: server.id,
+    nodeId: server.nodeId,
     displayName: server.displayName,
     storageName: server.storageName,
     minecraftVersion: server.minecraftVersion,
@@ -727,6 +834,7 @@ async function publicServer(server: ManagedServer): Promise<PublicServer> {
     updatedAt: server.updatedAt,
     directoryLabel: server.storageName || server.displayName,
     hasDockerContainer: Boolean(server.dockerContainer),
+    nodeName: node?.name,
     resolvedVersions: await resolveServerVersions(server)
   };
 }
@@ -763,6 +871,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   }
   return {
     id: validateServerId(server.id),
+    nodeId: optionalString(server.nodeId, "server.nodeId") ?? localNodeId,
     displayName: requiredString(server.displayName, "server.displayName"),
     serverDir,
     storageName: optionalString(server.storageName, "server.storageName"),
@@ -784,11 +893,35 @@ function normalizeManagedServer(value: unknown): ManagedServer {
 }
 
 async function readServers() {
-  return readJsonFile(serversFile, [], (value) => asArray(value, "servers.json").map(normalizeManagedServer));
+  const [servers, nodes] = await Promise.all([
+    readJsonFile(serversFile, [], (value) => asArray(value, "servers.json").map(normalizeManagedServer)),
+    readNodes()
+  ]);
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  return servers.map((server) => {
+    if (!nodeIds.has(server.nodeId)) {
+      throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
+    }
+    if (server.nodeId !== localNodeId) {
+      throw new Error(`Managed server ${server.displayName} references unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
+    }
+    return server;
+  });
 }
 
 async function writeServers(servers: ManagedServer[]) {
-  await writeJsonFile(serversFile, servers.map(normalizeManagedServer));
+  const nodes = await readNodes();
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const normalized = servers.map(normalizeManagedServer);
+  for (const server of normalized) {
+    if (!nodeIds.has(server.nodeId)) {
+      throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
+    }
+    if (server.nodeId !== localNodeId) {
+      throw new Error(`Managed server ${server.displayName} references unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
+    }
+  }
+  await writeJsonFile(serversFile, normalized);
 }
 
 function queuedReadServers() {
@@ -832,6 +965,7 @@ async function getServer(serverId?: string) {
   if (!server) {
     throw new Error("No managed server instance is registered");
   }
+  assertLocalServerNode(server);
   return server;
 }
 
@@ -1972,6 +2106,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const now = new Date().toISOString();
   const server: ManagedServer = {
     id: randomUUID(),
+    nodeId: localNodeId,
     displayName,
     serverDir: resolvedServerDir,
     storageName,
@@ -2443,12 +2578,41 @@ app.get("/api/app", async (request) => {
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
   const servers = await queuedReadServers();
+  const nodes = await queuedReadNodes();
   return {
-    servers: await Promise.all(servers.map(publicServer)),
+    servers: await Promise.all(servers.map((server) => publicServer(server, nodes))),
+    nodes: nodes.map(publicNode),
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
     totalMemory: totalmem(),
     currentUser: user ? publicUser(user) : undefined
+  };
+});
+
+app.get("/api/nodes", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  return { nodes: (await queuedReadNodes()).map(publicNode) };
+});
+
+app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) {
+    return reply.code(404).send({ error: "Node not found" });
+  }
+  return publicNode(node);
+});
+
+app.get("/api/context", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const servers = await queuedReadServers();
+  const nodes = await queuedReadNodes();
+  const publicServers = await Promise.all(servers.map((server) => publicServer(server, nodes)));
+  return {
+    nodes: nodes.map((node) => ({
+      ...publicNode(node),
+      servers: publicServers.filter((server) => server.nodeId === node.id)
+    }))
   };
 });
 
@@ -3568,12 +3732,14 @@ function scheduleNextTick() {
 scheduleNextTick();
 
 const startupUsers = await readUsers().catch(() => []);
+const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
   appVersion: process.env.npm_package_version ?? "0.2.0",
   configDir: config.configDir,
   managedServersDir: config.serversDir,
+  nodeCount: startupNodes.length,
   dockerSocketMounted,
   modrinthApiConfigured: modrinthConfigured,
   authEnabled: startupUsers.length > 0,
