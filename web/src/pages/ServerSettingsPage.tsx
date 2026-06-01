@@ -209,6 +209,7 @@ export function ManagedServerForm({
   onSubmit,
   dockerSocketMounted,
   nodes = [],
+  preferredNodeId = "",
   versions,
   totalMemory = 0,
   provisioning = false
@@ -216,6 +217,7 @@ export function ManagedServerForm({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dockerSocketMounted: boolean;
   nodes?: ContextNode[];
+  preferredNodeId?: string;
   versions: FabricVersions;
   totalMemory?: number;
   provisioning?: boolean;
@@ -244,13 +246,17 @@ export function ManagedServerForm({
   }, [versions.game]);
 
   useEffect(() => {
+    if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
+      setSelectedNodeId(preferredNodeId);
+      return;
+    }
     if (usableNodes.length === 1) {
       setSelectedNodeId(usableNodes[0].id);
       return;
     }
     if (selectedNodeId && usableNodes.some((node) => node.id === selectedNodeId)) return;
     setSelectedNodeId(usableNodes[0]?.id ?? "");
-  }, [selectedNodeId, usableNodes]);
+  }, [preferredNodeId, selectedNodeId, usableNodes]);
 
   return (
     <form onSubmit={onSubmit} className="appForm">

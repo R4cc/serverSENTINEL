@@ -9,6 +9,7 @@ type AddNodeInput = {
 };
 
 const defaultNodeDataPath = "/var/lib/serversentinel";
+const collapsedServerLimit = 4;
 
 function formatNodeDate(value?: string, formatter?: (value: string | number | Date) => string) {
   if (!value) return "Never";
@@ -19,6 +20,16 @@ function statusTone(value?: string) {
   if (value === "online" || value === "available" || value === "compatible" || value === "ready") return "ready";
   if (value === "offline" || value === "unavailable" || value === "incompatible" || value === "missing") return "limited";
   return "";
+}
+
+function ServerRowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
+      <path d="m4 7 8 4 8-4" />
+      <path d="M12 11v10" />
+    </svg>
+  );
 }
 
 function dockerComposeSnippet(install: NodeInstallInstructions) {
@@ -200,8 +211,12 @@ export function NodesPage({
   onShowInstall,
   onRotateToken,
   onRemoveNode,
+  onCloseDetails,
+  onSelectServer,
+  onAddServer,
   onClearInstall,
   onCopy,
+  serverStateLabel,
   formatDate
 }: {
   nodes: ContextNode[];
@@ -223,10 +238,15 @@ export function NodesPage({
   onShowInstall: (node: ManagedNode) => void;
   onRotateToken: (node: ManagedNode) => void;
   onRemoveNode: (node: ContextNode) => void;
+  onCloseDetails: () => void;
+  onSelectServer: (serverId: string) => void;
+  onAddServer: (nodeId: string) => void;
   onClearInstall: () => void;
   onCopy: (text: string) => void;
+  serverStateLabel: (serverId: string) => string;
   formatDate: (value: string | number | Date) => string;
 }) {
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
   const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
   const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
@@ -244,7 +264,7 @@ export function NodesPage({
         <section className="panel nodesToolbar">
           <div>
             <h2>NODES</h2>
-            <p className="muted">{internalNode ? "Manage the internal node and remote nodes that can host servers." : "Manage remote nodes that can host servers."}</p>
+            <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
             <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
@@ -261,8 +281,11 @@ export function NodesPage({
           </div>
         )}
         {sortedNodes.map((node) => {
-          const warnings = nodeWarnings(node);
-          const removeBlocked = node.isInternal || node.servers.length > 0;
+          const expanded = Boolean(expandedNodeIds[node.id]);
+          const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
+          const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
+          const canAddServer = isNodeRuntimeUsable(node);
+          const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
           return (
             <article key={node.id} className={`panel nodeCard ${node.status}`}>
               <header className="nodeCardHeader">
@@ -271,48 +294,55 @@ export function NodesPage({
                     <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
                     <h3>{node.name}</h3>
                   </div>
-                  <p>{node.isInternal ? "Internal Node" : "External Node"}</p>
                 </div>
                 <span className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</span>
+                <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
               </header>
 
-              <dl className="nodeFacts">
-                <div><dt>Servers</dt><dd>{node.servers.length}</dd></div>
-                <div><dt>Agent</dt><dd>{node.agentVersion || "Unknown"}</dd></div>
-                <div><dt>Protocol</dt><dd>{node.protocolVersion || "Unknown"}</dd></div>
-                <div><dt>Compatibility</dt><dd className={statusTone(node.compatibility)}>{nodeCompatibilityLabel(node)}</dd></div>
-                <div><dt>Docker</dt><dd className={statusTone(node.dockerStatus)}>{nodeDockerLabel(node)}</dd></div>
-                <div><dt>Data path</dt><dd className={statusTone(node.dataPathStatus)}>{nodeDataPathLabel(node)}</dd></div>
-                <div><dt>Last seen</dt><dd>{formatNodeDate(node.lastSeenAt ?? node.connectedAt, formatDate)}</dd></div>
-              </dl>
-
-              {warnings.length > 0 && (
-                <div className="nodeWarnings">
-                  {warnings.slice(0, 3).map((warning) => <span key={warning}>{warning}</span>)}
+              <section className="nodeServerSection">
+                <div className="nodeServerSectionLabel">SERVERS ON THIS NODE</div>
+                <div className="nodeServerList">
+                  {node.servers.length === 0 && <div className="nodeServerEmpty">No servers on this node</div>}
+                  {visibleServers.map((server) => {
+                    const state = serverStateLabel(server.id);
+                    return (
+                      <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
+                        <span className="nodeServerIcon"><ServerRowIcon /></span>
+                        <span className="nodeServerName">{server.displayName}</span>
+                        <span className={`nodeServerState ${state.toLowerCase()}`}>
+                          <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
+                          {state}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {hiddenServerCount > 0 && (
+                    <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: true }))}>
+                      + {hiddenServerCount} MORE SERVERS
+                    </button>
+                  )}
+                  {expanded && node.servers.length > collapsedServerLimit && (
+                    <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: false }))}>
+                      SHOW LESS
+                    </button>
+                  )}
                 </div>
-              )}
+              </section>
 
-              <div className="nodeActions">
-                <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
-                <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(node)} disabled={busyNodeId === node.id}>Install</button>
-                <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(node)} disabled={busyNodeId === node.id || node.isInternal || !canManageNodes} title={node.isInternal ? "Internal node tokens cannot be rotated" : ""}>Rotate token</button>
-                <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}>Refresh</button>
-                <button type="button" className="dangerButton compactButton" onClick={() => onRemoveNode(node)} disabled={busyNodeId === node.id || removeBlocked || !canManageNodes} title={node.isInternal ? "Internal node cannot be deleted" : node.servers.length > 0 ? "Move or delete assigned servers first" : ""}>Remove</button>
-              </div>
-
-              {!isNodeRuntimeUsable(node) && (
-                <p className="nodeBlockedNote">{nodeBlockReason(node) || "Runtime actions may be limited."}</p>
-              )}
+              <button type="button" className="secondaryButton nodeAddServerButton" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
+                + Add Server
+              </button>
             </article>
           );
         })}
-        {sortedNodes.length > 0 && canManageNodes && (
+        {sortedNodes.length > 0 && (
           <button
             type="button"
             className="panel nodeCard addNodeCardButton"
             onClick={onOpenAddNode}
-            disabled={busy}
+            disabled={busy || !canManageNodes}
             aria-label="Add a remote node"
+            title={canManageNodes ? "Add a remote node" : "Manage users permission is required"}
           >
             <div className="addNodeCardInner">
               <svg className="addNodeIcon" viewBox="0 0 24 24">
@@ -325,22 +355,57 @@ export function NodesPage({
       </section>
 
       {selectedNode && (
-        <section className="panel nodeDetailsPanel">
-          <div className="panelHeader">
-            <div>
-              <h2>{selectedNode.name}</h2>
-              <p className="muted">Node details from the backend.</p>
+        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onCloseDetails();
+        }}>
+          <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="node-details-title">
+            <header className="nodeModalHeader">
+              <div>
+                <h2 id="node-details-title">{selectedNode.name}</h2>
+                <p>Technical node details and maintenance actions.</p>
+              </div>
+              <button type="button" className="iconButton contextCloseButton" onClick={onCloseDetails} aria-label="Close node details">X</button>
+            </header>
+            <div className="nodeModalBody">
+              <dl className="nodeFacts detailed">
+                <div><dt>ID</dt><dd>{selectedNode.id}</dd></div>
+                <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
+                <div><dt>Status</dt><dd className={statusTone(selectedNode.status)}>{selectedNode.status}</dd></div>
+                <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
+                <div><dt>Protocol</dt><dd>{selectedNode.protocolVersion || "Unknown"}</dd></div>
+                <div><dt>Compatibility</dt><dd className={statusTone(selectedNode.compatibility)}>{nodeCompatibilityLabel(selectedNode)}</dd></div>
+                <div><dt>Docker</dt><dd className={statusTone(selectedNode.dockerStatus)}>{nodeDockerLabel(selectedNode)}</dd></div>
+                <div><dt>Data path</dt><dd className={statusTone(selectedNode.dataPathStatus)}>{nodeDataPathLabel(selectedNode)}</dd></div>
+                <div><dt>Created</dt><dd>{formatNodeDate(selectedNode.createdAt, formatDate)}</dd></div>
+                <div><dt>Updated</dt><dd>{formatNodeDate(selectedNode.updatedAt, formatDate)}</dd></div>
+                <div><dt>Last seen</dt><dd>{formatNodeDate(selectedNode.lastSeenAt ?? selectedNode.connectedAt, formatDate)}</dd></div>
+                <div><dt>Capabilities</dt><dd>{selectedNode.capabilities?.length ? selectedNode.capabilities.join(", ") : "None advertised"}</dd></div>
+              </dl>
+              {nodeWarnings(selectedNode).length > 0 && (
+                <div className="nodeWarnings">
+                  {nodeWarnings(selectedNode).map((warning) => <span key={warning}>{warning}</span>)}
+                </div>
+              )}
+              <div className="nodeActions">
+                <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedNode)} disabled={busyNodeId === selectedNode.id}>Install instructions</button>
+                <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}>Rotate token</button>
+                <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}>Refresh node</button>
+                <button
+                  type="button"
+                  className="dangerButton compactButton"
+                  onClick={() => {
+                    const node = sortedNodes.find((candidate) => candidate.id === selectedNode.id);
+                    if (node) onRemoveNode(node);
+                  }}
+                  disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || Boolean(sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length) || !canManageNodes}
+                  title={selectedNode.isInternal ? "Internal node cannot be deleted" : sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length ? "Move or delete assigned servers first" : ""}
+                >
+                  Remove node
+                </button>
+              </div>
             </div>
-          </div>
-          <dl className="nodeFacts detailed">
-            <div><dt>ID</dt><dd>{selectedNode.id}</dd></div>
-            <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
-            <div><dt>Created</dt><dd>{formatNodeDate(selectedNode.createdAt, formatDate)}</dd></div>
-            <div><dt>Updated</dt><dd>{formatNodeDate(selectedNode.updatedAt, formatDate)}</dd></div>
-            <div><dt>Connected</dt><dd>{formatNodeDate(selectedNode.connectedAt, formatDate)}</dd></div>
-            <div><dt>Capabilities</dt><dd>{selectedNode.capabilities?.length ? selectedNode.capabilities.join(", ") : "None advertised"}</dd></div>
-          </dl>
-        </section>
+          </section>
+        </div>
       )}
 
       {installResult && (

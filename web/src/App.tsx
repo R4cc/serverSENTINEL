@@ -359,6 +359,7 @@ export default function App() {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
   const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("compose");
+  const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
@@ -650,6 +651,29 @@ export default function App() {
   function manageNodesPlaceholder() {
     setActivePage("nodes");
     closeContextModal();
+  }
+
+  function openCreateServerForNode(nodeId = "") {
+    setPreferredCreateNodeId(nodeId);
+    setActivePage("create");
+  }
+
+  function openServerFromNode(serverId: string) {
+    const server = effectiveAppState.servers.find((candidate) => candidate.id === serverId);
+    if (!server) return;
+    if (demoMode && server.id !== demoServerId) {
+      notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
+      return;
+    }
+    setActiveServerId(server.id);
+    activeServerIdRef.current = server.id;
+    setActivePage("overview");
+  }
+
+  function nodeServerStateLabel(serverId: string) {
+    if (status?.server.id !== serverId) return "UNKNOWN";
+    if (!status.docker.configured) return "UNKNOWN";
+    return status.docker.running ? "RUNNING" : "STOPPED";
   }
 
   useEffect(() => {
@@ -2873,7 +2897,7 @@ export default function App() {
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>New managed server</button>}
+            {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
             {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
@@ -2970,7 +2994,7 @@ export default function App() {
                 ) : (
                   <>
                     <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
-                    <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
                   </>
                 )}
               </div>
@@ -2984,6 +3008,7 @@ export default function App() {
               onSubmit={createServer}
               dockerSocketMounted={effectiveAppState.dockerSocketMounted}
               nodes={contextNodes}
+              preferredNodeId={preferredCreateNodeId}
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
@@ -3152,8 +3177,12 @@ export default function App() {
             onShowInstall={showNodeInstall}
             onRotateToken={rotateNodeToken}
             onRemoveNode={removeNode}
+            onCloseDetails={() => setNodeDetails(null)}
+            onSelectServer={openServerFromNode}
+            onAddServer={openCreateServerForNode}
             onClearInstall={() => setNodeInstallResult(null)}
             onCopy={(text) => void copyText(text)}
+            serverStateLabel={nodeServerStateLabel}
             formatDate={formatDisplayDate}
           />
         )}
@@ -3179,7 +3208,7 @@ export default function App() {
             ) : (
               <>
                 <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
-                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
               </>
             )}
           </section>

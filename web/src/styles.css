@@ -2612,12 +2612,18 @@ button .buttonIcon {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   gap: var(--space-3);
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  padding-right: var(--space-1);
+  align-items: stretch;
 }
 
 .nodeCard {
   display: grid;
+  grid-template-rows: auto 1fr auto;
   gap: var(--space-3);
   border-radius: var(--radius-md);
+  min-height: 320px;
 }
 
 .nodeCard.online {
@@ -2651,11 +2657,145 @@ button .buttonIcon {
   font-weight: 800;
 }
 
+.nodeCardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  padding-bottom: var(--space-3);
+}
+
 .nodeCardTitle {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.nodeServerSection {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.nodeServerSectionLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nodeServerList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.nodeServerEmpty {
+  min-height: 44px;
+  width: 100%;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2) var(--space-3);
+}
+
+.nodeServerRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  text-align: left;
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--text);
+  transform: none;
+}
+
+.nodeServerIcon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+}
+
+.nodeServerIcon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.nodeServerName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.nodeServerState {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nodeServerState.running {
+  color: var(--sentinel-success);
+}
+
+.nodeServerState.stopped {
+  color: var(--sentinel-danger);
+}
+
+.nodeServerMoreRow {
+  justify-content: space-between;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.nodeServerEmpty {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.nodeAddServerButton {
+  justify-self: start;
+  align-self: end;
+  min-height: 38px;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.nodeAddServerButton:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--swiss-white);
 }
 
 .nodeCardTitle h3 {
