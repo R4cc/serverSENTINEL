@@ -131,7 +131,7 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
-export type NodeType = "local";
+export type NodeType = "local" | "remote";
 
 export type NodeStatus = "online" | "offline" | "unknown";
 
@@ -144,9 +144,21 @@ export type ManagedNode = {
   createdAt: string;
   updatedAt: string;
   lastSeenAt?: string;
+  connectedAt?: string;
+  agentVersion?: string;
+  protocolVersion?: string;
+  capabilities?: string[];
+  dockerStatus?: string;
+  dataPathStatus?: string;
+  compatibility?: "compatible" | "incompatible" | "unknown";
+  secretHash?: string;
+  joinTokenHash?: string;
+  joinTokenExpiresAt?: string;
 };
 
-export type PublicNode = ManagedNode;
+export type PublicNode = Omit<ManagedNode, "secretHash" | "joinTokenHash"> & {
+  hasPendingJoinToken?: boolean;
+};
 
 export type ManagedServer = {
   id: string;

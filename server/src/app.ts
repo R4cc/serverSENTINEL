@@ -27,7 +27,12 @@ import {
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
+import { PanelNodeConnections } from "./nodes/panelConnections.js";
+import { nodeCapabilities, nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
+import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
+import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
+import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime, RuntimeAction } from "./nodes/types.js";
 import {
   ROLE_PRESETS,
@@ -114,6 +119,7 @@ type DockerStats = {
 };
 
 type CreateServerInput = {
+  nodeId?: string;
   displayName?: string;
   minecraftVersion?: string;
   loaderVersion?: string;
@@ -152,6 +158,7 @@ type Client = {
 
 const provisionJobs = new Map<string, ProvisionJob>();
 const sessions = new Map<string, Session>();
+const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
 const passwordHashKeyLength = 64;
@@ -513,6 +520,17 @@ function verifyPassword(password: string, user: StoredUser) {
   return attempted.length === stored.length && timingSafeEqual(attempted, stored);
 }
 
+function hashNodeSecret(secret: string) {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+function verifyNodeSecret(secret: string | undefined, expectedHash?: string) {
+  if (!secret || !expectedHash) return false;
+  const attempted = Buffer.from(hashNodeSecret(secret), "hex");
+  const expected = Buffer.from(expectedHash, "hex");
+  return attempted.length === expected.length && timingSafeEqual(attempted, expected);
+}
+
 async function readUsers() {
   return readJsonFile(usersFile, [], (value) => asArray(value, "users.json").map(normalizeStoredUser));
 }
@@ -598,8 +616,8 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
 function normalizeNode(value: unknown): ManagedNode {
   const node = asObject(value, "managed node");
   const type = node.type ?? "local";
-  if (type !== "local") {
-    throw new Error("managed node type must be local");
+  if (type !== "local" && type !== "remote") {
+    throw new Error("managed node type must be local or remote");
   }
   const status = node.status ?? "unknown";
   if (status !== "online" && status !== "offline" && status !== "unknown") {
@@ -613,7 +631,17 @@ function normalizeNode(value: unknown): ManagedNode {
     isInternal: requireStrictBoolean(node.isInternal, "node.isInternal"),
     createdAt: requiredString(node.createdAt, "node.createdAt"),
     updatedAt: requiredString(node.updatedAt, "node.updatedAt"),
-    lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt")
+    lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt"),
+    connectedAt: optionalString(node.connectedAt, "node.connectedAt"),
+    agentVersion: optionalString(node.agentVersion, "node.agentVersion"),
+    protocolVersion: optionalString(node.protocolVersion, "node.protocolVersion"),
+    capabilities: node.capabilities === undefined ? undefined : asArray(node.capabilities, "node.capabilities").map((capability) => requiredString(capability, "node.capabilities[]")),
+    dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
+    dataPathStatus: optionalString(node.dataPathStatus, "node.dataPathStatus"),
+    compatibility: node.compatibility === "compatible" || node.compatibility === "incompatible" || node.compatibility === "unknown" ? node.compatibility : undefined,
+    secretHash: optionalString(node.secretHash, "node.secretHash"),
+    joinTokenHash: optionalString(node.joinTokenHash, "node.joinTokenHash"),
+    joinTokenExpiresAt: optionalString(node.joinTokenExpiresAt, "node.joinTokenExpiresAt")
   };
 }
 
@@ -641,13 +669,18 @@ function ensureDefaultInternalNode(nodes: ManagedNode[]) {
 }
 
 function publicNode(node: ManagedNode): PublicNode {
-  return normalizeNode(node);
+  const normalized = normalizeNode(node);
+  const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
+  return {
+    ...publicFields,
+    hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
+  };
 }
 
 async function readNodes() {
-  const nodes = await readJsonFile(nodesFile, [defaultInternalNode()], (value) => asArray(value, "nodes.json").map(normalizeNode));
+  const nodes = await readJsonFile(nodesFile, config.runtimeMode === "all-in-one" ? [defaultInternalNode()] : [], (value) => asArray(value, "nodes.json").map(normalizeNode));
   const normalized = nodes.map(normalizeNode);
-  if (ensureDefaultInternalNode(normalized)) {
+  if (config.runtimeMode === "all-in-one" && ensureDefaultInternalNode(normalized)) {
     await writeJsonFile(nodesFile, normalized);
   }
   return normalized;
@@ -655,7 +688,7 @@ async function readNodes() {
 
 async function writeNodes(nodes: ManagedNode[]) {
   const normalized = nodes.map(normalizeNode);
-  ensureDefaultInternalNode(normalized);
+  if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
   await writeJsonFile(nodesFile, normalized);
 }
 
@@ -848,7 +881,10 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     directoryLabel: server.storageName || server.displayName,
     hasDockerContainer: Boolean(server.dockerContainer),
     nodeName: node?.name,
-    resolvedVersions: await resolveServerVersions(server)
+    resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
+      minecraftVersion: versionResolution(server.minecraftVersion, server.minecraftVersion ? "stored" : "unknown", new Date().toISOString()),
+      fabricLoaderVersion: versionResolution(server.loaderVersion, server.loaderVersion ? "stored" : "unknown", new Date().toISOString())
+    }
   };
 }
 
@@ -877,14 +913,18 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   }
   const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
   if (dockerPorts) parseDockerPorts(dockerPorts);
+  const id = validateServerId(server.id);
+  const nodeId = optionalString(server.nodeId, "server.nodeId") ?? localNodeId;
   const serversDir = resolve(config.serversDir);
-  const serverDir = resolve(requiredString(server.serverDir, "server.serverDir"));
-  if (serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
+  const serverDir = nodeId === localNodeId
+    ? resolve(requiredString(server.serverDir, "server.serverDir"))
+    : resolve(optionalString(server.serverDir, "server.serverDir") ?? join("/remote", id));
+  if (nodeId === localNodeId && serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
     throw new Error("managed server serverDir must be inside SERVERSENTINEL_SERVERS_DIR");
   }
   return {
-    id: validateServerId(server.id),
-    nodeId: optionalString(server.nodeId, "server.nodeId") ?? localNodeId,
+    id,
+    nodeId,
     displayName: requiredString(server.displayName, "server.displayName"),
     serverDir,
     storageName: optionalString(server.storageName, "server.storageName"),
@@ -2070,6 +2110,9 @@ async function createServerFiles(
 }
 
 async function createManagedServer(input: CreateServerInput, report?: (progress: number, task: string) => void, jobId?: string) {
+  if ((input.nodeId ?? localNodeId) !== localNodeId) {
+    throw new Error("Remote server provisioning is not implemented yet");
+  }
   const startedAt = Date.now();
   report?.(5, "Validating server settings");
   const displayName = input.displayName?.trim();
@@ -2166,6 +2209,10 @@ function updateProvisionJob(id: string, patch: Partial<ProvisionJob>) {
 }
 
 function startProvisionJob(input: CreateServerInput) {
+  const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
+  if (!nodeId) {
+    throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+  }
   const id = randomUUID();
   const now = new Date().toISOString();
   provisionJobs.set(id, {
@@ -2178,7 +2225,7 @@ function startProvisionJob(input: CreateServerInput) {
   });
   logInfo({ jobId: id, serverName: input.displayName?.trim() }, "Provisioning job started");
 
-  void runtimeForNodeId(localNodeId).createServer(input, (progress, task) => {
+  void runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, (progress, task) => {
     updateProvisionJob(id, { progress, task });
   }, id).then(async (server) => {
     updateProvisionJob(id, {
@@ -2728,6 +2775,9 @@ app.addHook("preHandler", async (request) => {
   if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
     return;
   }
+  if (request.raw.url.startsWith("/api/nodes/connect")) {
+    return;
+  }
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
   if (demoMode) {
     if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions"))) {
@@ -2760,6 +2810,51 @@ app.get("/api/nodes", async (request) => {
   return { nodes: (await queuedReadNodes()).map(publicNode) };
 });
 
+app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string } }>("/api/nodes/pending", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const now = new Date();
+  const joinToken = randomBytes(32).toString("base64url");
+  const nodeId = randomUUID();
+  const nodeName = request.body.name?.trim() || "Remote Node";
+  const ttlMinutes = Number.isFinite(request.body.tokenTtlMinutes) ? Math.max(5, Math.min(1440, Number(request.body.tokenTtlMinutes))) : 60;
+  const expiresAt = new Date(now.getTime() + ttlMinutes * 60_000).toISOString();
+  const node: ManagedNode = {
+    id: nodeId,
+    name: nodeName,
+    type: "remote",
+    status: "unknown",
+    isInternal: false,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    compatibility: "unknown",
+    capabilities: [],
+    joinTokenHash: hashNodeSecret(joinToken),
+    joinTokenExpiresAt: expiresAt
+  };
+  await updateNodes((nodes) => {
+    nodes.push(node);
+  });
+  const panelUrl = `http://<panel-host>:${config.port}`;
+  const dataMount = request.body.dataMount?.trim() || "/srv/serversentinel:/data";
+  return {
+    node: publicNode(node),
+    joinToken,
+    expiresAt,
+    install: {
+      dockerCompose: {
+        image: `serversentinel:${process.env.npm_package_version ?? "latest"}`,
+        environment: {
+          SS_MODE: "node",
+          SS_PANEL_URL: panelUrl,
+          SS_JOIN_TOKEN: joinToken
+        },
+        volumes: ["/var/run/docker.sock:/var/run/docker.sock", dataMount]
+      },
+      dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl} -e SS_JOIN_TOKEN=<redacted> -v /var/run/docker.sock:/var/run/docker.sock -v ${dataMount} serversentinel:${process.env.npm_package_version ?? "latest"}`
+    }
+  };
+});
+
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
   await requireRequestPermission(request, "servers.view");
   const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
@@ -2767,6 +2862,106 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
     return reply.code(404).send({ error: "Node not found" });
   }
   return publicNode(node);
+});
+
+app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
+  const ws = socket as any;
+  const reject = (message: string) => {
+    const response: PanelWelcome = { type: "welcome", nodeId: "", protocolVersion: nodeProtocolVersion, accepted: false, compatibility: "incompatible", error: message };
+    ws.send(JSON.stringify(response));
+    ws.close();
+  };
+
+  ws.once("message", async (raw: Buffer) => {
+    let hello: NodeHello;
+    try {
+      hello = JSON.parse(raw.toString()) as NodeHello;
+    } catch {
+      reject("Invalid node hello");
+      return;
+    }
+    if (hello.type !== "hello") {
+      reject("Node hello is required");
+      return;
+    }
+    const now = new Date().toISOString();
+    let acceptedNode: ManagedNode | undefined;
+    let issuedSecret: string | undefined;
+    await updateNodes((nodes) => {
+      if (hello.nodeId && hello.nodeSecret) {
+        const node = nodes.find((candidate) => candidate.id === hello.nodeId);
+        if (!node || !verifyNodeSecret(hello.nodeSecret, node.secretHash)) return;
+        acceptedNode = {
+          ...node,
+          name: hello.nodeName?.trim() || node.name,
+          status: "online",
+          updatedAt: now,
+          lastSeenAt: now,
+          connectedAt: now,
+          agentVersion: hello.agentVersion,
+          protocolVersion: hello.protocolVersion,
+          capabilities: hello.capabilities ?? [],
+          dockerStatus: hello.dockerStatus,
+          dataPathStatus: hello.dataPathStatus,
+          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible"
+        };
+        nodes[nodes.indexOf(node)] = acceptedNode;
+        return;
+      }
+
+      if (hello.joinToken) {
+        const tokenHash = hashNodeSecret(hello.joinToken);
+        const node = nodes.find((candidate) => candidate.joinTokenHash === tokenHash && candidate.joinTokenExpiresAt && new Date(candidate.joinTokenExpiresAt).getTime() > Date.now());
+        if (!node) return;
+        issuedSecret = newNodeSecret();
+        acceptedNode = {
+          ...node,
+          name: hello.nodeName?.trim() || node.name,
+          type: "remote",
+          status: "online",
+          isInternal: false,
+          updatedAt: now,
+          lastSeenAt: now,
+          connectedAt: now,
+          agentVersion: hello.agentVersion,
+          protocolVersion: hello.protocolVersion,
+          capabilities: hello.capabilities ?? [],
+          dockerStatus: hello.dockerStatus,
+          dataPathStatus: hello.dataPathStatus,
+          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible",
+          secretHash: hashNodeSecret(issuedSecret),
+          joinTokenHash: undefined,
+          joinTokenExpiresAt: undefined
+        };
+        nodes[nodes.indexOf(node)] = acceptedNode;
+      }
+    });
+
+    if (!acceptedNode) {
+      reject("Node authentication failed");
+      return;
+    }
+
+    const welcome: PanelWelcome = {
+      type: "welcome",
+      nodeId: acceptedNode.id,
+      nodeSecret: issuedSecret,
+      protocolVersion: nodeProtocolVersion,
+      accepted: true,
+      compatibility: acceptedNode.compatibility === "compatible" ? "compatible" : "incompatible"
+    };
+    ws.send(JSON.stringify(welcome));
+    panelNodeConnections.connect(acceptedNode, ws);
+    ws.on("close", () => {
+      void updateNodes((nodes) => {
+        const node = nodes.find((candidate) => candidate.id === acceptedNode!.id);
+        if (node) {
+          node.status = "offline";
+          node.updatedAt = new Date().toISOString();
+        }
+      }).catch(() => {});
+    });
+  });
 });
 
 app.get("/api/context", async (request) => {
@@ -2815,13 +3010,18 @@ app.post<{
   Body: CreateServerInput;
 }>("/api/servers", provisionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.create");
-  const server = await runtimeForNodeId(localNodeId).createServer(request.body);
+  const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
+  if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+  const server = await runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId });
   logInfo(serverLogFields(server), "Managed server created");
   return runtimeForServer(server).publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.create");
+  if (!request.body.nodeId && config.runtimeMode === "panel") {
+    throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+  }
   const job = startProvisionJob(request.body);
   return job;
 });
@@ -3843,7 +4043,7 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
   return runtimeForServer(server).installMod(server, request.body.projectId, request.body.forceIncompatible, request.body.channel);
 });
 
-runtimeRegistry = new NodeRuntimeRegistry(new LocalNodeRuntime({
+const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({
   publicServer,
   createServer: createManagedServer,
   updateServer: localUpdateServer,
@@ -3879,7 +4079,11 @@ runtimeRegistry = new NodeRuntimeRegistry(new LocalNodeRuntime({
   removeMod: localRemoveMod,
   uploadMod: localUploadMod,
   installMod: localInstallMod
-}));
+}) : undefined;
+runtimeRegistry = new NodeRuntimeRegistry(
+  localRuntime,
+  (nodeId) => new RemoteNodeRuntime(nodeId, async (id) => (await queuedReadNodes()).find((node) => node.id === id), panelNodeConnections, publicServer)
+);
 
 await registerStaticFrontend(app);
 
