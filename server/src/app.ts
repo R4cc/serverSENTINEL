@@ -3261,9 +3261,11 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
-  const parentStat = await stat(parent);
-  if (!parentStat.isDirectory()) {
-    throw new Error("Upload path is not a directory");
+  if (server.nodeId === localNodeId) {
+    const parentStat = await stat(parent);
+    if (!parentStat.isDirectory()) {
+      throw new Error("Upload path is not a directory");
+    }
   }
   const filename = safeFileManagerName(request.body.filename);
   const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
@@ -4082,7 +4084,26 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
 }) : undefined;
 runtimeRegistry = new NodeRuntimeRegistry(
   localRuntime,
-  (nodeId) => new RemoteNodeRuntime(nodeId, async (id) => (await queuedReadNodes()).find((node) => node.id === id), panelNodeConnections, publicServer)
+  (nodeId) => new RemoteNodeRuntime(
+    nodeId,
+    async (id) => (await queuedReadNodes()).find((node) => node.id === id),
+    panelNodeConnections,
+    publicServer,
+    async (server) => {
+      await updateServers((servers) => {
+        if (servers.some((candidate) => candidate.id === server.id)) {
+          throw new Error("A managed server with this id already exists");
+        }
+        servers.push(server);
+      });
+    },
+    async (serverId) => {
+      await updateServers((servers) => {
+        const index = servers.findIndex((candidate) => candidate.id === serverId);
+        if (index !== -1) servers.splice(index, 1);
+      });
+    }
+  )
 );
 
 await registerStaticFrontend(app);

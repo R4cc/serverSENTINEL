@@ -3,13 +3,29 @@ export const nodeProtocolVersion = "1.0";
 export const nodeCapabilities = [
   "node.health",
   "docker.info",
+  "server.create",
+  "server.delete",
   "server.start",
   "server.stop",
   "server.restart",
   "server.inspect",
   "server.stats",
   "server.logs.recent",
-  "server.console.send"
+  "server.console.send",
+  "files.list",
+  "files.read",
+  "files.write",
+  "files.upload",
+  "files.download",
+  "files.delete",
+  "files.rename",
+  "files.copy",
+  "files.mkdir",
+  "mods.list",
+  "mods.install",
+  "mods.upload",
+  "mods.enableDisable",
+  "mods.remove"
 ] as const;
 
 export type NodeCapability = typeof nodeCapabilities[number];
