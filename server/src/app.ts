@@ -26,6 +26,9 @@ import {
   fetchProject
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
+import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
+import { NodeRuntimeRegistry } from "./nodes/registry.js";
+import type { NodeRuntime, RuntimeAction } from "./nodes/types.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -668,14 +671,24 @@ async function updateNodes(updater: (nodes: ManagedNode[]) => Promise<void> | vo
   });
 }
 
-function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
-  return nodes.find((node) => node.id === server.nodeId);
+let runtimeRegistry: NodeRuntimeRegistry | undefined;
+
+function runtimeForServer(server: ManagedServer): NodeRuntime {
+  if (!runtimeRegistry) {
+    throw new Error("Node runtime registry is not initialized");
+  }
+  return runtimeRegistry.forServer(server);
 }
 
-function assertLocalServerNode(server: ManagedServer) {
-  if (server.nodeId !== localNodeId) {
-    throw new Error(`Server ${server.displayName} is assigned to unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
+function runtimeForNodeId(nodeId: string): NodeRuntime {
+  if (!runtimeRegistry) {
+    throw new Error("Node runtime registry is not initialized");
   }
+  return runtimeRegistry.forNodeId(nodeId);
+}
+
+function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
+  return nodes.find((node) => node.id === server.nodeId);
 }
 
 function parseVersionMetadataText(text: string): VersionMetadata {
@@ -902,9 +915,6 @@ async function readServers() {
     if (!nodeIds.has(server.nodeId)) {
       throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
     }
-    if (server.nodeId !== localNodeId) {
-      throw new Error(`Managed server ${server.displayName} references unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
-    }
     return server;
   });
 }
@@ -916,9 +926,6 @@ async function writeServers(servers: ManagedServer[]) {
   for (const server of normalized) {
     if (!nodeIds.has(server.nodeId)) {
       throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
-    }
-    if (server.nodeId !== localNodeId) {
-      throw new Error(`Managed server ${server.displayName} references unsupported node ${server.nodeId}; only the internal local node is supported in this backend version`);
     }
   }
   await writeJsonFile(serversFile, normalized);
@@ -965,7 +972,6 @@ async function getServer(serverId?: string) {
   if (!server) {
     throw new Error("No managed server instance is registered");
   }
-  assertLocalServerNode(server);
   return server;
 }
 
@@ -2172,14 +2178,14 @@ function startProvisionJob(input: CreateServerInput) {
   });
   logInfo({ jobId: id, serverName: input.displayName?.trim() }, "Provisioning job started");
 
-  void createManagedServer(input, (progress, task) => {
+  void runtimeForNodeId(localNodeId).createServer(input, (progress, task) => {
     updateProvisionJob(id, { progress, task });
   }, id).then(async (server) => {
     updateProvisionJob(id, {
       status: "succeeded",
       progress: 100,
       task: "Server setup complete",
-      server: await publicServer(server)
+      server: await runtimeForServer(server).publicServer(server)
     });
     setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).catch((error: unknown) => {
@@ -2229,8 +2235,9 @@ function scheduleFromBody(body: {
 async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution) {
   const startedAt = Date.now();
   try {
-    const status = await dockerStatus(server);
-    if (!status.running) {
+    const runtime = runtimeForServer(server);
+    const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
+    if (!status.docker?.running) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped" };
     }
@@ -2247,7 +2254,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
     }
 
     for (const command of schedule.commands) {
-      await sendDockerStdinCommand(server, command);
+      await runtime.sendConsoleCommand(server, command);
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
     return { status: "success", message: `Sent ${schedule.commands.length} command${schedule.commands.length === 1 ? "" : "s"}` };
@@ -2309,6 +2316,165 @@ async function tickSchedules() {
       }
     });
   }
+}
+
+async function localUpdateServer(serverId: string, input: unknown) {
+  const body = input as {
+    displayName?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    installerVersion?: string;
+    serverJar?: string;
+    dockerContainer?: string;
+    dockerImage?: string;
+    dockerPorts?: string;
+    javaArgs?: string;
+    serverPort?: string;
+  };
+  let updatedServer: ManagedServer | null = null;
+  await updateServers(async (servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === serverId);
+    if (index === -1) {
+      throw new Error("Server not found");
+    }
+
+    const current = servers[index];
+    if (servers.some((server) => server.id !== current.id && server.displayName.toLowerCase() === (body.displayName?.trim() || current.displayName).toLowerCase())) {
+      throw new Error("A managed server with this display name already exists");
+    }
+    const status = await dockerStatus(current);
+    if (status.running) {
+      throw new Error("Stop the server before changing its configuration");
+    }
+    const minecraftVersion = body.minecraftVersion?.trim() || current.minecraftVersion;
+    const loaderVersion = body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
+    const installerVersion = body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
+    const serverJar = validateRuntimeJarFilename(body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar");
+    const serverPort = body.serverPort?.trim();
+    if (serverPort && !isValidServerPort(serverPort)) {
+      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+    }
+    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
+    const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion));
+    const dockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
+    if (dockerPorts) parseDockerPorts(dockerPorts);
+    const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
+
+    const jarChanged = current.minecraftVersion !== minecraftVersion
+      || current.loaderVersion !== loaderVersion
+      || current.installerVersion !== installerVersion
+      || current.serverJar !== serverJar;
+
+    const updated: ManagedServer = {
+      ...current,
+      displayName: body.displayName?.trim() || current.displayName,
+      minecraftVersion,
+      loaderVersion,
+      installerVersion,
+      serverJar,
+      dockerContainer,
+      dockerImage,
+      dockerPorts,
+      javaArgs,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (jarChanged) {
+      await downloadFabricServerJar(updated);
+    }
+    await writeVersionMetadataFile(updated);
+    if (serverPort) {
+      await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      });
+    }
+
+    servers[index] = updated;
+    updatedServer = updated;
+  });
+  return updatedServer!;
+}
+
+async function localDeleteServer(server: ManagedServer, input: unknown) {
+  const body = input as { confirmName?: string; deleteFiles?: boolean };
+  let deletedContainer = false;
+  let deletedFiles = false;
+  let serverFields: Record<string, unknown> = {};
+
+  await updateServers(async (servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === server.id);
+    if (index === -1) {
+      throw new Error("Server not found");
+    }
+
+    const current = servers[index];
+    serverFields = serverLogFields(current);
+    const status = await dockerStatus(current);
+    if (status.running) {
+      throw new Error("Stop the server before deleting it");
+    }
+    if (body.confirmName !== current.displayName) {
+      throw new Error(`Type "${current.displayName}" to confirm deletion`);
+    }
+
+    deletedContainer = dockerAvailable() ? await removeManagedDockerContainer(current) : false;
+    const deleteFiles = optionalStrictBoolean(body.deleteFiles, "deleteFiles", false);
+    if (deleteFiles) {
+      const directory = ensureManagedServerDirectory(current);
+      await rm(directory, { recursive: true, force: true });
+      deletedFiles = true;
+    }
+
+    servers.splice(index, 1);
+  });
+
+  logInfo({ ...serverFields, deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
+  return { ok: true, deletedFiles, deletedContainer };
+}
+
+async function localServerStatus(server: ManagedServer) {
+  const latestLogPath = await validateExistingInsideServer(server, "logs/latest.log").catch(() => "");
+  const docker = await dockerStatus(server);
+  const commandInput = await dockerCommandInputCapability(server, docker);
+  return {
+    server: await publicServer(server),
+    docker,
+    fileLogsAvailable: Boolean(latestLogPath && existsSync(latestLogPath)),
+    controlAvailable: Boolean(docker.controllable),
+    commandInputAvailable: commandInput.available,
+    commandInputMessage: commandInput.message
+  };
+}
+
+async function localSendConsoleCommand(server: ManagedServer, command: unknown) {
+  const startedAt = Date.now();
+  try {
+    const result = await sendDockerStdinCommand(server, typeof command === "string" ? command : "");
+    logInfo({ ...serverLogFields(server), action: "send_console_command", commandsCount: 1, durationMs: durationSince(startedAt), status: "succeeded" }, "Console command sent");
+    return result;
+  } catch (error) {
+    logOperationFailure({ ...serverLogFields(server), action: "send_console_command", commandsCount: typeof command === "string" && command.trim() ? 1 : 0, durationMs: durationSince(startedAt), status: "failed" }, "Console command failed", error);
+    throw error;
+  }
+}
+
+async function localStreamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void) {
+  const consoleClient = client as Client;
+  consoleClient.send(JSON.stringify({ type: "status", status: await dockerStatus(server) }));
+  if (dockerControlConfigured(server) && dockerAvailable()) {
+    const logRequest = streamDockerLogs(server, consoleClient);
+    onClose(() => logRequest?.destroy());
+    return;
+  }
+
+  onClose(streamLatestServerLog(server, consoleClient));
+}
+
+async function localServerLogs(server: ManagedServer) {
+  if (dockerControlConfigured(server) && dockerAvailable()) {
+    return { text: await dockerRecentLogs(server), source: "docker" };
+  }
+  return { text: await readLatestServerLog(server), source: "logs/latest.log" };
 }
 
 export async function startServer() {
@@ -2580,7 +2746,7 @@ app.get("/api/app", async (request) => {
   const servers = await queuedReadServers();
   const nodes = await queuedReadNodes();
   return {
-    servers: await Promise.all(servers.map((server) => publicServer(server, nodes))),
+    servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
     nodes: nodes.map(publicNode),
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
@@ -2607,7 +2773,7 @@ app.get("/api/context", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const servers = await queuedReadServers();
   const nodes = await queuedReadNodes();
-  const publicServers = await Promise.all(servers.map((server) => publicServer(server, nodes)));
+  const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes)));
   return {
     nodes: nodes.map((node) => ({
       ...publicNode(node),
@@ -2649,9 +2815,9 @@ app.post<{
   Body: CreateServerInput;
 }>("/api/servers", provisionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.create");
-  const server = await createManagedServer(request.body);
+  const server = await runtimeForNodeId(localNodeId).createServer(request.body);
   logInfo(serverLogFields(server), "Managed server created");
-  return publicServer(server);
+  return runtimeForServer(server).publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
@@ -2685,68 +2851,9 @@ app.put<{
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
-  let updatedServer: ManagedServer | null = null;
-  await updateServers(async (servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (index === -1) {
-      throw new Error("Server not found");
-    }
-
-    const current = servers[index];
-    if (servers.some((server) => server.id !== current.id && server.displayName.toLowerCase() === (request.body.displayName?.trim() || current.displayName).toLowerCase())) {
-      throw new Error("A managed server with this display name already exists");
-    }
-    const status = await dockerStatus(current);
-    if (status.running) {
-      throw new Error("Stop the server before changing its configuration");
-    }
-    const minecraftVersion = request.body.minecraftVersion?.trim() || current.minecraftVersion;
-    const loaderVersion = request.body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
-    const installerVersion = request.body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
-    const serverJar = validateRuntimeJarFilename(request.body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar");
-    const serverPort = request.body.serverPort?.trim();
-    if (serverPort && !isValidServerPort(serverPort)) {
-      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-    }
-    const dockerContainer = validateDockerContainerName(request.body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
-    const dockerImage = validateDockerImageName(request.body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion));
-    const dockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
-    if (dockerPorts) parseDockerPorts(dockerPorts);
-    const javaArgs = validateJavaArgs(request.body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
-
-    const jarChanged = current.minecraftVersion !== minecraftVersion
-      || current.loaderVersion !== loaderVersion
-      || current.installerVersion !== installerVersion
-      || current.serverJar !== serverJar;
-
-    const updated: ManagedServer = {
-      ...current,
-      displayName: request.body.displayName?.trim() || current.displayName,
-      minecraftVersion,
-      loaderVersion,
-      installerVersion,
-      serverJar,
-      dockerContainer,
-      dockerImage,
-      dockerPorts,
-      javaArgs,
-      updatedAt: new Date().toISOString()
-    };
-
-    if (jarChanged) {
-      await downloadFabricServerJar(updated);
-    }
-    await writeVersionMetadataFile(updated);
-    if (serverPort) {
-      await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      });
-    }
-
-    servers[index] = updated;
-    updatedServer = updated;
-  });
-  return publicServer(updatedServer!);
+  const server = await getServer(request.params.id);
+  const updatedServer = await runtimeForServer(server).updateServer(server.id, request.body);
+  return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 
 app.delete<{
@@ -2757,84 +2864,38 @@ app.delete<{
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
-  let deletedContainer = false;
-  let deletedFiles = false;
-  let serverFields: Record<string, unknown> = {};
-
-  await updateServers(async (servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (index === -1) {
-      throw new Error("Server not found");
-    }
-
-    const server = servers[index];
-    serverFields = serverLogFields(server);
-    const status = await dockerStatus(server);
-    if (status.running) {
-      throw new Error("Stop the server before deleting it");
-    }
-    if (request.body.confirmName !== server.displayName) {
-      throw new Error(`Type "${server.displayName}" to confirm deletion`);
-    }
-
-    deletedContainer = dockerAvailable() ? await removeManagedDockerContainer(server) : false;
-    const deleteFiles = optionalStrictBoolean(request.body.deleteFiles, "deleteFiles", false);
-    if (deleteFiles) {
-      const directory = ensureManagedServerDirectory(server);
-      await rm(directory, { recursive: true, force: true });
-      deletedFiles = true;
-    }
-
-    servers.splice(index, 1);
-  });
-
-  logInfo({ ...serverFields, deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
-  return { ok: true, deletedFiles, deletedContainer };
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).deleteServer(server, request.body);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
-  const latestLogPath = await validateExistingInsideServer(server, "logs/latest.log").catch(() => "");
-  const docker = await dockerStatus(server);
-  const commandInput = await dockerCommandInputCapability(server, docker);
-  return {
-    server: await publicServer(server),
-    docker: docker,
-    fileLogsAvailable: Boolean(latestLogPath && existsSync(latestLogPath)),
-    controlAvailable: Boolean(docker.controllable),
-    commandInputAvailable: commandInput.available,
-    commandInputMessage: commandInput.message
-  };
+  return runtimeForServer(server).serverStatus(server);
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.control");
-  return dockerAction(await getServer(request.params.id), "start");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).lifecycle(server, "start");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.control");
-  return dockerAction(await getServer(request.params.id), "stop");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).lifecycle(server, "stop");
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.control");
-  return dockerAction(await getServer(request.params.id), "restart");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).lifecycle(server, "restart");
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
   await requireRequestPermission(request, "console.command");
   const server = await getServer(request.params.id);
-  const startedAt = Date.now();
-  try {
-    const result = await sendDockerStdinCommand(server, request.body.command ?? "");
-    logInfo({ ...serverLogFields(server), action: "send_console_command", commandsCount: 1, durationMs: durationSince(startedAt), status: "succeeded" }, "Console command sent");
-    return result;
-  } catch (error) {
-    logOperationFailure({ ...serverLogFields(server), action: "send_console_command", commandsCount: request.body.command?.trim() ? 1 : 0, durationMs: durationSince(startedAt), status: "failed" }, "Console command failed", error);
-    throw error;
-  }
+  return runtimeForServer(server).sendConsoleCommand(server, request.body.command);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
@@ -2918,15 +2979,7 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     await requireRequestPermission(request, "console.view");
     const server = await getServer(serverId);
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
-    client.send(JSON.stringify({ type: "status", status: await dockerStatus(server) }));
-    if (dockerControlConfigured(server) && dockerAvailable()) {
-      const logRequest = streamDockerLogs(server, client);
-      socket.on("close", () => logRequest?.destroy());
-      return;
-    }
-
-    const stopFileLogs = streamLatestServerLog(server, client);
-    socket.on("close", stopFileLogs);
+    await runtimeForServer(server).streamConsole(server, client, (cleanup) => socket.on("close", cleanup));
   } catch (error) {
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
     client.send(JSON.stringify({ type: "unavailable", message: (error as Error).message }));
@@ -2936,26 +2989,119 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
 app.get<{ Params: { id: string } }>("/api/servers/:id/logs", async (request) => {
   await requireRequestPermission(request, "console.view");
   const server = await getServer(request.params.id);
-  if (dockerControlConfigured(server) && dockerAvailable()) {
-    return { text: await dockerRecentLogs(server), source: "docker" };
-  }
-  return { text: await readLatestServerLog(server), source: "logs/latest.log" };
+  return runtimeForServer(server).serverLogs(server);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/stats", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  return dockerResourceStats(await getServer(request.params.id));
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).serverStats(server);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  return serverOverviewData(await getServer(request.params.id));
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).serverOverview(server);
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
-  const target = await validateExistingInsideServer(server, request.query.path ?? ".");
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.query.path ?? ".");
   await requireFilePathPermission(request, server, target, "files.view");
+  return runtime.listFiles(server, target);
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.view");
+  return runtime.previewFile(server, target);
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", async (request, reply) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.download");
+  const download = await runtime.downloadFile(server, target);
+  return reply
+    .header("Content-Type", "application/octet-stream")
+    .header("Content-Length", download.size)
+    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`)
+    .send(download.stream);
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, "files.view");
+  return runtime.readFile(server, target);
+});
+
+app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  return runtime.writeFile(server, target, request.body.content);
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
+  await requireFilePathPermission(request, server, parent, "files.upload");
+  return runtime.createFolder(server, parent, request.body.name);
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
+  const parentStat = await stat(parent);
+  if (!parentStat.isDirectory()) {
+    throw new Error("Upload path is not a directory");
+  }
+  const filename = safeFileManagerName(request.body.filename);
+  const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
+  await requireFilePathPermission(request, server, parent, uploadPermission);
+  return runtime.uploadFile(server, parent, filename, request.body.contentBase64);
+});
+
+app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  if (resolve(source) === resolve(server.serverDir)) {
+    throw new Error("Refusing to rename the server root directory");
+  }
+  const targetName = safeFileManagerName(request.body.name);
+  const target = await runtime.resolveWritableResolvedPath(server, join(dirname(source), targetName));
+  await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, target));
+  return runtime.renameFile(server, source, targetName);
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
+  return runtime.duplicateFile(server, source, request.body.name);
+});
+
+app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
+  await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
+  return runtime.deleteFile(server, target, request.query.recursive);
+});
+
+
+async function localListFiles(server: ManagedServer, target: string) {
   const targetStat = await stat(target);
   if (!targetStat.isDirectory()) {
     throw new Error("Path is not a directory");
@@ -2982,12 +3128,9 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
         })
     )
   };
-});
+}
 
-app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
-  const server = await getServer(request.params.id);
-  const target = await validateExistingInsideServer(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.view");
+async function localPreviewFile(server: ManagedServer, target: string) {
   const targetStat = await stat(target);
   const publicPath = toPublicPath(server, target);
   if (!targetStat.isFile()) {
@@ -3009,28 +3152,21 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
     content: buffer.toString("utf8"),
     modifiedAt: targetStat.mtime.toISOString()
   };
-});
+}
 
-app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", async (request, reply) => {
-  const server = await getServer(request.params.id);
-  const target = await validateExistingInsideServer(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.download");
+async function localDownloadFile(_server: ManagedServer, target: string) {
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Only files can be downloaded");
   }
-  const filename = basename(target);
-  return reply
-    .header("Content-Type", "application/octet-stream")
-    .header("Content-Length", targetStat.size)
-    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`)
-    .send(createReadStream(target));
-});
+  return {
+    filename: basename(target),
+    size: targetStat.size,
+    stream: createReadStream(target)
+  };
+}
 
-app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file", async (request) => {
-  const server = await getServer(request.params.id);
-  const target = await validateExistingInsideServer(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.view");
+async function localReadEditableFile(server: ManagedServer, target: string) {
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
@@ -3049,59 +3185,49 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
     content: buffer.toString("utf8"),
     modifiedAt: targetStat.mtime.toISOString()
   };
-});
+}
 
-app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const target = await validateExistingInsideServer(server, request.body.path ?? "");
-  await requireFilePathPermission(request, server, target, isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
-  if (typeof request.body.content !== "string") {
+async function localWriteEditableFile(server: ManagedServer, target: string, content: unknown) {
+  if (typeof content !== "string") {
     throw new Error("Content is required");
   }
-  if (Buffer.byteLength(request.body.content, "utf8") > editorFileSizeLimit) {
+  if (Buffer.byteLength(content, "utf8") > editorFileSizeLimit) {
     throw new Error("File content is larger than the 2 MiB editor limit");
   }
-  if (request.body.content.includes("\0")) {
+  if (content.includes("\0")) {
     throw new Error("Binary files cannot be edited in the browser editor");
   }
   const targetStat = await stat(target);
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
   }
-  await writeFile(target, request.body.content, "utf8");
+  await writeFile(target, content, "utf8");
   logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "write_file" }, "Server file written");
   return { ok: true, path: toPublicPath(server, target) };
-});
+}
 
-app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
-  await requireFilePathPermission(request, server, parent, "files.upload");
+async function localCreateFolder(server: ManagedServer, parent: string, name: unknown) {
   const parentStat = await stat(parent);
   if (!parentStat.isDirectory()) {
     throw new Error("Parent path is not a directory");
   }
-  const folderName = safeFileManagerName(request.body.name);
+  const folderName = safeFileManagerName(name as string | undefined);
   const target = await ensureWritableResolvedInsideServer(server, join(parent, folderName));
   await mkdir(target, { recursive: false });
   logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "create_folder" }, "Server folder created");
   return { ok: true, path: toPublicPath(server, target) };
-});
+}
 
-app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const parent = await validateExistingInsideServer(server, request.body.path ?? ".");
+async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, contentBase64: unknown) {
   const parentStat = await stat(parent);
   if (!parentStat.isDirectory()) {
     throw new Error("Upload path is not a directory");
   }
-  const filename = safeFileManagerName(request.body.filename);
-  const uploadPermission: Permission = isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
-  await requireFilePathPermission(request, server, parent, uploadPermission);
-  if (typeof request.body.contentBase64 !== "string") {
+  const filename = safeFileManagerName(filenameInput as string | undefined);
+  if (typeof contentBase64 !== "string") {
     throw new Error("File content is required");
   }
-  const content = Buffer.from(request.body.contentBase64, "base64");
+  const content = Buffer.from(contentBase64, "base64");
   if (content.length > fileUploadSizeLimit) {
     throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
   }
@@ -3112,34 +3238,28 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
   await writeFile(target, content);
   logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), size: content.length, action: "upload_file" }, "Server file uploaded");
   return { ok: true, path: toPublicPath(server, target), size: content.length };
-});
+}
 
-app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const source = await validateExistingInsideServer(server, request.body.path ?? "");
+async function localRenameFile(server: ManagedServer, source: string, name: unknown) {
   if (resolve(source) === resolve(server.serverDir)) {
     throw new Error("Refusing to rename the server root directory");
   }
-  const targetName = safeFileManagerName(request.body.name);
+  const targetName = safeFileManagerName(name as string | undefined);
   const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
-  await requireFilePathPermission(request, server, source, fileRenamePermission(server, source, target));
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
   await rename(source, target);
   logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "rename_file" }, "Server file renamed");
   return { ok: true, path: toPublicPath(server, target) };
-});
+}
 
-app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const source = await validateExistingInsideServer(server, request.body.path ?? "");
-  await requireFilePathPermission(request, server, source, isModsPath(server, source) ? "mods.upload" : "files.upload");
+async function localDuplicateFile(server: ManagedServer, source: string, name: unknown) {
   const sourceStat = await stat(source);
   if (!sourceStat.isFile()) {
     throw new Error("Only files can be duplicated from the browser file manager");
   }
-  const targetName = safeFileManagerName(request.body.name);
+  const targetName = safeFileManagerName(name as string | undefined);
   const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
@@ -3147,22 +3267,19 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   await copyFile(source, target);
   logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "duplicate_file" }, "Server file duplicated");
   return { ok: true, path: toPublicPath(server, target) };
-});
+}
 
-app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  if (request.query.recursive !== undefined && request.query.recursive !== "true" && request.query.recursive !== "false") {
+async function localDeleteFile(server: ManagedServer, target: string, recursive: unknown) {
+  if (recursive !== undefined && recursive !== "true" && recursive !== "false") {
     throw new Error("recursive must be true or false");
   }
-  const target = await validateExistingInsideServer(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, isModsPath(server, target) ? "mods.remove" : "files.delete");
   if (resolve(target) === resolve(server.serverDir)) {
     throw new Error("Refusing to delete the server root directory");
   }
   const publicPath = toPublicPath(server, target);
   const targetStat = await stat(target);
   if (targetStat.isDirectory()) {
-    if (request.query.recursive === "true") {
+    if (recursive === "true") {
       await rm(target, { recursive: true, force: false });
     } else {
       try {
@@ -3183,10 +3300,9 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   if (publicPath.startsWith("/mods/") && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
     await deleteModIcon(server, basename(publicPath));
   }
-  logInfo({ ...serverLogFields(server), path: publicPath, recursive: request.query.recursive === "true", action: "delete_file" }, "Server file deleted");
+  logInfo({ ...serverLogFields(server), path: publicPath, recursive: recursive === "true", action: "delete_file" }, "Server file deleted");
   return { ok: true, path: publicPath };
-});
-
+}
 
 
 async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
@@ -3325,9 +3441,8 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
     upToDate: Boolean(target && current.version_number === target.version_number)
   };
 }
-app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
-  await requireRequestPermission(request, "mods.view");
-  const server = await getServer(request.params.id);
+
+async function localListMods(server: ManagedServer) {
   await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, "mods");
   const entries = await readdir(modsDir, { withFileTypes: true });
@@ -3375,7 +3490,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
                 prefsModified = true;
               }
             }
-          } catch (e) {
+          } catch {
             // Ignore backfill failures
           }
         }
@@ -3402,39 +3517,30 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => 
   }
 
   return { mods };
-});
+}
 
-app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
-  await requireRequestPermission(request, "mods.view");
-  const server = await getServer(request.params.id);
-  const filename = safeInstalledModFilename(request.query.filename);
+async function localModIcon(server: ManagedServer, filenameInput: unknown) {
+  const filename = safeInstalledModFilename(filenameInput as string | undefined);
   let iconsDir: string;
   try {
     iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
-    reply.code(404);
-    return { error: "Icon not found" };
+    return null;
   }
   const key = modIconKey(filename);
   const icon = existsSync(iconsDir) ? (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`)) : undefined;
-  if (!icon) {
-    reply.code(404);
-    return { error: "Icon not found" };
-  }
+  if (!icon) return null;
   const extension = extname(icon).toLowerCase();
   const contentType = extension === ".webp" ? "image/webp" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "image/png";
-  reply.header("Content-Type", contentType);
   const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
-  return reply.send(createReadStream(iconPath));
-});
+  return { contentType, stream: createReadStream(iconPath) };
+}
 
-app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.enableDisable");
-  const server = await getServer(request.params.id);
+async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
   await ensureServerStoppedForModChanges(server);
-  const filename = safeInstalledModFilename(request.body.filename);
-  const enabled = requireStrictBoolean(request.body.enabled, "enabled");
+  const filename = safeInstalledModFilename(filenameInput as string | undefined);
+  const enabled = requireStrictBoolean(enabledInput, "enabled");
   const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join("mods", filename)))
     ? `${filename}.disabled`
     : filename;
@@ -3460,26 +3566,21 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   }
   logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, "Mod state changed");
   return { ok: true, filename: basename(target), enabled };
-});
+}
 
-
-app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
-  const server = await getServer(request.params.id);
-  const filename = safeInstalledModFilename(request.body.filename);
-  const channel = optionalReleaseChannel(request.body.channel);
+async function localSetModChannel(server: ManagedServer, filenameInput: unknown, channelInput: ReleaseChannel | undefined) {
+  const filename = safeInstalledModFilename(filenameInput as string | undefined);
+  const channel = optionalReleaseChannel(channelInput);
   const prefs = await readModPreferences(server);
   prefs[filename] = { ...prefs[filename], channel };
   await writeModPreferences(server, prefs);
   logInfo({ ...serverLogFields(server), filename, channel, action: "set_mod_channel" }, "Mod update channel changed");
   return { ok: true, filename, channel };
-});
+}
 
-app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.remove");
-  const server = await getServer(request.params.id);
+async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
   await ensureServerStoppedForModChanges(server);
-  const filename = safeInstalledModFilename(request.query.filename);
+  const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const target = await validateExistingInsideServer(server, join("mods", filename));
   await rm(target, { force: true });
   await deleteModIcon(server, filename);
@@ -3490,18 +3591,16 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   }
   logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, "Mod removed");
   return { ok: true, filename };
-});
+}
 
-app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.upload");
-  const server = await getServer(request.params.id);
+async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown) {
   const startedAt = Date.now();
   let filename: string | undefined;
   try {
     await ensureServerStoppedForModChanges(server);
-    filename = safeModFilename(safeInstalledModFilename(request.body.filename));
+    filename = safeModFilename(safeInstalledModFilename(filenameInput as string | undefined));
     logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, "Manual mod upload started");
-    const contentBase64 = validateBase64Content(request.body.contentBase64);
+    const contentBase64 = validateBase64Content(contentBase64Input);
     const content = Buffer.from(contentBase64, "base64");
     if (!content.length || content.length > modFileSizeLimit) {
       throw new Error(`Uploaded mod must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
@@ -3526,81 +3625,19 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     logOperationFailure({ ...serverLogFields(server), filename, durationMs: durationSince(startedAt), action: "upload_mod", status: "failed" }, "Manual mod upload failed", error);
     throw error;
   }
-});
+}
 
-app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
-  await requireRequestPermission(request, "mods.view");
-  const query = request.query.query?.trim();
-  if (!query) {
-    return { hits: [], status: "no_project_found" };
-  }
-  const server = await getServer(request.query.serverId);
-  if (!server.minecraftVersion || !server.loaderVersion) {
-    throw new Error("Minecraft and Fabric loader versions are required before searching compatible mods");
-  }
-  const minecraftVersion = server.minecraftVersion;
-  const selectedChannel = optionalReleaseChannel(request.query.channel);
-  const compatibilityFilter = optionalCompatibilityFilter(request.query.compatibility);
+async function localInstallMod(server: ManagedServer, projectIdInput: unknown, forceIncompatibleInput: unknown, channelInput: ReleaseChannel | undefined) {
   const startedAt = Date.now();
-  logDebug({ ...serverLogFields(server), queryLength: query.length, channel: selectedChannel, compatibilityFilter, action: "modrinth_search" }, "Modrinth search started");
-
-  try {
-    const url = new URL("https://api.modrinth.com/v2/search");
-    url.searchParams.set("query", query);
-    url.searchParams.set("limit", "20");
-
-    const facets: string[][] = [
-      ["project_type:mod"],
-      ["categories:fabric"],
-      [`versions:${minecraftVersion}`]
-    ];
-    if (compatibilityFilter !== "all") {
-      facets.push(["server_side:required", "server_side:optional"]);
-    }
-    url.searchParams.set("facets", JSON.stringify(facets));
-
-    const response = await modrinthFetch(url.toString());
-    const body = await response.json() as { hits?: ModrinthProject[] };
-    const hits = await Promise.all((body.hits ?? []).map(async (hit) => {
-      const projectId = hit.project_id || hit.id;
-      if (!projectId) {
-        return {
-          ...hit,
-          compatibility: unknownCompatibility()
-        };
-      }
-      return {
-        ...hit,
-        project_id: projectId,
-        compatibility: await resolveModrinthProjectCompatibility({
-          projectId,
-          minecraftVersion,
-          loader: "fabric",
-          channel: selectedChannel
-        })
-      };
-    }));
-    logInfo({ ...serverLogFields(server), resultCount: hits.length, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
-    return { ...body, hits, status: hits.length > 0 ? "projects_found" : "no_project_found" };
-  } catch (error) {
-    logError({ ...serverLogFields(server), durationMs: durationSince(startedAt), action: "modrinth_search", status: "failed", ...errorLogFields(error) }, "Modrinth search failed");
-    throw error;
-  }
-});
-
-app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.install");
-  const server = await getServer(request.body.serverId);
-  const startedAt = Date.now();
-  const projectId = validateModrinthProjectId(request.body.projectId);
-  const forceIncompatible = optionalStrictBoolean(request.body.forceIncompatible, "forceIncompatible", false);
+  const projectId = validateModrinthProjectId(projectIdInput);
+  const forceIncompatible = optionalStrictBoolean(forceIncompatibleInput, "forceIncompatible", false);
   try {
     await ensureServerStoppedForModChanges(server);
     if (!projectId || !server.minecraftVersion || !server.loaderVersion) {
       throw new Error("projectId, Minecraft version, and Fabric loader version are required for compatible Fabric installs");
     }
     const minecraftVersion = server.minecraftVersion;
-    const selectedChannel = optionalReleaseChannel(request.body.channel);
+    const selectedChannel = optionalReleaseChannel(channelInput);
     logInfo({ ...serverLogFields(server), projectId, channel: selectedChannel, forceIncompatible, action: "modrinth_install" }, "Modrinth install started");
 
     const projectUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`);
@@ -3695,7 +3732,154 @@ app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChann
     logOperationFailure({ ...serverLogFields(server), projectId, durationMs: durationSince(startedAt), forceIncompatible, action: "modrinth_install", status: "failed" }, "Modrinth install failed", error);
     throw error;
   }
+}
+
+app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).listMods(server);
 });
+
+app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
+  await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  const icon = await runtimeForServer(server).modIcon(server, request.query.filename);
+  if (!icon) {
+    reply.code(404);
+    return { error: "Icon not found" };
+  }
+  reply.header("Content-Type", icon.contentType);
+  return reply.send(icon.stream);
+});
+
+app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.enableDisable");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled);
+});
+
+
+app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.update");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).setModChannel(server, request.body.filename, request.body.channel);
+});
+
+app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.remove");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).removeMod(server, request.query.filename);
+});
+
+app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.upload");
+  const server = await getServer(request.params.id);
+  return runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64);
+});
+
+app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const query = request.query.query?.trim();
+  if (!query) {
+    return { hits: [], status: "no_project_found" };
+  }
+  const server = await getServer(request.query.serverId);
+  if (!server.minecraftVersion || !server.loaderVersion) {
+    throw new Error("Minecraft and Fabric loader versions are required before searching compatible mods");
+  }
+  const minecraftVersion = server.minecraftVersion;
+  const selectedChannel = optionalReleaseChannel(request.query.channel);
+  const compatibilityFilter = optionalCompatibilityFilter(request.query.compatibility);
+  const startedAt = Date.now();
+  logDebug({ ...serverLogFields(server), queryLength: query.length, channel: selectedChannel, compatibilityFilter, action: "modrinth_search" }, "Modrinth search started");
+
+  try {
+    const url = new URL("https://api.modrinth.com/v2/search");
+    url.searchParams.set("query", query);
+    url.searchParams.set("limit", "20");
+
+    const facets: string[][] = [
+      ["project_type:mod"],
+      ["categories:fabric"],
+      [`versions:${minecraftVersion}`]
+    ];
+    if (compatibilityFilter !== "all") {
+      facets.push(["server_side:required", "server_side:optional"]);
+    }
+    url.searchParams.set("facets", JSON.stringify(facets));
+
+    const response = await modrinthFetch(url.toString());
+    const body = await response.json() as { hits?: ModrinthProject[] };
+    const hits = await Promise.all((body.hits ?? []).map(async (hit) => {
+      const projectId = hit.project_id || hit.id;
+      if (!projectId) {
+        return {
+          ...hit,
+          compatibility: unknownCompatibility()
+        };
+      }
+      return {
+        ...hit,
+        project_id: projectId,
+        compatibility: await resolveModrinthProjectCompatibility({
+          projectId,
+          minecraftVersion,
+          loader: "fabric",
+          channel: selectedChannel
+        })
+      };
+    }));
+    logInfo({ ...serverLogFields(server), resultCount: hits.length, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
+    return { ...body, hits, status: hits.length > 0 ? "projects_found" : "no_project_found" };
+  } catch (error) {
+    logError({ ...serverLogFields(server), durationMs: durationSince(startedAt), action: "modrinth_search", status: "failed", ...errorLogFields(error) }, "Modrinth search failed");
+    throw error;
+  }
+});
+
+app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.install");
+  const server = await getServer(request.body.serverId);
+  return runtimeForServer(server).installMod(server, request.body.projectId, request.body.forceIncompatible, request.body.channel);
+});
+
+runtimeRegistry = new NodeRuntimeRegistry(new LocalNodeRuntime({
+  publicServer,
+  createServer: createManagedServer,
+  updateServer: localUpdateServer,
+  deleteServer: localDeleteServer,
+  serverStatus: localServerStatus,
+  lifecycle: dockerAction,
+  sendConsoleCommand: localSendConsoleCommand,
+  streamConsole: localStreamConsole,
+  serverLogs: localServerLogs,
+  serverStats: dockerResourceStats,
+  serverOverview: serverOverviewData,
+  resolveExistingPath: validateExistingInsideServer,
+  resolveWritablePath: ensureWritableInsideServer,
+  resolveWritableResolvedPath: ensureWritableResolvedInsideServer,
+  publicPath: toPublicPath,
+  isModsPath,
+  isServerSettingsFile,
+  fileRenamePermission,
+  listFiles: localListFiles,
+  previewFile: localPreviewFile,
+  downloadFile: localDownloadFile,
+  readFile: localReadEditableFile,
+  writeFile: localWriteEditableFile,
+  createFolder: localCreateFolder,
+  uploadFile: localUploadFile,
+  renameFile: localRenameFile,
+  duplicateFile: localDuplicateFile,
+  deleteFile: localDeleteFile,
+  listMods: localListMods,
+  modIcon: localModIcon,
+  toggleMod: localToggleMod,
+  setModChannel: localSetModChannel,
+  removeMod: localRemoveMod,
+  uploadMod: localUploadMod,
+  installMod: localInstallMod
+}));
 
 await registerStaticFrontend(app);
 
