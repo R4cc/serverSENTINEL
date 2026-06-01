@@ -599,6 +599,13 @@ button .buttonIcon {
   white-space: nowrap;
 }
 
+.sidebarDivider {
+  height: 2px;
+  background-color: var(--border-muted);
+  margin: var(--space-2) 0;
+  width: 100%;
+}
+
 .workspaceHeader {
   border-bottom: var(--border-heavy) solid var(--border);
   padding-bottom: var(--space-5);

@@ -2804,6 +2804,11 @@ export default function App() {
               </button>
             </div>
           </div>
+          <button className={activePage === "nodes" ? "active" : ""} onClick={() => setActivePage("nodes")} disabled={isProvisioning}>
+            <SidebarIcon name="nodes" />
+            <span className="navLabel">Nodes</span>
+          </button>
+          <div className="sidebarDivider" />
           <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer}>
             <SidebarIcon name="overview" />
             <span className="navLabel">Overview</span>

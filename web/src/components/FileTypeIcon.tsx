@@ -1,7 +1,19 @@
 import type { FileEntry } from '../types';
 import { fileIconKind } from '../utils/files';
 
-export function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" }) {
+export function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" | "nodes" }) {
+  if (name === "nodes") {
+    return (
+      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="6" r="2.5" />
+        <circle cx="6" cy="17" r="2.5" />
+        <circle cx="18" cy="17" r="2.5" />
+        <path d="m11 8.5-4 6" />
+        <path d="m13 8.5 4 6" />
+        <path d="M8.5 17h7" />
+      </svg>
+    );
+  }
   if (name === "overview") {
     return (
       <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
