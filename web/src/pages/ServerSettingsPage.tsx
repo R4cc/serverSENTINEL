@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react';
-import type { FabricVersions, ManagedServer } from '../types';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { ContextNode, FabricVersions, ManagedServer } from '../types';
 import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDockerLabel, nodeStatusLabel } from '../utils/nodes';
 
 export function MemorySelector({
   totalMemory,
@@ -207,12 +208,14 @@ export function DeleteServerPanel({
 export function ManagedServerForm({
   onSubmit,
   dockerSocketMounted,
+  nodes = [],
   versions,
   totalMemory = 0,
   provisioning = false
 }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dockerSocketMounted: boolean;
+  nodes?: ContextNode[];
   versions: FabricVersions;
   totalMemory?: number;
   provisioning?: boolean;
@@ -227,7 +230,11 @@ export function ManagedServerForm({
   const [dockerImage, setDockerImage] = useState(defaultDockerImageForMinecraftVersion(defaultMinecraftVersion));
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
+  const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
+  const [selectedNodeId, setSelectedNodeId] = useState("");
   const serverPortValid = isValidServerPort(serverPort);
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
 
   useEffect(() => {
     const nextVersion = versions.game[0]?.version;
@@ -236,9 +243,62 @@ export function ManagedServerForm({
     setDockerImage(defaultDockerImageForMinecraftVersion(nextVersion));
   }, [versions.game]);
 
+  useEffect(() => {
+    if (usableNodes.length === 1) {
+      setSelectedNodeId(usableNodes[0].id);
+      return;
+    }
+    if (selectedNodeId && usableNodes.some((node) => node.id === selectedNodeId)) return;
+    setSelectedNodeId(usableNodes[0]?.id ?? "");
+  }, [selectedNodeId, usableNodes]);
+
   return (
     <form onSubmit={onSubmit} className="appForm">
       <fieldset disabled={provisioning}>
+      <section className="placementStep" aria-labelledby="placement-title">
+        <div className="placementHeader">
+          <span>Placement</span>
+          <h3 id="placement-title">Where should this server run?</h3>
+        </div>
+        {nodes.length === 0 ? (
+          <div className="systemBanner warning placementWarning">
+            <strong>No nodes available.</strong>
+            <span>Add a node before creating servers in panel-only mode.</span>
+          </div>
+        ) : (
+          <div className="nodePlacementGrid">
+            {nodes.map((node) => {
+              const usable = isNodeRuntimeUsable(node);
+              const selected = selectedNodeId === node.id;
+              const reason = nodeBlockReason(node);
+              return (
+                <label key={node.id} className={`nodePlacementCard ${selected ? "selected" : ""} ${!usable ? "disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="nodeId"
+                    value={node.id}
+                    checked={selected}
+                    disabled={!usable}
+                    onChange={() => setSelectedNodeId(node.id)}
+                    required
+                  />
+                  <span className="nodePlacementTitle">
+                    <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
+                    <strong>{node.isInternal ? "Internal Node" : node.name}</strong>
+                  </span>
+                  <span>{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</span>
+                  <span>{nodeDockerLabel(node)}</span>
+                  <span>{nodeCompatibilityLabel(node)}</span>
+                  {reason && <em>{reason}</em>}
+                </label>
+              );
+            })}
+          </div>
+        )}
+        {placementBlocked && nodes.length > 0 && (
+          <p className="fieldError">Choose an online, compatible node with Docker available before creating this server.</p>
+        )}
+      </section>
       <label>
         Display name
         <input name="displayName" placeholder="Survival" required maxLength={80} />
@@ -340,7 +400,7 @@ export function ManagedServerForm({
       <p className="muted">
         Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create and control the Minecraft runtime container." : "not mounted; runtime management is unavailable until Docker integration is connected."}
       </p>
-      <button disabled={!serverPortValid}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
+      <button disabled={!serverPortValid || placementBlocked}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
       </fieldset>
     </form>
   );
