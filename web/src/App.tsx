@@ -3172,7 +3172,7 @@ export default function App() {
         {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
-            {panelOnlyMode ? (
+            {panelOnlyMode && usableContextNodes.length === 0 ? (
               <>
                 <p>Add a node before creating servers. Nodes run the Minecraft containers while this panel manages them.</p>
                 <button
