@@ -240,16 +240,18 @@ export function NodesPage({
 
   return (
     <section className="pageStack nodesPage">
-      <section className="panel nodesToolbar">
-        <div>
-          <h2>NODES</h2>
-          <p className="muted">{internalNode ? "Manage the internal node and remote nodes that can host servers." : "Manage remote nodes that can host servers."}</p>
-        </div>
-        <div className="buttonRow">
-          <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
-          <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : "Add a remote node"}>Add Node</button>
-        </div>
-      </section>
+      {sortedNodes.length > 0 && (
+        <section className="panel nodesToolbar">
+          <div>
+            <h2>NODES</h2>
+            <p className="muted">{internalNode ? "Manage the internal node and remote nodes that can host servers." : "Manage remote nodes that can host servers."}</p>
+          </div>
+          <div className="buttonRow">
+            <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
+            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : "Add a remote node"}>Add Node</button>
+          </div>
+        </section>
+      )}
 
       <section className="nodesGrid">
         {sortedNodes.length === 0 && (
