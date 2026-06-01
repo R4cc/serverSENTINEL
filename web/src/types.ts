@@ -28,8 +28,50 @@ export type ManagedNode = {
   createdAt?: string;
   updatedAt?: string;
   lastSeenAt?: string;
+  connectedAt?: string;
+  agentVersion?: string;
+  protocolVersion?: string;
+  dockerStatus?: string;
+  dataPathStatus?: string;
+  joinTokenExpiresAt?: string;
+  hasPendingJoinToken?: boolean;
   compatibility?: "compatible" | "incompatible" | "unknown";
   capabilities?: string[];
+};
+
+export type ContextNode = ManagedNode & {
+  servers: ManagedServer[];
+};
+
+export type NodeInstallInstructions = {
+  image: string;
+  panelUrl: string;
+  joinToken?: string;
+  tokenRequired: boolean;
+  dataMount: string;
+  dockerSocketMount: string;
+  dockerCompose: {
+    image: string;
+    environment: {
+      SS_MODE: "node";
+      SS_PANEL_URL: string;
+      SS_JOIN_TOKEN?: string;
+    };
+    volumes: string[];
+  };
+  dockerRun: string;
+};
+
+export type CreateNodeResponse = {
+  node: ManagedNode;
+  joinToken: string;
+  expiresAt: string;
+  install: NodeInstallInstructions;
+};
+
+export type NodeInstallResponse = {
+  node: ManagedNode;
+  install: NodeInstallInstructions;
 };
 
 export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
@@ -310,7 +352,7 @@ export type GeneralJob = {
   dismissible: boolean;
 };
 
-export type ActivePage = "servers" | "settings" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
+export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
 
 export type ThemePreference = "light" | "dark" | "system";
 

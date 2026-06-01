@@ -759,6 +759,12 @@ button .buttonIcon {
   font-weight: 600;
 }
 
+.nodeStripMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .serverStripRight {
   display: flex;
   align-items: center;
@@ -2552,6 +2558,350 @@ button .buttonIcon {
 .settingsStatus.limited {
   border-color: var(--sentinel-danger);
   color: var(--sentinel-danger);
+}
+
+.nodesPage {
+  max-width: 1280px;
+}
+
+.nodesToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.nodesToolbar h2,
+.nodeCard h3,
+.nodeInstallHeader h3 {
+  margin: 0;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.nodesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: var(--space-3);
+}
+
+.nodeCard {
+  display: grid;
+  gap: var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.nodeCard.online {
+  box-shadow: inset 5px 0 0 var(--sentinel-success);
+}
+
+.nodeCard.offline {
+  box-shadow: inset 5px 0 0 var(--sentinel-danger);
+}
+
+.nodeCard.unknown {
+  box-shadow: inset 5px 0 0 var(--text-soft);
+}
+
+.nodeCardHeader,
+.nodeInstallHeader,
+.nodeModalHeader,
+.nodeModalFooter.inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.nodeCardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nodeCardTitle h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.nodeFacts.detailed {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.nodeFacts div {
+  min-width: 0;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2);
+}
+
+.nodeFacts dt {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nodeFacts dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.nodeFacts dd.ready {
+  color: var(--sentinel-success);
+}
+
+.nodeFacts dd.limited {
+  color: var(--sentinel-danger);
+}
+
+.nodeWarnings {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nodeWarnings span,
+.nodeBlockedNote {
+  border: var(--border-subtle) solid var(--sentinel-warning);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-warning) 14%);
+  color: var(--sentinel-warning);
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nodeBlockedNote {
+  margin: 0;
+}
+
+.nodeActions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nodeActions .compactButton,
+.compactButton {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: 10px;
+}
+
+.nodeModalPanel {
+  width: min(820px, calc(100vw - 32px));
+  padding: 0;
+}
+
+.nodeModalHeader,
+.nodeModalBody {
+  padding: var(--space-4);
+}
+
+.nodeModalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.nodeModalBody {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.nodeModalFooter {
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+  padding: var(--space-4);
+}
+
+.nodeModalFooter.inline {
+  justify-content: flex-start;
+  border-top: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.nodeInstallBox {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.installTabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.installTabs button {
+  min-height: 36px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.installTabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--swiss-white);
+}
+
+.installSnippet {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--terminal-bg);
+  color: var(--terminal-text);
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.nodeSetupState {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+}
+
+.nodeSetupStep {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nodeSetupStep.done {
+  border-color: var(--sentinel-success);
+  color: var(--sentinel-success);
+}
+
+.nodeSetupStep.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.placementStep {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  padding: var(--space-3);
+}
+
+.placementHeader span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.placementHeader h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.nodePlacementGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+
+.nodePlacementCard {
+  display: grid !important;
+  gap: 5px !important;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-3);
+  cursor: pointer;
+  color: var(--text) !important;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.nodePlacementCard input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nodePlacementCard.selected {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.nodePlacementCard.disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.nodePlacementTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nodePlacementTitle strong {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.nodePlacementCard span,
+.nodePlacementCard em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.nodePlacementCard em {
+  color: var(--sentinel-danger);
+}
+
+.placementWarning {
+  margin: 0;
 }
 
 .summaryTile {

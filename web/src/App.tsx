@@ -1,12 +1,13 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateRuntimeJarFilename, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
+import { isNodeRuntimeUsable, nodeBlockReason, nodeStatusLabel } from "./utils/nodes";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
@@ -16,6 +17,7 @@ import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
+import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 
 const appVersion = "0.2.0";
@@ -41,10 +43,6 @@ const emptyApp: AppState = {
   totalMemory: 0
 };
 
-type ContextNode = ManagedNode & {
-  servers: ManagedServer[];
-};
-
 const defaultContextNode: ManagedNode = {
   id: "local",
   name: "Internal Node",
@@ -52,12 +50,6 @@ const defaultContextNode: ManagedNode = {
   status: "online",
   isInternal: true
 };
-
-function nodeStatusLabel(status: ManagedNode["status"]) {
-  if (status === "online") return "Node online";
-  if (status === "offline") return "Node offline";
-  return "Node status unknown";
-}
 
 function NodeGlyph() {
   return (
@@ -125,7 +117,6 @@ function ContextSwitchModal({
         <div className="contextNodeList">
           {nodes.map((node) => {
             const expanded = Boolean(expandedNodes[node.id]);
-            const offline = node.status === "offline";
             return (
               <section key={node.id} className={`contextNodeGroup ${expanded ? "expanded" : ""}`}>
                 <button type="button" className="contextNodeButton" onClick={() => onToggleNode(node.id)} aria-expanded={expanded}>
@@ -154,9 +145,8 @@ function ContextSwitchModal({
                             type="button"
                             className={`contextServerButton ${selected ? "selected" : ""}`}
                             onClick={() => onSelectServer(server, node)}
-                            disabled={offline}
                             aria-selected={selected}
-                            title={offline ? "This node is offline" : `Manage ${server.displayName}`}
+                            title={`Manage ${server.displayName}`}
                           >
                             <span className="contextServerIcon"><ServerGlyph /></span>
                             <span className="contextServerName">{server.displayName}</span>
@@ -353,6 +343,12 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [contextModalOpen, setContextModalOpen] = useState(false);
   const [expandedContextNodes, setExpandedContextNodes] = useState<Record<string, boolean>>({});
+  const [nodeBusyId, setNodeBusyId] = useState("");
+  const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
+  const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
+  const [addNodeOpen, setAddNodeOpen] = useState(false);
+  const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
+  const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("compose");
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
@@ -417,8 +413,11 @@ export default function App() {
   }, [appState, demoMode, demoSchedules]);
 
   const contextNodes = useMemo<ContextNode[]>(() => {
-    const nodes = (effectiveAppState.nodes?.length ? effectiveAppState.nodes : [defaultContextNode]).map((node) => ({
+    const nodes: ContextNode[] = (effectiveAppState.nodes?.length ? effectiveAppState.nodes : [defaultContextNode]).map((node) => ({
       ...node,
+      dockerStatus: (node.isInternal || node.type === "local") ? (effectiveAppState.dockerSocketMounted ? "available" : "unavailable") : node.dockerStatus,
+      dataPathStatus: (node.isInternal || node.type === "local") ? "ready" : node.dataPathStatus,
+      compatibility: (node.isInternal || node.type === "local") ? "compatible" : node.compatibility,
       servers: [] as ManagedServer[]
     }));
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
@@ -440,11 +439,8 @@ export default function App() {
       nodes.push(fallbackNode);
       nodesById.set(nodeId, fallbackNode);
     }
-    if (!nodesById.has("local")) {
-      nodes.unshift({ ...defaultContextNode, servers: [] });
-    }
     return nodes;
-  }, [effectiveAppState.nodes, effectiveAppState.servers]);
+  }, [effectiveAppState.nodes, effectiveAppState.servers, effectiveAppState.dockerSocketMounted]);
 
   const activeServer = useMemo(
     () => {
@@ -460,6 +456,7 @@ export default function App() {
     const serverNodeId = activeServer?.nodeId || "local";
     return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...defaultContextNode, servers: [] };
   }, [activeServer?.nodeId, contextNodes]);
+  const usableContextNodes = useMemo(() => contextNodes.filter(isNodeRuntimeUsable), [contextNodes]);
   const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
   const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
   const activeModContext = `Fabric ${activeFabricLoaderVersion === "Unknown" ? "unknown" : activeFabricLoaderVersion} · Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
@@ -475,7 +472,13 @@ export default function App() {
   const canManageUsers = hasPermission(permissionUser, "users.manage");
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
-  const dockerOperationalLock = authOperationalLock || !effectiveAppState.dockerSocketMounted;
+  const activeNodeRuntimeBlocked = Boolean(activeServer && !activeServerIsDemo && !isNodeRuntimeUsable(activeNode));
+  const activeNodeBlockReason = nodeBlockReason(activeNode);
+  const activeNodeBlockMessage = activeNodeRuntimeBlocked
+    ? `${activeNodeBlockReason || "Node unavailable"}. This server belongs to ${activeNode.name}. Runtime actions and file access are unavailable until the node reconnects or the runtime issue is fixed.`
+    : "";
+  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || ((activeNode.isInternal || activeNode.type === "local") && !effectiveAppState.dockerSocketMounted);
+  const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
@@ -610,7 +613,6 @@ export default function App() {
   }
 
   function selectContextServer(server: ManagedServer, node: ContextNode) {
-    if (node.status === "offline") return;
     if (demoMode && server.id !== demoServerId) {
       notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
       return;
@@ -622,9 +624,8 @@ export default function App() {
   }
 
   function manageNodesPlaceholder() {
-    setActivePage("settings");
+    setActivePage("nodes");
     closeContextModal();
-    notify("info", "Node management is not available in this UI yet.");
   }
 
   useEffect(() => {
@@ -689,6 +690,21 @@ export default function App() {
       setInstalledMods(demoInstalledMods);
       return;
     }
+    if (activeNodeRuntimeBlocked) {
+      setStatus(null);
+      setStatusError(activeNodeBlockMessage);
+      setConsoleError(activeNodeBlockMessage);
+      setFilesError(activeNodeBlockMessage);
+      setModsError(activeNodeBlockMessage);
+      setOverviewError(activeNodeBlockMessage);
+      setOverviewLoading(false);
+      setFilesLoading(false);
+      setConsoleLoading(false);
+      setModsLoading(false);
+      setListing({ path: "/", entries: [] });
+      setInstalledMods([]);
+      return;
+    }
     void refreshStatus(activeServer.id);
     void loadFiles(activeServer.id, "/");
     void loadInstalledMods(activeServer.id);
@@ -718,7 +734,7 @@ export default function App() {
     };
     socket.onerror = () => setLogs(["Console stream is unavailable."]);
     return () => socket.close();
-  }, [activeServer?.id, consoleStreamVersion, demoMode]);
+  }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
   useEffect(() => {
     if (activePage !== "overview" && activePage !== "console") return;
@@ -805,7 +821,15 @@ export default function App() {
   }, [commandHistory]);
 
   useEffect(() => {
-    if (!activeServer || (activePage !== "overview" && activePage !== "console")) return;
+    if (!addNodeOpen || !addNodeResult || demoMode) return;
+    const interval = window.setInterval(() => {
+      void refreshApp();
+    }, 2500);
+    return () => window.clearInterval(interval);
+  }, [addNodeOpen, addNodeResult?.node.id, demoMode]);
+
+  useEffect(() => {
+    if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "overview" && activePage !== "console")) return;
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples([demoStats(demoRunning)]);
       const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-48)), resourcePollMs);
@@ -840,19 +864,19 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activePage, demoMode, demoRunning]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (!activeServer || demoMode) return;
+    if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
     const interval = window.setInterval(() => {
       void refreshStatus(serverId);
     }, resourcePollMs);
     return () => window.clearInterval(interval);
-  }, [activeServer?.id, demoMode]);
+  }, [activeServer?.id, demoMode, activeNodeRuntimeBlocked]);
 
   useEffect(() => {
-    if (!activeServer || activePage !== "overview") return;
+    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "overview") return;
     if (demoMode && activeServer.id === demoServerId) {
       setOverviewData(demoOverviewData(demoRunning));
       return;
@@ -882,10 +906,10 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activePage, demoMode, demoRunning]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (!activeServer || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
+    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
     const trimmedQuery = query.trim();
     setForceInstallProjectId(null);
     setModSearchError("");
@@ -932,7 +956,7 @@ export default function App() {
       setIsSearchingMods(false);
       window.clearTimeout(timeout);
     };
-  }, [activeServer?.id, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modInstallChannel, modCompatibilityFilter]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modInstallChannel, modCompatibilityFilter]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -1159,6 +1183,8 @@ export default function App() {
       setAppLoadError("");
       if (demoMode) {
         setActiveServerId(demoServerId);
+      } else if (activeServerId && !next.servers.some((server) => server.id === activeServerId)) {
+        setActiveServerId(next.servers[0]?.id ?? "");
       } else if (!activeServerId && next.servers[0]) {
         setActiveServerId(next.servers[0].id);
       }
@@ -1267,7 +1293,7 @@ export default function App() {
       notify("error", "Demo mode is enabled. Exit demo mode before creating managed servers.");
       return;
     }
-    if (dockerOperationalLock || !canCreateServers) return;
+    if (serverCreationBlocked || !canCreateServers) return;
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -1304,6 +1330,7 @@ export default function App() {
           dockerContainer: form.get("dockerContainer"),
           dockerImage: form.get("dockerImage"),
           dockerMountSource: form.get("dockerMountSource"),
+          nodeId: form.get("nodeId"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
           serverPort: form.get("serverPort"),
@@ -1416,6 +1443,112 @@ export default function App() {
     }
   }
 
+  function currentPanelUrl() {
+    return window.location.origin;
+  }
+
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      notify("success", "Copied to clipboard");
+    } catch {
+      notify("error", "Could not copy to clipboard");
+    }
+  }
+
+  async function refreshNodes() {
+    await refreshApp();
+    notify("success", "Node status refreshed");
+  }
+
+  async function viewNodeDetails(node: ManagedNode) {
+    setNodeBusyId(node.id);
+    try {
+      const details = await api<ManagedNode>(`/api/nodes/${node.id}`);
+      setNodeDetails(details);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not load node details."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
+  async function showNodeInstall(node: ManagedNode) {
+    setNodeBusyId(node.id);
+    try {
+      const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent("/srv/serversentinel")}`);
+      setNodeInstallMethod("compose");
+      setNodeInstallResult(result);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not load install instructions."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
+  async function rotateNodeToken(node: ManagedNode) {
+    if (node.isInternal || !canManageUsers) return;
+    setNodeBusyId(node.id);
+    try {
+      const result = await api<CreateNodeResponse>(`/api/nodes/${node.id}/rotate-token`, {
+        method: "POST",
+        body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: "/srv/serversentinel" })
+      });
+      setNodeInstallMethod("compose");
+      setNodeInstallResult(result);
+      notify("success", `Rotated join token for ${node.name}`);
+      await refreshApp();
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not rotate the join token."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
+  async function removeNode(node: ContextNode) {
+    if (node.isInternal || !canManageUsers) return;
+    if (node.servers.length > 0) {
+      notify("error", "Move or delete assigned servers before removing this node.");
+      return;
+    }
+    if (!window.confirm(`Remove node "${node.name}"?\n\nThis cannot be undone.`)) return;
+    setNodeBusyId(node.id);
+    try {
+      await api(`/api/nodes/${node.id}`, { method: "DELETE" });
+      notify("success", `Removed ${node.name}`);
+      if (nodeDetails?.id === node.id) setNodeDetails(null);
+      if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
+      await refreshApp();
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not remove the node."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
+  async function createNode(input: { name: string; panelUrl: string; dataMount: string }) {
+    if (!canManageUsers) return;
+    setNodeBusyId("create");
+    try {
+      const result = await api<CreateNodeResponse>("/api/nodes", {
+        method: "POST",
+        body: JSON.stringify({
+          name: input.name,
+          panelUrl: input.panelUrl,
+          dataMount: input.dataMount
+        })
+      });
+      setNodeInstallMethod("compose");
+      setAddNodeResult(result);
+      notify("success", `Created pending node ${result.node.name}`);
+      await refreshApp();
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not create the node."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
   async function runContainerAction(action: "start" | "stop" | "restart") {
     if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
@@ -1452,7 +1585,7 @@ export default function App() {
 
   async function sendCommand(event: FormEvent) {
     event.preventDefault();
-    if (isProvisioning || commandSending || !canExpanded) return;
+    if (isProvisioning || commandSending || dockerOperationalLock || !canExpanded) return;
     if (!activeServer) return;
     const command = commandInput.trim().replace(/^\//, "");
     if (!command) return;
@@ -2650,7 +2783,7 @@ export default function App() {
               type="button"
               className="iconButton addServerButton"
               onClick={() => setActivePage("create")}
-              disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}
+              disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}
               aria-label="Add server"
               title="Add server"
             >
@@ -2717,19 +2850,21 @@ export default function App() {
               {activePage === "create" && "New Managed Server"}
               {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (effectiveAppState.servers.length === 0 ? "Welcome" : "No Managed Server Selected"))}
               {activePage === "settings" && "Settings"}
+              {activePage === "nodes" && "Nodes"}
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>New managed server</button>}
+            {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => refreshStatus()} disabled={isProvisioning}>Refresh</button>}
+            {activePage === "nodes" && <button onClick={() => { setAddNodeResult(null); setAddNodeOpen(true); }} disabled={demoMode || Boolean(nodeBusyId) || !canManageUsers}>Add node</button>}
+            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
         </header>
 
-        {appStateLoaded && !effectiveAppState.dockerSocketMounted && (
+        {appStateLoaded && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
-            <span>Runtime management is unavailable until the Docker socket is mounted. Creating runtime containers, starting, stopping, restarting, logs, stats, and console command input require Docker integration.</span>
+            <span>Internal-node runtime management is unavailable until the Docker socket is mounted. Remote nodes can still be used when they are connected and compatible.</span>
           </section>
         )}
 
@@ -2741,6 +2876,13 @@ export default function App() {
         )}
 
         {notice && <div className="notice">{notice}</div>}
+
+        {isServerWorkspacePage(activePage) && activeServer && activeNodeRuntimeBlocked && (
+          <section className="systemBanner error" role="alert">
+            <strong>{activeNodeBlockReason || "Node unavailable"}</strong>
+            <span>{activeNodeBlockMessage}</span>
+          </section>
+        )}
 
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && (
           <InlineState
@@ -2793,7 +2935,7 @@ export default function App() {
               <div className="emptyState">
                 <h2>No Managed Servers Yet</h2>
                 <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
-                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>Create Managed Server</button>
+                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
               </div>
             )}
           </section>
@@ -2804,6 +2946,7 @@ export default function App() {
             <ManagedServerForm
               onSubmit={createServer}
               dockerSocketMounted={effectiveAppState.dockerSocketMounted}
+              nodes={contextNodes}
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
@@ -2887,10 +3030,26 @@ export default function App() {
               </div>
             </section>
 
+            <section className="panel settingsGroup">
+              <div className="settingsGroupHeader">
+                <span>03</span>
+                <div>
+                  <h2>Infrastructure</h2>
+                </div>
+              </div>
+              <div className="settingsRow">
+                <div>
+                  <strong>Nodes</strong>
+                  <span>Internal and remote server hosts.</span>
+                </div>
+                <button type="button" onClick={() => setActivePage("nodes")}>Manage nodes</button>
+              </div>
+            </section>
+
             {canAdmin && (
               <section className="panel settingsGroup">
                 <div className="settingsGroupHeader usersGroupHeader">
-                  <span>03</span>
+                  <span>04</span>
                   <div>
                     <h2>Users</h2>
                   </div>
@@ -2926,7 +3085,7 @@ export default function App() {
 
             <section className="panel settingsGroup">
               <div className="settingsGroupHeader">
-                <span>{canAdmin ? "04" : "03"}</span>
+                <span>{canAdmin ? "05" : "04"}</span>
                 <div>
                   <h2>Container</h2>
                 </div>
@@ -2943,11 +3102,45 @@ export default function App() {
           </section>
         )}
 
+        {activePage === "nodes" && (
+          <NodesPage
+            nodes={contextNodes}
+            canManageNodes={canManageUsers}
+            busy={Boolean(nodeBusyId)}
+            busyNodeId={nodeBusyId}
+            defaultPanelUrl={currentPanelUrl()}
+            selectedNode={nodeDetails}
+            installResult={nodeInstallResult}
+            addNodeOpen={addNodeOpen}
+            addNodeResult={addNodeResult}
+            installMethod={nodeInstallMethod}
+            onInstallMethodChange={setNodeInstallMethod}
+            onOpenAddNode={() => {
+              setAddNodeResult(null);
+              setNodeInstallMethod("compose");
+              setAddNodeOpen(true);
+            }}
+            onCloseAddNode={() => {
+              setAddNodeOpen(false);
+              setAddNodeResult(null);
+            }}
+            onCreateNode={createNode}
+            onRefresh={() => void refreshNodes()}
+            onViewDetails={viewNodeDetails}
+            onShowInstall={showNodeInstall}
+            onRotateToken={rotateNodeToken}
+            onRemoveNode={removeNode}
+            onClearInstall={() => setNodeInstallResult(null)}
+            onCopy={(text) => void copyText(text)}
+            formatDate={formatDisplayDate}
+          />
+        )}
+
         {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
             <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
-            <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || dockerOperationalLock || !canCreateServers}>Create Managed Server</button>
+            <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
           </section>
         )}
 
@@ -2981,6 +3174,10 @@ export default function App() {
                     <small className="serverStripMeta">
                       Fabric {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}
                     </small>
+                    <small className="serverStripMeta nodeStripMeta">
+                      <span className={`nodeStatusDot ${activeNode.status}`} aria-hidden="true" />
+                      {activeNode.name}
+                    </small>
                   </div>
                 </div>
               </div>
@@ -2988,7 +3185,7 @@ export default function App() {
                 <RuntimeControls
                   status={activeStatus}
                   controlAvailableFallback={effectiveAppState.dockerSocketMounted && activeServer.hasDockerContainer}
-                  isProvisioning={isProvisioning || !canBasic}
+                  isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
                 />
@@ -3169,7 +3366,7 @@ export default function App() {
                               ? "Start the demo server to enable simulated console input."
                               : "Console input unavailable"
                           }
-                          disabled={isProvisioning || !canExpanded || !activeStatus?.commandInputAvailable}
+                          disabled={isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable}
                           spellCheck={false}
                           autoComplete="off"
                         />
@@ -3191,7 +3388,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <button disabled={commandSending || isProvisioning || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()}>
+                      <button disabled={commandSending || isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()}>
                         {commandSending ? "Sending" : "Send"}
                       </button>
                     </form>
