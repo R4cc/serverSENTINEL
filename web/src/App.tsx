@@ -2875,7 +2875,6 @@ export default function App() {
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {activePage === "nodes" && <button onClick={() => { setAddNodeResult(null); setAddNodeOpen(true); }} disabled={demoMode || Boolean(nodeBusyId) || !canManageUsers}>Add node</button>}
             {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning}>Refresh</button>}
           </div>
         </header>
@@ -3068,26 +3067,10 @@ export default function App() {
               </div>
             </section>
 
-            <section className="panel settingsGroup">
-              <div className="settingsGroupHeader">
-                <span>03</span>
-                <div>
-                  <h2>Infrastructure</h2>
-                </div>
-              </div>
-              <div className="settingsRow">
-                <div>
-                  <strong>Nodes</strong>
-                  <span>Internal and remote server hosts.</span>
-                </div>
-                <button type="button" onClick={() => setActivePage("nodes")}>Manage nodes</button>
-              </div>
-            </section>
-
             {canAdmin && (
               <section className="panel settingsGroup">
                 <div className="settingsGroupHeader usersGroupHeader">
-                  <span>04</span>
+                  <span>03</span>
                   <div>
                     <h2>Users</h2>
                   </div>
@@ -3121,19 +3104,20 @@ export default function App() {
               </section>
             )}
 
-            <section className="panel settingsGroup">
+            <section className={`panel settingsGroup ${panelOnlyMode ? "panelModeDisabled" : ""}`}>
               <div className="settingsGroupHeader">
-                <span>{canAdmin ? "05" : "04"}</span>
+                <span>{canAdmin ? "04" : "03"}</span>
                 <div>
                   <h2>Container</h2>
+                  {panelOnlyMode && <p className="panelModeWarning">Panel mode does not support local Docker socket connection.</p>}
                 </div>
               </div>
               <div className="settingsRow readOnly">
                 <div>
                   <strong>Docker socket</strong>
                 </div>
-                <span className={`settingsStatus ${effectiveAppState.dockerSocketMounted ? "ready" : "limited"}`}>
-                  {demoMode ? "Demo override" : effectiveAppState.dockerSocketMounted ? "Connected" : "Not mounted"}
+                <span className={`settingsStatus ${panelOnlyMode ? "" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
+                  {panelOnlyMode ? "Unsupported" : (demoMode ? "Demo override" : effectiveAppState.dockerSocketMounted ? "Connected" : "Not mounted")}
                 </span>
               </div>
             </section>

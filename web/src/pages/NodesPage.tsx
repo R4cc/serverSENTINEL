@@ -248,7 +248,6 @@ export function NodesPage({
           </div>
           <div className="buttonRow">
             <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
-            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : "Add a remote node"}>Add Node</button>
           </div>
         </section>
       )}
@@ -307,6 +306,22 @@ export function NodesPage({
             </article>
           );
         })}
+        {sortedNodes.length > 0 && canManageNodes && (
+          <button
+            type="button"
+            className="panel nodeCard addNodeCardButton"
+            onClick={onOpenAddNode}
+            disabled={busy}
+            aria-label="Add a remote node"
+          >
+            <div className="addNodeCardInner">
+              <svg className="addNodeIcon" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" />
+              </svg>
+              <span>Add Node</span>
+            </div>
+          </button>
+        )}
       </section>
 
       {selectedNode && (
