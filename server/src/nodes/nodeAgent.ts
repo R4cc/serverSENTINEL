@@ -33,6 +33,7 @@ const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
+const reconnectDelayMs = 5000;
 
 async function readNodeConfig() {
   try { return JSON.parse(await readFile(nodeConfigPath, "utf8")) as NodeConfig; } catch { return null; }
@@ -373,10 +374,20 @@ export async function startNodeAgent() {
   await mkdir(config.nodeDataDir, { recursive: true });
   let persisted = await readNodeConfig();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
+  console.info(`ServerSentinel node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
   const connect = async () => {
     persisted = await readNodeConfig();
-    const socket = new WebSocket(panelWebSocketUrl());
+    const target = panelWebSocketUrl();
+    console.info(`Connecting node agent to ${target}`);
+    const socket = new WebSocket(target);
+    let reconnectScheduled = false;
+    const reconnect = (reason: string) => {
+      if (reconnectScheduled) return;
+      reconnectScheduled = true;
+      console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.round(reconnectDelayMs / 1000)}s.`);
+      setTimeout(() => void connect(), reconnectDelayMs);
+    };
     socket.on("open", () => {
       const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || basename(config.nodeDataDir) || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.2.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
       socket.send(JSON.stringify(hello));
@@ -384,8 +395,17 @@ export async function startNodeAgent() {
     socket.on("message", async (raw) => {
       const message = JSON.parse(raw.toString()) as PanelWelcome | NodeRequestMessage;
       if (message.type === "welcome") {
-        if (!message.accepted) throw new Error(message.error ?? "Node registration rejected");
-        if (message.nodeSecret) await writeNodeConfig({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
+        if (!message.accepted) {
+          console.error(`Node registration rejected: ${message.error ?? "unknown error"}`);
+          socket.close();
+          return;
+        }
+        if (message.nodeSecret) {
+          await writeNodeConfig({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
+          console.info(`Node registration accepted. Persisted node id ${message.nodeId}.`);
+        } else {
+          console.info(`Node session accepted for ${message.nodeId}.`);
+        }
         return;
       }
       if (message.type !== "request") return;
@@ -395,11 +415,15 @@ export async function startNodeAgent() {
       };
       socket.send(JSON.stringify(await response()));
     });
-    socket.on("close", () => setTimeout(() => void connect(), 5000).unref());
-    socket.on("error", () => socket.close());
+    socket.on("close", (code, reason) => reconnect(`closed with code ${code}${reason.length ? ` (${reason.toString()})` : ""}`));
+    socket.on("error", (error) => {
+      console.error(`Node agent websocket error: ${(error as Error).message}`);
+      socket.close();
+    });
   };
 
   await connect();
+  await new Promise(() => undefined);
 }
 
 export function newNodeSecret() {
