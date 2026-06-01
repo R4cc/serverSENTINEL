@@ -1,7 +1,7 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedServer, ModrinthHit, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -35,10 +35,154 @@ function isServerWorkspacePage(page: ActivePage) {
 
 const emptyApp: AppState = {
   servers: [],
+  nodes: [],
   modrinthApiConfigured: false,
   dockerSocketMounted: false,
   totalMemory: 0
 };
+
+type ContextNode = ManagedNode & {
+  servers: ManagedServer[];
+};
+
+const defaultContextNode: ManagedNode = {
+  id: "local",
+  name: "Internal Node",
+  type: "local",
+  status: "online",
+  isInternal: true
+};
+
+function nodeStatusLabel(status: ManagedNode["status"]) {
+  if (status === "online") return "Node online";
+  if (status === "offline") return "Node offline";
+  return "Node status unknown";
+}
+
+function NodeGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="4" width="14" height="16" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h4" />
+    </svg>
+  );
+}
+
+function ServerGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
+      <path d="m4 7 8 4 8-4" />
+      <path d="M12 11v10" />
+    </svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m5 12 4 4 10-10" />
+    </svg>
+  );
+}
+
+function ContextSwitchModal({
+  nodes,
+  activeServerId,
+  expandedNodes,
+  modalRef,
+  onClose,
+  onManageNodes,
+  onSelectServer,
+  onToggleNode
+}: {
+  nodes: ContextNode[];
+  activeServerId: string;
+  expandedNodes: Record<string, boolean>;
+  modalRef: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  onManageNodes: () => void;
+  onSelectServer: (server: ManagedServer, node: ContextNode) => void;
+  onToggleNode: (nodeId: string) => void;
+}) {
+  return (
+    <div className="modalBackdrop contextModalBackdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section className="modalPanel contextModalPanel" role="dialog" aria-modal="true" aria-labelledby="context-modal-title" tabIndex={-1} ref={modalRef}>
+        <header className="contextModalHeader">
+          <div>
+            <h2 id="context-modal-title">SWITCH CONTEXT</h2>
+            <p>Select a node and server to manage.</p>
+          </div>
+          <button type="button" className="iconButton contextCloseButton" onClick={onClose} aria-label="Close switch context modal">
+            <span aria-hidden="true">X</span>
+          </button>
+        </header>
+
+        <div className="contextNodeList">
+          {nodes.map((node) => {
+            const expanded = Boolean(expandedNodes[node.id]);
+            const offline = node.status === "offline";
+            return (
+              <section key={node.id} className={`contextNodeGroup ${expanded ? "expanded" : ""}`}>
+                <button type="button" className="contextNodeButton" onClick={() => onToggleNode(node.id)} aria-expanded={expanded}>
+                  <span className="contextNodeIcon"><NodeGlyph /></span>
+                  <span className="contextNodeText">
+                    <span className="contextNodeName">
+                      <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
+                      {node.name}
+                    </span>
+                    <span className="contextNodeMeta">{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</span>
+                  </span>
+                  {(node.isInternal || node.type === "local") && <span className="nodePill">LOCAL</span>}
+                  <span className="nodeExpandIndicator" aria-hidden="true">{expanded ? "-" : "+"}</span>
+                </button>
+
+                {expanded && (
+                  <div className="contextServerSection">
+                    <div className="contextServerSectionLabel">SERVERS ON {node.name}</div>
+                    <div className="contextServerList">
+                      {node.servers.length === 0 && <div className="contextEmptyServers">No servers assigned</div>}
+                      {node.servers.map((server) => {
+                        const selected = server.id === activeServerId;
+                        return (
+                          <button
+                            key={server.id}
+                            type="button"
+                            className={`contextServerButton ${selected ? "selected" : ""}`}
+                            onClick={() => onSelectServer(server, node)}
+                            disabled={offline}
+                            aria-selected={selected}
+                            title={offline ? "This node is offline" : `Manage ${server.displayName}`}
+                          >
+                            <span className="contextServerIcon"><ServerGlyph /></span>
+                            <span className="contextServerName">{server.displayName}</span>
+                            {selected && <span className="contextCheck"><CheckGlyph /></span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+
+        <footer className="contextModalFooter">
+          <button type="button" className="secondaryButton manageNodesButton" onClick={onManageNodes}>
+            <SidebarIcon name="settings" />
+            <span>MANAGE NODES</span>
+          </button>
+          <button type="button" className="secondaryButton" onClick={onClose}>CANCEL</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
 
 function readDemoMode() {
   return window.localStorage.getItem("serversentinel-demo-mode") === "true";
@@ -207,6 +351,8 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>("overview");
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [contextModalOpen, setContextModalOpen] = useState(false);
+  const [expandedContextNodes, setExpandedContextNodes] = useState<Record<string, boolean>>({});
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
@@ -221,6 +367,8 @@ export default function App() {
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
+  const switchContextButtonRef = useRef<HTMLButtonElement>(null);
+  const contextModalRef = useRef<HTMLElement>(null);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
     inFlightEnabled: boolean | null;
@@ -261,11 +409,42 @@ export default function App() {
     return {
       ...appState,
       servers: [demoServer(demoSchedules), ...appState.servers.filter((server) => server.id !== demoServerId)],
+      nodes: appState.nodes?.length ? appState.nodes : [defaultContextNode],
       modrinthApiConfigured: true,
       dockerSocketMounted: true,
       totalMemory: appState.totalMemory || 16 * 1024 * 1024 * 1024
     };
   }, [appState, demoMode, demoSchedules]);
+
+  const contextNodes = useMemo<ContextNode[]>(() => {
+    const nodes = (effectiveAppState.nodes?.length ? effectiveAppState.nodes : [defaultContextNode]).map((node) => ({
+      ...node,
+      servers: [] as ManagedServer[]
+    }));
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    for (const server of effectiveAppState.servers) {
+      const nodeId = server.nodeId || "local";
+      const node = nodesById.get(nodeId);
+      if (node) {
+        node.servers.push(server);
+        continue;
+      }
+      const fallbackNode: ContextNode = {
+        id: nodeId,
+        name: server.nodeName || nodeId,
+        type: "remote",
+        status: "unknown",
+        isInternal: false,
+        servers: [server]
+      };
+      nodes.push(fallbackNode);
+      nodesById.set(nodeId, fallbackNode);
+    }
+    if (!nodesById.has("local")) {
+      nodes.unshift({ ...defaultContextNode, servers: [] });
+    }
+    return nodes;
+  }, [effectiveAppState.nodes, effectiveAppState.servers]);
 
   const activeServer = useMemo(
     () => {
@@ -277,6 +456,10 @@ export default function App() {
     [activeServerId, demoMode, effectiveAppState.servers]
   );
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
+  const activeNode = useMemo(() => {
+    const serverNodeId = activeServer?.nodeId || "local";
+    return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...defaultContextNode, servers: [] };
+  }, [activeServer?.nodeId, contextNodes]);
   const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
   const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
   const activeModContext = `Fabric ${activeFabricLoaderVersion === "Unknown" ? "unknown" : activeFabricLoaderVersion} · Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
@@ -404,6 +587,45 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+
+  useEffect(() => {
+    if (!contextModalOpen) return;
+    contextModalRef.current?.focus();
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") closeContextModal();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contextModalOpen]);
+
+  function openContextModal() {
+    const nodeId = activeNode.id || "local";
+    setExpandedContextNodes((current) => ({ ...current, [nodeId]: true }));
+    setContextModalOpen(true);
+  }
+
+  function closeContextModal() {
+    setContextModalOpen(false);
+    window.setTimeout(() => switchContextButtonRef.current?.focus(), 0);
+  }
+
+  function selectContextServer(server: ManagedServer, node: ContextNode) {
+    if (node.status === "offline") return;
+    if (demoMode && server.id !== demoServerId) {
+      notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
+      return;
+    }
+    setActiveServerId(server.id);
+    activeServerIdRef.current = server.id;
+    setActivePage("overview");
+    closeContextModal();
+  }
+
+  function manageNodesPlaceholder() {
+    setActivePage("settings");
+    closeContextModal();
+    notify("info", "Node management is not available in this UI yet.");
+  }
 
   useEffect(() => {
     if (!overflowOpen) return;
@@ -2380,6 +2602,18 @@ export default function App() {
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
       <Notifications notices={notices} activeJobs={activeJobs} onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))} />
+      {contextModalOpen && (
+        <ContextSwitchModal
+          nodes={contextNodes}
+          activeServerId={activeServer?.id ?? ""}
+          expandedNodes={expandedContextNodes}
+          modalRef={contextModalRef}
+          onClose={closeContextModal}
+          onManageNodes={manageNodesPlaceholder}
+          onSelectServer={selectContextServer}
+          onToggleNode={(nodeId) => setExpandedContextNodes((current) => ({ ...current, [nodeId]: !current[nodeId] }))}
+        />
+      )}
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
@@ -2395,28 +2629,23 @@ export default function App() {
         </div>
         <nav className="sideNav">
           <div className="serverPickerRow">
-            <label className="serverPicker">
-              <small>{effectiveAppState.servers.length === 0 ? "No servers created" : "Active managed server"}</small>
-              <select
-                value={activeServerId}
-                onChange={(event) => {
-                  if (demoMode && event.target.value !== demoServerId) {
-                    notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
-                    setActiveServerId(demoServerId);
-                    return;
-                  }
-                  setActiveServerId(event.target.value);
-                  if (event.target.value) setActivePage("overview");
-                }}
+            <div className="activeContextBlock">
+              <div className="activeContextHeader">ACTIVE CONTEXT</div>
+              <div className="activeContextNodeLine">
+                <span className={`nodeStatusDot ${activeNode.status}`} title={nodeStatusLabel(activeNode.status)} aria-label={nodeStatusLabel(activeNode.status)} />
+                <span>{activeNode.name}</span>
+              </div>
+              <div className="activeContextServerLine">{activeServer?.displayName ?? "No server selected"}</div>
+              <button
+                type="button"
+                className="switchContextButton"
+                onClick={openContextModal}
                 disabled={isProvisioning || effectiveAppState.servers.length === 0}
+                ref={switchContextButtonRef}
               >
-                {effectiveAppState.servers.map((server) => (
-                  <option key={server.id} value={server.id} disabled={demoMode && server.id !== demoServerId}>
-                    {server.displayName}{demoMode && server.id !== demoServerId ? " (demo mode enabled)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+                SWITCH CONTEXT
+              </button>
+            </div>
             <button
               type="button"
               className="iconButton addServerButton"

@@ -1,6 +1,8 @@
 export type ManagedServer = {
   id: string;
   displayName: string;
+  nodeId: string;
+  nodeName?: string;
   directoryLabel: string;
   storageName?: string;
   minecraftVersion?: string;
@@ -15,6 +17,19 @@ export type ManagedServer = {
   serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
+};
+
+export type ManagedNode = {
+  id: string;
+  name: string;
+  type: "local" | "remote";
+  status: "online" | "offline" | "unknown";
+  isInternal: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  lastSeenAt?: string;
+  compatibility?: "compatible" | "incompatible" | "unknown";
+  capabilities?: string[];
 };
 
 export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
@@ -46,6 +61,7 @@ export type ScheduledExecution = {
 
 export type AppState = {
   servers: ManagedServer[];
+  nodes?: ManagedNode[];
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;
   totalMemory: number;

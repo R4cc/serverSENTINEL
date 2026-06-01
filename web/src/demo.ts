@@ -258,6 +258,8 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
   return {
     id: demoServerId,
     displayName: "Demo Survival",
+    nodeId: "local",
+    nodeName: "Internal Node",
     directoryLabel: "/demo/survival",
     storageName: "Browser demo",
     minecraftVersion: "1.21.4",
