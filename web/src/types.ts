@@ -104,6 +104,7 @@ export type ScheduledExecution = {
 export type AppState = {
   servers: ManagedServer[];
   nodes?: ManagedNode[];
+  runtimeMode?: "all-in-one" | "panel" | "node";
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;
   totalMemory: number;

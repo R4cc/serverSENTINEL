@@ -233,7 +233,7 @@ export function NodesPage({
       <section className="panel nodesToolbar">
         <div>
           <h2>NODES</h2>
-          <p className="muted">Manage the internal node and remote nodes that can host servers.</p>
+          <p className="muted">{internalNode ? "Manage the internal node and remote nodes that can host servers." : "Manage remote nodes that can host servers."}</p>
         </div>
         <div className="buttonRow">
           <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
@@ -242,6 +242,13 @@ export function NodesPage({
       </section>
 
       <section className="nodesGrid">
+        {sortedNodes.length === 0 && (
+          <div className="emptyState nodesEmptyState">
+            <h2>No Nodes Yet</h2>
+            <p>Add a node to connect a host that can run Minecraft server containers.</p>
+            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes}>Add Node</button>
+          </div>
+        )}
         {sortedNodes.map((node) => {
           const warnings = nodeWarnings(node);
           const removeBlocked = node.isInternal || node.servers.length > 0;

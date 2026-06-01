@@ -38,6 +38,7 @@ function isServerWorkspacePage(page: ActivePage) {
 const emptyApp: AppState = {
   servers: [],
   nodes: [],
+  runtimeMode: "all-in-one",
   modrinthApiConfigured: false,
   dockerSocketMounted: false,
   totalMemory: 0
@@ -49,6 +50,14 @@ const defaultContextNode: ManagedNode = {
   type: "local",
   status: "online",
   isInternal: true
+};
+
+const emptyPanelContextNode: ManagedNode = {
+  id: "",
+  name: "No node selected",
+  type: "remote",
+  status: "unknown",
+  isInternal: false
 };
 
 function NodeGlyph() {
@@ -365,6 +374,7 @@ export default function App() {
   const activeServerIdRef = useRef("");
   const switchContextButtonRef = useRef<HTMLButtonElement>(null);
   const contextModalRef = useRef<HTMLElement>(null);
+  const panelFirstRunPromptedRef = useRef(false);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
     inFlightEnabled: boolean | null;
@@ -406,14 +416,17 @@ export default function App() {
       ...appState,
       servers: [demoServer(demoSchedules), ...appState.servers.filter((server) => server.id !== demoServerId)],
       nodes: appState.nodes?.length ? appState.nodes : [defaultContextNode],
+      runtimeMode: appState.runtimeMode ?? "all-in-one",
       modrinthApiConfigured: true,
       dockerSocketMounted: true,
       totalMemory: appState.totalMemory || 16 * 1024 * 1024 * 1024
     };
   }, [appState, demoMode, demoSchedules]);
+  const panelOnlyMode = effectiveAppState.runtimeMode === "panel";
 
   const contextNodes = useMemo<ContextNode[]>(() => {
-    const nodes: ContextNode[] = (effectiveAppState.nodes?.length ? effectiveAppState.nodes : [defaultContextNode]).map((node) => ({
+    const sourceNodes = effectiveAppState.nodes?.length ? effectiveAppState.nodes : (panelOnlyMode ? [] : [defaultContextNode]);
+    const nodes: ContextNode[] = sourceNodes.filter((node) => !(panelOnlyMode && (node.isInternal || node.type === "local"))).map((node) => ({
       ...node,
       dockerStatus: (node.isInternal || node.type === "local") ? (effectiveAppState.dockerSocketMounted ? "available" : "unavailable") : node.dockerStatus,
       dataPathStatus: (node.isInternal || node.type === "local") ? "ready" : node.dataPathStatus,
@@ -423,6 +436,7 @@ export default function App() {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
     for (const server of effectiveAppState.servers) {
       const nodeId = server.nodeId || "local";
+      if (panelOnlyMode && nodeId === "local") continue;
       const node = nodesById.get(nodeId);
       if (node) {
         node.servers.push(server);
@@ -440,7 +454,7 @@ export default function App() {
       nodesById.set(nodeId, fallbackNode);
     }
     return nodes;
-  }, [effectiveAppState.nodes, effectiveAppState.servers, effectiveAppState.dockerSocketMounted]);
+  }, [effectiveAppState.nodes, effectiveAppState.servers, effectiveAppState.dockerSocketMounted, panelOnlyMode]);
 
   const activeServer = useMemo(
     () => {
@@ -454,8 +468,8 @@ export default function App() {
   const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
   const activeNode = useMemo(() => {
     const serverNodeId = activeServer?.nodeId || "local";
-    return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...defaultContextNode, servers: [] };
-  }, [activeServer?.nodeId, contextNodes]);
+    return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...(panelOnlyMode ? emptyPanelContextNode : defaultContextNode), servers: [] };
+  }, [activeServer?.nodeId, contextNodes, panelOnlyMode]);
   const usableContextNodes = useMemo(() => contextNodes.filter(isNodeRuntimeUsable), [contextNodes]);
   const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
   const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
@@ -590,6 +604,18 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+
+  useEffect(() => {
+    if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
+    if (effectiveAppState.servers.length > 0 || usableContextNodes.length > 0) return;
+    panelFirstRunPromptedRef.current = true;
+    setActivePage("nodes");
+    setAddNodeResult(null);
+    setNodeInstallMethod("compose");
+    if (canManageUsers) {
+      setAddNodeOpen(true);
+    }
+  }, [appStateLoaded, canManageUsers, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
 
   useEffect(() => {
     if (!contextModalOpen) return;
@@ -2779,16 +2805,6 @@ export default function App() {
                 SWITCH CONTEXT
               </button>
             </div>
-            <button
-              type="button"
-              className="iconButton addServerButton"
-              onClick={() => setActivePage("create")}
-              disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}
-              aria-label="Add server"
-              title="Add server"
-            >
-              <AppIcon name="plus" />
-            </button>
           </div>
           <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer}>
             <SidebarIcon name="overview" />
@@ -2861,7 +2877,7 @@ export default function App() {
           </div>
         </header>
 
-        {appStateLoaded && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && (
+        {appStateLoaded && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
             <span>Internal-node runtime management is unavailable until the Docker socket is mounted. Remote nodes can still be used when they are connected and compatible.</span>
@@ -2934,8 +2950,27 @@ export default function App() {
             ) : (
               <div className="emptyState">
                 <h2>No Managed Servers Yet</h2>
-                <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
-                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                {panelOnlyMode && usableContextNodes.length === 0 ? (
+                  <>
+                    <p>Add a node before creating servers. Nodes run the Minecraft containers while this panel manages them.</p>
+                    <button
+                      onClick={() => {
+                        setActivePage("nodes");
+                        setAddNodeResult(null);
+                        setNodeInstallMethod("compose");
+                        if (canManageUsers) setAddNodeOpen(true);
+                      }}
+                      disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+                    >
+                      Add Node
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
+                    <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                  </>
+                )}
               </div>
             )}
           </section>
@@ -3139,8 +3174,27 @@ export default function App() {
         {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
-            <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
-            <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+            {panelOnlyMode ? (
+              <>
+                <p>Add a node before creating servers. Nodes run the Minecraft containers while this panel manages them.</p>
+                <button
+                  onClick={() => {
+                    setActivePage("nodes");
+                    setAddNodeResult(null);
+                    setNodeInstallMethod("compose");
+                    if (canManageUsers) setAddNodeOpen(true);
+                  }}
+                  disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+                >
+                  Add Node
+                </button>
+              </>
+            ) : (
+              <>
+                <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
+                <button onClick={() => setActivePage("create")} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+              </>
+            )}
           </section>
         )}
 

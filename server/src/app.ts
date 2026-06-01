@@ -2844,6 +2844,7 @@ app.get("/api/app", async (request) => {
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
     nodes: nodes.map(publicNode),
+    runtimeMode: config.runtimeMode,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
     totalMemory: totalmem(),

@@ -422,8 +422,8 @@ button .buttonIcon {
 
 .serverPickerRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size);
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   align-items: end;
   transition: gap var(--sidebar-ease), grid-template-columns var(--sidebar-ease);
 }
@@ -461,7 +461,7 @@ button .buttonIcon {
   background: var(--surface);
   padding: var(--space-3);
   opacity: 1;
-  max-width: 200px;
+  max-width: none;
   visibility: visible;
   transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
   overflow: hidden;
@@ -513,13 +513,6 @@ button .buttonIcon {
   color: var(--swiss-white) !important;
   padding: 0 var(--space-2) !important;
   font-size: 11px;
-}
-
-.addServerButton {
-  width: var(--sidebar-rail-size);
-  min-width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-  min-height: var(--sidebar-rail-size);
 }
 
 .sideNav button,
@@ -4514,8 +4507,8 @@ details.compatibilityBadge p {
   }
 
   .sidebarCollapsed .serverPickerRow {
-    grid-template-columns: minmax(0, 1fr) 44px;
-    gap: var(--space-2) !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 !important;
   }
 
   .sidebarCollapsed .accountChip {
