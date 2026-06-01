@@ -27,6 +27,7 @@ import {
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
+import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
 import { nodeCapabilities, nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
@@ -531,6 +532,13 @@ function verifyNodeSecret(secret: string | undefined, expectedHash?: string) {
   return attempted.length === expected.length && timingSafeEqual(attempted, expected);
 }
 
+function nodeNotFound(nodeId: string): never {
+  const error = new Error(`Node ${nodeId} not found`) as Error & { statusCode?: number; code?: string };
+  error.statusCode = 404;
+  error.code = "node_not_found";
+  throw error;
+}
+
 async function readUsers() {
   return readJsonFile(usersFile, [], (value) => asArray(value, "users.json").map(normalizeStoredUser));
 }
@@ -674,6 +682,44 @@ function publicNode(node: ManagedNode): PublicNode {
   return {
     ...publicFields,
     hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
+  };
+}
+
+function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string }): NodeInstallInstructions {
+  const image = `serversentinel:${process.env.npm_package_version ?? "latest"}`;
+  const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
+  const dataMount = input.dataMount?.trim() || "/srv/serversentinel:/data";
+  const dockerSocketMount = "/var/run/docker.sock:/var/run/docker.sock";
+  const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
+    SS_MODE: "node",
+    SS_PANEL_URL: panelUrl
+  };
+  if (input.joinToken) {
+    environment.SS_JOIN_TOKEN = input.joinToken;
+  }
+  return {
+    image,
+    panelUrl,
+    joinToken: input.joinToken,
+    tokenRequired: !input.joinToken,
+    dataMount,
+    dockerSocketMount,
+    dockerCompose: {
+      image,
+      environment,
+      volumes: [dockerSocketMount, dataMount]
+    },
+    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl}${input.joinToken ? " -e SS_JOIN_TOKEN=<redacted>" : ""} -v ${dockerSocketMount} -v ${dataMount} ${image}`
+  };
+}
+
+function createJoinToken(ttlMinutesInput?: number) {
+  const now = new Date();
+  const joinToken = randomBytes(32).toString("base64url");
+  const ttlMinutes = Number.isFinite(ttlMinutesInput) ? Math.max(5, Math.min(1440, Number(ttlMinutesInput))) : 60;
+  return {
+    joinToken,
+    expiresAt: new Date(now.getTime() + ttlMinutes * 60_000).toISOString()
   };
 }
 
@@ -2810,14 +2856,12 @@ app.get("/api/nodes", async (request) => {
   return { nodes: (await queuedReadNodes()).map(publicNode) };
 });
 
-app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string } }>("/api/nodes/pending", destructiveRateLimit, async (request) => {
+app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
   await requireRequestPermission(request, "users.manage");
   const now = new Date();
-  const joinToken = randomBytes(32).toString("base64url");
+  const token = createJoinToken(request.body.tokenTtlMinutes);
   const nodeId = randomUUID();
   const nodeName = request.body.name?.trim() || "Remote Node";
-  const ttlMinutes = Number.isFinite(request.body.tokenTtlMinutes) ? Math.max(5, Math.min(1440, Number(request.body.tokenTtlMinutes))) : 60;
-  const expiresAt = new Date(now.getTime() + ttlMinutes * 60_000).toISOString();
   const node: ManagedNode = {
     id: nodeId,
     name: nodeName,
@@ -2828,38 +2872,106 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string }
     updatedAt: now.toISOString(),
     compatibility: "unknown",
     capabilities: [],
-    joinTokenHash: hashNodeSecret(joinToken),
-    joinTokenExpiresAt: expiresAt
+    joinTokenHash: hashNodeSecret(token.joinToken),
+    joinTokenExpiresAt: token.expiresAt
   };
   await updateNodes((nodes) => {
     nodes.push(node);
   });
-  const panelUrl = `http://<panel-host>:${config.port}`;
-  const dataMount = request.body.dataMount?.trim() || "/srv/serversentinel:/data";
   return {
     node: publicNode(node),
-    joinToken,
-    expiresAt,
-    install: {
-      dockerCompose: {
-        image: `serversentinel:${process.env.npm_package_version ?? "latest"}`,
-        environment: {
-          SS_MODE: "node",
-          SS_PANEL_URL: panelUrl,
-          SS_JOIN_TOKEN: joinToken
-        },
-        volumes: ["/var/run/docker.sock:/var/run/docker.sock", dataMount]
-      },
-      dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl} -e SS_JOIN_TOKEN=<redacted> -v /var/run/docker.sock:/var/run/docker.sock -v ${dataMount} serversentinel:${process.env.npm_package_version ?? "latest"}`
-    }
+    joinToken: token.joinToken,
+    expiresAt: token.expiresAt,
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
   };
+});
+
+app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes/pending", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
+  await requireRequestPermission(request, "users.manage");
+  const now = new Date();
+  const token = createJoinToken(request.body.tokenTtlMinutes);
+  const node: ManagedNode = {
+    id: randomUUID(),
+    name: request.body.name?.trim() || "Remote Node",
+    type: "remote",
+    status: "unknown",
+    isInternal: false,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    compatibility: "unknown",
+    capabilities: [],
+    joinTokenHash: hashNodeSecret(token.joinToken),
+    joinTokenExpiresAt: token.expiresAt
+  };
+  await updateNodes((nodes) => {
+    nodes.push(node);
+  });
+  return {
+    node: publicNode(node),
+    joinToken: token.joinToken,
+    expiresAt: token.expiresAt,
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
+  };
+});
+
+app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes/:nodeId/rotate-token", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
+  await requireRequestPermission(request, "users.manage");
+  const token = createJoinToken(request.body.tokenTtlMinutes);
+  let updatedNode: ManagedNode | undefined;
+  await updateNodes((nodes) => {
+    const node = nodes.find((candidate) => candidate.id === request.params.nodeId);
+    if (!node) nodeNotFound(request.params.nodeId);
+    if (node.isInternal) {
+      throw new Error("Internal node tokens cannot be rotated");
+    }
+    node.joinTokenHash = hashNodeSecret(token.joinToken);
+    node.joinTokenExpiresAt = token.expiresAt;
+    node.updatedAt = new Date().toISOString();
+    updatedNode = node;
+  });
+  return {
+    node: publicNode(updatedNode!),
+    joinToken: token.joinToken,
+    expiresAt: token.expiresAt,
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
+  };
+});
+
+app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMount?: string } }>("/api/nodes/:nodeId/install", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  return {
+    node: publicNode(node),
+    install: nodeInstallInstructions({ panelUrl: request.query.panelUrl, dataMount: request.query.dataMount })
+  };
+});
+
+app.delete<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const servers = await queuedReadServers();
+  if (servers.some((server) => server.nodeId === request.params.nodeId)) {
+    throw new Error("Cannot delete a node while servers are assigned to it");
+  }
+  let deleted = false;
+  await updateNodes((nodes) => {
+    const index = nodes.findIndex((candidate) => candidate.id === request.params.nodeId);
+    if (index === -1) nodeNotFound(request.params.nodeId);
+    if (nodes[index].isInternal) {
+      throw new Error("Internal node cannot be deleted");
+    }
+    nodes.splice(index, 1);
+    deleted = true;
+  });
+  panelNodeConnections.disconnect(request.params.nodeId);
+  return { ok: deleted };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
   await requireRequestPermission(request, "servers.view");
   const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) {
-    return reply.code(404).send({ error: "Node not found" });
+    return reply.code(404).send({ error: "Node not found", code: "node_not_found" });
   }
   return publicNode(node);
 });
@@ -4112,6 +4224,7 @@ app.setErrorHandler((error, _request, reply) => {
   const expectedUserError = isExpectedUserError(error);
   const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
   const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorCode = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
   const fields = {
     ...routeLogFields(_request, statusCode),
     category: errorCategory(error, statusCode),
@@ -4124,7 +4237,10 @@ app.setErrorHandler((error, _request, reply) => {
   } else {
     app.log.warn(fields, "API request rejected");
   }
-  reply.code(statusCode).send({ error: statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed" });
+  reply.code(statusCode).send({
+    error: statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed",
+    code: errorCode
+  });
 });
 
 function scheduleNextTick() {
