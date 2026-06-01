@@ -685,10 +685,15 @@ function publicNode(node: ManagedNode): PublicNode {
   };
 }
 
+function nodeDataMount(hostPath?: string) {
+  const value = hostPath?.trim() || "/var/lib/serversentinel";
+  return value.includes(":") ? value : `${value}:/data`;
+}
+
 function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string }): NodeInstallInstructions {
-  const image = `serversentinel:${process.env.npm_package_version ?? "latest"}`;
+  const image = "nl2109/serversentinel:latest";
   const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
-  const dataMount = input.dataMount?.trim() || "/srv/serversentinel:/data";
+  const dataMount = nodeDataMount(input.dataMount);
   const dockerSocketMount = "/var/run/docker.sock:/var/run/docker.sock";
   const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
     SS_MODE: "node",
@@ -709,7 +714,7 @@ function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string;
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl}${input.joinToken ? " -e SS_JOIN_TOKEN=<redacted>" : ""} -v ${dockerSocketMount} -v ${dataMount} ${image}`
+    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl}${input.joinToken ? ` -e SS_JOIN_TOKEN=${input.joinToken}` : ""} -v ${dockerSocketMount} -v ${dataMount} ${image}`
   };
 }
 

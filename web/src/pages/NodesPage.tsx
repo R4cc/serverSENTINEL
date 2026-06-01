@@ -8,6 +8,8 @@ type AddNodeInput = {
   dataMount: string;
 };
 
+const defaultNodeDataPath = "/var/lib/serversentinel";
+
 function formatNodeDate(value?: string, formatter?: (value: string | number | Date) => string) {
   if (!value) return "Never";
   return formatter ? formatter(value) : new Date(value).toLocaleString();
@@ -111,7 +113,7 @@ function AddNodeModal({
 }) {
   const [name, setName] = useState("");
   const [panelUrl, setPanelUrl] = useState(defaultPanelUrl);
-  const [dataMount, setDataMount] = useState("/srv/serversentinel");
+  const [dataMount, setDataMount] = useState(defaultNodeDataPath);
 
   useEffect(() => {
     if (!panelUrl) setPanelUrl(defaultPanelUrl);
@@ -147,8 +149,16 @@ function AddNodeModal({
                 <input name="panelUrl" value={panelUrl} onChange={(event) => setPanelUrl(event.target.value)} placeholder="https://panel.example.com" required />
               </label>
               <label>
-                Host data path
-                <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder="/srv/serversentinel" required />
+                <span className="fieldLabelWithInfo">
+                  Data folder on node
+                  <span className="roleInfoWrap">
+                    <button type="button" className="roleInfoButton" aria-describedby="node-data-folder-tip">i</button>
+                    <span id="node-data-folder-tip" role="tooltip" className="roleTooltip fieldTooltip">
+                      Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts this folder into the node container.
+                    </span>
+                  </span>
+                </span>
+                <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
               </label>
               <div className="nodeModalFooter inline">
                 <button type="submit">{busy ? "Creating..." : "Create pending node"}</button>

@@ -1798,6 +1798,18 @@ button .buttonIcon {
   opacity: 1;
 }
 
+.fieldLabelWithInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fieldTooltip {
+  width: 280px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .userActions {
   display: flex;
   gap: var(--space-2);

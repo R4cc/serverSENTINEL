@@ -21,6 +21,7 @@ import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 
 const appVersion = "0.2.0";
+const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 type ModCompatibilityFilter = "all" | "compatible" | "incompatible";
 type FileSortKey = "name" | "modifiedAt" | "type" | "size";
@@ -612,10 +613,7 @@ export default function App() {
     setActivePage("nodes");
     setAddNodeResult(null);
     setNodeInstallMethod("compose");
-    if (canManageUsers) {
-      setAddNodeOpen(true);
-    }
-  }, [appStateLoaded, canManageUsers, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
+  }, [appStateLoaded, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
 
   useEffect(() => {
     if (!contextModalOpen) return;
@@ -1502,7 +1500,7 @@ export default function App() {
   async function showNodeInstall(node: ManagedNode) {
     setNodeBusyId(node.id);
     try {
-      const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent("/srv/serversentinel")}`);
+      const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
       setNodeInstallMethod("compose");
       setNodeInstallResult(result);
     } catch (error) {
@@ -1518,7 +1516,7 @@ export default function App() {
     try {
       const result = await api<CreateNodeResponse>(`/api/nodes/${node.id}/rotate-token`, {
         method: "POST",
-        body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: "/srv/serversentinel" })
+        body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: defaultNodeDataPath })
       });
       setNodeInstallMethod("compose");
       setNodeInstallResult(result);
