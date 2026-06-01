@@ -2629,6 +2629,9 @@ app.addHook("onRequest", async (request, reply) => {
     assertSameOriginRequest(request);
     return;
   }
+  if (request.raw.url?.startsWith("/api/nodes/connect")) {
+    return;
+  }
   if (request.url.startsWith("/api/")) {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
       assertSameOriginRequest(request);
