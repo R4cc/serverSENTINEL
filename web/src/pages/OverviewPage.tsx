@@ -70,17 +70,17 @@ export function OverviewSummary({
       <div className="summaryTile">
         <span>Uptime</span>
         <strong>{running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
-        <small>{running ? "Container start time" : "Unavailable while stopped"}</small>
+        <small>{running ? "Container start time" : "Start the server to track uptime"}</small>
       </div>
       <div className="summaryTile">
         <span>Players online</span>
         <strong>{players}</strong>
-        <small>{players === "Unknown" ? "Player count unavailable" : activity.maxPlayers ? "Max players" : "From recent server output"}</small>
+        <small>{players === "Unknown" ? "Start the server to detect players" : activity.maxPlayers ? "Max players" : "From recent server output"}</small>
       </div>
       <div className={`summaryTile ${runtimeTone(status, dockerSocketMounted)}`}>
         <span>Runtime status</span>
         <strong>{runtimeLabel(status, dockerSocketMounted).replace(/^Container /, "")}</strong>
-        <small>{status?.docker.container || "Container unavailable"}</small>
+        <small>{status?.docker.container || "No container is available yet"}</small>
       </div>
     </section>
   );
@@ -209,7 +209,14 @@ export function RecentEventsPanel({
           </div>
         )) : (
           <div className="eventEmpty">
-            {hasHiddenEvents ? "All recent matching events are hidden." : eventsStatus === "unavailable" ? "Logs unavailable." : "No recent server events found."}
+            <strong>{hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}</strong>
+            <span>
+              {hasHiddenEvents
+                ? "Reset hidden events to show them again."
+                : eventsStatus === "unavailable"
+                  ? "Open the console to inspect raw logs, or try again after the server writes new output."
+                  : "Start the server or use it normally; important activity will appear here."}
+            </span>
           </div>
         )}
       </div>

@@ -2426,6 +2426,22 @@ button .buttonIcon {
   padding: var(--space-2) var(--space-3);
 }
 
+.nodeServerEmpty {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.nodeServerEmpty strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .nodeServerRow {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto auto;
@@ -2528,14 +2544,6 @@ button .buttonIcon {
   background: var(--surface-muted);
   color: var(--text-muted);
   font-size: 11px;
-}
-
-.nodeServerEmpty {
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .nodeAddServerButton {
@@ -3204,8 +3212,21 @@ button .buttonIcon {
   padding: var(--space-4);
   min-height: 92px;
   display: grid;
+  gap: var(--space-1);
   place-items: center;
   text-align: center;
+}
+
+.eventEmpty strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.eventEmpty span {
+  max-width: 460px;
+  line-height: 1.45;
 }
 
 .textLinkButton {
@@ -4011,12 +4032,27 @@ button .buttonIcon {
 .previewUnavailable {
   display: grid;
   min-height: 160px;
+  gap: var(--space-1);
   place-items: center;
   border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
   color: var(--text-muted);
   font-size: 13px;
+  line-height: 1.45;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.previewUnavailable strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.previewUnavailable span {
+  max-width: 320px;
 }
 
 .hiddenInput {

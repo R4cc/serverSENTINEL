@@ -269,7 +269,7 @@ export function ManagedServerForm({
         {nodes.length === 0 ? (
           <div className="systemBanner warning placementWarning">
             <strong>No nodes available.</strong>
-            <span>Add a node before creating servers in panel-only mode.</span>
+            <span>Add a node first so ServerSentinel has a host where it can create this server.</span>
           </div>
         ) : (
           <div className="nodePlacementGrid">
@@ -302,7 +302,7 @@ export function ManagedServerForm({
           </div>
         )}
         {placementBlocked && nodes.length > 0 && (
-          <p className="fieldError">Choose an online, compatible node with Docker available before creating this server.</p>
+          <p className="fieldError">Choose a ready node before creating this server. If none are ready, open Nodes to see what needs attention.</p>
         )}
       </section>
       <label>
@@ -404,7 +404,7 @@ export function ManagedServerForm({
         </label>
       </details>
       <p className="muted">
-        Docker socket is {dockerSocketMounted ? "mounted; ServerSentinel can create and control the Minecraft runtime container." : "not mounted; runtime management is unavailable until Docker integration is connected."}
+        {dockerSocketMounted ? "Docker is connected, so ServerSentinel can create and control this server." : "Docker is not connected yet. Connect Docker in Settings before using local runtime controls."}
       </p>
       <button disabled={!serverPortValid || placementBlocked}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
       </fieldset>

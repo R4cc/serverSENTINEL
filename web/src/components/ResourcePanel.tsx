@@ -69,7 +69,7 @@ export function ResourcePanel({
 }) {
   const latest = samples.at(-1);
   const hasStats = Boolean(latest?.available && latest.running);
-  const statsUnavailableLabel = !dockerSocketMounted ? "Unavailable" : status?.docker.running ? "Collecting" : "Not running";
+  const statsUnavailableLabel = !dockerSocketMounted ? "Not connected" : status?.docker.running ? "Collecting" : "Not running";
   const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
   const memoryUsage = hasStats ? latest?.memoryUsageBytes ?? 0 : 0;
   const configuredMemoryBytes = latest?.memoryLimitBytes || parseMaxMemoryGb(server.javaArgs) * 1024 * 1024 * 1024;
@@ -95,10 +95,10 @@ export function ResourcePanel({
       : statsUnavailableLabel;
   const statusMessage = latest?.message
     || (!dockerSocketMounted
-      ? "Docker socket is not mounted, so live container stats are unavailable."
+      ? "Connect Docker in Settings to show live memory, CPU, and network usage."
       : status?.docker.running
-        ? "Collecting Docker stats."
-        : status?.docker.message || "Start the container to collect live stats.");
+        ? "Collecting live stats. This usually appears after a few samples."
+        : status?.docker.message || "Start the server to collect live memory, CPU, and network usage.");
 
   return (
     <section className="panel resourcePanel">
@@ -118,7 +118,7 @@ export function ResourcePanel({
           <div className="resourceMetricLabel">
             <span>CPU usage</span>
             <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
-            <small>{hasStats ? "Current sample" : "Live Docker stats"}</small>
+            <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
           </div>
           <Sparkline samples={samples} value={(sample) => sample.cpuPercent} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
@@ -126,7 +126,7 @@ export function ResourcePanel({
           <div className="resourceMetricLabel">
             <span>Network activity</span>
             <strong>{networkValue}</strong>
-            <small>{hasStats ? "Current transfer rate" : "Network counters unavailable"}</small>
+            <small>{hasStats ? "Current transfer rate" : "Start the server to collect network activity"}</small>
           </div>
           <Sparkline samples={samples} value={(sample) => sample.networkRxBytes ?? 0} tone="green" emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>

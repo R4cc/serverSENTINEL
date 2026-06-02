@@ -299,7 +299,7 @@ export function NodesPage({
         {sortedNodes.length === 0 && (
           <div className="emptyState nodesEmptyState">
             <h2>No Nodes Yet</h2>
-            <p>Add a node to connect a host that can run Minecraft server containers.</p>
+            <p>No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers.</p>
             <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes}>Add Node</button>
           </div>
         )}
@@ -325,7 +325,12 @@ export function NodesPage({
               <section className="nodeServerSection">
                 <div className="nodeServerSectionLabel">SERVERS ON THIS NODE</div>
                 <div className="nodeServerList">
-                  {node.servers.length === 0 && <div className="nodeServerEmpty">No servers on this node</div>}
+                  {node.servers.length === 0 && (
+                    <div className="nodeServerEmpty">
+                      <strong>No servers here yet</strong>
+                      <span>{canAddServer ? "Add a server to place it on this node." : "Bring the node online before adding servers here."}</span>
+                    </div>
+                  )}
                   {visibleServers.map((server) => {
                     const state = serverStateLabel(server.id);
                     const playerLabel = playerCountLabel(serverActivities[server.id]);

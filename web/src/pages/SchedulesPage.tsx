@@ -114,7 +114,7 @@ export function SchedulePage({
           )) : (
             <div className="emptyState compactEmpty">
               <h2>No Schedules</h2>
-              <p>Create one scheduled execution with one or more console commands.</p>
+              <p>No scheduled commands are configured yet. Create one to run console commands automatically at a chosen time.</p>
             </div>
           )}
         </div>

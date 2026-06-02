@@ -146,7 +146,10 @@ export function UserManagement({
           {users.length === 0 && (
             <tr>
               <td colSpan={3}>
-                <div className="emptyInline noBorder">No users found.</div>
+                <div className="emptyInline noBorder">
+                  <strong>No users yet</strong>
+                  <span>Create a user to give someone access to this ServerSentinel panel.</span>
+                </div>
               </td>
             </tr>
           )}

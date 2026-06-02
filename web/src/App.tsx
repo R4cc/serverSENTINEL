@@ -2841,14 +2841,14 @@ export default function App() {
         {appStateLoaded && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
-            <span>Internal-node runtime management is unavailable until the Docker socket is mounted. Remote nodes can still be used when they are connected and compatible.</span>
+            <span>Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready.</span>
           </section>
         )}
 
         {provisioningError && activePage === "overview" && (
           <section className="systemBanner error" role="alert">
             <strong>Server setup failed.</strong>
-            <span>{provisioningError}</span>
+            <span>{provisioningError} Review the form values, then try creating the server again.</span>
           </section>
         )}
 
@@ -2873,7 +2873,7 @@ export default function App() {
           <InlineState
             tone="error"
             title="Could not load application state"
-            message={appLoadError}
+            message={`${appLoadError} Check that the ServerSentinel backend is reachable, then try again.`}
             actionLabel="Retry"
             onAction={() => void refreshApp()}
             busy={appRefreshing}
@@ -2913,7 +2913,7 @@ export default function App() {
                 <h2>No Managed Servers Yet</h2>
                 {panelOnlyMode && usableContextNodes.length === 0 ? (
                   <>
-                    <p>Add a node before creating servers. Nodes run the Minecraft containers while this panel manages them.</p>
+                    <p>No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers.</p>
                     <button
                       onClick={() => {
                         setActivePage("nodes");
@@ -2928,7 +2928,7 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <p>Create a managed server instance to generate Fabric server files and launch a separate Minecraft runtime container.</p>
+                    <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
                     <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
                   </>
                 )}
@@ -3037,13 +3037,13 @@ export default function App() {
                   <button type="button" onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</button>
                 </div>
                 {usersLoading && (
-                  <InlineState tone="loading" title="Loading users" message="Loading user accounts and permissions." />
+                  <InlineState tone="loading" title="Loading users" message="Loading user accounts and access settings." />
                 )}
                 {usersError && (
                   <InlineState
                     tone="error"
                     title="Could not load users"
-                    message={usersError}
+                    message={`${usersError} Check that your account can manage users, then try again.`}
                     actionLabel="Retry"
                     onAction={() => void loadUsers()}
                     busy={usersLoading}
@@ -3129,7 +3129,7 @@ export default function App() {
             <h2>Welcome to ServerSentinel</h2>
             {panelOnlyMode && usableContextNodes.length === 0 ? (
               <>
-                <p>Add a node before creating servers. Nodes run the Minecraft containers while this panel manages them.</p>
+                <p>No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers.</p>
                 <button
                   onClick={() => {
                     setActivePage("nodes");
@@ -3144,7 +3144,7 @@ export default function App() {
               </>
             ) : (
               <>
-                <p>You do not have any managed server instances yet. Create one to generate server files and launch its separate Minecraft runtime container.</p>
+                <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
                 <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
               </>
             )}
@@ -3154,7 +3154,7 @@ export default function App() {
         {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <section className="emptyState">
             <h2>No Server Selected</h2>
-            <p>Create or select a server from the Servers page.</p>
+            <p>A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings.</p>
             <button onClick={() => setActivePage("servers")}>Open Servers</button>
           </section>
         )}
@@ -3256,8 +3256,8 @@ export default function App() {
             {statusError && (
               <InlineState
                 tone="warning"
-                title="Status refresh failed"
-                message={statusError}
+                title="Status is not up to date"
+                message={`${statusError} The last known server information is still shown.`}
                 actionLabel="Refresh status"
                 onAction={() => void refreshStatus()}
               />
@@ -3269,14 +3269,14 @@ export default function App() {
                   <InlineState
                     tone="loading"
                     title="Loading overview"
-                    message="Loading activity, health, and recent events."
+                    message="Loading server activity, health, and recent events."
                   />
                 )}
                 {overviewError && (
                   <InlineState
                     tone="warning"
-                    title="Overview refresh failed"
-                    message={overviewError}
+                    title="Overview is not up to date"
+                    message={`${overviewError} Previously loaded activity is still shown when available.`}
                     actionLabel="Retry"
                     onAction={() => {
                       setOverviewError("");
@@ -3331,13 +3331,13 @@ export default function App() {
                     </div>
                   </div>
                   {consoleLoading && (
-                    <InlineState tone="loading" title="Loading logs" message="Loading recent console output." />
+                    <InlineState tone="loading" title="Loading console" message="Loading recent server log output." />
                   )}
                   {consoleError && (
                     <InlineState
                       tone="warning"
-                      title="Could not load logs"
-                      message={consoleError}
+                      title="Console output is not up to date"
+                      message={`${consoleError} Existing log lines remain visible when available.`}
                       actionLabel="Retry"
                       onAction={() => void refreshConsoleLogs(activeServer.id)}
                       busy={consoleLoading}
@@ -3345,7 +3345,7 @@ export default function App() {
                   )}
                   <div className="terminal">
                     <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
-                      {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No log output yet.</span>}
+                      {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
                     </div>
                     {pendingConsoleEntries > 0 && (
                       <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
@@ -3471,13 +3471,13 @@ export default function App() {
                     </div>
 
                     {filesLoading && listing.entries.length === 0 && (
-                      <InlineState tone="loading" title="Loading files" message="Loading the current server directory." />
+                      <InlineState tone="loading" title="Loading files" message={`Loading the contents of ${listing.path}.`} />
                     )}
                     {filesError && (
                       <InlineState
                         tone="error"
-                        title="Could not load server files"
-                        message={filesError}
+                        title="Could not load this folder"
+                        message={`${filesError} Check that the server files are available, then retry.`}
                         actionLabel="Retry"
                         onAction={() => void loadFiles(activeServer.id, listing.path)}
                         busy={filesLoading}
@@ -3516,7 +3516,7 @@ export default function App() {
                         ))}
                       </div>
                       {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
-                        <InlineState tone="empty" title="Directory is empty" message="No files or folders were found at this path." />
+                        <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
                       )}
                       {sortedFileEntries.map((entry) => {
                         const selected = selectedFilePaths.includes(entry.path);
@@ -3555,7 +3555,7 @@ export default function App() {
                   {!selectedEntry && selectedEntries.length === 0 && (
                     <div className="fileDetailsEmpty">
                       <h2>No file selected</h2>
-                      <p>Select a file to view details and preview.</p>
+                      <p>Select a file or folder from the list to view details. Text files will also show a read-only preview here.</p>
                     </div>
                   )}
                   {selectedEntries.length > 1 && (
@@ -3588,8 +3588,8 @@ export default function App() {
                       </dl>
                       <section className="filePreviewPanel">
                         <h3>Preview</h3>
-                        {filePreview.loading && <InlineState tone="loading" title="Loading preview" message="Reading a small preview of the selected file." />}
-                        {filePreview.error && <InlineState tone="error" title="Preview failed" message={filePreview.error} />}
+                        {filePreview.loading && <InlineState tone="loading" title="Loading preview" message="Reading a small preview of this file." />}
+                        {filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
                         {!filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
                           <pre>
                             {(filePreview.data.content ?? "").split(/\r?\n/).slice(0, 80).map((line, index) => (
@@ -3598,7 +3598,10 @@ export default function App() {
                           </pre>
                         )}
                         {!filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
-                          <div className="previewUnavailable">{filePreview.data?.message ?? "Preview unavailable"}</div>
+                          <div className="previewUnavailable">
+                            <strong>Preview unavailable</strong>
+                            <span>{filePreview.data?.message ?? "This item cannot be previewed here. You can still use the available file actions above."}</span>
+                          </div>
                         )}
                       </section>
                     </div>
@@ -3715,13 +3718,13 @@ export default function App() {
                       </div>
 
                       {modsLoading && installedMods.length === 0 && (
-                        <InlineState tone="loading" title="Loading installed mods" message="Reading the server mods folder and compatibility metadata." />
+                        <InlineState tone="loading" title="Loading installed mods" message="Checking the server mods folder and compatibility information." />
                       )}
                       {modsError && (
                         <InlineState
                           tone="error"
                           title="Could not load installed mods"
-                          message={modsError}
+                          message={`${modsError} Check that the mods folder is available, then retry.`}
                           actionLabel="Retry"
                           onAction={() => void loadInstalledMods(activeServer.id)}
                           busy={modsLoading}
@@ -3740,7 +3743,10 @@ export default function App() {
                         </div>
 
                         {filteredInstalledMods.length === 0 ? (
-                          <div className="emptyInline noBorder">No matching installed mods.</div>
+                          <div className="emptyInline noBorder">
+                            <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
+                            <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
+                          </div>
                         ) : (
                           filteredInstalledMods.map((mod) => {
                             const isComp = mod.compatibility?.compatible;
@@ -3939,26 +3945,26 @@ export default function App() {
                         {!isSearchingMods && !effectiveAppState.modrinthApiConfigured && (
                           <div className="emptyInline">
                             <strong>Modrinth API key is not configured</strong>
-                            <span>Add a key in Settings before searching for new mods.</span>
+                            <span>Add an API key in Settings to search and install mods from Modrinth.</span>
                           </div>
                         )}
                         {!isSearchingMods && effectiveAppState.modrinthApiConfigured && activeModVersionsUnknown && (
                           <div className="emptyInline">
                             <strong>Server version unknown</strong>
-                            <span>{activeModContext}. ServerSentinel needs both versions to check compatible Modrinth files.</span>
+                            <span>{activeModContext}. Set the Minecraft and Fabric versions in server settings, then search again.</span>
                           </div>
                         )}
                         {!isSearchingMods && effectiveAppState.modrinthApiConfigured && !activeModVersionsUnknown && !query.trim() && (
                           <div className="emptyInline">
                             <strong>Search Modrinth mods</strong>
-                            <span>Enter a mod name to load Fabric results for this server.</span>
+                            <span>Enter a mod name to find Fabric mods that fit this server.</span>
                           </div>
                         )}
                         {!isSearchingMods && modSearchError && (
                           <InlineState
                             tone="error"
-                            title="Search request failed"
-                            message={modSearchError}
+                            title="Search failed"
+                            message={`${modSearchError} Try again, or check the Modrinth API key in Settings.`}
                             actionLabel={query.trim() ? "Retry search" : undefined}
                             onAction={query.trim() ? () => {
                               setModSearchError("");
@@ -3970,13 +3976,13 @@ export default function App() {
                         {!isSearchingMods && !modSearchError && query.trim() && modSearchResults.length === 0 && (
                           <div className="emptyInline">
                             <strong>No mods found</strong>
-                            <span>Try a different search term.</span>
+                            <span>No Modrinth results matched this search. Try a different mod name or a shorter search term.</span>
                           </div>
                         )}
                         {!isSearchingMods && !modSearchError && query.trim() && modSearchResults.length > 0 && filteredModSearchResults.length === 0 && (
                           <div className="emptyInline">
                             <strong>All results filtered out</strong>
-                            <span>Switch the compatibility filter to see the loaded results.</span>
+                            <span>The current compatibility filter hides every result. Switch the filter to see more options.</span>
                           </div>
                         )}
                         {filteredModSearchResults.map((mod) => (

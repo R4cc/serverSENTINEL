@@ -85,14 +85,14 @@ export function FileEditorModal({
             </header>
             <div className="fileEditorBody">
               {fileOpening ? (
-                <InlineState tone="loading" title="Opening file" message="Loading the editable file contents." />
+                <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
               ) : (
                 <>
                   {fileReadError && (
                     <InlineState
                       tone="error"
-                      title="Editor error"
-                      message={fileReadError}
+                      title="Could not open this file"
+                      message={`${fileReadError} Close the editor or retry if the file should still be available.`}
                       actionLabel={fileOpenFailed ? "Retry" : undefined}
                       onAction={fileOpenFailed ? onRetryOpen : undefined}
                     />
