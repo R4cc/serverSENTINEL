@@ -2,16 +2,17 @@ import { existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
 import { config } from "../config.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { latestFabricVersion } from "../fabric/fabricClient.js";
 import { resolveModrinthProjectCompatibility } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import type { ManagedServer } from "../types.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
-import type { NodeHello, NodeRequestMessage, NodeResponseMessage, PanelWelcome } from "./protocol.js";
+import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 
 type NodeConfig = { nodeId: string; nodeSecret: string };
 type CreateInput = {
@@ -210,6 +211,98 @@ async function runtimeStatus(server: ManagedServer) {
   };
 }
 
+function stripDockerLogHeaders(buffer: Buffer) {
+  const chunks: Buffer[] = [];
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    const size = buffer.readUInt32BE(offset + 4);
+    const start = offset + 8;
+    const end = start + size;
+    if (end > buffer.length) break;
+    chunks.push(buffer.subarray(start, end));
+    offset = end;
+  }
+  return chunks.length ? Buffer.concat(chunks) : buffer;
+}
+
+function sendStreamData(socket: WebSocket, id: string, event: NodeStreamDataMessage["event"]) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "streamData", id, event } satisfies NodeStreamDataMessage));
+  }
+}
+
+function sendStreamEnd(socket: WebSocket, id: string, error?: NodeStreamEndMessage["error"]) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "streamEnd", id, error } satisfies NodeStreamEndMessage));
+  }
+}
+
+function startConsoleStream(server: ManagedServer, streamId: string, socket: WebSocket, onDone: () => void) {
+  let closed = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    sendStreamEnd(socket, streamId);
+    onDone();
+  };
+
+  if (!dockerAvailable()) {
+    sendStreamData(socket, streamId, {
+      type: "unavailable",
+      message: "Docker integration is not configured; mount /var/run/docker.sock to enable it"
+    });
+    finish();
+    return () => undefined;
+  }
+
+  const name = encodeURIComponent(containerName(server));
+  const request = http.request(
+    {
+      socketPath: config.dockerSocket,
+      path: `/containers/${name}/logs?stdout=1&stderr=1&tail=200&follow=1`,
+      method: "GET"
+    },
+    (response) => {
+      if (response.statusCode !== 200) {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () => {
+          const message = dockerErrorMessage(Buffer.concat(chunks).toString("utf8"), response.statusCode);
+          sendStreamData(socket, streamId, { type: "unavailable", message });
+          finish();
+        });
+        return;
+      }
+
+      response.on("data", (chunk: Buffer) => {
+        const text = stripDockerLogHeaders(chunk).toString("utf8");
+        if (text) {
+          sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
+        }
+      });
+      response.on("end", () => finish());
+      response.on("error", (error) => {
+        sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+        finish();
+      });
+    }
+  );
+
+  request.on("error", (error) => {
+    if (closed) return;
+    sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+    finish();
+  });
+  request.end();
+
+  return () => {
+    if (closed) return;
+    closed = true;
+    request.destroy();
+    onDone();
+  };
+}
+
 async function dockerInfo() {
   return { available: dockerAvailable(), info: dockerAvailable() ? await dockerRequest("GET", "/info").catch((error) => ({ error: (error as Error).message })) : undefined };
 }
@@ -385,10 +478,16 @@ export async function startNodeAgent() {
     const target = panelWebSocketUrl();
     console.info(`Connecting node agent to ${target}`);
     const socket = new WebSocket(target);
+    const activeStreams = new Map<string, () => void>();
+    const stopAllStreams = () => {
+      for (const cleanup of Array.from(activeStreams.values())) cleanup();
+      activeStreams.clear();
+    };
     let reconnectScheduled = false;
     const reconnect = (reason: string) => {
       if (reconnectScheduled) return;
       reconnectScheduled = true;
+      stopAllStreams();
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.round(reconnectDelayMs / 1000)}s.`);
       setTimeout(() => void connect(), reconnectDelayMs);
     };
@@ -397,7 +496,12 @@ export async function startNodeAgent() {
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {
-      const message = JSON.parse(raw.toString()) as PanelWelcome | NodeRequestMessage;
+      let message: PanelWelcome | NodeRequestMessage | NodeStreamStartMessage | NodeStreamStopMessage;
+      try {
+        message = JSON.parse(raw.toString()) as PanelWelcome | NodeRequestMessage | NodeStreamStartMessage | NodeStreamStopMessage;
+      } catch {
+        return;
+      }
       if (message.type === "welcome") {
         if (!message.accepted) {
           console.error(`Node registration rejected: ${message.error ?? "unknown error"}`);
@@ -410,6 +514,33 @@ export async function startNodeAgent() {
         } else {
           console.info(`Node session accepted for ${message.nodeId}.`);
         }
+        return;
+      }
+      if (message.type === "streamStart") {
+        activeStreams.get(message.id)?.();
+        activeStreams.delete(message.id);
+        if (message.command !== "server.console.stream") {
+          sendStreamData(socket, message.id, { type: "unavailable", message: `Unsupported node stream ${message.command}` });
+          sendStreamEnd(socket, message.id, { code: "unsupported_stream", message: `Unsupported node stream ${message.command}` });
+          return;
+        }
+        const server = (message.payload as { server?: ManagedServer } | undefined)?.server;
+        if (!server) {
+          sendStreamData(socket, message.id, { type: "unavailable", message: "server payload is required" });
+          sendStreamEnd(socket, message.id, { code: "invalid_payload", message: "server payload is required" });
+          return;
+        }
+        let completed = false;
+        const cleanup = startConsoleStream(server, message.id, socket, () => {
+          completed = true;
+          activeStreams.delete(message.id);
+        });
+        if (!completed) activeStreams.set(message.id, cleanup);
+        return;
+      }
+      if (message.type === "streamStop") {
+        activeStreams.get(message.id)?.();
+        activeStreams.delete(message.id);
         return;
       }
       if (message.type !== "request") return;

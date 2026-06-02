@@ -2,7 +2,13 @@ import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChannel } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
+import { protocolCompatible } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
+
+type ConsoleClient = {
+  send: (payload: string) => void;
+  readyState: number;
+};
 
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
 type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[]) => Promise<PublicServer>;
@@ -79,8 +85,53 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.console.send", { command });
   }
 
-  async streamConsole() {
-    unsupported("streamConsole");
+  async streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void) {
+    const consoleClient = client as ConsoleClient;
+    const send = (event: unknown) => {
+      if (consoleClient.readyState === 1) {
+        consoleClient.send(JSON.stringify(event));
+      }
+    };
+
+    const node = await this.lookupNode(server.nodeId);
+    if (!node) {
+      send({ type: "unavailable", message: `Node ${server.nodeId} not found` });
+      return;
+    }
+    if (!this.connections.isConnected(node.id)) {
+      send({ type: "unavailable", message: `Node ${node.name} is offline` });
+      return;
+    }
+    if (!protocolCompatible(node.protocolVersion)) {
+      send({ type: "unavailable", message: `Node ${node.name} uses unsupported protocol ${node.protocolVersion ?? "unknown"}` });
+      return;
+    }
+    if (!node.capabilities?.includes("server.console.stream")) {
+      send({ type: "unavailable", message: "Remote node does not support live console streaming. Update the node agent." });
+      return;
+    }
+
+    try {
+      const status = await this.serverStatus(server);
+      send({ type: "status", status });
+    } catch (error) {
+      send({ type: "unavailable", message: (error as Error).message });
+    }
+
+    try {
+      const cleanup = await this.connections.stream(
+        node,
+        "server.console.stream",
+        { server },
+        (event) => send(event),
+        (error) => {
+          if (error) send({ type: "unavailable", message: error.message });
+        }
+      );
+      onClose(cleanup);
+    } catch (error) {
+      send({ type: "unavailable", message: (error as Error).message });
+    }
   }
 
   serverLogs(server: ManagedServer) {

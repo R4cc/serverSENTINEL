@@ -12,6 +12,7 @@ export const nodeCapabilities = [
   "server.stats",
   "server.logs.recent",
   "server.console.send",
+  "server.console.stream",
   "files.list",
   "files.read",
   "files.write",
@@ -58,6 +59,49 @@ export type NodeRequestMessage = {
   id: string;
   command: string;
   payload?: unknown;
+};
+
+export type NodeStreamStartMessage = {
+  type: "streamStart";
+  id: string;
+  command: string;
+  payload?: unknown;
+};
+
+export type NodeStreamStopMessage = {
+  type: "streamStop";
+  id: string;
+};
+
+export type NodeStreamEvent =
+  | {
+      type: "log";
+      source: string;
+      text: string;
+      at: string;
+    }
+  | {
+      type: "unavailable";
+      message: string;
+    }
+  | {
+      type: "empty";
+      message?: string;
+    };
+
+export type NodeStreamDataMessage = {
+  type: "streamData";
+  id: string;
+  event: NodeStreamEvent;
+};
+
+export type NodeStreamEndMessage = {
+  type: "streamEnd";
+  id: string;
+  error?: {
+    code: string;
+    message: string;
+  };
 };
 
 export type NodeResponseMessage = {
