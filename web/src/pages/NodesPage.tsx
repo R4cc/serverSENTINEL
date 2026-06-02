@@ -160,7 +160,7 @@ function AddNodeModal({
             <h2 id="add-node-title">ADD NODE</h2>
             <p>Create a pending node, then run the generated install command on the host.</p>
           </div>
-          <button type="button" className="iconButton contextCloseButton" onClick={onClose} aria-label="Close add node modal">X</button>
+          <button type="button" className="iconButton modalCloseButton" onClick={onClose} aria-label="Close add node modal">X</button>
         </header>
 
         {!created ? (
@@ -388,7 +388,7 @@ export function NodesPage({
                 <h2 id="node-details-title">{selectedNode.name}</h2>
                 <p>Technical node details and maintenance actions.</p>
               </div>
-              <button type="button" className="iconButton contextCloseButton" onClick={onCloseDetails} aria-label="Close node details">X</button>
+              <button type="button" className="iconButton modalCloseButton" onClick={onCloseDetails} aria-label="Close node details">X</button>
             </header>
             <div className="nodeModalBody">
               <dl className="nodeFacts detailed">
@@ -442,7 +442,7 @@ export function NodesPage({
                 <h2 id="install-node-title">NODE INSTALL</h2>
                 <p>Use this on the host that should run the node agent.</p>
               </div>
-              <button type="button" className="iconButton contextCloseButton" onClick={onClearInstall} aria-label="Close install instructions">X</button>
+              <button type="button" className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions">X</button>
             </header>
             <div className="nodeModalBody">
               <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />

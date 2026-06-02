@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
@@ -10,6 +10,7 @@ import { minecraftCommandSuggestions } from "./utils/commands";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeStatusLabel } from "./utils/nodes";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
+import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
 import { Notifications } from "./components/Notifications";
 import { ResourcePanel } from "./components/ResourcePanel";
@@ -60,129 +61,6 @@ const emptyPanelContextNode: ManagedNode = {
   status: "unknown",
   isInternal: false
 };
-
-function NodeGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="4" width="14" height="16" />
-      <path d="M8 8h8" />
-      <path d="M8 12h8" />
-      <path d="M8 16h4" />
-    </svg>
-  );
-}
-
-function ServerGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
-      <path d="m4 7 8 4 8-4" />
-      <path d="M12 11v10" />
-    </svg>
-  );
-}
-
-function CheckGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m5 12 4 4 10-10" />
-    </svg>
-  );
-}
-
-function ContextSwitchModal({
-  nodes,
-  activeServerId,
-  expandedNodes,
-  modalRef,
-  onClose,
-  onManageNodes,
-  onSelectServer,
-  onToggleNode
-}: {
-  nodes: ContextNode[];
-  activeServerId: string;
-  expandedNodes: Record<string, boolean>;
-  modalRef: RefObject<HTMLElement | null>;
-  onClose: () => void;
-  onManageNodes: () => void;
-  onSelectServer: (server: ManagedServer, node: ContextNode) => void;
-  onToggleNode: (nodeId: string) => void;
-}) {
-  return (
-    <div className="modalBackdrop contextModalBackdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <section className="modalPanel contextModalPanel" role="dialog" aria-modal="true" aria-labelledby="context-modal-title" tabIndex={-1} ref={modalRef}>
-        <header className="contextModalHeader">
-          <div>
-            <h2 id="context-modal-title">SWITCH CONTEXT</h2>
-            <p>Select a node and server to manage.</p>
-          </div>
-          <button type="button" className="iconButton contextCloseButton" onClick={onClose} aria-label="Close switch context modal">
-            <span aria-hidden="true">X</span>
-          </button>
-        </header>
-
-        <div className="contextNodeList">
-          {nodes.map((node) => {
-            const expanded = Boolean(expandedNodes[node.id]);
-            return (
-              <section key={node.id} className={`contextNodeGroup ${expanded ? "expanded" : ""}`}>
-                <button type="button" className="contextNodeButton" onClick={() => onToggleNode(node.id)} aria-expanded={expanded}>
-                  <span className="contextNodeIcon"><NodeGlyph /></span>
-                  <span className="contextNodeText">
-                    <span className="contextNodeName">
-                      <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
-                      {node.name}
-                    </span>
-                    <span className="contextNodeMeta">{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</span>
-                  </span>
-                  {(node.isInternal || node.type === "local") && <span className="nodePill">LOCAL</span>}
-                  <span className="nodeExpandIndicator" aria-hidden="true">{expanded ? "-" : "+"}</span>
-                </button>
-
-                {expanded && (
-                  <div className="contextServerSection">
-                    <div className="contextServerSectionLabel">SERVERS ON {node.name}</div>
-                    <div className="contextServerList">
-                      {node.servers.length === 0 && <div className="contextEmptyServers">No servers assigned</div>}
-                      {node.servers.map((server) => {
-                        const selected = server.id === activeServerId;
-                        return (
-                          <button
-                            key={server.id}
-                            type="button"
-                            className={`contextServerButton ${selected ? "selected" : ""}`}
-                            onClick={() => onSelectServer(server, node)}
-                            aria-selected={selected}
-                            title={`Manage ${server.displayName}`}
-                          >
-                            <span className="contextServerIcon"><ServerGlyph /></span>
-                            <span className="contextServerName">{server.displayName}</span>
-                            {selected && <span className="contextCheck"><CheckGlyph /></span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
-
-        <footer className="contextModalFooter">
-          <button type="button" className="secondaryButton manageNodesButton" onClick={onManageNodes}>
-            <SidebarIcon name="settings" />
-            <span>MANAGE NODES</span>
-          </button>
-          <button type="button" className="secondaryButton" onClick={onClose}>CANCEL</button>
-        </footer>
-      </section>
-    </div>
-  );
-}
 
 function readDemoMode() {
   return window.localStorage.getItem("serversentinel-demo-mode") === "true";
@@ -354,8 +232,6 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>("overview");
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [contextModalOpen, setContextModalOpen] = useState(false);
-  const [expandedContextNodes, setExpandedContextNodes] = useState<Record<string, boolean>>({});
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
   const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
@@ -378,10 +254,7 @@ export default function App() {
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
-  const fileEditorModalRef = useRef<HTMLElement>(null);
-  const fileEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const activeServerIdRef = useRef("");
-  const contextModalRef = useRef<HTMLElement>(null);
   const panelFirstRunPromptedRef = useRef(false);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
@@ -538,8 +411,6 @@ export default function App() {
   const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileOperationBusy);
   const canRenameSelectedItem = Boolean(selectedEntry && !fileOperationBusy);
   const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileOperationBusy);
-  const editorFileName = selectedPath.split("/").filter(Boolean).pop() ?? selectedPath;
-  const editorFolderPath = selectedPath ? parentPath(selectedPath) : "";
   const fileBreadcrumbs = useMemo(() => {
     const parts = listing.path.split("/").filter(Boolean);
     return [
@@ -644,60 +515,6 @@ export default function App() {
     setAddNodeResult(null);
     setNodeInstallMethod("compose");
   }, [appStateLoaded, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
-
-  useEffect(() => {
-    if (!contextModalOpen) return;
-    contextModalRef.current?.focus();
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") closeContextModal();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [contextModalOpen]);
-
-  useEffect(() => {
-    if (!selectedPath || discardEditorRequest) return;
-    fileEditorModalRef.current?.focus();
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        requestCloseEditor();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPath, dirty, discardEditorRequest]);
-
-  useEffect(() => {
-    if (!selectedPath || fileOpening || fileOpenFailed) return;
-    window.requestAnimationFrame(() => fileEditorTextareaRef.current?.focus());
-  }, [selectedPath, fileOpening, fileOpenFailed]);
-
-  function openContextModal() {
-    const nodeId = activeNode.id || "local";
-    setExpandedContextNodes((current) => ({ ...current, [nodeId]: true }));
-    setContextModalOpen(true);
-  }
-
-  function closeContextModal() {
-    setContextModalOpen(false);
-  }
-
-  function selectContextServer(server: ManagedServer, node: ContextNode) {
-    if (demoMode && server.id !== demoServerId) {
-      notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
-      return;
-    }
-    setActiveServerId(server.id);
-    activeServerIdRef.current = server.id;
-    setActivePage("overview");
-    closeContextModal();
-  }
-
-  function manageNodesPlaceholder() {
-    setActivePage("nodes");
-    closeContextModal();
-  }
 
   function openCreateServerForNode(nodeId = "") {
     setPreferredCreateNodeId(nodeId);
@@ -2909,18 +2726,6 @@ export default function App() {
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
       <Notifications notices={notices} activeJobs={activeJobs} onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))} />
-      {contextModalOpen && (
-        <ContextSwitchModal
-          nodes={contextNodes}
-          activeServerId={activeServer?.id ?? ""}
-          expandedNodes={expandedContextNodes}
-          modalRef={contextModalRef}
-          onClose={closeContextModal}
-          onManageNodes={manageNodesPlaceholder}
-          onSelectServer={selectContextServer}
-          onToggleNode={(nodeId) => setExpandedContextNodes((current) => ({ ...current, [nodeId]: !current[nodeId] }))}
-        />
-      )}
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
@@ -3779,73 +3584,30 @@ export default function App() {
                   )}
                 </aside>
 
-                {selectedPath && (
-                  <div className="modalBackdrop fileEditorBackdrop" role="presentation" onMouseDown={(event) => {
-                    if (event.target === event.currentTarget) requestCloseEditor();
-                  }}>
-                    <section className="modalPanel fileEditorModal" role="dialog" aria-modal="true" aria-labelledby="file-editor-title" tabIndex={-1} ref={fileEditorModalRef}>
-                      <header className="fileEditorHeader">
-                        <div>
-                          <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
-                          <p>{editorFolderPath || "/"}</p>
-                        </div>
-                        <button type="button" className="iconButton contextCloseButton" onClick={requestCloseEditor} aria-label="Close editor" title="Close editor">
-                          <AppIcon name="x" />
-                        </button>
-                      </header>
-                      <div className="fileEditorBody">
-                        {fileOpening ? (
-                          <InlineState tone="loading" title="Opening file" message="Loading the editable file contents." />
-                        ) : (
-                          <>
-                            {fileReadError && (
-                              <InlineState
-                                tone="error"
-                                title="Editor error"
-                                message={fileReadError}
-                                actionLabel={fileOpenFailed && selectedPath ? "Retry" : undefined}
-                                onAction={fileOpenFailed && selectedPath ? () => void openFile(selectedPath, true) : undefined}
-                              />
-                            )}
-                            <textarea
-                              ref={fileEditorTextareaRef}
-                              className="fileEditorTextarea"
-                              value={editorText}
-                              onChange={(event) => {
-                                const nextText = event.target.value;
-                                setEditorText(nextText);
-                                setDirty(nextText !== savedEditorText);
-                              }}
-                              disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
-                              spellCheck={false}
-                            />
-                          </>
-                        )}
-                      </div>
-                      <footer className="fileEditorFooter">
-                        <button type="button" className="secondaryButton" onClick={cancelFileEdit} disabled={fileSaving}>Cancel</button>
-                        <button type="button" onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}>
-                          {fileSaving ? "Saving" : "Save"}
-                        </button>
-                      </footer>
-                    </section>
-                  </div>
-                )}
-
-                {discardEditorRequest && (
-                  <div className="modalBackdrop discardEditorBackdrop" role="presentation">
-                    <section className="modalPanel discardEditorModal" role="dialog" aria-modal="true" aria-labelledby="discard-editor-title">
-                      <header className="panelHeader">
-                        <h2 id="discard-editor-title">Discard unsaved changes?</h2>
-                      </header>
-                      <p>Discard unsaved changes?</p>
-                      <div className="buttonRow discardEditorActions">
-                        <button type="button" className="secondaryButton" onClick={() => setDiscardEditorRequest(null)}>Keep Editing</button>
-                        <button type="button" className="dangerButton" onClick={discardEditorChanges}>Discard Changes</button>
-                      </div>
-                    </section>
-                  </div>
-                )}
+                <FileEditorModal
+                  selectedPath={selectedPath}
+                  editorText={editorText}
+                  dirty={dirty}
+                  fileOpening={fileOpening}
+                  fileOpenFailed={fileOpenFailed}
+                  fileReadError={fileReadError}
+                  fileSaving={fileSaving}
+                  editorDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                  saveDisabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+                  discardRequestOpen={Boolean(discardEditorRequest)}
+                  onTextChange={(nextText) => {
+                    setEditorText(nextText);
+                    setDirty(nextText !== savedEditorText);
+                  }}
+                  onRequestClose={requestCloseEditor}
+                  onCancel={cancelFileEdit}
+                  onSave={saveFile}
+                  onRetryOpen={() => {
+                    if (selectedPath) void openFile(selectedPath, true);
+                  }}
+                  onKeepEditing={() => setDiscardEditorRequest(null)}
+                  onDiscardChanges={discardEditorChanges}
+                />
               </section>
             )}
 
