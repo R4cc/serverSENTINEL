@@ -375,7 +375,6 @@ export default function App() {
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
-  const switchContextButtonRef = useRef<HTMLButtonElement>(null);
   const contextModalRef = useRef<HTMLElement>(null);
   const panelFirstRunPromptedRef = useRef(false);
   const modToggleStateQueueRef = useRef<Record<string, {
@@ -638,7 +637,6 @@ export default function App() {
 
   function closeContextModal() {
     setContextModalOpen(false);
-    window.setTimeout(() => switchContextButtonRef.current?.focus(), 0);
   }
 
   function selectContextServer(server: ManagedServer, node: ContextNode) {
@@ -2854,30 +2852,14 @@ export default function App() {
           </button>
         </div>
         <nav className="sideNav">
-          <div className="serverPickerRow">
-            <div className="activeContextBlock">
-              <div className="activeContextHeader">ACTIVE CONTEXT</div>
-              <div className="activeContextNodeLine">
-                <span className={`nodeStatusDot ${activeNode.status}`} title={nodeStatusLabel(activeNode.status)} aria-label={nodeStatusLabel(activeNode.status)} />
-                <span>{activeNode.name}</span>
-              </div>
-              <div className="activeContextServerLine">{activeServer?.displayName ?? "No server selected"}</div>
-              <button
-                type="button"
-                className="switchContextButton"
-                onClick={openContextModal}
-                disabled={isProvisioning || effectiveAppState.servers.length === 0}
-                ref={switchContextButtonRef}
-              >
-                SWITCH CONTEXT
-              </button>
-            </div>
-          </div>
           <button className={activePage === "nodes" ? "active" : ""} onClick={() => setActivePage("nodes")} disabled={isProvisioning}>
             <SidebarIcon name="nodes" />
             <span className="navLabel">Nodes</span>
           </button>
           <div className="sidebarDivider" />
+          <div className="selectedServerReadout" aria-label="Selected server" title={activeServer?.displayName ?? "No server selected"}>
+            {activeServer?.displayName ?? "No server selected"}
+          </div>
           <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer}>
             <SidebarIcon name="overview" />
             <span className="navLabel">Overview</span>

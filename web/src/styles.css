@@ -420,54 +420,6 @@ button .buttonIcon {
   margin-top: auto;
 }
 
-.serverPickerRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  align-items: end;
-  transition: gap var(--sidebar-ease), grid-template-columns var(--sidebar-ease);
-}
-
-.serverPicker {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-  opacity: 1;
-  max-width: 200px;
-  visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
-  overflow: hidden;
-}
-
-.serverPicker small {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.serverPicker select {
-  height: 44px;
-  min-width: 0;
-}
-
-.activeContextBlock {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: var(--space-3);
-  opacity: 1;
-  max-width: none;
-  visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
-  overflow: hidden;
-}
-
-.activeContextHeader,
 .contextServerSectionLabel {
   color: var(--text-muted);
   font-size: 11px;
@@ -476,7 +428,6 @@ button .buttonIcon {
   text-transform: uppercase;
 }
 
-.activeContextNodeLine,
 .contextNodeName {
   display: flex;
   min-width: 0;
@@ -489,30 +440,23 @@ button .buttonIcon {
   text-transform: uppercase;
 }
 
-.activeContextNodeLine span:last-child,
 .contextNodeName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.activeContextServerLine {
+.selectedServerReadout {
+  min-width: 0;
+  padding: 0 var(--space-1) var(--space-1);
   overflow: hidden;
   color: var(--text);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900;
+  letter-spacing: 0.02em;
   text-overflow: ellipsis;
+  text-transform: uppercase;
   white-space: nowrap;
-}
-
-.switchContextButton {
-  min-height: 34px;
-  justify-content: center !important;
-  border-color: var(--accent) !important;
-  background: var(--accent) !important;
-  color: var(--swiss-white) !important;
-  padding: 0 var(--space-2) !important;
-  font-size: 11px;
 }
 
 .sideNav button,
@@ -1074,29 +1018,8 @@ button .buttonIcon {
   visibility: hidden;
 }
 
-.sidebarCollapsed .serverPickerRow {
-  grid-template-columns: var(--sidebar-rail-size);
-  gap: 0;
-  justify-content: center;
-  justify-items: center;
-}
-
-.sidebarCollapsed .serverPicker {
-  opacity: 0;
-  max-width: 0;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
-}
-
-.sidebarCollapsed .activeContextBlock {
-  opacity: 0;
-  max-width: 0;
-  height: 0;
-  padding: 0;
-  border-width: 0;
-  overflow: hidden;
-  visibility: hidden;
+.sidebarCollapsed .selectedServerReadout {
+  display: none;
 }
 
 .sidebarCollapsed .accountChip {
@@ -4768,9 +4691,7 @@ details.compatibilityBadge p {
   .sidebarCollapsed .brandBlock h1,
   .sidebarCollapsed .brandBlock p,
   .sidebarCollapsed .navLabel,
-  .sidebarCollapsed .serverPicker small,
-  .sidebarCollapsed .serverPicker,
-  .sidebarCollapsed .activeContextBlock,
+  .sidebarCollapsed .selectedServerReadout,
   .sidebarCollapsed .accountName,
   .sidebarCollapsed .accountLogoutButton,
   .sidebarCollapsed .settingsVersionText {
@@ -4791,9 +4712,8 @@ details.compatibilityBadge p {
     gap: var(--space-3) !important;
   }
 
-  .sidebarCollapsed .serverPickerRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0 !important;
+  .sidebarCollapsed .selectedServerReadout {
+    display: block;
   }
 
   .sidebarCollapsed .accountChip {
@@ -4801,18 +4721,6 @@ details.compatibilityBadge p {
     justify-content: flex-start;
     gap: var(--space-2) !important;
     padding: var(--space-1);
-  }
-
-  .sidebarCollapsed .serverPicker {
-    display: grid;
-    height: auto;
-  }
-
-  .sidebarCollapsed .activeContextBlock {
-    display: grid;
-    height: auto;
-    padding: var(--space-3);
-    border-width: var(--border-strong);
   }
 
   .sidebarCollapsed .accountLogoutButton {
