@@ -3372,6 +3372,7 @@ button .buttonIcon {
 
 .modsPanel .mods {
   max-width: none;
+  gap: var(--space-3);
 }
 
 .modsPanelHeader {
@@ -5001,18 +5002,19 @@ details.compatibilityBadge p {
 .modsCardsGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+  margin: 0;
 }
 
 .modsCard {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
-  padding: var(--space-3) var(--space-4);
+  min-height: 64px;
+  padding: var(--space-3);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   text-align: left;
   cursor: pointer;
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
@@ -5025,8 +5027,8 @@ details.compatibilityBadge p {
 }
 
 .modsCardIcon {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -5038,8 +5040,8 @@ details.compatibilityBadge p {
 }
 
 .modsCardIcon svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .modsCardText {
@@ -5064,7 +5066,7 @@ details.compatibilityBadge p {
 .modsToolbarCompact {
   display: flex;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin: 0;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -5077,7 +5079,7 @@ details.compatibilityBadge p {
   border-radius: var(--radius-md);
   background: var(--surface);
   padding: 0 var(--space-3);
-  height: 44px;
+  height: 42px;
   flex: 1;
   min-width: 0;
   max-width: 480px;
@@ -5111,7 +5113,7 @@ details.compatibilityBadge p {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin-top: var(--space-4);
+  margin: 0;
 }
 
 .modsTableHeader {
@@ -5119,7 +5121,7 @@ details.compatibilityBadge p {
   grid-template-columns: minmax(240px, 2.5fr) minmax(130px, 1.2fr) minmax(140px, 1.2fr) minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(110px, 1.1fr) minmax(210px, 1.8fr);
   background: var(--surface-muted);
   border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -5131,7 +5133,7 @@ details.compatibilityBadge p {
   display: grid;
   grid-template-columns: minmax(240px, 2.5fr) minmax(130px, 1.2fr) minmax(140px, 1.2fr) minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(110px, 1.1fr) minmax(210px, 1.8fr);
   border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3);
   align-items: center;
   background: var(--surface);
   transition: background 150ms ease;
@@ -5378,12 +5380,12 @@ details.compatibilityBadge p {
 .modsFooterBanner {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   border: var(--border-strong) solid var(--accent);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3);
   background: var(--sentinel-accent-soft);
-  margin-top: var(--space-4);
+  margin: 0;
   font-size: 13px;
   font-weight: 800;
   color: var(--text);
