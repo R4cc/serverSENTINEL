@@ -2599,6 +2599,15 @@ button .buttonIcon {
   flex-wrap: wrap;
 }
 
+.nodesToolbar .buttonRow {
+  margin-left: auto;
+}
+
+.nodesRefreshButton {
+  width: 44px;
+  min-width: 44px;
+}
+
 .nodesToolbar h2,
 .nodeCard h3,
 .nodeInstallHeader h3 {
@@ -2660,9 +2669,21 @@ button .buttonIcon {
 .nodeCardHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: start;
+  align-items: center;
   border-bottom: var(--border-subtle) solid var(--border-muted);
   padding-bottom: var(--space-3);
+}
+
+.nodeCardHeader .settingsStatus,
+.nodeCardHeader .compactButton {
+  min-height: 34px;
+}
+
+.nodeCardHeader .settingsStatus {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  line-height: 1;
 }
 
 .nodeCardTitle {
@@ -2705,7 +2726,7 @@ button .buttonIcon {
 
 .nodeServerRow {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
   gap: var(--space-2);
   align-items: center;
   text-align: left;
@@ -2758,6 +2779,38 @@ button .buttonIcon {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.nodeServerPlayers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.nodeServerPlayers.unknown {
+  color: var(--text-soft);
+}
+
+.nodePlayerIcon {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.nodePlayerIcon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
 }
 
 .nodeServerState.running {
@@ -2886,7 +2939,7 @@ button .buttonIcon {
   border-color: var(--accent);
   background: var(--surface-muted);
   color: var(--text);
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .addNodeCardButton:active:not(:disabled) {
@@ -4901,6 +4954,18 @@ details.compatibilityBadge p {
   .keyFormActions button,
   .keyFormConfigured button {
     width: 100%;
+  }
+
+  .nodesToolbar .buttonRow {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .nodesToolbar .nodesRefreshButton {
+    width: 44px;
+    min-width: 44px;
   }
 
   .keyFormActions,

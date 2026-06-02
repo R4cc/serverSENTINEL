@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse } from "../types";
+import { AppIcon } from "../components/FileTypeIcon";
+import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
 
 type AddNodeInput = {
@@ -30,6 +31,20 @@ function ServerRowIcon() {
       <path d="M12 11v10" />
     </svg>
   );
+}
+
+function PlayerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="3" />
+      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+    </svg>
+  );
+}
+
+function playerCountLabel(activity?: ServerActivity) {
+  if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return "-";
+  return activity.maxPlayers ? `${activity.playersOnline}/${activity.maxPlayers}` : String(activity.playersOnline);
 }
 
 function dockerComposeSnippet(install: NodeInstallInstructions) {
@@ -217,6 +232,7 @@ export function NodesPage({
   onClearInstall,
   onCopy,
   serverStateLabel,
+  serverActivities,
   formatDate
 }: {
   nodes: ContextNode[];
@@ -244,6 +260,7 @@ export function NodesPage({
   onClearInstall: () => void;
   onCopy: (text: string) => void;
   serverStateLabel: (serverId: string) => string;
+  serverActivities: Record<string, ServerActivity>;
   formatDate: (value: string | number | Date) => string;
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
@@ -267,7 +284,9 @@ export function NodesPage({
             <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
-            <button type="button" className="secondaryButton" onClick={onRefresh} disabled={busy}>Refresh status</button>
+            <button type="button" className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
+              <AppIcon name="refresh" />
+            </button>
           </div>
         </section>
       )}
@@ -305,10 +324,15 @@ export function NodesPage({
                   {node.servers.length === 0 && <div className="nodeServerEmpty">No servers on this node</div>}
                   {visibleServers.map((server) => {
                     const state = serverStateLabel(server.id);
+                    const playerLabel = playerCountLabel(serverActivities[server.id]);
                     return (
                       <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                         <span className="nodeServerIcon"><ServerRowIcon /></span>
                         <span className="nodeServerName">{server.displayName}</span>
+                        <span className={`nodeServerPlayers ${playerLabel === "-" ? "unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online`}>
+                          {playerLabel}
+                          <span className="nodePlayerIcon"><PlayerIcon /></span>
+                        </span>
                         <span className={`nodeServerState ${state.toLowerCase()}`}>
                           <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
                           {state}

@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -318,6 +318,7 @@ export default function App() {
   const [appRefreshing, setAppRefreshing] = useState(false);
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
+  const [serverActivities, setServerActivities] = useState<Record<string, ServerActivity>>({});
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
   const [statusError, setStatusError] = useState("");
@@ -397,6 +398,7 @@ export default function App() {
       try {
         const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
         setOverviewData(data);
+        setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
         setOverviewError("");
       } catch (error) {
         setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
@@ -679,6 +681,46 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (activePage !== "nodes") return;
+    const servers = contextNodes.flatMap((node) => node.servers);
+    if (!servers.length) return;
+    if (demoMode) {
+      setServerActivities((current) => ({
+        ...current,
+        [demoServerId]: demoOverviewData(demoRunning).activity
+      }));
+      return;
+    }
+
+    let cancelled = false;
+    async function loadNodeServerActivity() {
+      const entries = await Promise.all(servers.map(async (server) => {
+        try {
+          const data = await api<ServerOverviewData>(`/api/servers/${server.id}/events`);
+          return [server.id, data.activity] as const;
+        } catch {
+          return [server.id, undefined] as const;
+        }
+      }));
+      if (cancelled) return;
+      setServerActivities((current) => {
+        const next = { ...current };
+        for (const [serverId, activity] of entries) {
+          if (activity) next[serverId] = activity;
+        }
+        return next;
+      });
+    }
+
+    void loadNodeServerActivity();
+    const interval = window.setInterval(() => void loadNodeServerActivity(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activePage, contextNodes, demoMode, demoRunning]);
+
+  useEffect(() => {
     if (!overflowOpen) return;
     const handleOutsideClick = () => setOverflowOpen(false);
     window.addEventListener("click", handleOutsideClick);
@@ -940,6 +982,7 @@ export default function App() {
         const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
         if (!cancelled) {
           setOverviewData(data);
+          setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
           setOverviewError("");
         }
       } catch (error) {
@@ -3185,6 +3228,7 @@ export default function App() {
             onClearInstall={() => setNodeInstallResult(null)}
             onCopy={(text) => void copyText(text)}
             serverStateLabel={nodeServerStateLabel}
+            serverActivities={serverActivities}
             formatDate={formatDisplayDate}
           />
         )}
