@@ -3715,12 +3715,13 @@ button .buttonIcon {
 
 .fileTypeIcon > span {
   position: absolute;
-  right: 2px;
-  bottom: 1px;
-  border-radius: 3px;
-  background: var(--surface);
-  padding: 1px 2px;
-  font-size: 7px;
+  right: 3px;
+  bottom: 2px;
+  border: var(--border-subtle) solid currentColor;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  padding: 1px;
+  font-size: 5px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0;
@@ -3759,8 +3760,7 @@ button .buttonIcon {
 
 .fileNavButtons,
 .fileToolbar,
-.selectionActionBar,
-.selectionActionBar > div {
+.selectionActions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -3799,22 +3799,38 @@ button .buttonIcon {
 }
 
 .selectionActionBar {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
   border-bottom: var(--border-subtle) solid var(--border-muted);
   background: var(--surface-muted);
   padding: var(--space-2) var(--space-3);
 }
 
-.selectionActionBar span,
-.selectionActionBar small {
+.selectionSummary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.06em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.selectionActionBar small {
-  color: var(--text-muted);
-  margin-right: auto;
+.selectionActions {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.selectionActions button:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface);
+  color: var(--text-soft);
+  opacity: 0.45;
 }
 
 .linkButton {
@@ -3850,6 +3866,7 @@ button .buttonIcon {
 }
 
 .fileTableHead button,
+.fileTableHead label,
 .fileTableHead span {
   justify-content: start;
   min-height: 44px;
@@ -3863,6 +3880,10 @@ button .buttonIcon {
   letter-spacing: 0.08em;
   text-align: left;
   text-transform: uppercase;
+}
+
+.fileTableHead label {
+  padding: 0;
 }
 
 .fileTableRow {
@@ -3895,6 +3916,10 @@ button .buttonIcon {
   height: 100%;
 }
 
+.fileSelectAllCell {
+  cursor: pointer;
+}
+
 .fileCheckboxCell input {
   width: 16px;
   height: 16px;
@@ -3924,7 +3949,7 @@ button .buttonIcon {
   transform: none;
 }
 
-.fileNameCell span:last-child {
+.fileNameCell > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3996,7 +4021,7 @@ button .buttonIcon {
   white-space: nowrap;
 }
 
-.fileDetailsTitle span {
+.fileDetailsTitle > div > span {
   color: var(--text-muted);
   font-size: 13px;
 }
@@ -4847,7 +4872,6 @@ details.compatibilityBadge p {
   .buttonRow,
   .fileActions,
   .fileToolbar,
-  .selectionActionBar,
   .tabs {
     align-items: stretch;
     flex-direction: column;
@@ -4858,7 +4882,6 @@ details.compatibilityBadge p {
   .buttonRow button,
   .fileActions button,
   .fileToolbar button,
-  .selectionActionBar button,
   .keyFormActions button,
   .keyFormConfigured button {
     width: 100%;

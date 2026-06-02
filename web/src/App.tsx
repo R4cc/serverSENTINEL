@@ -374,6 +374,7 @@ export default function App() {
   const previousLogCountRef = useRef(0);
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
+  const fileSelectAllRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
   const contextModalRef = useRef<HTMLElement>(null);
   const panelFirstRunPromptedRef = useRef(false);
@@ -520,6 +521,18 @@ export default function App() {
       return result === 0 ? a.name.localeCompare(b.name) : result * direction;
     });
   }, [fileSort, listing.entries]);
+  const visibleFilePaths = useMemo(() => sortedFileEntries.map((entry) => entry.path), [sortedFileEntries]);
+  const visibleSelectedCount = visibleFilePaths.filter((path) => selectedFilePaths.includes(path)).length;
+  const allVisibleFilesSelected = visibleFilePaths.length > 0 && visibleSelectedCount === visibleFilePaths.length;
+  const someVisibleFilesSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleFilePaths.length;
+  const selectionSummary = selectedEntries.length === 0
+    ? "No selection"
+    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` · ${formatBytes(selectedTotalSize)}` : ""}`;
+  const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager);
+  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file");
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileOperationBusy);
+  const canRenameSelectedItem = Boolean(selectedEntry && !fileOperationBusy);
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileOperationBusy);
   const fileBreadcrumbs = useMemo(() => {
     const parts = listing.path.split("/").filter(Boolean);
     return [
@@ -556,6 +569,12 @@ export default function App() {
     () => modSearchResults.find((mod) => mod.project_id === forceInstallProjectId) ?? null,
     [forceInstallProjectId, modSearchResults]
   );
+
+  useEffect(() => {
+    if (fileSelectAllRef.current) {
+      fileSelectAllRef.current.indeterminate = someVisibleFilesSelected;
+    }
+  }, [someVisibleFilesSelected, allVisibleFilesSelected, visibleFilePaths.length]);
 
 
 
@@ -3528,10 +3547,6 @@ export default function App() {
                           <AppIcon name="folderPlus" />
                           New Folder
                         </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={selectedEntries.length !== 1 || selectedEntries[0]?.type !== "file" || Boolean(fileOperationBusy)} title={selectedEntries.length === 1 ? "Download selected file" : "Select one file to download"}>
-                          <AppIcon name="download" />
-                          Download
-                        </button>
                         <button type="button" className="secondaryButton compactButton" onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
                           <AppIcon name="refresh" />
                           {filesLoading ? "Refreshing" : "Refresh"}
@@ -3539,34 +3554,31 @@ export default function App() {
                       </div>
                     </div>
 
-                    {selectedEntries.length > 0 && (
-                      <div className="selectionActionBar">
-                        <span>{selectedEntries.length} selected</span>
-                        <small>{selectedTotalSize > 0 ? formatBytes(selectedTotalSize) : "No file size"}</small>
-                        <div>
-                          <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!selectedEntry || selectedEntry.type !== "file" || !isEditableFile(selectedEntry) || !canManager} title={selectedEntry?.type === "file" && !isEditableFile(selectedEntry) ? "Only small text files can be edited" : "Edit selected file"}>
-                            <AppIcon name="edit" />
-                            Edit
-                          </button>
-                          <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!selectedEntry || selectedEntry.type !== "file" || Boolean(fileOperationBusy)} title={selectedEntry?.type === "directory" ? "Directory duplication is not supported" : "Duplicate selected file"}>
-                            <AppIcon name="copy" />
-                            Duplicate
-                          </button>
-                          <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!selectedEntry || Boolean(fileOperationBusy)} title="Rename selected item">
-                            <AppIcon name="rename" />
-                            Rename
-                          </button>
-                          <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Delete selected item"}>
-                            <AppIcon name="trash" />
-                            Delete
-                          </button>
-                        </div>
-                        <button type="button" className="linkButton" onClick={() => setSelectedFilePaths(sortedFileEntries.map((entry) => entry.path))}>Select all</button>
-                        <button type="button" className="iconOnlyButton" onClick={() => setSelectedFilePaths([])} title="Clear selection" aria-label="Clear selection">
-                          <AppIcon name="x" />
+                    <div className="selectionActionBar" aria-label="File selection actions">
+                      <span className="selectionSummary">{selectionSummary}</span>
+                      <div className="selectionActions">
+                        <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : !canManager ? "Manager permission is required" : "Edit selected file"}>
+                          <AppIcon name="edit" />
+                          Edit
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile || Boolean(fileOperationBusy)} title={canDownloadSelectedFile ? "Download selected file" : "Select one file to download"}>
+                          <AppIcon name="download" />
+                          Download
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : "Duplicate selected file"}>
+                          <AppIcon name="copy" />
+                          Duplicate
+                        </button>
+                        <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={selectedEntry ? "Rename selected item" : "Select one item to rename"}>
+                          <AppIcon name="rename" />
+                          Rename
+                        </button>
+                        <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!canManager ? "Manager permission is required" : selectedEntries.length ? "Delete selected items" : "Select items to delete"}>
+                          <AppIcon name="trash" />
+                          Delete
                         </button>
                       </div>
-                    )}
+                    </div>
 
                     {filesLoading && listing.entries.length === 0 && (
                       <InlineState tone="loading" title="Loading files" message="Loading the current server directory." />
@@ -3584,7 +3596,23 @@ export default function App() {
 
                     <div className="fileTable" role="table" aria-label="Server files">
                       <div className="fileTableHead" role="row">
-                        <span aria-hidden="true" />
+                        <label className="fileCheckboxCell fileSelectAllCell" aria-label={allVisibleFilesSelected ? "Clear visible selection" : "Select all visible files"}>
+                          <input
+                            ref={fileSelectAllRef}
+                            type="checkbox"
+                            checked={allVisibleFilesSelected}
+                            disabled={sortedFileEntries.length === 0}
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setSelectedFilePaths((current) => {
+                                const visible = new Set(visibleFilePaths);
+                                return checked
+                                  ? [...new Set([...current, ...visibleFilePaths])]
+                                  : current.filter((path) => !visible.has(path));
+                              });
+                            }}
+                          />
+                        </label>
                         {([
                           ["name", "Name"],
                           ["modifiedAt", "Date Modified"],
