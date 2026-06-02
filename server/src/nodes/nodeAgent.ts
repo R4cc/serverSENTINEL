@@ -96,8 +96,12 @@ function publicPath(root: string, target: string) {
   return rel ? `/${rel}` : "/";
 }
 
+function defaultContainerName(displayName: string) {
+  return `serversentinel-${slugify(displayName)}`;
+}
+
 function containerName(server: ManagedServer) {
-  return server.dockerContainer || `serversentinel-${server.id}`;
+  return server.dockerContainer?.trim() || defaultContainerName(server.displayName);
 }
 
 function dockerImage(version?: string) {
@@ -163,7 +167,7 @@ async function createServer(input: CreateInput) {
     loaderVersion: input.loaderVersion?.trim() || await latestFabricVersion("loader"),
     installerVersion: input.installerVersion?.trim() || await latestFabricVersion("installer"),
     serverJar: input.serverJar?.trim() || "fabric-server-launch.jar",
-    dockerContainer: input.dockerContainer?.trim() || `serversentinel-${slugify(displayName)}`,
+    dockerContainer: input.dockerContainer?.trim() || defaultContainerName(displayName),
     dockerImage: input.dockerImage?.trim() || dockerImage(input.minecraftVersion),
     dockerPorts: input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`,
     javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
@@ -389,7 +393,7 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || basename(config.nodeDataDir) || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.2.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.2.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {

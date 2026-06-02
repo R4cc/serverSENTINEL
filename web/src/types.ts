@@ -55,6 +55,7 @@ export type NodeInstallInstructions = {
     environment: {
       SS_MODE: "node";
       SS_PANEL_URL: string;
+      SS_NODE_NAME?: string;
       SS_JOIN_TOKEN?: string;
     };
     volumes: string[];

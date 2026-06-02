@@ -690,15 +690,19 @@ function nodeDataMount(hostPath?: string) {
   return value.includes(":") ? value : `${value}:/data`;
 }
 
-function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string }): NodeInstallInstructions {
+function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
   const image = "nl2109/serversentinel:latest";
   const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
   const dataMount = nodeDataMount(input.dataMount);
+  const nodeName = input.nodeName?.trim();
   const dockerSocketMount = "/var/run/docker.sock:/var/run/docker.sock";
   const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
     SS_MODE: "node",
     SS_PANEL_URL: panelUrl
   };
+  if (nodeName) {
+    environment.SS_NODE_NAME = nodeName;
+  }
   if (input.joinToken) {
     environment.SS_JOIN_TOKEN = input.joinToken;
   }
@@ -714,7 +718,7 @@ function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string;
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${panelUrl}${input.joinToken ? ` -e SS_JOIN_TOKEN=${input.joinToken}` : ""} -v ${dockerSocketMount} -v ${dataMount} ${image}`
+    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${image}`
   };
 }
 
@@ -2891,7 +2895,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     node: publicNode(node),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName })
   };
 });
 
@@ -2899,9 +2903,10 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
   await requireRequestPermission(request, "users.manage");
   const now = new Date();
   const token = createJoinToken(request.body.tokenTtlMinutes);
+  const nodeName = request.body.name?.trim() || "Remote Node";
   const node: ManagedNode = {
     id: randomUUID(),
-    name: request.body.name?.trim() || "Remote Node",
+    name: nodeName,
     type: "remote",
     status: "unknown",
     isInternal: false,
@@ -2919,7 +2924,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     node: publicNode(node),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName })
   };
 });
 
@@ -2942,7 +2947,7 @@ app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMou
     node: publicNode(updatedNode!),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount })
+    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName: updatedNode!.name })
   };
 });
 
@@ -2952,7 +2957,7 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   if (!node) nodeNotFound(request.params.nodeId);
   return {
     node: publicNode(node),
-    install: nodeInstallInstructions({ panelUrl: request.query.panelUrl, dataMount: request.query.dataMount })
+    install: nodeInstallInstructions({ panelUrl: request.query.panelUrl, dataMount: request.query.dataMount, nodeName: node.name })
   };
 });
 
