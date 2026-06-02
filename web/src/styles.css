@@ -4051,6 +4051,108 @@ button .buttonIcon {
   font-weight: 700;
 }
 
+.fileEditorBackdrop {
+  z-index: 35;
+}
+
+.fileEditorModal {
+  width: min(980px, calc(100vw - 32px));
+  height: min(780px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+.fileEditorHeader,
+.fileEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.fileEditorHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.fileEditorHeader > div {
+  min-width: 0;
+}
+
+.fileEditorHeader h2,
+.fileEditorHeader p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileEditorHeader p {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.fileEditorBody {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  overflow: hidden;
+  padding: var(--space-4);
+}
+
+.fileEditorBody > .inlineState:only-child {
+  align-self: center;
+}
+
+.fileEditorTextarea {
+  min-height: 0;
+  height: 100%;
+  resize: none;
+  overflow: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.fileEditorFooter {
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+  justify-content: flex-end;
+}
+
+.fileEditorFooter button,
+.discardEditorActions button {
+  min-width: 132px;
+}
+
+.discardEditorBackdrop {
+  z-index: 45;
+}
+
+.discardEditorModal {
+  width: min(440px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-4);
+}
+
+.discardEditorModal p {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.discardEditorActions {
+  justify-content: flex-end;
+}
+
 .filePreviewPanel {
   display: grid;
   gap: var(--space-2);
@@ -4109,11 +4211,6 @@ button .buttonIcon {
 
 .hiddenInput {
   display: none;
-}
-
-.editorPanel .buttonRow {
-  justify-content: space-between;
-  margin-top: var(--space-3);
 }
 
 .modSearchToolbar {

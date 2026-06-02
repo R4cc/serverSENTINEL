@@ -327,6 +327,8 @@ export default function App() {
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState("");
   const [fileReadError, setFileReadError] = useState("");
+  const [fileOpenFailed, setFileOpenFailed] = useState(false);
+  const [fileOpening, setFileOpening] = useState(false);
   const [fileSaving, setFileSaving] = useState(false);
   const [modsLoading, setModsLoading] = useState(false);
   const [modsError, setModsError] = useState("");
@@ -360,6 +362,7 @@ export default function App() {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
   const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("compose");
+  const [discardEditorRequest, setDiscardEditorRequest] = useState<{ action: "close" } | { action: "switch"; path: string } | null>(null);
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
@@ -375,6 +378,8 @@ export default function App() {
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
+  const fileEditorModalRef = useRef<HTMLElement>(null);
+  const fileEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const activeServerIdRef = useRef("");
   const contextModalRef = useRef<HTMLElement>(null);
   const panelFirstRunPromptedRef = useRef(false);
@@ -533,6 +538,8 @@ export default function App() {
   const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileOperationBusy);
   const canRenameSelectedItem = Boolean(selectedEntry && !fileOperationBusy);
   const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileOperationBusy);
+  const editorFileName = selectedPath.split("/").filter(Boolean).pop() ?? selectedPath;
+  const editorFolderPath = selectedPath ? parentPath(selectedPath) : "";
   const fileBreadcrumbs = useMemo(() => {
     const parts = listing.path.split("/").filter(Boolean);
     return [
@@ -647,6 +654,24 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [contextModalOpen]);
+
+  useEffect(() => {
+    if (!selectedPath || discardEditorRequest) return;
+    fileEditorModalRef.current?.focus();
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestCloseEditor();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPath, dirty, discardEditorRequest]);
+
+  useEffect(() => {
+    if (!selectedPath || fileOpening || fileOpenFailed) return;
+    window.requestAnimationFrame(() => fileEditorTextareaRef.current?.focus());
+  }, [selectedPath, fileOpening, fileOpenFailed]);
 
   function openContextModal() {
     const nodeId = activeNode.id || "local";
@@ -770,9 +795,7 @@ export default function App() {
       setStatus(null);
       setLogs([]);
       setListing({ path: "/", entries: [] });
-      setSelectedPath("");
-      setEditorText("");
-      setDirty(false);
+      resetEditorState();
       void refreshApp();
     }
   }, [demoMode]);
@@ -781,9 +804,7 @@ export default function App() {
     if (!activeServer) return;
     setActiveServerId(activeServer.id);
     setLogs([]);
-    setSelectedPath("");
-    setEditorText("");
-    setDirty(false);
+    resetEditorState();
     setResourceSamples([]);
     setModSearchResults([]);
     setModsView("manager");
@@ -1856,8 +1877,40 @@ export default function App() {
     }
   }
 
-  function confirmDiscardFileChanges() {
-    return !dirty || window.confirm("Discard unsaved changes to the current file?");
+  function resetEditorState() {
+    setSelectedPath("");
+    setEditorText("");
+    setSavedEditorText("");
+    setDirty(false);
+    setFileReadError("");
+    setFileOpenFailed(false);
+    setFileOpening(false);
+    setFileSaving(false);
+  }
+
+  function closeEditor() {
+    resetEditorState();
+    setDiscardEditorRequest(null);
+  }
+
+  function requestCloseEditor() {
+    if (dirty) {
+      setDiscardEditorRequest({ action: "close" });
+      return;
+    }
+    closeEditor();
+  }
+
+  function discardEditorChanges() {
+    const request = discardEditorRequest;
+    setDiscardEditorRequest(null);
+    if (!request) return;
+    if (request.action === "close") {
+      closeEditor();
+      return;
+    }
+    resetEditorState();
+    void openFile(request.path, true);
   }
 
   async function loadFilePreview(entry: FileEntry) {
@@ -1882,25 +1935,35 @@ export default function App() {
     }
   }
 
-  async function openFile(path: string) {
+  async function openFile(path: string, discardConfirmed = false) {
     if (isProvisioning) return;
     if (!activeServer) return;
-    if (selectedPath && selectedPath !== path && !confirmDiscardFileChanges()) return;
+    if (selectedPath && selectedPath !== path && dirty && !discardConfirmed) {
+      setDiscardEditorRequest({ action: "switch", path });
+      return;
+    }
     const pathError = validateSafePath(path);
     if (pathError) {
       setFileReadError(pathError);
       setNotice(pathError);
       return;
     }
+    setSelectedPath(path);
+    setEditorText("");
+    setSavedEditorText("");
+    setDirty(false);
     setFileReadError("");
+    setFileOpenFailed(false);
+    setFileOpening(true);
     setNotice("");
+    setSelectedFilePaths([path]);
     if (activeServerIsDemo) {
       const content = demoFiles[path] ?? `Demo binary or generated file: ${path}`;
       setSelectedPath(path);
       setEditorText(content);
       setSavedEditorText(content);
       setDirty(false);
-      setSelectedFilePaths([path]);
+      setFileOpening(false);
       return;
     }
     try {
@@ -1915,7 +1978,10 @@ export default function App() {
     } catch (error) {
       const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
       setFileReadError(message);
+      setFileOpenFailed(true);
       setNotice(message);
+    } finally {
+      setFileOpening(false);
     }
   }
 
@@ -1944,10 +2010,7 @@ export default function App() {
         setDemoFiles(nextFiles);
       }
       if (selectedPath === entry.path) {
-        setSelectedPath("");
-        setEditorText("");
-        setSavedEditorText("");
-        setDirty(false);
+        resetEditorState();
       }
       setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
       notify("success", `Deleted ${entry.name}`);
@@ -1959,10 +2022,7 @@ export default function App() {
         method: "DELETE"
       });
       if (selectedPath === entry.path) {
-        setSelectedPath("");
-        setEditorText("");
-        setSavedEditorText("");
-        setDirty(false);
+        resetEditorState();
       }
       setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
       notify("success", `Deleted ${entry.name}`);
@@ -2171,9 +2231,12 @@ export default function App() {
   async function saveFile() {
     if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
+    if (!selectedPath || !dirty) return;
     if (fileSaving) return;
     setFileSaving(true);
     setNotice("");
+    setFileReadError("");
+    setFileOpenFailed(false);
     const pathError = validateSafePath(selectedPath);
     if (pathError) {
       setNotice(pathError);
@@ -2196,7 +2259,7 @@ export default function App() {
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      setFileSaving(false);
+      closeEditor();
       return;
     }
     try {
@@ -2209,8 +2272,11 @@ export default function App() {
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
+      closeEditor();
     } catch (error) {
       const message = errorMessage(error, "Could not save the file. Review the path and try again.");
+      setFileReadError(message);
+      setFileOpenFailed(false);
       setNotice(message);
       notify("error", message);
     } finally {
@@ -2219,9 +2285,7 @@ export default function App() {
   }
 
   function cancelFileEdit() {
-    if (!selectedPath || !dirty) return;
-    setEditorText(savedEditorText);
-    setDirty(false);
+    requestCloseEditor();
   }
 
   async function searchMods(event: FormEvent) {
@@ -3659,30 +3723,6 @@ export default function App() {
                     </div>
                   </section>
 
-                  {selectedPath && (
-                    <section className="panel editorPanel">
-                      <div className="panelHeader">
-                        <h2>{dirty ? "Editor *" : "Editor"}</h2>
-                        <code>{selectedPath}</code>
-                      </div>
-                      <textarea value={editorText} onChange={(event) => { setEditorText(event.target.value); setDirty(true); }} disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath} spellCheck={false} />
-                      {fileReadError && (
-                        <InlineState
-                          tone="error"
-                          title="Could not open file"
-                          message={fileReadError}
-                          actionLabel={selectedPath ? "Retry" : undefined}
-                          onAction={selectedPath ? () => void openFile(selectedPath) : undefined}
-                        />
-                      )}
-                      <div className="buttonRow">
-                        {dirty && (
-                          <button className="secondaryButton" onClick={cancelFileEdit} disabled={isProvisioning || dockerOperationalLock || !selectedPath}>Cancel</button>
-                        )}
-                        <button onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty}>{fileSaving ? "Saving" : "Save"}</button>
-                      </div>
-                    </section>
-                  )}
                 </section>
 
                 <aside className="panel fileDetailsPanel">
@@ -3738,6 +3778,74 @@ export default function App() {
                     </div>
                   )}
                 </aside>
+
+                {selectedPath && (
+                  <div className="modalBackdrop fileEditorBackdrop" role="presentation" onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) requestCloseEditor();
+                  }}>
+                    <section className="modalPanel fileEditorModal" role="dialog" aria-modal="true" aria-labelledby="file-editor-title" tabIndex={-1} ref={fileEditorModalRef}>
+                      <header className="fileEditorHeader">
+                        <div>
+                          <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
+                          <p>{editorFolderPath || "/"}</p>
+                        </div>
+                        <button type="button" className="iconButton contextCloseButton" onClick={requestCloseEditor} aria-label="Close editor" title="Close editor">
+                          <AppIcon name="x" />
+                        </button>
+                      </header>
+                      <div className="fileEditorBody">
+                        {fileOpening ? (
+                          <InlineState tone="loading" title="Opening file" message="Loading the editable file contents." />
+                        ) : (
+                          <>
+                            {fileReadError && (
+                              <InlineState
+                                tone="error"
+                                title="Editor error"
+                                message={fileReadError}
+                                actionLabel={fileOpenFailed && selectedPath ? "Retry" : undefined}
+                                onAction={fileOpenFailed && selectedPath ? () => void openFile(selectedPath, true) : undefined}
+                              />
+                            )}
+                            <textarea
+                              ref={fileEditorTextareaRef}
+                              className="fileEditorTextarea"
+                              value={editorText}
+                              onChange={(event) => {
+                                const nextText = event.target.value;
+                                setEditorText(nextText);
+                                setDirty(nextText !== savedEditorText);
+                              }}
+                              disabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                              spellCheck={false}
+                            />
+                          </>
+                        )}
+                      </div>
+                      <footer className="fileEditorFooter">
+                        <button type="button" className="secondaryButton" onClick={cancelFileEdit} disabled={fileSaving}>Cancel</button>
+                        <button type="button" onClick={saveFile} disabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}>
+                          {fileSaving ? "Saving" : "Save"}
+                        </button>
+                      </footer>
+                    </section>
+                  </div>
+                )}
+
+                {discardEditorRequest && (
+                  <div className="modalBackdrop discardEditorBackdrop" role="presentation">
+                    <section className="modalPanel discardEditorModal" role="dialog" aria-modal="true" aria-labelledby="discard-editor-title">
+                      <header className="panelHeader">
+                        <h2 id="discard-editor-title">Discard unsaved changes?</h2>
+                      </header>
+                      <p>Discard unsaved changes?</p>
+                      <div className="buttonRow discardEditorActions">
+                        <button type="button" className="secondaryButton" onClick={() => setDiscardEditorRequest(null)}>Keep Editing</button>
+                        <button type="button" className="dangerButton" onClick={discardEditorChanges}>Discard Changes</button>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </section>
             )}
 
