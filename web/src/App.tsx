@@ -493,7 +493,9 @@ export default function App() {
   const activeNodeBlockMessage = activeNodeRuntimeBlocked
     ? `${activeNodeBlockReason || "Node unavailable"}. This server belongs to ${activeNode.name}. Runtime actions and file access are unavailable until the node reconnects or the runtime issue is fixed.`
     : "";
-  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || ((activeNode.isInternal || activeNode.type === "local") && !effectiveAppState.dockerSocketMounted);
+  const activeServerUsesInternalNode = activeNode.isInternal || activeNode.type === "local";
+  const activeServerDockerSocketMounted = !activeServerUsesInternalNode || effectiveAppState.dockerSocketMounted;
+  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
@@ -3006,7 +3008,7 @@ export default function App() {
           <section className="panel createServerPanel">
             <ManagedServerForm
               onSubmit={createServer}
-              dockerSocketMounted={effectiveAppState.dockerSocketMounted}
+              dockerSocketMounted={panelOnlyMode ? true : effectiveAppState.dockerSocketMounted}
               nodes={contextNodes}
               preferredNodeId={preferredCreateNodeId}
               versions={fabricVersions}
@@ -3238,8 +3240,8 @@ export default function App() {
                     <strong>{activeServer.displayName}</strong>
                   </div>
                   <div className="serverStripMetaRow">
-                    <span className={`runtimeBadge ${runtimeTone(activeStatus, effectiveAppState.dockerSocketMounted)}`}>
-                      {runtimeLabel(activeStatus, effectiveAppState.dockerSocketMounted)}
+                    <span className={`runtimeBadge ${runtimeTone(activeStatus, activeServerDockerSocketMounted)}`}>
+                      {runtimeLabel(activeStatus, activeServerDockerSocketMounted)}
                     </span>
                     <small className="serverStripMeta">
                       Fabric {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}
@@ -3254,7 +3256,7 @@ export default function App() {
               <div className="serverStripRight">
                 <RuntimeControls
                   status={activeStatus}
-                  controlAvailableFallback={effectiveAppState.dockerSocketMounted && activeServer.hasDockerContainer}
+                  controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
                   isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
@@ -3355,7 +3357,7 @@ export default function App() {
                 <OverviewSummary
                   server={activeServer}
                   status={activeStatus}
-                  dockerSocketMounted={effectiveAppState.dockerSocketMounted}
+                  dockerSocketMounted={activeServerDockerSocketMounted}
                   activity={overviewData.activity}
                   formatDate={formatDisplayDate}
                 />
@@ -3364,7 +3366,7 @@ export default function App() {
                   server={activeServer}
                   samples={resourceSamples}
                   status={activeStatus}
-                  dockerSocketMounted={effectiveAppState.dockerSocketMounted}
+                  dockerSocketMounted={activeServerDockerSocketMounted}
                   formatNumber={formatDisplayNumber}
                 />
 
