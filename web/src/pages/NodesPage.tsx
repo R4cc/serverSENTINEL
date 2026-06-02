@@ -84,13 +84,17 @@ function InstallInstructions({
           <h3>Install {result.node.name}</h3>
           <p>{expiresAt ? `Join token expires ${formatNodeDate(expiresAt)}` : result.install.tokenRequired ? "Rotate the join token before installing this node." : "Token is not included in this snippet."}</p>
         </div>
-        <button type="button" className="secondaryButton" onClick={() => onCopy(snippet)}>Copy</button>
       </div>
       <div className="installTabs" role="tablist" aria-label="Install method">
         <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</button>
         <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run</button>
       </div>
-      <pre className="installSnippet"><code>{snippet}</code></pre>
+      <div className="installSnippetShell">
+        <button type="button" className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
+          <AppIcon name="copy" />
+        </button>
+        <pre className="installSnippet"><code>{snippet}</code></pre>
+      </div>
     </section>
   );
 }

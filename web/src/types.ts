@@ -148,7 +148,6 @@ export type ServerAccess = {
 export type PublicUser = {
   id: string;
   username: string;
-  displayName?: string;
   rolePreset: RolePreset;
   permissions: PermissionKey[];
   serverAccess?: ServerAccess;

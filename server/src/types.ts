@@ -38,7 +38,6 @@ export type ServerAccess = {
 export type StoredUser = {
   id: string;
   username: string;
-  displayName?: string;
   passwordHash: string;
   salt: string;
   rolePreset: RolePreset;
@@ -51,7 +50,6 @@ export type StoredUser = {
 export type PublicUser = {
   id: string;
   username: string;
-  displayName?: string;
   rolePreset: RolePreset;
   permissions: Permission[];
   serverAccess?: ServerAccess;

@@ -70,6 +70,7 @@ export function UserManagement({
   onCloseModal,
   onCreate,
   onUpdate,
+  onResetPassword,
   onDelete,
   busy = false
 }: {
@@ -82,9 +83,11 @@ export function UserManagement({
   onCloseModal: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onUpdate: (event: FormEvent<HTMLFormElement>, user: PublicUser) => void;
+  onResetPassword: (event: FormEvent<HTMLFormElement>, user: PublicUser) => Promise<boolean>;
   onDelete: (user: PublicUser) => void;
 }) {
   const modalUser = editingUser && editingUser !== "create" ? editingUser : null;
+  const [passwordUser, setPasswordUser] = useState<PublicUser | null>(null);
 
   return (
     <div className="usersSettings">
@@ -101,8 +104,7 @@ export function UserManagement({
             <tr key={user.id}>
               <td data-label="User">
                 <div className="userNameCell">
-                  <strong>{user.displayName || user.username}</strong>
-                  {user.displayName && <span className="usernameMeta">{user.username}</span>}
+                  <strong>{user.username}</strong>
                   {user.id === currentUserId && <span className="currentUserMark">Current user</span>}
                 </div>
               </td>
@@ -126,6 +128,7 @@ export function UserManagement({
               </td>
               <td data-label="Actions">
                 <div className="userActions">
+                  <button type="button" className="secondaryButton" onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset Password</button>
                   <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</button>
                   <button
                     type="button"
@@ -158,6 +161,18 @@ export function UserManagement({
           onSubmit={(event) => modalUser ? onUpdate(event, modalUser) : onCreate(event)}
         />
       )}
+
+      {passwordUser && (
+        <ResetPasswordModal
+          user={passwordUser}
+          busy={busy}
+          onClose={() => setPasswordUser(null)}
+          onSubmit={async (event) => {
+            const saved = await onResetPassword(event, passwordUser);
+            if (saved) setPasswordUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -182,6 +197,7 @@ function UserPermissionModal({
     return raw.filter((permission) => !isPermissionKey(permission));
   }, [user]);
   const inferredPreset = inferRolePreset(permissions);
+  const adminPermissionsLocked = Boolean(user && inferRolePreset(initialPermissions) === "admin");
   const canSave = permissions.length > 0;
 
   useEffect(() => {
@@ -238,25 +254,15 @@ function UserPermissionModal({
                 Username
                 <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={user?.username ?? ""} />
               </label>
-              <label>
-                Display name <span className="muted">(optional)</span>
-                <input name="displayName" autoComplete="off" maxLength={64} defaultValue={user?.displayName ?? ""} />
-              </label>
               {!user && (
                 <label>
                   Password
                   <input name="password" type="password" autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
                 </label>
               )}
-              {user && (
-                <label>
-                  New password <span className="muted">(optional)</span>
-                  <input name="password" type="password" autoComplete="new-password" minLength={8} placeholder="Leave blank to keep current password" />
-                </label>
-              )}
               <label>
                 Role preset
-                <select name="presetPicker" value={selectedPreset} onChange={changePreset}>
+                <select name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
                   <option value="viewer">Viewer</option>
                   <option value="operator">Operator</option>
                   <option value="maintainer">Maintainer</option>
@@ -279,6 +285,7 @@ function UserPermissionModal({
             <div className="permissionsSection">
               <div className="permissionsHeader">
                 <h3>Permissions</h3>
+                {adminPermissionsLocked && <span>Admin permissions are locked.</span>}
                 {!canSave && <span>Choose at least one permission.</span>}
               </div>
               <div className="permissionGrid">
@@ -299,6 +306,7 @@ function UserPermissionModal({
                             <input
                               type="checkbox"
                               checked={displayedPermissions.has(key)}
+                              disabled={adminPermissionsLocked}
                               onChange={(event) => togglePermission(key, event.target.checked)}
                             />
                             <span>
@@ -317,6 +325,53 @@ function UserPermissionModal({
           <div className="userModalFooter">
             <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
             <button disabled={busy || !canSave}>{busy ? "Saving..." : user ? "Save changes" : "Create user"}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ResetPasswordModal({
+  user,
+  busy,
+  onClose,
+  onSubmit
+}: {
+  user: PublicUser;
+  busy?: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="modalBackdrop" role="presentation">
+      <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+        <form onSubmit={onSubmit} className="userModalForm">
+          <div className="userModalHeader">
+            <h2 id="reset-password-title">Reset Password</h2>
+            <button type="button" className="iconButton" onClick={onClose} aria-label="Close reset password dialog">
+              <AppIcon name="x" />
+            </button>
+          </div>
+          <fieldset disabled={busy} className="userModalBody">
+            <div className="userModalFields">
+              <label>
+                User
+                <input value={user.username} readOnly />
+              </label>
+              <label>
+                New password
+                <input name="password" type="password" autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
+              </label>
+              <label>
+                Confirm password
+                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} placeholder="Repeat password" />
+              </label>
+            </div>
+          </fieldset>
+          <div className="userModalFooter">
+            <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
+            <button disabled={busy}>{busy ? "Saving..." : "Reset password"}</button>
           </div>
         </form>
       </section>

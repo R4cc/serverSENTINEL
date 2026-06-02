@@ -267,7 +267,6 @@ function publicUser(user: StoredUser): PublicUser {
   return {
     id: normalized.id,
     username: normalized.username,
-    displayName: normalized.displayName,
     rolePreset: normalized.rolePreset,
     permissions: normalized.permissions,
     serverAccess: normalized.serverAccess,
@@ -277,19 +276,6 @@ function publicUser(user: StoredUser): PublicUser {
 
 function normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined {
   return rolePreset === undefined ? undefined : rolePresetFromUnknown(rolePreset);
-}
-
-function normalizeDisplayName(displayName?: unknown) {
-  if (displayName === undefined) return undefined;
-  if (typeof displayName !== "string") {
-    badRequest("Display name must be a string");
-  }
-  const value = displayName.trim();
-  if (!value) return undefined;
-  if (value.length > 64) {
-    badRequest("Display name must be 64 characters or fewer");
-  }
-  return value;
 }
 
 function normalizeStoredUser(value: unknown): StoredUser {
@@ -307,7 +293,6 @@ function normalizeStoredUser(value: unknown): StoredUser {
   return {
     id: requiredString(user.id, "user.id"),
     username: validateUsername(optionalString(user.username, "user.username")),
-    displayName: normalizeDisplayName(user.displayName),
     passwordHash: requiredString(user.passwordHash, "user.passwordHash"),
     salt: requiredString(user.salt, "user.salt"),
     rolePreset: effectivePreset,
@@ -2727,10 +2712,9 @@ app.get("/api/users", async (request) => {
   return { users: (await queuedReadUsers()).map(publicUser) };
 });
 
-app.post<{ Body: { username?: string; displayName?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
+app.post<{ Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const username = validateUsername(request.body.username);
-  const displayName = normalizeDisplayName(request.body.displayName);
   const password = validatePassword(request.body.password);
   const rolePreset = normalizeRolePreset(request.body.rolePreset);
   const permissionData = buildUserPermissions({
@@ -2748,7 +2732,6 @@ app.post<{ Body: { username?: string; displayName?: string; password?: string; r
     createdUser = {
       id: randomUUID(),
       username,
-      displayName,
       rolePreset: permissionData.rolePreset,
       permissions: permissionData.permissions,
       createdAt: now,
@@ -2761,7 +2744,7 @@ app.post<{ Body: { username?: string; displayName?: string; password?: string; r
   return publicUser(createdUser!);
 });
 
-app.put<{ Params: { id: string }; Body: { username?: string; displayName?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
+app.put<{ Params: { id: string }; Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   let updatedUser: StoredUser | null = null;
   await updateUsers((users) => {
@@ -2773,7 +2756,6 @@ app.put<{ Params: { id: string }; Body: { username?: string; displayName?: strin
     }
     const current = users[index];
     const username = request.body.username === undefined ? current.username : validateUsername(request.body.username);
-    const displayName = request.body.displayName === undefined ? current.displayName : normalizeDisplayName(request.body.displayName);
     const rolePreset = normalizeRolePreset(request.body.rolePreset);
     const permissionData = buildUserPermissions({
       rolePreset,
@@ -2788,7 +2770,6 @@ app.put<{ Params: { id: string }; Body: { username?: string; displayName?: strin
     users[index] = {
       ...current,
       username,
-      displayName,
       rolePreset: permissionData.rolePreset,
       permissions: permissionData.permissions,
       updatedAt: new Date().toISOString(),

@@ -1023,12 +1023,10 @@ export default function App() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const username = trimFormValue(form, "username");
-    const displayName = trimFormValue(form, "displayName");
     const password = String(form.get("password") || "");
     const permissions = parsePermissionsField(form);
     const errors = [
       validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      displayName.length > 64 ? { field: "displayName", message: "Display name must be 64 characters or fewer." } : null,
       validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null,
       permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
     ].filter((error): error is { field: string; message: string } => Boolean(error));
@@ -1039,7 +1037,6 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           username,
-          displayName,
           password,
           rolePreset: form.get("rolePreset"),
           permissions
@@ -1062,13 +1059,9 @@ export default function App() {
     const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     const username = trimFormValue(form, "username");
-    const displayName = trimFormValue(form, "displayName");
-    const password = String(form.get("password") || "");
     const permissions = parsePermissionsField(form);
     const errors = [
       validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      displayName.length > 64 ? { field: "displayName", message: "Display name must be 64 characters or fewer." } : null,
-      validatePassword(password, false) ? { field: "password", message: validatePassword(password, false)! } : null,
       permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
     ].filter((error): error is { field: string; message: string } => Boolean(error));
     if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
@@ -1081,8 +1074,6 @@ export default function App() {
         method: "PUT",
         body: JSON.stringify({
           username,
-          displayName,
-          password,
           rolePreset: form.get("rolePreset"),
           permissions
         })
@@ -1095,6 +1086,35 @@ export default function App() {
       }
     } catch (error) {
       notify("error", (error as Error).message);
+    } finally {
+      setUserSaving(false);
+    }
+  }
+
+  async function resetUserPassword(event: FormEvent<HTMLFormElement>, user: PublicUser) {
+    event.preventDefault();
+    if (!canManageUsers || userSaving) return false;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const password = String(form.get("password") || "");
+    const confirmPassword = String(form.get("confirmPassword") || "");
+    const errors = [
+      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null,
+      password !== confirmPassword ? { field: "confirmPassword", message: "Passwords do not match." } : null
+    ].filter((error): error is { field: string; message: string } => Boolean(error));
+    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return false;
+    setUserSaving(true);
+    try {
+      await api<PublicUser>(`/api/users/${user.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ password })
+      });
+      formElement.reset();
+      notify("success", `Password reset for ${user.username}`);
+      return true;
+    } catch (error) {
+      notify("error", (error as Error).message);
+      return false;
     } finally {
       setUserSaving(false);
     }
@@ -3039,6 +3059,7 @@ export default function App() {
                   onCloseModal={() => setUserModal(null)}
                   onCreate={createUser}
                   onUpdate={updateUser}
+                  onResetPassword={resetUserPassword}
                   onDelete={deleteUser}
                 />
               </section>
