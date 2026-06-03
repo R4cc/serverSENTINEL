@@ -675,15 +675,30 @@ function nodeDataMount(hostPath?: string) {
   return value.includes(":") ? value : `${value}:/data`;
 }
 
-function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
+function nodeDataMountParts(hostPath?: string) {
+  const mount = nodeDataMount(hostPath);
+  const separator = mount.indexOf(":");
+  if (separator === -1) {
+    return { mount, hostSource: mount, containerTarget: "/data" };
+  }
+  return {
+    mount,
+    hostSource: mount.slice(0, separator),
+    containerTarget: mount.slice(separator + 1) || "/data"
+  };
+}
+
+export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
   const image = "nl2109/serversentinel:latest";
   const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
-  const dataMount = nodeDataMount(input.dataMount);
+  const { mount: dataMount, hostSource, containerTarget } = nodeDataMountParts(input.dataMount);
   const nodeName = input.nodeName?.trim();
   const dockerSocketMount = "/var/run/docker.sock:/var/run/docker.sock";
   const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
     SS_MODE: "node",
-    SS_PANEL_URL: panelUrl
+    SS_PANEL_URL: panelUrl,
+    SS_NODE_DATA_DIR: containerTarget,
+    SS_NODE_DOCKER_DATA_DIR: hostSource
   };
   if (nodeName) {
     environment.SS_NODE_NAME = nodeName;
@@ -703,7 +718,7 @@ function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string;
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${image}`
+    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SS_NODE_DATA_DIR=${shellQuote(containerTarget)} -e SS_NODE_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${image}`
   };
 }
 

@@ -105,6 +105,19 @@ function containerName(server: ManagedServer) {
   return server.dockerContainer?.trim() || defaultContainerName(server.displayName);
 }
 
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+async function dockerServerRoot(server: ManagedServer) {
+  const root = await serverRoot(server);
+  const rel = relative(config.nodeDataDir, root);
+  if (rel.startsWith("..") || rel === ".." || resolve(config.nodeDataDir, rel) !== root) {
+    return root;
+  }
+  return join(config.nodeDockerDataDir, rel);
+}
+
 function dockerImage(version?: string) {
   const [major, minor, patch] = (version ?? "").split(".").map(Number);
   if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) return "eclipse-temurin:21-jre";
@@ -117,8 +130,9 @@ async function pullImage(image: string) {
 }
 
 async function createContainer(server: ManagedServer) {
-  await pullImage(server.dockerImage || dockerImage(server.minecraftVersion));
-  const root = await serverRoot(server);
+  const image = server.dockerImage || dockerImage(server.minecraftVersion);
+  await pullImage(image);
+  const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
   const exposedPorts: Record<string, unknown> = {};
   const portBindings: Record<string, Array<{ HostPort: string }>> = {};
@@ -129,10 +143,14 @@ async function createContainer(server: ManagedServer) {
     exposedPorts[key] = {};
     portBindings[key] = [{ HostPort: host }];
   }
+  const serverJar = server.serverJar ?? "fabric-server-launch.jar";
+  const quotedServerJar = shellQuote(serverJar);
+  const javaArgs = server.javaArgs ?? "-Xms2G -Xmx4G";
+  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
   await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(containerName(server))}`, {
-    Image: server.dockerImage,
+    Image: image,
     WorkingDir: "/data",
-    Cmd: ["sh", "-lc", `java ${server.javaArgs ?? "-Xms2G -Xmx4G"} -jar ${server.serverJar ?? "fabric-server-launch.jar"} nogui`],
+    Cmd: ["sh", "-lc", command],
     OpenStdin: true,
     AttachStdin: true,
     Tty: false,

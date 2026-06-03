@@ -5,6 +5,7 @@ import {
   validateDockerContainerName,
   validateJavaArgs,
   validateModrinthProjectId,
+  nodeInstallInstructions,
   validateRuntimeJarFilename
 } from "./app.js";
 
@@ -120,5 +121,22 @@ describe("security validation helpers", () => {
     expect(validateRuntimeJarFilename("fabric-server-launch.jar")).toBe("fabric-server-launch.jar");
     expect(() => validateRuntimeJarFilename("../fabric-server-launch.jar")).toThrow("local .jar filename");
     expect(() => validateRuntimeJarFilename("server.txt")).toThrow("local .jar filename");
+  });
+});
+
+describe("node install instructions", () => {
+  it("passes the host-side node data directory for Docker sibling container binds", () => {
+    const install = nodeInstallInstructions({
+      panelUrl: "http://192.168.1.11:8085",
+      dataMount: "/var/lib/serversentinel",
+      nodeName: "mc-node-01",
+      joinToken: "join-token"
+    });
+
+    expect(install.dockerCompose.environment.SS_NODE_DATA_DIR).toBe("/data");
+    expect(install.dockerCompose.environment.SS_NODE_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
+    expect(install.dockerRun).toContain("-e SS_NODE_DATA_DIR='/data'");
+    expect(install.dockerRun).toContain("-e SS_NODE_DOCKER_DATA_DIR='/var/lib/serversentinel'");
+    expect(install.dockerRun).toContain("-v '/var/lib/serversentinel:/data'");
   });
 });
