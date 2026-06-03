@@ -68,7 +68,11 @@ Replace these placeholders with real screenshots when ready.
       <p align="center">Manage local users, roles, and permissions.</p>
     </td>
     <td valign="top" width="50%">
-      <!-- Empty cell to align layout -->
+      <p align="center"><strong>Mod Management/strong></p>
+      <a href="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" target="_blank">
+        <img width="2467" height="2065" alt="image" src="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" />
+      </a>
+      <p align="center">Manage server mods and updates.</p>
     </td>
   </tr>
 </table>
