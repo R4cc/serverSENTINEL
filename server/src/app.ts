@@ -410,6 +410,42 @@ function validateProvisionJobId(id: unknown) {
   return id;
 }
 
+function validateNodeName(name: unknown) {
+  const value = typeof name === "string" ? name.trim() : "";
+  if (!value) return "Remote Node";
+  if (value.length > 80 || /[\u0000-\u001f]/.test(value)) {
+    badRequest("Node name must be 1-80 characters and cannot contain control characters");
+  }
+  return value;
+}
+
+function optionalNodePanelUrl(panelUrl: unknown) {
+  const value = typeof panelUrl === "string" ? panelUrl.trim() : "";
+  if (!value) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    badRequest("Panel URL must be a valid http or https URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    badRequest("Panel URL must use http or https");
+  }
+  if (parsed.username || parsed.password) {
+    badRequest("Panel URL cannot include embedded credentials");
+  }
+  return value;
+}
+
+function optionalNodeDataMount(dataMount: unknown) {
+  const value = typeof dataMount === "string" ? dataMount.trim() : "";
+  if (!value) return undefined;
+  if (value.length > 512 || /[\r\n\u0000]/.test(value)) {
+    badRequest("Node data mount must be a single-line host path or host:container mount");
+  }
+  return value;
+}
+
 export function validateModrinthProjectId(projectId: unknown) {
   if (typeof projectId !== "string" || !/^[a-zA-Z0-9_-]{3,64}$/.test(projectId.trim())) {
     badRequest("A valid Modrinth project id is required");
@@ -2881,7 +2917,9 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
   const now = new Date();
   const token = createJoinToken(request.body.tokenTtlMinutes);
   const nodeId = randomUUID();
-  const nodeName = request.body.name?.trim() || "Remote Node";
+  const nodeName = validateNodeName(request.body.name);
+  const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
+  const dataMount = optionalNodeDataMount(request.body.dataMount);
   const node: ManagedNode = {
     id: nodeId,
     name: nodeName,
@@ -2902,7 +2940,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     node: publicNode(node),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName })
+    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName })
   };
 });
 
@@ -2910,7 +2948,9 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
   await requireRequestPermission(request, "users.manage");
   const now = new Date();
   const token = createJoinToken(request.body.tokenTtlMinutes);
-  const nodeName = request.body.name?.trim() || "Remote Node";
+  const nodeName = validateNodeName(request.body.name);
+  const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
+  const dataMount = optionalNodeDataMount(request.body.dataMount);
   const node: ManagedNode = {
     id: randomUUID(),
     name: nodeName,
@@ -2931,13 +2971,15 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     node: publicNode(node),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName })
+    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName })
   };
 });
 
 app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes/:nodeId/rotate-token", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
   await requireRequestPermission(request, "users.manage");
   const token = createJoinToken(request.body.tokenTtlMinutes);
+  const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
+  const dataMount = optionalNodeDataMount(request.body.dataMount);
   let updatedNode: ManagedNode | undefined;
   await updateNodes((nodes) => {
     const node = nodes.find((candidate) => candidate.id === request.params.nodeId);
@@ -2954,17 +2996,19 @@ app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMou
     node: publicNode(updatedNode!),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl: request.body.panelUrl, joinToken: token.joinToken, dataMount: request.body.dataMount, nodeName: updatedNode!.name })
+    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode!.name })
   };
 });
 
 app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMount?: string } }>("/api/nodes/:nodeId/install", async (request) => {
   await requireRequestPermission(request, "servers.view");
+  const panelUrl = optionalNodePanelUrl(request.query.panelUrl);
+  const dataMount = optionalNodeDataMount(request.query.dataMount);
   const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   return {
     node: publicNode(node),
-    install: nodeInstallInstructions({ panelUrl: request.query.panelUrl, dataMount: request.query.dataMount, nodeName: node.name })
+    install: nodeInstallInstructions({ panelUrl, dataMount, nodeName: node.name })
   };
 });
 
@@ -4253,6 +4297,7 @@ app.setErrorHandler((error, _request, reply) => {
   const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
   const errorMessage = error instanceof Error ? error.message : String(error);
   const errorCode = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const publicMessage = statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed";
   const fields = {
     ...routeLogFields(_request, statusCode),
     category: errorCategory(error, statusCode),
@@ -4266,8 +4311,10 @@ app.setErrorHandler((error, _request, reply) => {
     app.log.warn(fields, "API request rejected");
   }
   reply.code(statusCode).send({
-    error: statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed",
-    code: errorCode
+    error: publicMessage,
+    message: publicMessage,
+    code: errorCode,
+    statusCode
   });
 });
 

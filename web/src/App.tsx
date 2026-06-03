@@ -117,6 +117,22 @@ function defaultDuplicateName(name: string) {
   return `${name} copy`;
 }
 
+function publicPathContains(containerPath: string, candidatePath: string) {
+  const normalizedContainer = containerPath === "/" ? "/" : containerPath.replace(/\/+$/, "");
+  if (normalizedContainer === "/") return candidatePath === "/" || candidatePath.startsWith("/");
+  return candidatePath === normalizedContainer || candidatePath.startsWith(`${normalizedContainer}/`);
+}
+
+function clearDeletedFileState(deletedEntries: FileEntry[], selectedPath: string, filePreviewPath: string, resetEditorState: () => void, setFilePreview: (state: FilePreviewState) => void) {
+  const deletedPaths = deletedEntries.map((entry) => entry.path);
+  if (selectedPath && deletedPaths.some((path) => publicPathContains(path, selectedPath))) {
+    resetEditorState();
+  }
+  if (filePreviewPath && deletedPaths.some((path) => publicPathContains(path, filePreviewPath))) {
+    setFilePreview({ path: "", loading: false, data: null, error: "" });
+  }
+}
+
 function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string) {
   const displayName = trimFormValue(form, "displayName");
   const errors: Array<{ field: string; message: string }> = [];
@@ -1828,61 +1844,72 @@ export default function App() {
     }
   }
 
-  async function deleteFileEntry(entry: FileEntry) {
-    if (isProvisioning || dockerOperationalLock || !canManager || !activeServer) return;
-    const pathError = validateSafePath(entry.path);
-    if (pathError) {
-      setNotice(pathError);
-      notify("error", pathError);
+  async function deleteSelectedFiles() {
+    if (!activeServer || selectedEntries.length === 0 || fileOperationBusy) return;
+    if (isProvisioning || dockerOperationalLock || !canManager) return;
+    const invalidPath = selectedEntries.map((entry) => validateSafePath(entry.path)).find(Boolean);
+    if (invalidPath) {
+      setNotice(invalidPath);
+      notify("error", invalidPath);
       return;
     }
-    const confirmation = entry.type === "directory"
-      ? `Delete empty directory "${entry.name}"?\n\nOnly this directory will be removed. Non-empty directories are blocked in the browser file manager.`
-      : `Delete file "${entry.name}"?\n\nThis will permanently delete ${entry.path}.`;
-    if (!window.confirm(confirmation)) return;
+    const directoryCount = selectedEntries.filter((entry) => entry.type === "directory").length;
+    const fileCount = selectedEntries.length - directoryCount;
+    const itemLabel = selectedEntries.length === 1 ? selectedEntries[0].name : `${selectedEntries.length} selected items`;
+    const previewList = selectedEntries.slice(0, 5).map((entry) => `- ${entry.path}`).join("\n");
+    const moreText = selectedEntries.length > 5 ? `\n- ...and ${selectedEntries.length - 5} more` : "";
+    const directoryWarning = directoryCount ? "\n\nDirectories must be empty. Non-empty directories are blocked in the browser file manager." : "";
+    if (!window.confirm(`Delete ${itemLabel}?\n\nFiles: ${fileCount}\nFolders: ${directoryCount}\n${previewList}${moreText}${directoryWarning}\n\nThis cannot be undone.`)) return;
+
+    setFileOperationBusy("delete");
     setNotice("");
-    if (activeServerIsDemo) {
-      let nextFiles = demoFiles;
-      if (entry.path.startsWith("/mods/")) {
-        setDemoInstalledMods((current) => current.filter((mod) => `/mods/${mod.filename}` !== entry.path));
-      } else {
-        nextFiles = { ...demoFiles };
-        for (const path of Object.keys(nextFiles)) {
-          if (path === entry.path || path.startsWith(`${entry.path}/`)) delete nextFiles[path];
-        }
-        setDemoFiles(nextFiles);
-      }
-      if (selectedPath === entry.path) {
-        resetEditorState();
-      }
-      setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
-      notify("success", `Deleted ${entry.name}`);
-      setListing(demoListing(listing.path, nextFiles, demoInstalledMods.filter((mod) => `/mods/${mod.filename}` !== entry.path)));
-      return;
-    }
     try {
-      await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}`, {
-        method: "DELETE"
-      });
-      if (selectedPath === entry.path) {
-        resetEditorState();
+      if (activeServerIsDemo) {
+        const deletedEntries = [...selectedEntries];
+        const nextFiles = { ...demoFiles };
+        for (const entry of deletedEntries) {
+          for (const path of Object.keys(nextFiles)) {
+            if (publicPathContains(entry.path, path)) delete nextFiles[path];
+          }
+        }
+        const deletedModPaths = new Set(deletedEntries.filter((entry) => entry.path.startsWith("/mods/")).map((entry) => entry.path));
+        const nextMods = demoInstalledMods.filter((mod) => !deletedModPaths.has(`/mods/${mod.filename}`));
+        setDemoFiles(nextFiles);
+        setDemoInstalledMods(nextMods);
+        setListing(demoListing(listing.path, nextFiles, nextMods));
+        clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
+        setSelectedFilePaths([]);
+        notify("success", selectedEntries.length === 1 ? `Deleted ${selectedEntries[0].name}` : `Deleted ${selectedEntries.length} items`);
+        return;
       }
-      setSelectedFilePaths((current) => current.filter((path) => path !== entry.path));
-      notify("success", `Deleted ${entry.name}`);
+
+      const failures: string[] = [];
+      const deletedEntries: FileEntry[] = [];
+      for (const entry of selectedEntries) {
+        try {
+          await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}`, {
+            method: "DELETE"
+          });
+          deletedEntries.push(entry);
+        } catch (error) {
+          failures.push(`${entry.name}: ${errorMessage(error, "Delete failed")}`);
+        }
+      }
+      if (deletedEntries.length) {
+        clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
+        setSelectedFilePaths((current) => current.filter((path) => !deletedEntries.some((entry) => publicPathContains(entry.path, path))));
+        notify("success", deletedEntries.length === 1 ? `Deleted ${deletedEntries[0].name}` : `Deleted ${deletedEntries.length} items`);
+      }
       await loadFiles(activeServer.id, listing.path);
       await loadInstalledMods(activeServer.id);
-    } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      if (failures.length) {
+        const message = `Could not delete ${failures.length} item${failures.length === 1 ? "" : "s"}: ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "; ..." : ""}`;
+        setNotice(message);
+        notify("error", message);
+      }
+    } finally {
+      setFileOperationBusy("");
     }
-  }
-
-  async function deleteSelectedFiles() {
-    if (selectedEntries.length === 0) return;
-    for (const entry of selectedEntries) {
-      await deleteFileEntry(entry);
-    }
-    setSelectedFilePaths([]);
   }
 
   async function createFolder() {
@@ -2103,6 +2130,7 @@ export default function App() {
       notify("success", `Saved ${selectedPath}`);
       setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
       closeEditor();
+      setFileSaving(false);
       return;
     }
     try {
@@ -2463,8 +2491,13 @@ export default function App() {
       setDemoInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
       return;
     }
-    await api(`/api/servers/${activeServer.id}/mods/channel`, { method: "PUT", body: JSON.stringify({ filename: mod.filename, channel }) });
-    await loadInstalledMods(activeServer.id);
+    try {
+      await api(`/api/servers/${activeServer.id}/mods/channel`, { method: "PUT", body: JSON.stringify({ filename: mod.filename, channel }) });
+      await loadInstalledMods(activeServer.id);
+      notify("success", `Updated ${mod.displayName} update channel`);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not update the mod channel."));
+    }
   }
 
   async function processModToggleQueue(filename: string, modDisplayName: string) {
@@ -2550,6 +2583,7 @@ export default function App() {
   async function removeInstalledMod(mod: InstalledMod) {
     if (modsLocked || !canManager || !activeServer) return;
     setNotice("");
+    if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder. Stop the server first if it is running.`)) return;
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
       setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
@@ -2564,8 +2598,9 @@ export default function App() {
       await loadInstalledMods(activeServer.id);
       await loadFiles(activeServer.id, "/mods");
     } catch (error) {
-      setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      const message = errorMessage(error, "Could not remove the mod.");
+      setNotice(message);
+      notify("error", message);
     }
   }
 

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
@@ -45,6 +46,36 @@ function PlayerIcon() {
 function playerCountLabel(activity?: ServerActivity) {
   if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return "-";
   return activity.maxPlayers ? `${activity.playersOnline}/${activity.maxPlayers}` : String(activity.playersOnline);
+}
+
+function validateAddNodeInput(input: AddNodeInput) {
+  const name = input.name.trim();
+  const panelUrl = input.panelUrl.trim();
+  const dataMount = input.dataMount.trim();
+  if (name.length > 80 || /[\u0000-\u001f]/.test(name)) {
+    return "Node name must be 80 characters or fewer.";
+  }
+  if (!panelUrl) {
+    return "Panel URL is required so the node can connect back.";
+  }
+  try {
+    const url = new URL(panelUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "Panel URL must start with http:// or https://.";
+    }
+    if (url.username || url.password) {
+      return "Panel URL cannot include a username or password.";
+    }
+  } catch {
+    return "Panel URL must be a valid URL reachable from the node host.";
+  }
+  if (!dataMount) {
+    return "Data folder is required.";
+  }
+  if (dataMount.length > 512 || /[\r\n\u0000]/.test(dataMount)) {
+    return "Data folder must be a single-line host path or host:container mount.";
+  }
+  return "";
 }
 
 function dockerComposeSnippet(install: NodeInstallInstructions) {
@@ -233,6 +264,7 @@ function AddNodeModal({
   const [name, setName] = useState("");
   const [panelUrl, setPanelUrl] = useState(defaultPanelUrl);
   const [dataMount, setDataMount] = useState(defaultNodeDataPath);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!panelUrl) setPanelUrl(defaultPanelUrl);
@@ -240,7 +272,15 @@ function AddNodeModal({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onCreate({ name, panelUrl, dataMount });
+    if (busy) return;
+    const input = { name: name.trim(), panelUrl: panelUrl.trim(), dataMount: dataMount.trim() };
+    const error = validateAddNodeInput(input);
+    if (error) {
+      setFormError(error);
+      return;
+    }
+    setFormError("");
+    onCreate(input);
   }
 
   const liveNode = currentNode ?? created?.node;
@@ -265,6 +305,7 @@ function AddNodeModal({
         {!created ? (
           <form className="appForm nodeModalBody" onSubmit={submit}>
             <fieldset disabled={busy}>
+              {formError && <InlineState tone="error" title="Check node details" message={formError} />}
               <label>
                 Node name
                 <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
