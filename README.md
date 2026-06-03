@@ -1,158 +1,322 @@
-# ServerSentinel
+# serverSENTINEL
 
-ServerSentinel is a Dockerized web panel for creating and managing Fabric Minecraft managed server instances.
+serverSENTINEL is a web panel for running Minecraft servers with Docker. It gives you a browser-based place to create servers, start and stop them, view the live console, send commands, manage files, install mods, schedule actions, and manage users.
 
-NOTE: This project is *entirely* coded with AI and it's recommended to only be used in a secure environment.
+This project is preproduction software. It was written with AI assistance, including later polishing and security hardening passes. That can make development faster, but it does not make the software perfect: AI-written code can still miss edge cases, contain ordinary bugs, or make assumptions that need more real-world testing.
 
-ServerSentinel stores its lightweight configuration, users, and managed server definitions as validated JSON files on disk. It does not require an external database.
+Do not expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
 
-<img width="2652" height="1799" alt="image" src="https://github.com/user-attachments/assets/191c1f82-c15c-4392-a78b-758e5f820fe5" />
+## How It Works
 
+serverSENTINEL has two runtime roles:
 
-## Runtime Model
+- **Panel**: the web UI and API. It stores users, settings, node definitions, and server metadata.
+- **Node agent**: a host-side agent that connects back to the panel and performs Docker, console, file, mod, and server operations on its own machine.
 
-ServerSentinel is a web panel and orchestrator. Minecraft runs only in separate Minecraft runtime containers created for managed server instances, never in the web panel container. Managing arbitrary existing or already-running external Minecraft servers is not supported.
+The panel can manage servers across one or more nodes. In multi-host setups, each node is responsible for Docker operations on the host where it runs. A panel-only container should not need direct Docker socket access when all server operations are handled by remote node agents.
 
-The supported model is:
+Supported modes:
 
-1. ServerSentinel creates a managed server instance.
-2. ServerSentinel writes the managed server files under `SERVERSENTINEL_SERVERS_DIR`, for example:
+- **All-in-one / local node**: the panel and local Docker management run on the same host. This is the recommended setup for simple single-host use.
+- **Panel**: runs only the web panel. Use this for multi-host setups where separate node agents manage servers.
+- **Node**: runs only a node agent. Use this on each Docker host that should run Minecraft servers.
 
-```text
-/data/servers/survival
-```
+Minecraft itself does not run inside the panel container. Managed Minecraft servers run as separate Docker containers created and controlled by serverSENTINEL.
 
-3. With Docker integration enabled, ServerSentinel launches a separate Minecraft runtime container for that managed server instance, similar to:
+## Features
 
-```bash
-docker run \
-  --name serversentinel-survival \
-  -v serversentinel-minecraft-servers:/data/servers \
-  -w /data/servers/survival \
-  -p 25565:25565 \
-  eclipse-temurin:21-jre \
-  sh -lc "java -Xms2G -Xmx4G -jar fabric-server-launch.jar nogui"
-```
+- Server overview with status and runtime information
+- Docker-based server creation and management
+- Start, stop, and restart controls
+- Live console output
+- Console command input
+- File manager
+- Browser file editor with line numbers and syntax highlighting for common config files
+- Modrinth search and install flow
+- Mod upload and management
+- Schedules
+- Settings
+- Local user management and permissions
+- Multi-node management
+- Add node flow with generated install commands
+- Node connection and status handling
 
-Each managed server instance has its own managed server files and Minecraft runtime container. ServerSentinel remains only the ServerSentinel web panel and orchestrator.
+## Safety Notes
 
-## Safety Boundaries
-
-- Server definitions are persisted in ServerSentinel config storage at `SERVERSENTINEL_CONFIG_DIR`.
-- Users have role presets and explicit permissions. Backend authorization checks permissions.
-- Server files are created under `SERVERSENTINEL_SERVERS_DIR`.
-- File operations are scoped to the active managed server directory.
-- Requests that try to escape a managed server directory are rejected.
-- Mod downloads only write beneath the active server's `mods` folder.
-- Manual mod uploads only accept `.jar` files and write beneath the active server's `mods` folder.
-- Browser editing rejects binary files and files larger than 2 MiB.
-- `MODRINTH_API_KEY` is read only by the backend and is never sent to the frontend.
-- ServerSentinel does not require Java and does not execute Minecraft inside the web panel container.
-
-## Environment
-
-Copy `.env.example` to `.env` and adjust values as needed:
-
-```env
-SERVERSENTINEL_CONFIG_DIR=/config
-SERVERSENTINEL_SERVERS_DIR=/data/servers
-SERVERSENTINEL_SERVERS_DOCKER_VOLUME=serversentinel-minecraft-servers
-MODRINTH_API_KEY=
-LOG_LEVEL=info
-PORT=8080
-```
-
-`SERVERSENTINEL_SERVERS_DOCKER_VOLUME` should match the Docker volume mounted into ServerSentinel at `SERVERSENTINEL_SERVERS_DIR`. This lets Minecraft runtime containers mount the same managed server files by name.
+- Do not expose the panel directly to the public internet.
+- Prefer LAN-only access, a VPN, Cloudflare Tunnel, or a reverse proxy with additional authentication.
+- Protect API keys, node join tokens, node secrets, user passwords, and Docker socket access.
+- Docker socket access is powerful. A container with access to `/var/run/docker.sock` can control Docker on the host.
+- File manager and console access are powerful administrative features. Give those permissions only to users you trust.
+- Keep backups of your config and server folders before upgrading or testing major changes.
 
 ## Storage
 
-ServerSentinel is pre-release and does not maintain compatibility with old local development data. The config directory contains `settings.json`, `users.json`, and `servers.json`; per-server metadata such as installed Modrinth mod preferences is stored inside the managed server directory under `mods/.serversentinel-mods.json`, and detected Fabric/Minecraft version metadata is stored in `.serversentinel-version.json`.
+serverSENTINEL stores configuration as JSON files on disk and does not require an external database.
 
-Persisted JSON is validated when it is read and written. Invalid or outdated pre-release records should be recreated instead of migrated. For local development, stop the app and delete the configured config and server data directories, for example `.local-config` and `.local-servers`, then start ServerSentinel and create a new admin user and managed server. For Docker volumes, remove and recreate the ServerSentinel config volume and managed server files volume.
+Recommended host folders:
 
-## Docker Socket Security
-
-Mounting `/var/run/docker.sock` gives ServerSentinel powerful control over Docker on the host. Treat it as trusted-admin access. Only enable it in local or otherwise trusted environments.
-
-Docker socket access is required for creating Minecraft runtime containers, starting, stopping, restarting, Docker logs, overview CPU/memory stats, and console command input. If the socket is not mounted, ServerSentinel can still prepare managed server files, but runtime management is unavailable.
-
-## ServerSentinel Application Logs
-
-ServerSentinel writes its own backend/application logs to stdout and stderr, so they appear in Docker logs:
-
-```bash
-docker logs -f serversentinel
+```text
+/opt/serversentinel/config
+/opt/serversentinel/servers
+/opt/serversentinel/data
 ```
 
-Use `LOG_LEVEL` to control verbosity. The default is `info`; set `LOG_LEVEL=debug` only while diagnosing noisy details.
+Use `config` for panel settings and users, `servers` for all-in-one managed server files, and `data` for node-managed server files.
 
-Application logs are structured JSON and focus on operational events such as startup configuration, Docker integration availability, managed server provisioning, runtime container start/stop/restart, file writes/deletes, Modrinth search/install, manual mod uploads, schedule execution, authentication/user actions, API errors, and console log streaming failures.
+## Deployment
 
-Secrets are intentionally excluded. ServerSentinel does not log Modrinth API keys, passwords, full request bodies for sensitive endpoints, uploaded file contents, full Minecraft console logs, or full mod download URLs.
+The published image used by the project is:
 
-## Console Command Input
-
-ServerSentinel sends console commands to managed Minecraft runtime containers by creating a short-lived Docker exec process that writes one command line to `/proc/1/fd/0` inside the runtime container. This is supported for Minecraft runtime containers created by ServerSentinel because they are configured with `OpenStdin: true`, `AttachStdin: true`, and `Tty: false`.
-
-Command input is intentionally marked unavailable for non-managed containers or containers that were not created with those stdin settings. Managing already-running external Minecraft servers is not supported. If Docker cannot write to stdin, the command request fails and the UI shows the error; ServerSentinel does not report command success unless the Docker exec exits successfully. Logs continue to stream from Docker logs or `logs/latest.log` even when command input is unavailable.
-
-## Docker
-
-Build and run:
-
-```bash
-docker compose up --build
+```text
+nl2109/serversentinel:latest
 ```
 
-Open `http://localhost:8080`.
+The panel listens on port `8080` inside the container.
 
-For Portainer or any host where you pull the published image instead of building from source, use:
+### All-In-One With Docker Run
+
+Use this for a simple single-host setup.
+
+```bash
+sudo mkdir -p /opt/serversentinel/config /opt/serversentinel/servers
+
+docker run -d \
+  --name serversentinel \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e SS_MODE=all-in-one \
+  -e PORT=8080 \
+  -e SERVERSENTINEL_CONFIG_DIR=/config \
+  -e SERVERSENTINEL_SERVERS_DIR=/data/servers \
+  -e SERVERSENTINEL_SERVERS_DOCKER_VOLUME= \
+  -e MODRINTH_API_KEY= \
+  -v /opt/serversentinel/config:/config \
+  -v /opt/serversentinel/servers:/data/servers \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  nl2109/serversentinel:latest
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+### All-In-One With Docker Compose
 
 ```yaml
 services:
   serversentinel:
     image: nl2109/serversentinel:latest
     container_name: serversentinel
+    restart: unless-stopped
     ports:
-      - "8085:8080"
+      - "8080:8080"
     environment:
+      SS_MODE: all-in-one
+      PORT: 8080
       SERVERSENTINEL_CONFIG_DIR: /config
       SERVERSENTINEL_SERVERS_DIR: /data/servers
-      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
-      PORT: 8080
+      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: ""
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
     volumes:
-      - serversentinel-config:/config
-      - minecraft-servers:/data/servers
+      - /opt/serversentinel/config:/config
+      - /opt/serversentinel/servers:/data/servers
       - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-
-volumes:
-  serversentinel-config:
-  minecraft-servers:
-    name: serversentinel-minecraft-servers
 ```
 
-To enable Docker integration for runtime container creation, status, start/stop/restart, logs, stats, and console command input, uncomment this volume in `docker-compose.yml`:
-
-```yaml
-- /var/run/docker.sock:/var/run/docker.sock
-```
-
-## Docker Hub Publishing
-
-The GitHub Actions workflow in `.github/workflows/dockerpush.yml` builds and pushes `nl2109/serversentinel` when changes land on `main`.
-
-Configure these GitHub repository secrets before pushing:
-
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
-
-Pull the published image with:
+Start it:
 
 ```bash
-docker pull nl2109/serversentinel:latest
+docker compose up -d
 ```
+
+### Panel-Only With Docker Run
+
+Use this when one or more separate node agents will manage Docker hosts. This mode does not need the Docker socket mounted into the panel container.
+
+```bash
+sudo mkdir -p /opt/serversentinel/config
+
+docker run -d \
+  --name serversentinel-panel \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e SS_MODE=panel \
+  -e PORT=8080 \
+  -e SERVERSENTINEL_CONFIG_DIR=/config \
+  -v /opt/serversentinel/config:/config \
+  nl2109/serversentinel:latest
+```
+
+### Panel-Only With Docker Compose
+
+```yaml
+services:
+  serversentinel-panel:
+    image: nl2109/serversentinel:latest
+    container_name: serversentinel-panel
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SS_MODE: panel
+      PORT: 8080
+      SERVERSENTINEL_CONFIG_DIR: /config
+    volumes:
+      - /opt/serversentinel/config:/config
+```
+
+### Node Agent With Docker Run
+
+In normal use, create a node from the panel's Add Node flow and use the generated command. The command includes a join token and the panel URL.
+
+Template:
+
+```bash
+sudo mkdir -p /opt/serversentinel/data
+
+docker run -d \
+  --name serversentinel-node \
+  --restart unless-stopped \
+  -e SS_MODE=node \
+  -e SS_PANEL_URL=http://panel-host:8080 \
+  -e SS_NODE_NAME=mc-node-01 \
+  -e SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
+  -e SS_NODE_DATA_DIR=/data \
+  -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /opt/serversentinel/data:/data \
+  nl2109/serversentinel:latest
+```
+
+The node does not publish a web port. It connects outbound to the panel.
+
+### Node Agent With Docker Compose
+
+```yaml
+services:
+  serversentinel-node:
+    image: nl2109/serversentinel:latest
+    container_name: serversentinel-node
+    restart: unless-stopped
+    environment:
+      SS_MODE: node
+      SS_PANEL_URL: http://panel-host:8080
+      SS_NODE_NAME: mc-node-01
+      SS_JOIN_TOKEN: PASTE_JOIN_TOKEN_FROM_PANEL
+      SS_NODE_DATA_DIR: /data
+      SS_NODE_DOCKER_DATA_DIR: /opt/serversentinel/data
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/serversentinel/data:/data
+```
+
+## Environment Reference
+
+Common panel variables:
+
+```env
+SS_MODE=all-in-one
+PORT=8080
+SERVERSENTINEL_CONFIG_DIR=/config
+SERVERSENTINEL_SERVERS_DIR=/data/servers
+SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
+MODRINTH_API_KEY=
+LOG_LEVEL=info
+```
+
+Node variables:
+
+```env
+SS_MODE=node
+SS_PANEL_URL=http://panel-host:8080
+SS_NODE_NAME=mc-node-01
+SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL
+SS_NODE_DATA_DIR=/data
+SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
+```
+
+`SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
+
+## First Run
+
+1. Start the panel.
+2. Open `http://localhost:8080` or your configured panel URL.
+3. Create the initial admin user when prompted.
+4. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
+5. Create a managed server and start it from the panel.
+
+## Screenshots
+
+Replace these placeholders with real screenshots when ready.
+
+### Overview
+
+![Overview screenshot placeholder](docs/screenshots/overview.png)
+
+Server list, status, and high-level controls.
+
+### Console
+
+![Console screenshot placeholder](docs/screenshots/console.png)
+
+Live output and command input.
+
+### File Manager
+
+![File Manager screenshot placeholder](docs/screenshots/file-manager.png)
+
+Browse, upload, rename, duplicate, download, and delete server files.
+
+### File Editor
+
+![File Editor screenshot placeholder](docs/screenshots/file-editor.png)
+
+Edit text/config files in the browser.
+
+### Mods
+
+![Mods screenshot placeholder](docs/screenshots/mods.png)
+
+View and manage installed mods.
+
+### Mod Installation Flow
+
+![Mod Installation Flow screenshot placeholder](docs/screenshots/mod-installation-flow.png)
+
+Search Modrinth and install compatible mods.
+
+### Nodes
+
+![Nodes screenshot placeholder](docs/screenshots/nodes.png)
+
+View node status and connection state.
+
+### Add Node Flow
+
+![Add Node Flow screenshot placeholder](docs/screenshots/add-node-flow.png)
+
+Create a node join token and copy generated install commands.
+
+### Schedules
+
+![Schedules screenshot placeholder](docs/screenshots/schedules.png)
+
+Create scheduled server actions.
+
+### Settings
+
+![Settings screenshot placeholder](docs/screenshots/settings.png)
+
+Configure panel settings.
+
+### User Management
+
+![User Management screenshot placeholder](docs/screenshots/user-management.png)
+
+Manage local users, roles, and permissions.
 
 ## Development
 
@@ -162,26 +326,31 @@ Install dependencies:
 npm install
 ```
 
-Run the backend and frontend in separate terminals:
+Run backend and frontend development servers:
 
 ```bash
 npm run dev:server
 npm run dev:web
 ```
 
-For local development outside Docker, set `SERVERSENTINEL_CONFIG_DIR` and `SERVERSENTINEL_SERVERS_DIR` to writable local folders.
-
 The Vite dev server proxies `/api` and `/ws` to the backend on port `8080`.
 
-Build everything:
+Build all workspaces:
 
 ```bash
 npm run build
 ```
 
-## Current MVP Limitations
+Run server tests:
 
-- Authentication is local and permission-based, but the Docker socket still grants powerful host access. Do not expose this service directly to the public internet.
-- Managed server creation is Fabric-only.
-- Managing arbitrary existing or already-running external Minecraft servers is not supported.
-- No mod dependency/conflict resolver; installs the latest Modrinth version matching Fabric and the selected Minecraft version.
+```bash
+npm test
+```
+
+## Current Limitations
+
+- This is preproduction software.
+- Managed server creation is currently focused on Fabric Minecraft servers.
+- Managing arbitrary already-running external Minecraft servers is not the primary supported model.
+- Modrinth installs target compatible versions, but this is not a full dependency or conflict resolver.
+- The Docker socket and node agent model should be treated as trusted administrator access.
