@@ -1252,6 +1252,53 @@ async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: st
   await writeFile(iconPath, bytes);
 }
 
+function modrinthIconProxyUrl(iconUrl?: string | null) {
+  if (!iconUrl) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(iconUrl);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== "https:") return undefined;
+  if (parsed.hostname !== "cdn.modrinth.com" && !parsed.hostname.endsWith(".modrinth.com")) return undefined;
+  return `/api/modrinth/icon?url=${encodeURIComponent(parsed.toString())}`;
+}
+
+async function fetchModrinthIcon(iconUrl: unknown) {
+  const url = typeof iconUrl === "string" ? iconUrl : "";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    badRequest("A valid Modrinth icon URL is required");
+  }
+  if (parsed.protocol !== "https:" || (parsed.hostname !== "cdn.modrinth.com" && !parsed.hostname.endsWith(".modrinth.com"))) {
+    badRequest("Only Modrinth icon URLs can be proxied");
+  }
+  const response = await fetch(parsed.toString(), {
+    headers: { "User-Agent": "ServerSentinel/0.3.0 (Fabric mod manager)" }
+  });
+  if (!response.ok || !response.body) {
+    const error = new Error("Icon not found") as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > 1024 * 1024) {
+    badRequest("Icon is larger than the 1 MiB limit");
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  const safeContentType = contentType.includes("webp")
+    ? "image/webp"
+    : contentType.includes("jpeg")
+      ? "image/jpeg"
+      : contentType.includes("png")
+        ? "image/png"
+        : "image/png";
+  return { bytes, contentType: safeContentType };
+}
+
 async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string) {
   if (await modIconUrl(server, filename)) return;
   try {
@@ -2675,6 +2722,9 @@ app.addHook("onRequest", async (request, reply) => {
     return;
   }
   if (request.method === "GET" && request.url.includes("/mods/icon")) {
+    return;
+  }
+  if (request.method === "GET" && request.url.startsWith("/api/modrinth/icon")) {
     return;
   }
   if (request.url.startsWith("/ws/")) {
@@ -4139,6 +4189,14 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
   return reply.send(icon.stream);
 });
 
+app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request, reply) => {
+  await requireRequestPermission(request, "mods.view");
+  const icon = await fetchModrinthIcon(request.query.url);
+  reply.header("Content-Type", icon.contentType);
+  reply.header("Cache-Control", "public, max-age=3600");
+  return reply.send(icon.bytes);
+});
+
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
@@ -4208,6 +4266,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
       return {
         ...hit,
         project_id: projectId,
+        icon_url: modrinthIconProxyUrl(hit.icon_url),
         compatibility: await resolveModrinthProjectCompatibility({
           projectId,
           minecraftVersion,

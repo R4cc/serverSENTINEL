@@ -117,6 +117,20 @@ function defaultDuplicateName(name: string) {
   return `${name} copy`;
 }
 
+function modIconSource(iconUrl?: string | null) {
+  if (!iconUrl) return "";
+  if (iconUrl.startsWith("/")) return iconUrl;
+  try {
+    const url = new URL(iconUrl);
+    if (url.protocol === "https:" && (url.hostname === "cdn.modrinth.com" || url.hostname.endsWith(".modrinth.com"))) {
+      return `/api/modrinth/icon?url=${encodeURIComponent(url.toString())}`;
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 function publicPathContains(containerPath: string, candidatePath: string) {
   const normalizedContainer = containerPath === "/" ? "/" : containerPath.replace(/\/+$/, "");
   if (normalizedContainer === "/") return candidatePath === "/" || candidatePath.startsWith("/");
@@ -3685,10 +3699,7 @@ export default function App() {
               <section className="tabPage">
                 <section className="panel modsPanel">
                   <div className="panelHeader modsPanelHeader">
-                    <div>
-                      <h2>{modsView === "search" ? "Search Modrinth Mods" : "Installed Mods"}</h2>
-                    </div>
-                    <div className="modsContext modsContextRow">
+                    <div className="modsPanelHeaderLeft">
                       {modsView === "search" && (
                         <button
                           type="button"
@@ -3702,6 +3713,9 @@ export default function App() {
                           Back to Installed Mods
                         </button>
                       )}
+                      <h2>{modsView === "search" ? "Search Modrinth Mods" : "Installed Mods"}</h2>
+                    </div>
+                    <div className="modsContext modsContextRow">
                       <span className={modsLocked ? "warn" : "ok"}>
                         {!activeStatus ? "Checking server state" : activeStatus.docker.running ? "Stop server to edit mods" : "Mod changes enabled"}
                       </span>
@@ -3797,12 +3811,13 @@ export default function App() {
                           filteredInstalledMods.map((mod) => {
                             const isComp = mod.compatibility?.compatible;
                             const compStatus = mod.compatibility?.status;
+                            const iconSrc = modIconSource(mod.iconUrl);
                             return (
                               <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
                                 <div className="modsTableCell mod-col">
                                   <div className="modInfoCol">
-                                    {mod.iconUrl ? (
-                                      <img src={mod.iconUrl} alt={mod.displayName} />
+                                    {iconSrc ? (
+                                      <img src={iconSrc} alt={mod.displayName} />
                                     ) : (
                                       <div className="modFileIcon">JAR</div>
                                     )}
@@ -4031,34 +4046,37 @@ export default function App() {
                             <span>The current compatibility filter hides every result. Switch the filter to see more options.</span>
                           </div>
                         )}
-                        {filteredModSearchResults.map((mod) => (
-                          <article key={mod.project_id} className="modRow modSearchResult">
-                            {mod.icon_url ? <img src={mod.icon_url} alt="" /> : <div className="modFileIcon">MOD</div>}
-                            <div className="modResultMain">
-                              <div className="modTitleLine">
-                                <strong>{mod.title}</strong>
+                        {filteredModSearchResults.map((mod) => {
+                          const iconSrc = modIconSource(mod.icon_url);
+                          return (
+                            <article key={mod.project_id} className="modRow modSearchResult">
+                              {iconSrc ? <img src={iconSrc} alt="" /> : <div className="modFileIcon">MOD</div>}
+                              <div className="modResultMain">
+                                <div className="modTitleLine">
+                                  <strong>{mod.title}</strong>
+                                </div>
+                                <p>{mod.description}</p>
+                                <small>
+                                  {formatDisplayNumber(mod.downloads)} downloads
+                                  {formatOptionalModDate(mod.date_modified) && ` · ${formatOptionalModDate(mod.date_modified)}`}
+                                </small>
                               </div>
-                              <p>{mod.description}</p>
-                              <small>
-                                {formatDisplayNumber(mod.downloads)} downloads
-                                {formatOptionalModDate(mod.date_modified) && ` · ${formatOptionalModDate(mod.date_modified)}`}
-                              </small>
-                            </div>
-                            <div className="modCompatibilityColumn">
-                              <span className={`compatibilityBadge ${compatibilityClass(mod.compatibility)}`}>
-                                {compatibilityLabel(mod.compatibility)}
-                              </span>
-                              <p className={mod.compatibility?.compatible ? "compatibilityReason ok" : "compatibilityReason"}>{modCompatibilityNote(mod)}</p>
-                            </div>
-                            <div className="modResultAction">
-                              {mod.compatibility?.compatible ? (
-                                <button onClick={() => installMod(mod.project_id, mod.title)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Install</button>
-                              ) : (
-                                <button className="secondaryButton" onClick={() => setForceInstallProjectId(mod.project_id)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Review</button>
-                              )}
-                            </div>
-                          </article>
-                        ))}
+                              <div className="modCompatibilityColumn">
+                                <span className={`compatibilityBadge ${compatibilityClass(mod.compatibility)}`}>
+                                  {compatibilityLabel(mod.compatibility)}
+                                </span>
+                                <p className={mod.compatibility?.compatible ? "compatibilityReason ok" : "compatibilityReason"}>{modCompatibilityNote(mod)}</p>
+                              </div>
+                              <div className="modResultAction">
+                                {mod.compatibility?.compatible ? (
+                                  <button onClick={() => installMod(mod.project_id, mod.title)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Install</button>
+                                ) : (
+                                  <button className="secondaryButton" onClick={() => setForceInstallProjectId(mod.project_id)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Review</button>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -4102,8 +4120,8 @@ export default function App() {
                           </button>
                         </div>
                         <div className="modDetailsHeaderRow">
-                          {detailsMod.iconUrl ? (
-                            <img src={detailsMod.iconUrl} alt={detailsMod.displayName} className="modDetailsIcon" />
+                          {modIconSource(detailsMod.iconUrl) ? (
+                            <img src={modIconSource(detailsMod.iconUrl)} alt={detailsMod.displayName} className="modDetailsIcon" />
                           ) : (
                             <div className="modDetailsIconFallback">JAR</div>
                           )}

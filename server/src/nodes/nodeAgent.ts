@@ -8,7 +8,7 @@ import { fetch } from "undici";
 import { config } from "../config.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { latestFabricVersion } from "../fabric/fabricClient.js";
-import { resolveModrinthProjectCompatibility } from "../modrinth/compatibility.js";
+import { fetchProject, resolveModrinthProjectCompatibility } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import type { ManagedServer } from "../types.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
@@ -370,7 +370,53 @@ async function writeRelativeFile(server: ManagedServer, path: unknown, content: 
 async function modsList(server: ManagedServer) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
-  return { mods: listing.entries.filter((entry: any) => entry.type === "file" && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled"))).map((entry: any) => ({ filename: entry.name, displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"), enabled: entry.name.endsWith(".jar"), size: entry.size, modifiedAt: entry.modifiedAt, preferredChannel: "release", compatibility: { status: "unknown", compatible: false, reason: "Remote mod metadata sync pending" } })) };
+  const mods = await Promise.all(
+    listing.entries
+      .filter((entry: any) => entry.type === "file" && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
+      .map(async (entry: any) => {
+        const filename = entry.name;
+        const base = {
+          filename,
+          displayName: filename.replace(/\.jar\.disabled$/, ".jar"),
+          enabled: filename.endsWith(".jar"),
+          size: entry.size,
+          modifiedAt: entry.modifiedAt,
+          preferredChannel: "release",
+          compatibility: { status: "unknown", compatible: false, reason: "Remote mod metadata sync pending" }
+        };
+        try {
+          const target = await inside(server, join("mods", filename));
+          const hash = createHash("sha1").update(await readFile(target)).digest("hex");
+          const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+          const version = await versionResponse.json() as any;
+          if (!version?.project_id) return base;
+          const project = await fetchProject(version.project_id);
+          const primaryFile = version.files?.find((file: any) => file.hashes?.sha1 === hash || file.primary);
+          return {
+            ...base,
+            iconUrl: project.icon_url,
+            compatibility: { status: "unknown", compatible: false, reason: "Remote compatibility metadata is available after panel sync", serverSide: project.server_side, clientSide: project.client_side },
+            modrinth: {
+              projectId: version.project_id,
+              versionId: version.id,
+              filename,
+              versionNumber: version.version_number,
+              versionType: version.version_type,
+              gameVersions: version.game_versions ?? [],
+              loaders: version.loaders ?? [],
+              hashes: primaryFile?.hashes ?? { sha1: hash },
+              installedAt: new Date().toISOString(),
+              installedWithForceIncompatible: false,
+              clientSide: project.client_side,
+              serverSide: project.server_side
+            }
+          };
+        } catch {
+          return base;
+        }
+      })
+  );
+  return { mods };
 }
 
 async function modUpload(server: ManagedServer, filename: unknown, contentBase64: unknown) {

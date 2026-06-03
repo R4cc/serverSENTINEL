@@ -3531,7 +3531,13 @@ button .buttonIcon {
 }
 
 .modsPanelHeader {
-  align-items: start;
+  align-items: center;
+}
+
+.modsPanelHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .modsContext {
@@ -5854,6 +5860,11 @@ button,
 .secondaryButton,
 .dangerButton {
   min-height: 42px;
+}
+
+button.compactButton,
+.compactButton {
+  min-height: 34px;
 }
 
 .secondaryButton {
