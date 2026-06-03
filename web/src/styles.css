@@ -1527,17 +1527,17 @@ button .buttonIcon {
 
 .usersTable th:nth-child(1),
 .usersTable td:nth-child(1) {
-  width: 44%;
+  width: 35%;
 }
 
 .usersTable th:nth-child(2),
 .usersTable td:nth-child(2) {
-  width: 28%;
+  width: 20%;
 }
 
 .usersTable th:nth-child(3),
 .usersTable td:nth-child(3) {
-  width: 28%;
+  width: 45%;
 }
 
 .usersTable th,
@@ -1712,10 +1712,12 @@ button .buttonIcon {
   display: flex;
   gap: var(--space-2);
   justify-content: end;
+  flex-wrap: wrap;
 }
 
 .userActions button {
   min-height: 36px;
+  padding: 0 var(--space-3);
 }
 
 .modalBackdrop {
@@ -5187,6 +5189,10 @@ details.compatibilityBadge p {
   cursor: pointer;
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
   width: 100%;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .modsCard:hover:not(:disabled) {
@@ -6232,6 +6238,10 @@ button:disabled,
 .usersTable td,
 .usersTable th {
   overflow: hidden;
+}
+
+.usersTable td:last-child {
+  overflow: visible;
 }
 
 .usersTable td > *,

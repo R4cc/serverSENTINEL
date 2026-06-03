@@ -10,47 +10,68 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
 
 Replace these placeholders with real screenshots when ready.
 
-### Overview
-
-<img width="1972" height="1362" alt="image" src="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" />
-
-Server list, status, and high-level controls.
-
-### Console
-
-<img width="1952" height="1361" alt="image" src="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" />
-
-Live output and command input.
-
-### File Manager
-
-<img width="1956" height="1361" alt="image" src="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" />
-
-Edit text/config files in the browser.
-
-### File Editor
-
-<img width="1962" height="1362" alt="image" src="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" />
-
-Browse, upload, rename, duplicate, download, and delete server files.
-
-### Schedules
-
-<img width="1951" height="1362" alt="image" src="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" />
-
-Create scheduled server actions.
-
-### Settings
-
-<img width="1945" height="1362" alt="image" src="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" />
-
-Configure panel settings.
-
-### User Management
-
-<img width="1950" height="1363" alt="image" src="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" />
-
-Manage local users, roles, and permissions.
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <p align="center"><strong>Overview</strong></p>
+      <a href="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" target="_blank">
+        <img src="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" alt="Overview" style="max-width: 100%;" />
+      </a>
+      <p align="center">Server list, status, and high-level controls.</p>
+    </td>
+    <td valign="top" width="50%">
+      <p align="center"><strong>Console</strong></p>
+      <a href="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" target="_blank">
+        <img src="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" alt="Console" style="max-width: 100%;" />
+      </a>
+      <p align="center">Live output and command input.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <p align="center"><strong>File Manager</strong></p>
+      <a href="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" target="_blank">
+        <img src="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" alt="File Manager" style="max-width: 100%;" />
+      </a>
+      <p align="center">Edit text/config files in the browser.</p>
+    </td>
+    <td valign="top" width="50%">
+      <p align="center"><strong>File Editor</strong></p>
+      <a href="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" target="_blank">
+        <img src="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" alt="File Editor" style="max-width: 100%;" />
+      </a>
+      <p align="center">Browse, upload, rename, duplicate, download, and delete server files.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <p align="center"><strong>Schedules</strong></p>
+      <a href="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" target="_blank">
+        <img src="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" alt="Schedules" style="max-width: 100%;" />
+      </a>
+      <p align="center">Create scheduled server actions.</p>
+    </td>
+    <td valign="top" width="50%">
+      <p align="center"><strong>Settings</strong></p>
+      <a href="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" target="_blank">
+        <img src="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" alt="Settings" style="max-width: 100%;" />
+      </a>
+      <p align="center">Configure panel settings.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <p align="center"><strong>User Management</strong></p>
+      <a href="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" target="_blank">
+        <img src="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" alt="User Management" style="max-width: 100%;" />
+      </a>
+      <p align="center">Manage local users, roles, and permissions.</p>
+    </td>
+    <td valign="top" width="50%">
+      <!-- Empty cell to align layout -->
+    </td>
+  </tr>
+</table>
 
 
 ## How It Works
