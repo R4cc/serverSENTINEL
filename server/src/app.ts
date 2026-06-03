@@ -35,6 +35,7 @@ import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime, RuntimeAction } from "./nodes/types.js";
+import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -1539,7 +1540,7 @@ async function dockerAction(server: ManagedServer, action: "start" | "stop" | "r
       if (!status.running) {
         logWarn({ ...serverLogFields(server), action, durationMs: durationSince(startedAt), status: status.state }, "Runtime container exited unexpectedly after action");
         const logs = await dockerRecentLogs(server).catch(() => "");
-        throw new Error(`Minecraft runtime container exited after ${action}${logs.trim() ? `: ${logs.trim().slice(-800)}` : ""}`);
+        throw new Error(summarizeRuntimeExit(action, logs));
       }
       logInfo({ ...serverLogFields(server), action, durationMs: durationSince(startedAt), status: status.state }, "Runtime container action completed");
       return status;

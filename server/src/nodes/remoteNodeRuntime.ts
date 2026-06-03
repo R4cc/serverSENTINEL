@@ -4,6 +4,7 @@ import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChann
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { protocolCompatible } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
+import { summarizeRuntimeExit } from "../runtimeErrors.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -76,9 +77,17 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.inspect");
   }
 
-  lifecycle(server: ManagedServer, action: RuntimeAction) {
+  async lifecycle(server: ManagedServer, action: RuntimeAction) {
     const command = action === "start" ? "server.start" : action === "stop" ? "server.stop" : "server.restart";
-    return this.command(server, command);
+    const result = await this.command(server, command);
+    if (action !== "start" && action !== "restart") return result;
+
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const status = await this.serverStatus(server) as { docker?: { running?: boolean } };
+    if (status.docker?.running) return status;
+
+    const logs = await this.serverLogs(server).catch(() => ({ text: "" })) as { text?: string };
+    throw new Error(summarizeRuntimeExit(action, logs.text ?? ""));
   }
 
   sendConsoleCommand(server: ManagedServer, command: unknown) {
