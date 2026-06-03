@@ -6,6 +6,53 @@ This project is preproduction software. It was written with AI assistance, inclu
 
 Do not expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
 
+## Screenshots
+
+Replace these placeholders with real screenshots when ready.
+
+### Overview
+
+<img width="1972" height="1362" alt="image" src="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" />
+
+Server list, status, and high-level controls.
+
+### Console
+
+<img width="1952" height="1361" alt="image" src="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" />
+
+Live output and command input.
+
+### File Manager
+
+<img width="1956" height="1361" alt="image" src="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" />
+
+Edit text/config files in the browser.
+
+### File Editor
+
+<img width="1962" height="1362" alt="image" src="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" />
+
+Browse, upload, rename, duplicate, download, and delete server files.
+
+### Schedules
+
+<img width="1951" height="1362" alt="image" src="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" />
+
+Create scheduled server actions.
+
+### Settings
+
+<img width="1945" height="1362" alt="image" src="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" />
+
+Configure panel settings.
+
+### User Management
+
+<img width="1950" height="1363" alt="image" src="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" />
+
+Manage local users, roles, and permissions.
+
+
 ## How It Works
 
 serverSENTINEL has two runtime roles:
@@ -247,76 +294,6 @@ SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
 3. Create the initial admin user when prompted.
 4. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
 5. Create a managed server and start it from the panel.
-
-## Screenshots
-
-Replace these placeholders with real screenshots when ready.
-
-### Overview
-
-![Overview screenshot placeholder](docs/screenshots/overview.png)
-
-Server list, status, and high-level controls.
-
-### Console
-
-![Console screenshot placeholder](docs/screenshots/console.png)
-
-Live output and command input.
-
-### File Manager
-
-![File Manager screenshot placeholder](docs/screenshots/file-manager.png)
-
-Browse, upload, rename, duplicate, download, and delete server files.
-
-### File Editor
-
-![File Editor screenshot placeholder](docs/screenshots/file-editor.png)
-
-Edit text/config files in the browser.
-
-### Mods
-
-![Mods screenshot placeholder](docs/screenshots/mods.png)
-
-View and manage installed mods.
-
-### Mod Installation Flow
-
-![Mod Installation Flow screenshot placeholder](docs/screenshots/mod-installation-flow.png)
-
-Search Modrinth and install compatible mods.
-
-### Nodes
-
-![Nodes screenshot placeholder](docs/screenshots/nodes.png)
-
-View node status and connection state.
-
-### Add Node Flow
-
-![Add Node Flow screenshot placeholder](docs/screenshots/add-node-flow.png)
-
-Create a node join token and copy generated install commands.
-
-### Schedules
-
-![Schedules screenshot placeholder](docs/screenshots/schedules.png)
-
-Create scheduled server actions.
-
-### Settings
-
-![Settings screenshot placeholder](docs/screenshots/settings.png)
-
-Configure panel settings.
-
-### User Management
-
-![User Management screenshot placeholder](docs/screenshots/user-management.png)
-
-Manage local users, roles, and permissions.
 
 ## Development
 
