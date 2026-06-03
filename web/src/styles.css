@@ -3785,7 +3785,7 @@ button .buttonIcon {
 }
 
 .selectionActions {
-  justify-content: flex-start;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -6049,7 +6049,7 @@ button:disabled,
 }
 
 .fileEditorBody {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -6086,6 +6086,19 @@ button:disabled,
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+}
+
+.fileEditorMainArea {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.fileEditorMainArea > .fileCodeEditor:first-child,
+.fileEditorMainArea > .fileEditorStateFill:first-child {
+  grid-row: 1 / -1;
 }
 
 .fileCodeEditor .cm-editor {

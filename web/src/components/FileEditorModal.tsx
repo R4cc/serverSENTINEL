@@ -93,38 +93,40 @@ export function FileEditorModal({
                 <span>{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
               </div>
-              {fileOpening ? (
-                <div className="fileEditorStateFill">
-                  <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
-                </div>
-              ) : (
-                <>
-                  {fileReadError && (
-                    <div className={fileOpenFailed ? "fileEditorStateFill" : ""}>
-                      <InlineState
-                        tone="error"
-                        title="Could not open this file"
-                        message={`${fileReadError} Close the editor or retry if the file should still be available.`}
-                        actionLabel={fileOpenFailed ? "Retry" : undefined}
-                        onAction={fileOpenFailed ? onRetryOpen : undefined}
-                      />
-                    </div>
-                  )}
-                  {!fileOpenFailed && (
-                    <Suspense fallback={<EditorLoadingState />}>
-                      <CodeEditor
-                        selectedPath={selectedPath}
-                        fileName={editorFileName}
-                        value={editorText}
-                        disabled={editorDisabled}
-                        saveDisabled={saveDisabled}
-                        onChange={onTextChange}
-                        onSave={onSave}
-                      />
-                    </Suspense>
-                  )}
-                </>
-              )}
+              <div className="fileEditorMainArea">
+                {fileOpening ? (
+                  <div className="fileEditorStateFill">
+                    <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
+                  </div>
+                ) : (
+                  <>
+                    {fileReadError && (
+                      <div className={fileOpenFailed ? "fileEditorStateFill" : ""}>
+                        <InlineState
+                          tone="error"
+                          title="Could not open this file"
+                          message={`${fileReadError} Close the editor or retry if the file should still be available.`}
+                          actionLabel={fileOpenFailed ? "Retry" : undefined}
+                          onAction={fileOpenFailed ? onRetryOpen : undefined}
+                        />
+                      </div>
+                    )}
+                    {!fileOpenFailed && (
+                      <Suspense fallback={<EditorLoadingState />}>
+                        <CodeEditor
+                          selectedPath={selectedPath}
+                          fileName={editorFileName}
+                          value={editorText}
+                          disabled={editorDisabled}
+                          saveDisabled={saveDisabled}
+                          onChange={onTextChange}
+                          onSave={onSave}
+                        />
+                      </Suspense>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
             <footer className="fileEditorFooter">
               <button type="button" className="secondaryButton" onClick={onCancel} disabled={fileSaving}>Cancel</button>

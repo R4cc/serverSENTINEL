@@ -1822,7 +1822,7 @@ export default function App() {
       const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
       setFileReadError(message);
       setFileOpenFailed(true);
-      setNotice(message);
+      notify("error", message);
     } finally {
       setFileOpening(false);
     }
