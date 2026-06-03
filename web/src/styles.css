@@ -2143,7 +2143,11 @@ button .buttonIcon {
 
 .filesPage {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  align-items: start;
+  align-items: stretch;
+  height: calc(100vh - 300px);
+  min-height: 520px;
+  max-height: calc(100vh - 220px);
+  min-width: 0;
 }
 
 .settingsPage {
@@ -3712,10 +3716,15 @@ button .buttonIcon {
 .filesExplorer {
   display: grid;
   gap: var(--space-3);
+  height: 100%;
+  min-height: 0;
   min-width: 0;
 }
 
 .filesPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
 }
@@ -3819,6 +3828,8 @@ button .buttonIcon {
 }
 
 .fileTable {
+  flex: 1 1 auto;
+  min-height: 0;
   min-width: 760px;
   overflow: auto;
 }
@@ -3831,6 +3842,9 @@ button .buttonIcon {
 }
 
 .fileTableHead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-height: 44px;
   border-bottom: var(--border-subtle) solid var(--border-muted);
   background: var(--surface-muted);
@@ -3868,7 +3882,14 @@ button .buttonIcon {
 }
 
 .fileTableRow.selected {
-  background: var(--sentinel-accent-soft);
+  background:
+    linear-gradient(90deg, var(--accent) 0 5px, transparent 5px),
+    var(--sentinel-accent-soft);
+}
+
+.fileTableRow:has(.fileNameCell:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .fileTableRow > span {
@@ -3920,6 +3941,10 @@ button .buttonIcon {
   transform: none;
 }
 
+.fileNameCell:focus-visible {
+  outline: none;
+}
+
 .fileNameCell > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3945,6 +3970,7 @@ button .buttonIcon {
 }
 
 .fileTableFooter {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
@@ -3955,12 +3981,10 @@ button .buttonIcon {
 }
 
 .fileDetailsPanel {
-  position: sticky;
-  top: var(--space-4);
   display: grid;
-  min-height: 520px;
-  max-height: calc(100vh - 150px);
-  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
 }
 
 .fileDetailsEmpty,
@@ -4887,6 +4911,17 @@ details.compatibilityBadge p {
     grid-template-columns: 1fr;
   }
 
+  .filesPage {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .filesExplorer {
+    height: min(640px, calc(100vh - 220px));
+    min-height: 420px;
+  }
+
   .overviewSummary,
   .overviewPage > .resourcePanel,
   .overviewPage > .activityPanel,
@@ -4896,8 +4931,8 @@ details.compatibilityBadge p {
   }
 
   .fileDetailsPanel {
-    position: static;
-    max-height: none;
+    height: auto;
+    min-height: 320px;
   }
 
   .fileNavBar {
@@ -6185,7 +6220,7 @@ button:disabled,
 }
 
 .fileTableRow.selected {
-  box-shadow: inset 5px 0 0 var(--accent);
+  box-shadow: none;
 }
 
 .fileTableRow > span,
