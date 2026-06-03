@@ -278,6 +278,7 @@ export type ModCompatibility = {
 export type ModrinthHit = {
   project_id: string;
   title: string;
+  author?: string;
   description: string;
   downloads: number;
   icon_url?: string;
@@ -285,6 +286,62 @@ export type ModrinthHit = {
   compatibility?: ModCompatibility;
   client_side?: string;
   server_side?: string;
+};
+
+export type ModrinthInstallVersionStatus =
+  | "recommended"
+  | "compatible"
+  | "version_mismatch"
+  | "wrong_loader"
+  | "no_installable_jar"
+  | "client_only"
+  | "server_support_unknown";
+
+export type ModrinthInstallVersion = {
+  id: string;
+  versionNumber: string;
+  releaseChannel: ReleaseChannel;
+  publishedAt?: string;
+  minecraftVersions: string[];
+  loaders: string[];
+  file?: {
+    filename: string;
+    size?: number;
+    hashes?: Record<string, string>;
+  };
+  compatible: boolean;
+  selectable: boolean;
+  requiresMinecraftAcknowledgement: boolean;
+  status: ModrinthInstallVersionStatus;
+  statusLabel: string;
+  reason: string;
+  dependencies: Array<{
+    projectId?: string;
+    versionId?: string;
+    dependencyType: "required" | "optional" | "incompatible" | "embedded" | string;
+    title?: string;
+    iconUrl?: string;
+  }>;
+};
+
+export type ModrinthInstallVersionsResponse = {
+  project: {
+    id: string;
+    title?: string;
+    description?: string;
+    iconUrl?: string;
+    clientSide?: string;
+    serverSide?: string;
+  };
+  target: {
+    serverId: string;
+    serverName: string;
+    minecraftVersion: string;
+    loader: "Fabric";
+  };
+  channel: ReleaseChannel;
+  compatibleVersions: ModrinthInstallVersion[];
+  otherVersions: ModrinthInstallVersion[];
 };
 
 export type InstalledMod = {
@@ -309,6 +366,8 @@ export type InstalledMod = {
     installedAt: string;
     installedWithForceIncompatible: boolean;
     incompatibilityReason?: string;
+    overrideMinecraftVersion?: boolean;
+    overrideReason?: string;
     clientSide?: string;
     serverSide?: string;
     forceIncompatible?: boolean;

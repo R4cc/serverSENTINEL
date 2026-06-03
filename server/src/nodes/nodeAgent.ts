@@ -8,9 +8,9 @@ import { fetch } from "undici";
 import { config } from "../config.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { latestFabricVersion } from "../fabric/fabricClient.js";
-import { fetchProject, resolveModrinthProjectCompatibility } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
-import type { ManagedServer } from "../types.js";
+import type { ManagedServer, ReleaseChannel } from "../types.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 
@@ -428,17 +428,63 @@ async function modUpload(server: ManagedServer, filename: unknown, contentBase64
   return writeRelativeFile(server, join("mods", name), content);
 }
 
-async function modInstall(server: ManagedServer, projectId: unknown, forceIncompatible: unknown, channel: unknown) {
-  if (typeof projectId !== "string" || !server.minecraftVersion || !server.loaderVersion) throw new Error("projectId, Minecraft version, and Fabric loader version are required");
-  const compatibility = await resolveModrinthProjectCompatibility({ projectId, minecraftVersion: server.minecraftVersion, loader: "fabric", channel: channel === "alpha" || channel === "beta" ? channel : "release" });
-  if (!compatibility.compatible && forceIncompatible !== true) throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
-  const file = compatibility.file;
+async function modInstall(server: ManagedServer, input: unknown) {
+  const payload = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
+  const projectId = typeof payload.projectId === "string" ? payload.projectId.trim() : "";
+  const versionId = typeof payload.versionId === "string" ? payload.versionId.trim() : "";
+  const forceIncompatible = payload.forceIncompatible === true;
+  const overrideMinecraftVersion = payload.overrideMinecraftVersion === true;
+  const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
+  if (!projectId || !server.minecraftVersion || !server.loaderVersion) throw new Error("projectId, Minecraft version, and Fabric loader version are required");
+
+  if (!versionId) {
+    const compatibility = await resolveModrinthProjectCompatibility({ projectId, minecraftVersion: server.minecraftVersion, loader: "fabric", channel });
+    if (!compatibility.compatible && !forceIncompatible) throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
+    const file = compatibility.file;
+    if (!file?.url || !file.filename) throw new Error("No installable jar found");
+    const response = await modrinthFetch(file.url);
+    if (!response.ok) throw new Error(`Mod download failed: ${response.statusText}`);
+    const content = Buffer.from(await response.arrayBuffer());
+    const written = await modUpload(server, file.filename, content.toString("base64"));
+    return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
+  }
+
+  const [project, versions] = await Promise.all([fetchProject(projectId), fetchProjectVersions(projectId)]);
+  const selectedVersion = versions.find((version) => version.id === versionId);
+  if (!selectedVersion) throw new Error("The selected Modrinth version could not be found");
+  if (!allowedForChannel(selectedVersion, channel)) throw new Error("The selected version is outside the requested release channel");
+  const file = modrinthJarFile(selectedVersion);
   if (!file?.url || !file.filename) throw new Error("No installable jar found");
+  if (!selectedVersion.loaders.includes("fabric")) throw new Error("The selected version is not a Fabric version");
+  if (project.server_side === "unsupported") throw new Error("Client-only mods cannot be installed on the server");
+  const matchesMinecraft = selectedVersion.game_versions.includes(server.minecraftVersion);
+  if (!matchesMinecraft && !overrideMinecraftVersion) throw new Error(`This version is not marked for Minecraft ${server.minecraftVersion}. Confirm the Minecraft version override before installing.`);
+  if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
+  if (!file.url.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS mod file");
   const response = await modrinthFetch(file.url);
   if (!response.ok) throw new Error(`Mod download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
   const written = await modUpload(server, file.filename, content.toString("base64"));
-  return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
+  return {
+    ...written,
+    filename: file.filename,
+    projectId,
+    version: selectedVersion.version_number,
+    channel: versionChannel(selectedVersion.version_type),
+    compatibility: {
+      status: matchesMinecraft ? "compatible" : "incompatible",
+      compatible: matchesMinecraft,
+      reason: matchesMinecraft ? "Compatible server-side Fabric mod" : "Installed with Minecraft version override",
+      matchedVersionId: selectedVersion.id,
+      matchedVersionNumber: selectedVersion.version_number,
+      matchedVersionType: versionChannel(selectedVersion.version_type),
+      matchedLoaders: selectedVersion.loaders,
+      matchedGameVersions: selectedVersion.game_versions,
+      file,
+      serverSide: project.server_side,
+      clientSide: project.client_side
+    }
+  };
 }
 
 async function handleCommand(command: string, payload: any) {
@@ -514,7 +560,7 @@ async function handleCommand(command: string, payload: any) {
   }
   if (command === "mods.list") return modsList(server);
   if (command === "mods.upload") return modUpload(server, payload?.filename, payload?.contentBase64);
-  if (command === "mods.install") return modInstall(server, payload?.projectId, payload?.forceIncompatible, payload?.channel);
+  if (command === "mods.install") return modInstall(server, payload);
   if (command === "mods.enableDisable") {
     const filename = safeName(payload?.filename);
     const source = await inside(server, join("mods", filename));
@@ -556,7 +602,7 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.2.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.3.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {

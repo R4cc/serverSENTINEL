@@ -183,7 +183,7 @@ export function resolveCompatibilityFromVersions(
   return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion, projectSides);
 }
 
-async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }) {
+export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }) {
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
   url.searchParams.set("include_changelog", "false");
   if (filters?.loader) {

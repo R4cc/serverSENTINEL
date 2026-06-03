@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -21,7 +21,7 @@ import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 
-const appVersion = "0.2.0";
+const appVersion = "0.3.0";
 const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 type ModCompatibilityFilter = "all" | "compatible" | "incompatible";
@@ -31,6 +31,18 @@ type FilePreviewState = {
   loading: boolean;
   data: FilePreview | null;
   error: string;
+};
+type ModInstallModalState = {
+  mod: ModrinthHit;
+  step: 1 | 2;
+  channel: ReleaseChannel;
+  loading: boolean;
+  installing: boolean;
+  error: string;
+  data: ModrinthInstallVersionsResponse | null;
+  selectedVersionId: string;
+  showOtherVersions: boolean;
+  acknowledgeMinecraftMismatch: boolean;
 };
 
 function isServerWorkspacePage(page: ActivePage) {
@@ -216,7 +228,7 @@ export default function App() {
   const [modCompatibilityFilter, setModCompatibilityFilter] = useState<ModCompatibilityFilter>("all");
   const [isSearchingMods, setIsSearchingMods] = useState(false);
   const [modSearchError, setModSearchError] = useState("");
-  const [forceInstallProjectId, setForceInstallProjectId] = useState<string | null>(null);
+  const [modInstallModal, setModInstallModal] = useState<ModInstallModalState | null>(null);
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [modsView, setModsView] = useState<"manager" | "search">("manager");
   const [installedQuery, setInstalledQuery] = useState("");
@@ -473,9 +485,18 @@ export default function App() {
     }
     return modSearchResults;
   }, [modCompatibilityFilter, modSearchResults]);
-  const forceInstallMod = useMemo(
-    () => modSearchResults.find((mod) => mod.project_id === forceInstallProjectId) ?? null,
-    [forceInstallProjectId, modSearchResults]
+  const selectedInstallVersion = useMemo(() => {
+    if (!modInstallModal?.data || !modInstallModal.selectedVersionId) return null;
+    return [...modInstallModal.data.compatibleVersions, ...modInstallModal.data.otherVersions]
+      .find((version) => version.id === modInstallModal.selectedVersionId) ?? null;
+  }, [modInstallModal?.data, modInstallModal?.selectedVersionId]);
+  const canContinueModInstall = Boolean(
+    selectedInstallVersion
+    && selectedInstallVersion.selectable
+    && (
+      selectedInstallVersion.compatible
+      || (modInstallModal?.showOtherVersions && selectedInstallVersion.requiresMinecraftAcknowledgement && modInstallModal.acknowledgeMinecraftMismatch)
+    )
   );
 
   useEffect(() => {
@@ -528,6 +549,118 @@ export default function App() {
 
   function formatOptionalModDate(value?: string) {
     return value ? `Updated ${formatDisplayDate(value)}` : "";
+  }
+
+  function modSideSupportLabel(value?: string) {
+    if (value === "required") return "Required";
+    if (value === "optional") return "Supported";
+    if (value === "unsupported") return "Unsupported";
+    if (value === "unknown") return "Unknown";
+    return "Unknown";
+  }
+
+  function formatVersionList(versions: string[]) {
+    if (versions.length <= 2) return versions.join(", ") || "-";
+    return `${versions.slice(0, 2).join(", ")} +${versions.length - 2}`;
+  }
+
+  function modInstallStatusClass(version: ModrinthInstallVersion) {
+    if (version.status === "recommended" || version.status === "compatible") return "ok";
+    if (version.status === "version_mismatch") return "warning";
+    return "danger";
+  }
+
+  function releaseChannelLabel(channel?: ReleaseChannel) {
+    if (channel === "alpha") return "Alpha";
+    if (channel === "beta") return "Beta";
+    return "Release";
+  }
+
+  function dependencyTypeLabel(value: string) {
+    if (value === "required") return "Required";
+    if (value === "optional") return "Optional";
+    if (value === "incompatible") return "Incompatible";
+    if (value === "embedded") return "Embedded";
+    return value || "Dependency";
+  }
+
+  function dependencyInstallStatus(dependency: ModrinthInstallVersion["dependencies"][number]) {
+    if (dependency.projectId && installedMods.some((mod) => mod.modrinth?.projectId === dependency.projectId)) {
+      return "Already installed";
+    }
+    if (dependency.dependencyType === "required") return "Auto-install not implemented";
+    if (dependency.dependencyType === "optional") return "Optional";
+    return "Informational";
+  }
+
+  function firstSelectableVersionId(data: ModrinthInstallVersionsResponse) {
+    return data.compatibleVersions.find((version) => version.status === "recommended")?.id
+      ?? data.compatibleVersions[0]?.id
+      ?? "";
+  }
+
+  function demoInstallVersions(mod: ModrinthHit, channel: ReleaseChannel): ModrinthInstallVersionsResponse {
+    const minecraftVersion = activeServer?.minecraftVersion || "1.21.1";
+    const now = new Date().toISOString();
+    return {
+      project: {
+        id: mod.project_id,
+        title: mod.title,
+        description: mod.description,
+        iconUrl: mod.icon_url,
+        clientSide: mod.client_side,
+        serverSide: mod.server_side ?? "optional"
+      },
+      target: {
+        serverId: activeServer?.id || demoServerId,
+        serverName: activeServer?.displayName || "Demo Server",
+        minecraftVersion,
+        loader: "Fabric"
+      },
+      channel,
+      compatibleVersions: [
+        {
+          id: `${mod.project_id}-demo-compatible`,
+          versionNumber: mod.compatibility?.matchedVersionNumber || "1.0.0",
+          releaseChannel: channel,
+          publishedAt: now,
+          minecraftVersions: [minecraftVersion],
+          loaders: ["fabric"],
+          file: { filename: `${mod.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jar`, size: mod.compatibility?.file?.size ?? 1_048_576 },
+          compatible: true,
+          selectable: true,
+          requiresMinecraftAcknowledgement: false,
+          status: "recommended",
+          statusLabel: "Recommended",
+          reason: "Compatible Fabric server mod",
+          dependencies: [
+            {
+              projectId: "fabric-api",
+              dependencyType: "required",
+              title: "Fabric API"
+            }
+          ]
+        }
+      ],
+      otherVersions: [
+        {
+          id: `${mod.project_id}-demo-mismatch`,
+          versionNumber: "0.9.0",
+          releaseChannel: "release",
+          publishedAt: now,
+          minecraftVersions: ["1.20.1"],
+          loaders: ["fabric"],
+          file: { filename: `${mod.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-old.jar`, size: 900_000 },
+          compatible: false,
+          selectable: true,
+          requiresMinecraftAcknowledgement: true,
+          status: "version_mismatch",
+          statusLabel: "Version mismatch",
+          reason: `Not marked for Minecraft ${minecraftVersion}`,
+          dependencies: []
+        }
+      ]
+    };
   }
   useEffect(() => {
     void refreshAuth();
@@ -891,7 +1024,7 @@ export default function App() {
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
     const trimmedQuery = query.trim();
-    setForceInstallProjectId(null);
+    setModInstallModal(null);
     setModSearchError("");
     if (!trimmedQuery) {
       setModSearchResults([]);
@@ -917,7 +1050,7 @@ export default function App() {
     const timeout = window.setTimeout(async () => {
       try {
         const result = await api<{ hits: ModrinthHit[] }>(
-          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
+          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
         );
         if (!cancelled) setModSearchResults(result.hits);
       } catch (error) {
@@ -936,7 +1069,7 @@ export default function App() {
       setIsSearchingMods(false);
       window.clearTimeout(timeout);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modInstallChannel, modCompatibilityFilter]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modCompatibilityFilter]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -2179,7 +2312,7 @@ export default function App() {
     if (!activeServer) return;
     setNotice("");
     setModSearchError("");
-    setForceInstallProjectId(null);
+    setModInstallModal(null);
     const searchQuery = query.trim();
     if (!effectiveAppState.modrinthApiConfigured) {
       const message = "Modrinth API is not configured. Add an API key in settings.";
@@ -2205,7 +2338,7 @@ export default function App() {
     }
     try {
       const result = await api<{ hits: ModrinthHit[] }>(
-        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(modInstallChannel)}&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
+        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
       );
       setModSearchResults(result.hits);
     } catch (error) {
@@ -2216,6 +2349,79 @@ export default function App() {
     } finally {
       setIsSearchingMods(false);
     }
+  }
+
+  async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel) {
+    if (!activeServer) return;
+    setModInstallChannel(channel);
+    setModInstallModal((current) => current && current.mod.project_id === mod.project_id
+      ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null }
+      : current
+    );
+
+    try {
+      const data = activeServerIsDemo
+        ? demoInstallVersions(mod, channel)
+        : await api<ModrinthInstallVersionsResponse>(
+          `/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(channel)}`
+        );
+      const selectedVersionId = firstSelectableVersionId(data);
+      setModInstallModal((current) => current && current.mod.project_id === mod.project_id
+        ? {
+          ...current,
+          channel,
+          loading: false,
+          installing: false,
+          error: "",
+          data,
+          selectedVersionId,
+          showOtherVersions: current.showOtherVersions,
+          acknowledgeMinecraftMismatch: false
+        }
+        : current
+      );
+    } catch (error) {
+      const message = errorMessage(error, "Could not load Modrinth versions for this project.");
+      setModInstallModal((current) => current && current.mod.project_id === mod.project_id
+        ? { ...current, channel, loading: false, installing: false, error: message, data: null, selectedVersionId: "" }
+        : current
+      );
+      notify("error", message);
+    }
+  }
+
+  function openModInstallModal(mod: ModrinthHit) {
+    const channel: ReleaseChannel = "release";
+    setModInstallModal({
+      mod,
+      step: 1,
+      channel,
+      loading: true,
+      installing: false,
+      error: "",
+      data: null,
+      selectedVersionId: "",
+      showOtherVersions: false,
+      acknowledgeMinecraftMismatch: false
+    });
+    void loadModInstallVersions(mod, channel);
+  }
+
+  function selectInstallVersion(version: ModrinthInstallVersion) {
+    if (!version.selectable) return;
+    setModInstallModal((current) => current
+      ? {
+        ...current,
+        selectedVersionId: version.id,
+        acknowledgeMinecraftMismatch: version.requiresMinecraftAcknowledgement ? current.acknowledgeMinecraftMismatch : false
+      }
+      : current
+    );
+  }
+
+  function continueModInstallReview() {
+    if (!modInstallModal || !selectedInstallVersion || !canContinueModInstall) return;
+    setModInstallModal((current) => current ? { ...current, step: 2 } : current);
   }
 
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
@@ -2313,19 +2519,26 @@ export default function App() {
     }
   }
 
-  async function installMod(projectId: string, title: string, forceIncompatible = false) {
+  async function installSelectedMod() {
     if (modsLocked || !canManager) return;
     if (!activeServer) return;
+    if (!modInstallModal || !modInstallModal.data || !selectedInstallVersion || !selectedInstallVersion.selectable) return;
+    const projectId = modInstallModal.mod.project_id;
+    const title = modInstallModal.data.project.title || modInstallModal.mod.title;
+    const forceIncompatible = !selectedInstallVersion.compatible;
+    const overrideMinecraftVersion = selectedInstallVersion.requiresMinecraftAcknowledgement;
+    if (overrideMinecraftVersion && !modInstallModal.acknowledgeMinecraftMismatch) return;
     setNotice("");
-    const jobId = `install-${projectId}-${Date.now()}`;
+    setModInstallModal((current) => current ? { ...current, installing: true, error: "" } : current);
+    const jobId = `install-${projectId}-${selectedInstallVersion.id}-${Date.now()}`;
     const initialJob: GeneralJob = {
       id: jobId,
       type: "mod-install",
       status: "running",
-      title: forceIncompatible ? "Force installing mod" : "Installing mod",
-      subject: title,
+      title: "Installing mod",
+      subject: `${title} ${selectedInstallVersion.versionNumber}`,
       progress: 10,
-      task: forceIncompatible ? "Installing despite compatibility warning" : "Checking compatibility",
+      task: "Resolving version",
       dismissible: false
     };
     setActiveJobs((current) => [...current, initialJob]);
@@ -2341,19 +2554,39 @@ export default function App() {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 95, task: "Refreshing installed mods" } : j));
 
-        const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || projectId}-demo.jar`;
+        const filename = selectedInstallVersion.file?.filename || `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || projectId}-demo.jar`;
         const mod: InstalledMod = {
           filename,
           displayName: title,
           enabled: true,
-          size: 1_048_576 + Math.round(Math.random() * 2_000_000),
-          modifiedAt: new Date().toISOString()
+          size: selectedInstallVersion.file?.size ?? 1_048_576 + Math.round(Math.random() * 2_000_000),
+          modifiedAt: new Date().toISOString(),
+          iconUrl: modInstallModal.data.project.iconUrl || modInstallModal.mod.icon_url,
+          description: modInstallModal.data.project.description || modInstallModal.mod.description,
+          modrinth: {
+            projectId,
+            versionId: selectedInstallVersion.id,
+            filename,
+            versionNumber: selectedInstallVersion.versionNumber,
+            versionType: selectedInstallVersion.releaseChannel,
+            gameVersions: selectedInstallVersion.minecraftVersions,
+            loaders: selectedInstallVersion.loaders,
+            hashes: selectedInstallVersion.file?.hashes,
+            installedAt: new Date().toISOString(),
+            installedWithForceIncompatible: forceIncompatible,
+            incompatibilityReason: forceIncompatible ? selectedInstallVersion.reason : undefined,
+            overrideMinecraftVersion,
+            overrideReason: overrideMinecraftVersion ? selectedInstallVersion.reason : undefined,
+            clientSide: modInstallModal.data.project.clientSide,
+            serverSide: modInstallModal.data.project.serverSide,
+            forceIncompatible
+          }
         };
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
         setNotice(`Installed ${title} as ${filename}`);
         notify("success", `Installed ${title}`);
-        setForceInstallProjectId(null);
+        setModInstallModal(null);
         setModsView("manager");
 
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
@@ -2363,26 +2596,36 @@ export default function App() {
       } catch (err) {
         const msg = (err as Error).message;
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: msg, dismissible: true } : j));
+        setModInstallModal((current) => current ? { ...current, installing: false, error: msg } : current);
       }
       return;
     }
 
     try {
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 40, task: "Resolving version and downloading jar" } : j));
+      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 35, task: "Downloading jar" } : j));
 
       const result = await api<{ filename: string; version: string; channel: ReleaseChannel }>("/api/modrinth/install", {
         method: "POST",
-        body: JSON.stringify({ serverId: activeServer.id, projectId, channel: modInstallChannel, forceIncompatible })
+        body: JSON.stringify({
+          serverId: activeServer.id,
+          projectId,
+          versionId: selectedInstallVersion.id,
+          channel: modInstallModal.channel,
+          forceIncompatible,
+          overrideMinecraftVersion
+        })
       });
-      setForceInstallProjectId(null);
-      setNotice(`Installed ${title} ${result.version} (${result.channel}) as ${result.filename}`);
-      notify("success", `Installed ${title}`);
-      setModsView("manager");
+      setModInstallModal(null);
 
+      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 75, task: "Saving file" } : j));
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
       try {
         await loadInstalledMods(activeServer.id);
         await loadFiles(activeServer.id, "/mods");
+        setNotice(`Installed ${title} ${result.version} (${result.channel}) as ${result.filename}`);
+        notify("success", `Installed ${title}`);
+        setModsView("manager");
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
       } catch (refreshErr) {
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
@@ -2396,6 +2639,7 @@ export default function App() {
       setNotice(message);
       notify("error", message);
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: message, dismissible: true } : j));
+      setModInstallModal((current) => current ? { ...current, installing: false, error: message } : current);
     }
   }
 
@@ -3967,11 +4211,6 @@ export default function App() {
                           </span>
                           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Modrinth mods..." disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown} />
                         </label>
-                        <select value={modInstallChannel} onChange={(event) => setModInstallChannel(event.target.value as ReleaseChannel)} disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown}>
-                          <option value="release">Release</option>
-                          <option value="beta">Beta</option>
-                          <option value="alpha">Alpha</option>
-                        </select>
                         <div className="compatibilityFilter" aria-label="Compatibility filter">
                           <strong>Compatibility</strong>
                           {(["all", "compatible", "incompatible"] as ModCompatibilityFilter[]).map((filter) => (
@@ -4068,11 +4307,9 @@ export default function App() {
                                 <p className={mod.compatibility?.compatible ? "compatibilityReason ok" : "compatibilityReason"}>{modCompatibilityNote(mod)}</p>
                               </div>
                               <div className="modResultAction">
-                                {mod.compatibility?.compatible ? (
-                                  <button onClick={() => installMod(mod.project_id, mod.title)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Install</button>
-                                ) : (
-                                  <button className="secondaryButton" onClick={() => setForceInstallProjectId(mod.project_id)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Review</button>
-                                )}
+                                <button onClick={() => openModInstallModal(mod)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>
+                                  {mod.compatibility?.compatible ? "Install" : "Review"}
+                                </button>
                               </div>
                             </article>
                           );
@@ -4080,31 +4317,312 @@ export default function App() {
                       </div>
                     </>
                   )}
-                  {forceInstallMod && (
-                    <div className="modalBackdrop" role="presentation">
-                      <section className="modalPanel forceInstallModal" role="dialog" aria-modal="true" aria-labelledby="force-install-title">
-                        <div className="panelHeader">
-                          <h2 id="force-install-title">
-                            {forceInstallMod.compatibility?.serverSide === "unsupported" ? "Review client-only mod" : forceInstallMod.compatibility?.serverSide === "unknown" ? "Review unknown side support" : "Review incompatible mod"}
-                          </h2>
-                          <button type="button" className="iconButton" onClick={() => setForceInstallProjectId(null)} aria-label="Close force install review">
+                  {modInstallModal && (
+                    <div className="modalBackdrop modInstallBackdrop" role="presentation">
+                      <section className="modalPanel modInstallPanel" role="dialog" aria-modal="true" aria-labelledby="mod-install-title">
+                        <div className="modInstallHeader">
+                          <div className="modInstallTitleBlock">
+                            <h2 id="mod-install-title">{modInstallModal.step === 2 ? `Install ${modInstallModal.data?.project.title || modInstallModal.mod.title}` : "Install mod"}</h2>
+                            {modInstallModal.step === 1 && <strong>{modInstallModal.data?.project.title || modInstallModal.mod.title}</strong>}
+                          </div>
+                          <button type="button" className="iconButton" onClick={() => setModInstallModal(null)} aria-label="Close install modal">
                             <AppIcon name="x" />
                           </button>
                         </div>
-                        <div className="forceInstallWarning">
-                          <strong>{forceInstallMod.title}</strong>
-                          <p>{modCompatibilityNote(forceInstallMod)}</p>
-                          <p>
-                            {forceInstallMod.compatibility?.serverSide === "unsupported"
-                              ? "Client-only mods are designed for the Minecraft client and may crash the server or do nothing if installed. Only force install if you are sure this mod is safe for the server."
-                              : forceInstallMod.compatibility?.serverSide === "unknown"
-                                ? "Server-side support for this mod could not be verified. It may crash the server or prevent startup. Only force install if you have verified it supports Minecraft servers."
-                                : "This mod may crash the server or prevent startup. Only force install it if you have reviewed the project and understand the risk."}
-                          </p>
+
+                        <div className="modInstallBody">
+                          <div className="modInstallStepper" aria-label="Install progress">
+                            <div className={modInstallModal.step === 2 ? "completed" : "active"}><span>{modInstallModal.step === 2 ? <AppIcon name="check" /> : "1"}</span><strong>Select version</strong></div>
+                            <i />
+                            <div className={modInstallModal.step === 2 ? "active" : ""}><span>2</span><strong>Confirm & install</strong></div>
+                            <i />
+                            <div><span>3</span><strong>Install</strong></div>
+                          </div>
+
+                          {modInstallModal.step === 1 && (
+                            <>
+                              <div className="modInstallTargetSummary">
+                                <div>
+                                  <small>Target server</small>
+                                  <strong>{modInstallModal.data?.target.serverName || activeServer?.displayName || "Server"}</strong>
+                                </div>
+                                <div>
+                                  <small>Minecraft</small>
+                                  <strong>{modInstallModal.data?.target.minecraftVersion || activeServer?.minecraftVersion || "Unknown"}</strong>
+                                </div>
+                                <div>
+                                  <small>Loader</small>
+                                  <strong>{modInstallModal.data?.target.loader || "Fabric"}</strong>
+                                </div>
+                                <div>
+                                  <small>Server-side support</small>
+                                  <strong className={modInstallModal.data?.project.serverSide === "unsupported" ? "dangerText" : "successText"}>
+                                    {modSideSupportLabel(modInstallModal.data?.project.serverSide ?? modInstallModal.mod.server_side)}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <div className="modInstallStepIntro">
+                                <h3>Step 1: Select version</h3>
+                                <p>Compatible versions for this server are shown first. You can review and select other versions manually if needed.</p>
+                              </div>
+
+                              <div className="modInstallChannelRow">
+                                <strong>Release channel</strong>
+                                <div className="modInstallChannelButtons" role="group" aria-label="Release channel">
+                                  {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => (
+                                    <button
+                                      key={channel}
+                                      type="button"
+                                      className={modInstallModal.channel === channel ? "active" : ""}
+                                      onClick={() => void loadModInstallVersions(modInstallModal.mod, channel)}
+                                      disabled={modInstallModal.loading}
+                                    >
+                                      {channel[0].toUpperCase() + channel.slice(1)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {modInstallModal.loading && (
+                                <InlineState tone="info" title="Loading versions" message="Fetching available Modrinth versions for this project." busy />
+                              )}
+                              {!modInstallModal.loading && modInstallModal.error && (
+                                <InlineState
+                                  tone="error"
+                                  title="Versions unavailable"
+                                  message={modInstallModal.error}
+                                  actionLabel="Retry"
+                                  onAction={() => void loadModInstallVersions(modInstallModal.mod, modInstallModal.channel)}
+                                />
+                              )}
+
+                              {!modInstallModal.loading && modInstallModal.data && (
+                                <div className="modInstallVersionGroups">
+                                  <section className="modInstallVersionGroup">
+                                    <div className="modInstallVersionGroupHeader">
+                                      <strong>Compatible versions</strong>
+                                      <span>{formatDisplayNumber(modInstallModal.data.compatibleVersions.length)}</span>
+                                    </div>
+                                    {modInstallModal.data.compatibleVersions.length === 0 ? (
+                                      <div className="emptyInline">
+                                        <strong>No compatible versions found</strong>
+                                        <span>Try Beta or Alpha, or review other available versions below.</span>
+                                      </div>
+                                    ) : (
+                                      <div className="modInstallVersionTable">
+                                        <div className="modInstallVersionTableHeader">
+                                          <span>Version</span>
+                                          <span>Minecraft</span>
+                                          <span>Release type</span>
+                                          <span>Published</span>
+                                          <span>Size</span>
+                                          <span>Status</span>
+                                        </div>
+                                        {modInstallModal.data.compatibleVersions.map((version) => (
+                                          <button
+                                            key={version.id}
+                                            type="button"
+                                            className={`modInstallVersionRow ${modInstallModal.selectedVersionId === version.id ? "selected" : ""}`}
+                                            onClick={() => selectInstallVersion(version)}
+                                          >
+                                            <span><input type="radio" checked={modInstallModal.selectedVersionId === version.id} readOnly />{version.versionNumber}</span>
+                                            <span>{formatVersionList(version.minecraftVersions)}</span>
+                                            <span>{releaseChannelLabel(version.releaseChannel)}</span>
+                                            <span>{version.publishedAt ? formatDisplayDate(version.publishedAt) : "-"}</span>
+                                            <span>{version.file?.size ? formatBytes(version.file.size) : "-"}</span>
+                                            <span><mark className={`installStatusBadge ${modInstallStatusClass(version)}`}>{version.statusLabel}</mark></span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </section>
+
+                                  <section className="modInstallVersionGroup">
+                                    <div className="modInstallVersionGroupHeader">
+                                      <strong>Other available versions</strong>
+                                      <label className="modInstallCheckbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={modInstallModal.showOtherVersions}
+                                          onChange={(event) => setModInstallModal((current) => current ? { ...current, showOtherVersions: event.target.checked, selectedVersionId: event.target.checked ? current.selectedVersionId : current.data ? firstSelectableVersionId(current.data) : "", acknowledgeMinecraftMismatch: false } : current)}
+                                        />
+                                        <span>Show versions not marked for Minecraft {modInstallModal.data.target.minecraftVersion}</span>
+                                      </label>
+                                    </div>
+                                    {modInstallModal.showOtherVersions && (
+                                      <div className="modInstallVersionTable">
+                                        <div className="modInstallVersionTableHeader">
+                                          <span>Version</span>
+                                          <span>Minecraft</span>
+                                          <span>Release type</span>
+                                          <span>Published</span>
+                                          <span>Size</span>
+                                          <span>Status</span>
+                                        </div>
+                                        {modInstallModal.data.otherVersions.length === 0 ? (
+                                          <div className="modInstallVersionEmpty">No other versions matched this release channel.</div>
+                                        ) : modInstallModal.data.otherVersions.map((version) => (
+                                          <button
+                                            key={version.id}
+                                            type="button"
+                                            className={`modInstallVersionRow ${modInstallModal.selectedVersionId === version.id ? "selected" : ""}`}
+                                            onClick={() => selectInstallVersion(version)}
+                                            disabled={!version.selectable}
+                                            title={!version.selectable ? version.reason : undefined}
+                                          >
+                                            <span><input type="radio" checked={modInstallModal.selectedVersionId === version.id} readOnly disabled={!version.selectable} />{version.versionNumber}</span>
+                                            <span>{formatVersionList(version.minecraftVersions)}</span>
+                                            <span>{releaseChannelLabel(version.releaseChannel)}</span>
+                                            <span>{version.publishedAt ? formatDisplayDate(version.publishedAt) : "-"}</span>
+                                            <span>{version.file?.size ? formatBytes(version.file.size) : "-"}</span>
+                                            <span><mark className={`installStatusBadge ${modInstallStatusClass(version)}`}>{version.statusLabel}</mark></span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </section>
+
+                                  {selectedInstallVersion?.requiresMinecraftAcknowledgement && (
+                                    <div className="modInstallRiskBox">
+                                      <strong>These versions are not marked as compatible with Minecraft {modInstallModal.data.target.minecraftVersion}.</strong>
+                                      <p>You will be asked to confirm before continuing if you select one of these.</p>
+                                      <label className="modInstallCheckbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={modInstallModal.acknowledgeMinecraftMismatch}
+                                          onChange={(event) => setModInstallModal((current) => current ? { ...current, acknowledgeMinecraftMismatch: event.target.checked } : current)}
+                                        />
+                                        <span>I understand this version is not marked as compatible with this Minecraft version.</span>
+                                      </label>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          {modInstallModal.step === 2 && modInstallModal.data && selectedInstallVersion && (
+                            <div className="modInstallConfirm">
+                              <p className="modInstallReviewCopy">Review the details below before installing.</p>
+                              <section className="modConfirmSection">
+                                <div className="modConfirmSectionHeader">
+                                  <strong>Selected mod version</strong>
+                                </div>
+                                <div className="modConfirmSelectedVersion">
+                                  {modIconSource(modInstallModal.data.project.iconUrl || modInstallModal.mod.icon_url) ? (
+                                    <img src={modIconSource(modInstallModal.data.project.iconUrl || modInstallModal.mod.icon_url)} alt="" />
+                                  ) : (
+                                    <div className="modDetailsIconFallback">MOD</div>
+                                  )}
+                                  <div className="modConfirmSelectedText">
+                                    <strong>{modInstallModal.data.project.title || modInstallModal.mod.title}</strong>
+                                    {modInstallModal.mod.author && <small>by {modInstallModal.mod.author}</small>}
+                                    <div className="modConfirmMetaLine">
+                                      <span className="subtlePill">{releaseChannelLabel(selectedInstallVersion.releaseChannel)}</span>
+                                      <span>{selectedInstallVersion.versionNumber}</span>
+                                      <span>{selectedInstallVersion.loaders.includes("fabric") ? "Fabric" : selectedInstallVersion.loaders.join(", ")}</span>
+                                      <span>For Minecraft: {formatVersionList(selectedInstallVersion.minecraftVersions)}</span>
+                                      <span>{selectedInstallVersion.publishedAt ? `Released: ${formatDisplayDate(selectedInstallVersion.publishedAt)}` : "Released: unknown"}</span>
+                                    </div>
+                                    <div className="modConfirmFilename">{selectedInstallVersion.file?.filename || "No selected jar"}{selectedInstallVersion.file?.size ? ` · ${formatBytes(selectedInstallVersion.file.size)}` : ""}</div>
+                                  </div>
+                                  <button type="button" className="secondaryButton" onClick={() => setModInstallModal((current) => current ? { ...current, step: 1, installing: false } : current)}>Change selection</button>
+                                </div>
+                                {selectedInstallVersion.requiresMinecraftAcknowledgement && (
+                                  <div className="modConfirmInfoBanner">
+                                    This version was not built for Minecraft {modInstallModal.data.target.minecraftVersion} but may still be compatible.
+                                  </div>
+                                )}
+                              </section>
+
+                              <section className="modConfirmSection">
+                                <div className="modConfirmSectionHeader"><strong>Install location</strong></div>
+                                <div className="modConfirmLocation">
+                                  <div className="modConfirmLocationIcon"><FileTypeIcon entry={{ name: "server", path: "/", type: "directory", size: 0, modifiedAt: new Date().toISOString() }} /></div>
+                                  <div>
+                                    <strong>{modInstallModal.data.target.serverName}</strong>
+                                    <span>{modInstallModal.data.target.loader} {modInstallModal.data.target.minecraftVersion}</span>
+                                  </div>
+                                </div>
+                              </section>
+
+                              <section className="modConfirmSection">
+                                <div className="modConfirmSectionHeader"><strong>Compatibility</strong></div>
+                                <div className="modConfirmRows">
+                                  <div>
+                                    <span>Minecraft Version</span>
+                                    <strong>Server: {modInstallModal.data.target.minecraftVersion} <span aria-hidden="true">↔</span> Mod: {formatVersionList(selectedInstallVersion.minecraftVersions)}</strong>
+                                    <mark className={`installStatusBadge ${selectedInstallVersion.requiresMinecraftAcknowledgement ? "warning" : "ok"}`}>{selectedInstallVersion.requiresMinecraftAcknowledgement ? "Overridden" : "Compatible"}</mark>
+                                  </div>
+                                  <div>
+                                    <span>Loader</span>
+                                    <strong>Fabric</strong>
+                                    <mark className="installStatusBadge ok">Compatible</mark>
+                                  </div>
+                                  <div>
+                                    <span>Server-side support</span>
+                                    <strong>{modSideSupportLabel(modInstallModal.data.project.serverSide)}</strong>
+                                    <mark className={`installStatusBadge ${modInstallModal.data.project.serverSide === "unsupported" ? "danger" : modInstallModal.data.project.serverSide === "unknown" ? "warning" : "ok"}`}>
+                                      {modInstallModal.data.project.serverSide === "unsupported" ? "Unsupported" : modInstallModal.data.project.serverSide === "unknown" ? "Unknown" : "Supported"}
+                                    </mark>
+                                  </div>
+                                </div>
+                              </section>
+
+                              <section className="modConfirmSection">
+                                <div className="modConfirmSectionHeader"><strong>Dependencies</strong></div>
+                                {selectedInstallVersion.dependencies.length === 0 ? (
+                                  <div className="modInstallVersionEmpty">No dependencies were listed for this version.</div>
+                                ) : (
+                                  <div className="modDependencyList">
+                                    {selectedInstallVersion.dependencies.map((dependency, index) => {
+                                      const status = dependencyInstallStatus(dependency);
+                                      return (
+                                        <div key={`${dependency.projectId || dependency.versionId || "dependency"}-${index}`} className="modDependencyRow">
+                                          {modIconSource(dependency.iconUrl) ? <img src={modIconSource(dependency.iconUrl)} alt="" /> : <div className="modDependencyFallback">?</div>}
+                                          <div>
+                                            <strong>{dependency.title || dependency.projectId || dependency.versionId || "Unknown dependency"}</strong>
+                                            <span><mark className="subtlePill">{dependencyTypeLabel(dependency.dependencyType)}</mark> {status === "Auto-install not implemented" ? "Required dependency detected. Auto-install is not implemented yet." : status}</span>
+                                          </div>
+                                          <mark className={`installStatusBadge ${status === "Already installed" ? "ok" : dependency.dependencyType === "required" ? "warning" : "ok"}`}>{status}</mark>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </section>
+
+                              {selectedInstallVersion.requiresMinecraftAcknowledgement && (
+                                <div className="modInstallRiskBox">
+                                  <strong>Confirm Minecraft version override</strong>
+                                  <label className="modInstallCheckbox">
+                                    <input
+                                      type="checkbox"
+                                      checked={modInstallModal.acknowledgeMinecraftMismatch}
+                                      onChange={(event) => setModInstallModal((current) => current ? { ...current, acknowledgeMinecraftMismatch: event.target.checked } : current)}
+                                    />
+                                    <span>I understand this version is not marked as compatible with Minecraft {modInstallModal.data.target.minecraftVersion}.</span>
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="buttonRow">
-                          <button type="button" className="secondaryButton" onClick={() => setForceInstallProjectId(null)}>Cancel</button>
-                          <button type="button" className="dangerButton" onClick={() => installMod(forceInstallMod.project_id, forceInstallMod.title, true)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>Force install</button>
+
+                        <div className="modInstallFooter">
+                          {modInstallModal.step === 2 && <button type="button" className="secondaryButton" onClick={() => setModInstallModal((current) => current ? { ...current, step: 1, installing: false } : current)} disabled={modInstallModal.installing}>Back</button>}
+                          <span className="modInstallFooterSpacer" />
+                          <button type="button" className="secondaryButton" onClick={() => setModInstallModal(null)} disabled={modInstallModal.installing}>Cancel</button>
+                          {modInstallModal.step === 1 ? (
+                            <button type="button" onClick={continueModInstallReview} disabled={!canContinueModInstall || modInstallModal.loading}>
+                              Continue
+                            </button>
+                          ) : (
+                            <button type="button" onClick={installSelectedMod} disabled={!canContinueModInstall || modInstallModal.installing}>
+                              {modInstallModal.installing ? "Installing" : "Install mod"}
+                            </button>
+                          )}
                         </div>
                       </section>
                     </div>

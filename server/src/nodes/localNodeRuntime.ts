@@ -36,7 +36,7 @@ export type LocalNodeRuntimeHandlers = {
   setModChannel(server: ManagedServer, filename: unknown, channel: ReleaseChannel | undefined): Promise<unknown>;
   removeMod(server: ManagedServer, filename: unknown): Promise<unknown>;
   uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown): Promise<unknown>;
-  installMod(server: ManagedServer, projectId: unknown, forceIncompatible: unknown, channel: ReleaseChannel | undefined): Promise<unknown>;
+  installMod(server: ManagedServer, input: unknown): Promise<unknown>;
 };
 
 export class LocalNodeRuntime implements NodeRuntime {
@@ -180,7 +180,7 @@ export class LocalNodeRuntime implements NodeRuntime {
     return this.handlers.uploadMod(server, filename, contentBase64);
   }
 
-  installMod(server: ManagedServer, projectId: unknown, forceIncompatible: unknown, channel: ReleaseChannel | undefined) {
-    return this.handlers.installMod(server, projectId, forceIncompatible, channel);
+  installMod(server: ManagedServer, input: unknown) {
+    return this.handlers.installMod(server, input);
   }
 }

@@ -4225,7 +4225,7 @@ button .buttonIcon {
 
 .modSearchToolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(140px, 190px) auto auto;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
   gap: var(--space-3);
   align-items: center;
   border: var(--border-strong) solid var(--border);
@@ -4564,6 +4564,556 @@ details.compatibilityBadge p {
 .forceInstallModal .buttonRow {
   justify-content: end;
   margin-top: var(--space-3);
+}
+
+.modInstallBackdrop {
+  align-items: start;
+  padding: 32px var(--space-4);
+  overflow-y: auto;
+}
+
+.modInstallPanel {
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.modInstallHeader,
+.modInstallFooter {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+}
+
+.modInstallHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.modInstallFooter {
+  border-top: var(--border-strong) solid var(--border);
+}
+
+.modInstallFooterSpacer {
+  flex: 1 1 auto;
+}
+
+.modInstallTitleBlock {
+  min-width: 0;
+}
+
+.modInstallTitleBlock h2 {
+  margin: 0 0 var(--space-1);
+  font-size: 24px;
+}
+
+.modInstallTitleBlock strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modInstallBody {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  background: var(--surface);
+}
+
+.modInstallStepper {
+  display: grid;
+  grid-template-columns: max-content minmax(40px, 1fr) max-content minmax(40px, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.modInstallStepper div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+
+.modInstallStepper span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 900;
+}
+
+.modInstallStepper .active {
+  color: var(--accent);
+}
+
+.modInstallStepper .active span {
+  color: var(--swiss-white);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.modInstallStepper .completed {
+  color: var(--text);
+}
+
+.modInstallStepper .completed span {
+  color: var(--swiss-white);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.modInstallStepper .completed .buttonIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.modInstallStepper i {
+  border-top: var(--border-subtle) solid var(--border-muted);
+}
+
+.modInstallTargetSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.modInstallTargetSummary div {
+  min-width: 0;
+  padding: var(--space-3);
+  border-right: var(--border-subtle) solid var(--border-muted);
+}
+
+.modInstallTargetSummary div:last-child {
+  border-right: 0;
+}
+
+.modInstallTargetSummary small,
+.modInstallChannelRow > strong,
+.modInstallVersionGroupHeader > strong {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.modInstallTargetSummary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.successText {
+  color: var(--sentinel-success);
+}
+
+.dangerText {
+  color: var(--sentinel-danger);
+}
+
+.modInstallStepIntro h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 20px;
+}
+
+.modInstallStepIntro p {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.modInstallChannelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.modInstallChannelButtons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.modInstallChannelButtons button {
+  min-height: 36px;
+  background: var(--surface);
+}
+
+.modInstallChannelButtons button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.modInstallVersionGroups {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.modInstallVersionGroup {
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.modInstallVersionGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  background: var(--surface-muted);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+}
+
+.modInstallVersionGroupHeader > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.modInstallVersionTable {
+  min-width: 100%;
+  overflow-x: auto;
+}
+
+.modInstallVersionTableHeader,
+.modInstallVersionRow {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.1fr) minmax(120px, 1fr) minmax(92px, 0.7fr) minmax(132px, 1fr) minmax(80px, 0.6fr) minmax(140px, 0.9fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 760px;
+  padding: var(--space-3);
+}
+
+.modInstallVersionTableHeader {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+}
+
+.modInstallVersionRow {
+  width: 100%;
+  border: 0;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.modInstallVersionRow:last-child {
+  border-bottom: 0;
+}
+
+.modInstallVersionRow:hover:not(:disabled),
+.modInstallVersionRow.selected {
+  background: var(--sentinel-accent-soft);
+}
+
+.modInstallVersionRow:disabled {
+  color: var(--text-soft);
+  cursor: not-allowed;
+}
+
+.modInstallVersionRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modInstallVersionRow span:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 900;
+}
+
+.modInstallVersionRow input[type="radio"],
+.modInstallCheckbox input {
+  accent-color: var(--accent);
+}
+
+.installStatusBadge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border: var(--border-strong) solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.installStatusBadge.ok {
+  color: var(--sentinel-success);
+}
+
+.installStatusBadge.warning {
+  color: var(--sentinel-warning);
+}
+
+.installStatusBadge.danger {
+  color: var(--sentinel-danger);
+}
+
+.modInstallCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.modInstallVersionEmpty {
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.modInstallRiskBox {
+  border: var(--border-strong) solid var(--sentinel-warning);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 88%, var(--sentinel-warning) 12%);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.modInstallRiskBox p {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.modInstallConfirm {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.modInstallReviewCopy {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.modConfirmSection {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.modConfirmSectionHeader {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  background: var(--surface-muted);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+}
+
+.modConfirmSectionHeader strong {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.modConfirmSelectedVersion {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+}
+
+.modConfirmSelectedVersion > img,
+.modConfirmSelectedVersion .modDetailsIconFallback {
+  width: 64px;
+  height: 64px;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.modConfirmSelectedText {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.modConfirmSelectedText > strong,
+.modConfirmFilename {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modConfirmSelectedText small {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.modConfirmMetaLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.subtlePill {
+  display: inline-flex;
+  width: fit-content;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.modConfirmFilename {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.modConfirmInfoBanner {
+  margin: 0 var(--space-3) var(--space-3);
+  border: var(--border-subtle) solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent) 14%);
+  padding: var(--space-3);
+  font-weight: 800;
+}
+
+.modConfirmLocation {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.modConfirmLocation > div:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.modConfirmLocation span {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.modConfirmRows {
+  display: grid;
+}
+
+.modConfirmRows > div {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.45fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+}
+
+.modConfirmRows > div:last-child {
+  border-bottom: 0;
+}
+
+.modConfirmRows span {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.modConfirmRows strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modDependencyList {
+  display: grid;
+}
+
+.modDependencyRow {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+}
+
+.modDependencyRow:last-child {
+  border-bottom: 0;
+}
+
+.modDependencyRow img,
+.modDependencyFallback {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-weight: 900;
+}
+
+.modDependencyRow div {
+  min-width: 0;
+}
+
+.modDependencyRow strong,
+.modDependencyRow span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modDependencyRow span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .modActions {

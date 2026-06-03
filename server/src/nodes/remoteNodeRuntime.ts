@@ -251,7 +251,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "mods.upload", { filename, contentBase64 });
   }
 
-  installMod(server: ManagedServer, projectId: unknown, forceIncompatible: unknown, channel: ReleaseChannel | undefined) {
-    return this.command(server, "mods.install", { projectId, forceIncompatible, channel });
+  installMod(server: ManagedServer, input: unknown) {
+    return this.command(server, "mods.install", input);
   }
 }

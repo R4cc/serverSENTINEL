@@ -19,11 +19,13 @@ import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJs
 import { fabricMeta, latestFabricVersion } from "./fabric/fabricClient.js";
 import {
   allowedForChannel,
+  fetchProject,
+  fetchProjectVersions,
+  modrinthJarFile,
   normalizeReleaseChannel,
   resolveModrinthProjectCompatibility,
   unknownCompatibility,
-  versionChannel,
-  fetchProject
+  versionChannel
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
@@ -386,8 +388,8 @@ function optionalReleaseChannel(channel: unknown): ReleaseChannel {
 
 function optionalCompatibilityFilter(value: unknown) {
   if (value === undefined) return undefined;
-  if (value === "all" || value === "compatible") return value;
-  badRequest("Compatibility filter must be all or compatible");
+  if (value === "all" || value === "compatible" || value === "incompatible") return value;
+  badRequest("Compatibility filter must be all, compatible, or incompatible");
 }
 
 function validateServerId(id: unknown) {
@@ -452,6 +454,14 @@ export function validateModrinthProjectId(projectId: unknown) {
     badRequest("A valid Modrinth project id is required");
   }
   return projectId.trim();
+}
+
+export function validateModrinthVersionId(versionId: unknown) {
+  if (versionId === undefined || versionId === null || versionId === "") return undefined;
+  if (typeof versionId !== "string" || !/^[a-zA-Z0-9_-]{3,64}$/.test(versionId.trim())) {
+    badRequest("A valid Modrinth version id is required");
+  }
+  return versionId.trim();
 }
 
 export function validateRuntimeJarFilename(filename: unknown) {
@@ -3787,6 +3797,8 @@ function normalizeInstalledModMetadata(value: unknown): InstalledModMetadata {
     installedAt: requiredString(metadata.installedAt, "modrinth.installedAt"),
     installedWithForceIncompatible: requireStrictBoolean(metadata.installedWithForceIncompatible, "modrinth.installedWithForceIncompatible"),
     incompatibilityReason: optionalString(metadata.incompatibilityReason, "modrinth.incompatibilityReason"),
+    overrideMinecraftVersion: metadata.overrideMinecraftVersion === undefined ? undefined : requireStrictBoolean(metadata.overrideMinecraftVersion, "modrinth.overrideMinecraftVersion"),
+    overrideReason: optionalString(metadata.overrideReason, "modrinth.overrideReason"),
     clientSide: optionalString(metadata.clientSide, "modrinth.clientSide"),
     serverSide: optionalString(metadata.serverSide, "modrinth.serverSide"),
     forceIncompatible: metadata.forceIncompatible === undefined ? undefined : requireStrictBoolean(metadata.forceIncompatible, "modrinth.forceIncompatible")
@@ -4064,39 +4076,125 @@ async function localUploadMod(server: ManagedServer, filenameInput: unknown, con
   }
 }
 
-async function localInstallMod(server: ManagedServer, projectIdInput: unknown, forceIncompatibleInput: unknown, channelInput: ReleaseChannel | undefined) {
+type ModrinthInstallRequest = {
+  projectId: string;
+  versionId?: string;
+  forceIncompatible: boolean;
+  overrideMinecraftVersion: boolean;
+  channel: ReleaseChannel;
+};
+
+function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequest {
+  const body = asObject(input, "mod install request");
+  return {
+    projectId: validateModrinthProjectId(body.projectId),
+    versionId: validateModrinthVersionId(body.versionId),
+    forceIncompatible: optionalStrictBoolean(body.forceIncompatible, "forceIncompatible", false),
+    overrideMinecraftVersion: optionalStrictBoolean(body.overrideMinecraftVersion, "overrideMinecraftVersion", false),
+    channel: optionalReleaseChannel(body.channel)
+  };
+}
+
+function compatibilityFromSelectedVersion(input: {
+  version: ModrinthVersion;
+  file: NonNullable<ReturnType<typeof modrinthJarFile>>;
+  projectSides: { server_side?: string; client_side?: string };
+  minecraftVersion: string;
+  compatible: boolean;
+  reason: string;
+}): ModCompatibility {
+  return {
+    status: input.compatible ? "compatible" : "incompatible",
+    compatible: input.compatible,
+    reason: input.reason,
+    matchedVersionId: input.version.id,
+    matchedVersionNumber: input.version.version_number,
+    matchedVersionType: versionChannel(input.version.version_type),
+    matchedLoaders: input.version.loaders,
+    matchedGameVersions: input.version.game_versions,
+    file: input.file,
+    serverSide: input.projectSides.server_side,
+    clientSide: input.projectSides.client_side
+  };
+}
+
+async function localInstallMod(server: ManagedServer, input: unknown) {
   const startedAt = Date.now();
-  const projectId = validateModrinthProjectId(projectIdInput);
-  const forceIncompatible = optionalStrictBoolean(forceIncompatibleInput, "forceIncompatible", false);
+  const install = parseModrinthInstallRequest(input);
+  const projectId = install.projectId;
+  const forceIncompatible = install.forceIncompatible;
   try {
     await ensureServerStoppedForModChanges(server);
     if (!projectId || !server.minecraftVersion || !server.loaderVersion) {
       throw new Error("projectId, Minecraft version, and Fabric loader version are required for compatible Fabric installs");
     }
     const minecraftVersion = server.minecraftVersion;
-    const selectedChannel = optionalReleaseChannel(channelInput);
-    logInfo({ ...serverLogFields(server), projectId, channel: selectedChannel, forceIncompatible, action: "modrinth_install" }, "Modrinth install started");
+    const selectedChannel = install.channel;
+    logInfo({ ...serverLogFields(server), projectId, versionId: install.versionId, channel: selectedChannel, forceIncompatible, overrideMinecraftVersion: install.overrideMinecraftVersion, action: "modrinth_install" }, "Modrinth install started");
 
-    const projectUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`);
-    const projectResponse = await modrinthFetch(projectUrl.toString());
-    if (!projectResponse.ok) {
-      throw new Error(`Modrinth project lookup failed: ${projectResponse.statusText}`);
+    const [project, versions] = await Promise.all([
+      fetchProject(projectId) as Promise<ModrinthProject>,
+      fetchProjectVersions(projectId)
+    ]);
+    const projectSides = { server_side: project.server_side, client_side: project.client_side };
+    const selectedVersion = install.versionId
+      ? versions.find((version) => version.id === install.versionId)
+      : versions.find((version) => (
+        allowedForChannel(version, selectedChannel)
+        && version.loaders.includes("fabric")
+        && version.game_versions.includes(minecraftVersion)
+        && modrinthJarFile(version)
+        && modrinthServerSideSupported(project.server_side)
+      ));
+    if (!selectedVersion) {
+      throw new Error(install.versionId ? "The selected Modrinth version could not be found" : "No compatible installable version was found for that project");
     }
-    const project = await projectResponse.json() as { icon_url?: string | null };
-    const compatibility = await resolveModrinthProjectCompatibility({
-      projectId,
+    if (!allowedForChannel(selectedVersion, selectedChannel)) {
+      throw new Error("The selected version is outside the requested release channel");
+    }
+    const file = modrinthJarFile(selectedVersion);
+    const hasFabric = selectedVersion.loaders.includes("fabric");
+    const matchesMinecraft = selectedVersion.game_versions.includes(minecraftVersion);
+    const serverSide = project.server_side;
+    const serverSupported = modrinthServerSideSupported(serverSide);
+    if (!file) {
+      throw new Error("No installable .jar file was found for that version");
+    }
+    if (!hasFabric) {
+      throw new Error("The selected version is not a Fabric version");
+    }
+    if (serverSide === "unsupported") {
+      throw new Error("Client-only mods cannot be installed on the server");
+    }
+    if (serverSide === "unknown" && !forceIncompatible) {
+      throw new Error("Server-side support is unknown. Confirm the risk before installing.");
+    }
+    if (!serverSupported && !forceIncompatible) {
+      throw new Error("Server-side support could not be verified. Confirm the risk before installing.");
+    }
+    if (!matchesMinecraft && !install.overrideMinecraftVersion) {
+      throw new Error(`This version is not marked for Minecraft ${minecraftVersion}. Confirm the Minecraft version override before installing.`);
+    }
+    const compatible = hasFabric && matchesMinecraft && serverSupported;
+    const incompatibilityReason = compatible
+      ? undefined
+      : !matchesMinecraft
+        ? `Installed with Minecraft version override. Server ${minecraftVersion}; mod ${selectedVersion.game_versions.join(", ") || "unknown"}.`
+        : serverSide === "unknown"
+          ? "Server-side support could not be verified"
+          : "Installed with compatibility override";
+    const compatibility = compatibilityFromSelectedVersion({
+      version: selectedVersion,
+      file,
+      projectSides,
       minecraftVersion,
-      loader: "fabric",
-      channel: selectedChannel
+      compatible,
+      reason: compatible ? "Compatible server-side Fabric mod" : incompatibilityReason ?? "Installed with compatibility override"
     });
     logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, compatibility: compatibility.status, forceIncompatible, action: "modrinth_install" }, "Modrinth compatibility decision");
     if (!compatibility.compatible && !forceIncompatible) {
       logWarn({ ...serverLogFields(server), projectId, compatibility: compatibility.status, reason: compatibility.reason, action: "modrinth_install" }, "Modrinth install rejected as incompatible");
       throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
-    }
-    const file = compatibility.file;
-    if (!compatibility.matchedVersionId || !compatibility.matchedVersionNumber || !file) {
-      throw new Error("No installable .jar file was found for that project");
     }
     if (!file.url.startsWith("https://")) {
       throw new Error("Refusing to download a non-HTTPS mod file");
@@ -4113,6 +4211,9 @@ async function localInstallMod(server: ManagedServer, projectIdInput: unknown, f
       throw new Error("A mod with that filename already exists");
     }
     const downloadResponse = await modrinthFetch(file.url);
+    if (!downloadResponse.ok) {
+      throw new Error(`Mod download failed: ${downloadResponse.statusText}`);
+    }
     if (!downloadResponse.body) {
       throw new Error("Mod download returned no body");
     }
@@ -4138,18 +4239,20 @@ async function localInstallMod(server: ManagedServer, projectIdInput: unknown, f
       channel: selectedChannel,
       modrinth: {
         projectId,
-        versionId: compatibility.matchedVersionId,
+        versionId: selectedVersion.id,
         filename,
-        versionNumber: compatibility.matchedVersionNumber,
-        versionType: compatibility.matchedVersionType,
-        gameVersions: compatibility.matchedGameVersions ?? [],
-        loaders: compatibility.matchedLoaders ?? [],
+        versionNumber: selectedVersion.version_number,
+        versionType: versionChannel(selectedVersion.version_type),
+        gameVersions: selectedVersion.game_versions,
+        loaders: selectedVersion.loaders,
         hashes: file.hashes,
         installedAt: new Date().toISOString(),
         installedWithForceIncompatible: forceIncompatible && !compatibility.compatible,
-        incompatibilityReason: compatibility.compatible ? undefined : compatibility.reason,
-        clientSide: compatibility.clientSide,
-        serverSide: compatibility.serverSide,
+        incompatibilityReason,
+        overrideMinecraftVersion: install.overrideMinecraftVersion && !matchesMinecraft,
+        overrideReason: install.overrideMinecraftVersion && !matchesMinecraft ? incompatibilityReason : undefined,
+        clientSide: project.client_side,
+        serverSide: project.server_side,
         forceIncompatible: forceIncompatible && !compatibility.compatible
       }
     };
@@ -4159,10 +4262,10 @@ async function localInstallMod(server: ManagedServer, projectIdInput: unknown, f
     return {
       ok: true,
       projectId,
-      version: compatibility.matchedVersionNumber,
+      version: selectedVersion.version_number,
       filename,
       path: toPublicPath(server, destination),
-      channel: compatibility.matchedVersionType ?? "release",
+      channel: versionChannel(selectedVersion.version_type),
       compatibility
     };
   } catch (error) {
@@ -4220,6 +4323,165 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
   await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
   return runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64);
+});
+
+type ModrinthInstallVersionStatus =
+  | "recommended"
+  | "compatible"
+  | "version_mismatch"
+  | "wrong_loader"
+  | "no_installable_jar"
+  | "client_only"
+  | "server_support_unknown";
+
+function modrinthServerSideSupported(serverSide?: string) {
+  return serverSide === undefined || serverSide === "required" || serverSide === "optional";
+}
+
+function classifyModrinthInstallVersion(input: {
+  version: ModrinthVersion;
+  minecraftVersion: string;
+  projectSides: { server_side?: string; client_side?: string };
+  recommended: boolean;
+  dependencyProjects: Map<string, ModrinthProject>;
+}) {
+  const file = modrinthJarFile(input.version);
+  const hasFabric = input.version.loaders.includes("fabric");
+  const matchesMinecraft = input.version.game_versions.includes(input.minecraftVersion);
+  const serverSide = input.projectSides.server_side;
+  const serverSupported = modrinthServerSideSupported(serverSide);
+  const selectable = Boolean(file && hasFabric && serverSupported);
+  const compatible = selectable && matchesMinecraft;
+  let status: ModrinthInstallVersionStatus = compatible ? "compatible" : "version_mismatch";
+  let statusLabel = compatible ? "Compatible" : "Version mismatch";
+  let reason = compatible
+    ? "Compatible Fabric server mod"
+    : `Not marked for Minecraft ${input.minecraftVersion}`;
+
+  if (!file) {
+    status = "no_installable_jar";
+    statusLabel = "No installable jar";
+    reason = "No installable .jar file was found";
+  } else if (!hasFabric) {
+    status = "wrong_loader";
+    statusLabel = "Wrong loader";
+    reason = "This version is not for Fabric";
+  } else if (serverSide === "unsupported") {
+    status = "client_only";
+    statusLabel = "Client-only";
+    reason = "Server-side support is unsupported";
+  } else if (serverSide === "unknown") {
+    status = "server_support_unknown";
+    statusLabel = "Server support unknown";
+    reason = "Server-side support could not be verified";
+  } else if (input.recommended) {
+    status = "recommended";
+    statusLabel = "Recommended";
+  }
+
+  return {
+    id: input.version.id,
+    versionNumber: input.version.version_number,
+    releaseChannel: versionChannel(input.version.version_type),
+    publishedAt: input.version.date_published,
+    minecraftVersions: input.version.game_versions,
+    loaders: input.version.loaders,
+    file: file ? {
+      filename: file.filename,
+      size: file.size,
+      hashes: file.hashes
+    } : undefined,
+    compatible,
+    selectable,
+    requiresMinecraftAcknowledgement: selectable && !matchesMinecraft,
+    status,
+    statusLabel,
+    reason,
+    dependencies: (input.version.dependencies ?? []).map((dependency) => {
+      const project = dependency.project_id ? input.dependencyProjects.get(dependency.project_id) : undefined;
+      return {
+        projectId: dependency.project_id,
+        versionId: dependency.version_id,
+        dependencyType: dependency.dependency_type || "required",
+        title: project?.title,
+        iconUrl: modrinthIconProxyUrl(project?.icon_url)
+      };
+    })
+  };
+}
+
+app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; channel?: ReleaseChannel } }>("/api/modrinth/projects/:projectId/versions", async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const projectId = validateModrinthProjectId(request.params.projectId);
+  const server = await getServer(request.query.serverId);
+  if (!server.minecraftVersion || !server.loaderVersion) {
+    throw new Error("Minecraft and Fabric loader versions are required before reviewing mod versions");
+  }
+  const selectedChannel = optionalReleaseChannel(request.query.channel);
+  const startedAt = Date.now();
+  logDebug({ ...serverLogFields(server), projectId, channel: selectedChannel, action: "modrinth_project_versions" }, "Modrinth project versions started");
+
+  try {
+    const [project, versions] = await Promise.all([
+      fetchProject(projectId) as Promise<ModrinthProject>,
+      fetchProjectVersions(projectId)
+    ]);
+    const allowedVersions = versions.filter((version) => allowedForChannel(version, selectedChannel));
+    const dependencyProjectIds = Array.from(new Set(allowedVersions.flatMap((version) => (
+      version.dependencies ?? []
+    )).map((dependency) => dependency.project_id).filter((id): id is string => Boolean(id)))).slice(0, 40);
+    const dependencyProjects = new Map<string, ModrinthProject>();
+    await Promise.all(dependencyProjectIds.map(async (dependencyProjectId) => {
+      try {
+        dependencyProjects.set(dependencyProjectId, await fetchProject(dependencyProjectId) as ModrinthProject);
+      } catch {
+        // Dependency names are helpful for the modal, but should not block version selection.
+      }
+    }));
+    const projectSides = {
+      server_side: project.server_side,
+      client_side: project.client_side
+    };
+    const firstCompatibleId = allowedVersions.find((version) => (
+      version.loaders.includes("fabric")
+      && version.game_versions.includes(server.minecraftVersion!)
+      && modrinthJarFile(version)
+      && modrinthServerSideSupported(project.server_side)
+    ))?.id;
+    const classified = allowedVersions.map((version) => classifyModrinthInstallVersion({
+      version,
+      minecraftVersion: server.minecraftVersion!,
+      projectSides,
+      recommended: version.id === firstCompatibleId,
+      dependencyProjects
+    }));
+    const compatibleVersions = classified.filter((version) => version.compatible);
+    const otherVersions = classified.filter((version) => !version.compatible);
+
+    logInfo({ ...serverLogFields(server), projectId, resultCount: classified.length, durationMs: durationSince(startedAt), action: "modrinth_project_versions", status: "versions_found" }, "Modrinth project versions completed");
+    return {
+      project: {
+        id: projectId,
+        title: project.title,
+        description: project.description,
+        iconUrl: modrinthIconProxyUrl(project.icon_url),
+        clientSide: project.client_side,
+        serverSide: project.server_side
+      },
+      target: {
+        serverId: server.id,
+        serverName: server.displayName,
+        minecraftVersion: server.minecraftVersion,
+        loader: "Fabric"
+      },
+      channel: selectedChannel,
+      compatibleVersions,
+      otherVersions
+    };
+  } catch (error) {
+    logError({ ...serverLogFields(server), projectId, durationMs: durationSince(startedAt), action: "modrinth_project_versions", status: "failed", ...errorLogFields(error) }, "Modrinth project versions failed");
+    throw error;
+  }
 });
 
 app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
@@ -4283,10 +4545,10 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   }
 });
 
-app.post<{ Body: { serverId?: string; projectId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
+app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
-  return runtimeForServer(server).installMod(server, request.body.projectId, request.body.forceIncompatible, request.body.channel);
+  return runtimeForServer(server).installMod(server, request.body);
 });
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({
@@ -4396,7 +4658,7 @@ const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
-  appVersion: process.env.npm_package_version ?? "0.2.0",
+  appVersion: process.env.npm_package_version ?? "0.3.0",
   configDir: config.configDir,
   managedServersDir: config.serversDir,
   nodeCount: startupNodes.length,

@@ -81,6 +81,8 @@ export type InstalledModMetadata = {
   installedAt: string;
   installedWithForceIncompatible: boolean;
   incompatibilityReason?: string;
+  overrideMinecraftVersion?: boolean;
+  overrideReason?: string;
   clientSide?: string;
   serverSide?: string;
   forceIncompatible?: boolean;
@@ -112,9 +114,11 @@ export type ModrinthVersion = {
   project_id?: string;
   version_number: string;
   version_type: string;
+  date_published?: string;
   game_versions: string[];
   loaders: string[];
   files: Array<{ url: string; filename: string; primary: boolean; size?: number; hashes?: Record<string, string> }>;
+  dependencies?: Array<{ project_id?: string; version_id?: string; dependency_type?: string }>;
 };
 
 export type ModrinthProject = {

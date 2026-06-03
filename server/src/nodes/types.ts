@@ -51,5 +51,5 @@ export type NodeRuntime = {
   setModChannel(server: ManagedServer, filename: unknown, channel: ReleaseChannel | undefined): Promise<unknown>;
   removeMod(server: ManagedServer, filename: unknown): Promise<unknown>;
   uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown): Promise<unknown>;
-  installMod(server: ManagedServer, projectId: unknown, forceIncompatible: unknown, channel: ReleaseChannel | undefined): Promise<unknown>;
+  installMod(server: ManagedServer, input: unknown): Promise<unknown>;
 };
