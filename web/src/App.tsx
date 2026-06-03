@@ -336,11 +336,12 @@ export default function App() {
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
   const effectiveAppState = useMemo<AppState>(() => {
     if (!demoMode) return appState;
+    const runtimeMode = appState.runtimeMode ?? "all-in-one";
     return {
       ...appState,
       servers: [demoServer(demoSchedules), ...appState.servers.filter((server) => server.id !== demoServerId)],
-      nodes: appState.nodes?.length ? appState.nodes : [defaultContextNode],
-      runtimeMode: appState.runtimeMode ?? "all-in-one",
+      nodes: appState.nodes?.length ? appState.nodes : (runtimeMode === "panel" ? [] : [defaultContextNode]),
+      runtimeMode,
       modrinthApiConfigured: true,
       dockerSocketMounted: true,
       totalMemory: appState.totalMemory || 16 * 1024 * 1024 * 1024

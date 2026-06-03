@@ -781,15 +781,17 @@ function createJoinToken(ttlMinutesInput?: number) {
 
 async function readNodes() {
   const nodes = await readJsonFile(nodesFile, config.runtimeMode === "all-in-one" ? [defaultInternalNode()] : [], (value) => asArray(value, "nodes.json").map(normalizeNode));
-  const normalized = nodes.map(normalizeNode);
+  const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
   if (config.runtimeMode === "all-in-one" && ensureDefaultInternalNode(normalized)) {
+    await writeJsonFile(nodesFile, normalized);
+  } else if (config.runtimeMode === "panel" && normalized.length !== nodes.length) {
     await writeJsonFile(nodesFile, normalized);
   }
   return normalized;
 }
 
 async function writeNodes(nodes: ManagedNode[]) {
-  const normalized = nodes.map(normalizeNode);
+  const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
   if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
   await writeJsonFile(nodesFile, normalized);
 }
@@ -1053,12 +1055,13 @@ async function readServers() {
     readNodes()
   ]);
   const nodeIds = new Set(nodes.map((node) => node.id));
-  return servers.map((server) => {
-    if (!nodeIds.has(server.nodeId)) {
-      throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
-    }
-    return server;
-  });
+  const validServers = servers.filter((server) => nodeIds.has(server.nodeId));
+  if (validServers.length !== servers.length) {
+    const removedServers = servers.filter((server) => !nodeIds.has(server.nodeId));
+    console.warn(`Purged ${removedServers.length} managed server record${removedServers.length === 1 ? "" : "s"} referencing unknown node ids.`);
+    await writeJsonFile(serversFile, validServers);
+  }
+  return validServers;
 }
 
 async function writeServers(servers: ManagedServer[]) {
@@ -3081,6 +3084,12 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
   if (assignedServers.length && !force) {
     throw new Error("Cannot delete a node while servers are assigned to it");
   }
+  let deletedServers = 0;
+  if (force && assignedServers.length) {
+    await updateServers((currentServers) => {
+      deletedServers = removeServersForNode(currentServers, request.params.nodeId);
+    });
+  }
   let deleted = false;
   await updateNodes((nodes) => {
     const index = nodes.findIndex((candidate) => candidate.id === request.params.nodeId);
@@ -3091,13 +3100,8 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
     nodes.splice(index, 1);
     deleted = true;
   });
-  if (force && assignedServers.length) {
-    await updateServers((currentServers) => {
-      removeServersForNode(currentServers, request.params.nodeId);
-    });
-  }
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: deleted, deletedServers: force ? assignedServers.length : 0 };
+  return { ok: deleted, deletedServers };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
