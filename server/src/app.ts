@@ -1030,6 +1030,17 @@ function queuedReadServers() {
   return serversQueue.enqueue(() => readServers());
 }
 
+export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
+  let removed = 0;
+  for (let index = servers.length - 1; index >= 0; index -= 1) {
+    if (servers[index].nodeId === nodeId) {
+      servers.splice(index, 1);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 async function updateServers(updater: (servers: ManagedServer[]) => Promise<void> | void) {
   return serversQueue.enqueue(async () => {
     const servers = await readServers();
@@ -2977,11 +2988,7 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
   });
   if (force && assignedServers.length) {
     await updateServers((currentServers) => {
-      for (let index = currentServers.length - 1; index >= 0; index -= 1) {
-        if (currentServers[index].nodeId === request.params.nodeId) {
-          currentServers.splice(index, 1);
-        }
-      }
+      removeServersForNode(currentServers, request.params.nodeId);
     });
   }
   panelNodeConnections.disconnect(request.params.nodeId);

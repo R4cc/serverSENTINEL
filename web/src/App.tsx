@@ -1485,8 +1485,9 @@ export default function App() {
     if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
     setNodeBusyId(node.id);
     try {
-      await api(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
-      notify("success", `Removed ${node.name}`);
+      const result = await api<{ ok: boolean; deletedServers?: number }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
+      const removedServers = result.deletedServers ?? 0;
+      notify("success", removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`);
       if (nodeDetails?.id === node.id) setNodeDetails(null);
       if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
       await refreshApp();

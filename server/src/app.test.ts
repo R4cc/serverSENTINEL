@@ -6,8 +6,10 @@ import {
   validateJavaArgs,
   validateModrinthProjectId,
   nodeInstallInstructions,
+  removeServersForNode,
   validateRuntimeJarFilename
 } from "./app.js";
+import type { ManagedServer } from "./types.js";
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
@@ -138,5 +140,18 @@ describe("node install instructions", () => {
     expect(install.dockerRun).toContain("-e SS_NODE_DATA_DIR='/data'");
     expect(install.dockerRun).toContain("-e SS_NODE_DOCKER_DATA_DIR='/var/lib/serversentinel'");
     expect(install.dockerRun).toContain("-v '/var/lib/serversentinel:/data'");
+  });
+});
+
+describe("node force delete cleanup", () => {
+  it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
+    const servers = [
+      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", serverType: "fabric", createdAt: "", updatedAt: "" },
+      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", serverType: "fabric", createdAt: "", updatedAt: "" },
+      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", serverType: "fabric", createdAt: "", updatedAt: "" }
+    ] satisfies ManagedServer[];
+
+    expect(removeServersForNode(servers, "deleted-node")).toBe(2);
+    expect(servers.map((server) => server.id)).toEqual(["server-2"]);
   });
 });
