@@ -6042,6 +6042,83 @@ button:disabled,
   margin-top: 0;
 }
 
+.fileEditorModal {
+  width: min(1120px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 80px));
+  max-height: calc(100vh - 80px);
+}
+
+.fileEditorBody {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.fileEditorMetaRow {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fileEditorMetaRow span {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fileEditorMetaRow span.dirty {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sentinel-accent-soft);
+}
+
+.fileCodeEditor {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.fileCodeEditor .cm-editor {
+  height: 100%;
+}
+
+.fileCodeEditor .cm-scroller {
+  min-height: 0;
+}
+
+.fileCodeEditor .cm-line {
+  white-space: pre;
+}
+
+.fileCodeEditor .cm-gutter {
+  min-height: 100%;
+}
+
+.fileEditorStateFill {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.fileEditorStateFill .inlineState {
+  width: min(560px, 100%);
+}
+
 .installSnippet {
   white-space: pre;
   overflow-wrap: normal;
@@ -6226,6 +6303,11 @@ button:disabled,
   .userModalFooter {
     flex-wrap: wrap;
   }
+
+  .fileEditorModal {
+    height: calc(100vh - 40px);
+    max-height: calc(100vh - 40px);
+  }
 }
 
 @media (max-width: 720px) {
@@ -6259,6 +6341,12 @@ button:disabled,
   .nodeServerList {
     max-height: 220px;
   }
+
+  .fileEditorMetaRow {
+    align-items: stretch;
+  }
+
+  .fileEditorMetaRow span {
+    border-radius: var(--radius-sm);
+  }
 }
-
-

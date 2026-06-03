@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import { AppIcon } from "./FileTypeIcon";
 import { InlineState } from "./InlineState";
 import { parentPath } from "../utils/files";
@@ -23,6 +23,16 @@ type FileEditorModalProps = {
   onDiscardChanges: () => void;
 };
 
+const CodeEditor = lazy(() => import("./CodeEditor"));
+
+function EditorLoadingState() {
+  return (
+    <div className="fileEditorStateFill">
+      <InlineState tone="loading" title="Preparing editor" message="Loading the code editor." />
+    </div>
+  );
+}
+
 export function FileEditorModal({
   selectedPath,
   editorText,
@@ -43,7 +53,6 @@ export function FileEditorModal({
   onDiscardChanges
 }: FileEditorModalProps) {
   const modalRef = useRef<HTMLElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
 
@@ -59,11 +68,6 @@ export function FileEditorModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [discardRequestOpen, onRequestClose, selectedPath]);
-
-  useEffect(() => {
-    if (!selectedPath || fileOpening || fileOpenFailed) return;
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [fileOpenFailed, fileOpening, selectedPath]);
 
   if (!selectedPath && !discardRequestOpen) return null;
 
@@ -84,27 +88,41 @@ export function FileEditorModal({
               </button>
             </header>
             <div className="fileEditorBody">
+              <div className="fileEditorMetaRow">
+                <span>{editorDisabled ? "Read only" : "Editable"}</span>
+                <span>{editorText.split("\n").length} lines</span>
+                {dirty && <span className="dirty">Unsaved changes</span>}
+              </div>
               {fileOpening ? (
-                <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
+                <div className="fileEditorStateFill">
+                  <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
+                </div>
               ) : (
                 <>
                   {fileReadError && (
-                    <InlineState
-                      tone="error"
-                      title="Could not open this file"
-                      message={`${fileReadError} Close the editor or retry if the file should still be available.`}
-                      actionLabel={fileOpenFailed ? "Retry" : undefined}
-                      onAction={fileOpenFailed ? onRetryOpen : undefined}
-                    />
+                    <div className={fileOpenFailed ? "fileEditorStateFill" : ""}>
+                      <InlineState
+                        tone="error"
+                        title="Could not open this file"
+                        message={`${fileReadError} Close the editor or retry if the file should still be available.`}
+                        actionLabel={fileOpenFailed ? "Retry" : undefined}
+                        onAction={fileOpenFailed ? onRetryOpen : undefined}
+                      />
+                    </div>
                   )}
-                  <textarea
-                    ref={textareaRef}
-                    className="fileEditorTextarea"
-                    value={editorText}
-                    onChange={(event) => onTextChange(event.target.value)}
-                    disabled={editorDisabled}
-                    spellCheck={false}
-                  />
+                  {!fileOpenFailed && (
+                    <Suspense fallback={<EditorLoadingState />}>
+                      <CodeEditor
+                        selectedPath={selectedPath}
+                        fileName={editorFileName}
+                        value={editorText}
+                        disabled={editorDisabled}
+                        saveDisabled={saveDisabled}
+                        onChange={onTextChange}
+                        onSave={onSave}
+                      />
+                    </Suspense>
+                  )}
                 </>
               )}
             </div>
