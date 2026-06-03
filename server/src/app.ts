@@ -2957,10 +2957,12 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   };
 });
 
-app.delete<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
+app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const servers = await queuedReadServers();
-  if (servers.some((server) => server.nodeId === request.params.nodeId)) {
+  const assignedServers = servers.filter((server) => server.nodeId === request.params.nodeId);
+  const force = request.query.force === "true";
+  if (assignedServers.length && !force) {
     throw new Error("Cannot delete a node while servers are assigned to it");
   }
   let deleted = false;
@@ -2973,8 +2975,17 @@ app.delete<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", destructiveRate
     nodes.splice(index, 1);
     deleted = true;
   });
+  if (force && assignedServers.length) {
+    await updateServers((currentServers) => {
+      for (let index = currentServers.length - 1; index >= 0; index -= 1) {
+        if (currentServers[index].nodeId === request.params.nodeId) {
+          currentServers.splice(index, 1);
+        }
+      }
+    });
+  }
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: deleted };
+  return { ok: deleted, deletedServers: force ? assignedServers.length : 0 };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {

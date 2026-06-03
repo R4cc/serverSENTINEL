@@ -257,7 +257,7 @@ export function NodesPage({
   onViewDetails: (node: ManagedNode) => void;
   onShowInstall: (node: ManagedNode) => void;
   onRotateToken: (node: ManagedNode) => void;
-  onRemoveNode: (node: ContextNode) => void;
+  onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
   onAddServer: (nodeId: string) => void;
@@ -435,6 +435,20 @@ export function NodesPage({
                 >
                   Remove node
                 </button>
+                {Boolean(sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length) && !selectedNode.isInternal && canManageNodes && (
+                  <button
+                    type="button"
+                    className="dangerButton compactButton"
+                    onClick={() => {
+                      const node = sortedNodes.find((candidate) => candidate.id === selectedNode.id);
+                      if (node) onRemoveNode(node, true);
+                    }}
+                    disabled={busyNodeId === selectedNode.id}
+                    title="Remove this stale node and its assigned server records from the panel without contacting the node host"
+                  >
+                    Force remove node
+                  </button>
+                )}
               </div>
             </div>
           </section>

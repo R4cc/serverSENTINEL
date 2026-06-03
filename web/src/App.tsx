@@ -1473,16 +1473,19 @@ export default function App() {
     }
   }
 
-  async function removeNode(node: ContextNode) {
+  async function removeNode(node: ContextNode, force = false) {
     if (node.isInternal || !canManageUsers) return;
-    if (node.servers.length > 0) {
+    if (node.servers.length > 0 && !force) {
       notify("error", "Move or delete assigned servers before removing this node.");
       return;
     }
-    if (!window.confirm(`Remove node "${node.name}"?\n\nThis cannot be undone.`)) return;
+    const assignedMessage = node.servers.length
+      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. It will not contact the node host or delete remote files.`
+      : "";
+    if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
     setNodeBusyId(node.id);
     try {
-      await api(`/api/nodes/${node.id}`, { method: "DELETE" });
+      await api(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
       notify("success", `Removed ${node.name}`);
       if (nodeDetails?.id === node.id) setNodeDetails(null);
       if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
