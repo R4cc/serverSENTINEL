@@ -155,12 +155,25 @@ type ProvisionJob = {
   updatedAt: string;
 };
 
+export type DockerHostPortBinding = {
+  port: string;
+  protocol: string;
+  key: string;
+};
+
+type ProvisionPortReservation = {
+  nodeId: string;
+  dockerPorts: string;
+  displayName: string;
+};
+
 type Client = {
   send: (payload: string) => void;
   readyState: number;
 };
 
 const provisionJobs = new Map<string, ProvisionJob>();
+const activeProvisionPortReservations = new Map<string, ProvisionPortReservation>();
 const sessions = new Map<string, Session>();
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
@@ -1334,6 +1347,93 @@ function isValidServerPort(port: string) {
   return value >= minServerPort && value <= maxServerPort;
 }
 
+export function dockerHostPortBindings(dockerPorts?: string): DockerHostPortBinding[] {
+  const { portBindings } = parseDockerPorts(dockerPorts);
+  return Object.entries(portBindings).flatMap(([containerPort, bindings]) => {
+    const [, protocol = "tcp"] = containerPort.split("/", 2);
+    return bindings.map((binding) => ({
+      port: binding.HostPort,
+      protocol,
+      key: `${binding.HostPort}/${protocol}`
+    }));
+  });
+}
+
+function assertUniqueDockerHostPorts(dockerPorts: string) {
+  const seen = new Map<string, DockerHostPortBinding>();
+  for (const port of dockerHostPortBindings(dockerPorts)) {
+    const existing = seen.get(port.key);
+    if (existing) {
+      throw new Error(`Port ${existing.port}/${existing.protocol} is listed more than once. Each Docker host port can only be used once per server.`);
+    }
+    seen.set(port.key, port);
+  }
+}
+
+function normalizeCreateServerPorts(input: CreateServerInput) {
+  const serverPort = input.serverPort?.trim() || "25565";
+  if (!isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+  }
+  const dockerPorts = input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`;
+  assertUniqueDockerHostPorts(dockerPorts);
+  return { serverPort, dockerPorts };
+}
+
+function portConflictMessage(port: DockerHostPortBinding, ownerName: string) {
+  return `Port ${port.port}/${port.protocol} is already used on this node by ${ownerName}. Choose a different server port or Docker port binding.`;
+}
+
+export function findExistingServerPortConflict(
+  servers: ManagedServer[],
+  nodeId: string,
+  dockerPorts: string,
+  ignoreServerId?: string
+) {
+  const requestedPorts = dockerHostPortBindings(dockerPorts);
+  const requestedKeys = new Set(requestedPorts.map((port) => port.key));
+  for (const server of servers) {
+    if (server.nodeId !== nodeId || server.id === ignoreServerId) continue;
+    for (const port of dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp")) {
+      if (requestedKeys.has(port.key)) {
+        return {
+          port,
+          ownerName: `managed server "${server.displayName}"`
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function findProvisionPortConflict(nodeId: string, dockerPorts: string, ignoreJobId?: string) {
+  const requestedPorts = dockerHostPortBindings(dockerPorts);
+  const requestedKeys = new Set(requestedPorts.map((port) => port.key));
+  for (const [jobId, reservation] of activeProvisionPortReservations) {
+    if (jobId === ignoreJobId || reservation.nodeId !== nodeId) continue;
+    for (const port of dockerHostPortBindings(reservation.dockerPorts)) {
+      if (requestedKeys.has(port.key)) {
+        return {
+          port,
+          ownerName: `provisioning job for "${reservation.displayName}"`
+        };
+      }
+    }
+  }
+  return null;
+}
+
+async function assertNodePortsAvailable(nodeId: string, dockerPorts: string, options: { ignoreServerId?: string; ignoreJobId?: string } = {}) {
+  const existingConflict = findExistingServerPortConflict(await queuedReadServers(), nodeId, dockerPorts, options.ignoreServerId);
+  if (existingConflict) {
+    throw new Error(portConflictMessage(existingConflict.port, existingConflict.ownerName));
+  }
+  const provisionConflict = findProvisionPortConflict(nodeId, dockerPorts, options.ignoreJobId);
+  if (provisionConflict) {
+    throw new Error(portConflictMessage(provisionConflict.port, provisionConflict.ownerName));
+  }
+}
+
 function sanitizeCommands(commands: unknown) {
   if (!Array.isArray(commands)) {
     throw new Error("At least one command is required");
@@ -2305,14 +2405,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const loaderVersion = input.loaderVersion?.trim() || await latestFabricVersion("loader");
   const installerVersion = input.installerVersion?.trim() || await latestFabricVersion("installer");
   const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || "fabric-server-launch.jar");
-  const serverPort = input.serverPort?.trim() || "25565";
-  if (!isValidServerPort(serverPort)) {
-    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-  }
+  const { serverPort, dockerPorts } = normalizeCreateServerPorts(input);
+  await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(minecraftVersion));
-  const dockerPorts = input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`;
-  parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
 
   const now = new Date().toISOString();
@@ -2371,13 +2467,20 @@ function updateProvisionJob(id: string, patch: Partial<ProvisionJob>) {
   });
 }
 
-function startProvisionJob(input: CreateServerInput) {
+async function startProvisionJob(input: CreateServerInput) {
   const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
+  const { dockerPorts } = normalizeCreateServerPorts(input);
+  await assertNodePortsAvailable(nodeId, dockerPorts);
   const id = randomUUID();
   const now = new Date().toISOString();
+  activeProvisionPortReservations.set(id, {
+    nodeId,
+    dockerPorts,
+    displayName: input.displayName?.trim() || "unnamed server"
+  });
   provisionJobs.set(id, {
     id,
     status: "running",
@@ -2405,6 +2508,8 @@ function startProvisionJob(input: CreateServerInput) {
       task: "Server setup failed"
     });
     setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
+  }).finally(() => {
+    activeProvisionPortReservations.delete(id);
   });
 
   return provisionJobs.get(id)!;
@@ -2567,7 +2672,17 @@ async function localUpdateServer(serverId: string, input: unknown) {
     const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
     const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion));
     const dockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
-    if (dockerPorts) parseDockerPorts(dockerPorts);
+    if (dockerPorts) assertUniqueDockerHostPorts(dockerPorts);
+    if (dockerPorts) {
+      const existingConflict = findExistingServerPortConflict(servers, current.nodeId, dockerPorts, current.id);
+      if (existingConflict) {
+        throw new Error(portConflictMessage(existingConflict.port, existingConflict.ownerName));
+      }
+      const provisionConflict = findProvisionPortConflict(current.nodeId, dockerPorts);
+      if (provisionConflict) {
+        throw new Error(portConflictMessage(provisionConflict.port, provisionConflict.ownerName));
+      }
+    }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
 
     const jarChanged = current.minecraftVersion !== minecraftVersion
@@ -3261,6 +3376,8 @@ app.post<{
   await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+  const { dockerPorts } = normalizeCreateServerPorts(request.body);
+  await assertNodePortsAvailable(nodeId, dockerPorts);
   const server = await runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId });
   logInfo(serverLogFields(server), "Managed server created");
   return runtimeForServer(server).publicServer(server);
@@ -3271,7 +3388,7 @@ app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLim
   if (!request.body.nodeId && config.runtimeMode === "panel") {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const job = startProvisionJob(request.body);
+  const job = await startProvisionJob(request.body);
   return job;
 });
 

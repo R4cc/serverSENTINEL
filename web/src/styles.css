@@ -3567,8 +3567,7 @@ button .buttonIcon {
 
 .modsContext span,
 .modsContext small,
-.modResultsHeader,
-.compatibilityFilter strong {
+.modResultsHeader {
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -4225,7 +4224,7 @@ button .buttonIcon {
 
 .modSearchToolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(240px, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   border: var(--border-strong) solid var(--border);
@@ -4274,36 +4273,6 @@ button .buttonIcon {
 
 .modSearchInput input:focus {
   outline: none;
-}
-
-.compatibilityFilter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  min-height: 44px;
-  padding: var(--space-1);
-}
-
-.compatibilityFilter strong {
-  padding: 0 var(--space-2);
-}
-
-.compatibilityFilter button {
-  min-height: 30px;
-  padding: 0 var(--space-2);
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-  box-shadow: none;
-}
-
-.compatibilityFilter button.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--swiss-white);
 }
 
 .modSearchButton {
@@ -4754,12 +4723,23 @@ details.compatibilityBadge p {
 .modInstallChannelButtons button {
   min-height: 36px;
   background: var(--surface);
+  color: var(--text);
+  font-weight: 900;
 }
 
 .modInstallChannelButtons button.active {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--swiss-white);
+}
+
+.modInstallChannelButtons button:not(.active):hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.modInstallChannelButtons button:disabled {
+  color: var(--text-soft);
 }
 
 .modInstallVersionGroups {
@@ -4859,6 +4839,43 @@ details.compatibilityBadge p {
 .modInstallVersionRow input[type="radio"],
 .modInstallCheckbox input {
   accent-color: var(--accent);
+}
+
+.modInstallVersionSkeleton {
+  pointer-events: none;
+}
+
+.modInstallVersionSkeleton .modInstallVersionRow {
+  min-height: 54px;
+}
+
+.modInstallVersionSkeleton .skeletonBlock {
+  width: min(100%, 110px);
+  height: 13px;
+}
+
+.modInstallVersionSkeleton .skeletonBadge {
+  width: 92px;
+  height: 22px;
+}
+
+.modInstallVersionSkeleton .skeletonCount {
+  width: 18px;
+  height: 14px;
+}
+
+.modInstallVersionSkeleton .skeletonToggle {
+  width: min(280px, 45%);
+  height: 18px;
+}
+
+.skeletonRadio {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface-muted);
 }
 
 .installStatusBadge {
@@ -5431,10 +5448,6 @@ details.compatibilityBadge p {
   .modsContext {
     justify-items: start;
     text-align: left;
-  }
-
-  .compatibilityFilter {
-    flex-wrap: wrap;
   }
 
   .activeServerStrip {

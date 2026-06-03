@@ -7,7 +7,9 @@ import {
   validateModrinthProjectId,
   nodeInstallInstructions,
   removeServersForNode,
-  validateRuntimeJarFilename
+  validateRuntimeJarFilename,
+  dockerHostPortBindings,
+  findExistingServerPortConflict
 } from "./app.js";
 import type { ManagedServer } from "./types.js";
 
@@ -153,5 +155,49 @@ describe("node force delete cleanup", () => {
 
     expect(removeServersForNode(servers, "deleted-node")).toBe(2);
     expect(servers.map((server) => server.id)).toEqual(["server-2"]);
+  });
+});
+
+describe("server port conflict detection", () => {
+  const servers = [
+    {
+      id: "server-1",
+      nodeId: "node-a",
+      displayName: "Survival",
+      serverDir: "/tmp/survival",
+      dockerPorts: "25565:25565/tcp,25565:25565/udp",
+      serverType: "fabric",
+      createdAt: "",
+      updatedAt: ""
+    },
+    {
+      id: "server-2",
+      nodeId: "node-b",
+      displayName: "Creative",
+      serverDir: "/tmp/creative",
+      dockerPorts: "25565:25565/tcp",
+      serverType: "fabric",
+      createdAt: "",
+      updatedAt: ""
+    }
+  ] satisfies ManagedServer[];
+
+  it("extracts host ports by protocol from Docker port bindings", () => {
+    expect(dockerHostPortBindings("25565:25565/tcp,19132:19132/udp")).toEqual([
+      { port: "25565", protocol: "tcp", key: "25565/tcp" },
+      { port: "19132", protocol: "udp", key: "19132/udp" }
+    ]);
+  });
+
+  it("detects duplicate host ports on the same node", () => {
+    const conflict = findExistingServerPortConflict(servers, "node-a", "25565:25566/tcp");
+    expect(conflict?.ownerName).toBe('managed server "Survival"');
+    expect(conflict?.port).toEqual({ port: "25565", protocol: "tcp", key: "25565/tcp" });
+  });
+
+  it("allows the same host port on a different node or different protocol", () => {
+    expect(findExistingServerPortConflict(servers, "node-b", "25565:25566/tcp", "server-2")).toBeNull();
+    expect(findExistingServerPortConflict(servers, "node-a", "25566:25565/tcp")).toBeNull();
+    expect(findExistingServerPortConflict(servers, "node-a", "25565:25565/udp", "server-1")).toBeNull();
   });
 });

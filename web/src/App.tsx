@@ -24,7 +24,6 @@ import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/Se
 const appVersion = "0.3.0";
 const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
-type ModCompatibilityFilter = "all" | "compatible" | "incompatible";
 type FileSortKey = "name" | "modifiedAt" | "type" | "size";
 type FilePreviewState = {
   path: string;
@@ -201,6 +200,46 @@ function hasPotentialEvent(text: string): boolean {
   );
 }
 
+function ModInstallVersionSkeleton() {
+  const rowKeys = ["one", "two", "three"];
+  return (
+    <div className="modInstallVersionGroups modInstallVersionSkeleton" aria-hidden="true">
+      <section className="modInstallVersionGroup">
+        <div className="modInstallVersionGroupHeader">
+          <strong>Compatible versions</strong>
+          <span className="skeletonBlock skeletonCount" />
+        </div>
+        <div className="modInstallVersionTable">
+          <div className="modInstallVersionTableHeader">
+            <span>Version</span>
+            <span>Minecraft</span>
+            <span>Release type</span>
+            <span>Published</span>
+            <span>Size</span>
+            <span>Status</span>
+          </div>
+          {rowKeys.map((key) => (
+            <div key={key} className="modInstallVersionRow">
+              <span><i className="skeletonRadio" /><b className="skeletonBlock" /></span>
+              <span><b className="skeletonBlock" /></span>
+              <span><b className="skeletonBlock" /></span>
+              <span><b className="skeletonBlock" /></span>
+              <span><b className="skeletonBlock" /></span>
+              <span><b className="skeletonBlock skeletonBadge" /></span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="modInstallVersionGroup">
+        <div className="modInstallVersionGroupHeader">
+          <strong>Other available versions</strong>
+          <span className="skeletonBlock skeletonToggle" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
@@ -224,8 +263,6 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
   const [modSearchResults, setModSearchResults] = useState<ModrinthHit[]>([]);
-  const [modInstallChannel, setModInstallChannel] = useState<ReleaseChannel>("release");
-  const [modCompatibilityFilter, setModCompatibilityFilter] = useState<ModCompatibilityFilter>("all");
   const [isSearchingMods, setIsSearchingMods] = useState(false);
   const [modSearchError, setModSearchError] = useState("");
   const [modInstallModal, setModInstallModal] = useState<ModInstallModalState | null>(null);
@@ -477,15 +514,6 @@ export default function App() {
     });
   }, [installedMods, installedQuery]);
 
-  const filteredModSearchResults = useMemo(() => {
-    if (modCompatibilityFilter === "compatible") {
-      return modSearchResults.filter((mod) => Boolean(mod.compatibility?.compatible));
-    }
-    if (modCompatibilityFilter === "incompatible") {
-      return modSearchResults.filter((mod) => !mod.compatibility?.compatible);
-    }
-    return modSearchResults;
-  }, [modCompatibilityFilter, modSearchResults]);
   const selectedInstallVersion = useMemo(() => {
     if (!modInstallModal?.data || !modInstallModal.selectedVersionId) return null;
     return [...modInstallModal.data.compatibleVersions, ...modInstallModal.data.otherVersions]
@@ -598,6 +626,16 @@ export default function App() {
     return data.compatibleVersions.find((version) => version.status === "recommended")?.id
       ?? data.compatibleVersions[0]?.id
       ?? "";
+  }
+
+  function hasVisibleInstallVersions(data: ModrinthInstallVersionsResponse) {
+    return data.compatibleVersions.length > 0 || data.otherVersions.length > 0;
+  }
+
+  function nextReleaseChannel(channel: ReleaseChannel): ReleaseChannel | null {
+    if (channel === "release") return "beta";
+    if (channel === "beta") return "alpha";
+    return null;
   }
 
   function demoInstallVersions(mod: ModrinthHit, channel: ReleaseChannel): ModrinthInstallVersionsResponse {
@@ -873,7 +911,6 @@ export default function App() {
       setInstalledQuery("");
       setModSearchResults([]);
       setModSearchError("");
-      setModCompatibilityFilter("all");
     }
   }, [activePage]);
 
@@ -1051,7 +1088,7 @@ export default function App() {
     const timeout = window.setTimeout(async () => {
       try {
         const result = await api<{ hits: ModrinthHit[] }>(
-          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
+          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
         );
         if (!cancelled) setModSearchResults(result.hits);
       } catch (error) {
@@ -1070,7 +1107,7 @@ export default function App() {
       setIsSearchingMods(false);
       window.clearTimeout(timeout);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo, modCompatibilityFilter]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -2339,7 +2376,7 @@ export default function App() {
     }
     try {
       const result = await api<{ hits: ModrinthHit[] }>(
-        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&compatibility=${encodeURIComponent(modCompatibilityFilter)}`
+        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
       );
       setModSearchResults(result.hits);
     } catch (error) {
@@ -2354,23 +2391,30 @@ export default function App() {
 
   async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel) {
     if (!activeServer) return;
-    setModInstallChannel(channel);
     setModInstallModal((current) => current && current.mod.project_id === mod.project_id
       ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null }
       : current
     );
 
     try {
-      const data = activeServerIsDemo
-        ? demoInstallVersions(mod, channel)
-        : await api<ModrinthInstallVersionsResponse>(
-          `/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(channel)}`
+      const fetchVersions = async (nextChannel: ReleaseChannel) => activeServerIsDemo
+        ? demoInstallVersions(mod, nextChannel)
+        : api<ModrinthInstallVersionsResponse>(
+          `/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`
         );
+      let resolvedChannel = channel;
+      let data = await fetchVersions(resolvedChannel);
+      while (!hasVisibleInstallVersions(data)) {
+        const fallbackChannel = nextReleaseChannel(resolvedChannel);
+        if (!fallbackChannel) break;
+        resolvedChannel = fallbackChannel;
+        data = await fetchVersions(resolvedChannel);
+      }
       const selectedVersionId = firstSelectableVersionId(data);
       setModInstallModal((current) => current && current.mod.project_id === mod.project_id
         ? {
           ...current,
-          channel,
+          channel: resolvedChannel,
           loading: false,
           installing: false,
           error: "",
@@ -2585,7 +2629,6 @@ export default function App() {
         };
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
-        setNotice(`Installed ${title} as ${filename}`);
         notify("success", `Installed ${title}`);
         setModInstallModal(null);
         setModsView("manager");
@@ -2624,7 +2667,6 @@ export default function App() {
       try {
         await loadInstalledMods(activeServer.id);
         await loadFiles(activeServer.id, "/mods");
-        setNotice(`Installed ${title} ${result.version} (${result.channel}) as ${result.filename}`);
         notify("success", `Installed ${title}`);
         setModsView("manager");
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
@@ -4212,24 +4254,11 @@ export default function App() {
                           </span>
                           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Modrinth mods..." disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown} />
                         </label>
-                        <div className="compatibilityFilter" aria-label="Compatibility filter">
-                          <strong>Compatibility</strong>
-                          {(["all", "compatible", "incompatible"] as ModCompatibilityFilter[]).map((filter) => (
-                            <button
-                              key={filter}
-                              type="button"
-                              className={modCompatibilityFilter === filter ? "active" : ""}
-                              onClick={() => setModCompatibilityFilter(filter)}
-                            >
-                              {filter === "all" ? "All" : filter === "compatible" ? "Compatible" : "Incompatible"}
-                            </button>
-                          ))}
-                        </div>
                         <button className="modSearchButton" disabled={isProvisioning || !canManager || isSearchingMods || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown || !query.trim()}>{isSearchingMods ? "Searching" : "Search"}</button>
                       </form>
                       <div className="modResultsHeader">
                         <strong>Search results</strong>
-                        <span>{isSearchingMods ? "Searching..." : query.trim() ? `${formatDisplayNumber(filteredModSearchResults.length)} shown` : "No query entered"}</span>
+                        <span>{isSearchingMods ? "Searching..." : query.trim() ? `${formatDisplayNumber(modSearchResults.length)} shown` : "No query entered"}</span>
                       </div>
                       <div className="mods">
                         {isSearchingMods && Array.from({ length: 4 }, (_, index) => (
@@ -4280,13 +4309,7 @@ export default function App() {
                             <span>No Modrinth results matched this search. Try a different mod name or a shorter search term.</span>
                           </div>
                         )}
-                        {!isSearchingMods && !modSearchError && query.trim() && modSearchResults.length > 0 && filteredModSearchResults.length === 0 && (
-                          <div className="emptyInline">
-                            <strong>All results filtered out</strong>
-                            <span>The current compatibility filter hides every result. Switch the filter to see more options.</span>
-                          </div>
-                        )}
-                        {filteredModSearchResults.map((mod) => {
+                        {modSearchResults.map((mod) => {
                           const iconSrc = modIconSource(mod.icon_url);
                           return (
                             <article key={mod.project_id} className="modRow modSearchResult">
@@ -4386,7 +4409,7 @@ export default function App() {
                               </div>
 
                               {modInstallModal.loading && (
-                                <InlineState tone="info" title="Loading versions" message="Fetching available Modrinth versions for this project." busy />
+                                <ModInstallVersionSkeleton />
                               )}
                               {!modInstallModal.loading && modInstallModal.error && (
                                 <InlineState
