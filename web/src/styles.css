@@ -5755,5 +5755,510 @@ details.compatibilityBadge p {
   padding-top: var(--space-4);
 }
 
+/* Focused frontend polish pass */
+.workspace {
+  min-width: 0;
+  max-width: 1680px;
+  width: 100%;
+}
+
+.workspaceHeader {
+  min-height: 104px;
+  align-items: end;
+}
+
+.workspaceHeader > div {
+  min-width: 0;
+}
+
+.workspaceHeader h2 {
+  overflow-wrap: anywhere;
+}
+
+.workspaceActions {
+  justify-content: flex-end;
+}
+
+.pageStack,
+.tabPage,
+.settingsList,
+.nodesPage {
+  min-width: 0;
+}
+
+.panel,
+.emptyState,
+.activeServerStrip,
+.modalPanel {
+  border-radius: var(--radius-sm);
+}
+
+.panel {
+  padding: var(--space-4);
+}
+
+.panelHeader {
+  min-height: 44px;
+  align-items: center;
+}
+
+.panelHeader > div,
+.panelHeader h2,
+.settingsGroupHeader > div,
+.settingsRow > div,
+.serverStripInfo,
+.modsCardText,
+.scheduleMain,
+.scheduleMeta {
+  min-width: 0;
+}
+
+.panelHeader h2,
+.settingsGroupHeader h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyState,
+.compactEmpty,
+.emptyInline,
+.eventEmpty,
+.nodeServerEmpty,
+.fileDetailsEmpty {
+  border-radius: var(--radius-sm);
+}
+
+.emptyState {
+  width: 100%;
+}
+
+.compactEmpty {
+  max-width: none;
+  padding: var(--space-4);
+}
+
+.compactEmpty h2 {
+  font-size: clamp(24px, 4vw, 44px);
+  line-height: 0.92;
+}
+
+button,
+.quickActionButton,
+.runtimeControlButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 42px;
+}
+
+.secondaryButton {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.toastDismissButton,
+.eventHideButton,
+.iconDangerButton,
+.roleInfoButton,
+.accountLogoutButton {
+  flex: 0 0 auto;
+}
+
+button:disabled,
+.sideNav button:disabled {
+  filter: grayscale(0.2);
+}
+
+.sideNav button:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border-muted);
+  color: var(--text-soft);
+  opacity: 0.64;
+}
+
+.sideNav button.active {
+  box-shadow: inset 5px 0 0 var(--accent);
+}
+
+.sideNav button:not(.active):hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--text);
+  transform: none;
+}
+
+.selectedServerReadout {
+  min-height: 28px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 6px 8px;
+}
+
+.serverListItem,
+.nodeCard,
+.addNodeCardButton,
+.modsCard,
+.scheduleRow {
+  min-width: 0;
+}
+
+.serverListItem strong,
+.nodeCardTitle h3,
+.nodeServerName,
+.selectedServerReadout,
+.accountName,
+.settingsNavLabel,
+.modInfoText strong,
+.modInfoText .filename,
+.modsCardText strong,
+.scheduleMain strong,
+.scheduleMain code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inlineState {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+}
+
+.inlineStateSpinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.85s linear infinite;
+}
+
+.inlineState-empty,
+.emptyInline,
+.eventEmpty,
+.fileDetailsEmpty,
+.nodeServerEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
+    var(--surface-muted);
+}
+
+.themeDark .inlineState-empty,
+.themeDark .emptyInline,
+.themeDark .eventEmpty,
+.themeDark .fileDetailsEmpty,
+.themeDark .nodeServerEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 10px),
+    var(--surface-muted);
+}
+
+.modalHeader,
+.modalBody,
+.modalFooter {
+  padding: var(--space-4);
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.modalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.modalHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modalBody {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.modalBody p {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.modalFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+}
+
+.confirmModalPanel,
+.discardEditorModal {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.confirmContent blockquote {
+  margin: 0;
+  border-left: var(--border-heavy) solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.discardEditorActions {
+  margin: 0;
+}
+
+.fileEditorHeader,
+.fileEditorFooter,
+.userModalHeader,
+.userModalFooter,
+.nodeModalHeader,
+.nodeModalBody {
+  padding: var(--space-4);
+}
+
+.nodeModalFooter.inline {
+  margin-top: 0;
+}
+
+.installSnippet {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.installSnippetShell {
+  overflow-x: auto;
+}
+
+.terminal,
+.console,
+.installSnippet,
+.fileEditorTextarea,
+.modDetailsHashes {
+  scrollbar-width: thin;
+}
+
+.terminal pre,
+.console pre,
+.installSnippet code,
+.modDetailsHashes {
+  overflow-wrap: normal;
+}
+
+.fileTable {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fileTableHead,
+.fileTableRow {
+  min-width: 760px;
+}
+
+.fileTableRow.selected {
+  box-shadow: inset 5px 0 0 var(--accent);
+}
+
+.fileTableRow > span,
+.modsTableCell,
+.modsTableCell span,
+.modsTableCell code,
+.sourceCol,
+.compatMeta,
+.updateMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modsCardsGrid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.modsTable {
+  overflow-x: auto;
+}
+
+.modsTableHeader,
+.modsTableRow {
+  min-width: 1060px;
+}
+
+.modsTableCell {
+  min-width: 0;
+}
+
+.scheduleRow {
+  gap: var(--space-3);
+}
+
+.scheduleRow ul {
+  max-height: 160px;
+  overflow: auto;
+}
+
+.scheduleRow li {
+  overflow-wrap: anywhere;
+}
+
+.scheduleMeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settingsRow,
+.settingsGroupHeader {
+  min-width: 0;
+}
+
+.settingsRow select,
+.settingsRow input,
+.keyForm,
+.secretPreview {
+  min-width: 0;
+}
+
+.usersTable td,
+.usersTable th {
+  overflow: hidden;
+}
+
+.usersTable td > *,
+.usersTable th > * {
+  min-width: 0;
+}
+
+.nodeServerList {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.nodeServerRow {
+  min-width: 0;
+}
+
+.nodeServerState,
+.nodeServerPlayers {
+  flex: 0 0 auto;
+}
+
+.nodesGrid {
+  min-height: 0;
+}
+
+.addNodeCardButton {
+  min-height: 320px;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 1366px) {
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .workspaceHeader {
+    min-height: 88px;
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(34px, 4.8vw, 64px);
+  }
+
+  .activeServerStrip {
+    padding: var(--space-3);
+  }
+
+  .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .nodesGrid {
+    max-height: calc(100vh - 220px);
+  }
+}
+
+@media (max-width: 900px) {
+  .workspaceHeader {
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .workspaceActions {
+    justify-content: flex-start;
+  }
+
+  .selectionActionBar {
+    grid-template-columns: 1fr;
+  }
+
+  .selectionActions,
+  .fileToolbar {
+    justify-content: flex-start;
+  }
+
+  .modalFooter,
+  .fileEditorFooter,
+  .userModalFooter {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 720px) {
+  .modalHeader,
+  .modalBody,
+  .modalFooter,
+  .fileEditorHeader,
+  .fileEditorFooter,
+  .userModalHeader,
+  .userModalFooter,
+  .nodeModalHeader,
+  .nodeModalBody {
+    padding: var(--space-3);
+  }
+
+  .modalFooter button,
+  .fileEditorFooter button,
+  .discardEditorActions button {
+    width: 100%;
+  }
+
+  .inlineState {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inlineStateSpinner {
+    align-self: start;
+  }
+
+  .nodeServerList {
+    max-height: 220px;
+  }
+}
 
 

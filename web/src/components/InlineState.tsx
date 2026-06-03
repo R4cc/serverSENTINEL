@@ -15,6 +15,7 @@ export function InlineState({
 }) {
   return (
     <div className={`inlineState inlineState-${tone}`} role={tone === "error" ? "alert" : "status"}>
+      {tone === "loading" && <span className="inlineStateSpinner" aria-hidden="true" />}
       <div>
         <strong>{title}</strong>
         <span>{message}</span>

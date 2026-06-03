@@ -119,16 +119,23 @@ export function FileEditorModal({
       )}
 
       {discardRequestOpen && (
-        <div className="modalBackdrop discardEditorBackdrop" role="presentation">
+        <div className="modalBackdrop discardEditorBackdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onKeepEditing();
+        }}>
           <section className="modalPanel discardEditorModal" role="dialog" aria-modal="true" aria-labelledby="discard-editor-title">
-            <header className="panelHeader">
+            <header className="modalHeader">
               <h2 id="discard-editor-title">Discard unsaved changes?</h2>
+              <button type="button" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
+                <AppIcon name="x" />
+              </button>
             </header>
-            <p>Discard unsaved changes?</p>
-            <div className="buttonRow discardEditorActions">
+            <div className="modalBody">
+              <p>Discard this editor session and lose the unsaved file changes?</p>
+            </div>
+            <footer className="modalFooter discardEditorActions">
               <button type="button" className="secondaryButton" onClick={onKeepEditing}>Keep Editing</button>
               <button type="button" className="dangerButton" onClick={onDiscardChanges}>Discard Changes</button>
-            </div>
+            </footer>
           </section>
         </div>
       )}

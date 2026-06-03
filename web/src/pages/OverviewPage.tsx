@@ -223,37 +223,29 @@ export function RecentEventsPanel({
       <button type="button" className="textLinkButton" onClick={onOpenConsole}>View full log</button>
 
       {confirmHide && (
-        <div className="modalBackdrop" role="presentation" onClick={() => setConfirmHide(null)}>
-          <section className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="confirm-hide-title" onClick={(e) => e.stopPropagation()}>
-            <div className="panelHeader">
+        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setConfirmHide(null);
+        }}>
+          <section className="modalPanel confirmModalPanel" role="dialog" aria-modal="true" aria-labelledby="confirm-hide-title">
+            <header className="modalHeader">
               <h2 id="confirm-hide-title">Hide Event Type</h2>
-              <button type="button" className="iconButton" onClick={() => setConfirmHide(null)} aria-label="Close dialog">
+              <button type="button" className="iconButton modalCloseButton" onClick={() => setConfirmHide(null)} aria-label="Close dialog" title="Close dialog">
                 <AppIcon name="x" />
               </button>
-            </div>
-            <div className="confirmContent" style={{ marginTop: 'var(--space-2)' }}>
-              <p style={{ margin: '0 0 var(--space-4)', fontSize: '14px', lineHeight: 1.5 }}>
-                Are you sure you want to hide all recent events of this type?
-              </p>
-              <blockquote style={{
-                margin: '0 0 var(--space-4)',
-                padding: 'var(--space-2) var(--space-3)',
-                background: 'var(--surface-muted)',
-                borderLeft: '4px solid var(--accent)',
-                borderRadius: 'var(--radius-sm)',
-                fontStyle: 'normal',
-                fontSize: '14px'
-              }}>
+            </header>
+            <div className="modalBody confirmContent">
+              <p>Hide all recent events matching this type?</p>
+              <blockquote>
                 <strong>{confirmHide.text}</strong>
               </blockquote>
-              <div className="buttonRow" style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-                <button type="button" className="secondaryButton" onClick={() => setConfirmHide(null)}>Cancel</button>
-                <button type="button" className="dangerButton" onClick={() => {
-                  hideEvent(confirmHide.signature);
-                  setConfirmHide(null);
-                }}>Hide Events</button>
-              </div>
             </div>
+            <footer className="modalFooter">
+              <button type="button" className="secondaryButton" onClick={() => setConfirmHide(null)}>Cancel</button>
+              <button type="button" className="dangerButton" onClick={() => {
+                hideEvent(confirmHide.signature);
+                setConfirmHide(null);
+              }}>Hide Events</button>
+            </footer>
           </section>
         </div>
       )}
