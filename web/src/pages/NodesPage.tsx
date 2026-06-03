@@ -81,13 +81,13 @@ function InstallInstructions({
     <section className="nodeInstallBox">
       <div className="nodeInstallHeader">
         <div>
-          <h3>Install {result.node.name}</h3>
+          <h3>INSTALL {result.node.name}</h3>
           <p>{expiresAt ? `Join token expires ${formatNodeDate(expiresAt)}` : result.install.tokenRequired ? "Rotate the join token before installing this node." : "Token is not included in this snippet."}</p>
         </div>
       </div>
       <div className="installTabs" role="tablist" aria-label="Install method">
-        <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</button>
-        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run</button>
+        <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>DOCKER COMPOSE</button>
+        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>DOCKER RUN</button>
       </div>
       <div className="installSnippetShell">
         <button type="button" className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
@@ -99,23 +99,110 @@ function InstallInstructions({
   );
 }
 
-function NodeSetupState({ node }: { node?: ManagedNode }) {
-  const steps = [
-    { label: "Waiting for node", done: Boolean(node && node.status !== "unknown"), active: !node || node.status === "unknown" },
-    { label: "Token accepted", done: Boolean(node?.connectedAt || (node && !node.hasPendingJoinToken && node.status !== "unknown")) },
-    { label: "Docker available", done: node?.dockerStatus === "available" },
-    { label: "Data path writable", done: node?.dataPathStatus === "ready" },
-    { label: "Node ready", done: Boolean(node && isNodeRuntimeUsable(node) && node.dataPathStatus === "ready") }
-  ];
+const addNodeSteps = ["Create Node", "Run Install", "Connect", "Verify", "Ready"];
+
+type AddNodeFlowState = "waiting" | "success" | "incompatible" | "expired" | "disconnected";
+
+function isAddNodeSuccess(node?: ManagedNode) {
+  return Boolean(node && node.status === "online" && node.compatibility === "compatible" && isNodeRuntimeUsable(node));
+}
+
+function addNodeFlowState(node: ManagedNode | undefined, expiresAt: string): AddNodeFlowState {
+  if (isAddNodeSuccess(node)) return "success";
+  if (node?.status === "online" && node.compatibility === "incompatible") return "incompatible";
+  if (node?.status === "offline" && node.connectedAt) return "disconnected";
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return "expired";
+  return "waiting";
+}
+
+function addNodeActiveStep(flowState: AddNodeFlowState) {
+  if (flowState === "success") return 5;
+  if (flowState === "incompatible") return 4;
+  if (flowState === "disconnected") return 3;
+  return 2;
+}
+
+function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; completeAll: boolean }) {
+  const completedUntil = completeAll ? addNodeSteps.length : Math.max(1, activeStep - 1);
 
   return (
-    <div className="nodeSetupState">
-      {steps.map((step) => (
-        <div key={step.label} className={`nodeSetupStep ${step.done ? "done" : step.active ? "active" : ""}`}>
-          <span className={`nodeStatusDot ${step.done ? "online" : step.active ? "unknown" : "offline"}`} aria-hidden="true" />
-          <span>{step.label}</span>
+    <ol className="addNodeStepper" aria-label="Add node progress">
+      {addNodeSteps.map((label, index) => {
+        const stepNumber = index + 1;
+        const isComplete = stepNumber <= completedUntil;
+        const isActive = !completeAll && stepNumber === activeStep;
+        return (
+          <li key={label} className={`addNodeStep ${isComplete ? "complete" : ""} ${isActive ? "active" : ""}`}>
+            {index > 0 && <span className={`addNodeConnector ${index <= completedUntil ? "complete" : ""}`} aria-hidden="true" />}
+            <span className="addNodeStepContent">
+              <span className="addNodeStepCircle" aria-hidden="true">{isComplete ? "✓" : stepNumber}</span>
+              <span className="addNodeStepLabel">{label}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; flowState: AddNodeFlowState; node?: ManagedNode }) {
+  if (flowState === "success") {
+    return (
+      <div className="addNodeStatusCard success">
+        <span className="addNodeStatusIcon" aria-hidden="true">✓</span>
+        <div>
+          <h3>NODE ADDED SUCCESSFULLY</h3>
+          <p>{nodeName} is now connected to this panel and ready to host servers.</p>
+          <p>You can close this dialog and manage the node from the Nodes page.</p>
         </div>
-      ))}
+      </div>
+    );
+  }
+
+  if (flowState === "incompatible") {
+    const versionText = [node?.agentVersion ? `agent ${node.agentVersion}` : "", node?.protocolVersion ? `protocol ${node.protocolVersion}` : ""].filter(Boolean).join(", ");
+    return (
+      <div className="addNodeStatusCard error">
+        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
+        <div>
+          <h3>NODE CONNECTED BUT INCOMPATIBLE</h3>
+          <p>{versionText ? `${nodeName} connected with ${versionText}, but it is not compatible with this panel.` : `${nodeName} connected, but its agent or protocol version is not compatible with this panel.`}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (flowState === "expired") {
+    return (
+      <div className="addNodeStatusCard error">
+        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
+        <div>
+          <h3>JOIN TOKEN EXPIRED</h3>
+          <p>The join token for {nodeName} expired before the node connected. Rotate the token or create a new pending node, then run the updated install command.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (flowState === "disconnected") {
+    return (
+      <div className="addNodeStatusCard error">
+        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
+        <div>
+          <h3>NODE DISCONNECTED</h3>
+          <p>{nodeName} connected once, but it is offline now. Check the node host and run the install command again if needed.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="addNodeStatusCard waiting" role="status" aria-live="polite">
+      <span className="addNodeSpinner" aria-hidden="true" />
+      <div>
+        <h3>WAITING FOR NODE CONNECTION</h3>
+        <p>Run the install command on the host, then wait for the node to connect to this panel.</p>
+      </div>
     </div>
   );
 }
@@ -128,6 +215,7 @@ function AddNodeModal({
   installMethod,
   onInstallMethodChange,
   onClose,
+  onDone,
   onCreate,
   onCopy
 }: {
@@ -138,6 +226,7 @@ function AddNodeModal({
   installMethod: "compose" | "run";
   onInstallMethodChange: (method: "compose" | "run") => void;
   onClose: () => void;
+  onDone: () => void;
   onCreate: (input: AddNodeInput) => void;
   onCopy: (text: string) => void;
 }) {
@@ -154,6 +243,12 @@ function AddNodeModal({
     onCreate({ name, panelUrl, dataMount });
   }
 
+  const liveNode = currentNode ?? created?.node;
+  const flowState = created ? addNodeFlowState(liveNode, created.expiresAt) : "waiting";
+  const isSuccess = flowState === "success";
+  const activeStep = addNodeActiveStep(flowState);
+  const showInstall = Boolean(created && flowState !== "success" && flowState !== "incompatible");
+
   return (
     <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
@@ -162,7 +257,7 @@ function AddNodeModal({
         <header className="nodeModalHeader">
           <div>
             <h2 id="add-node-title">ADD NODE</h2>
-            <p>Create a pending node, then run the generated install command on the host.</p>
+            <p>Create a remote node and connect it to this panel.</p>
           </div>
           <button type="button" className="iconButton modalCloseButton" onClick={onClose} aria-label="Close add node modal">X</button>
         </header>
@@ -198,10 +293,12 @@ function AddNodeModal({
           </form>
         ) : (
           <div className="nodeModalBody">
-            <NodeSetupState node={currentNode ?? created.node} />
-            <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />
-            <div className="nodeModalFooter inline">
-              <button type="button" className="secondaryButton" onClick={onClose}>Done</button>
+            <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
+            <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
+            {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />}
+            <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
+              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose}>CANCEL</button>}
+              <button type="button" onClick={isSuccess ? onDone : onClose}>{isSuccess ? "DONE" : "DONE"}</button>
             </div>
           </div>
         )}
@@ -224,6 +321,7 @@ export function NodesPage({
   onInstallMethodChange,
   onOpenAddNode,
   onCloseAddNode,
+  onDoneAddNode,
   onCreateNode,
   onRefresh,
   onViewDetails,
@@ -252,6 +350,7 @@ export function NodesPage({
   onInstallMethodChange: (method: "compose" | "run") => void;
   onOpenAddNode: () => void;
   onCloseAddNode: () => void;
+  onDoneAddNode: () => void;
   onCreateNode: (input: AddNodeInput) => void;
   onRefresh: () => void;
   onViewDetails: (node: ManagedNode) => void;
@@ -483,6 +582,7 @@ export function NodesPage({
           installMethod={installMethod}
           onInstallMethodChange={onInstallMethodChange}
           onClose={onCloseAddNode}
+          onDone={onDoneAddNode}
           onCreate={onCreateNode}
           onCopy={onCopy}
         />

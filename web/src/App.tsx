@@ -769,11 +769,13 @@ export default function App() {
 
   useEffect(() => {
     if (!addNodeOpen || !addNodeResult || demoMode) return;
+    const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
+    if (currentNode && currentNode.status === "online" && currentNode.compatibility === "compatible" && isNodeRuntimeUsable(currentNode)) return;
     const interval = window.setInterval(() => {
       void refreshApp();
     }, 2500);
     return () => window.clearInterval(interval);
-  }, [addNodeOpen, addNodeResult?.node.id, demoMode]);
+  }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "overview" && activePage !== "console")) return;
@@ -3110,6 +3112,11 @@ export default function App() {
             onCloseAddNode={() => {
               setAddNodeOpen(false);
               setAddNodeResult(null);
+            }}
+            onDoneAddNode={() => {
+              setAddNodeOpen(false);
+              setAddNodeResult(null);
+              void refreshApp();
             }}
             onCreateNode={createNode}
             onRefresh={() => void refreshNodes()}
