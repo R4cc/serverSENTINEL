@@ -1688,19 +1688,14 @@ export default function App() {
   async function updateNodeImage(node: ManagedNode) {
     if (node.isInternal || !canManageUsers) return;
     const versionText = node.agentVersion ? ` from ${node.agentVersion} to ${appVersion}` : ` to ${appVersion}`;
-    if (!window.confirm(`Update node "${node.name}"${versionText}?\n\nThe node may disconnect briefly while the container is recreated. Compose-managed nodes will return a command to run on the host instead.`)) return;
+    if (!window.confirm(`Upgrade node "${node.name}"${versionText}?\n\nThe node may disconnect briefly while the container is recreated.`)) return;
     setNodeBusyId(node.id);
     try {
       const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
         method: "POST",
         body: JSON.stringify({})
       });
-      if (result.command) {
-        await copyText(result.command);
-        notify(result.ok ? "success" : "info", `${result.message} Command copied to clipboard.`);
-      } else {
-        notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
-      }
+      notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
       setNodeDetails((current) => current?.id === node.id ? { ...current, status: result.ok && result.mode === "self" ? "offline" : current.status } : current);
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {

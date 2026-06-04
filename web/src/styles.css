@@ -2337,15 +2337,15 @@ button .buttonIcon {
   max-height: calc(100vh - 250px);
   overflow-y: auto;
   padding-right: var(--space-1);
-  align-items: stretch;
+  align-items: start;
 }
 
 .nodeCard {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   gap: var(--space-3);
   border-radius: var(--radius-md);
-  min-height: 320px;
+  min-height: 0;
 }
 
 .nodeCard.online {
@@ -2381,10 +2381,26 @@ button .buttonIcon {
 
 .nodeCardHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
   border-bottom: var(--border-subtle) solid var(--border-muted);
   padding-bottom: var(--space-3);
+}
+
+.nodeCardTopLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nodeStatusPills {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .nodeCardHeader .settingsStatus,
@@ -2397,6 +2413,7 @@ button .buttonIcon {
   align-items: center;
   padding: 0 var(--space-3);
   line-height: 1;
+  max-width: 100%;
 }
 
 .nodeCardTitle {
@@ -2404,6 +2421,26 @@ button .buttonIcon {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.nodeCardActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.nodeCardActions .compactButton {
+  width: auto;
+  min-width: 104px;
+  flex: 0 0 auto;
+}
+
+.nodeUpgradeButton {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .nodeServerSection {
@@ -2559,7 +2596,7 @@ button .buttonIcon {
 
 .nodeAddServerButton {
   justify-self: start;
-  align-self: end;
+  align-self: start;
   min-height: 38px;
   border-color: var(--accent);
   color: var(--accent);

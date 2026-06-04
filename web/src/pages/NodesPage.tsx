@@ -442,8 +442,7 @@ export function NodesPage({
   const nodeUpdateAvailable = (node: ManagedNode) => nodeVersionState(node) === "older";
   const nodePanelUpdateRequired = (node: ManagedNode) => nodeVersionState(node) === "newer";
   const nodeVersionMismatch = (node: ManagedNode) => nodeVersionState(node) === "mismatch";
-  const nodeCanSelfUpdate = (node: ManagedNode) => node.capabilities?.includes("node.update");
-  const nodeCanPanelUpdate = (node: ManagedNode) => node.status === "online" && nodeCanSelfUpdate(node);
+  const nodeCanPanelUpdate = (node: ManagedNode) => node.status === "online";
 
   const sortedNodes = useMemo(() => {
     return [
@@ -485,31 +484,35 @@ export function NodesPage({
           return (
             <article key={node.id} className={`panel nodeCard ${node.status}`}>
               <header className="nodeCardHeader">
-                <div>
+                <div className="nodeCardTopLine">
                   <div className="nodeCardTitle">
                     <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
                     <h3>{node.name}</h3>
                   </div>
+                  <div className="nodeStatusPills">
+                    <span className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</span>
+                    {nodePanelUpdateRequired(node) && (
+                      <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</span>
+                    )}
+                    {nodeVersionMismatch(node) && (
+                      <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</span>
+                    )}
+                  </div>
                 </div>
-                <span className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</span>
-                {nodePanelUpdateRequired(node) && (
-                  <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</span>
-                )}
-                {nodeVersionMismatch(node) && (
-                  <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</span>
-                )}
-                {nodeUpdateAvailable(node) && (
-                  <button
-                    type="button"
-                    className="secondaryButton compactButton"
-                    onClick={() => nodeCanPanelUpdate(node) ? onUpdateNode(node) : onShowInstall(node)}
-                    disabled={busyNodeId === node.id || !canManageNodes}
-                    title={nodeCanPanelUpdate(node) ? `Update node agent to ${panelVersion}` : "This node needs a manual update before panel-triggered updates are available"}
-                  >
-                    {nodeCanPanelUpdate(node) ? "Update" : "Instructions"}
-                  </button>
-                )}
-                <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
+                <div className="nodeCardActions">
+                  {nodeUpdateAvailable(node) && (
+                    <button
+                      type="button"
+                      className="secondaryButton compactButton nodeUpgradeButton"
+                      onClick={() => onUpdateNode(node)}
+                      disabled={busyNodeId === node.id || !canManageNodes || !nodeCanPanelUpdate(node)}
+                      title={nodeCanPanelUpdate(node) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
+                    >
+                      Upgrade
+                    </button>
+                  )}
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
+                </div>
               </header>
 
               <section className="nodeServerSection">
@@ -528,10 +531,12 @@ export function NodesPage({
                       <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                         <span className="nodeServerIcon"><ServerRowIcon /></span>
                         <span className="nodeServerName">{server.displayName}</span>
-                        <span className={`nodeServerPlayers ${playerLabel === "-" ? "unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online`}>
-                          {playerLabel}
-                          <span className="nodePlayerIcon"><PlayerIcon /></span>
-                        </span>
+                        {playerLabel !== "-" && (
+                          <span className="nodeServerPlayers" title={`${playerLabel} players online`}>
+                            {playerLabel}
+                            <span className="nodePlayerIcon"><PlayerIcon /></span>
+                          </span>
+                        )}
                         <span className={`nodeServerState ${state.toLowerCase()}`}>
                           <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
                           {state}
@@ -626,11 +631,11 @@ export function NodesPage({
                   <button
                     type="button"
                     className="secondaryButton compactButton"
-                    onClick={() => nodeCanPanelUpdate(selectedNode) ? onUpdateNode(selectedNode) : onShowInstall(selectedNode)}
-                    disabled={busyNodeId === selectedNode.id || !canManageNodes}
-                    title={nodeCanPanelUpdate(selectedNode) ? `Update node agent to ${panelVersion}` : "This node needs a manual update before panel-triggered updates are available"}
+                    onClick={() => onUpdateNode(selectedNode)}
+                    disabled={busyNodeId === selectedNode.id || !canManageNodes || !nodeCanPanelUpdate(selectedNode)}
+                    title={nodeCanPanelUpdate(selectedNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
                   >
-                    {nodeCanPanelUpdate(selectedNode) ? "Update image" : "Update instructions"}
+                    Upgrade
                   </button>
                 )}
                 <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}>Rotate token</button>

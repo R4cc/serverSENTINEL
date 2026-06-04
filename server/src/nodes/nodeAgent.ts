@@ -374,17 +374,6 @@ function compareVersionStrings(left?: string, right?: string) {
   return 0;
 }
 
-function composeUpdateCommand(inspect: NodeContainerInspect, image: string) {
-  const labels = inspect.Config?.Labels || {};
-  const project = labels["com.docker.compose.project"];
-  const service = labels["com.docker.compose.service"];
-  if (!project || !service) return "";
-  const workingDir = labels["com.docker.compose.project.working_dir"];
-  const command = `docker compose -p ${shellQuote(project)} pull ${shellQuote(service)} && docker compose -p ${shellQuote(project)} up -d ${shellQuote(service)}`;
-  const prefix = workingDir ? `cd ${shellQuote(workingDir)} && ` : "";
-  return `${prefix}${command}`;
-}
-
 function createNetworkingConfig(inspect: NodeContainerInspect) {
   const networks = inspect.NetworkSettings?.Networks;
   if (!networks || Object.keys(networks).length === 0) return undefined;
@@ -418,7 +407,8 @@ async function prepareNodeUpdate(payload: unknown) {
 
   const inspect = await dockerRequest<NodeContainerInspect>("GET", `/containers/${encodeURIComponent(containerId)}/json`);
   const currentName = cleanContainerName(inspect.Name) || containerId;
-  const composeCommand = composeUpdateCommand(inspect, image);
+  const labels = inspect.Config?.Labels || {};
+  const composeManaged = Boolean(labels["com.docker.compose.project"] && labels["com.docker.compose.service"]);
   const plan = {
     createdAt: new Date().toISOString(),
     image,
@@ -426,24 +416,12 @@ async function prepareNodeUpdate(payload: unknown) {
     currentVersion,
     containerId: inspect.Id || containerId,
     containerName: currentName,
-    composeManaged: Boolean(composeCommand),
-    composeCommand,
+    composeManaged,
     inspect
   };
   await mkdir(nodeUpdateDir, { recursive: true });
   const planPath = join(nodeUpdateDir, `node-update-${Date.now()}.json`);
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
-
-  if (composeCommand) {
-    return {
-      ok: false,
-      mode: "compose",
-      message: `This node is managed by Docker Compose. Set the service image to ${image} in the Compose file, then run the copied update command on the node host.`,
-      command: composeCommand,
-      image,
-      planPath
-    };
-  }
 
   setTimeout(() => {
     void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
@@ -461,7 +439,7 @@ async function prepareNodeUpdate(payload: unknown) {
   return {
     ok: true,
     mode: "self",
-    message: "Node update prepared. The node will pull the image, recreate its container, and reconnect shortly.",
+    message: "Node update started. The node will reconnect shortly.",
     image,
     planPath
   };

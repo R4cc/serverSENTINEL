@@ -79,7 +79,7 @@ export type NodeInstallResponse = {
 
 export type NodeUpdateResponse = {
   ok: boolean;
-  mode: "self" | "compose" | "manual" | "offline";
+  mode: "self" | "manual" | "offline";
   message: string;
   image?: string;
   command?: string;
