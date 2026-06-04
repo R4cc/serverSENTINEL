@@ -1249,7 +1249,7 @@ export default function App() {
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName));
+    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName), undefined, { requireNode: true, requireEula: true });
     if (setValidationNotice(formElement, errors, (message) => {
       setNotice(message);
       notify("error", message);
@@ -1638,7 +1638,7 @@ export default function App() {
   }
 
   async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace") {
-    if (isProvisioning) return;
+    if (isProvisioning) return false;
     const previousPath = listing.path;
     setFilesLoading(true);
     setFilesError("");
@@ -1648,30 +1648,34 @@ export default function App() {
         const nextListing = demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
         setSelectedFilePaths([]);
+        setFilePreview({ path: "", loading: false, data: null, error: "" });
         if (historyMode === "push" && nextListing.path !== previousPath) {
           setFileBackStack((current) => [...current, previousPath].slice(-50));
           setFileForwardStack([]);
         }
       }
       setFilesLoading(false);
-      return;
+      return true;
     }
     try {
       const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
         setSelectedFilePaths([]);
+        setFilePreview({ path: "", loading: false, data: null, error: "" });
         setFilesError("");
         if (historyMode === "push" && nextListing.path !== previousPath) {
           setFileBackStack((current) => [...current, previousPath].slice(-50));
           setFileForwardStack([]);
         }
       }
+      return true;
     } catch (error) {
       const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
       setFilesError(message);
       setNotice(message);
       notify("error", message);
+      return false;
     } finally {
       if (activeServerIdRef.current === serverId) setFilesLoading(false);
     }
@@ -1685,17 +1689,21 @@ export default function App() {
   async function navigateBackFiles() {
     if (!activeServer || fileBackStack.length === 0) return;
     const target = fileBackStack[fileBackStack.length - 1];
-    setFileBackStack((current) => current.slice(0, -1));
-    setFileForwardStack((current) => [listing.path, ...current].slice(0, 50));
-    await loadFiles(activeServer.id, target, "back");
+    const loaded = await loadFiles(activeServer.id, target, "back");
+    if (loaded) {
+      setFileBackStack((current) => current.slice(0, -1));
+      setFileForwardStack((current) => [listing.path, ...current].slice(0, 50));
+    }
   }
 
   async function navigateForwardFiles() {
     if (!activeServer || fileForwardStack.length === 0) return;
     const target = fileForwardStack[0];
-    setFileForwardStack((current) => current.slice(1));
-    setFileBackStack((current) => [...current, listing.path].slice(-50));
-    await loadFiles(activeServer.id, target, "forward");
+    const loaded = await loadFiles(activeServer.id, target, "forward");
+    if (loaded) {
+      setFileForwardStack((current) => current.slice(1));
+      setFileBackStack((current) => [...current, listing.path].slice(-50));
+    }
   }
 
   async function loadInstalledMods(serverId: string) {
@@ -1845,6 +1853,7 @@ export default function App() {
       const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
       setFileReadError(message);
       setFileOpenFailed(true);
+      setSelectedFilePaths([]);
       notify("error", message);
     } finally {
       setFileOpening(false);
@@ -2528,6 +2537,8 @@ export default function App() {
       notify("error", message);
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: message, dismissible: true } : j));
       setModInstallModal((current) => current ? { ...current, installing: false, error: message } : current);
+      void loadInstalledMods(activeServer.id);
+      void loadFiles(activeServer.id, "/mods");
     }
   }
 
@@ -2628,6 +2639,8 @@ export default function App() {
       setNotice(message);
       notify("error", message);
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Update failed", error: message, dismissible: true } : j));
+      void loadInstalledMods(activeServer.id);
+      void loadFiles(activeServer.id, "/mods");
     }
   }
 
@@ -4241,7 +4254,7 @@ export default function App() {
                             <h2 id="mod-install-title">{modInstallModal.step === 2 ? `Install ${modInstallModal.data?.project.title || modInstallModal.mod.title}` : "Install mod"}</h2>
                             {modInstallModal.step === 1 && <strong>{modInstallModal.data?.project.title || modInstallModal.mod.title}</strong>}
                           </div>
-                          <button type="button" className="iconButton modalCloseButton" onClick={() => setModInstallModal(null)} aria-label="Close install modal" title="Close install modal">
+                          <button type="button" className="iconButton modalCloseButton" onClick={() => setModInstallModal(null)} disabled={modInstallModal.installing} aria-label="Close install modal" title={modInstallModal.installing ? "Mod install is still running." : "Close install modal"}>
                             <AppIcon name="x" />
                           </button>
                         </div>

@@ -36,6 +36,12 @@ export function AuthPanel({
           </div>
         </div>
         {notice && <div className="notice">{notice}</div>}
+        {setupRequired && (
+          <div className="systemBanner accent compactBanner">
+            <strong>First-run setup.</strong>
+            <span>Create this admin account first. After sign-in, ServerSentinel will show Docker, node, server, and Modrinth setup actions as needed.</span>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="appForm">
           <fieldset disabled={busy}>
             <label>

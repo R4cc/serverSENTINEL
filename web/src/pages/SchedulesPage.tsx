@@ -154,7 +154,13 @@ export function SchedulePage({
               </ul>
               <div className="scheduleMeta">
                 <span>{schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Runs regardless of player count"}</span>
-                <span>{schedule.lastRunAt ? `Last ${schedule.lastStatus}: ${schedule.lastMessage || "No message"}` : "Never run"}</span>
+                <span className={schedule.lastStatus === "failed" ? "scheduleLastRunFailed" : ""}>
+                  {schedule.lastRunAt
+                    ? schedule.lastStatus === "failed"
+                      ? `Last run failed: ${schedule.lastMessage || "No message from the scheduler"}`
+                      : `Last ${schedule.lastStatus || "run"}: ${schedule.lastMessage || "No message"}`
+                    : "Never run"}
+                </span>
               </div>
               <div className="buttonRow">
                 <button type="button" onClick={() => onToggle(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule changes are unavailable right now." : schedule.enabled ? "Disable schedule" : "Enable schedule"}>

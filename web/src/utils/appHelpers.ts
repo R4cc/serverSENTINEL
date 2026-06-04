@@ -83,13 +83,19 @@ export function clearDeletedFileState(deletedEntries: FileEntry[], selectedPath:
   }
 }
 
-export function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string) {
+export function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string, options: { requireNode?: boolean; requireEula?: boolean } = {}) {
   const displayName = trimFormValue(form, "displayName");
   const errors: Array<{ field: string; message: string }> = [];
   const displayError = validateDisplayName(displayName);
   if (displayError) errors.push({ field: "displayName", message: displayError });
   if (displayName && displayName.toLowerCase() !== currentName?.toLowerCase() && existingNames.some((name) => name.toLowerCase() === displayName.toLowerCase())) {
     errors.push({ field: "displayName", message: "A managed server with this display name already exists." });
+  }
+  if (options.requireNode && !trimFormValue(form, "nodeId")) {
+    errors.push({ field: "nodeId", message: "Choose a node that is online, compatible, and Docker-ready." });
+  }
+  if (options.requireEula && form.get("acceptEula") !== "on") {
+    errors.push({ field: "acceptEula", message: "Accept the Minecraft EULA before creating this server." });
   }
   const port = trimFormValue(form, "serverPort");
   if (port) {

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
-import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
+import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
 
 type AddNodeInput = {
   name: string;
@@ -549,7 +549,7 @@ export function NodesPage({
     ];
   }, [externalNodes, internalNode]);
   const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
-  const selectedWarnings = selectedNode ? nodeWarnings(selectedNode).filter((warning) => warning !== "Join token is pending.") : [];
+  const selectedWarnings = selectedNode ? nodeWarnings(selectedNode) : [];
   const selectedCapabilities = selectedNode?.capabilities?.length ? selectedNode.capabilities : [];
 
   return (
@@ -766,7 +766,7 @@ export function NodesPage({
               {selectedNode.hasPendingJoinToken && (
                 <div className="nodeAlert joinTokenAlert">
                   <NodeDetailIcon name="warning" />
-                  <span>Join token is pending.</span>
+                  <span>{nodeJoinTokenExpired(selectedNode) ? "Join token expired. Rotate the token, copy the new install command, and run it on the node host." : `Join token pending${selectedNode.joinTokenExpiresAt ? ` until ${formatNodeDate(selectedNode.joinTokenExpiresAt, formatDate)}` : ""}. Run the install command on the node host to finish connecting this node.`}</span>
                 </div>
               )}
               {selectedWarnings.length > 0 && (

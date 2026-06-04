@@ -5718,6 +5718,11 @@ details.compatibilityBadge p {
   flex-wrap: wrap;
 }
 
+.scheduleLastRunFailed {
+  color: var(--sentinel-danger);
+  font-weight: 900;
+}
+
 .compactEmpty {
   max-width: none;
   padding: var(--space-4);

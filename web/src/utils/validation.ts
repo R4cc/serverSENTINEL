@@ -83,9 +83,10 @@ export function validateCronExpression(value: string): string | null {
   const parts = value.trim().split(/\s+/);
   if (parts.length !== 5) return "Cron schedule must use five fields: minute hour day month weekday.";
   const ranges: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+  const labels = ["minute", "hour", "day of month", "month", "weekday"];
   for (let index = 0; index < parts.length; index += 1) {
     if (!isValidCronField(parts[index], ranges[index][0], ranges[index][1])) {
-      return "Cron schedule contains an invalid field.";
+      return `Cron ${labels[index]} field is invalid. Use *, a number, a range, a list, or a step within ${ranges[index][0]}-${ranges[index][1]}.`;
     }
   }
   return null;

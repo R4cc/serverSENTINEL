@@ -36,16 +36,26 @@ export function isNodeRuntimeUsable(node: ManagedNode) {
   return node.status === "online" && isNodeCompatible(node) && isNodeDockerUsable(node);
 }
 
+export function nodeJoinTokenExpired(node: ManagedNode) {
+  return Boolean(node.hasPendingJoinToken && node.joinTokenExpiresAt && new Date(node.joinTokenExpiresAt).getTime() <= Date.now());
+}
+
 export function nodeBlockReason(node: ManagedNode) {
+  if (nodeJoinTokenExpired(node)) return "Join token expired";
+  if (node.hasPendingJoinToken && node.status === "unknown") return "Waiting for node to join";
   if (node.status === "offline") return "Node offline";
   if (node.status === "unknown") return "Node has not connected yet";
   if (node.compatibility === "incompatible") return "Node agent is incompatible";
   if (node.dockerStatus === "unavailable") return "Docker is unavailable on this node";
+  if (!node.dockerStatus || node.dockerStatus === "unknown") return "Docker status is unknown";
+  if (node.dataPathStatus === "missing") return "Node data path is missing";
   return "";
 }
 
 export function nodeWarnings(node: ManagedNode) {
   const warnings: string[] = [];
+  if (nodeJoinTokenExpired(node)) warnings.push("Join token expired. Rotate the token and rerun the install command.");
+  else if (node.hasPendingJoinToken) warnings.push("Join token pending. Run the install command before it expires.");
   if (node.status === "offline") warnings.push("Node is offline.");
   if (node.status === "unknown") warnings.push("Node has not connected yet.");
   if (node.compatibility === "incompatible") warnings.push("Agent protocol is incompatible with this panel.");
@@ -53,6 +63,5 @@ export function nodeWarnings(node: ManagedNode) {
   if (node.dockerStatus === "unavailable") warnings.push("Docker is unavailable.");
   if (!node.dockerStatus || node.dockerStatus === "unknown") warnings.push("Docker availability is unknown.");
   if (node.dataPathStatus && node.dataPathStatus !== "ready") warnings.push(nodeDataPathLabel(node));
-  if (node.hasPendingJoinToken) warnings.push("Join token is pending.");
   return warnings;
 }
