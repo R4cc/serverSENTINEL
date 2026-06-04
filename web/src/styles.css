@@ -2658,19 +2658,265 @@ button .buttonIcon {
   color: var(--sentinel-danger);
 }
 
+.nodeModalHeader.nodeDetailsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%), var(--surface-raised));
+}
+
+.nodeDetailsTitleBlock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.nodeDetailsTitleBlock h2 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.nodeDetailsTitleBlock p {
+  margin-top: var(--space-2);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.nodeDetailIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 70%, var(--surface-raised));
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface-muted) 65%, var(--surface)));
+  color: var(--text);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.05);
+}
+
+.nodeDetailIcon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeDetailIcon.node,
+.nodeDetailIcon.panel,
+.nodeDetailIcon.protocol {
+  color: var(--accent);
+}
+
+.nodeDetailIcon.status,
+.nodeDetailIcon.compatibility,
+.nodeDetailIcon.docker,
+.nodeDetailIcon.data {
+  color: var(--sentinel-success);
+}
+
+.nodeDetailIcon.warning {
+  color: var(--sentinel-warning);
+}
+
+.polishedCloseButton {
+  border-color: color-mix(in srgb, var(--border-muted) 65%, var(--surface-raised));
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+}
+
+.nodeModalBody.nodeDetailsBody {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  background: color-mix(in srgb, var(--surface-muted) 52%, var(--surface-raised));
+}
+
+.nodeInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.nodeInfoCard {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 74%, var(--surface));
+  border-radius: 14px;
+  background: var(--surface-raised);
+  padding: var(--space-3);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.045);
+}
+
+.nodeInfoCard.wide {
+  grid-column: span 1;
+}
+
+.nodeInfoCard.secondary {
+  background: color-mix(in srgb, var(--surface-raised) 80%, var(--surface-muted));
+}
+
+.nodeInfoCard dt {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.nodeInfoCard dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.nodeInfoCard dd.ready {
+  color: var(--sentinel-success);
+}
+
+.nodeInfoCard dd.limited {
+  color: var(--sentinel-danger);
+}
+
+.nodeInfoCard .technicalValue {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nodeCapabilitiesPanel {
+  overflow: hidden;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 74%, var(--surface));
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.045);
+}
+
+.nodeCapabilitiesPanel summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 70%, var(--surface));
+  color: var(--text);
+  font-weight: 900;
+  list-style: none;
+}
+
+.nodeCapabilitiesPanel summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeCapabilitiesPanel summary > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nodeCapabilitiesPanel .nodeDetailIcon {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 10px;
+  color: var(--text-muted);
+}
+
+.capabilityCount {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nodeCapabilityList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.nodeCapabilityList code {
+  border: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 72%, var(--surface));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  color: var(--text);
+  padding: 5px 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.emptyCapabilityText {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nodeAlert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--border-subtle) solid var(--sentinel-warning);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--sentinel-warning) 18%);
+  color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--text));
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.nodeAlert .nodeDetailIcon {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--surface));
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--sentinel-warning) 28%);
+  box-shadow: none;
+}
+
 .nodeWarnings {
   display: grid;
   gap: var(--space-1);
 }
 
+.nodeDetailsWarnings {
+  gap: var(--space-2);
+}
+
 .nodeWarnings span,
 .nodeBlockedNote {
   border: var(--border-subtle) solid var(--sentinel-warning);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-warning) 14%);
-  color: var(--sentinel-warning);
-  padding: 7px 9px;
-  font-size: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--sentinel-warning) 14%);
+  color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--text));
+  padding: 10px 12px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -2744,6 +2990,27 @@ button .buttonIcon {
   flex-wrap: wrap;
 }
 
+.nodeDetailsActions {
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-top: var(--border-subtle) solid color-mix(in srgb, var(--border-muted) 72%, var(--surface));
+  margin: var(--space-1) calc(var(--space-6) * -1) calc(var(--space-6) * -1);
+  padding: var(--space-4) var(--space-6);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--surface-muted));
+}
+
+.nodeActionGroup {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.nodeActionGroup.destructive {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
 .nodeActions .compactButton,
 .compactButton {
   min-height: 34px;
@@ -2751,14 +3018,62 @@ button .buttonIcon {
   font-size: 10px;
 }
 
+.nodeDetailsActions .compactButton {
+  min-height: 44px;
+  border-radius: 9px;
+  padding: 0 var(--space-4);
+  font-size: 11px;
+  gap: var(--space-2);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 0.04);
+}
+
+.nodeDetailsActions .compactButton:disabled {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
+  color: var(--text-soft);
+  opacity: 1;
+}
+
+.nodeRemoveButton {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 62%, var(--surface));
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--sentinel-danger) 18%);
+  color: color-mix(in srgb, var(--sentinel-danger) 76%, var(--text));
+}
+
+.forceRemoveButton {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.forceRemoveButton .nodeDetailIcon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: currentColor;
+  box-shadow: none;
+}
+
+.forceRemoveButton .nodeDetailIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
 .nodeModalPanel {
-  width: min(820px, calc(100vw - 32px));
+  width: min(1180px, calc(100vw - 32px));
   padding: 0;
+  border-color: color-mix(in srgb, var(--border-muted) 72%, var(--surface));
+  border-radius: 18px;
+  background: var(--surface-raised);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.18);
 }
 
 .nodeModalHeader,
 .nodeModalBody {
-  padding: var(--space-4);
+  padding: var(--space-5);
 }
 
 .nodeModalHeader {
@@ -6700,6 +7015,66 @@ button:disabled,
 
 .nodeModalFooter.inline {
   margin-top: 0;
+}
+
+.nodeModalHeader.nodeDetailsHeader {
+  padding: var(--space-6);
+}
+
+.nodeModalBody.nodeDetailsBody {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+@media (max-width: 920px) {
+  .nodeInfoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nodeDetailsActions {
+    align-items: stretch;
+  }
+
+  .nodeActionGroup,
+  .nodeActionGroup.destructive {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .nodeModalPanel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    border-radius: 14px;
+  }
+
+  .nodeModalHeader.nodeDetailsHeader,
+  .nodeModalBody.nodeDetailsBody {
+    padding: var(--space-4);
+  }
+
+  .nodeDetailsHeader {
+    align-items: flex-start;
+  }
+
+  .nodeDetailsTitleBlock {
+    gap: var(--space-3);
+  }
+
+  .nodeInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .nodeDetailsActions {
+    margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);
+    padding: var(--space-4);
+  }
+
+  .nodeDetailsActions .compactButton {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .fileEditorModal {

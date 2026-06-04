@@ -43,6 +43,94 @@ function PlayerIcon() {
   );
 }
 
+function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "agent" | "panel" | "protocol" | "compatibility" | "docker" | "data" | "created" | "updated" | "seen" | "capabilities" | "warning" }) {
+  return (
+    <span className={`nodeDetailIcon ${name}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        {name === "node" && (
+          <>
+            <rect x="6" y="4" width="12" height="4" rx="1" />
+            <rect x="6" y="10" width="12" height="4" rx="1" />
+            <rect x="6" y="16" width="12" height="4" rx="1" />
+            <path d="M9 6h.1M9 12h.1M9 18h.1" />
+          </>
+        )}
+        {name === "status" && (
+          <>
+            <path d="M5 12a7 7 0 0 1 14 0" />
+            <path d="M8 12a4 4 0 0 1 8 0" />
+            <path d="M11 12a1 1 0 0 1 2 0" />
+          </>
+        )}
+        {name === "type" && (
+          <>
+            <rect x="6" y="5" width="12" height="10" rx="1.5" />
+            <path d="M9 19h6M12 15v4" />
+          </>
+        )}
+        {name === "id" && (
+          <>
+            <path d="M12 4a4 4 0 0 1 4 4c0 3-4 3.5-4 7" />
+            <path d="M12 20h.1" />
+            <path d="M8 8a4 4 0 0 1 8 0" />
+          </>
+        )}
+        {name === "agent" && (
+          <>
+            <path d="M12 4v4M8 8h8M7 20v-5l5-3 5 3v5" />
+            <path d="M9 20v-4h6v4" />
+          </>
+        )}
+        {name === "panel" && (
+          <>
+            <rect x="4" y="4" width="6" height="6" rx="1" />
+            <rect x="14" y="4" width="6" height="6" rx="1" />
+            <rect x="4" y="14" width="6" height="6" rx="1" />
+            <rect x="14" y="14" width="6" height="6" rx="1" />
+          </>
+        )}
+        {name === "protocol" && <path d="M7 17 17 7M10 7h7v7" />}
+        {name === "compatibility" && (
+          <>
+            <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
+            <path d="m9 12 2 2 4-5" />
+          </>
+        )}
+        {name === "docker" && (
+          <>
+            <path d="M4 13h15l-2 5H7l-3-5Z" />
+            <path d="M7 10h3v3H7zM10 10h3v3h-3zM13 10h3v3h-3zM10 7h3v3h-3z" />
+          </>
+        )}
+        {name === "data" && (
+          <>
+            <path d="M3 8h7l2 2h9v9H3z" />
+            <path d="M3 8V5h7l2 3" />
+          </>
+        )}
+        {(name === "created" || name === "updated" || name === "seen") && (
+          <>
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 7v5l4 2" />
+          </>
+        )}
+        {name === "capabilities" && (
+          <>
+            <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" />
+            <path d="m19 13 .1-1-.1-1 2-1.5-2-3.5-2.5 1a8 8 0 0 0-2-1.2L14 3h-4l-.5 2.8a8 8 0 0 0-2 1.2L5 6 3 9.5 5 11l-.1 1 .1 1-2 1.5L5 18l2.5-1a8 8 0 0 0 2 1.2L10 21h4l.5-2.8a8 8 0 0 0 2-1.2l2.5 1 2-3.5L19 13Z" />
+          </>
+        )}
+        {name === "warning" && (
+          <>
+            <path d="M12 4 3 20h18L12 4Z" />
+            <path d="M12 9v5M12 17h.1" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 function playerCountLabel(activity?: ServerActivity) {
   if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return "-";
   return activity.maxPlayers ? `${activity.playersOnline}/${activity.maxPlayers}` : String(activity.playersOnline);
@@ -450,6 +538,9 @@ export function NodesPage({
       ...externalNodes.sort((a, b) => a.name.localeCompare(b.name))
     ];
   }, [externalNodes, internalNode]);
+  const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
+  const selectedWarnings = selectedNode ? nodeWarnings(selectedNode).filter((warning) => warning !== "Join token is pending.") : [];
+  const selectedCapabilities = selectedNode?.capabilities?.length ? selectedNode.capabilities : [];
 
   return (
     <section className="pageStack nodesPage">
@@ -587,85 +678,140 @@ export function NodesPage({
           if (event.target === event.currentTarget) onCloseDetails();
         }}>
           <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="node-details-title">
-            <header className="nodeModalHeader">
-              <div>
-                <h2 id="node-details-title">{selectedNode.name}</h2>
-                <p>Technical node details and maintenance actions.</p>
+            <header className="nodeModalHeader nodeDetailsHeader">
+              <div className="nodeDetailsTitleBlock">
+                <NodeDetailIcon name="node" />
+                <div>
+                  <h2 id="node-details-title">{selectedNode.name}</h2>
+                  <p>Technical node details and maintenance actions.</p>
+                </div>
               </div>
-              <button type="button" className="iconButton modalCloseButton" onClick={onCloseDetails} aria-label="Close node details">X</button>
+              <button type="button" className="iconButton modalCloseButton polishedCloseButton" onClick={onCloseDetails} aria-label="Close node details"><AppIcon name="x" /></button>
             </header>
-            <div className="nodeModalBody">
-              <dl className="nodeFacts detailed">
-                <div><dt>ID</dt><dd>{selectedNode.id}</dd></div>
-                <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
-                <div><dt>Status</dt><dd className={statusTone(selectedNode.status)}>{selectedNode.status}</dd></div>
-                <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
-                <div><dt>Panel</dt><dd>{panelVersion}</dd></div>
-                <div><dt>Protocol</dt><dd>{selectedNode.protocolVersion || "Unknown"}</dd></div>
-                <div><dt>Compatibility</dt><dd className={statusTone(selectedNode.compatibility)}>{nodeCompatibilityLabel(selectedNode)}</dd></div>
-                <div><dt>Docker</dt><dd className={statusTone(selectedNode.dockerStatus)}>{nodeDockerLabel(selectedNode)}</dd></div>
-                <div><dt>Data path</dt><dd className={statusTone(selectedNode.dataPathStatus)}>{nodeDataPathLabel(selectedNode)}</dd></div>
-                <div><dt>Created</dt><dd>{formatNodeDate(selectedNode.createdAt, formatDate)}</dd></div>
-                <div><dt>Updated</dt><dd>{formatNodeDate(selectedNode.updatedAt, formatDate)}</dd></div>
-                <div><dt>Last seen</dt><dd>{formatNodeDate(selectedNode.lastSeenAt ?? selectedNode.connectedAt, formatDate)}</dd></div>
-                <div><dt>Capabilities</dt><dd>{selectedNode.capabilities?.length ? selectedNode.capabilities.join(", ") : "None advertised"}</dd></div>
+            <div className="nodeModalBody nodeDetailsBody">
+              <dl className="nodeInfoGrid">
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="status" />
+                  <div><dt>Status</dt><dd className={statusTone(selectedNode.status)}><span className={`nodeStatusDot ${selectedNode.status}`} aria-hidden="true" />{selectedNode.status}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="type" />
+                  <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
+                </div>
+                <div className="nodeInfoCard wide">
+                  <NodeDetailIcon name="id" />
+                  <div><dt>ID</dt><dd className="technicalValue">{selectedNode.id}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="agent" />
+                  <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="panel" />
+                  <div><dt>Panel</dt><dd>{panelVersion}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="protocol" />
+                  <div><dt>Protocol</dt><dd>{selectedNode.protocolVersion || "Unknown"}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="compatibility" />
+                  <div><dt>Compatibility</dt><dd className={statusTone(selectedNode.compatibility)}>{nodeCompatibilityLabel(selectedNode)}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="docker" />
+                  <div><dt>Docker</dt><dd className={statusTone(selectedNode.dockerStatus)}>{nodeDockerLabel(selectedNode)}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="data" />
+                  <div><dt>Data path</dt><dd className={statusTone(selectedNode.dataPathStatus)}>{nodeDataPathLabel(selectedNode)}</dd></div>
+                </div>
+                <div className="nodeInfoCard secondary">
+                  <NodeDetailIcon name="created" />
+                  <div><dt>Created</dt><dd>{formatNodeDate(selectedNode.createdAt, formatDate)}</dd></div>
+                </div>
+                <div className="nodeInfoCard secondary">
+                  <NodeDetailIcon name="updated" />
+                  <div><dt>Updated</dt><dd>{formatNodeDate(selectedNode.updatedAt, formatDate)}</dd></div>
+                </div>
+                <div className="nodeInfoCard secondary">
+                  <NodeDetailIcon name="seen" />
+                  <div><dt>Last seen</dt><dd>{formatNodeDate(selectedNode.lastSeenAt ?? selectedNode.connectedAt, formatDate)}</dd></div>
+                </div>
               </dl>
-              {nodeWarnings(selectedNode).length > 0 && (
-                <div className="nodeWarnings">
-                  {nodeWarnings(selectedNode).map((warning) => <span key={warning}>{warning}</span>)}
+
+              <details className="nodeCapabilitiesPanel" open>
+                <summary>
+                  <span><NodeDetailIcon name="capabilities" />Capabilities</span>
+                  <span className="capabilityCount">{selectedCapabilities.length || "None"}</span>
+                </summary>
+                <div className="nodeCapabilityList">
+                  {selectedCapabilities.length > 0 ? selectedCapabilities.map((capability) => (
+                    <code key={capability}>{capability}</code>
+                  )) : <span className="emptyCapabilityText">None advertised</span>}
+                </div>
+              </details>
+
+              {selectedNode.hasPendingJoinToken && (
+                <div className="nodeAlert joinTokenAlert">
+                  <NodeDetailIcon name="warning" />
+                  <span>Join token is pending.</span>
+                </div>
+              )}
+              {selectedWarnings.length > 0 && (
+                <div className="nodeWarnings nodeDetailsWarnings">
+                  {selectedWarnings.map((warning) => <span key={warning}>{warning}</span>)}
                 </div>
               )}
               {nodePanelUpdateRequired(selectedNode) && (
-                <div className="nodeWarnings">
+                <div className="nodeWarnings nodeDetailsWarnings">
                   <span>Node agent {selectedNode.agentVersion} is newer than this panel ({panelVersion}). Update the panel before updating or managing this node image.</span>
                 </div>
               )}
               {nodeVersionMismatch(selectedNode) && (
-                <div className="nodeWarnings">
+                <div className="nodeWarnings nodeDetailsWarnings">
                   <span>Node agent {selectedNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node manually to matching release versions.</span>
                 </div>
               )}
-              <div className="nodeActions">
-                <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedNode)} disabled={busyNodeId === selectedNode.id}>Install instructions</button>
-                {nodeUpdateAvailable(selectedNode) && (
+              <div className="nodeActions nodeDetailsActions">
+                <div className="nodeActionGroup maintenance">
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedNode)} disabled={busyNodeId === selectedNode.id}><AppIcon name="download" />Install instructions</button>
                   <button
                     type="button"
                     className="secondaryButton compactButton"
                     onClick={() => onUpdateNode(selectedNode)}
-                    disabled={busyNodeId === selectedNode.id || !canManageNodes || !nodeCanPanelUpdate(selectedNode)}
-                    title={nodeCanPanelUpdate(selectedNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
+                    disabled={busyNodeId === selectedNode.id || !canManageNodes || !nodeUpdateAvailable(selectedNode) || !nodeCanPanelUpdate(selectedNode)}
+                    title={!nodeUpdateAvailable(selectedNode) ? "Node agent is already current" : nodeCanPanelUpdate(selectedNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
                   >
-                    Upgrade
+                    <AppIcon name="arrowUp" />Upgrade
                   </button>
-                )}
-                <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}>Rotate token</button>
-                <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}>Refresh node</button>
-                <button
-                  type="button"
-                  className="dangerButton compactButton"
-                  onClick={() => {
-                    const node = sortedNodes.find((candidate) => candidate.id === selectedNode.id);
-                    if (node) onRemoveNode(node);
-                  }}
-                  disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || Boolean(sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length) || !canManageNodes}
-                  title={selectedNode.isInternal ? "Internal node cannot be deleted" : sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length ? "Move or delete assigned servers first" : ""}
-                >
-                  Remove node
-                </button>
-                {Boolean(sortedNodes.find((candidate) => candidate.id === selectedNode.id)?.servers.length) && !selectedNode.isInternal && canManageNodes && (
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</button>
+                  <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</button>
+                </div>
+                <div className="nodeActionGroup destructive">
                   <button
                     type="button"
-                    className="dangerButton compactButton"
+                    className="dangerButton compactButton nodeRemoveButton"
                     onClick={() => {
-                      const node = sortedNodes.find((candidate) => candidate.id === selectedNode.id);
-                      if (node) onRemoveNode(node, true);
+                      if (selectedContextNode) onRemoveNode(selectedContextNode);
                     }}
-                    disabled={busyNodeId === selectedNode.id}
-                    title="Remove this stale node and its assigned server records from the panel without contacting the node host"
+                    disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || Boolean(selectedContextNode?.servers.length) || !canManageNodes}
+                    title={selectedNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Move or delete assigned servers first" : ""}
                   >
-                    Force remove node
+                    <AppIcon name="trash" />Remove node
                   </button>
-                )}
+                  <button
+                    type="button"
+                    className="dangerButton compactButton forceRemoveButton"
+                    onClick={() => {
+                      if (selectedContextNode) onRemoveNode(selectedContextNode, true);
+                    }}
+                    disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !Boolean(selectedContextNode?.servers.length) || !canManageNodes}
+                    title={selectedNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and its assigned server records from the panel without contacting the node host" : "Force remove is only available when server records are assigned"}
+                  >
+                    <NodeDetailIcon name="warning" />Force remove node
+                  </button>
+                </div>
               </div>
             </div>
           </section>
