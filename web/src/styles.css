@@ -4747,23 +4747,38 @@ button .buttonIcon {
 
 .modSkeleton {
   pointer-events: none;
+  position: relative;
+  overflow: hidden;
+  animation: skeletonCardBreath 1800ms ease-in-out infinite;
+}
+
+.modSkeleton:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.modSkeleton:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.modSkeleton:nth-child(4) {
+  animation-delay: 360ms;
 }
 
 .skeletonBlock {
   display: block;
   border-radius: var(--radius-sm);
   background:
-    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent),
+    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.5) 48%, transparent 66%),
     var(--surface-muted);
-  background-size: 220% 100%;
-  animation: skeletonSweep 1100ms linear infinite;
+  background-size: 260% 100%;
+  animation: skeletonSweep 1400ms ease-in-out infinite;
 }
 
 .themeDark .skeletonBlock {
   background:
-    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent),
+    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.1) 48%, transparent 66%),
     var(--surface-muted);
-  background-size: 220% 100%;
+  background-size: 260% 100%;
 }
 
 .skeletonBlock.icon {
@@ -4796,11 +4811,26 @@ button .buttonIcon {
 
 @keyframes skeletonSweep {
   from {
-    background-position: 220% 0;
+    background-position: 180% 0;
   }
 
   to {
-    background-position: -220% 0;
+    background-position: -180% 0;
+  }
+}
+
+@keyframes skeletonCardBreath {
+  0%,
+  100% {
+    border-color: var(--border);
+    opacity: 0.78;
+    transform: translateY(0);
+  }
+
+  50% {
+    border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+    opacity: 1;
+    transform: translateY(-1px);
   }
 }
 
@@ -5735,6 +5765,11 @@ details.compatibilityBadge p {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .modSkeleton,
+  .skeletonBlock {
+    animation: none !important;
   }
 }
 
