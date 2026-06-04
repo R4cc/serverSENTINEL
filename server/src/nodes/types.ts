@@ -19,7 +19,7 @@ export type NodeRuntime = {
   readonly nodeId: string;
   publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer>;
   createServer(input: unknown, report?: RuntimeProgressReporter, jobId?: string): Promise<ManagedServer>;
-  updateServer(serverId: string, input: unknown): Promise<ManagedServer>;
+  updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer>;
   deleteServer(server: ManagedServer, input: unknown): Promise<unknown>;
   serverStatus(server: ManagedServer): Promise<unknown>;
   lifecycle(server: ManagedServer, action: RuntimeAction): Promise<unknown>;

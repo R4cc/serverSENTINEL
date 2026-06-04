@@ -5,9 +5,11 @@ import { createHash, randomUUID } from "node:crypto";
 import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
-import { config } from "../config.js";
+import { config, maxServerPort, minServerPort } from "../config.js";
+import { parseDockerPorts } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { latestFabricVersion } from "../fabric/fabricClient.js";
+import { validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import type { ManagedServer, ReleaseChannel } from "../types.js";
@@ -45,6 +47,7 @@ type CreateInput = {
   acceptEula?: boolean;
   serverPort?: string;
 };
+type UpdateInput = Omit<CreateInput, "nodeId" | "acceptEula">;
 
 const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
 const nodeUpdateDir = join(config.nodeDataDir, "node", "updates");
@@ -141,6 +144,30 @@ function dockerImage(version?: string) {
   return "eclipse-temurin:17-jre";
 }
 
+function isValidServerPort(port: string) {
+  if (!/^\d+$/.test(port)) return false;
+  const value = Number(port);
+  return value >= minServerPort && value <= maxServerPort;
+}
+
+async function writeVersionMetadata(server: ManagedServer) {
+  const now = new Date().toISOString();
+  const target = await inside(server, ".serversentinel-version.json", false);
+  let createdAt = now;
+  try {
+    const existing = JSON.parse(await readFile(target, "utf8")) as { createdAt?: string };
+    createdAt = existing.createdAt ?? now;
+  } catch {
+    createdAt = now;
+  }
+  await writeFile(target, `${JSON.stringify({
+    minecraftVersion: server.minecraftVersion,
+    fabricLoaderVersion: server.loaderVersion,
+    createdAt,
+    updatedAt: now
+  }, null, 2)}\n`, "utf8");
+}
+
 async function pullImage(image: string) {
   const [fromImage, tag] = image.includes(":") ? image.split(/:(.*)/, 2) : [image, "latest"];
   await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag || "latest")}`, [200, 201]);
@@ -219,6 +246,57 @@ async function createServer(input: CreateInput) {
   await downloadFabricJar(server);
   if (dockerAvailable()) await createContainer(server);
   return server;
+}
+
+async function updateServer(server: ManagedServer, input: UpdateInput) {
+  const status = await runtimeStatus(server);
+  if ((status as { docker?: { running?: boolean } }).docker?.running) {
+    throw new Error("Stop the server before changing its configuration");
+  }
+
+  const minecraftVersion = input.minecraftVersion?.trim() || server.minecraftVersion;
+  const loaderVersion = input.loaderVersion?.trim() || server.loaderVersion || await latestFabricVersion("loader");
+  const installerVersion = input.installerVersion?.trim() || server.installerVersion || await latestFabricVersion("installer");
+  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || server.serverJar || "fabric-server-launch.jar");
+  const serverPort = input.serverPort?.trim();
+  if (serverPort && !isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+  }
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultContainerName(server.displayName));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(minecraftVersion));
+  const dockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  if (dockerPorts) parseDockerPorts(dockerPorts);
+  const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
+
+  const jarChanged = server.minecraftVersion !== minecraftVersion
+    || server.loaderVersion !== loaderVersion
+    || server.installerVersion !== installerVersion
+    || server.serverJar !== serverJar;
+
+  const updated: ManagedServer = {
+    ...server,
+    displayName: input.displayName?.trim() || server.displayName,
+    minecraftVersion,
+    loaderVersion,
+    installerVersion,
+    serverJar,
+    dockerContainer,
+    dockerImage: dockerImageName,
+    dockerPorts,
+    javaArgs,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (jarChanged) {
+    await downloadFabricJar(updated);
+  }
+  await writeVersionMetadata(updated);
+  if (serverPort) {
+    await writeFile(await inside(updated, "server.properties", false), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    });
+  }
+  return updated;
 }
 
 async function inspect(server: ManagedServer) {
@@ -637,6 +715,7 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.create") return createServer(payload?.input as CreateInput);
   if (!server) throw new Error("server payload is required");
   const name = encodeURIComponent(containerName(server));
+  if (command === "server.update") return updateServer(server, payload?.input as UpdateInput);
   if (command === "server.delete") {
     const status = await inspect(server).catch(() => null) as any;
     if (status?.State?.Running) throw new Error("Stop the server before deleting it");

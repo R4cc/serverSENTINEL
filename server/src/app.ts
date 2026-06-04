@@ -3197,7 +3197,21 @@ app.put<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
-  const updatedServer = await runtimeForServer(server).updateServer(server.id, request.body);
+  const nextDisplayName = request.body.displayName?.trim() || server.displayName;
+  const servers = await queuedReadServers();
+  if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
+    throw new Error("A managed server with this display name already exists");
+  }
+  const serverPort = request.body.serverPort?.trim();
+  if (serverPort && !isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+  }
+  const dockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  if (dockerPorts) {
+    assertUniqueDockerHostPorts(dockerPorts);
+    await assertNodePortsAvailable(server.nodeId, dockerPorts, { ignoreServerId: server.id });
+  }
+  const updatedServer = await runtimeForServer(server).updateServer(server, request.body);
   return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 
@@ -4501,6 +4515,13 @@ runtimeRegistry = new NodeRuntimeRegistry(
           throw new Error("A managed server with this id already exists");
         }
         servers.push(server);
+      });
+    },
+    async (server) => {
+      await updateServers((servers) => {
+        const index = servers.findIndex((candidate) => candidate.id === server.id);
+        if (index === -1) throw new Error("Server not found");
+        servers[index] = server;
       });
     },
     async (serverId) => {

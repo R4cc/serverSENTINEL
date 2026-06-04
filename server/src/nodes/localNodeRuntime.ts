@@ -52,8 +52,8 @@ export class LocalNodeRuntime implements NodeRuntime {
     return this.handlers.createServer(input, report, jobId);
   }
 
-  updateServer(serverId: string, input: unknown) {
-    return this.handlers.updateServer(serverId, input);
+  updateServer(server: ManagedServer, input: unknown) {
+    return this.handlers.updateServer(server.id, input);
   }
 
   deleteServer(server: ManagedServer, input: unknown) {

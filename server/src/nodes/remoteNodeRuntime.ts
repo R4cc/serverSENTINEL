@@ -14,14 +14,8 @@ type ConsoleClient = {
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
 type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[]) => Promise<PublicServer>;
 type PersistServerFn = (server: ManagedServer) => Promise<void>;
+type UpdateServerRecordFn = (server: ManagedServer) => Promise<void>;
 type DeleteServerRecordFn = (serverId: string) => Promise<void>;
-
-function unsupported(command: string): never {
-  const error = new Error(`${command} is not implemented for remote nodes yet`) as Error & { statusCode?: number; code?: string };
-  error.statusCode = 400;
-  error.code = "missing_capability";
-  throw error;
-}
 
 function normalizeRemotePath(path: string) {
   const value = (path || ".").replaceAll("\\", "/");
@@ -44,6 +38,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
     private readonly connections: PanelNodeConnections,
     private readonly publicServerFn: PublicServerFn,
     private readonly persistServer: PersistServerFn,
+    private readonly updateServerRecord: UpdateServerRecordFn,
     private readonly deleteServerRecord: DeleteServerRecordFn
   ) {
     this.nodeId = nodeId;
@@ -65,7 +60,11 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return result;
   }
 
-  async updateServer(): Promise<ManagedServer> { unsupported("updateServer"); }
+  async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
+    const result = await this.command(server, "server.update", { input }) as ManagedServer;
+    await this.updateServerRecord(result);
+    return result;
+  }
 
   async deleteServer(server: ManagedServer, input: unknown) {
     const result = await this.command(server, "server.delete", { input });

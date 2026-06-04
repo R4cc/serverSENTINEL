@@ -5,6 +5,7 @@ export const nodeCapabilities = [
   "node.update",
   "docker.info",
   "server.create",
+  "server.update",
   "server.delete",
   "server.start",
   "server.stop",
