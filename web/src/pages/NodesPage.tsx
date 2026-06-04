@@ -70,9 +70,8 @@ function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "a
         )}
         {name === "id" && (
           <>
-            <path d="M12 4a4 4 0 0 1 4 4c0 3-4 3.5-4 7" />
-            <path d="M12 20h.1" />
-            <path d="M8 8a4 4 0 0 1 8 0" />
+            <rect x="5" y="5" width="14" height="14" rx="3" />
+            <path d="M9 9h6M9 12h6M9 15h4" />
           </>
         )}
         {name === "agent" && (
@@ -740,7 +739,7 @@ export function NodesPage({
                 </div>
               </dl>
 
-              <details className="nodeCapabilitiesPanel" open>
+              <details className="nodeCapabilitiesPanel">
                 <summary>
                   <span><NodeDetailIcon name="capabilities" />Capabilities</span>
                   <span className="capabilityCount">{selectedCapabilities.length || "None"}</span>
