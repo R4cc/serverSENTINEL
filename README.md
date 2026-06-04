@@ -67,8 +67,8 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>Mod Management</strong></p>
-      <a href="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" target="_blank">
-        <img width="2467" height="2065" alt="image" src="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" />
+      <a href="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" target="_blank">
+        <img src="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" alt="Mod Management" style="max-width: 100%;" />
       </a>
       <p align="center">Manage server mods and updates.</p>
     </td>
@@ -139,7 +139,7 @@ Use `config` for panel settings and users, `servers` for all-in-one managed serv
 The published image used by the project is:
 
 ```text
-nl2109/serversentinel:0.5.0
+nl2109/serversentinel:latest
 ```
 
 The panel listens on port `8080` inside the container.
@@ -164,7 +164,7 @@ docker run -d \
   -v /opt/serversentinel/config:/config \
   -v /opt/serversentinel/servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:0.5.0
+  nl2109/serversentinel:latest
 ```
 
 Open:
@@ -178,7 +178,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:0.5.0
+    image: nl2109/serversentinel:latest
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -217,7 +217,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_CONFIG_DIR=/config \
   -v /opt/serversentinel/config:/config \
-  nl2109/serversentinel:0.5.0
+  nl2109/serversentinel:latest
 ```
 
 ### Panel-Only With Docker Compose
@@ -225,7 +225,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:0.5.0
+    image: nl2109/serversentinel:latest
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -258,7 +258,7 @@ docker run -d \
   -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:0.5.0
+  nl2109/serversentinel:latest
 ```
 
 The node does not publish a web port. It connects outbound to the panel.
@@ -268,7 +268,7 @@ The node does not publish a web port. It connects outbound to the panel.
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:0.5.0
+    image: nl2109/serversentinel:latest
     container_name: serversentinel-node
     restart: unless-stopped
     environment:
@@ -293,7 +293,7 @@ PORT=8080
 SERVERSENTINEL_CONFIG_DIR=/config
 SERVERSENTINEL_SERVERS_DIR=/data/servers
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
-SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:0.5.0
+SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
 MODRINTH_API_KEY=
 LOG_LEVEL=info
 ```
@@ -361,7 +361,7 @@ npm run typecheck
 Build the Docker image locally:
 
 ```bash
-docker build -t nl2109/serversentinel:0.5.0 -f docker/Dockerfile .
+docker build -t nl2109/serversentinel:latest -f docker/Dockerfile .
 ```
 
 ## Current Limitations

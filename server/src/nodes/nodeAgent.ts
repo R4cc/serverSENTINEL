@@ -396,7 +396,7 @@ async function prepareNodeUpdate(payload: unknown) {
   if (input.expectedVersion && currentVersion !== input.expectedVersion && expectedComparison === null) {
     throw new Error(`Node agent version ${currentVersion} cannot be safely compared with panel version ${input.expectedVersion}. Update the panel and node manually to matching release versions.`);
   }
-  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${currentVersion}`);
+  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || "nl2109/serversentinel:latest");
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Manual update is required.");
   }

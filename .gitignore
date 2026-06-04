@@ -2,6 +2,11 @@ node_modules/
 dist/
 .local-config/
 .local-servers/
+.tmp/
+.tmp-codex/
+.tmp-config/
+.tmp-config-ux/
+.tmp-config-verify/
 .env
 .env.*
 !.env.example

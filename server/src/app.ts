@@ -121,7 +121,7 @@ import {
 const localNodeId = "local";
 const appVersion = process.env.npm_package_version ?? "0.5.0";
 const nodeImageRepository = "nl2109/serversentinel";
-const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
+const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const serversFile = join(config.configDir, "servers.json");
 const nodesFile = join(config.configDir, "nodes.json");
 const usersFile = join(config.configDir, "users.json");
