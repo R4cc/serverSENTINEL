@@ -215,13 +215,14 @@ function InstallInstructions({
     <section className="nodeInstallBox">
       <div className="nodeInstallHeader">
         <div>
-          <h3>INSTALL {result.node.name}</h3>
+          <h3>Install {result.node.name}</h3>
           <p>{expiresAt ? `Join token expires ${formatNodeDate(expiresAt)}` : result.install.tokenRequired ? "Rotate the join token before installing this node." : "Token is not included in this snippet."}</p>
+          {result.install.joinToken && <p className="sensitiveHint">This command contains a secret join token. Copy it only to the node host.</p>}
         </div>
       </div>
       <div className="installTabs" role="tablist" aria-label="Install method">
-        <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>DOCKER COMPOSE</button>
-        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>DOCKER RUN</button>
+        <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</button>
+        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run</button>
       </div>
       <div className="installSnippetShell">
         <button type="button" className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
@@ -233,7 +234,7 @@ function InstallInstructions({
   );
 }
 
-const addNodeSteps = ["Create Node", "Run Install", "Connect", "Verify", "Ready"];
+const addNodeSteps = ["Create node", "Run install", "Connect", "Verify", "Ready"];
 
 type AddNodeFlowState = "waiting" | "success" | "incompatible" | "expired" | "disconnected";
 

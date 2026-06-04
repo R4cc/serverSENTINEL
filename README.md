@@ -2,13 +2,11 @@
 
 serverSENTINEL is a web panel for running Minecraft servers with Docker. It gives you a browser-based place to create servers, start and stop them, view the live console, send commands, manage files, install mods, schedule actions, and manage users.
 
-This project is preproduction software. It was written with AI assistance, including later polishing and security hardening passes. That can make development faster, but it does not make the software perfect: AI-written code can still miss edge cases, contain ordinary bugs, or make assumptions that need more real-world testing.
+This project is preproduction software. Test it on non-critical servers first, keep backups, and review your deployment settings before trusting it with production worlds or public access.
 
 Do not expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
 
 ## Screenshots
-
-Replace these placeholders with real screenshots when ready.
 
 <table>
   <tr>
@@ -40,7 +38,7 @@ Replace these placeholders with real screenshots when ready.
       <a href="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" target="_blank">
         <img src="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" alt="File Editor" style="max-width: 100%;" />
       </a>
-      <p align="center">Browse, upload, rename, duplicate, download, and delete server files.</p>
+      <p align="center">Edit server configuration and text files safely.</p>
     </td>
   </tr>
   <tr>
@@ -49,7 +47,7 @@ Replace these placeholders with real screenshots when ready.
       <a href="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" target="_blank">
         <img src="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" alt="Schedules" style="max-width: 100%;" />
       </a>
-      <p align="center">Create scheduled server actions.</p>
+      <p align="center">Create and edit scheduled server actions.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>Settings</strong></p>
@@ -68,7 +66,7 @@ Replace these placeholders with real screenshots when ready.
       <p align="center">Manage local users, roles, and permissions.</p>
     </td>
     <td valign="top" width="50%">
-      <p align="center"><strong>Mod Management/strong></p>
+      <p align="center"><strong>Mod Management</strong></p>
       <a href="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" target="_blank">
         <img width="2467" height="2065" alt="image" src="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" />
       </a>
@@ -141,7 +139,7 @@ Use `config` for panel settings and users, `servers` for all-in-one managed serv
 The published image used by the project is:
 
 ```text
-nl2109/serversentinel:0.4.0
+nl2109/serversentinel:0.5.0
 ```
 
 The panel listens on port `8080` inside the container.
@@ -166,7 +164,7 @@ docker run -d \
   -v /opt/serversentinel/config:/config \
   -v /opt/serversentinel/servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:0.4.0
+  nl2109/serversentinel:0.5.0
 ```
 
 Open:
@@ -180,7 +178,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:0.4.0
+    image: nl2109/serversentinel:0.5.0
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -219,7 +217,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_CONFIG_DIR=/config \
   -v /opt/serversentinel/config:/config \
-  nl2109/serversentinel:0.4.0
+  nl2109/serversentinel:0.5.0
 ```
 
 ### Panel-Only With Docker Compose
@@ -227,7 +225,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:0.4.0
+    image: nl2109/serversentinel:0.5.0
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -260,7 +258,7 @@ docker run -d \
   -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:0.4.0
+  nl2109/serversentinel:0.5.0
 ```
 
 The node does not publish a web port. It connects outbound to the panel.
@@ -270,7 +268,7 @@ The node does not publish a web port. It connects outbound to the panel.
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:0.4.0
+    image: nl2109/serversentinel:0.5.0
     container_name: serversentinel-node
     restart: unless-stopped
     environment:
@@ -295,6 +293,7 @@ PORT=8080
 SERVERSENTINEL_CONFIG_DIR=/config
 SERVERSENTINEL_SERVERS_DIR=/data/servers
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
+SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:0.5.0
 MODRINTH_API_KEY=
 LOG_LEVEL=info
 ```
@@ -311,6 +310,10 @@ SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
 ```
 
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
+
+`SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
+
+Join tokens generated by the panel are short-lived bootstrap secrets. Rotate the token from the Nodes page if a generated command is exposed, expires, or is no longer needed.
 
 ## First Run
 
@@ -347,6 +350,18 @@ Run server tests:
 
 ```bash
 npm test
+```
+
+Run all workspace typechecks:
+
+```bash
+npm run typecheck
+```
+
+Build the Docker image locally:
+
+```bash
+docker build -t nl2109/serversentinel:0.5.0 -f docker/Dockerfile .
 ```
 
 ## Current Limitations

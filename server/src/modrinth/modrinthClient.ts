@@ -4,7 +4,7 @@ import { modrinthApiKey } from "../storage/settingsStore.js";
 export async function modrinthFetch(url: string) {
   const apiKey = await modrinthApiKey();
   const headers: Record<string, string> = {
-    "User-Agent": "ServerSentinel/0.4.0 (managed Fabric server panel)"
+    "User-Agent": "ServerSentinel/0.5.0 (managed Fabric server panel)"
   };
   if (apiKey) {
     headers.Authorization = apiKey;

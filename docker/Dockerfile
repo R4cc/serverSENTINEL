@@ -15,7 +15,10 @@ FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV SS_MODE=all-in-one
 ENV SERVERSENTINEL_CONFIG_DIR=/config
+ENV SERVERSENTINEL_SERVERS_DIR=/data/servers
+ENV SERVERSENTINEL_SERVERS_DOCKER_VOLUME=serversentinel-minecraft-servers
 ENV PORT=8080
 
 COPY package*.json ./

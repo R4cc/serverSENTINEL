@@ -1405,7 +1405,7 @@ export default function App() {
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      notify("success", "Copied to clipboard");
+      notify("success", text.includes("SS_JOIN_TOKEN") ? "Copied install command. Treat the join token as a secret." : "Copied to clipboard");
     } catch {
       notify("error", "Could not copy to clipboard");
     }

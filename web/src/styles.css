@@ -3152,6 +3152,12 @@ button .buttonIcon {
   color: var(--swiss-white);
 }
 
+.sensitiveHint {
+  margin-top: var(--space-1);
+  color: var(--sentinel-warning) !important;
+  font-weight: 850;
+}
+
 .installSnippetShell {
   position: relative;
   overflow: hidden;

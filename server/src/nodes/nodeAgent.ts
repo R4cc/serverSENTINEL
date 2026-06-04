@@ -388,7 +388,7 @@ function createNetworkingConfig(inspect: NodeContainerInspect) {
 
 async function prepareNodeUpdate(payload: unknown) {
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
-  const currentVersion = process.env.npm_package_version ?? "0.4.0";
+  const currentVersion = process.env.npm_package_version ?? "0.5.0";
   const expectedComparison = compareVersionStrings(currentVersion, input.expectedVersion);
   if (input.expectedVersion && expectedComparison === 1) {
     throw new Error(`Node agent ${currentVersion} is newer than panel ${input.expectedVersion}. Update the panel before changing this node image.`);
@@ -745,7 +745,7 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.4.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.5.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {

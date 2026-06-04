@@ -9,7 +9,10 @@ import {
   removeServersForNode,
   validateRuntimeJarFilename,
   dockerHostPortBindings,
-  findExistingServerPortConflict
+  findExistingServerPortConflict,
+  sessionExpired,
+  sessionMaxAgeSeconds,
+  validateJoinTokenTtlMinutes
 } from "./app.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import type { ManagedServer } from "./types.js";
@@ -136,6 +139,22 @@ describe("security validation helpers", () => {
     expect(() => optionalNodeDataMount("/srv/data\nSS_JOIN_TOKEN=bad")).toThrow("single-line");
     expect(optionalReleaseChannel("beta")).toBe("beta");
     expect(() => optionalReleaseChannel("nightly")).toThrow("Release channel");
+  });
+
+  it("bounds node join token expiry to deliberate short-lived values", () => {
+    expect(validateJoinTokenTtlMinutes(undefined)).toBe(60);
+    expect(validateJoinTokenTtlMinutes(5)).toBe(5);
+    expect(validateJoinTokenTtlMinutes(1440)).toBe(1440);
+    expect(() => validateJoinTokenTtlMinutes(4)).toThrow("Join token expiry");
+    expect(() => validateJoinTokenTtlMinutes(1441)).toThrow("Join token expiry");
+    expect(() => validateJoinTokenTtlMinutes(30.5)).toThrow("Join token expiry");
+  });
+
+  it("expires server-side sessions even if a stale cookie is still sent", () => {
+    const now = Date.now();
+    expect(sessionExpired({ createdAt: new Date(now - sessionMaxAgeSeconds * 1000 + 1000).toISOString() }, now)).toBe(false);
+    expect(sessionExpired({ createdAt: new Date(now - sessionMaxAgeSeconds * 1000 - 1000).toISOString() }, now)).toBe(true);
+    expect(sessionExpired({ createdAt: "not-a-date" }, now)).toBe(true);
   });
 });
 

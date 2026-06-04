@@ -15,7 +15,7 @@ export async function fabricMeta<T>(path: string): Promise<T> {
   }
   const response = await fetch(`https://meta.fabricmc.net${path}`, {
     headers: {
-      "User-Agent": "ServerSentinel/0.4.0 (Fabric server creator)"
+      "User-Agent": "ServerSentinel/0.5.0 (Fabric server creator)"
     }
   });
   if (!response.ok) {
