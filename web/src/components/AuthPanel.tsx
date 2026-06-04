@@ -245,7 +245,7 @@ function UserPermissionModal({
             <h2 id="user-modal-title">{user ? "Edit User" : "New User"}</h2>
             <button
               type="button"
-              className="iconButton"
+              className="iconButton modalCloseButton"
               onClick={onClose}
               disabled={busy}
               aria-label="Close user dialog"
@@ -363,7 +363,7 @@ function ResetPasswordModal({
             <h2 id="reset-password-title">Reset Password</h2>
             <button
               type="button"
-              className="iconButton"
+              className="iconButton modalCloseButton"
               onClick={onClose}
               disabled={busy}
               aria-label="Close reset password dialog"

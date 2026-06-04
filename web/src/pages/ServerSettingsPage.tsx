@@ -212,7 +212,8 @@ export function ManagedServerForm({
   preferredNodeId = "",
   versions,
   totalMemory = 0,
-  provisioning = false
+  provisioning = false,
+  disabledReason = ""
 }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dockerSocketMounted: boolean;
@@ -221,6 +222,7 @@ export function ManagedServerForm({
   versions: FabricVersions;
   totalMemory?: number;
   provisioning?: boolean;
+  disabledReason?: string;
 }) {
   const runtimeImages = [
     { value: "eclipse-temurin:21-jre", label: "Java 21 runtime (recommended)" },
@@ -415,8 +417,8 @@ export function ManagedServerForm({
         {dockerSocketMounted ? "Docker is connected, so ServerSentinel can create and control this server." : "Docker is not connected yet. Connect Docker in Settings before using local runtime controls."}
       </p>
       <button
-        disabled={!serverPortValid || placementBlocked}
-        title={!serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : "Create managed server"}
+        disabled={provisioning || !serverPortValid || placementBlocked}
+        title={provisioning ? disabledReason || "Server setup is still running." : !serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : "Create managed server"}
       >
         {provisioning ? "Setting up..." : "Create Managed Server"}
       </button>

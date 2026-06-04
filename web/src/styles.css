@@ -89,9 +89,9 @@ button {
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.01em;
   line-height: 1;
-  text-transform: uppercase;
+  text-transform: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7400,6 +7400,303 @@ button:disabled,
 .addNodeCardButton {
   min-height: 320px;
   border-radius: var(--radius-sm);
+}
+
+/* Unified interaction primitives */
+.uiToolbar,
+.buttonRow,
+.userActions,
+.keyFormActions,
+.consoleHeaderActions,
+.fileToolbar,
+.selectionActions,
+.nodeCardActions,
+.nodeActions,
+.nodeDetailsActions,
+.modDetailsButtonRow,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.uiToolbar,
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar,
+.modsToolbarCompact,
+.modSearchToolbar {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  padding: var(--space-3);
+}
+
+.nodesToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.uiPanel,
+.panel,
+.authPanel,
+.activeServerStrip,
+.emptyState,
+.modalPanel {
+  background: var(--surface-raised);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.uiSectionHeader,
+.panelHeader,
+.settingsGroupHeader,
+.nodeCardHeader,
+.nodeInstallHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modsPanelHeader,
+.modInstallHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.uiSectionHeader h2,
+.panelHeader h2,
+.settingsGroupHeader h2,
+.modalHeader h2,
+.userModalHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.modInstallHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uiForm,
+.appForm,
+.userModalForm,
+.keyForm {
+  min-width: 0;
+}
+
+.appForm label,
+.userModalForm label,
+.keyForm label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.appForm label input,
+.appForm label select,
+.appForm label textarea,
+.userModalForm label input,
+.userModalForm label select,
+.userModalForm label textarea,
+.keyForm label input {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.checkLine,
+.appForm label.checkLine,
+.userModalForm label.checkLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.uiStatusPill,
+.settingsStatus,
+.runtimeBadge,
+.compatibilityBadge,
+.installStatusBadge,
+.roleBadge,
+.nodePill,
+.subtlePill,
+.modDetailsPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  border: var(--border-subtle) solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.settingsStatus.ready,
+.runtimeBadge.running,
+.compatibilityBadge.ok,
+.installStatusBadge.ok,
+.nodeServerState.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.settingsStatus.warning,
+.runtimeBadge.starting,
+.compatibilityBadge.unknown,
+.installStatusBadge.warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.settingsStatus.limited,
+.runtimeBadge.stopped,
+.runtimeBadge.exited,
+.compatibilityBadge.danger,
+.installStatusBadge.danger,
+.nodeServerState.stopped {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.runtimeBadge.neutral,
+.settingsStatus.neutral {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.uiListRow,
+.scheduleRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.modsTableRow,
+.modRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.modsTableRow:hover,
+.modRow:hover,
+.fileTableRow:hover,
+.eventRow:hover,
+.settingsRow:hover {
+  background: var(--sentinel-accent-soft);
+}
+
+.modalPanel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody,
+.modInstallBody {
+  overflow: auto;
+}
+
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+  padding: var(--space-4);
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modInstallHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+.modDetailsPanel > .panelHeader {
+  padding: var(--space-4);
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.modDetailsPanel > .modDetailsHeaderRow,
+.modDetailsPanel > .modDetailsBody,
+.modDetailsPanel > .modDetailsButtonRow {
+  margin: 0;
+  padding: var(--space-4);
+}
+
+.modDetailsPanel > .modDetailsBody {
+  overflow: auto;
+}
+
+.modDetailsPanel > .modDetailsButtonRow {
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+}
+
+.dangerButton,
+.dangerTextButton,
+.iconDangerButton {
+  border-color: var(--sentinel-danger);
+}
+
+.dangerButton {
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.dangerButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled) {
+  background: var(--sentinel-danger);
+  border-color: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.themeDark .uiToolbar,
+.themeDark .fileToolbar,
+.themeDark .selectionActionBar,
+.themeDark .nodesToolbar,
+.themeDark .modsToolbarCompact,
+.themeDark .modSearchToolbar {
+  background: var(--surface-raised);
 }
 
 @media (max-width: 1366px) {

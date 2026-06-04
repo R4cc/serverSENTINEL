@@ -132,6 +132,7 @@ export default function App() {
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
   const panelFirstRunPromptedRef = useRef(false);
+  const provisionSubmitLockRef = useRef(false);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
     inFlightEnabled: boolean | null;
@@ -167,6 +168,7 @@ export default function App() {
 
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && job.status === "running");
+  const currentProvisionJob = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
   const {
     effectiveAppState,
@@ -263,11 +265,28 @@ export default function App() {
   const selectionSummary = selectedEntries.length === 0
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` · ${formatBytes(selectedTotalSize)}` : ""}`;
-  const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager);
-  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file");
-  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileOperationBusy);
-  const canRenameSelectedItem = Boolean(selectedEntry && !fileOperationBusy);
-  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileOperationBusy);
+  const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
+  const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager && !fileRuntimeLocked);
+  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileRuntimeLocked && !fileOperationBusy);
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && canManager && !fileRuntimeLocked && !fileOperationBusy);
+  const canRenameSelectedItem = Boolean(selectedEntry && canManager && !fileRuntimeLocked && !fileOperationBusy);
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileRuntimeLocked && !fileOperationBusy);
+  const fileActionBlockedReason = isProvisioning
+    ? "Server setup is still running."
+    : dockerOperationalLock
+      ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
+      : fileOperationBusy
+        ? "A file operation is already running."
+        : !canManager
+          ? "Manager permission is required."
+          : "";
+  const fileReadActionBlockedReason = isProvisioning
+    ? "Server setup is still running."
+    : dockerOperationalLock
+      ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
+      : fileOperationBusy
+        ? "A file operation is already running."
+        : "";
   const fileBreadcrumbs = useMemo(() => {
     const parts = listing.path.split("/").filter(Boolean);
     return [
@@ -1226,7 +1245,7 @@ export default function App() {
       notify("error", "Demo mode is enabled. Exit demo mode before creating managed servers.");
       return;
     }
-    if (serverCreationBlocked || !canCreateServers) return;
+    if (provisionSubmitLockRef.current || isProvisioning || serverCreationBlocked || !canCreateServers) return;
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -1237,6 +1256,7 @@ export default function App() {
     })) {
       return;
     }
+    provisionSubmitLockRef.current = true;
     setProvisioningError("");
     const displayName = trimFormValue(form, "displayName");
     const initialJob: GeneralJob = {
@@ -1307,6 +1327,8 @@ export default function App() {
         error: message,
         dismissible: true
       } : j));
+    } finally {
+      provisionSubmitLockRef.current = false;
     }
   }
 
@@ -1745,25 +1767,43 @@ export default function App() {
     if (activeServerIsDemo) {
       const content = demoFiles[entry.path] ?? "";
       if (!isPreviewableFile(entry)) {
-        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "unsupported", message: "Preview unavailable" }, error: "" });
+        setFilePreview((current) => current.path === entry.path
+          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "unsupported", message: "Preview unavailable" }, error: "" }
+          : current);
       } else if (new Blob([content]).size > 96 * 1024) {
-        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "too_large", message: "File too large to preview" }, error: "" });
+        setFilePreview((current) => current.path === entry.path
+          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "too_large", message: "File too large to preview" }, error: "" }
+          : current);
       } else {
-        setFilePreview({ path: entry.path, loading: false, data: { path: entry.path, preview: "text", content }, error: "" });
+        setFilePreview((current) => current.path === entry.path
+          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "text", content }, error: "" }
+          : current);
       }
       return;
     }
     try {
       const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`);
-      setFilePreview({ path: entry.path, loading: false, data: preview, error: "" });
+      setFilePreview((current) => current.path === entry.path
+        ? { path: entry.path, loading: false, data: preview, error: "" }
+        : current);
     } catch (error) {
-      setFilePreview({ path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") });
+      setFilePreview((current) => current.path === entry.path
+        ? { path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") }
+        : current);
     }
   }
 
   async function openFile(path: string, discardConfirmed = false) {
     if (isProvisioning) return;
     if (!activeServer) return;
+    if (dockerOperationalLock || !canManager) {
+      const message = dockerOperationalLock
+        ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
+        : "Manager permission is required to edit files.";
+      setNotice(message);
+      notify("warning", message);
+      return;
+    }
     if (selectedPath && selectedPath !== path && dirty && !discardConfirmed) {
       setDiscardEditorRequest({ action: "switch", path });
       return;
@@ -1881,6 +1921,7 @@ export default function App() {
 
   async function createFolder() {
     if (!activeServer || fileOperationBusy) return;
+    if (fileRuntimeLocked || !canManager) return;
     const name = window.prompt("New folder name");
     if (name === null) return;
     const nameError = fileNameValidation(name);
@@ -1914,6 +1955,7 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeServer || fileOperationBusy) return;
+    if (fileRuntimeLocked || !canManager) return;
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);
@@ -1950,6 +1992,7 @@ export default function App() {
 
   async function downloadSelectedFile() {
     if (!activeServer || selectedEntries.length !== 1) return;
+    if (!canDownloadSelectedFile) return;
     const entry = selectedEntries[0];
     if (entry.type !== "file") return;
     setFileOperationBusy("download");
@@ -1991,7 +2034,14 @@ export default function App() {
 
   async function renameSelectedFile() {
     if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+    if (!canRenameSelectedItem) return;
     const entry = selectedEntries[0];
+    if (dirty && selectedPath && publicPathContains(entry.path, selectedPath)) {
+      const message = "Save or discard the open editor changes before renaming this item.";
+      setNotice(message);
+      notify("warning", message);
+      return;
+    }
     const name = window.prompt("Rename item", entry.name);
     if (name === null || name.trim() === entry.name) return;
     const nameError = fileNameValidation(name);
@@ -2021,7 +2071,12 @@ export default function App() {
         await loadFiles(activeServer.id, listing.path);
       }
       setSelectedFilePaths([targetPath]);
-      if (selectedPath === entry.path) setSelectedPath(targetPath);
+      if (selectedPath && publicPathContains(entry.path, selectedPath)) {
+        setSelectedPath(selectedPath.replace(entry.path, targetPath));
+      }
+      if (filePreview.path && publicPathContains(entry.path, filePreview.path)) {
+        setFilePreview({ path: "", loading: false, data: null, error: "" });
+      }
       notify("success", `Renamed to ${name.trim()}`);
     } catch (error) {
       notify("error", errorMessage(error, "Could not rename the selected item."));
@@ -2032,6 +2087,7 @@ export default function App() {
 
   async function duplicateSelectedFile() {
     if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+    if (!canDuplicateSelectedFile) return;
     const entry = selectedEntries[0];
     if (entry.type !== "file") return;
     const suggestedName = defaultDuplicateName(entry.name);
@@ -2698,7 +2754,7 @@ export default function App() {
 
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || scheduleBusy || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return;
     setNotice("");
     setScheduleBusy(true);
     const formElement = event.currentTarget;
@@ -2760,17 +2816,20 @@ export default function App() {
   }
 
   async function updateSchedule(schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) {
-    if (isProvisioning || scheduleBusy || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return false;
     setScheduleBusy(true);
+    const actionLabel = patch.enabled !== undefined && Object.keys(patch).length === 1
+      ? patch.enabled ? "Schedule enabled" : "Schedule disabled"
+      : "Schedule updated";
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.map((candidate) => (
         candidate.id === schedule.id
           ? { ...candidate, ...patch, updatedAt: new Date().toISOString() }
           : candidate
       )));
-      notify("success", patch.enabled ? "Schedule enabled" : "Schedule disabled");
+      notify("success", actionLabel);
       setScheduleBusy(false);
-      return;
+      return true;
     }
     try {
       const next = { ...schedule, ...patch };
@@ -2784,12 +2843,14 @@ export default function App() {
           enabled: next.enabled
         })
       });
-      notify("success", next.enabled ? "Schedule enabled" : "Schedule disabled");
+      notify("success", actionLabel);
       await refreshApp();
+      return true;
     } catch (error) {
       const message = errorMessage(error, "Could not update the schedule. Try again after refreshing.");
       setNotice(message);
       notify("error", message);
+      return false;
     } finally {
       setScheduleBusy(false);
     }
@@ -3085,6 +3146,22 @@ export default function App() {
 
         {activePage === "create" && (
           <section className="panel createServerPanel">
+            {currentProvisionJob && currentProvisionJob.status === "running" && (
+              <InlineState
+                tone="loading"
+                title="Creating server"
+                message={`${currentProvisionJob.task || "Server setup is running."} Progress: ${Math.round(currentProvisionJob.progress)}%.`}
+              />
+            )}
+            {provisioningError && (
+              <InlineState
+                tone="error"
+                title="Server setup failed"
+                message={`${provisioningError} Review the details below, adjust the form if needed, then try again.`}
+                actionLabel="Clear error"
+                onAction={() => setProvisioningError("")}
+              />
+            )}
             <ManagedServerForm
               onSubmit={createServer}
               dockerSocketMounted={panelOnlyMode ? true : effectiveAppState.dockerSocketMounted}
@@ -3093,6 +3170,7 @@ export default function App() {
               versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
+              disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
             />
           </section>
         )}
@@ -3587,11 +3665,11 @@ export default function App() {
                       </div>
                       <div className="fileToolbar">
                         <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <button type="button" className="secondaryButton compactButton" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Upload a file to this folder"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Upload a file to this folder"}>
                           <AppIcon name="fileUp" />
                           Upload
                         </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={!canManager ? "Manager permission is required" : "Create a folder here"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Create a folder here"}>
                           <AppIcon name="folderPlus" />
                           New Folder
                         </button>
@@ -3605,23 +3683,23 @@ export default function App() {
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : !canManager ? "Manager permission is required" : "Edit selected file"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : fileActionBlockedReason || "Edit selected file"}>
                           <AppIcon name="edit" />
                           Edit
                         </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile || Boolean(fileOperationBusy)} title={canDownloadSelectedFile ? "Download selected file" : "Select one file to download"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
                           <AppIcon name="download" />
                           Download
                         </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : "Duplicate selected file"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
                           <AppIcon name="copy" />
                           Duplicate
                         </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={selectedEntry ? "Rename selected item" : "Select one item to rename"}>
+                        <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
                           <AppIcon name="rename" />
                           Rename
                         </button>
-                        <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!canManager ? "Manager permission is required" : selectedEntries.length ? "Delete selected items" : "Select items to delete"}>
+                        <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
                           <AppIcon name="trash" />
                           Delete
                         </button>
@@ -4163,7 +4241,7 @@ export default function App() {
                             <h2 id="mod-install-title">{modInstallModal.step === 2 ? `Install ${modInstallModal.data?.project.title || modInstallModal.mod.title}` : "Install mod"}</h2>
                             {modInstallModal.step === 1 && <strong>{modInstallModal.data?.project.title || modInstallModal.mod.title}</strong>}
                           </div>
-                          <button type="button" className="iconButton" onClick={() => setModInstallModal(null)} aria-label="Close install modal">
+                          <button type="button" className="iconButton modalCloseButton" onClick={() => setModInstallModal(null)} aria-label="Close install modal" title="Close install modal">
                             <AppIcon name="x" />
                           </button>
                         </div>
@@ -4471,7 +4549,7 @@ export default function App() {
                       <section className="modalPanel modDetailsPanel" role="dialog" aria-modal="true" aria-labelledby="details-title" onClick={(e) => e.stopPropagation()}>
                         <div className="panelHeader">
                           <h2 id="details-title">Mod Details</h2>
-                          <button type="button" className="iconButton" onClick={() => setDetailsMod(null)} aria-label="Close details">
+                          <button type="button" className="iconButton modalCloseButton" onClick={() => setDetailsMod(null)} aria-label="Close details" title="Close details">
                             <AppIcon name="x" />
                           </button>
                         </div>
@@ -4580,6 +4658,7 @@ export default function App() {
                 schedules={activeServer.schedules ?? []}
                 onCreate={createSchedule}
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
+                onUpdate={updateSchedule}
                 onDelete={deleteSchedule}
                 disabled={scheduleBusy || isProvisioning || !canExpanded || dockerOperationalLock}
                 disabledReason={scheduleDisabledReason}

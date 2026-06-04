@@ -400,7 +400,7 @@ function AddNodeModal({
       <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="add-node-title">
         <header className="nodeModalHeader">
           <div>
-            <h2 id="add-node-title">ADD NODE</h2>
+            <h2 id="add-node-title">Add Node</h2>
             <p>Create a remote node and connect it to this panel.</p>
           </div>
           <button
@@ -411,7 +411,7 @@ function AddNodeModal({
             aria-label="Close add node modal"
             title={canClose ? "Close add node modal" : "Node creation is still in progress"}
           >
-            X
+            <AppIcon name="x" />
           </button>
         </header>
 
@@ -451,8 +451,8 @@ function AddNodeModal({
             <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
             {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />}
             <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>CANCEL</button>}
-              <button type="button" onClick={isSuccess ? onDone : onClose}>{isSuccess ? "DONE" : "DONE"}</button>
+              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>Cancel</button>}
+              <button type="button" onClick={isSuccess ? onDone : onClose}>Done</button>
             </div>
           </div>
         )}
@@ -556,7 +556,7 @@ export function NodesPage({
       {sortedNodes.length > 0 && (
         <section className="panel nodesToolbar">
           <div>
-            <h2>NODES</h2>
+            <h2>Nodes</h2>
             <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
@@ -616,7 +616,7 @@ export function NodesPage({
               </header>
 
               <section className="nodeServerSection">
-                <div className="nodeServerSectionLabel">SERVERS ON THIS NODE</div>
+                <div className="nodeServerSectionLabel">Servers on this node</div>
                 <div className="nodeServerList">
                   {node.servers.length === 0 && (
                     <div className="nodeServerEmpty">
@@ -646,19 +646,20 @@ export function NodesPage({
                   })}
                   {hiddenServerCount > 0 && (
                     <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: true }))}>
-                      + {hiddenServerCount} MORE SERVERS
+                      + {hiddenServerCount} more servers
                     </button>
                   )}
                   {expanded && node.servers.length > collapsedServerLimit && (
                     <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: false }))}>
-                      SHOW LESS
+                      Show less
                     </button>
                   )}
                 </div>
               </section>
 
               <button type="button" className="secondaryButton nodeAddServerButton" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
-                + Add Server
+                <AppIcon name="plus" />
+                Add Server
               </button>
             </article>
           );
@@ -834,10 +835,10 @@ export function NodesPage({
           <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="install-node-title">
             <header className="nodeModalHeader">
               <div>
-                <h2 id="install-node-title">NODE INSTALL</h2>
+                <h2 id="install-node-title">Node Install</h2>
                 <p>Use this on the host that should run the node agent.</p>
               </div>
-              <button type="button" className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions">X</button>
+              <button type="button" className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></button>
             </header>
             <div className="nodeModalBody">
               <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />
