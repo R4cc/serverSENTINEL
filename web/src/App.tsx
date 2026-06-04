@@ -199,11 +199,44 @@ export default function App() {
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
+  const runtimeControlsDisabledReason = authOperationalLock
+    ? "Sign in before using runtime controls."
+    : !canBasic
+      ? "Servers control permission is required."
+      : activeNodeRuntimeBlocked
+        ? activeNodeBlockMessage
+        : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
+          ? "Docker socket is not mounted. Runtime controls are unavailable for the internal node."
+          : isProvisioning
+            ? "Server setup is still running."
+            : "";
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modServerRunning = Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
+  const scheduleDisabledReason = scheduleBusy
+    ? "Schedule changes are still saving."
+    : isProvisioning
+      ? "Server setup is still running."
+      : !canExpanded
+        ? "Console command permission is required."
+        : dockerOperationalLock
+          ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+          : "";
+  const consoleCommandDisabledReason = commandSending
+    ? "Command is already being sent."
+    : isProvisioning
+      ? "Server setup is still running."
+      : dockerOperationalLock
+        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+        : !canExpanded
+          ? "Console command permission is required."
+          : !activeStatus?.commandInputAvailable
+            ? activeStatus?.commandInputMessage || "Console command input is unavailable."
+            : !commandInput.trim()
+              ? "Enter a command to send."
+              : "";
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
     return listing.entries.filter((entry) => selected.has(entry.path));
@@ -2843,6 +2876,18 @@ export default function App() {
     );
   }
 
+  const provisioningNavigationReason = isProvisioning ? "Server setup is still running." : "";
+  const serverPageDisabledReason = !activeServer ? "Select or create a server first." : provisioningNavigationReason;
+  const createServerDisabledReason = demoMode
+    ? "Exit demo mode before creating real servers."
+    : !canCreateServers
+      ? "Create servers permission is required."
+      : serverCreationBlocked
+        ? usableContextNodes.length === 0
+          ? "Add an online, compatible node before creating a server."
+          : "Server creation is unavailable right now."
+        : provisioningNavigationReason;
+
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
       <Notifications notices={notices} activeJobs={activeJobs} onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))} />
@@ -2855,12 +2900,12 @@ export default function App() {
               <p>Managed server web panel</p>
             </div>
           </div>
-          <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning}>
+          <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
             <SidebarToggleIcon collapsed={sidebarCollapsed} />
           </button>
         </div>
         <nav className="sideNav">
-          <button className={activePage === "nodes" ? "active" : ""} onClick={() => setActivePage("nodes")} disabled={isProvisioning}>
+          <button className={activePage === "nodes" ? "active" : ""} onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
             <SidebarIcon name="nodes" />
             <span className="navLabel">Nodes</span>
           </button>
@@ -2868,33 +2913,33 @@ export default function App() {
           <div className="selectedServerReadout" aria-label="Selected server" title={activeServer?.displayName ?? "No server selected"}>
             {activeServer?.displayName ?? "No server selected"}
           </div>
-          <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
             <SidebarIcon name="overview" />
             <span className="navLabel">Overview</span>
           </button>
-          <button className={activePage === "console" ? "active" : ""} onClick={() => setActivePage("console")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "console" ? "active" : ""} onClick={() => setActivePage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
             <SidebarIcon name="console" />
             <span className="navLabel">Console</span>
           </button>
-          <button className={activePage === "files" ? "active" : ""} onClick={() => setActivePage("files")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "files" ? "active" : ""} onClick={() => setActivePage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
             <SidebarIcon name="files" />
             <span className="navLabel">Files</span>
           </button>
-          <button className={activePage === "mods" ? "active" : ""} onClick={() => setActivePage("mods")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "mods" ? "active" : ""} onClick={() => setActivePage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
             <SidebarIcon name="mods" />
             <span className="navLabel">Mods</span>
           </button>
-          <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
             <SidebarIcon name="schedule" />
             <span className="navLabel">Schedules</span>
           </button>
-          <button className={activePage === "properties" ? "active" : ""} onClick={() => setActivePage("properties")} disabled={isProvisioning || !activeServer}>
+          <button className={activePage === "properties" ? "active" : ""} onClick={() => setActivePage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
             <SidebarIcon name="properties" />
             <span className="navLabel">Properties</span>
           </button>
         </nav>
         <nav className="sideNav sideNavBottom">
-          <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning}>
+          <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
             <SidebarIcon name="settings" />
             <span className="navLabel settingsNavLabel">
               <span>Settings</span>
@@ -2909,7 +2954,7 @@ export default function App() {
               </svg>
             </span>
             <span className="accountName">{demoMode ? "Demo" : authSession.user?.username}</span>
-            <button type="button" className="accountLogoutButton" onClick={logout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"}>
+            <button type="button" className="accountLogoutButton" onClick={logout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M10 5H5v14h5" />
                 <path d="M14 8l4 4-4 4" />
@@ -2932,9 +2977,9 @@ export default function App() {
             </h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>New managed server</button>}
-            {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning}>Cancel</button>}
-            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning}>Refresh</button>}
+            {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</button>}
+            {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</button>}
+            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : activeNodeRuntimeBlocked ? "Refresh app and node status" : "Refresh server status"}>Refresh</button>}
           </div>
         </header>
 
@@ -3022,6 +3067,7 @@ export default function App() {
                         if (canManageUsers) setAddNodeOpen(true);
                       }}
                       disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+                      title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                     >
                       Add Node
                     </button>
@@ -3029,7 +3075,7 @@ export default function App() {
                 ) : (
                   <>
                     <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create Managed Server</button>
                   </>
                 )}
               </div>
@@ -3245,6 +3291,7 @@ export default function App() {
                     if (canManageUsers) setAddNodeOpen(true);
                   }}
                   disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+                  title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                 >
                   Add Node
                 </button>
@@ -3252,7 +3299,7 @@ export default function App() {
             ) : (
               <>
                 <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}>Create Managed Server</button>
+                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create Managed Server</button>
               </>
             )}
           </section>
@@ -3300,6 +3347,7 @@ export default function App() {
                   status={activeStatus}
                   controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
                   isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
+                  disabledReason={runtimeControlsDisabledReason}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
                 />
@@ -3341,6 +3389,7 @@ export default function App() {
                           setOverflowOpen(false);
                         }}
                         disabled={isProvisioning}
+                        title={isProvisioning ? provisioningNavigationReason : "Refresh server status"}
                       >
                         Refresh Status
                       </button>
@@ -3351,6 +3400,7 @@ export default function App() {
                           setOverflowOpen(false);
                         }}
                         disabled={logs.length === 0}
+                        title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}
                       >
                         Download Log
                       </button>
@@ -3424,7 +3474,7 @@ export default function App() {
                   <div className="panelHeader">
                     <h2>Console</h2>
                     <div className="consoleHeaderActions">
-                      <button type="button" onClick={downloadConsoleLogs} disabled={logs.length === 0}>
+                      <button type="button" onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
                         Download log
                       </button>
                       <span className="muted">
@@ -3456,7 +3506,7 @@ export default function App() {
                     </div>
                     {pendingConsoleEntries > 0 && (
                       <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
-                        {pendingConsoleEntries} new {pendingConsoleEntries === 1 ? "entry" : "entries"} • Jump to latest
+                        {pendingConsoleEntries} new {pendingConsoleEntries === 1 ? "entry" : "entries"} - Jump to latest
                       </button>
                     )}
                     <form onSubmit={sendCommand} className="terminalPrompt">
@@ -3481,6 +3531,7 @@ export default function App() {
                               : "Console input unavailable"
                           }
                           disabled={isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable}
+                          title={isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable ? consoleCommandDisabledReason : "Enter a console command"}
                           spellCheck={false}
                           autoComplete="off"
                         />
@@ -3502,7 +3553,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <button disabled={commandSending || isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()}>
+                      <button disabled={commandSending || isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()} title={consoleCommandDisabledReason || "Send command"}>
                         {commandSending ? "Sending" : "Send"}
                       </button>
                     </form>
@@ -4530,7 +4581,8 @@ export default function App() {
                 onCreate={createSchedule}
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onDelete={deleteSchedule}
-                disabled={scheduleBusy || isProvisioning || !canExpanded}
+                disabled={scheduleBusy || isProvisioning || !canExpanded || dockerOperationalLock}
+                disabledReason={scheduleDisabledReason}
                 commandInputMessage={activeStatus?.commandInputAvailable ? "" : activeStatus?.commandInputMessage || "Scheduled commands need Docker command input when they run."}
               />
             )}

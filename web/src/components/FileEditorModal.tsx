@@ -55,6 +55,16 @@ export function FileEditorModal({
   const modalRef = useRef<HTMLElement>(null);
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
+  const canCloseEditor = !fileSaving;
+  const saveDisabledReason = fileSaving
+    ? "File save is already in progress."
+    : fileOpenFailed
+      ? "Retry opening the file before saving."
+      : editorDisabled
+        ? "This file is read-only."
+        : !dirty
+          ? "There are no changes to save."
+          : "";
 
   useEffect(() => {
     if (!selectedPath || discardRequestOpen) return;
@@ -62,12 +72,12 @@ export function FileEditorModal({
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onRequestClose();
+        if (canCloseEditor) onRequestClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [discardRequestOpen, onRequestClose, selectedPath]);
+  }, [canCloseEditor, discardRequestOpen, onRequestClose, selectedPath]);
 
   if (!selectedPath && !discardRequestOpen) return null;
 
@@ -75,7 +85,7 @@ export function FileEditorModal({
     <>
       {selectedPath && (
         <div className="modalBackdrop fileEditorBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onRequestClose();
+          if (event.target === event.currentTarget && canCloseEditor) onRequestClose();
         }}>
           <section className="modalPanel fileEditorModal" role="dialog" aria-modal="true" aria-labelledby="file-editor-title" tabIndex={-1} ref={modalRef}>
             <header className="fileEditorHeader">
@@ -83,7 +93,7 @@ export function FileEditorModal({
                 <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
                 <p>{editorFolderPath || "/"}</p>
               </div>
-              <button type="button" className="iconButton modalCloseButton" onClick={onRequestClose} aria-label="Close editor" title="Close editor">
+              <button type="button" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
                 <AppIcon name="x" />
               </button>
             </header>
@@ -129,8 +139,8 @@ export function FileEditorModal({
               </div>
             </div>
             <footer className="fileEditorFooter">
-              <button type="button" className="secondaryButton" onClick={onCancel} disabled={fileSaving}>Cancel</button>
-              <button type="button" onClick={onSave} disabled={saveDisabled}>
+              <button type="button" className="secondaryButton" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</button>
+              <button type="button" onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
                 {fileSaving ? "Saving" : "Save"}
               </button>
             </footer>

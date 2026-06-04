@@ -237,6 +237,13 @@ export function ManagedServerForm({
   const serverPortValid = isValidServerPort(serverPort);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
+  const placementBlockedReason = nodes.length === 0
+    ? "Add a node before creating a server."
+    : usableNodes.length === 0
+      ? "No node is online, compatible, and Docker-ready."
+      : !selectedNode
+        ? "Choose a node before creating this server."
+        : nodeBlockReason(selectedNode) || "Choose a ready node before creating this server.";
 
   useEffect(() => {
     const nextVersion = versions.game[0]?.version;
@@ -287,6 +294,7 @@ export function ManagedServerForm({
                     disabled={!usable}
                     onChange={() => setSelectedNodeId(node.id)}
                     required
+                    title={!usable ? reason || "This node cannot host new servers right now." : `Run this server on ${node.name}`}
                   />
                   <span className="nodePlacementTitle">
                     <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
@@ -302,7 +310,7 @@ export function ManagedServerForm({
           </div>
         )}
         {placementBlocked && nodes.length > 0 && (
-          <p className="fieldError">Choose a ready node before creating this server. If none are ready, open Nodes to see what needs attention.</p>
+          <p className="fieldError">{placementBlockedReason} If none are ready, open Nodes to see what needs attention.</p>
         )}
       </section>
       <label>
@@ -406,7 +414,12 @@ export function ManagedServerForm({
       <p className="muted">
         {dockerSocketMounted ? "Docker is connected, so ServerSentinel can create and control this server." : "Docker is not connected yet. Connect Docker in Settings before using local runtime controls."}
       </p>
-      <button disabled={!serverPortValid || placementBlocked}>{provisioning ? "Setting up..." : "Create Managed Server"}</button>
+      <button
+        disabled={!serverPortValid || placementBlocked}
+        title={!serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : "Create managed server"}
+      >
+        {provisioning ? "Setting up..." : "Create Managed Server"}
+      </button>
       </fieldset>
     </form>
   );

@@ -391,10 +391,11 @@ function AddNodeModal({
   const isSuccess = flowState === "success";
   const activeStep = addNodeActiveStep(flowState);
   const showInstall = Boolean(created && flowState !== "success" && flowState !== "incompatible");
+  const canClose = !busy;
 
   return (
     <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
+      if (event.target === event.currentTarget && canClose) onClose();
     }}>
       <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="add-node-title">
         <header className="nodeModalHeader">
@@ -402,7 +403,16 @@ function AddNodeModal({
             <h2 id="add-node-title">ADD NODE</h2>
             <p>Create a remote node and connect it to this panel.</p>
           </div>
-          <button type="button" className="iconButton modalCloseButton" onClick={onClose} aria-label="Close add node modal">X</button>
+          <button
+            type="button"
+            className="iconButton modalCloseButton"
+            onClick={onClose}
+            disabled={!canClose}
+            aria-label="Close add node modal"
+            title={canClose ? "Close add node modal" : "Node creation is still in progress"}
+          >
+            X
+          </button>
         </header>
 
         {!created ? (
@@ -431,7 +441,7 @@ function AddNodeModal({
               </label>
               <div className="nodeModalFooter inline">
                 <button type="submit">{busy ? "Creating..." : "Create pending node"}</button>
-                <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
+                <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</button>
               </div>
             </fieldset>
           </form>
@@ -441,7 +451,7 @@ function AddNodeModal({
             <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
             {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />}
             <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose}>CANCEL</button>}
+              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>CANCEL</button>}
               <button type="button" onClick={isSuccess ? onDone : onClose}>{isSuccess ? "DONE" : "DONE"}</button>
             </div>
           </div>
@@ -562,7 +572,7 @@ export function NodesPage({
           <div className="emptyState nodesEmptyState">
             <h2>No Nodes Yet</h2>
             <p>No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers.</p>
-            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes}>Add Node</button>
+            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add Node</button>
           </div>
         )}
         {sortedNodes.map((node) => {
@@ -601,7 +611,7 @@ export function NodesPage({
                       Upgrade
                     </button>
                   )}
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</button>
                 </div>
               </header>
 
@@ -660,7 +670,7 @@ export function NodesPage({
             onClick={onOpenAddNode}
             disabled={busy || !canManageNodes}
             aria-label="Add a remote node"
-            title={canManageNodes ? "Add a remote node" : "Manage users permission is required"}
+            title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
           >
             <div className="addNodeCardInner">
               <svg className="addNodeIcon" viewBox="0 0 24 24">

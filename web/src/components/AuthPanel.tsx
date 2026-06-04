@@ -243,7 +243,14 @@ function UserPermissionModal({
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="user-modal-title">{user ? "Edit User" : "New User"}</h2>
-            <button type="button" className="iconButton" onClick={onClose} aria-label="Close user dialog">
+            <button
+              type="button"
+              className="iconButton"
+              onClick={onClose}
+              disabled={busy}
+              aria-label="Close user dialog"
+              title={busy ? "User changes are still saving" : "Close user dialog"}
+            >
               <AppIcon name="x" />
             </button>
           </div>
@@ -326,8 +333,10 @@ function UserPermissionModal({
           </fieldset>
 
           <div className="userModalFooter">
-            <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
-            <button disabled={busy || !canSave}>{busy ? "Saving..." : user ? "Save changes" : "Create user"}</button>
+            <button type="button" className="secondaryButton" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</button>
+            <button disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"}>
+              {busy ? "Saving..." : user ? "Save changes" : "Create user"}
+            </button>
           </div>
         </form>
       </section>
@@ -352,7 +361,14 @@ function ResetPasswordModal({
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="reset-password-title">Reset Password</h2>
-            <button type="button" className="iconButton" onClick={onClose} aria-label="Close reset password dialog">
+            <button
+              type="button"
+              className="iconButton"
+              onClick={onClose}
+              disabled={busy}
+              aria-label="Close reset password dialog"
+              title={busy ? "Password reset is still saving" : "Close reset password dialog"}
+            >
               <AppIcon name="x" />
             </button>
           </div>
@@ -373,8 +389,8 @@ function ResetPasswordModal({
             </div>
           </fieldset>
           <div className="userModalFooter">
-            <button type="button" className="secondaryButton" onClick={onClose}>Cancel</button>
-            <button disabled={busy}>{busy ? "Saving..." : "Reset password"}</button>
+            <button type="button" className="secondaryButton" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</button>
+            <button disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"}>{busy ? "Saving..." : "Reset password"}</button>
           </div>
         </form>
       </section>

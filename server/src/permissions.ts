@@ -29,6 +29,33 @@ export const ALL_PERMISSIONS = [
 
 const allPermissionSet = new Set<string>(ALL_PERMISSIONS);
 
+const PERMISSION_LABELS: Record<Permission, string> = {
+  "servers.view": "view servers",
+  "servers.control": "control servers",
+  "servers.create": "create servers",
+  "servers.delete": "delete servers",
+  "servers.editSettings": "edit server settings",
+  "console.view": "view console",
+  "console.command": "send console commands",
+  "files.view": "view files",
+  "files.edit": "edit files",
+  "files.delete": "delete files",
+  "files.upload": "upload files",
+  "files.download": "download files",
+  "mods.view": "view mods",
+  "mods.install": "install mods",
+  "mods.upload": "upload mods",
+  "mods.enableDisable": "enable or disable mods",
+  "mods.remove": "remove mods",
+  "mods.update": "update mods",
+  "schedules.view": "view schedules",
+  "schedules.manage": "manage schedules",
+  "settings.view": "view settings",
+  "integrations.manage": "manage integrations",
+  "users.view": "view users",
+  "users.manage": "manage users"
+};
+
 export const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, Permission[]> = {
   viewer: [
     "servers.view",
@@ -183,7 +210,7 @@ export function hasAnyPermission(user: Pick<StoredUser, "permissions">, permissi
 export function requirePermission(permission: Permission) {
   return (user: Pick<StoredUser, "permissions">) => {
     if (!hasPermission(user, permission)) {
-      throwPermissionError("You do not have permission to perform this action", 403);
+      throwPermissionError(`You need permission to ${PERMISSION_LABELS[permission]} before performing this action.`, 403);
     }
   };
 }
@@ -191,7 +218,8 @@ export function requirePermission(permission: Permission) {
 export function requireAnyPermission(permissions: readonly Permission[]) {
   return (user: Pick<StoredUser, "permissions">) => {
     if (!hasAnyPermission(user, permissions)) {
-      throwPermissionError("You do not have permission to perform this action", 403);
+      const labels = permissions.map((permission) => PERMISSION_LABELS[permission]).join(" or ");
+      throwPermissionError(`You need permission to ${labels} before performing this action.`, 403);
     }
   };
 }

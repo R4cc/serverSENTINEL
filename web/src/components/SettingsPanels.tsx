@@ -27,7 +27,7 @@ export function ModrinthKeyForm({
           <span className="settingsStatus ready">Configured</span>
           <code aria-hidden="true">**** **** **** ****</code>
         </div>
-        <button type="button" className="secondaryButton" onClick={() => setEditing(true)} disabled={disabled}>Replace key</button>
+        <button type="button" className="secondaryButton" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</button>
       </div>
     );
   }

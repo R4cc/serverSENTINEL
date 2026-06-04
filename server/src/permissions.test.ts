@@ -28,7 +28,7 @@ describe("permission model", () => {
   it("checks required permissions against the permission array", () => {
     const user = { permissions: normalizePermissions(["servers.control"]) };
     expect(() => requirePermission("servers.control")(user)).not.toThrow();
-    expect(() => requirePermission("users.manage")(user)).toThrow("You do not have permission");
+    expect(() => requirePermission("users.manage")(user)).toThrow("permission to manage users");
   });
 
   it("identifies full-access admins for last-admin protection", () => {

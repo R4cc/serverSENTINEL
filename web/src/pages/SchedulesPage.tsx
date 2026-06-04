@@ -9,6 +9,7 @@ export function SchedulePage({
   onToggle,
   onDelete,
   disabled,
+  disabledReason,
   commandInputMessage
 }: {
   schedules: ScheduledExecution[];
@@ -16,6 +17,7 @@ export function SchedulePage({
   onToggle: (schedule: ScheduledExecution) => void;
   onDelete: (schedule: ScheduledExecution) => void;
   disabled: boolean;
+  disabledReason?: string;
   commandInputMessage: string;
 }) {
   const [commandIds, setCommandIds] = useState(() => [clientId()]);
@@ -31,6 +33,12 @@ export function SchedulePage({
           <section className="systemBanner warning compactBanner">
             <strong>Scheduling is limited.</strong>
             <span>{commandInputMessage}</span>
+          </section>
+        )}
+        {disabled && disabledReason && (
+          <section className="systemBanner warning compactBanner">
+            <strong>Schedules are unavailable.</strong>
+            <span>{disabledReason}</span>
           </section>
         )}
         <form onSubmit={onCreate} className="appForm scheduleForm">
@@ -73,7 +81,9 @@ export function SchedulePage({
               <input name="enabled" type="checkbox" defaultChecked />
               Enabled
             </label>
-            <button>Create scheduled execution</button>
+            <button title={disabled ? disabledReason || "Scheduled commands are unavailable right now." : "Create scheduled execution"}>
+              {disabled && disabledReason?.includes("saving") ? "Saving..." : "Create scheduled execution"}
+            </button>
           </fieldset>
         </form>
       </section>
@@ -103,10 +113,10 @@ export function SchedulePage({
                 <span>{schedule.lastRunAt ? `Last ${schedule.lastStatus}: ${schedule.lastMessage || "No message"}` : "Never run"}</span>
               </div>
               <div className="buttonRow">
-                <button type="button" onClick={() => onToggle(schedule)} disabled={disabled}>
+                <button type="button" onClick={() => onToggle(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule changes are unavailable right now." : schedule.enabled ? "Disable schedule" : "Enable schedule"}>
                   {schedule.enabled ? "Disable" : "Enable"}
                 </button>
-                <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>
+                <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule deletion is unavailable right now." : "Delete schedule"}>
                   Delete
                 </button>
               </div>
