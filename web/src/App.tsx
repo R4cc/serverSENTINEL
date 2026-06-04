@@ -4124,29 +4124,31 @@ export default function App() {
                         />
                       )}
 
-                      <div className="modsTable">
-                        <div className="modsTableHeader">
-                          <div className="modsTableCell">Mod</div>
-                          <div className="modsTableCell">Compatibility</div>
-                          <div className="modsTableCell">Installed Version</div>
-                          <div className="modsTableCell">Update Status</div>
-                          <div className="modsTableCell">Source</div>
-                          <div className="modsTableCell">Status</div>
-                          <div className="modsTableCell alignEnd">Actions</div>
-                        </div>
-
-                        {filteredInstalledMods.length === 0 ? (
-                          <div className="emptyInline noBorder">
-                            <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
-                            <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
+                      <div className="modsTableFrame">
+                        <div className="modsTable">
+                          <div className="modsTableHeader">
+                            <div className="modsTableCell">Mod</div>
+                            <div className="modsTableCell">Compatibility</div>
+                            <div className="modsTableCell">Installed Version</div>
+                            <div className="modsTableCell">Update Status</div>
+                            <div className="modsTableCell">Source</div>
+                            <div className="modsTableCell">Status</div>
+                            <div className="modsTableCell alignEnd">Actions</div>
                           </div>
-                        ) : (
-                          filteredInstalledMods.map((mod) => {
-                            const isComp = mod.compatibility?.compatible;
-                            const compStatus = mod.compatibility?.status;
-                            const iconSrc = modIconSource(mod.iconUrl);
-                            return (
-                              <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
+
+                          <div className="modsTableBody">
+                            {filteredInstalledMods.length === 0 ? (
+                              <div className="emptyInline noBorder">
+                                <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
+                                <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
+                              </div>
+                            ) : (
+                              filteredInstalledMods.map((mod) => {
+                                const isComp = mod.compatibility?.compatible;
+                                const compStatus = mod.compatibility?.status;
+                                const iconSrc = modIconSource(mod.iconUrl);
+                                return (
+                                  <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
                                 <div className="modsTableCell mod-col">
                                   <div className="modInfoCol">
                                     {iconSrc ? (
@@ -4272,10 +4274,12 @@ export default function App() {
                                   )}
                                   <button className="dangerTextButton" onClick={() => removeInstalledMod(mod)} disabled={modsLocked}>Remove</button>
                                 </div>
-                              </article>
-                            );
-                          })
-                        )}
+                                  </article>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                     </div>
