@@ -18,16 +18,18 @@
   --text: var(--swiss-black);
   --text-muted: #4a4a4a;
   --text-soft: #707070;
-  --border: var(--swiss-black);
-  --border-muted: color-mix(in srgb, var(--border) 42%, var(--surface) 58%);
+  --border: #20242c;
+  --border-muted: color-mix(in srgb, var(--border) 18%, var(--surface) 82%);
   --border-subtle: 1px;
+  --border-panel: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
+  --border-row: color-mix(in srgb, var(--border) 12%, var(--surface) 88%);
   --accent: var(--sentinel-accent);
   --terminal-bg: #000000;
   --terminal-text: #f2f2f2;
   --overlay: rgb(0 0 0 / 0.48);
-  --shadow-elevated: 0 10px 0 rgb(0 0 0 / 0.08);
-  --border-strong: 2px;
-  --border-heavy: 4px;
+  --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
+  --border-strong: 1px;
+  --border-heavy: 2px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -59,9 +61,9 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.035) 1px, transparent 0) 0 0 / 16px 16px,
-    linear-gradient(rgb(0 0 0 / 0.025) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(90deg, rgb(0 0 0 / 0.025) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.018) 1px, transparent 0) 0 0 / 20px 20px,
+    linear-gradient(rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
     var(--surface);
   color: var(--text);
 }
@@ -260,7 +262,9 @@ code {
   --text-muted: #b8becb;
   --text-soft: #929baa;
   --border: #596170;
-  --border-muted: color-mix(in srgb, var(--border) 48%, var(--surface) 52%);
+  --border-muted: color-mix(in srgb, var(--border) 34%, var(--surface) 66%);
+  --border-panel: color-mix(in srgb, var(--border) 46%, var(--surface) 54%);
+  --border-row: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
   --sentinel-accent: #a5b4ff;
   --sentinel-accent-strong: #c8d2ff;
   --sentinel-accent-soft: #272d44;
@@ -271,11 +275,11 @@ code {
   --terminal-bg: #17191e;
   --terminal-text: #dfe3eb;
   --overlay: rgb(0 0 0 / 0.62);
-  --shadow-elevated: 0 10px 0 rgb(0 0 0 / 0.22);
+  --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
   background:
-    radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.025) 1px, transparent 0) 0 0 / 16px 16px,
-    linear-gradient(rgb(255 255 255 / 0.022) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(90deg, rgb(255 255 255 / 0.022) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.014) 1px, transparent 0) 0 0 / 20px 20px,
+    linear-gradient(rgb(255 255 255 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgb(255 255 255 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
     var(--surface);
 }
 
@@ -7743,6 +7747,480 @@ button:disabled,
 .themeDark .modsToolbarCompact,
 .themeDark .modSearchToolbar {
   background: var(--surface-raised);
+}
+
+/* Visual hierarchy cleanup */
+.sidebar {
+  border-right: var(--border-subtle) solid var(--border-panel);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 78%, var(--surface)), var(--surface-muted));
+}
+
+.themeDark .sidebar {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 82%, var(--surface)), var(--surface-muted));
+}
+
+.brandBlock,
+.workspaceHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modInstallHeader,
+.panelHeader,
+.settingsGroupHeader,
+.modsPanelHeader,
+.fileNavBar,
+.usersTable th,
+.usersTable td,
+.modsTableHeader,
+.modsTableRow,
+.fileTableHead,
+.fileTableRow,
+.settingsRow,
+.modDetailsPanel > .panelHeader {
+  border-color: var(--border-row);
+}
+
+.workspaceHeader {
+  border-bottom-width: var(--border-heavy);
+  border-color: var(--border-panel);
+}
+
+.brandLogo,
+.serverStripIcon,
+.fileTypeIcon,
+.modFileIcon,
+.modRow img,
+.accountIcon,
+.nodeDetailIcon,
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+}
+
+.sideNav {
+  gap: 3px;
+}
+
+.sideNav button,
+.serverListItem {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.sideNav button:hover:not(:disabled),
+.serverListItem:hover:not(.active) {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
+  color: var(--text);
+  transform: none;
+}
+
+.sideNav button.active,
+.serverListItem.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.sideNav button.active:hover,
+.serverListItem.active:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 78%, var(--surface-raised));
+  color: var(--sentinel-accent-strong);
+}
+
+.selectedServerReadout,
+.accountChip {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+}
+
+.sidebarDivider {
+  height: 1px;
+  background-color: var(--border-row);
+}
+
+.uiPanel,
+.panel,
+.authPanel,
+.activeServerStrip,
+.emptyState,
+.modalPanel,
+.nodeCard,
+.addNodeCardButton,
+.modsCard,
+.modDetailsPanel,
+.fileCodeEditor,
+.fileEditorStateFill,
+.installSnippetShell,
+.systemBanner {
+  border-color: var(--border-panel);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.045);
+}
+
+.themeDark .uiPanel,
+.themeDark .panel,
+.themeDark .authPanel,
+.themeDark .activeServerStrip,
+.themeDark .emptyState,
+.themeDark .modalPanel,
+.themeDark .nodeCard,
+.themeDark .addNodeCardButton,
+.themeDark .modsCard,
+.themeDark .modDetailsPanel,
+.themeDark .fileCodeEditor,
+.themeDark .fileEditorStateFill,
+.themeDark .installSnippetShell,
+.themeDark .systemBanner {
+  box-shadow: 0 16px 44px rgb(0 0 0 / 0.18);
+}
+
+.panel .panel,
+.modalPanel .panel,
+.nodeModalBody .panel,
+.fileEditorBody .panel,
+.modInstallBody .panel,
+.settingsGroup,
+.permissionsCategory,
+.presetSummary,
+.secretPreview,
+.addNodeStatusCard,
+.inlineState,
+.notice,
+.toast,
+.emptyInline,
+.eventEmpty,
+.nodeServerEmpty,
+.fileDetailsEmpty {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.uiToolbar,
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar,
+.modsToolbarCompact,
+.modSearchToolbar,
+.segmentedControl {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
+  box-shadow: none;
+}
+
+input,
+select,
+textarea,
+.modSearchInput,
+.consoleInput,
+.fileBreadcrumbs button,
+.fileOpenButton,
+.roleInfoButton,
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.toastDismissButton,
+.eventHideButton,
+.accountLogoutButton {
+  border-color: var(--border-muted);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.fileBreadcrumbs button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+}
+
+.secondaryButton,
+.quickActionButton,
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.toastDismissButton,
+.eventHideButton,
+.accountLogoutButton {
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.modalCloseButton:hover:not(:disabled),
+.overflowButton:hover:not(:disabled),
+.toastDismissButton:hover:not(:disabled),
+.eventHideButton:hover:not(:disabled),
+.accountLogoutButton:hover:not(:disabled) {
+  background: var(--sentinel-accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+  transform: none;
+}
+
+.runtimeControlButton,
+.modSearchButton,
+.workspaceActions > button:not(.secondaryButton),
+.modalFooter > button:not(.secondaryButton):not(.dangerButton),
+.userModalFooter > button:not(.secondaryButton):not(.dangerButton),
+.nodeModalFooter > button:not(.secondaryButton):not(.dangerButton),
+.fileEditorFooter > button:not(.secondaryButton):not(.dangerButton),
+.modInstallFooter > button:not(.secondaryButton):not(.dangerButton),
+.appForm > button:not(.secondaryButton):not(.dangerButton) {
+  border-color: var(--text);
+}
+
+.uiStatusPill,
+.settingsStatus,
+.runtimeBadge,
+.compatibilityBadge,
+.installStatusBadge,
+.roleBadge,
+.nodePill,
+.subtlePill,
+.modDetailsPill {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  letter-spacing: 0.06em;
+}
+
+.settingsStatus.ready,
+.runtimeBadge.running,
+.compatibilityBadge.ok,
+.installStatusBadge.ok,
+.nodeServerState.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 36%, transparent);
+}
+
+.settingsStatus.warning,
+.runtimeBadge.starting,
+.compatibilityBadge.unknown,
+.installStatusBadge.warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, transparent);
+}
+
+.settingsStatus.limited,
+.runtimeBadge.stopped,
+.runtimeBadge.exited,
+.compatibilityBadge.danger,
+.installStatusBadge.danger,
+.nodeServerState.stopped {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
+}
+
+.uiListRow,
+.scheduleRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.modsTableRow,
+.modRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.scheduleRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.modsTableRow,
+.modRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.modsTableRow:hover,
+.modRow:hover,
+.fileTableRow:hover,
+.eventRow:hover,
+.settingsRow:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modInstallHeader,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter,
+.modDetailsPanel > .modDetailsButtonRow {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody,
+.modInstallBody {
+  background: var(--surface-raised);
+}
+
+.terminal,
+.console,
+.fileCodeEditor,
+.installSnippetShell {
+  border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
+}
+
+.emptyState,
+.compactEmpty,
+.emptyInline,
+.eventEmpty,
+.nodeServerEmpty,
+.fileDetailsEmpty,
+.inlineState-empty {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
+}
+
+.systemBanner.warning,
+.systemBanner.error,
+.systemBanner.accent {
+  background-image: none;
+}
+
+.sideNav button:disabled {
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.46;
+}
+
+.summaryTile,
+.resourceRow,
+.activityGrid,
+.activityItem,
+.resourceMessage,
+.nodePlacementCard,
+.modsTable,
+.usersTable,
+.fileTable,
+.scheduleCommands,
+.propertiesGroup,
+.deletePanel {
+  border-color: var(--border-row);
+}
+
+.summaryTile {
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+  box-shadow: none;
+}
+
+.summaryTile::before {
+  width: 3px;
+}
+
+.resourceRows,
+.eventList {
+  gap: var(--space-2);
+}
+
+.resourceRow {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+}
+
+.activityGrid {
+  background: color-mix(in srgb, var(--surface-raised) 70%, var(--surface-muted));
+}
+
+.activityItem {
+  border-color: var(--border-row);
+}
+
+.sparkline,
+.sparklineEmpty,
+.resourceMessage,
+.consoleNotice,
+.commandHelp,
+.modDropzone,
+.uploadDropzone,
+.permissionWarning,
+.permissionGroup,
+.nodeCapabilitiesPanel,
+.installTabs,
+.addNodeStepCircle,
+.nodeDetailsActions {
+  border-color: var(--border-muted);
+}
+
+.permissionGroup {
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
+}
+
+.resourceRow.unavailable .sparkline,
+.resourceRow.unavailable .sparklineEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.018) 0 1px, transparent 1px 12px),
+    var(--surface);
+}
+
+.themeDark .resourceRow.unavailable .sparkline,
+.themeDark .resourceRow.unavailable .sparklineEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 12px),
+    var(--surface);
+}
+
+.usersTable th,
+.modsTableHeader,
+.fileTableHead,
+.settingsGroupHeader {
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
+}
+
+.usersTable td,
+.modsTableRow,
+.fileTableRow {
+  border-color: var(--border-row);
+}
+
+.fileNameCell,
+.modsTableRow button,
+.scheduleRow button,
+.nodeServerRow,
+.nodeServerMoreRow {
+  border-color: transparent;
+}
+
+.fileNameCell:hover,
+.modsTableRow button:hover:not(:disabled),
+.scheduleRow button:hover:not(:disabled),
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: var(--border-row);
+}
+
+.tabs {
+  border-color: var(--border-panel);
+}
+
+.tabs button {
+  border-color: var(--border-row);
+}
+
+.tabs button.active,
+.segmentedControl button.active,
+.installTabs button.active {
+  background: var(--text);
+  color: var(--surface);
 }
 
 @media (max-width: 1366px) {
