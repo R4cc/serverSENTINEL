@@ -1264,7 +1264,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.3.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.4.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1303,7 +1303,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.3.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.4.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -2325,7 +2325,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: server.minecraftVersion, loaderVersion: server.loaderVersion, installerVersion: server.installerVersion, filename: server.serverJar }, "Downloading Fabric server launcher");
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "ServerSentinel/0.3.0 (Fabric server creator)"
+      "User-Agent": "ServerSentinel/0.4.0 (Fabric server creator)"
     }
   });
   if (!response.ok || !response.body) {
@@ -4779,7 +4779,7 @@ const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
-  appVersion: process.env.npm_package_version ?? "0.3.0",
+  appVersion: process.env.npm_package_version ?? "0.4.0",
   configDir: config.configDir,
   managedServersDir: config.serversDir,
   nodeCount: startupNodes.length,

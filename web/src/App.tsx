@@ -21,7 +21,7 @@ import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 
-const appVersion = "0.3.0";
+const appVersion = "0.4.0";
 const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 type FileSortKey = "name" | "modifiedAt" | "type" | "size";
