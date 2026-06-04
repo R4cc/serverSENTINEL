@@ -11,6 +11,7 @@ import {
   dockerHostPortBindings,
   findExistingServerPortConflict
 } from "./app.js";
+import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import type { ManagedServer } from "./types.js";
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
@@ -125,6 +126,16 @@ describe("security validation helpers", () => {
     expect(validateRuntimeJarFilename("fabric-server-launch.jar")).toBe("fabric-server-launch.jar");
     expect(() => validateRuntimeJarFilename("../fabric-server-launch.jar")).toThrow("local .jar filename");
     expect(() => validateRuntimeJarFilename("server.txt")).toThrow("local .jar filename");
+  });
+
+  it("validates node setup inputs without credentials or multiline mounts", () => {
+    expect(optionalNodePanelUrl("http://192.168.1.11:8085")).toBe("http://192.168.1.11:8085");
+    expect(() => optionalNodePanelUrl("ftp://panel.local")).toThrow("http or https");
+    expect(() => optionalNodePanelUrl("http://user:pass@panel.local")).toThrow("embedded credentials");
+    expect(optionalNodeDataMount("/srv/serversentinel")).toBe("/srv/serversentinel");
+    expect(() => optionalNodeDataMount("/srv/data\nSS_JOIN_TOKEN=bad")).toThrow("single-line");
+    expect(optionalReleaseChannel("beta")).toBe("beta");
+    expect(() => optionalReleaseChannel("nightly")).toThrow("Release channel");
   });
 });
 

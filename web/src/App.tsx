@@ -1,17 +1,23 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
-import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
+import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
-import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateRuntimeJarFilename, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
+import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeStatusLabel } from "./utils/nodes";
+import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
+import { usePreferencesState } from "./app/appState";
+import { useServerContext } from "./app/serverContext";
+import type { FilePreviewState, FileSortKey, ModInstallModalState } from "./app/uiState";
+import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
+import { ModInstallVersionSkeleton } from "./components/ModInstallVersionSkeleton";
 import { Notifications } from "./components/Notifications";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
@@ -20,225 +26,6 @@ import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
-
-const appVersion = "0.4.0";
-const defaultNodeDataPath = "/var/lib/serversentinel";
-const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
-type FileSortKey = "name" | "modifiedAt" | "type" | "size";
-type FilePreviewState = {
-  path: string;
-  loading: boolean;
-  data: FilePreview | null;
-  error: string;
-};
-type ModInstallModalState = {
-  mod: ModrinthHit;
-  step: 1 | 2;
-  channel: ReleaseChannel;
-  loading: boolean;
-  installing: boolean;
-  error: string;
-  data: ModrinthInstallVersionsResponse | null;
-  selectedVersionId: string;
-  showOtherVersions: boolean;
-  acknowledgeMinecraftMismatch: boolean;
-};
-
-function isServerWorkspacePage(page: ActivePage) {
-  return serverWorkspacePages.includes(page);
-}
-
-const emptyApp: AppState = {
-  servers: [],
-  nodes: [],
-  runtimeMode: "all-in-one",
-  modrinthApiConfigured: false,
-  dockerSocketMounted: false,
-  totalMemory: 0
-};
-
-const defaultContextNode: ManagedNode = {
-  id: "local",
-  name: "Internal Node",
-  type: "local",
-  status: "online",
-  isInternal: true
-};
-
-const emptyPanelContextNode: ManagedNode = {
-  id: "",
-  name: "No node selected",
-  type: "remote",
-  status: "unknown",
-  isInternal: false
-};
-
-function readDemoMode() {
-  return window.localStorage.getItem("serversentinel-demo-mode") === "true";
-}
-
-function readCommandHistory() {
-  try {
-    const raw = window.localStorage.getItem("serversentinel-command-history");
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string").slice(-50) : [];
-  } catch {
-    return [];
-  }
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message : "";
-  if (!message) return fallback;
-  if (/timeout|timed out/i.test(message)) {
-    return "The request timed out. The server may still be busy.";
-  }
-  if (/docker|socket/i.test(message)) {
-    return message.includes("not mounted")
-      ? "Docker socket is not mounted. Runtime controls are unavailable."
-      : message;
-  }
-  return message;
-}
-
-function firstValidationMessage(errors: Array<{ message: string }>) {
-  return errors[0]?.message ?? "";
-}
-
-function setValidationNotice(form: HTMLFormElement, errors: Array<{ field: string; message: string }>, setMessage: (message: string) => void) {
-  if (!errors.length) return false;
-  applyFormErrors(form, errors);
-  setMessage(firstValidationMessage(errors));
-  return true;
-}
-
-function fileNameValidation(name: string) {
-  const value = name.trim();
-  if (!value) return "A file or folder name is required.";
-  if (value === "." || value === ".." || value.length > 160) return "Use a normal file or folder name.";
-  if (/[<>:"/\\|?*\u0000-\u001f]/.test(value)) return "The name contains characters that are not safe for server files.";
-  return "";
-}
-
-function defaultDuplicateName(name: string) {
-  const dot = name.lastIndexOf(".");
-  if (dot > 0) {
-    return `${name.slice(0, dot)} copy${name.slice(dot)}`;
-  }
-  return `${name} copy`;
-}
-
-function modIconSource(iconUrl?: string | null) {
-  if (!iconUrl) return "";
-  if (iconUrl.startsWith("/")) return iconUrl;
-  try {
-    const url = new URL(iconUrl);
-    if (url.protocol === "https:" && (url.hostname === "cdn.modrinth.com" || url.hostname.endsWith(".modrinth.com"))) {
-      return `/api/modrinth/icon?url=${encodeURIComponent(url.toString())}`;
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-function publicPathContains(containerPath: string, candidatePath: string) {
-  const normalizedContainer = containerPath === "/" ? "/" : containerPath.replace(/\/+$/, "");
-  if (normalizedContainer === "/") return candidatePath === "/" || candidatePath.startsWith("/");
-  return candidatePath === normalizedContainer || candidatePath.startsWith(`${normalizedContainer}/`);
-}
-
-function clearDeletedFileState(deletedEntries: FileEntry[], selectedPath: string, filePreviewPath: string, resetEditorState: () => void, setFilePreview: (state: FilePreviewState) => void) {
-  const deletedPaths = deletedEntries.map((entry) => entry.path);
-  if (selectedPath && deletedPaths.some((path) => publicPathContains(path, selectedPath))) {
-    resetEditorState();
-  }
-  if (filePreviewPath && deletedPaths.some((path) => publicPathContains(path, filePreviewPath))) {
-    setFilePreview({ path: "", loading: false, data: null, error: "" });
-  }
-}
-
-function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string) {
-  const displayName = trimFormValue(form, "displayName");
-  const errors: Array<{ field: string; message: string }> = [];
-  const displayError = validateDisplayName(displayName);
-  if (displayError) errors.push({ field: "displayName", message: displayError });
-  if (displayName && displayName.toLowerCase() !== currentName?.toLowerCase() && existingNames.some((name) => name.toLowerCase() === displayName.toLowerCase())) {
-    errors.push({ field: "displayName", message: "A managed server with this display name already exists." });
-  }
-  const port = trimFormValue(form, "serverPort");
-  if (port) {
-    const portError = validateServerPort(port);
-    if (portError) errors.push({ field: "serverPort", message: portError });
-  }
-  const jarError = validateRuntimeJarFilename(trimFormValue(form, "serverJar"));
-  if (jarError) errors.push({ field: "serverJar", message: jarError });
-  const containerError = validateDockerContainerName(trimFormValue(form, "dockerContainer"));
-  if (containerError) errors.push({ field: "dockerContainer", message: containerError });
-  const portsError = validateDockerPorts(trimFormValue(form, "dockerPorts"));
-  if (portsError) errors.push({ field: "dockerPorts", message: portsError });
-  const javaArgsError = validateJavaArgs(trimFormValue(form, "javaArgs"));
-  if (javaArgsError) errors.push({ field: "javaArgs", message: javaArgsError });
-  return errors;
-}
-
-function hasPotentialEvent(text: string): boolean {
-  const lowercase = text.toLowerCase();
-  return (
-    lowercase.includes("joined the game") ||
-    lowercase.includes("left the game") ||
-    lowercase.includes("lost connection:") ||
-    lowercase.includes("disconnecting ") ||
-    lowercase.includes("starting minecraft server") ||
-    lowercase.includes("stopping server") ||
-    lowercase.includes("stopping the server") ||
-    lowercase.includes("all chunks are saved") ||
-    /done \([^)]+\)! for help, type "help"/i.test(lowercase) ||
-    /\b(disabled|disabling)\b.*\b(mod|\.jar)/i.test(lowercase) ||
-    /\b(mod|\.jar).*?\b(disabled|disabling)\b/i.test(lowercase) ||
-    /encountered an unexpected exception|this crash report has been saved to:|minecraft crash report|a crash report has been generated|the game crashed|server crashed/i.test(lowercase)
-  );
-}
-
-function ModInstallVersionSkeleton() {
-  const rowKeys = ["one", "two", "three"];
-  return (
-    <div className="modInstallVersionGroups modInstallVersionSkeleton" aria-hidden="true">
-      <section className="modInstallVersionGroup">
-        <div className="modInstallVersionGroupHeader">
-          <strong>Compatible versions</strong>
-          <span className="skeletonBlock skeletonCount" />
-        </div>
-        <div className="modInstallVersionTable">
-          <div className="modInstallVersionTableHeader">
-            <span>Version</span>
-            <span>Minecraft</span>
-            <span>Release type</span>
-            <span>Published</span>
-            <span>Size</span>
-            <span>Status</span>
-          </div>
-          {rowKeys.map((key) => (
-            <div key={key} className="modInstallVersionRow">
-              <span><i className="skeletonRadio" /><b className="skeletonBlock" /></span>
-              <span><b className="skeletonBlock" /></span>
-              <span><b className="skeletonBlock" /></span>
-              <span><b className="skeletonBlock" /></span>
-              <span><b className="skeletonBlock" /></span>
-              <span><b className="skeletonBlock skeletonBadge" /></span>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="modInstallVersionGroup">
-        <div className="modInstallVersionGroupHeader">
-          <strong>Other available versions</strong>
-          <span className="skeletonBlock skeletonToggle" />
-        </div>
-      </section>
-    </div>
-  );
-}
 
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -319,15 +106,25 @@ export default function App() {
   const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("compose");
   const [discardEditorRequest, setDiscardEditorRequest] = useState<{ action: "close" } | { action: "switch"; path: string } | null>(null);
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
-  const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
-  const [demoMode, setDemoMode] = useState(() => readDemoMode());
-  const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
-  const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
-  const [demoRunning, setDemoRunning] = useState(true);
-  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => initialDemoFiles);
-  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => initialDemoMods);
-  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules);
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
+  const {
+    themePreference,
+    setThemePreference,
+    demoMode,
+    setDemoMode,
+    dateLocalePreference,
+    setDateLocalePreference,
+    numberLocalePreference,
+    setNumberLocalePreference,
+    demoRunning,
+    setDemoRunning,
+    demoFiles,
+    setDemoFiles,
+    demoInstalledMods,
+    setDemoInstalledMods,
+    demoSchedules,
+    setDemoSchedules,
+    systemDark
+  } = usePreferencesState();
   const consoleRef = useRef<HTMLDivElement>(null);
   const previousLogCountRef = useRef(0);
   const modUploadRef = useRef<HTMLInputElement>(null);
@@ -371,74 +168,26 @@ export default function App() {
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && job.status === "running");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
-  const effectiveAppState = useMemo<AppState>(() => {
-    if (!demoMode) return appState;
-    const runtimeMode = appState.runtimeMode ?? "all-in-one";
-    return {
-      ...appState,
-      servers: [demoServer(demoSchedules), ...appState.servers.filter((server) => server.id !== demoServerId)],
-      nodes: appState.nodes?.length ? appState.nodes : (runtimeMode === "panel" ? [] : [defaultContextNode]),
-      runtimeMode,
-      modrinthApiConfigured: true,
-      dockerSocketMounted: true,
-      totalMemory: appState.totalMemory || 16 * 1024 * 1024 * 1024
-    };
-  }, [appState, demoMode, demoSchedules]);
-  const panelOnlyMode = effectiveAppState.runtimeMode === "panel";
+  const {
+    effectiveAppState,
+    panelOnlyMode,
+    contextNodes,
+    activeServer,
+    activeServerIsDemo,
+    activeNode,
+    usableContextNodes,
+    activeMinecraftVersion,
+    activeFabricLoaderVersion,
+    activeModContext,
+    activeModVersionsUnknown,
+    activeStatus,
+    activeNodeRuntimeBlocked,
+    activeNodeBlockReason,
+    activeNodeBlockMessage,
+    activeServerUsesInternalNode,
+    activeServerDockerSocketMounted
+  } = useServerContext({ appState, activeServerId, status, demoMode, demoSchedules });
   const applicationReady = appStateLoaded || demoMode;
-
-  const contextNodes = useMemo<ContextNode[]>(() => {
-    const sourceNodes = effectiveAppState.nodes?.length ? effectiveAppState.nodes : (panelOnlyMode ? [] : [defaultContextNode]);
-    const nodes: ContextNode[] = sourceNodes.filter((node) => !(panelOnlyMode && (node.isInternal || node.type === "local"))).map((node) => ({
-      ...node,
-      dockerStatus: (node.isInternal || node.type === "local") ? (effectiveAppState.dockerSocketMounted ? "available" : "unavailable") : node.dockerStatus,
-      dataPathStatus: (node.isInternal || node.type === "local") ? "ready" : node.dataPathStatus,
-      compatibility: (node.isInternal || node.type === "local") ? "compatible" : node.compatibility,
-      servers: [] as ManagedServer[]
-    }));
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
-    for (const server of effectiveAppState.servers) {
-      const nodeId = server.nodeId || "local";
-      if (panelOnlyMode && nodeId === "local") continue;
-      const node = nodesById.get(nodeId);
-      if (node) {
-        node.servers.push(server);
-        continue;
-      }
-      const fallbackNode: ContextNode = {
-        id: nodeId,
-        name: server.nodeName || nodeId,
-        type: "remote",
-        status: "unknown",
-        isInternal: false,
-        servers: [server]
-      };
-      nodes.push(fallbackNode);
-      nodesById.set(nodeId, fallbackNode);
-    }
-    return nodes;
-  }, [effectiveAppState.nodes, effectiveAppState.servers, effectiveAppState.dockerSocketMounted, panelOnlyMode]);
-
-  const activeServer = useMemo(
-    () => {
-      if (demoMode) {
-        return effectiveAppState.servers.find((server) => server.id === demoServerId);
-      }
-      return effectiveAppState.servers.find((server) => server.id === activeServerId) ?? effectiveAppState.servers[0];
-    },
-    [activeServerId, demoMode, effectiveAppState.servers]
-  );
-  const activeServerIsDemo = demoMode && activeServer?.id === demoServerId;
-  const activeNode = useMemo(() => {
-    const serverNodeId = activeServer?.nodeId || "local";
-    return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...(panelOnlyMode ? emptyPanelContextNode : defaultContextNode), servers: [] };
-  }, [activeServer?.nodeId, contextNodes, panelOnlyMode]);
-  const usableContextNodes = useMemo(() => contextNodes.filter(isNodeRuntimeUsable), [contextNodes]);
-  const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
-  const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
-  const activeModContext = `Fabric ${activeFabricLoaderVersion === "Unknown" ? "unknown" : activeFabricLoaderVersion} · Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
-  const activeModVersionsUnknown = activeFabricLoaderVersion === "Unknown" || activeMinecraftVersion === "Unknown";
-  const activeStatus = status?.server.id === activeServer?.id ? status : null;
   const permissionUser = appState.currentUser ?? authSession?.user ?? null;
   const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
   const canExpanded = activeServerIsDemo || hasPermission(permissionUser, "console.command");
@@ -449,13 +198,6 @@ export default function App() {
   const canManageUsers = hasPermission(permissionUser, "users.manage");
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
-  const activeNodeRuntimeBlocked = Boolean(activeServer && !activeServerIsDemo && !isNodeRuntimeUsable(activeNode));
-  const activeNodeBlockReason = nodeBlockReason(activeNode);
-  const activeNodeBlockMessage = activeNodeRuntimeBlocked
-    ? `${activeNodeBlockReason || "Node unavailable"}. This server belongs to ${activeNode.name}. Runtime actions and file access are unavailable until the node reconnects or the runtime issue is fixed.`
-    : "";
-  const activeServerUsesInternalNode = activeNode.isInternal || activeNode.type === "local";
-  const activeServerDockerSocketMounted = !activeServerUsesInternalNode || effectiveAppState.dockerSocketMounted;
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
@@ -806,7 +548,6 @@ export default function App() {
   }, [authSession?.authenticated, authSession?.user?.rolePreset, canViewUsers, demoMode]);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-demo-mode", String(demoMode));
     if (demoMode) {
       setNotice("");
       setActiveServerId(demoServerId);
@@ -944,27 +685,6 @@ export default function App() {
     setConsolePinnedToBottom(true);
     setPendingConsoleEntries(0);
   }
-
-  useEffect(() => {
-    const query = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!query) return;
-    const update = () => setSystemDark(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("serversentinel-theme", themePreference);
-  }, [themePreference]);
-
-  useEffect(() => {
-    window.localStorage.setItem("serversentinel-date-locale", dateLocalePreference);
-  }, [dateLocalePreference]);
-
-  useEffect(() => {
-    window.localStorage.setItem("serversentinel-number-locale", numberLocalePreference);
-  }, [numberLocalePreference]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));

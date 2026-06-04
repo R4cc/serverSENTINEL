@@ -16,6 +16,7 @@ import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
+import { shellQuote } from "./docker/shell.js";
 import { fabricMeta, latestFabricVersion } from "./fabric/fabricClient.js";
 import {
   allowedForChannel,
@@ -30,6 +31,7 @@ import {
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
+import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
 import { nodeCapabilities, nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
@@ -48,8 +50,36 @@ import {
   rolePresetFromUnknown
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
+import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
 import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
+import {
+  badRequest,
+  forbidden,
+  optionalCompatibilityFilter,
+  optionalNodeDataMount,
+  optionalNodePanelUrl,
+  optionalReleaseChannel,
+  optionalStrictBoolean,
+  requireStrictBoolean,
+  validateDockerContainerName,
+  validateDockerImageName,
+  validateJavaArgs,
+  validateModrinthProjectId,
+  validateModrinthVersionId,
+  validateNodeName,
+  validateProvisionJobId,
+  validateRuntimeJarFilename,
+  validateScheduleId,
+  validateServerId
+} from "./http/validation.js";
+export {
+  requireStrictBoolean,
+  validateDockerContainerName,
+  validateJavaArgs,
+  validateModrinthProjectId,
+  validateRuntimeJarFilename
+} from "./http/validation.js";
 import type {
   DockerExecCreate,
   DockerExecInspect,
@@ -373,146 +403,6 @@ function validatePassword(password?: string) {
   return password;
 }
 
-function badRequest(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 400;
-  throw error;
-}
-
-function forbidden(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 403;
-  throw error;
-}
-
-export function requireStrictBoolean(value: unknown, fieldName: string) {
-  if (typeof value !== "boolean") {
-    badRequest(`${fieldName} must be a boolean`);
-  }
-  return value;
-}
-
-function optionalStrictBoolean(value: unknown, fieldName: string, fallback: boolean) {
-  return value === undefined ? fallback : requireStrictBoolean(value, fieldName);
-}
-
-function optionalReleaseChannel(channel: unknown): ReleaseChannel {
-  if (channel === undefined) return "release";
-  if (channel === "release" || channel === "beta" || channel === "alpha") return channel;
-  badRequest("Release channel must be one of release, beta, or alpha");
-}
-
-function optionalCompatibilityFilter(value: unknown) {
-  if (value === undefined) return undefined;
-  if (value === "all" || value === "compatible" || value === "incompatible") return value;
-  badRequest("Compatibility filter must be all, compatible, or incompatible");
-}
-
-function validateServerId(id: unknown) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid server id is required");
-  }
-  return id;
-}
-
-function validateScheduleId(id: unknown) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid schedule id is required");
-  }
-  return id;
-}
-
-function validateProvisionJobId(id: unknown) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid provisioning job id is required");
-  }
-  return id;
-}
-
-function validateNodeName(name: unknown) {
-  const value = typeof name === "string" ? name.trim() : "";
-  if (!value) return "Remote Node";
-  if (value.length > 80 || /[\u0000-\u001f]/.test(value)) {
-    badRequest("Node name must be 1-80 characters and cannot contain control characters");
-  }
-  return value;
-}
-
-function optionalNodePanelUrl(panelUrl: unknown) {
-  const value = typeof panelUrl === "string" ? panelUrl.trim() : "";
-  if (!value) return undefined;
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    badRequest("Panel URL must be a valid http or https URL");
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    badRequest("Panel URL must use http or https");
-  }
-  if (parsed.username || parsed.password) {
-    badRequest("Panel URL cannot include embedded credentials");
-  }
-  return value;
-}
-
-function optionalNodeDataMount(dataMount: unknown) {
-  const value = typeof dataMount === "string" ? dataMount.trim() : "";
-  if (!value) return undefined;
-  if (value.length > 512 || /[\r\n\u0000]/.test(value)) {
-    badRequest("Node data mount must be a single-line host path or host:container mount");
-  }
-  return value;
-}
-
-export function validateModrinthProjectId(projectId: unknown) {
-  if (typeof projectId !== "string" || !/^[a-zA-Z0-9_-]{3,64}$/.test(projectId.trim())) {
-    badRequest("A valid Modrinth project id is required");
-  }
-  return projectId.trim();
-}
-
-export function validateModrinthVersionId(versionId: unknown) {
-  if (versionId === undefined || versionId === null || versionId === "") return undefined;
-  if (typeof versionId !== "string" || !/^[a-zA-Z0-9_-]{3,64}$/.test(versionId.trim())) {
-    badRequest("A valid Modrinth version id is required");
-  }
-  return versionId.trim();
-}
-
-export function validateRuntimeJarFilename(filename: unknown) {
-  const value = typeof filename === "string" ? filename.trim() : "";
-  if (!value || basename(value) !== value || !value.endsWith(".jar")) {
-    badRequest("Server jar filename must be a local .jar filename");
-  }
-  return value;
-}
-
-export function validateDockerContainerName(name: unknown) {
-  const value = typeof name === "string" ? name.trim() : "";
-  if (!value || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(value)) {
-    badRequest("Docker container name contains invalid characters");
-  }
-  return value;
-}
-
-export function validateDockerImageName(image: unknown) {
-  const value = typeof image === "string" ? image.trim() : "";
-  if (!value || value.length > 255 || /\s/.test(value) || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(value)) {
-    badRequest("Docker image name contains invalid characters");
-  }
-  return value;
-}
-
-export function validateJavaArgs(args: unknown) {
-  const value = typeof args === "string" ? args.trim() : "";
-  if (!value) return "-Xms2G -Xmx4G";
-  if (value.length > 512 || /[\r\n;&|`$<>\\]/.test(value)) {
-    badRequest("Java arguments contain unsafe shell characters");
-  }
-  return value;
-}
-
 function validateBase64Content(value: unknown) {
   if (typeof value !== "string" || !value || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
     badRequest("Uploaded mod content must be valid base64");
@@ -749,56 +639,8 @@ function publicNode(node: ManagedNode): PublicNode {
   };
 }
 
-function nodeDataMount(hostPath?: string) {
-  const value = hostPath?.trim() || "/var/lib/serversentinel";
-  return value.includes(":") ? value : `${value}:/data`;
-}
-
-function nodeDataMountParts(hostPath?: string) {
-  const mount = nodeDataMount(hostPath);
-  const separator = mount.indexOf(":");
-  if (separator === -1) {
-    return { mount, hostSource: mount, containerTarget: "/data" };
-  }
-  return {
-    mount,
-    hostSource: mount.slice(0, separator),
-    containerTarget: mount.slice(separator + 1) || "/data"
-  };
-}
-
 export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
-  const image = nodeImage;
-  const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
-  const { mount: dataMount, hostSource, containerTarget } = nodeDataMountParts(input.dataMount);
-  const nodeName = input.nodeName?.trim();
-  const dockerSocketMount = "/var/run/docker.sock:/var/run/docker.sock";
-  const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
-    SS_MODE: "node",
-    SS_PANEL_URL: panelUrl,
-    SS_NODE_DATA_DIR: containerTarget,
-    SS_NODE_DOCKER_DATA_DIR: hostSource
-  };
-  if (nodeName) {
-    environment.SS_NODE_NAME = nodeName;
-  }
-  if (input.joinToken) {
-    environment.SS_JOIN_TOKEN = input.joinToken;
-  }
-  return {
-    image,
-    panelUrl,
-    joinToken: input.joinToken,
-    tokenRequired: !input.joinToken,
-    dataMount,
-    dockerSocketMount,
-    dockerCompose: {
-      image,
-      environment,
-      volumes: [dockerSocketMount, dataMount]
-    },
-    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SS_NODE_DATA_DIR=${shellQuote(containerTarget)} -e SS_NODE_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${image}`
-  };
+  return buildNodeInstallInstructions({ ...input, image: nodeImage, defaultPanelPort: config.port });
 }
 
 function createJoinToken(ttlMinutesInput?: number) {
@@ -1474,10 +1316,6 @@ function dockerContainerName(server: ManagedServer) {
     return validateDockerContainerName(server.dockerContainer);
   }
   return defaultContainerName(server.displayName);
-}
-
-function shellQuote(value: string) {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function dockerControlConfigured(server: ManagedServer) {
@@ -2893,181 +2731,26 @@ app.addHook("onRequest", async (request, reply) => {
   }
 });
 
-app.get("/api/auth/session", async (request) => {
-  const users = await queuedReadUsers();
-  const user = await currentUserFromCookie(request.headers.cookie);
-  return {
-    authenticated: Boolean(user),
-    setupRequired: users.length === 0,
-    user: user ? publicUser(user) : null
-  };
-});
-
-app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", authRateLimit, async (request, reply) => {
-  const username = validateUsername(request.body.username);
-  const password = validatePassword(request.body.password);
-  const now = new Date().toISOString();
-  const passwordData = hashPassword(password);
-  const user: StoredUser = {
-    id: randomUUID(),
-    username,
-    rolePreset: "admin",
-    permissions: normalizePermissions(ROLE_PRESETS.admin),
-    createdAt: now,
-    updatedAt: now,
-    ...passwordData
-  };
-  await updateUsers((users) => {
-    if (users.length > 0) {
-      const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
-      error.statusCode = 403;
-      throw error;
-    }
-    users.push(user);
-  });
-  const sessionId = randomBytes(32).toString("base64url");
-  sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
-  const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
-  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
-  logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
-  return { authenticated: true, setupRequired: false, user: publicUser(user) };
-});
-
-app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", authRateLimit, async (request, reply) => {
-  const username = request.body.username?.trim() ?? "";
-  const password = request.body.password ?? "";
-  if (username === "demo" && password === "demo") {
-    logInfo({ username: "demo", action: "login_demo" }, "Demo login requested");
-    return { authenticated: false, setupRequired: (await queuedReadUsers()).length === 0, demo: true, user: null };
-  }
-  const users = await queuedReadUsers();
-  const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
-  if (!user || !verifyPassword(password, user)) {
-    logWarn({ username, action: "login", status: "failed" }, "Login failed");
-    const error = new Error("Invalid username or password") as Error & { statusCode?: number };
-    error.statusCode = 401;
-    throw error;
-  }
-  const sessionId = randomBytes(32).toString("base64url");
-  const now = new Date().toISOString();
-  sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
-  const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
-  reply.header("Set-Cookie", sessionCookie(sessionId, 60 * 60 * 24 * 14, isSecure));
-  logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
-  return { authenticated: true, setupRequired: false, user: publicUser(user) };
-});
-
-app.post("/api/auth/logout", async (request, reply) => {
-  const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
-  if (sessionId) {
-    sessions.delete(sessionId);
-  }
-  reply.header("Set-Cookie", sessionCookie("", 0));
-  logInfo({ action: "logout" }, "User logged out");
-  return { ok: true };
-});
-
-app.get("/api/users", async (request) => {
-  await requireRequestPermission(request, "users.view");
-  return { users: (await queuedReadUsers()).map(publicUser) };
-});
-
-app.post<{ Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "users.manage");
-  const username = validateUsername(request.body.username);
-  const password = validatePassword(request.body.password);
-  const rolePreset = normalizeRolePreset(request.body.rolePreset);
-  const permissionData = buildUserPermissions({
-    rolePreset,
-    permissions: request.body.permissions
-  });
-  let createdUser: StoredUser | null = null;
-  await updateUsers((users) => {
-    if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
-      const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
-      error.statusCode = 400;
-      throw error;
-    }
-    const now = new Date().toISOString();
-    createdUser = {
-      id: randomUUID(),
-      username,
-      rolePreset: permissionData.rolePreset,
-      permissions: permissionData.permissions,
-      createdAt: now,
-      updatedAt: now,
-      ...hashPassword(password)
-    };
-    users.push(createdUser);
-  });
-  logInfo({ userId: createdUser!.id, username: createdUser!.username, rolePreset: createdUser!.rolePreset, action: "create_user" }, "User created");
-  return publicUser(createdUser!);
-});
-
-app.put<{ Params: { id: string }; Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "users.manage");
-  let updatedUser: StoredUser | null = null;
-  await updateUsers((users) => {
-    const index = users.findIndex((user) => user.id === request.params.id);
-    if (index === -1) {
-      const error = new Error("User not found") as Error & { statusCode?: number };
-      error.statusCode = 404;
-      throw error;
-    }
-    const current = users[index];
-    const username = request.body.username === undefined ? current.username : validateUsername(request.body.username);
-    const rolePreset = normalizeRolePreset(request.body.rolePreset);
-    const permissionData = buildUserPermissions({
-      rolePreset,
-      permissions: request.body.permissions
-    }, current);
-    const password = request.body.password?.trim() ? validatePassword(request.body.password) : undefined;
-    if (users.some((user) => user.id !== current.id && user.username.toLowerCase() === username.toLowerCase())) {
-      const error = new Error("A user with that username already exists") as Error & { statusCode?: number };
-      error.statusCode = 400;
-      throw error;
-    }
-    users[index] = {
-      ...current,
-      username,
-      rolePreset: permissionData.rolePreset,
-      permissions: permissionData.permissions,
-      updatedAt: new Date().toISOString(),
-      ...(password ? hashPassword(password) : {})
-    };
-    updatedUser = users[index];
-  });
-  logInfo({ userId: updatedUser!.id, username: updatedUser!.username, rolePreset: updatedUser!.rolePreset, action: "update_user" }, "User updated");
-  return publicUser(updatedUser!);
-});
-
-app.delete<{ Params: { id: string } }>("/api/users/:id", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "users.manage");
-  let deletedUser: StoredUser | null = null;
-  await updateUsers((users) => {
-    const index = users.findIndex((candidate) => candidate.id === request.params.id);
-    if (index === -1) {
-      const error = new Error("User not found") as Error & { statusCode?: number };
-      error.statusCode = 404;
-      throw error;
-    }
-    const user = users[index];
-    if (isFullAccessUser(user) && users.filter(isFullAccessUser).length <= 1) {
-      const error = new Error("At least one admin user is required") as Error & { statusCode?: number };
-      error.statusCode = 400;
-      throw error;
-    }
-    users.splice(index, 1);
-    deletedUser = user;
-  });
-
-  for (const [sessionId, session] of sessions) {
-    if (session.userId === request.params.id) {
-      sessions.delete(sessionId);
-    }
-  }
-  logInfo({ userId: deletedUser!.id, username: deletedUser!.username, action: "delete_user" }, "User deleted");
-  return { ok: true };
+registerAuthRoutes(app, {
+  authRateLimit,
+  destructiveRateLimit,
+  sessions,
+  sessionCookieName,
+  parseCookies,
+  sessionCookie,
+  currentUserFromCookie,
+  queuedReadUsers,
+  updateUsers,
+  requireRequestPermission,
+  validateUsername,
+  validatePassword,
+  normalizeRolePreset,
+  buildUserPermissions,
+  hashPassword,
+  verifyPassword,
+  publicUser,
+  logInfo,
+  logWarn
 });
 
 app.addHook("preHandler", async (request) => {
