@@ -59,7 +59,7 @@ export async function dockerRequest<T>(
   });
 }
 
-export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200) {
+export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
   }
@@ -71,7 +71,7 @@ export async function dockerBufferRequest(method: "GET" | "POST", path: string, 
         socketPath: config.dockerSocket,
         path,
         method,
-        timeout: 15000
+        timeout: timeoutMs
       },
       (response) => {
         const chunks: Buffer[] = [];

@@ -48,6 +48,22 @@ function playerCountLabel(activity?: ServerActivity) {
   return activity.maxPlayers ? `${activity.playersOnline}/${activity.maxPlayers}` : String(activity.playersOnline);
 }
 
+function compareVersions(left?: string, right?: string) {
+  if (!left || !right) return null;
+  const parse = (value: string) => {
+    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
+  };
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  if (!leftParts || !rightParts) return left === right ? 0 : null;
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] > rightParts[index]) return 1;
+    if (leftParts[index] < rightParts[index]) return -1;
+  }
+  return 0;
+}
+
 function validateAddNodeInput(input: AddNodeInput) {
   const name = input.name.trim();
   const panelUrl = input.panelUrl.trim();
@@ -350,6 +366,7 @@ function AddNodeModal({
 
 export function NodesPage({
   nodes,
+  panelVersion,
   canManageNodes,
   busy,
   busyNodeId,
@@ -368,6 +385,7 @@ export function NodesPage({
   onViewDetails,
   onShowInstall,
   onRotateToken,
+  onUpdateNode,
   onRemoveNode,
   onCloseDetails,
   onSelectServer,
@@ -379,6 +397,7 @@ export function NodesPage({
   formatDate
 }: {
   nodes: ContextNode[];
+  panelVersion: string;
   canManageNodes: boolean;
   busy: boolean;
   busyNodeId: string;
@@ -397,6 +416,7 @@ export function NodesPage({
   onViewDetails: (node: ManagedNode) => void;
   onShowInstall: (node: ManagedNode) => void;
   onRotateToken: (node: ManagedNode) => void;
+  onUpdateNode: (node: ManagedNode) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
@@ -411,6 +431,19 @@ export function NodesPage({
   const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
   const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
+  const nodeVersionState = (node: ManagedNode) => {
+    if (node.isInternal || !node.agentVersion) return "unknown";
+    const comparison = compareVersions(node.agentVersion, panelVersion);
+    if (comparison === 0) return "current";
+    if (comparison === -1) return "older";
+    if (comparison === 1) return "newer";
+    return "mismatch";
+  };
+  const nodeUpdateAvailable = (node: ManagedNode) => nodeVersionState(node) === "older";
+  const nodePanelUpdateRequired = (node: ManagedNode) => nodeVersionState(node) === "newer";
+  const nodeVersionMismatch = (node: ManagedNode) => nodeVersionState(node) === "mismatch";
+  const nodeCanSelfUpdate = (node: ManagedNode) => node.capabilities?.includes("node.update");
+  const nodeCanPanelUpdate = (node: ManagedNode) => node.status === "online" && nodeCanSelfUpdate(node);
 
   const sortedNodes = useMemo(() => {
     return [
@@ -459,6 +492,23 @@ export function NodesPage({
                   </div>
                 </div>
                 <span className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</span>
+                {nodePanelUpdateRequired(node) && (
+                  <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</span>
+                )}
+                {nodeVersionMismatch(node) && (
+                  <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</span>
+                )}
+                {nodeUpdateAvailable(node) && (
+                  <button
+                    type="button"
+                    className="secondaryButton compactButton"
+                    onClick={() => nodeCanPanelUpdate(node) ? onUpdateNode(node) : onShowInstall(node)}
+                    disabled={busyNodeId === node.id || !canManageNodes}
+                    title={nodeCanPanelUpdate(node) ? `Update node agent to ${panelVersion}` : "This node needs a manual update before panel-triggered updates are available"}
+                  >
+                    {nodeCanPanelUpdate(node) ? "Update" : "Instructions"}
+                  </button>
+                )}
                 <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id}>Details</button>
               </header>
 
@@ -545,6 +595,7 @@ export function NodesPage({
                 <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
                 <div><dt>Status</dt><dd className={statusTone(selectedNode.status)}>{selectedNode.status}</dd></div>
                 <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
+                <div><dt>Panel</dt><dd>{panelVersion}</dd></div>
                 <div><dt>Protocol</dt><dd>{selectedNode.protocolVersion || "Unknown"}</dd></div>
                 <div><dt>Compatibility</dt><dd className={statusTone(selectedNode.compatibility)}>{nodeCompatibilityLabel(selectedNode)}</dd></div>
                 <div><dt>Docker</dt><dd className={statusTone(selectedNode.dockerStatus)}>{nodeDockerLabel(selectedNode)}</dd></div>
@@ -559,8 +610,29 @@ export function NodesPage({
                   {nodeWarnings(selectedNode).map((warning) => <span key={warning}>{warning}</span>)}
                 </div>
               )}
+              {nodePanelUpdateRequired(selectedNode) && (
+                <div className="nodeWarnings">
+                  <span>Node agent {selectedNode.agentVersion} is newer than this panel ({panelVersion}). Update the panel before updating or managing this node image.</span>
+                </div>
+              )}
+              {nodeVersionMismatch(selectedNode) && (
+                <div className="nodeWarnings">
+                  <span>Node agent {selectedNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node manually to matching release versions.</span>
+                </div>
+              )}
               <div className="nodeActions">
                 <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedNode)} disabled={busyNodeId === selectedNode.id}>Install instructions</button>
+                {nodeUpdateAvailable(selectedNode) && (
+                  <button
+                    type="button"
+                    className="secondaryButton compactButton"
+                    onClick={() => nodeCanPanelUpdate(selectedNode) ? onUpdateNode(selectedNode) : onShowInstall(selectedNode)}
+                    disabled={busyNodeId === selectedNode.id || !canManageNodes}
+                    title={nodeCanPanelUpdate(selectedNode) ? `Update node agent to ${panelVersion}` : "This node needs a manual update before panel-triggered updates are available"}
+                  >
+                    {nodeCanPanelUpdate(selectedNode) ? "Update image" : "Update instructions"}
+                  </button>
+                )}
                 <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}>Rotate token</button>
                 <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}>Refresh node</button>
                 <button

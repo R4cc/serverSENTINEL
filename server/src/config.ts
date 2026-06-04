@@ -32,7 +32,8 @@ export const config = {
   joinToken: process.env.SS_JOIN_TOKEN?.trim(),
   nodeName: process.env.SS_NODE_NAME?.trim(),
   nodeDataDir: resolve(process.env.SS_NODE_DATA_DIR ?? "/data"),
-  nodeDockerDataDir: process.env.SS_NODE_DOCKER_DATA_DIR?.trim() || resolve(process.env.SS_NODE_DATA_DIR ?? "/data")
+  nodeDockerDataDir: process.env.SS_NODE_DOCKER_DATA_DIR?.trim() || resolve(process.env.SS_NODE_DATA_DIR ?? "/data"),
+  nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim()
 };
 
 export const minServerPort = 1000;

@@ -2,6 +2,7 @@ export const nodeProtocolVersion = "1.1";
 
 export const nodeCapabilities = [
   "node.health",
+  "node.update",
   "docker.info",
   "server.create",
   "server.delete",

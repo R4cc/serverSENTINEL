@@ -15,6 +15,22 @@ import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 
 type NodeConfig = { nodeId: string; nodeSecret: string };
+type NodeUpdateRequest = {
+  image?: string;
+  expectedVersion?: string;
+};
+type NodeContainerInspect = {
+  Id: string;
+  Name?: string;
+  Config?: Record<string, unknown> & {
+    Image?: string;
+    Labels?: Record<string, string>;
+  };
+  HostConfig?: Record<string, unknown>;
+  NetworkSettings?: {
+    Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; EndpointID?: string; Gateway?: string; IPAddress?: string; IPPrefixLen?: number; IPv6Gateway?: string; GlobalIPv6Address?: string; GlobalIPv6PrefixLen?: number; MacAddress?: string; DriverOpts?: Record<string, string> }>;
+  };
+};
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
@@ -31,6 +47,7 @@ type CreateInput = {
 };
 
 const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
+const nodeUpdateDir = join(config.nodeDataDir, "node", "updates");
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
@@ -325,6 +342,153 @@ async function dockerInfo() {
   return { available: dockerAvailable(), info: dockerAvailable() ? await dockerRequest("GET", "/info").catch((error) => ({ error: (error as Error).message })) : undefined };
 }
 
+function currentContainerId() {
+  return process.env.HOSTNAME || "";
+}
+
+function cleanContainerName(name?: string) {
+  return (name || "").replace(/^\/+/, "");
+}
+
+function validateNodeDockerImageName(image: string) {
+  const value = image.trim();
+  if (!value || value.length > 255 || /\s/.test(value) || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(value)) {
+    throw new Error("Docker image name contains invalid characters");
+  }
+  return value;
+}
+
+function compareVersionStrings(left?: string, right?: string) {
+  if (!left || !right) return null;
+  const parse = (value: string) => {
+    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
+  };
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  if (!leftParts || !rightParts) return left === right ? 0 : null;
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] > rightParts[index]) return 1;
+    if (leftParts[index] < rightParts[index]) return -1;
+  }
+  return 0;
+}
+
+function composeUpdateCommand(inspect: NodeContainerInspect, image: string) {
+  const labels = inspect.Config?.Labels || {};
+  const project = labels["com.docker.compose.project"];
+  const service = labels["com.docker.compose.service"];
+  if (!project || !service) return "";
+  const workingDir = labels["com.docker.compose.project.working_dir"];
+  const command = `docker compose -p ${shellQuote(project)} pull ${shellQuote(service)} && docker compose -p ${shellQuote(project)} up -d ${shellQuote(service)}`;
+  const prefix = workingDir ? `cd ${shellQuote(workingDir)} && ` : "";
+  return `${prefix}${command}`;
+}
+
+function createNetworkingConfig(inspect: NodeContainerInspect) {
+  const networks = inspect.NetworkSettings?.Networks;
+  if (!networks || Object.keys(networks).length === 0) return undefined;
+  return {
+    EndpointsConfig: Object.fromEntries(Object.entries(networks).map(([name, network]) => [name, {
+      IPAMConfig: network.IPAMConfig,
+      Aliases: network.Aliases,
+      DriverOpts: network.DriverOpts
+    }]))
+  };
+}
+
+async function prepareNodeUpdate(payload: unknown) {
+  const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
+  const currentVersion = process.env.npm_package_version ?? "0.4.0";
+  const expectedComparison = compareVersionStrings(currentVersion, input.expectedVersion);
+  if (input.expectedVersion && expectedComparison === 1) {
+    throw new Error(`Node agent ${currentVersion} is newer than panel ${input.expectedVersion}. Update the panel before changing this node image.`);
+  }
+  if (input.expectedVersion && currentVersion !== input.expectedVersion && expectedComparison === null) {
+    throw new Error(`Node agent version ${currentVersion} cannot be safely compared with panel version ${input.expectedVersion}. Update the panel and node manually to matching release versions.`);
+  }
+  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${currentVersion}`);
+  if (!dockerAvailable()) {
+    throw new Error("Docker socket is not mounted on this node. Manual update is required.");
+  }
+  const containerId = currentContainerId();
+  if (!containerId) {
+    throw new Error("Could not determine the current node container id.");
+  }
+
+  const inspect = await dockerRequest<NodeContainerInspect>("GET", `/containers/${encodeURIComponent(containerId)}/json`);
+  const currentName = cleanContainerName(inspect.Name) || containerId;
+  const composeCommand = composeUpdateCommand(inspect, image);
+  const plan = {
+    createdAt: new Date().toISOString(),
+    image,
+    expectedVersion: input.expectedVersion,
+    currentVersion,
+    containerId: inspect.Id || containerId,
+    containerName: currentName,
+    composeManaged: Boolean(composeCommand),
+    composeCommand,
+    inspect
+  };
+  await mkdir(nodeUpdateDir, { recursive: true });
+  const planPath = join(nodeUpdateDir, `node-update-${Date.now()}.json`);
+  await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+
+  if (composeCommand) {
+    return {
+      ok: false,
+      mode: "compose",
+      message: `This node is managed by Docker Compose. Set the service image to ${image} in the Compose file, then run the copied update command on the node host.`,
+      command: composeCommand,
+      image,
+      planPath
+    };
+  }
+
+  setTimeout(() => {
+    void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
+      void writeFile(join(nodeUpdateDir, `node-update-error-${Date.now()}.json`), `${JSON.stringify({
+        at: new Date().toISOString(),
+        image,
+        containerName: currentName,
+        planPath,
+        error: (error as Error).message
+      }, null, 2)}\n`, "utf8").catch(() => null);
+      console.error(`Node self-update failed: ${(error as Error).message}`);
+    });
+  }, 500);
+
+  return {
+    ok: true,
+    mode: "self",
+    message: "Node update prepared. The node will pull the image, recreate its container, and reconnect shortly.",
+    image,
+    planPath
+  };
+}
+
+async function selfUpdateContainer(inspect: NodeContainerInspect, image: string, currentName: string, planPath: string) {
+  await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(image)}`, [200, 201, 204], 10 * 60 * 1000);
+  const oldName = `${currentName}-previous-${Date.now()}`;
+  await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
+
+  const configBody = {
+    ...inspect.Config,
+    Image: image,
+    Hostname: undefined,
+    Domainname: undefined,
+    MacAddress: undefined,
+    NetworkDisabled: undefined,
+    HostConfig: inspect.HostConfig,
+    NetworkingConfig: createNetworkingConfig(inspect)
+  };
+  await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, configBody, 201);
+  await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "created" }, null, 2)}\n`, "utf8");
+  await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
+  await dockerRequest("POST", `/containers/${encodeURIComponent(oldName)}/stop?t=10`, [204, 304]);
+  await dockerRequest("DELETE", `/containers/${encodeURIComponent(oldName)}?v=1`, [204, 404]);
+}
+
 async function fileList(server: ManagedServer, path: unknown) {
   const root = await serverRoot(server);
   const target = await inside(server, path);
@@ -490,6 +654,7 @@ async function modInstall(server: ManagedServer, input: unknown) {
 async function handleCommand(command: string, payload: any) {
   const server = payload?.server as ManagedServer | undefined;
   if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir };
+  if (command === "node.update") return prepareNodeUpdate(payload);
   if (command === "docker.info") return dockerInfo();
   if (command === "server.create") return createServer(payload?.input as CreateInput);
   if (!server) throw new Error("server payload is required");

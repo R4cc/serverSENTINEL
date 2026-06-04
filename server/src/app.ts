@@ -89,6 +89,9 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
+const appVersion = process.env.npm_package_version ?? "0.4.0";
+const nodeImageRepository = "nl2109/serversentinel";
+const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
 const serversFile = join(config.configDir, "servers.json");
 const nodesFile = join(config.configDir, "nodes.json");
 const usersFile = join(config.configDir, "users.json");
@@ -653,6 +656,22 @@ function versionResolution(version: string | undefined, source: ResolvedServerVe
   return { version: version || undefined, source: version ? source : "unknown", lastCheckedAt };
 }
 
+function compareVersionStrings(left?: string, right?: string) {
+  if (!left || !right) return null;
+  const parse = (value: string) => {
+    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
+  };
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  if (!leftParts || !rightParts) return left === right ? 0 : null;
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] > rightParts[index]) return 1;
+    if (leftParts[index] < rightParts[index]) return -1;
+  }
+  return 0;
+}
+
 function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
   return {
     id: localNodeId,
@@ -749,7 +768,7 @@ function nodeDataMountParts(hostPath?: string) {
 }
 
 export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
-  const image = "nl2109/serversentinel:latest";
+  const image = nodeImage;
   const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${config.port}`;
   const { mount: dataMount, hostSource, containerTarget } = nodeDataMountParts(input.dataMount);
   const nodeName = input.nodeName?.trim();
@@ -3191,6 +3210,62 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   };
 });
 
+app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:nodeId/update", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const body = request.body ?? {};
+  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  if (node.isInternal) {
+    throw new Error("Internal node cannot be updated from the Nodes page.");
+  }
+  const nodePanelVersionComparison = compareVersionStrings(node.agentVersion, appVersion);
+  if (nodePanelVersionComparison === 1) {
+    return {
+      ok: false,
+      mode: "manual",
+      message: `Node agent ${node.agentVersion} is newer than this panel (${appVersion}). Update the panel before updating this node image.`,
+      image: nodeImage
+    };
+  }
+  if (node.agentVersion && node.agentVersion !== appVersion && nodePanelVersionComparison === null) {
+    return {
+      ok: false,
+      mode: "manual",
+      message: `Node agent version ${node.agentVersion} could not be compared with panel version ${appVersion}. Update the panel and node manually to matching release versions.`,
+      image: nodeImage
+    };
+  }
+  const image = validateDockerImageName(body.image?.trim() || nodeImage);
+  if (node.status !== "online") {
+    return {
+      ok: false,
+      mode: "offline",
+      message: "Node is offline. Update it on the node host, then refresh this page.",
+      image,
+      command: `docker pull ${image}`
+    };
+  }
+  if (!node.capabilities?.includes("node.update")) {
+    return {
+      ok: false,
+      mode: "manual",
+      message: "This node agent does not support panel-triggered self-update yet. Update it on the node host once, then future updates can be triggered here.",
+      image,
+      command: `docker pull ${image}`
+    };
+  }
+  if (!panelNodeConnections.isConnected(node.id)) {
+    return {
+      ok: false,
+      mode: "offline",
+      message: "Node is not connected to the panel right now. Update it on the node host, then refresh this page.",
+      image,
+      command: `docker pull ${image}`
+    };
+  }
+  return panelNodeConnections.request(node, "node.update", { image, expectedVersion: appVersion }, 30_000);
+});
+
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const servers = await queuedReadServers();
@@ -4779,7 +4854,7 @@ const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
-  appVersion: process.env.npm_package_version ?? "0.4.0",
+  appVersion,
   configDir: config.configDir,
   managedServersDir: config.serversDir,
   nodeCount: startupNodes.length,

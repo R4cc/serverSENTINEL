@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus, initialDemoFiles, initialDemoMods, initialDemoSchedules } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, readLocalePreference, readThemePreference, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -1680,6 +1680,31 @@ export default function App() {
       await refreshApp();
     } catch (error) {
       notify("error", errorMessage(error, "Could not rotate the join token."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
+  async function updateNodeImage(node: ManagedNode) {
+    if (node.isInternal || !canManageUsers) return;
+    const versionText = node.agentVersion ? ` from ${node.agentVersion} to ${appVersion}` : ` to ${appVersion}`;
+    if (!window.confirm(`Update node "${node.name}"${versionText}?\n\nThe node may disconnect briefly while the container is recreated. Compose-managed nodes will return a command to run on the host instead.`)) return;
+    setNodeBusyId(node.id);
+    try {
+      const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      if (result.command) {
+        await copyText(result.command);
+        notify(result.ok ? "success" : "info", `${result.message} Command copied to clipboard.`);
+      } else {
+        notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
+      }
+      setNodeDetails((current) => current?.id === node.id ? { ...current, status: result.ok && result.mode === "self" ? "offline" : current.status } : current);
+      window.setTimeout(() => void refreshApp(), 5000);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not start the node update."));
     } finally {
       setNodeBusyId("");
     }
@@ -3448,6 +3473,7 @@ export default function App() {
         {activePage === "nodes" && (
           <NodesPage
             nodes={contextNodes}
+            panelVersion={appVersion}
             canManageNodes={canManageUsers}
             busy={Boolean(nodeBusyId)}
             busyNodeId={nodeBusyId}
@@ -3477,6 +3503,7 @@ export default function App() {
             onViewDetails={viewNodeDetails}
             onShowInstall={showNodeInstall}
             onRotateToken={rotateNodeToken}
+            onUpdateNode={updateNodeImage}
             onRemoveNode={removeNode}
             onCloseDetails={() => setNodeDetails(null)}
             onSelectServer={openServerFromNode}

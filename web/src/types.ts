@@ -77,6 +77,15 @@ export type NodeInstallResponse = {
   install: NodeInstallInstructions;
 };
 
+export type NodeUpdateResponse = {
+  ok: boolean;
+  mode: "self" | "compose" | "manual" | "offline";
+  message: string;
+  image?: string;
+  command?: string;
+  planPath?: string;
+};
+
 export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
 
 export type VersionResolution = {

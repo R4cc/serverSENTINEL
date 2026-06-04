@@ -141,7 +141,7 @@ Use `config` for panel settings and users, `servers` for all-in-one managed serv
 The published image used by the project is:
 
 ```text
-nl2109/serversentinel:latest
+nl2109/serversentinel:0.4.0
 ```
 
 The panel listens on port `8080` inside the container.
@@ -166,7 +166,7 @@ docker run -d \
   -v /opt/serversentinel/config:/config \
   -v /opt/serversentinel/servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:0.4.0
 ```
 
 Open:
@@ -180,7 +180,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:0.4.0
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -219,7 +219,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_CONFIG_DIR=/config \
   -v /opt/serversentinel/config:/config \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:0.4.0
 ```
 
 ### Panel-Only With Docker Compose
@@ -227,7 +227,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:0.4.0
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -260,7 +260,7 @@ docker run -d \
   -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:0.4.0
 ```
 
 The node does not publish a web port. It connects outbound to the panel.
@@ -270,7 +270,7 @@ The node does not publish a web port. It connects outbound to the panel.
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:0.4.0
     container_name: serversentinel-node
     restart: unless-stopped
     environment:

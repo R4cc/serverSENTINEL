@@ -2295,6 +2295,11 @@ button .buttonIcon {
   color: var(--sentinel-danger);
 }
 
+.settingsStatus.warning {
+  border-color: var(--sentinel-warning);
+  color: var(--sentinel-warning);
+}
+
 .nodesPage {
   max-width: 1280px;
 }
