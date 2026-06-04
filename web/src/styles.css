@@ -3530,6 +3530,7 @@ button .buttonIcon {
 }
 
 .modsPanel .mods {
+  --mods-action-width: min(100%, 780px);
   max-width: none;
   gap: var(--space-3);
 }
@@ -5778,6 +5779,7 @@ details.compatibilityBadge p {
   grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
   margin: 0;
+  width: var(--mods-action-width);
 }
 
 .modsCard {
@@ -5847,6 +5849,7 @@ details.compatibilityBadge p {
   margin: 0;
   align-items: center;
   flex-wrap: wrap;
+  width: var(--mods-action-width);
 }
 
 .modsSearchInputCompact {
@@ -5860,7 +5863,7 @@ details.compatibilityBadge p {
   height: 42px;
   flex: 1;
   min-width: 0;
-  max-width: 480px;
+  max-width: none;
 }
 
 .modsSearchInputCompact svg {

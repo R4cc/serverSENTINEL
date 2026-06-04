@@ -98,7 +98,7 @@ export function ResourcePanel({
       ? "Connect Docker in Settings to show live memory, CPU, and network usage."
       : status?.docker.running
         ? "Collecting live stats. This usually appears after a few samples."
-        : status?.docker.message || "Start the server to collect live memory, CPU, and network usage.");
+        : status?.docker.message);
 
   return (
     <section className="panel resourcePanel">
@@ -131,7 +131,7 @@ export function ResourcePanel({
           <Sparkline samples={samples} value={(sample) => sample.networkRxBytes ?? 0} tone="green" emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
       </div>
-      {!hasStats && <p className="resourceMessage">{statusMessage}</p>}
+      {!hasStats && statusMessage && <p className="resourceMessage">{statusMessage}</p>}
     </section>
   );
 }

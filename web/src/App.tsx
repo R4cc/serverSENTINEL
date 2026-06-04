@@ -385,6 +385,7 @@ export default function App() {
     };
   }, [appState, demoMode, demoSchedules]);
   const panelOnlyMode = effectiveAppState.runtimeMode === "panel";
+  const applicationReady = appStateLoaded || demoMode;
 
   const contextNodes = useMemo<ContextNode[]>(() => {
     const sourceNodes = effectiveAppState.nodes?.length ? effectiveAppState.nodes : (panelOnlyMode ? [] : [defaultContextNode]);
@@ -458,8 +459,9 @@ export default function App() {
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
-  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || Boolean(activeStatus.docker.running) || isAnyModJobRunning;
+  const modServerRunning = Boolean(activeStatus?.docker.running);
+  const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
+  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
     return listing.entries.filter((entry) => selected.has(entry.path));
@@ -1069,6 +1071,7 @@ export default function App() {
       setIsSearchingMods(false);
       return;
     }
+    setModSearchResults([]);
     if (activeServerIsDemo) {
       setIsSearchingMods(true);
       const timeout = window.setTimeout(() => {
@@ -1115,6 +1118,12 @@ export default function App() {
     window.setTimeout(() => {
       setNotices((current) => current.filter((candidate) => candidate.id !== id));
     }, 5000);
+  }
+
+  function warnIfModServerRunning() {
+    if (!modServerRunning) return false;
+    notify("error", "Stop the server before adding, removing, updating, or uploading mods.");
+    return true;
   }
 
   async function refreshAuth() {
@@ -2365,6 +2374,7 @@ export default function App() {
       setNotice(message);
       return;
     }
+    setModSearchResults([]);
     setIsSearchingMods(true);
     if (activeServerIsDemo) {
       window.setTimeout(() => {
@@ -2436,6 +2446,7 @@ export default function App() {
   }
 
   function openModInstallModal(mod: ModrinthHit) {
+    if (warnIfModServerRunning()) return;
     const channel: ReleaseChannel = "release";
     setModInstallModal({
       mod,
@@ -2470,6 +2481,10 @@ export default function App() {
   }
 
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
+    if (warnIfModServerRunning()) {
+      event.target.value = "";
+      return;
+    }
     if (modsLocked || !canManager || !activeServer) return;
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -2565,6 +2580,7 @@ export default function App() {
   }
 
   async function installSelectedMod() {
+    if (warnIfModServerRunning()) return;
     if (modsLocked || !canManager) return;
     if (!activeServer) return;
     if (!modInstallModal || !modInstallModal.data || !selectedInstallVersion || !selectedInstallVersion.selectable) return;
@@ -2687,6 +2703,7 @@ export default function App() {
   }
 
   async function updateMod(mod: InstalledMod) {
+    if (warnIfModServerRunning()) return;
     if (modsLocked || !canManager || !activeServer || !mod.modrinth) return;
     setNotice("");
     const projectId = mod.modrinth.projectId;
@@ -2882,9 +2899,10 @@ export default function App() {
   }
 
   async function removeInstalledMod(mod: InstalledMod) {
+    if (warnIfModServerRunning()) return;
     if (modsLocked || !canManager || !activeServer) return;
     setNotice("");
-    if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder. Stop the server first if it is running.`)) return;
+    if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder.`)) return;
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
       setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
@@ -3168,7 +3186,7 @@ export default function App() {
             <h2>
               {activePage === "servers" && "Servers"}
               {activePage === "create" && "New Managed Server"}
-              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (effectiveAppState.servers.length === 0 ? "Welcome" : "No Managed Server Selected"))}
+              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (!applicationReady ? "Loading" : effectiveAppState.servers.length === 0 ? "Welcome" : "No Managed Server Selected"))}
               {activePage === "settings" && "Settings"}
               {activePage === "nodes" && "Nodes"}
             </h2>
@@ -3222,7 +3240,7 @@ export default function App() {
           />
         )}
 
-        {activePage === "servers" && (
+        {activePage === "servers" && applicationReady && (
           <section className="pageStack">
             {effectiveAppState.servers.length > 0 ? (
               <section className="serverList">
@@ -3471,7 +3489,7 @@ export default function App() {
           />
         )}
 
-        {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
+        {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
           <section className="emptyState">
             <h2>Welcome to ServerSentinel</h2>
             {panelOnlyMode && usableContextNodes.length === 0 ? (
@@ -3498,7 +3516,7 @@ export default function App() {
           </section>
         )}
 
-        {isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
+        {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <section className="emptyState">
             <h2>No Server Selected</h2>
             <p>A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings.</p>
@@ -4003,8 +4021,8 @@ export default function App() {
                       <h2>{modsView === "search" ? "Search Modrinth Mods" : "Installed Mods"}</h2>
                     </div>
                     <div className="modsContext modsContextRow">
-                      <span className={modsLocked ? "warn" : "ok"}>
-                        {!activeStatus ? "Checking server state" : activeStatus.docker.running ? "Stop server to edit mods" : "Mod changes enabled"}
+                      <span className={modsLocked || modServerRunning ? "warn" : "ok"}>
+                        {!activeStatus ? "Checking server state" : activeStatus.docker.running ? "Server running" : "Mod changes enabled"}
                       </span>
                     </div>
                   </div>
@@ -4022,7 +4040,10 @@ export default function App() {
                         <button
                           type="button"
                           className="modsCard"
-                          onClick={() => setModsView("search")}
+                          onClick={() => {
+                            if (warnIfModServerRunning()) return;
+                            setModsView("search");
+                          }}
                           disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured}
                         >
                           <span className="modsCardIcon">
@@ -4036,7 +4057,10 @@ export default function App() {
                         <button
                           type="button"
                           className="modsCard"
-                          onClick={() => modUploadRef.current?.click()}
+                          onClick={() => {
+                            if (warnIfModServerRunning()) return;
+                            modUploadRef.current?.click();
+                          }}
                           disabled={modsLocked}
                         >
                           <span className="modsCardIcon">
@@ -4232,13 +4256,6 @@ export default function App() {
                         )}
                       </div>
 
-                      <div className="modsFooterBanner">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter">
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M12 16v-4M12 8h.01" />
-                        </svg>
-                        <span>Stop the server before adding, removing, or uploading mods. You can enable or disable mods while the server is running.</span>
-                      </div>
                     </div>
                   )}
 
@@ -4309,7 +4326,7 @@ export default function App() {
                             <span>No Modrinth results matched this search. Try a different mod name or a shorter search term.</span>
                           </div>
                         )}
-                        {modSearchResults.map((mod) => {
+                        {!isSearchingMods && modSearchResults.map((mod) => {
                           const iconSrc = modIconSource(mod.icon_url);
                           return (
                             <article key={mod.project_id} className="modRow modSearchResult">
