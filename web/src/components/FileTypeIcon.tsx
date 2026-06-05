@@ -81,11 +81,13 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
       {name === "chevronRight" && <path d="m9 5 7 7-7 7" />}
+      {name === "chevronUp" && <path d="m5 15 7-7 7 7" />}
+      {name === "chevronDown" && <path d="m5 9 7 7 7-7" />}
       {name === "arrowUp" && (
         <>
           <path d="m12 5-7 7" />
@@ -222,5 +224,14 @@ export function FileTypeIcon({ entry }: { entry: FileEntry }) {
 }
 
 export function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
-  return <AppIcon name={collapsed ? "chevronRight" : "chevronLeft"} />;
+  return (
+    <>
+      <span className="sidebarToggleIconDesktop" aria-hidden="true">
+        <AppIcon name={collapsed ? "chevronRight" : "chevronLeft"} />
+      </span>
+      <span className="sidebarToggleIconMobile" aria-hidden="true">
+        <AppIcon name={collapsed ? "chevronDown" : "chevronUp"} />
+      </span>
+    </>
+  );
 }
