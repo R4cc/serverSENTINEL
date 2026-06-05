@@ -688,7 +688,7 @@ export function NodesPage({
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onCloseDetails();
         }}>
-          <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="node-details-title">
+          <section className="modalPanel nodeModalPanel nodeDetailsPanel" role="dialog" aria-modal="true" aria-labelledby="node-details-title">
             <header className="nodeModalHeader nodeDetailsHeader">
               <div className="nodeDetailsTitleBlock">
                 <NodeDetailIcon name="node" />
@@ -709,13 +709,13 @@ export function NodesPage({
                   <NodeDetailIcon name="type" />
                   <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
                 </div>
-                <div className="nodeInfoCard wide">
-                  <NodeDetailIcon name="id" />
-                  <div><dt>ID</dt><dd className="technicalValue">{selectedNode.id}</dd></div>
-                </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="agent" />
                   <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
+                </div>
+                <div className="nodeInfoCard wide">
+                  <NodeDetailIcon name="id" />
+                  <div><dt>ID</dt><dd className="technicalValue">{selectedNode.id}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="panel" />

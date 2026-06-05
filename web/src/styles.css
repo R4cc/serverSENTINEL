@@ -2780,12 +2780,12 @@ button .buttonIcon {
 .nodeModalBody.nodeDetailsBody {
   padding: var(--space-6) var(--space-7) var(--space-7);
   background: color-mix(in srgb, var(--surface-muted) 52%, var(--surface-raised));
+  overflow: auto;
 }
 
 .nodeInfoGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-flow: row dense;
   gap: var(--space-4);
   margin: 0;
 }
@@ -3066,6 +3066,9 @@ button .buttonIcon {
   margin: var(--space-1) calc(var(--space-7) * -1) calc(var(--space-7) * -1);
   padding: var(--space-5) var(--space-7);
   background: color-mix(in srgb, var(--surface-raised) 84%, var(--surface-muted));
+  position: sticky;
+  bottom: calc(var(--space-7) * -1);
+  z-index: 1;
 }
 
 .nodeActionGroup {
@@ -3133,6 +3136,7 @@ button .buttonIcon {
 
 .nodeModalPanel {
   width: min(1180px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 0;
   border-color: color-mix(in srgb, var(--border-muted) 72%, var(--surface));
   border-radius: 18px;
@@ -9848,6 +9852,27 @@ details.compatibilityBadge p {
 .userModalPanel,
 .nodeModalPanel {
   width: min(var(--modal-medium-width), calc(100vw - 32px));
+}
+
+.nodeDetailsPanel {
+  width: min(1180px, calc(100vw - 32px));
+}
+
+.nodeDetailsPanel .nodeDetailsActions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 920px) {
+  .nodeDetailsPanel .nodeDetailsActions {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .nodeDetailsPanel .nodeDetailsActions {
+    bottom: calc(var(--space-4) * -1);
+  }
 }
 
 .modInstallPanel,
