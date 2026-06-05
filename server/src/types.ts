@@ -133,6 +133,29 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
+export type LoaderType = "fabric";
+export type ServerJarProviderId = "mcjars" | "manual" | "legacy";
+export type JavaMajorVersion = 17 | 21 | 25;
+export type RuntimeCompatibilityStatus = "compatible" | "legacy" | "manual" | "unsupported" | "unknown";
+
+export type ServerRuntimeProfile = {
+  minecraftVersion: string;
+  loader: LoaderType;
+  loaderVersion: string;
+  javaMajorVersion: JavaMajorVersion;
+  jarProvider: ServerJarProviderId;
+  jarArtifact: {
+    id?: string;
+    filename: string;
+    downloadUrl?: string;
+    sha1?: string;
+    sha256?: string;
+    sizeBytes?: number;
+  };
+  compatibilityStatus: RuntimeCompatibilityStatus;
+  resolvedAt: string;
+};
+
 export type NodeType = "local" | "remote";
 
 export type NodeStatus = "online" | "offline" | "unknown";
@@ -172,6 +195,7 @@ export type ManagedServer = {
   loaderVersion?: string;
   installerVersion?: string;
   serverJar?: string;
+  runtimeProfile?: ServerRuntimeProfile;
   dockerContainer?: string;
   dockerImage?: string;
   dockerMountSource?: string;
@@ -204,6 +228,7 @@ export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource"
   hasDockerContainer: boolean;
   nodeName?: string;
   resolvedVersions?: ResolvedServerVersions;
+  runtimeProfile?: ServerRuntimeProfile;
 };
 
 export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
@@ -289,6 +314,7 @@ export type ServerActivity = {
 };
 
 export type CreateServerInput = {
+  nodeId?: string;
   displayName?: string;
   minecraftVersion?: string;
   loaderVersion?: string;

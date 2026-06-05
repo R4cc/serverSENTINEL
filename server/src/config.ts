@@ -33,7 +33,9 @@ export const config = {
   nodeName: process.env.SS_NODE_NAME?.trim(),
   nodeDataDir: resolve(process.env.SS_NODE_DATA_DIR ?? "/data"),
   nodeDockerDataDir: process.env.SS_NODE_DOCKER_DATA_DIR?.trim() || resolve(process.env.SS_NODE_DATA_DIR ?? "/data"),
-  nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim()
+  nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim(),
+  mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
+  mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
 };
 
 export const minServerPort = 1000;

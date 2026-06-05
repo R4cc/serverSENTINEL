@@ -17,7 +17,6 @@ import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
 import { shellQuote } from "./docker/shell.js";
-import { fabricMeta, latestFabricVersion } from "./fabric/fabricClient.js";
 import {
   allowedForChannel,
   fetchProject,
@@ -39,6 +38,13 @@ import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime, RuntimeAction } from "./nodes/types.js";
+import { defaultServerJarProvider } from "./runtime/mcjarsProvider.js";
+import {
+  normalizeRuntimeProfile,
+  runtimeProfileForServer,
+  runtimeTarget,
+  type ServerJarProvider
+} from "./runtime/profile.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import {
   ROLE_PRESETS,
@@ -101,6 +107,7 @@ import type {
   ServerActivity,
   ServerEvent,
   ScheduledExecution,
+  ServerRuntimeProfile,
   Session,
   StoredUser
 } from "./types.js";
@@ -133,6 +140,7 @@ const usersQueue = new AsyncQueue();
 export const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 export const minNodeJoinTokenTtlMinutes = 5;
 export const maxNodeJoinTokenTtlMinutes = 1440;
+const serverJarProvider: ServerJarProvider = defaultServerJarProvider;
 
 
 type DockerContainerInspect = {
@@ -763,9 +771,10 @@ async function writeVersionMetadataFile(server: ManagedServer) {
   } catch {
     existing = {};
   }
+  const targetRuntime = runtimeTarget(server);
   const metadata: VersionMetadata = {
-    minecraftVersion: server.minecraftVersion,
-    fabricLoaderVersion: server.loaderVersion,
+    minecraftVersion: targetRuntime.minecraftVersion,
+    fabricLoaderVersion: targetRuntime.loaderVersion,
     createdAt: existing.createdAt ?? now,
     updatedAt: now
   };
@@ -845,6 +854,7 @@ async function detectVersionsFromLogs(server: ManagedServer) {
 
 async function resolveServerVersions(server: ManagedServer): Promise<ResolvedServerVersions> {
   const lastCheckedAt = new Date().toISOString();
+  const targetRuntime = runtimeTarget(server);
   const detected = await detectVersionsFromLauncherJar(server);
   const metadata = detected.minecraftVersion && detected.fabricLoaderVersion
     ? {}
@@ -853,11 +863,11 @@ async function resolveServerVersions(server: ManagedServer): Promise<ResolvedSer
     ? {}
     : await detectVersionsFromLogs(server);
 
-  const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : server.minecraftVersion || metadata.minecraftVersion ? "stored" : "unknown";
-  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : server.loaderVersion || metadata.fabricLoaderVersion ? "stored" : "unknown";
+  const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : targetRuntime.minecraftVersion || metadata.minecraftVersion ? "stored" : "unknown";
+  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : targetRuntime.loaderVersion || metadata.fabricLoaderVersion ? "stored" : "unknown";
   return {
-    minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || server.minecraftVersion || metadata.minecraftVersion, minecraftSource, lastCheckedAt),
-    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || server.loaderVersion || metadata.fabricLoaderVersion, fabricSource, lastCheckedAt)
+    minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || targetRuntime.minecraftVersion || metadata.minecraftVersion, minecraftSource, lastCheckedAt),
+    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || targetRuntime.loaderVersion || metadata.fabricLoaderVersion, fabricSource, lastCheckedAt)
   };
 }
 
@@ -885,9 +895,10 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     directoryLabel: server.storageName || server.displayName,
     hasDockerContainer: Boolean(server.dockerContainer),
     nodeName: node?.name,
+    runtimeProfile: runtimeProfileForServer(server),
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
-      minecraftVersion: versionResolution(server.minecraftVersion, server.minecraftVersion ? "stored" : "unknown", new Date().toISOString()),
-      fabricLoaderVersion: versionResolution(server.loaderVersion, server.loaderVersion ? "stored" : "unknown", new Date().toISOString())
+      minecraftVersion: versionResolution(runtimeTarget(server).minecraftVersion, runtimeTarget(server).minecraftVersion ? "stored" : "unknown", new Date().toISOString()),
+      fabricLoaderVersion: versionResolution(runtimeTarget(server).loaderVersion, runtimeTarget(server).loaderVersion ? "stored" : "unknown", new Date().toISOString())
     }
   };
 }
@@ -936,6 +947,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     loaderVersion: optionalString(server.loaderVersion, "server.loaderVersion"),
     installerVersion: optionalString(server.installerVersion, "server.installerVersion"),
     serverJar: server.serverJar === undefined ? undefined : validateRuntimeJarFilename(server.serverJar),
+    runtimeProfile: normalizeRuntimeProfile(server.runtimeProfile),
     dockerContainer: server.dockerContainer === undefined ? undefined : validateDockerContainerName(server.dockerContainer),
     dockerImage: server.dockerImage === undefined ? undefined : validateDockerImageName(server.dockerImage),
     dockerMountSource: optionalString(server.dockerMountSource, "server.dockerMountSource"),
@@ -1469,12 +1481,13 @@ function containerMemoryHostConfig(server: ManagedServer) {
 }
 
 function dockerRuntimeConfigHash(server: ManagedServer) {
+  const targetRuntime = runtimeTarget(server);
   return createHash("sha256").update(JSON.stringify({
-    image: server.dockerImage || defaultDockerImageForMinecraftVersion(server.minecraftVersion),
+    image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
     workingDir: serverDockerWorkingDir(server),
     bindTarget: serverDockerBindTarget(server),
     ports: server.dockerPorts || "25565:25565/tcp",
-    serverJar: server.serverJar,
+    serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
     limitContainerMemory: server.limitContainerMemory !== false,
     memoryLimitBytes: containerMemoryLimitBytes(server) ?? null
@@ -1509,17 +1522,18 @@ async function ensureDockerContainer(server: ManagedServer) {
     logWarn(serverLogFields(server), "Removing managed Docker container with stale runtime configuration");
     await removeDockerContainer(server);
   }
-  if (!serverDockerMountSource(server) || !server.serverJar) {
+  const runtime = runtimeTarget(server);
+  if (!serverDockerMountSource(server) || !runtime.serverJar) {
     throw new Error("Docker managed control requires Docker mount source and server jar filename");
   }
 
   const startedAt = Date.now();
-  const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(server.minecraftVersion));
+  const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(runtimeTarget(server).minecraftVersion));
   await ensureDockerImage(image);
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
   const javaArgs = validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G");
-  const quotedServerJar = shellQuote(server.serverJar);
-  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${server.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
+  const quotedServerJar = shellQuote(runtime.serverJar);
+  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${runtime.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
   const workingDir = serverDockerWorkingDir(server);
   const bindTarget = serverDockerBindTarget(server);
 
@@ -2258,17 +2272,26 @@ function streamDockerLogs(server: ManagedServer, client: Client) {
 }
 
 async function downloadFabricServerJar(server: ManagedServer) {
-  if (!server.minecraftVersion || !server.loaderVersion || !server.installerVersion || !server.serverJar) {
-    throw new Error("Minecraft, loader, installer, and server jar versions are required");
+  const profile = runtimeProfileForServer(server);
+  const artifact = profile?.jarArtifact;
+  const downloadUrl = artifact?.downloadUrl;
+  const filename = artifact?.filename ?? server.serverJar;
+  if (!profile || !filename) {
+    throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
+  }
+  if (!downloadUrl) {
+    throw new Error("This server uses a legacy/manual runtime jar and cannot refresh the server jar automatically");
+  }
+  if (!downloadUrl.startsWith("https://")) {
+    throw new Error("Refusing to download a non-HTTPS Fabric server jar");
   }
 
-  const target = ensureInsideServer(server, server.serverJar);
-  const url = `https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(server.minecraftVersion)}/${encodeURIComponent(server.loaderVersion)}/${encodeURIComponent(server.installerVersion)}/server/jar`;
+  const target = ensureInsideServer(server, filename);
   const startedAt = Date.now();
-  logInfo({ ...serverLogFields(server), minecraftVersion: server.minecraftVersion, loaderVersion: server.loaderVersion, installerVersion: server.installerVersion, filename: server.serverJar }, "Downloading Fabric server launcher");
-  const response = await fetch(url, {
+  logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
+  const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.5.0 (Fabric server creator)"
+      "User-Agent": "ServerSentinel/0.5.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -2283,7 +2306,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   if (!downloaded.isFile() || downloaded.size === 0) {
     throw new Error("Fabric server launcher download did not produce a runnable jar");
   }
-  logInfo({ ...serverLogFields(server), filename: server.serverJar, size: downloaded.size, durationMs: durationSince(startedAt) }, "Fabric server launcher downloaded");
+  logInfo({ ...serverLogFields(server), filename, size: downloaded.size, durationMs: durationSince(startedAt) }, "Fabric server launcher downloaded");
 }
 
 async function ensureServerStoppedForModChanges(server: ManagedServer) {
@@ -2345,13 +2368,23 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
 
   report?.(25, "Resolving Fabric versions");
   const resolvedServerDir = resolve(config.serversDir, storageName);
-  const loaderVersion = input.loaderVersion?.trim() || await latestFabricVersion("loader");
-  const installerVersion = input.installerVersion?.trim() || await latestFabricVersion("installer");
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || "fabric-server-launch.jar");
+  const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
+    minecraftVersion,
+    loaderVersion: input.loaderVersion?.trim() || "latest",
+    preferStable: true
+  });
+  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || runtimeProfile.jarArtifact.filename);
+  const storedRuntimeProfile: ServerRuntimeProfile = {
+    ...runtimeProfile,
+    jarArtifact: {
+      ...runtimeProfile.jarArtifact,
+      filename: serverJar
+    }
+  };
   const { serverPort, dockerPorts } = normalizeCreateServerPorts(input);
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
-  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(minecraftVersion));
+  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(storedRuntimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const limitContainerMemory = optionalStrictBoolean(input.limitContainerMemory, "limitContainerMemory", true);
 
@@ -2363,9 +2396,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     serverDir: resolvedServerDir,
     storageName,
     minecraftVersion,
-    loaderVersion,
-    installerVersion,
+    loaderVersion: storedRuntimeProfile.loaderVersion,
+    installerVersion: undefined,
     serverJar,
+    runtimeProfile: storedRuntimeProfile,
     dockerContainer,
     dockerImage,
     dockerMountSource: config.serversDockerVolume || resolvedServerDir,
@@ -2378,7 +2412,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     updatedAt: now
   };
 
-  logInfo({ ...serverLogFields(server), jobId, minecraftVersion, loaderVersion, installerVersion }, "Fabric metadata resolved for provisioning");
+  logInfo({ ...serverLogFields(server), jobId, minecraftVersion: storedRuntimeProfile.minecraftVersion, loaderVersion: storedRuntimeProfile.loaderVersion, jarProvider: storedRuntimeProfile.jarProvider }, "Fabric runtime profile resolved for provisioning");
   try {
     await createServerFiles(server, input.acceptEula, serverPort, report);
     if (dockerAvailable()) {
@@ -2607,16 +2641,38 @@ async function localUpdateServer(serverId: string, input: unknown) {
     if (status.running) {
       throw new Error("Stop the server before changing its configuration");
     }
-    const minecraftVersion = body.minecraftVersion?.trim() || current.minecraftVersion;
-    const loaderVersion = body.loaderVersion?.trim() || current.loaderVersion || await latestFabricVersion("loader");
-    const installerVersion = body.installerVersion?.trim() || current.installerVersion || await latestFabricVersion("installer");
-    const serverJar = validateRuntimeJarFilename(body.serverJar?.trim() || current.serverJar || "fabric-server-launch.jar");
+    const currentRuntime = runtimeProfileForServer(current);
+    const minecraftVersion = body.minecraftVersion?.trim() || currentRuntime?.minecraftVersion || current.minecraftVersion;
+    if (!minecraftVersion) {
+      throw new Error("Minecraft version is required");
+    }
+    const requestedLoaderVersion = body.loaderVersion?.trim() || currentRuntime?.loaderVersion || current.loaderVersion || "latest";
+    const serverJar = validateRuntimeJarFilename(body.serverJar?.trim() || currentRuntime?.jarArtifact.filename || current.serverJar || "fabric-server-launch.jar");
+    const shouldResolveRuntime = body.minecraftVersion !== undefined || body.loaderVersion !== undefined || !currentRuntime;
+    const resolvedRuntime = shouldResolveRuntime
+      ? await serverJarProvider.resolveFabricServerJar({
+          minecraftVersion,
+          loaderVersion: requestedLoaderVersion,
+          preferStable: true
+        })
+      : currentRuntime;
+    if (!resolvedRuntime) {
+      throw new Error("A Fabric runtime profile is required before changing server settings");
+    }
+    const runtimeProfile: ServerRuntimeProfile = {
+      ...resolvedRuntime,
+      jarArtifact: {
+        ...resolvedRuntime.jarArtifact,
+        filename: serverJar
+      }
+    };
+    const loaderVersion = runtimeProfile.loaderVersion;
     const serverPort = body.serverPort?.trim();
     if (serverPort && !isValidServerPort(serverPort)) {
       throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
     }
     const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
-    const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion));
+    const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
     const dockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
     if (dockerPorts) assertUniqueDockerHostPorts(dockerPorts);
     if (dockerPorts) {
@@ -2634,8 +2690,8 @@ async function localUpdateServer(serverId: string, input: unknown) {
 
     const jarChanged = current.minecraftVersion !== minecraftVersion
       || current.loaderVersion !== loaderVersion
-      || current.installerVersion !== installerVersion
-      || current.serverJar !== serverJar;
+      || current.serverJar !== serverJar
+      || current.runtimeProfile?.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
     const containerConfigChanged = current.dockerContainer !== dockerContainer
       || current.dockerImage !== dockerImage
       || current.dockerPorts !== dockerPorts
@@ -2648,8 +2704,9 @@ async function localUpdateServer(serverId: string, input: unknown) {
       displayName: body.displayName?.trim() || current.displayName,
       minecraftVersion,
       loaderVersion,
-      installerVersion,
+      installerVersion: undefined,
       serverJar,
+      runtimeProfile,
       dockerContainer,
       dockerImage,
       dockerPorts,
@@ -2864,7 +2921,7 @@ app.addHook("preHandler", async (request) => {
   }
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
   if (demoMode) {
-    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions"))) {
+    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/fabric/"))) {
       return;
     }
     const error = new Error("Demo mode is active. Disable demo mode before managing real servers.") as Error & { statusCode?: number };
@@ -3218,16 +3275,50 @@ app.get("/api/fabric/versions", async (request) => {
   if (request.headers["x-serversentinel-demo-mode"] !== "true") {
     await requireRequestPermission(request, "servers.create");
   }
-  const [game, loader, installer] = await Promise.all([
-    fabricMeta<Array<{ version: string; stable: boolean }>>("/v2/versions/game"),
-    fabricMeta<Array<{ version: string; stable: boolean }>>("/v2/versions/loader"),
-    fabricMeta<Array<{ version: string; stable: boolean }>>("/v2/versions/installer")
-  ]);
+  const game = await serverJarProvider.listMinecraftVersions();
+  const latestGame = game.find((version) => version.type === "release") ?? game[0];
+  const loader = latestGame ? await serverJarProvider.listFabricLoaderVersions(latestGame.id).catch(() => []) : [];
   return {
-    game: game.filter((version) => version.stable).slice(0, 20),
-    loader: loader.filter((version) => version.stable).slice(0, 20),
-    installer: installer.filter((version) => version.stable).slice(0, 20)
+    game: game.filter((version) => version.type === "release").slice(0, 20).map((version) => ({ version: version.id, stable: version.supported })),
+    loader: loader.slice(0, 20).map((version) => ({ version: version.loaderVersion, stable: version.stable !== false })),
+    installer: []
   };
+});
+
+app.get("/api/runtime/fabric/minecraft-versions", async (request) => {
+  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+    await requireRequestPermission(request, "servers.create");
+  }
+  return { versions: await serverJarProvider.listMinecraftVersions() };
+});
+
+app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
+  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+    await requireRequestPermission(request, "servers.create");
+  }
+  const minecraftVersion = request.query.minecraftVersion?.trim();
+  if (!minecraftVersion) {
+    throw new Error("minecraftVersion is required");
+  }
+  return {
+    minecraftVersion,
+    loaderVersions: await serverJarProvider.listFabricLoaderVersions(minecraftVersion, { forceRefresh: request.query.refresh === "true" })
+  };
+});
+
+app.post<{ Body: { minecraftVersion?: string; loaderVersion?: string; preferStable?: boolean; refresh?: boolean } }>("/api/runtime/fabric/resolve", async (request) => {
+  await requireRequestPermission(request, "servers.create");
+  const minecraftVersion = request.body.minecraftVersion?.trim();
+  if (!minecraftVersion) {
+    throw new Error("minecraftVersion is required");
+  }
+  const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
+    minecraftVersion,
+    loaderVersion: request.body.loaderVersion?.trim() || "latest",
+    preferStable: request.body.preferStable !== false,
+    forceRefresh: request.body.refresh === true
+  });
+  return { runtimeProfile, warnings: [] };
 });
 
 app.post<{
@@ -3294,6 +3385,59 @@ app.put<{
   }
   const updatedServer = await runtimeForServer(server).updateServer(server, request.body);
   return runtimeForServer(updatedServer).publicServer(updatedServer);
+});
+
+app.get<{ Params: { id: string } }>("/api/servers/:id/runtime", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const server = await getServer(request.params.id);
+  const runtimeProfile = runtimeProfileForServer(server);
+  return {
+    serverId: server.id,
+    runtimeProfile,
+    compatibilityStatus: runtimeProfile?.compatibilityStatus ?? "unknown"
+  };
+});
+
+app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/:id/runtime/refresh", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "servers.editSettings");
+  const server = await getServer(request.params.id);
+  const runtimeProfile = runtimeProfileForServer(server);
+  if (!runtimeProfile?.minecraftVersion) {
+    throw new Error("This server does not have enough runtime metadata to refresh automatically");
+  }
+  const refreshed = await serverJarProvider.resolveFabricServerJar({
+    minecraftVersion: runtimeProfile.minecraftVersion,
+    loaderVersion: runtimeProfile.loaderVersion || "latest",
+    preferStable: true,
+    forceRefresh: request.body.refresh === true
+  });
+  const nextProfile: ServerRuntimeProfile = {
+    ...refreshed,
+    jarArtifact: {
+      ...refreshed.jarArtifact,
+      filename: runtimeProfile.jarArtifact.filename || refreshed.jarArtifact.filename
+    }
+  };
+  let updatedServer: ManagedServer | undefined;
+  await updateServers((servers) => {
+    const index = servers.findIndex((candidate) => candidate.id === server.id);
+    if (index === -1) throw new Error("Server not found");
+    servers[index] = {
+      ...servers[index],
+      minecraftVersion: nextProfile.minecraftVersion,
+      loaderVersion: nextProfile.loaderVersion,
+      serverJar: nextProfile.jarArtifact.filename,
+      runtimeProfile: nextProfile,
+      updatedAt: new Date().toISOString()
+    };
+    updatedServer = servers[index];
+  });
+  return {
+    serverId: server.id,
+    runtimeProfile: nextProfile,
+    server: updatedServer ? await runtimeForServer(updatedServer).publicServer(updatedServer) : undefined,
+    warnings: []
+  };
 });
 
 app.delete<{
@@ -3813,6 +3957,7 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
   if (!metadata) {
     return { status: "unknown", compatible: false, reason: "Server-side support unknown" };
   }
+  const target = runtimeTarget(server);
   const serverSide = metadata.serverSide;
   const clientSide = metadata.clientSide;
 
@@ -3841,11 +3986,11 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
   if (!metadata.loaders.includes("fabric")) {
     return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
   }
-  if (server.minecraftVersion && !metadata.gameVersions.includes(server.minecraftVersion)) {
+  if (target.minecraftVersion && !metadata.gameVersions.includes(target.minecraftVersion)) {
     return {
       status: "no_minecraft_version",
       compatible: false,
-      reason: `This mod was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${server.minecraftVersion}.`,
+      reason: `This mod was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${target.minecraftVersion}.`,
       serverSide,
       clientSide
     };
@@ -3865,14 +4010,15 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
 }
 
 async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel) {
-  if (!server.minecraftVersion) return null;
+  const targetRuntime = runtimeTarget(server);
+  if (!targetRuntime.minecraftVersion) return null;
   const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
   const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
   const current = await currentRes.json() as { project_id?: string; version_number?: string; version_type?: string };
   if (!current.project_id) return null;
   const versionsUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(current.project_id)}/version`);
   versionsUrl.searchParams.set("loaders", JSON.stringify(["fabric"]));
-  versionsUrl.searchParams.set("game_versions", JSON.stringify([server.minecraftVersion]));
+  versionsUrl.searchParams.set("game_versions", JSON.stringify([targetRuntime.minecraftVersion]));
   const versionsRes = await modrinthFetch(versionsUrl.toString());
   const versions = await versionsRes.json() as ModrinthVersion[];
   const target = versions.find((version) => allowedForChannel(version, preferredChannel));
@@ -4113,6 +4259,124 @@ function compatibilityFromSelectedVersion(input: {
   };
 }
 
+type PlannedModInstall = {
+  projectId: string;
+  project: ModrinthProject;
+  version: ModrinthVersion;
+  file: NonNullable<ReturnType<typeof modrinthJarFile>>;
+  compatibility: ModCompatibility;
+  dependencyType: "root" | "required";
+};
+
+type OptionalModDependency = {
+  projectId?: string;
+  versionId?: string;
+  dependencyType: string;
+  reason: string;
+};
+
+async function fetchModrinthVersion(versionId: string) {
+  const response = await modrinthFetch(`https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Modrinth version ${versionId}: ${response.statusText}`);
+  }
+  return await response.json() as ModrinthVersion;
+}
+
+async function planRequiredModrinthInstalls(input: {
+  rootProjectId: string;
+  rootProject: ModrinthProject;
+  rootVersion: ModrinthVersion;
+  minecraftVersion: string;
+  channel: ReleaseChannel;
+}) {
+  const planned = new Map<string, PlannedModInstall>();
+  const optionalDependencies: OptionalModDependency[] = [];
+  const visiting = new Set<string>();
+
+  const planVersion = async (
+    projectId: string,
+    project: ModrinthProject,
+    version: ModrinthVersion,
+    dependencyType: "root" | "required"
+  ) => {
+    const key = version.id || projectId;
+    if (planned.has(key)) return;
+    if (visiting.has(key)) {
+      throw new Error(`Required Modrinth dependency cycle detected at ${project.title || projectId}`);
+    }
+    visiting.add(key);
+    const file = modrinthJarFile(version);
+    if (!file) {
+      throw new Error(`Required dependency ${project.title || projectId} has no installable .jar file for this runtime`);
+    }
+    const hasFabric = version.loaders.includes("fabric");
+    const matchesMinecraft = version.game_versions.includes(input.minecraftVersion);
+    if (!hasFabric) {
+      throw new Error(`Required dependency ${project.title || projectId} is not available for Fabric`);
+    }
+    if (!matchesMinecraft) {
+      throw new Error(`Required dependency ${project.title || projectId} is not available for Minecraft ${input.minecraftVersion}`);
+    }
+    const projectSides = { server_side: project.server_side, client_side: project.client_side };
+    const compatibility = compatibilityFromSelectedVersion({
+      version,
+      file,
+      projectSides,
+      minecraftVersion: input.minecraftVersion,
+      compatible: true,
+      reason: dependencyType === "root" ? "Compatible server-side Fabric mod" : "Compatible required dependency"
+    });
+
+    for (const dependency of version.dependencies ?? []) {
+      const type = dependency.dependency_type || "required";
+      if (type !== "required") {
+        optionalDependencies.push({
+          projectId: dependency.project_id,
+          versionId: dependency.version_id,
+          dependencyType: type,
+          reason: "Optional dependency was not installed automatically"
+        });
+        continue;
+      }
+      let dependencyVersion: ModrinthVersion | undefined;
+      let dependencyProjectId = dependency.project_id;
+      if (dependency.version_id) {
+        dependencyVersion = await fetchModrinthVersion(dependency.version_id);
+        dependencyProjectId ||= dependencyVersion.project_id;
+      }
+      if (!dependencyProjectId) {
+        throw new Error(`Required dependency for ${project.title || projectId} does not include a project id`);
+      }
+      const dependencyProject = await fetchProject(dependencyProjectId) as ModrinthProject;
+      dependencyVersion ??= (await fetchProjectVersions(dependencyProjectId, {
+        loader: "fabric",
+        minecraftVersion: input.minecraftVersion
+      })).find((candidate) => allowedForChannel(candidate, input.channel) && modrinthJarFile(candidate));
+      if (!dependencyVersion) {
+        throw new Error(`Required dependency ${dependencyProject.title || dependencyProjectId} has no compatible Fabric version for Minecraft ${input.minecraftVersion}`);
+      }
+      await planVersion(dependencyProjectId, dependencyProject, dependencyVersion, "required");
+    }
+
+    visiting.delete(key);
+    planned.set(key, {
+      projectId,
+      project,
+      version,
+      file,
+      compatibility,
+      dependencyType
+    });
+  };
+
+  await planVersion(input.rootProjectId, input.rootProject, input.rootVersion, "root");
+  return {
+    installs: Array.from(planned.values()).sort((a, b) => a.dependencyType === b.dependencyType ? 0 : a.dependencyType === "required" ? -1 : 1),
+    optionalDependencies
+  };
+}
+
 async function localInstallMod(server: ManagedServer, input: unknown) {
   const startedAt = Date.now();
   const install = parseModrinthInstallRequest(input);
@@ -4120,10 +4384,11 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
   const forceIncompatible = install.forceIncompatible;
   try {
     await ensureServerStoppedForModChanges(server);
-    if (!projectId || !server.minecraftVersion || !server.loaderVersion) {
-      throw new Error("projectId, Minecraft version, and Fabric loader version are required for compatible Fabric installs");
+    const targetRuntime = runtimeTarget(server);
+    if (!projectId || !targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
+      throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
     }
-    const minecraftVersion = server.minecraftVersion;
+    const minecraftVersion = targetRuntime.minecraftVersion;
     const selectedChannel = install.channel;
     logInfo({ ...serverLogFields(server), projectId, versionId: install.versionId, channel: selectedChannel, forceIncompatible, overrideMinecraftVersion: install.overrideMinecraftVersion, action: "modrinth_install" }, "Modrinth install started");
 
@@ -4191,77 +4456,110 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       logWarn({ ...serverLogFields(server), projectId, compatibility: compatibility.status, reason: compatibility.reason, action: "modrinth_install" }, "Modrinth install rejected as incompatible");
       throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
     }
-    if (!file.url.startsWith("https://")) {
-      throw new Error("Refusing to download a non-HTTPS mod file");
-    }
-    if (file.size && file.size > modFileSizeLimit) {
-      throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-    }
-    const downloadHost = new URL(file.url).host;
+    const installPlan = compatibility.compatible
+      ? await planRequiredModrinthInstalls({
+          rootProjectId: projectId,
+          rootProject: project,
+          rootVersion: selectedVersion,
+          minecraftVersion,
+          channel: selectedChannel
+        })
+      : {
+          installs: [{
+            projectId,
+            project,
+            version: selectedVersion,
+            file,
+            compatibility,
+            dependencyType: "root" as const
+          }],
+          optionalDependencies: [] as OptionalModDependency[]
+        };
 
     await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
     await validateExistingInsideServer(server, "mods");
-    const destination = await ensureWritableInsideServer(server, join("mods", safeModFilename(file.filename)));
-    if (existsSync(destination)) {
-      throw new Error("A mod with that filename already exists");
-    }
-    const downloadResponse = await modrinthFetch(file.url);
-    if (!downloadResponse.ok) {
-      throw new Error(`Mod download failed: ${downloadResponse.statusText}`);
-    }
-    if (!downloadResponse.body) {
-      throw new Error("Mod download returned no body");
-    }
-    const contentLength = Number(downloadResponse.headers.get("content-length") ?? "0");
-    if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
-      throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-    }
-    try {
-      await pipeline(
-        Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
-        sizeLimitTransform(modFileSizeLimit),
-        createWriteStream(destination)
-      );
-      await verifyDownloadedJar(destination, file);
-    } catch (error) {
-      await rm(destination, { force: true }).catch(() => {});
-      throw error;
-    }
-    const filename = basename(destination);
-    await saveModIcon(server, filename, project.icon_url);
+    const installed: Array<{ projectId: string; version: string; filename: string; dependencyType: "root" | "required"; path: string }> = [];
     const prefs = await readModPreferences(server);
-    prefs[filename] = {
-      channel: selectedChannel,
-      modrinth: {
-        projectId,
-        versionId: selectedVersion.id,
-        filename,
-        versionNumber: selectedVersion.version_number,
-        versionType: versionChannel(selectedVersion.version_type),
-        gameVersions: selectedVersion.game_versions,
-        loaders: selectedVersion.loaders,
-        hashes: file.hashes,
-        installedAt: new Date().toISOString(),
-        installedWithForceIncompatible: forceIncompatible && !compatibility.compatible,
-        incompatibilityReason,
-        overrideMinecraftVersion: install.overrideMinecraftVersion && !matchesMinecraft,
-        overrideReason: install.overrideMinecraftVersion && !matchesMinecraft ? incompatibilityReason : undefined,
-        clientSide: project.client_side,
-        serverSide: project.server_side,
-        forceIncompatible: forceIncompatible && !compatibility.compatible
+
+    for (const planned of installPlan.installs) {
+      if (!planned.file.url.startsWith("https://")) {
+        throw new Error("Refusing to download a non-HTTPS mod file");
       }
-    };
+      if (planned.file.size && planned.file.size > modFileSizeLimit) {
+        throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+      }
+      const destination = await ensureWritableInsideServer(server, join("mods", safeModFilename(planned.file.filename)));
+      if (existsSync(destination)) {
+        if (planned.dependencyType === "required") continue;
+        throw new Error("A mod with that filename already exists");
+      }
+      const downloadResponse = await modrinthFetch(planned.file.url);
+      if (!downloadResponse.ok) {
+        throw new Error(`Mod download failed: ${downloadResponse.statusText}`);
+      }
+      if (!downloadResponse.body) {
+        throw new Error("Mod download returned no body");
+      }
+      const contentLength = Number(downloadResponse.headers.get("content-length") ?? "0");
+      if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
+        throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+      }
+      try {
+        await pipeline(
+          Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
+          sizeLimitTransform(modFileSizeLimit),
+          createWriteStream(destination)
+        );
+        await verifyDownloadedJar(destination, planned.file);
+      } catch (error) {
+        await rm(destination, { force: true }).catch(() => {});
+        throw error;
+      }
+      const filename = basename(destination);
+      await saveModIcon(server, filename, planned.project.icon_url);
+      prefs[filename] = {
+        channel: selectedChannel,
+        modrinth: {
+          projectId: planned.projectId,
+          versionId: planned.version.id,
+          filename,
+          versionNumber: planned.version.version_number,
+          versionType: versionChannel(planned.version.version_type),
+          gameVersions: planned.version.game_versions,
+          loaders: planned.version.loaders,
+          hashes: planned.file.hashes,
+          installedAt: new Date().toISOString(),
+          installedWithForceIncompatible: planned.dependencyType === "root" && forceIncompatible && !compatibility.compatible,
+          incompatibilityReason: planned.dependencyType === "root" ? incompatibilityReason : undefined,
+          overrideMinecraftVersion: planned.dependencyType === "root" && install.overrideMinecraftVersion && !matchesMinecraft,
+          overrideReason: planned.dependencyType === "root" && install.overrideMinecraftVersion && !matchesMinecraft ? incompatibilityReason : undefined,
+          clientSide: planned.project.client_side,
+          serverSide: planned.project.server_side,
+          forceIncompatible: planned.dependencyType === "root" && forceIncompatible && !compatibility.compatible
+        }
+      };
+      installed.push({
+        projectId: planned.projectId,
+        version: planned.version.version_number,
+        filename,
+        dependencyType: planned.dependencyType,
+        path: toPublicPath(server, destination)
+      });
+    }
     await writeModPreferences(server, prefs);
 
-    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, filename, downloadHost, durationMs: durationSince(startedAt), forceIncompatible: forceIncompatible && !compatibility.compatible, action: "modrinth_install", status: "succeeded" }, "Modrinth install succeeded");
+    const rootInstall = installed.find((item) => item.dependencyType === "root");
+    logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, filename: rootInstall?.filename, installedCount: installed.length, durationMs: durationSince(startedAt), forceIncompatible: forceIncompatible && !compatibility.compatible, action: "modrinth_install", status: "succeeded" }, "Modrinth install succeeded");
     return {
       ok: true,
       projectId,
       version: selectedVersion.version_number,
-      filename,
-      path: toPublicPath(server, destination),
+      filename: rootInstall?.filename ?? safeModFilename(file.filename),
+      path: rootInstall?.path,
       channel: versionChannel(selectedVersion.version_type),
-      compatibility
+      compatibility,
+      installed,
+      optionalDependencies: installPlan.optionalDependencies
     };
   } catch (error) {
     logOperationFailure({ ...serverLogFields(server), projectId, durationMs: durationSince(startedAt), forceIncompatible, action: "modrinth_install", status: "failed" }, "Modrinth install failed", error);
@@ -4409,8 +4707,9 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
   await requireRequestPermission(request, "mods.view");
   const projectId = validateModrinthProjectId(request.params.projectId);
   const server = await getServer(request.query.serverId);
-  if (!server.minecraftVersion || !server.loaderVersion) {
-    throw new Error("Minecraft and Fabric loader versions are required before reviewing mod versions");
+  const targetRuntime = runtimeTarget(server);
+  if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
+    throw new Error("A resolved Fabric runtime profile is required before reviewing mod versions");
   }
   const selectedChannel = optionalReleaseChannel(request.query.channel);
   const startedAt = Date.now();
@@ -4439,13 +4738,13 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
     };
     const firstCompatibleId = allowedVersions.find((version) => (
       version.loaders.includes("fabric")
-      && version.game_versions.includes(server.minecraftVersion!)
+      && version.game_versions.includes(targetRuntime.minecraftVersion!)
       && modrinthJarFile(version)
       && modrinthServerSideSupported(project.server_side)
     ))?.id;
     const classified = allowedVersions.map((version) => classifyModrinthInstallVersion({
       version,
-      minecraftVersion: server.minecraftVersion!,
+      minecraftVersion: targetRuntime.minecraftVersion!,
       projectSides,
       recommended: version.id === firstCompatibleId,
       dependencyProjects
@@ -4466,8 +4765,8 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
       target: {
         serverId: server.id,
         serverName: server.displayName,
-        minecraftVersion: server.minecraftVersion,
-        loader: "Fabric"
+        minecraftVersion: targetRuntime.minecraftVersion,
+        loader: targetRuntime.loader
       },
       channel: selectedChannel,
       compatibleVersions,
@@ -4486,10 +4785,11 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     return { hits: [], status: "no_project_found" };
   }
   const server = await getServer(request.query.serverId);
-  if (!server.minecraftVersion || !server.loaderVersion) {
-    throw new Error("Minecraft and Fabric loader versions are required before searching compatible mods");
+  const targetRuntime = runtimeTarget(server);
+  if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
+    throw new Error("A resolved Fabric runtime profile is required before searching compatible mods");
   }
-  const minecraftVersion = server.minecraftVersion;
+  const minecraftVersion = targetRuntime.minecraftVersion;
   const selectedChannel = optionalReleaseChannel(request.query.channel);
   const compatibilityFilter = optionalCompatibilityFilter(request.query.compatibility);
   const startedAt = Date.now();
@@ -4532,7 +4832,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
         compatibility: await resolveModrinthProjectCompatibility({
           projectId,
           minecraftVersion,
-          loader: "fabric",
+          loader: targetRuntime.loader,
           channel: selectedChannel
         })
       };
