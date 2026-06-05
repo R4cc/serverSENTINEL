@@ -3964,6 +3964,7 @@ button .buttonIcon {
   max-width: none;
   gap: var(--space-3);
   min-height: 0;
+  overflow-y: auto;
 }
 
 .modsPanel {
@@ -4755,6 +4756,7 @@ button .buttonIcon {
   border-radius: var(--radius-md);
   padding: var(--space-3);
   background: var(--surface);
+  flex-shrink: 0;
 }
 
 .modSearchResult {
