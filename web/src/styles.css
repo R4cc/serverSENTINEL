@@ -9616,7 +9616,6 @@ details.compatibilityBadge p {
 }
 
 .settingsRow select,
-.settingsRow .keyForm,
 .settingsRow .settingsStatus,
 .settingsRow > button {
   justify-self: start;
@@ -9624,11 +9623,26 @@ details.compatibilityBadge p {
 }
 
 .settingsRow .keyForm {
+  justify-self: end;
   width: min(420px, 100%);
 }
 
+.keyFormConfigured {
+  align-items: flex-end;
+}
+
+@media (min-width: 1101px) {
+  .keyFormConfigured {
+    align-items: center;
+  }
+}
+
+.usersSettings {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
 .usersTable {
-  margin: var(--space-3) var(--space-4) var(--space-4);
+  margin: 0;
 }
 
 .nodesPage {
@@ -9841,8 +9855,12 @@ details.compatibilityBadge p {
     max-width: none;
   }
 
+  .usersSettings {
+    padding-inline: var(--space-3);
+  }
+
   .usersTable {
-    margin-inline: var(--space-3);
+    margin-inline: 0;
   }
 }
 
