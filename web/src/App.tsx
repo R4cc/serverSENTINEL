@@ -1585,7 +1585,6 @@ export default function App() {
         setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
         setHistoryIndex(null);
         setCommandInput("");
-        notify("success", `Sent command: ${command}`);
         return;
       }
       await api(`/api/servers/${activeServer.id}/command`, {
@@ -1596,7 +1595,6 @@ export default function App() {
       setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
       setHistoryIndex(null);
       setCommandInput("");
-      notify("success", `Sent command: ${command}`);
     } catch (error) {
       const message = errorMessage(error, "Could not send the console command. Refresh server status and try again.");
       setNotice(message);
