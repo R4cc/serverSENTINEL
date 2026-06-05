@@ -4163,6 +4163,7 @@ button .buttonIcon {
 .filesPanel {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   padding: 0;
   overflow: hidden;
@@ -9446,6 +9447,7 @@ details.compatibilityBadge p {
   gap: var(--space-4);
   height: max(560px, calc(100vh - 238px));
   max-height: none;
+  align-items: stretch;
 }
 
 .fileTableHead,
