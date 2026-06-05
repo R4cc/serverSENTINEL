@@ -2366,7 +2366,7 @@ export default function App() {
     return () => observer.disconnect();
   }, [modSearchResults.length, modSearchTotal, isLoadingMoreMods, isSearchingMods, query]);
 
-  async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel) {
+  async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel, options: { useFallbackChannel?: boolean } = {}) {
     if (!activeServer) return;
     setModInstallModal((current) => current && current.mod.project_id === mod.project_id
       ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null }
@@ -2381,7 +2381,7 @@ export default function App() {
         );
       let resolvedChannel = channel;
       let data = await fetchVersions(resolvedChannel);
-      while (!hasVisibleInstallVersions(data)) {
+      while (options.useFallbackChannel && !hasVisibleInstallVersions(data)) {
         const fallbackChannel = nextReleaseChannel(resolvedChannel);
         if (!fallbackChannel) break;
         resolvedChannel = fallbackChannel;
@@ -2427,7 +2427,7 @@ export default function App() {
       showOtherVersions: false,
       acknowledgeMinecraftMismatch: false
     });
-    void loadModInstallVersions(mod, channel);
+    void loadModInstallVersions(mod, channel, { useFallbackChannel: true });
   }
 
   function selectInstallVersion(version: ModrinthInstallVersion) {
@@ -2614,7 +2614,6 @@ export default function App() {
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
         notify("success", `Installed ${title}`);
         setModInstallModal(null);
-        setModsView("manager");
 
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
         window.setTimeout(() => {
@@ -2651,7 +2650,6 @@ export default function App() {
         await loadInstalledMods(activeServer.id);
         await loadFiles(activeServer.id, "/mods");
         notify("success", `Installed ${title}`);
-        setModsView("manager");
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
       } catch (refreshErr) {
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
@@ -4314,12 +4312,10 @@ export default function App() {
                         </label>
                         <button className="modSearchButton" disabled={isProvisioning || !canManager || isSearchingMods || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown || !query.trim()}>{isSearchingMods ? "Searching" : "Search"}</button>
                       </form>
-                      {(isSearchingMods || query.trim() || modSearchResults.length > 0 || modSearchError) && (
-                        <div className="modResultsHeader">
-                          <strong>Search results</strong>
-                          <span>{isSearchingMods ? "Searching..." : query.trim() ? (modSearchTotal > 0 ? `${formatDisplayNumber(modSearchResults.length)} of ${formatDisplayNumber(modSearchTotal)} shown` : `${formatDisplayNumber(modSearchResults.length)} shown`) : "No query entered"}</span>
-                        </div>
-                      )}
+                      <div className={`modResultsHeader ${isSearchingMods || query.trim() || modSearchResults.length > 0 || modSearchError ? "" : "placeholder"}`} aria-hidden={!(isSearchingMods || query.trim() || modSearchResults.length > 0 || modSearchError)}>
+                        <strong>Search results</strong>
+                        <span>{isSearchingMods ? "Searching..." : query.trim() ? (modSearchTotal > 0 ? `${formatDisplayNumber(modSearchResults.length)} of ${formatDisplayNumber(modSearchTotal)} shown` : `${formatDisplayNumber(modSearchResults.length)} shown`) : "No query entered"}</span>
+                      </div>
                       <div className="mods">
                         {isSearchingMods && Array.from({ length: 4 }, (_, index) => (
                           <article key={`mod-skeleton-${index}`} className="modRow modSkeleton" aria-hidden="true">
@@ -4511,8 +4507,8 @@ export default function App() {
                                     </div>
                                     {modInstallModal.data.compatibleVersions.length === 0 ? (
                                       <div className="emptyInline">
-                                        <strong>No compatible versions found</strong>
-                                        <span>Try Beta or Alpha, or review other available versions below.</span>
+                                        <strong>{hasVisibleInstallVersions(modInstallModal.data) ? "No compatible versions found" : "No version available"}</strong>
+                                        <span>{hasVisibleInstallVersions(modInstallModal.data) ? "Review other available versions below, or try a different release channel." : `No ${releaseChannelLabel(modInstallModal.channel).toLowerCase()} files are available for this mod.`}</span>
                                       </div>
                                     ) : (
                                       <div className="modInstallVersionTable">
@@ -4544,17 +4540,27 @@ export default function App() {
                                   </section>
 
                                   <section className="modInstallVersionGroup">
-                                    <div className="modInstallVersionGroupHeader">
+                                    <button
+                                      type="button"
+                                      className="modInstallVersionGroupHeader modInstallDisclosure"
+                                      aria-expanded={modInstallModal.showOtherVersions}
+                                      onClick={() => setModInstallModal((current) => {
+                                        if (!current) return current;
+                                        const showOtherVersions = !current.showOtherVersions;
+                                        return {
+                                          ...current,
+                                          showOtherVersions,
+                                          selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? firstSelectableVersionId(current.data) : "",
+                                          acknowledgeMinecraftMismatch: false
+                                        };
+                                      })}
+                                    >
                                       <strong>Other available versions</strong>
-                                      <label className="modInstallCheckbox">
-                                        <input
-                                          type="checkbox"
-                                          checked={modInstallModal.showOtherVersions}
-                                          onChange={(event) => setModInstallModal((current) => current ? { ...current, showOtherVersions: event.target.checked, selectedVersionId: event.target.checked ? current.selectedVersionId : current.data ? firstSelectableVersionId(current.data) : "", acknowledgeMinecraftMismatch: false } : current)}
-                                        />
-                                        <span>Show versions not marked for Minecraft {modInstallModal.data.target.minecraftVersion}</span>
-                                      </label>
-                                    </div>
+                                      <span className="modInstallDisclosureMeta">
+                                        {formatDisplayNumber(modInstallModal.data.otherVersions.length)}
+                                        <AppIcon name={modInstallModal.showOtherVersions ? "chevronUp" : "chevronDown"} />
+                                      </span>
+                                    </button>
                                     {modInstallModal.showOtherVersions && (
                                       <div className="modInstallVersionTable">
                                         <div className="modInstallVersionTableHeader">
