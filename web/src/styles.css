@@ -3825,6 +3825,10 @@ button .buttonIcon {
 }
 
 .terminal {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: visible;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
@@ -3834,7 +3838,9 @@ button .buttonIcon {
 }
 
 .console {
-  height: 460px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   overflow: auto;
   padding: var(--space-3);
   font-size: 12px;
@@ -4147,6 +4153,7 @@ button .buttonIcon {
 
 .filesExplorer {
   display: grid;
+  grid-template-rows: 1fr;
   gap: var(--space-3);
   height: 100%;
   min-height: 0;
@@ -6905,7 +6912,10 @@ details.compatibilityBadge p {
   min-width: 0;
 }
 
+.tabPage:has(.consolePanel),
 .tabPage:has(.modsPanel) {
+  display: grid;
+  grid-template-rows: 1fr;
   height: max(560px, calc(100vh - 238px));
   min-height: 0;
 }
@@ -9391,7 +9401,10 @@ details.compatibilityBadge p {
 }
 
 .consolePanel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   gap: var(--space-3);
 }
 
