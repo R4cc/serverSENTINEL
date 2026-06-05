@@ -3829,7 +3829,7 @@ button .buttonIcon {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--terminal-bg);
@@ -4176,7 +4176,7 @@ button .buttonIcon {
   gap: var(--space-2);
   align-items: center;
   border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
 }
 
 .fileNavButtons,
@@ -4941,6 +4941,13 @@ button .buttonIcon {
 
 .modResultAction button {
   min-width: 104px;
+}
+
+.modResultAction .installedSearchButton:disabled {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: transparent;
+  color: var(--accent);
+  opacity: 1;
 }
 
 .modTitleLine {
@@ -9417,6 +9424,10 @@ details.compatibilityBadge p {
 }
 
 .consolePanel .panelHeader {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: var(--surface-raised);
   border-bottom: 0;
   margin-bottom: 0;
   padding-bottom: 0;
@@ -9448,6 +9459,15 @@ details.compatibilityBadge p {
 .fileNavBar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.fileNavBar .fileToolbar {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: var(--space-2);
+  justify-content: end;
 }
 
 .fileToolbar,
@@ -9624,6 +9644,10 @@ details.compatibilityBadge p {
 
 .modSearchView.empty {
   flex: 0 0 auto;
+  align-content: start;
+}
+
+.modSearchView.searching {
   align-content: start;
 }
 

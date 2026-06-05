@@ -81,7 +81,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus" | "x" | "fileUp" | "arrowUp" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
@@ -91,6 +91,13 @@ export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "plus
           <path d="m12 5-7 7" />
           <path d="m12 5 7 7" />
           <path d="M12 5v14" />
+        </>
+      )}
+      {name === "home" && (
+        <>
+          <path d="m4 11 8-7 8 7" />
+          <path d="M6 10v10h12V10" />
+          <path d="M10 20v-6h4v6" />
         </>
       )}
       {name === "refresh" && (

@@ -312,6 +312,9 @@ export default function App() {
              (mod.description || "").toLowerCase().includes(installedQuery.toLowerCase());
     });
   }, [installedMods, installedQuery]);
+  const installedModrinthProjectIds = useMemo(() => {
+    return new Set(installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
+  }, [installedMods]);
 
   const selectedInstallVersion = useMemo(() => {
     if (!modInstallModal?.data || !modInstallModal.selectedVersionId) return null;
@@ -3815,8 +3818,8 @@ export default function App() {
                         <button type="button" className="iconOnlyButton" onClick={navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
                           <AppIcon name="chevronRight" />
                         </button>
-                        <button type="button" className="iconOnlyButton" onClick={() => void navigateFiles(parentPath(listing.path))} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Up one level"} aria-label="Up one level">
-                          <AppIcon name="arrowUp" />
+                        <button type="button" className="iconOnlyButton" onClick={() => void navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
+                          <AppIcon name="home" />
                         </button>
                       </div>
                       <div className="fileBreadcrumbs" aria-label="Current folder">
@@ -4298,7 +4301,7 @@ export default function App() {
                   )}
 
                   {modsView === "search" && (
-                    <div className={`modSearchView ${!query.trim() && !isSearchingMods && !modSearchError && modSearchResults.length === 0 ? "empty" : ""}`}>
+                    <div className={`modSearchView ${isSearchingMods ? "searching" : ""} ${!query.trim() && !isSearchingMods && !modSearchError && modSearchResults.length === 0 ? "empty" : ""}`}>
                       <form onSubmit={searchMods} className="modSearchToolbar">
                         <label className="modSearchInput">
                           <span aria-hidden="true">
@@ -4368,6 +4371,7 @@ export default function App() {
                         )}
                         {!isSearchingMods && modSearchResults.map((mod) => {
                           const iconSrc = modIconSource(mod.icon_url);
+                          const alreadyInstalled = installedModrinthProjectIds.has(mod.project_id);
                           return (
                             <article key={mod.project_id} className="modRow modSearchResult">
                               {iconSrc ? <img src={iconSrc} alt="" /> : <div className="modFileIcon">MOD</div>}
@@ -4388,9 +4392,15 @@ export default function App() {
                                 <p className={mod.compatibility?.compatible ? "compatibilityReason ok" : "compatibilityReason"}>{modCompatibilityNote(mod)}</p>
                               </div>
                               <div className="modResultAction">
-                                <button onClick={() => openModInstallModal(mod)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>
-                                  {mod.compatibility?.compatible ? "Install" : "Review"}
-                                </button>
+                                {alreadyInstalled ? (
+                                  <button type="button" className="installedSearchButton" disabled title="This mod is already installed">
+                                    Installed
+                                  </button>
+                                ) : (
+                                  <button onClick={() => openModInstallModal(mod)} disabled={modsLocked || !effectiveAppState.modrinthApiConfigured}>
+                                    {mod.compatibility?.compatible ? "Install" : "Review"}
+                                  </button>
+                                )}
                               </div>
                             </article>
                           );

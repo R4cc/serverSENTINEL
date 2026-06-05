@@ -53,6 +53,8 @@ export function FileEditorModal({
   onDiscardChanges
 }: FileEditorModalProps) {
   const modalRef = useRef<HTMLElement>(null);
+  const canCloseEditorRef = useRef(true);
+  const onRequestCloseRef = useRef(onRequestClose);
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
   const canCloseEditor = !fileSaving;
@@ -67,17 +69,29 @@ export function FileEditorModal({
           : "";
 
   useEffect(() => {
+    canCloseEditorRef.current = canCloseEditor;
+  }, [canCloseEditor]);
+
+  useEffect(() => {
+    onRequestCloseRef.current = onRequestClose;
+  }, [onRequestClose]);
+
+  useEffect(() => {
     if (!selectedPath || discardRequestOpen) return;
     modalRef.current?.focus();
+  }, [discardRequestOpen, selectedPath]);
+
+  useEffect(() => {
+    if (!selectedPath || discardRequestOpen) return;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (canCloseEditor) onRequestClose();
+        if (canCloseEditorRef.current) onRequestCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canCloseEditor, discardRequestOpen, onRequestClose, selectedPath]);
+  }, [discardRequestOpen, selectedPath]);
 
   if (!selectedPath && !discardRequestOpen) return null;
 
