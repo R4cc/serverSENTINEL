@@ -44,6 +44,28 @@
   --sidebar-collapsed-width: 76px;
   --sidebar-rail-size: 44px;
   --sidebar-ease: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --type-brand-size: 15px;
+  --type-page-title-size: clamp(25px, 2.2vw, 34px);
+  --type-section-title-size: 17px;
+  --type-card-title-size: 15px;
+  --type-row-title-size: 14px;
+  --type-body-size: 14px;
+  --type-helper-size: 13px;
+  --type-meta-size: 12px;
+  --type-badge-size: 10px;
+  --type-button-size: 13px;
+  --type-form-label-size: 13px;
+  --type-code-size: 13px;
+  --weight-title: 720;
+  --weight-heading: 680;
+  --weight-strong: 650;
+  --weight-body: 450;
+  --weight-meta: 500;
+  --weight-button: 650;
+  --tracking-tight: 0;
+  --tracking-ui: 0;
+  --tracking-label: 0.01em;
+  --tracking-badge: 0.035em;
   font-family: var(--font-sans);
   background: var(--surface);
   color: var(--text);
@@ -8321,5 +8343,702 @@ textarea:hover:not(:disabled),
 
   .fileEditorMetaRow span {
     border-radius: var(--radius-sm);
+  }
+}
+
+/* Typography hierarchy pass */
+.typeBrand,
+.typePageTitle,
+.typeSectionTitle,
+.typeCardTitle,
+.typeRowTitle,
+.typeBody,
+.typeHelper,
+.typeMeta,
+.typeBadge,
+.typeButton,
+.typeFormLabel,
+.typeCode {
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.typeBrand {
+  font-size: var(--type-brand-size);
+  font-weight: var(--weight-title);
+}
+
+.typePageTitle {
+  font-size: var(--type-page-title-size);
+  font-weight: var(--weight-title);
+  line-height: 1.15;
+}
+
+.typeSectionTitle {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+}
+
+.typeCardTitle,
+.typeRowTitle {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.typeRowTitle {
+  font-size: var(--type-row-title-size);
+}
+
+.typeBody {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+}
+
+.typeHelper {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.typeMeta {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.4;
+}
+
+.typeBadge {
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+}
+
+.typeButton {
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+}
+
+.typeFormLabel {
+  color: var(--text-muted);
+  font-size: var(--type-form-label-size);
+  font-weight: var(--weight-meta);
+}
+
+.typeCode {
+  font-family: var(--font-mono);
+  font-size: var(--type-code-size);
+}
+
+body {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.18;
+  text-transform: none;
+}
+
+h1 {
+  font-size: var(--type-brand-size);
+  font-weight: var(--weight-title);
+}
+
+h2 {
+  font-size: var(--type-section-title-size);
+}
+
+h3,
+h4 {
+  font-size: var(--type-card-title-size);
+}
+
+p,
+li,
+dd,
+dt,
+small,
+span {
+  letter-spacing: var(--tracking-ui);
+}
+
+strong {
+  font-weight: var(--weight-strong);
+}
+
+button,
+.quickActionButton,
+.runtimeControlButton,
+.secondaryButton,
+.dangerButton,
+.dangerTextButton,
+.warningTextButton,
+.compactButton,
+.fileOpenButton,
+.fileNameCell,
+.modInstallVersionRow,
+.accountLogoutButton,
+.overflowDropdown button {
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.compactButton,
+.overflowDropdown button {
+  font-size: var(--type-meta-size);
+}
+
+input,
+select,
+textarea {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+textarea,
+.fileEditorTextarea,
+.consoleInput,
+.terminal,
+.console,
+.installSnippet,
+.fileCodeEditor .cm-editor,
+.codeValue,
+.modDetailsHashes,
+.scheduleRow ul,
+.scheduleMain code,
+.fileEditorHeader p {
+  font-family: var(--font-mono);
+  font-size: var(--type-code-size);
+  letter-spacing: 0;
+}
+
+.brandBlock h1,
+.authPanel h1 {
+  font-size: var(--type-brand-size);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.brandBlock p,
+.authPanel .brandLockup p {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.sideNav {
+  gap: 4px;
+}
+
+.sideNav button {
+  min-height: 44px;
+}
+
+.navLabel,
+.settingsNavLabel,
+.accountName {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 540;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsVersionText,
+.selectedServerReadout {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sideNav button.active .navLabel,
+.serverListItem.active strong {
+  font-weight: var(--weight-strong);
+}
+
+.serverListItem strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sideNav small,
+.serverListItem small,
+.serverListItem span {
+  color: currentColor;
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  line-height: 1.35;
+}
+
+.workspaceHeader {
+  min-height: 76px;
+  align-items: end;
+}
+
+.workspaceHeader h2 {
+  font-size: var(--type-page-title-size);
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+  line-height: 1.12;
+  text-transform: none;
+}
+
+.workspaceHeader p,
+.muted {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.activeServerStrip strong {
+  font-size: 16px;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.serverStripMeta,
+.nodeStripMeta,
+.activeServerStrip span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+}
+
+.activeServerStrip .runtimeControlButton span,
+.activeServerStrip .quickActionButton span,
+.activeServerStrip button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.runtimeBadge,
+.uiStatusPill,
+.settingsStatus,
+.compatibilityBadge,
+.installStatusBadge,
+.nodeServerState,
+.subtlePill,
+.modDetailsPill {
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.roleBadge,
+.nodePill {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.panelHeader h2,
+.uiSectionHeader h2,
+.settingsGroupHeader h2,
+.modalHeader h2,
+.userModalHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.modInstallHeader h2,
+.modsPanelHeader h2,
+.nodesToolbar h2,
+.nodeInstallHeader h3,
+.permissionsHeader h3,
+.modInstallStepIntro h3,
+.modConfirmSectionHeader strong {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.panelHeader code,
+.fileEditorHeader p {
+  color: var(--text-muted);
+  font-weight: var(--weight-body);
+}
+
+.panelHeader a {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-button);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.emptyState h2,
+.compactEmpty h2 {
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.emptyState p,
+.compactEmpty p,
+.emptyInline,
+.emptyInline span,
+.eventEmpty,
+.eventEmpty span,
+.nodeServerEmpty,
+.fileDetailsEmpty,
+.inlineState span,
+.modalBody p,
+.notice,
+.systemBanner span,
+.toastMessage {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+}
+
+.emptyInline strong,
+.eventEmpty strong,
+.nodeServerEmpty strong,
+.fileDetailsEmpty strong,
+.inlineState strong,
+.systemBanner strong,
+.toastTitleGroup span,
+.notice strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.appForm label,
+.userModalForm label,
+.keyForm label,
+.fieldLabel,
+.settingsRow strong,
+.nodeServerSectionLabel,
+.nodeFacts dt,
+.nodeInfoCard dt,
+.resourceMetricLabel span,
+.modInstallTargetSummary small,
+.modInstallChannelRow > strong,
+.modInstallVersionGroupHeader > strong,
+.fileDetailsContent dt {
+  color: var(--text-muted);
+  font-size: var(--type-form-label-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.appForm label input,
+.appForm label select,
+.appForm label textarea,
+.userModalForm label input,
+.userModalForm label select,
+.userModalForm label textarea,
+.keyForm label input {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+.checkLine,
+.appForm label.checkLine,
+.userModalForm label.checkLine,
+.modInstallCheckbox,
+.permissionRow span {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsGroupHeader > span {
+  font-size: 18px;
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+}
+
+.settingsGroupHeader p,
+.settingsRow span,
+.permissionsHeader span,
+.permissionRow small,
+.presetSummary,
+.permissionWarning {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.settingsStatus,
+.settingsToggle {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.usersTable th,
+.modsTableHeader,
+.fileTableHead button,
+.fileTableHead label,
+.fileTableHead span,
+.modInstallVersionTableHeader {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.usersTable td,
+.modsTableCell,
+.fileTableRow > span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.userNameCell strong,
+.modsCardText strong,
+.modInfoText strong,
+.modDetailsHeaderText strong,
+.modConfirmSelectedText > strong,
+.modDependencyRow strong,
+.fileNameCell > span:last-child,
+.fileDetailsTitle h2,
+.nodeCardTitle h3,
+.nodeServerName,
+.scheduleMain strong,
+.resourceMetricLabel strong,
+.eventRow strong,
+.modTitleLine strong,
+.modInstallTargetSummary strong,
+.modInstallVersionRow span:first-child,
+.modConfirmRows strong,
+.modConfirmLocation strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p,
+.nodeDetailsTitleBlock p,
+.modsCardText p,
+.modRow p,
+.modRow small,
+.modCompatibilityColumn p,
+.modInstallStepIntro p,
+.modInstallReviewCopy,
+.modInstallRiskBox p,
+.modConfirmMetaLine,
+.modConfirmSelectedText small,
+.modConfirmFilename,
+.modConfirmLocation span,
+.modConfirmRows span,
+.modDependencyRow span,
+.fileDetailsTitle > div > span,
+.fileDetailsContent dd,
+.resourceMetricLabel small,
+.resourceMeta,
+.eventRow small,
+.scheduleMeta,
+.scheduleMain code,
+.modsContext span,
+.modsContext small,
+.modResultsHeader {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.nodeDetailsTitleBlock h2 {
+  font-size: clamp(21px, 2.2vw, 28px);
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+  line-height: 1.12;
+  text-transform: none;
+}
+
+.nodeInfoCard dd,
+.nodeFacts dd,
+.nodeServerPlayers {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+}
+
+.addNodeCardInner span,
+.addNodeStepLabel,
+.addNodeStatusCard h3,
+.placementHeader h3,
+.nodePlacementTitle strong {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.addNodeStatusCard p,
+.nodePlacementCard span,
+.nodePlacementCard em {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.modFileIcon,
+.modDetailsIconFallback,
+.modDependencyFallback {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.modInstallTitleBlock h2 {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+}
+
+.modInstallTitleBlock strong {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.modInstallStepper div,
+.modInstallStepper span,
+.modInstallVersionGroupHeader > span {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.modInstallChannelButtons button {
+  font-weight: var(--weight-button);
+}
+
+.compatibilityBadge p,
+details.compatibilityBadge p {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fileEditorMetaRow span {
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+}
+
+.fileStatus {
+  font-weight: 700;
+}
+
+.switchStateLabel {
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+}
+
+.selectionSummary {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.permissionGroup h4,
+.presetSummary strong,
+.currentUserMark {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.summaryTile span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-badge);
+}
+
+.summaryTile strong {
+  font-size: clamp(16px, 1.25vw, 19px);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.summaryTile small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+}
+
+@media (max-width: 1366px) {
+  .workspaceHeader {
+    min-height: 72px;
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(24px, 2.8vw, 32px);
+  }
+}
+
+@media (max-width: 720px) {
+  .workspaceHeader h2 {
+    font-size: clamp(22px, 7vw, 30px);
+  }
+
+  .emptyState h2,
+  .compactEmpty h2 {
+    font-size: clamp(21px, 7vw, 30px);
   }
 }

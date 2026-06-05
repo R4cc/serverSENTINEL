@@ -70,7 +70,7 @@ export function SchedulePage({
     <section className="tabPage schedulePage">
       <section className="panel scheduleCreatePanel">
         <div className="panelHeader">
-          <h2>New Scheduled Execution</h2>
+          <h2>New scheduled execution</h2>
           <a href="https://crontab.guru/" target="_blank" rel="noreferrer">Cron Guru</a>
         </div>
         {commandInputMessage && (
@@ -114,7 +114,7 @@ export function SchedulePage({
               ))}
               <button type="button" className="secondaryButton" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
                 <AppIcon name="plus" />
-                <span>Additional Command</span>
+                <span>Additional command</span>
               </button>
             </div>
             <label className="checkLine">
@@ -134,7 +134,7 @@ export function SchedulePage({
 
       <section className="panel scheduleListPanel">
         <div className="panelHeader">
-          <h2>Scheduled Executions</h2>
+          <h2>Scheduled executions</h2>
           <span className="muted">{schedules.length} configured</span>
         </div>
         <div className="scheduleList">
@@ -221,7 +221,7 @@ export function SchedulePage({
                   ))}
                   <button type="button" className="secondaryButton" onClick={() => setEditCommandIds((ids) => [...ids, clientId()])}>
                     <AppIcon name="plus" />
-                    <span>Additional Command</span>
+                    <span>Additional command</span>
                   </button>
                 </div>
                 <label className="checkLine">

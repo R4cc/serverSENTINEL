@@ -134,7 +134,7 @@ export function UserManagement({
               </td>
               <td data-label="Actions">
                 <div className="userActions">
-                  <button type="button" className="secondaryButton" onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset Password</button>
+                  <button type="button" className="secondaryButton" onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset password</button>
                   <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</button>
                   <button
                     type="button"
@@ -248,7 +248,7 @@ function UserPermissionModal({
       <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
-            <h2 id="user-modal-title">{user ? "Edit User" : "New User"}</h2>
+            <h2 id="user-modal-title">{user ? "Edit user" : "New user"}</h2>
             <button
               type="button"
               className="iconButton modalCloseButton"
@@ -366,7 +366,7 @@ function ResetPasswordModal({
       <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
-            <h2 id="reset-password-title">Reset Password</h2>
+            <h2 id="reset-password-title">Reset password</h2>
             <button
               type="button"
               className="iconButton modalCloseButton"

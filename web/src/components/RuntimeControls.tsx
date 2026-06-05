@@ -45,6 +45,7 @@ export function RuntimeControls({
   const baseDisabledReason = busyAction
     ? `Runtime ${busyAction} is already in progress.`
     : disabledReason || (!controlAvailable ? status?.docker.message || "Runtime controls are unavailable for this server." : "");
+  const actionLabel = (action: "start" | "stop" | "restart") => `${action[0].toUpperCase()}${action.slice(1)}`;
 
   return (
     <div className="runtimeControls" aria-label="Container controls">
@@ -60,11 +61,11 @@ export function RuntimeControls({
             className={`runtimeControlButton ${action}`}
             onClick={() => onAction(action)}
             disabled={actionDisabled}
-            title={actionDisabled ? actionReason : `${action[0].toUpperCase()}${action.slice(1)} server`}
-            aria-label={actionDisabled && actionReason ? `${action} unavailable: ${actionReason}` : action}
+            title={actionDisabled ? actionReason : `${actionLabel(action)} server`}
+            aria-label={actionDisabled && actionReason ? `${actionLabel(action)} unavailable: ${actionReason}` : actionLabel(action)}
           >
             {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <ControlIcon action={action} />}
-            <span>{action}</span>
+            <span>{actionLabel(action)}</span>
           </button>
         );
       })}

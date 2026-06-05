@@ -286,7 +286,7 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
       <div className="addNodeStatusCard success">
         <span className="addNodeStatusIcon" aria-hidden="true">✓</span>
         <div>
-          <h3>NODE ADDED SUCCESSFULLY</h3>
+          <h3>Node added successfully</h3>
           <p>{nodeName} is now connected to this panel and ready to host servers.</p>
           <p>You can close this dialog and manage the node from the Nodes page.</p>
         </div>
@@ -300,7 +300,7 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
       <div className="addNodeStatusCard error">
         <span className="addNodeStatusIcon" aria-hidden="true">!</span>
         <div>
-          <h3>NODE CONNECTED BUT INCOMPATIBLE</h3>
+          <h3>Node connected but incompatible</h3>
           <p>{versionText ? `${nodeName} connected with ${versionText}, but it is not compatible with this panel.` : `${nodeName} connected, but its agent or protocol version is not compatible with this panel.`}</p>
         </div>
       </div>
@@ -312,7 +312,7 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
       <div className="addNodeStatusCard error">
         <span className="addNodeStatusIcon" aria-hidden="true">!</span>
         <div>
-          <h3>JOIN TOKEN EXPIRED</h3>
+          <h3>Join token expired</h3>
           <p>The join token for {nodeName} expired before the node connected. Rotate the token or create a new pending node, then run the updated install command.</p>
         </div>
       </div>
@@ -324,7 +324,7 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
       <div className="addNodeStatusCard error">
         <span className="addNodeStatusIcon" aria-hidden="true">!</span>
         <div>
-          <h3>NODE DISCONNECTED</h3>
+          <h3>Node disconnected</h3>
           <p>{nodeName} connected once, but it is offline now. Check the node host and run the install command again if needed.</p>
         </div>
       </div>
@@ -335,7 +335,7 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
     <div className="addNodeStatusCard waiting" role="status" aria-live="polite">
       <span className="addNodeSpinner" aria-hidden="true" />
       <div>
-        <h3>WAITING FOR NODE CONNECTION</h3>
+        <h3>Waiting for node connection</h3>
         <p>Run the install command on the host, then wait for the node to connect to this panel.</p>
       </div>
     </div>
@@ -401,7 +401,7 @@ function AddNodeModal({
       <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="add-node-title">
         <header className="nodeModalHeader">
           <div>
-            <h2 id="add-node-title">Add Node</h2>
+            <h2 id="add-node-title">Add node</h2>
             <p>Create a remote node and connect it to this panel.</p>
           </div>
           <button
@@ -573,7 +573,7 @@ export function NodesPage({
           <div className="emptyState nodesEmptyState">
             <h2>No Nodes Yet</h2>
             <p>No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers.</p>
-            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add Node</button>
+            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</button>
           </div>
         )}
         {sortedNodes.map((node) => {
@@ -660,7 +660,7 @@ export function NodesPage({
 
               <button type="button" className="secondaryButton nodeAddServerButton" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
                 <AppIcon name="plus" />
-                Add Server
+                Add server
               </button>
             </article>
           );
@@ -678,7 +678,7 @@ export function NodesPage({
               <svg className="addNodeIcon" viewBox="0 0 24 24">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" />
               </svg>
-              <span>Add Node</span>
+              <span>Add node</span>
             </div>
           </button>
         )}

@@ -3149,7 +3149,7 @@ export default function App() {
                 ) : (
                   <>
                     <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create Managed Server</button>
+                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</button>
                   </>
                 )}
               </div>
@@ -3235,7 +3235,7 @@ export default function App() {
               </label>
               <div className="settingsRow readOnly">
                 <div>
-                  <strong>version</strong>
+                  <strong>Version</strong>
                 </div>
                 <span className="settingsStatus">v{appVersion}</span>
               </div>
@@ -3390,7 +3390,7 @@ export default function App() {
             ) : (
               <>
                 <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create Managed Server</button>
+                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</button>
               </>
             )}
           </section>
@@ -3684,7 +3684,7 @@ export default function App() {
                         </button>
                         <button type="button" className="secondaryButton compactButton" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Create a folder here"}>
                           <AppIcon name="folderPlus" />
-                          New Folder
+                          New folder
                         </button>
                         <button type="button" className="secondaryButton compactButton" onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
                           <AppIcon name="refresh" />
@@ -4561,7 +4561,7 @@ export default function App() {
                     <div className="modalBackdrop" role="presentation" onClick={() => setDetailsMod(null)}>
                       <section className="modalPanel modDetailsPanel" role="dialog" aria-modal="true" aria-labelledby="details-title" onClick={(e) => e.stopPropagation()}>
                         <div className="panelHeader">
-                          <h2 id="details-title">Mod Details</h2>
+                          <h2 id="details-title">Mod details</h2>
                           <button type="button" className="iconButton modalCloseButton" onClick={() => setDetailsMod(null)} aria-label="Close details" title="Close details">
                             <AppIcon name="x" />
                           </button>
