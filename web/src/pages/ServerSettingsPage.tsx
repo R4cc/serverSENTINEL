@@ -81,6 +81,7 @@ export function ServerEditForm({
   disabled?: boolean;
 }) {
   const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
+  const [limitContainerMemory, setLimitContainerMemory] = useState(server.limitContainerMemory !== false);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
 
@@ -125,6 +126,16 @@ export function ServerEditForm({
         javaArgs={javaArgs}
         onJavaArgsChange={setJavaArgs}
       />
+      <input type="hidden" name="limitContainerMemory" value={limitContainerMemory ? "true" : "false"} />
+      <label className="checkLine">
+        <input
+          type="checkbox"
+          checked={!limitContainerMemory}
+          onChange={(event) => setLimitContainerMemory(!event.target.checked)}
+        />
+        Do not limit container memory
+      </label>
+      <p className="fieldHint">Java -Xmx still controls the Minecraft heap. This only removes Docker's outer memory cap.</p>
       <label>
         Java arguments
         <textarea
@@ -234,6 +245,7 @@ export function ManagedServerForm({
   const [dockerImage, setDockerImage] = useState(defaultDockerImageForMinecraftVersion(defaultMinecraftVersion));
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
+  const [limitContainerMemory, setLimitContainerMemory] = useState(true);
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const serverPortValid = isValidServerPort(serverPort);
@@ -363,6 +375,16 @@ export function ManagedServerForm({
           javaArgs={javaArgs}
           onJavaArgsChange={setJavaArgs}
         />
+        <input type="hidden" name="limitContainerMemory" value={limitContainerMemory ? "true" : "false"} />
+        <label className="checkLine">
+          <input
+            type="checkbox"
+            checked={!limitContainerMemory}
+            onChange={(event) => setLimitContainerMemory(!event.target.checked)}
+          />
+          Do not limit container memory
+        </label>
+        <p className="fieldHint">Java -Xmx still controls the Minecraft heap. This only removes Docker's outer memory cap.</p>
         <label>
           Java arguments
           <textarea

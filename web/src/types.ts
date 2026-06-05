@@ -13,6 +13,7 @@ export type ManagedServer = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
+  limitContainerMemory?: boolean;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   hasDockerContainer: boolean;

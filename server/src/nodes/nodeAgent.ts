@@ -44,6 +44,7 @@ type CreateInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
+  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
@@ -129,6 +130,41 @@ function shellQuote(value: string) {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+function parseJavaMaxMemoryBytes(javaArgs?: string) {
+  const match = (javaArgs || "").match(/(?:^|\s)-Xmx(\d+)([kKmMgGtT])?(?=\s|$)/);
+  if (!match) return 4 * 1024 * 1024 * 1024;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const unit = (match[2] || "b").toLowerCase();
+  const multiplier = unit === "t"
+    ? 1024 ** 4
+    : unit === "g"
+      ? 1024 ** 3
+      : unit === "m"
+        ? 1024 ** 2
+        : unit === "k"
+          ? 1024
+          : 1;
+  return value * multiplier;
+}
+
+function containerMemoryHostConfig(server: ManagedServer) {
+  if (server.limitContainerMemory === false) return {};
+  const bytes = parseJavaMaxMemoryBytes(server.javaArgs || "-Xms2G -Xmx4G");
+  return bytes > 0 ? { Memory: Math.max(bytes, 6 * 1024 * 1024) } : {};
+}
+
+function runtimeConfigHash(server: ManagedServer) {
+  return createHash("sha256").update(JSON.stringify({
+    image: server.dockerImage || dockerImage(server.minecraftVersion),
+    ports: server.dockerPorts || "25565:25565/tcp",
+    serverJar: server.serverJar || "fabric-server-launch.jar",
+    javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
+    limitContainerMemory: server.limitContainerMemory !== false,
+    memoryHostConfig: containerMemoryHostConfig(server)
+  })).digest("hex");
+}
+
 async function dockerServerRoot(server: ManagedServer) {
   const root = await serverRoot(server);
   const rel = relative(config.nodeDataDir, root);
@@ -199,9 +235,34 @@ async function createContainer(server: ManagedServer) {
     AttachStdin: true,
     Tty: false,
     ExposedPorts: exposedPorts,
-    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
-    Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id }
+    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" }, ...containerMemoryHostConfig(server) },
+    Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
   }, [201, 409]);
+}
+
+async function removeManagedContainer(server: ManagedServer) {
+  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  if (!details) return false;
+  if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
+    throw new Error(`Container ${containerName(server)} exists but is not managed by ServerSentinel; refusing to delete it`);
+  }
+  await dockerRequest("DELETE", `/containers/${encodeURIComponent(containerName(server))}?force=1`, [204, 404]);
+  return true;
+}
+
+async function ensureContainer(server: ManagedServer) {
+  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  if (!details) {
+    await createContainer(server);
+    return;
+  }
+  if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
+    throw new Error(`Container ${containerName(server)} exists but is not managed by ServerSentinel; refusing to control it`);
+  }
+  if (details.Config?.Labels?.["serversentinel.config-hash"] !== runtimeConfigHash(server)) {
+    await removeManagedContainer(server);
+    await createContainer(server);
+  }
 }
 
 async function downloadFabricJar(server: ManagedServer) {
@@ -234,6 +295,7 @@ async function createServer(input: CreateInput) {
     dockerImage: input.dockerImage?.trim() || dockerImage(input.minecraftVersion),
     dockerPorts: input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`,
     javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
+    limitContainerMemory: input.limitContainerMemory ?? true,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
@@ -244,7 +306,7 @@ async function createServer(input: CreateInput) {
   await writeFile(await inside(server, "eula.txt", false), `eula=${input.acceptEula ? "true" : "false"}\n`, "utf8");
   await writeFile(await inside(server, "logs/latest.log", false), "", { flag: "a" });
   await downloadFabricJar(server);
-  if (dockerAvailable()) await createContainer(server);
+  if (dockerAvailable()) await ensureContainer(server);
   return server;
 }
 
@@ -267,10 +329,17 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   const dockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
+  const limitContainerMemory = input.limitContainerMemory ?? (server.limitContainerMemory !== false);
 
   const jarChanged = server.minecraftVersion !== minecraftVersion
     || server.loaderVersion !== loaderVersion
     || server.installerVersion !== installerVersion
+    || server.serverJar !== serverJar;
+  const containerConfigChanged = server.dockerContainer !== dockerContainer
+    || server.dockerImage !== dockerImageName
+    || server.dockerPorts !== dockerPorts
+    || server.javaArgs !== javaArgs
+    || (server.limitContainerMemory !== false) !== limitContainerMemory
     || server.serverJar !== serverJar;
 
   const updated: ManagedServer = {
@@ -284,6 +353,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     dockerImage: dockerImageName,
     dockerPorts,
     javaArgs,
+    limitContainerMemory,
     updatedAt: new Date().toISOString()
   };
 
@@ -295,6 +365,10 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     await writeFile(await inside(updated, "server.properties", false), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     });
+  }
+  if (containerConfigChanged && dockerAvailable()) {
+    await removeManagedContainer(server);
+    await ensureContainer(updated);
   }
   return updated;
 }
@@ -724,7 +798,7 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, deletedContainer: true, deletedFiles: Boolean(payload?.input?.deleteFiles) };
   }
   if (command === "server.inspect") return runtimeStatus(server);
-  if (command === "server.start") { await dockerRequest("POST", `/containers/${name}/start`, [204, 304]); return runtimeStatus(server); }
+  if (command === "server.start") { await ensureContainer(server); await dockerRequest("POST", `/containers/${name}/start`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.stop") { await dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.restart") { await dockerRequest("POST", `/containers/${name}/restart?t=10`, 204); return runtimeStatus(server); }
   if (command === "server.stats") {

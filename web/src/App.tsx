@@ -1319,6 +1319,7 @@ export default function App() {
           nodeId: form.get("nodeId"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
+          limitContainerMemory: form.get("limitContainerMemory") === "true",
           serverPort: form.get("serverPort"),
           acceptEula: form.get("acceptEula") === "on"
         })
@@ -1397,6 +1398,7 @@ export default function App() {
           dockerImage: form.get("dockerImage"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
+          limitContainerMemory: form.get("limitContainerMemory") === "true",
           serverPort: form.get("serverPort")
         })
       });
@@ -1566,6 +1568,9 @@ export default function App() {
     if (!activeServer) return;
     setNotice("");
     setRuntimeAction(action);
+    const actionLabel = action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart";
+    const completedLabel = action === "start" ? "started" : action === "stop" ? "stopped" : "restarted";
+    notify("info", `${actionLabel} request sent`);
     try {
       if (activeServerIsDemo) {
         const nextRunning = action !== "stop";
@@ -1577,14 +1582,14 @@ export default function App() {
           `[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`,
           `[demo] Server is now ${nextRunning ? "running" : "stopped"}`
         ]);
-        notify("success", `Demo server ${nextRunning ? "running" : "stopped"}`);
+        notify("success", `Demo server ${completedLabel}`);
         return;
       }
       await api(`/api/servers/${activeServer.id}/${action}`, { method: "POST" });
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
       await refreshConsoleLogs(activeServer.id);
-      notify("success", `Sent ${action} request`);
+      notify("success", `${activeServer.displayName} ${completedLabel}`);
     } catch (error) {
       setConsoleStreamVersion((version) => version + 1);
       await refreshConsoleLogs(activeServer.id);
@@ -4293,7 +4298,7 @@ export default function App() {
                   )}
 
                   {modsView === "search" && (
-                    <>
+                    <div className="modSearchView">
                       <form onSubmit={searchMods} className="modSearchToolbar">
                         <label className="modSearchInput">
                           <span aria-hidden="true">
@@ -4403,7 +4408,7 @@ export default function App() {
                           <div ref={sentinelRef} style={{ height: "1px", margin: "10px 0" }} />
                         )}
                       </div>
-                    </>
+                    </div>
                   )}
                   {modInstallModal && (
                     <div className="modalBackdrop modInstallBackdrop" role="presentation">

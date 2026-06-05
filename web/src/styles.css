@@ -9546,6 +9546,46 @@ details.compatibilityBadge p {
   gap: var(--space-3);
 }
 
+.modSearchView {
+  display: grid;
+  gap: var(--space-3);
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.modSearchView .modSearchToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.modSearchView .modSearchInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.modSearchView .modSearchButton {
+  justify-self: end;
+}
+
+.modSearchView .modResultsHeader {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.modSearchView .mods {
+  width: 100%;
+  max-width: none;
+}
+
 .modSearchResultActions,
 .modsTableActions,
 .nodeServerActions {
@@ -9925,6 +9965,14 @@ details.compatibilityBadge p {
   .nodesToolbar {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .modSearchView .modSearchToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .modSearchView .modSearchButton {
+    justify-self: stretch;
   }
 
   .modalBackdrop {

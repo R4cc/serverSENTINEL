@@ -158,6 +158,10 @@ type DockerStats = {
   networks?: Record<string, { rx_bytes?: number; tx_bytes?: number }>;
 };
 
+type DockerInfo = {
+  MemTotal?: number;
+};
+
 type CreateServerInput = {
   nodeId?: string;
   displayName?: string;
@@ -169,6 +173,7 @@ type CreateServerInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
+  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
@@ -872,6 +877,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
+    limitContainerMemory: server.limitContainerMemory !== false,
     schedules: server.schedules ?? [],
     serverType: server.serverType,
     createdAt: server.createdAt,
@@ -936,6 +942,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerWorkingDir: optionalString(server.dockerWorkingDir, "server.dockerWorkingDir"),
     dockerPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
+    limitContainerMemory: optionalStrictBoolean(server.limitContainerMemory, "server.limitContainerMemory", true),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
     serverType,
     createdAt: requiredString(server.createdAt, "server.createdAt"),
@@ -1432,17 +1439,74 @@ async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
+function parseJavaMaxMemoryBytes(javaArgs?: string) {
+  const match = (javaArgs || "").match(/(?:^|\s)-Xmx(\d+)([kKmMgGtT])?(?=\s|$)/);
+  if (!match) return 4 * 1024 * 1024 * 1024;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const unit = (match[2] || "b").toLowerCase();
+  const multiplier = unit === "t"
+    ? 1024 ** 4
+    : unit === "g"
+      ? 1024 ** 3
+      : unit === "m"
+        ? 1024 ** 2
+        : unit === "k"
+          ? 1024
+          : 1;
+  return value * multiplier;
+}
+
+function containerMemoryLimitBytes(server: ManagedServer) {
+  if (server.limitContainerMemory === false) return undefined;
+  const bytes = parseJavaMaxMemoryBytes(server.javaArgs || "-Xms2G -Xmx4G");
+  return bytes > 0 ? Math.max(bytes, 6 * 1024 * 1024) : undefined;
+}
+
+function containerMemoryHostConfig(server: ManagedServer) {
+  const memory = containerMemoryLimitBytes(server);
+  return memory ? { Memory: memory } : {};
+}
+
+function dockerRuntimeConfigHash(server: ManagedServer) {
+  return createHash("sha256").update(JSON.stringify({
+    image: server.dockerImage || defaultDockerImageForMinecraftVersion(server.minecraftVersion),
+    workingDir: serverDockerWorkingDir(server),
+    bindTarget: serverDockerBindTarget(server),
+    ports: server.dockerPorts || "25565:25565/tcp",
+    serverJar: server.serverJar,
+    javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
+    limitContainerMemory: server.limitContainerMemory !== false,
+    memoryLimitBytes: containerMemoryLimitBytes(server) ?? null
+  })).digest("hex");
+}
+
+async function detectedTotalMemory() {
+  if (dockerAvailable()) {
+    try {
+      const info = await dockerRequest<DockerInfo>("GET", "/info", 200);
+      if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
+        return info.MemTotal;
+      }
+    } catch {
+      // Fall through to Node's view of memory when Docker host info is unavailable.
+    }
+  }
+  return totalmem();
+}
+
 async function ensureDockerContainer(server: ManagedServer) {
+  const expectedConfigHash = dockerRuntimeConfigHash(server);
   const existing = await inspectDockerContainer(server);
   if (existing) {
     if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
       throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by ServerSentinel; refusing to control it`);
     }
-    if (dockerContainerMountValid(server, existing)) {
+    if (dockerContainerMountValid(server, existing) && existing.Config?.Labels?.["serversentinel.config-hash"] === expectedConfigHash) {
       return;
     }
-    logWarn(serverLogFields(server), "Removing managed Docker container with stale mount");
+    logWarn(serverLogFields(server), "Removing managed Docker container with stale runtime configuration");
     await removeDockerContainer(server);
   }
   if (!serverDockerMountSource(server) || !server.serverJar) {
@@ -1479,6 +1543,7 @@ async function ensureDockerContainer(server: ManagedServer) {
           Privileged: false,
           NetworkMode: "bridge",
           PortBindings: portBindings,
+          ...containerMemoryHostConfig(server),
           Mounts: [
             {
               Type: serverDockerMountSource(server) === config.serversDockerVolume ? "volume" : "bind",
@@ -1489,7 +1554,8 @@ async function ensureDockerContainer(server: ManagedServer) {
         },
         Labels: {
           "serversentinel.server-id": server.id,
-          "serversentinel.managed": "true"
+          "serversentinel.managed": "true",
+          "serversentinel.config-hash": expectedConfigHash
         }
       },
       [201]
@@ -2287,6 +2353,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
+  const limitContainerMemory = optionalStrictBoolean(input.limitContainerMemory, "limitContainerMemory", true);
 
   const now = new Date().toISOString();
   const server: ManagedServer = {
@@ -2305,6 +2372,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${storageName}` : undefined,
     dockerPorts,
     javaArgs,
+    limitContainerMemory,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
@@ -2521,6 +2589,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     dockerImage?: string;
     dockerPorts?: string;
     javaArgs?: string;
+    limitContainerMemory?: boolean;
     serverPort?: string;
   };
   let updatedServer: ManagedServer | null = null;
@@ -2561,10 +2630,17 @@ async function localUpdateServer(serverId: string, input: unknown) {
       }
     }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
+    const limitContainerMemory = optionalStrictBoolean(body.limitContainerMemory, "limitContainerMemory", current.limitContainerMemory !== false);
 
     const jarChanged = current.minecraftVersion !== minecraftVersion
       || current.loaderVersion !== loaderVersion
       || current.installerVersion !== installerVersion
+      || current.serverJar !== serverJar;
+    const containerConfigChanged = current.dockerContainer !== dockerContainer
+      || current.dockerImage !== dockerImage
+      || current.dockerPorts !== dockerPorts
+      || current.javaArgs !== javaArgs
+      || (current.limitContainerMemory !== false) !== limitContainerMemory
       || current.serverJar !== serverJar;
 
     const updated: ManagedServer = {
@@ -2578,11 +2654,16 @@ async function localUpdateServer(serverId: string, input: unknown) {
       dockerImage,
       dockerPorts,
       javaArgs,
+      limitContainerMemory,
       updatedAt: new Date().toISOString()
     };
 
     if (jarChanged) {
       await downloadFabricServerJar(updated);
+    }
+    if (containerConfigChanged && dockerAvailable()) {
+      await removeManagedDockerContainer(current);
+      await ensureDockerContainer(updated);
     }
     await writeVersionMetadataFile(updated);
     if (serverPort) {
@@ -2804,7 +2885,7 @@ app.get("/api/app", async (request) => {
     runtimeMode: config.runtimeMode,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
-    totalMemory: totalmem(),
+    totalMemory: await detectedTotalMemory(),
     currentUser: user ? publicUser(user) : undefined
   };
 });

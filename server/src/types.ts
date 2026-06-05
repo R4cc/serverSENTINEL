@@ -178,6 +178,7 @@ export type ManagedServer = {
   dockerWorkingDir?: string;
   dockerPorts?: string;
   javaArgs?: string;
+  limitContainerMemory?: boolean;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   createdAt: string;
@@ -297,6 +298,7 @@ export type CreateServerInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
+  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
