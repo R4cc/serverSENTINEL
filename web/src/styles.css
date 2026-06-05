@@ -2774,6 +2774,7 @@ button .buttonIcon {
 .nodeInfoGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: row dense;
   gap: var(--space-4);
   margin: 0;
 }
@@ -2793,7 +2794,7 @@ button .buttonIcon {
 }
 
 .nodeInfoCard.wide {
-  grid-column: span 1;
+  grid-column: 1 / -1;
 }
 
 .nodeInfoCard.secondary {
@@ -9453,8 +9454,6 @@ details.compatibilityBadge p {
 }
 
 .fileDetailsContent dl,
-.nodeInfoGrid,
-.nodeFacts,
 .detailGrid {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
