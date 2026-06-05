@@ -218,6 +218,13 @@ export default function App() {
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modServerRunning = Boolean(activeStatus?.docker.running);
+  const activeRuntimeProfile = activeServer?.runtimeProfile;
+  const activeRuntimeLegacy = Boolean(activeServer && (!activeRuntimeProfile || activeRuntimeProfile.compatibilityStatus === "legacy" || activeRuntimeProfile.jarProvider === "legacy"));
+  const activeRuntimeLabel = activeRuntimeProfile && !activeRuntimeLegacy
+    ? `Minecraft ${activeRuntimeProfile.minecraftVersion} - Fabric ${activeRuntimeProfile.loaderVersion}`
+    : activeServer
+      ? "Legacy / manual runtime"
+      : "No server selected";
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const scheduleDisabledReason = scheduleBusy
@@ -267,7 +274,7 @@ export default function App() {
   const someVisibleFilesSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleFilePaths.length;
   const selectionSummary = selectedEntries.length === 0
     ? "No selection"
-    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` · ${formatBytes(selectedTotalSize)}` : ""}`;
+    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
   const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager && !fileRuntimeLocked);
   const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileRuntimeLocked && !fileOperationBusy);
@@ -321,6 +328,9 @@ export default function App() {
     return [...modInstallModal.data.compatibleVersions, ...modInstallModal.data.otherVersions]
       .find((version) => version.id === modInstallModal.selectedVersionId) ?? null;
   }, [modInstallModal?.data, modInstallModal?.selectedVersionId]);
+  const selectedRequiredDependencyCount = useMemo(() => {
+    return selectedInstallVersion?.dependencies.filter((dependency) => dependency.dependencyType === "required").length ?? 0;
+  }, [selectedInstallVersion]);
   const canContinueModInstall = Boolean(
     selectedInstallVersion
     && selectedInstallVersion.selectable
@@ -419,7 +429,7 @@ export default function App() {
     if (dependency.projectId && installedMods.some((mod) => mod.modrinth?.projectId === dependency.projectId)) {
       return "Already installed";
     }
-    if (dependency.dependencyType === "required") return "Auto-install not implemented";
+    if (dependency.dependencyType === "required") return "Will install";
     if (dependency.dependencyType === "optional") return "Optional";
     return "Informational";
   }
@@ -1285,7 +1295,7 @@ export default function App() {
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName), undefined, { requireNode: true, requireEula: true });
+    const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName), undefined, { requireNode: true, requireEula: true, requireRuntime: true });
     if (setValidationNotice(formElement, errors, (message) => {
       setNotice(message);
       notify("error", message);
@@ -2630,7 +2640,13 @@ export default function App() {
     try {
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 35, task: "Downloading jar" } : j));
 
-      const result = await api<{ filename: string; version: string; channel: ReleaseChannel }>("/api/modrinth/install", {
+      const result = await api<{
+        filename: string;
+        version: string;
+        channel: ReleaseChannel;
+        installed?: Array<{ filename: string; dependencyType: "root" | "required" }>;
+        optionalDependencies?: Array<{ projectId?: string; versionId?: string; dependencyType: string; reason: string }>;
+      }>("/api/modrinth/install", {
         method: "POST",
         body: JSON.stringify({
           serverId: activeServer.id,
@@ -2649,8 +2665,10 @@ export default function App() {
       try {
         await loadInstalledMods(activeServer.id);
         await loadFiles(activeServer.id, "/mods");
-        notify("success", `Installed ${title}`);
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
+        const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
+        const installSummary = requiredCount > 0 ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`;
+        notify("success", installSummary);
+        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: installSummary, dismissible: true } : j));
       } catch (refreshErr) {
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
       }
@@ -3911,7 +3929,7 @@ export default function App() {
                         ] as Array<[FileSortKey, string]>).map(([key, label]) => (
                           <button key={key} type="button" onClick={() => setFileSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" })}>
                             {label}
-                            {fileSort.key === key ? (fileSort.direction === "asc" ? " ↑" : " ↓") : ""}
+                            {fileSort.key === key ? (fileSort.direction === "asc" ? " asc" : " desc") : ""}
                           </button>
                         ))}
                       </div>
@@ -4065,6 +4083,16 @@ export default function App() {
                     <section className="systemBanner accent">
                       <strong>Modrinth API key is not configured.</strong>
                       <span>Installed mod management still works. Add a key in Settings to search and install new mods.</span>
+                    </section>
+                  )}
+                  {activeServer && (
+                    <section className={`systemBanner ${activeRuntimeLegacy ? "warning" : "accent"}`}>
+                      <strong>{activeRuntimeLegacy ? "Limited compatibility mode" : "Compatibility target"}</strong>
+                      <span>
+                        {activeRuntimeLegacy
+                          ? "This server does not have a resolved runtime profile. Modrinth compatibility is based on legacy metadata; review runtime settings before relying on automatic matching."
+                          : `${activeRuntimeLabel}. Mod search and installs use this server runtime automatically.`}
+                      </span>
                     </section>
                   )}
                   <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />
@@ -4378,7 +4406,7 @@ export default function App() {
                                 <p>{mod.description}</p>
                                 <small>
                                   {formatDisplayNumber(mod.downloads)} downloads
-                                  {formatOptionalModDate(mod.date_modified) && ` · ${formatOptionalModDate(mod.date_modified)}`}
+                                  {formatOptionalModDate(mod.date_modified) && ` - ${formatOptionalModDate(mod.date_modified)}`}
                                 </small>
                               </div>
                               <div className="modCompatibilityColumn">
@@ -4615,7 +4643,11 @@ export default function App() {
 
                           {modInstallModal.step === 2 && modInstallModal.data && selectedInstallVersion && (
                             <div className="modInstallConfirm">
-                              <p className="modInstallReviewCopy">Review the details below before installing.</p>
+                              <p className="modInstallReviewCopy">
+                                {selectedRequiredDependencyCount > 0
+                                  ? `Review the selected mod and ${selectedRequiredDependencyCount} required ${selectedRequiredDependencyCount === 1 ? "dependency" : "dependencies"} before installing all files.`
+                                  : "Review the details below before installing."}
+                              </p>
                               <section className="modConfirmSection">
                                 <div className="modConfirmSectionHeader">
                                   <strong>Selected mod version</strong>
@@ -4636,7 +4668,7 @@ export default function App() {
                                       <span>For Minecraft: {formatVersionList(selectedInstallVersion.minecraftVersions)}</span>
                                       <span>{selectedInstallVersion.publishedAt ? `Released: ${formatDisplayDate(selectedInstallVersion.publishedAt)}` : "Released: unknown"}</span>
                                     </div>
-                                    <div className="modConfirmFilename">{selectedInstallVersion.file?.filename || "No selected jar"}{selectedInstallVersion.file?.size ? ` · ${formatBytes(selectedInstallVersion.file.size)}` : ""}</div>
+                                    <div className="modConfirmFilename">{selectedInstallVersion.file?.filename || "No selected jar"}{selectedInstallVersion.file?.size ? ` - ${formatBytes(selectedInstallVersion.file.size)}` : ""}</div>
                                   </div>
                                   <button type="button" className="secondaryButton" onClick={() => setModInstallModal((current) => current ? { ...current, step: 1, installing: false } : current)}>Change selection</button>
                                 </div>
@@ -4663,7 +4695,7 @@ export default function App() {
                                 <div className="modConfirmRows">
                                   <div>
                                     <span>Minecraft Version</span>
-                                    <strong>Server: {modInstallModal.data.target.minecraftVersion} <span aria-hidden="true">↔</span> Mod: {formatVersionList(selectedInstallVersion.minecraftVersions)}</strong>
+                                    <strong>Server: {modInstallModal.data.target.minecraftVersion} <span aria-hidden="true">to</span> Mod: {formatVersionList(selectedInstallVersion.minecraftVersions)}</strong>
                                     <mark className={`installStatusBadge ${selectedInstallVersion.requiresMinecraftAcknowledgement ? "warning" : "ok"}`}>{selectedInstallVersion.requiresMinecraftAcknowledgement ? "Overridden" : "Compatible"}</mark>
                                   </div>
                                   <div>
@@ -4694,7 +4726,7 @@ export default function App() {
                                           {modIconSource(dependency.iconUrl) ? <img src={modIconSource(dependency.iconUrl)} alt="" /> : <div className="modDependencyFallback">?</div>}
                                           <div>
                                             <strong>{dependency.title || dependency.projectId || dependency.versionId || "Unknown dependency"}</strong>
-                                            <span><mark className="subtlePill">{dependencyTypeLabel(dependency.dependencyType)}</mark> {status === "Auto-install not implemented" ? "Required dependency detected. Auto-install is not implemented yet." : status}</span>
+                                            <span><mark className="subtlePill">{dependencyTypeLabel(dependency.dependencyType)}</mark> {status}</span>
                                           </div>
                                           <mark className={`installStatusBadge ${status === "Already installed" ? "ok" : dependency.dependencyType === "required" ? "warning" : "ok"}`}>{status}</mark>
                                         </div>
@@ -4731,7 +4763,7 @@ export default function App() {
                             </button>
                           ) : (
                             <button type="button" onClick={installSelectedMod} disabled={!canContinueModInstall || modInstallModal.installing}>
-                              {modInstallModal.installing ? "Installing" : "Install mod"}
+                              {modInstallModal.installing ? "Installing" : selectedRequiredDependencyCount > 0 ? "Install all" : "Install mod"}
                             </button>
                           )}
                         </div>

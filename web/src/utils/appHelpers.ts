@@ -83,7 +83,7 @@ export function clearDeletedFileState(deletedEntries: FileEntry[], selectedPath:
   }
 }
 
-export function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string, options: { requireNode?: boolean; requireEula?: boolean } = {}) {
+export function serverConfigValidation(form: FormData, existingNames: string[], currentName?: string, options: { requireNode?: boolean; requireEula?: boolean; requireRuntime?: boolean } = {}) {
   const displayName = trimFormValue(form, "displayName");
   const errors: Array<{ field: string; message: string }> = [];
   const displayError = validateDisplayName(displayName);
@@ -96,6 +96,12 @@ export function serverConfigValidation(form: FormData, existingNames: string[], 
   }
   if (options.requireEula && form.get("acceptEula") !== "on") {
     errors.push({ field: "acceptEula", message: "Accept the Minecraft EULA before creating this server." });
+  }
+  if (options.requireRuntime && !trimFormValue(form, "minecraftVersion")) {
+    errors.push({ field: "minecraftVersion", message: "Choose a supported Minecraft version." });
+  }
+  if (options.requireRuntime && !trimFormValue(form, "loaderVersion")) {
+    errors.push({ field: "loaderVersion", message: "Choose a Fabric loader version or keep the recommended option." });
   }
   const port = trimFormValue(form, "serverPort");
   if (port) {

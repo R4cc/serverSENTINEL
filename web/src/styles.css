@@ -3417,6 +3417,15 @@ button .buttonIcon {
   padding: var(--space-3);
 }
 
+.runtimeSelection {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  padding: var(--space-3);
+}
+
 .placementHeader span {
   color: var(--text-muted);
   font-size: 11px;
@@ -3494,6 +3503,101 @@ button .buttonIcon {
 
 .placementWarning {
   margin: 0;
+}
+
+.runtimeFixedRow {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.5fr) 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-2) var(--space-3);
+}
+
+.runtimeFixedRow span,
+.runtimeFixedRow small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.runtimeFixedRow strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.runtimePreview {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-3);
+}
+
+.runtimePreview.resolved {
+  border-color: var(--sentinel-success);
+}
+
+.runtimePreview.error {
+  border-color: var(--sentinel-danger);
+}
+
+.runtimePreview > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.runtimePreview > div:first-child span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.runtimePreview > div:first-child strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.runtimePreview dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.runtimePreview dl div {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2);
+}
+
+.runtimePreview dt {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.runtimePreview dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.warningText {
+  color: var(--sentinel-warning) !important;
 }
 
 .summaryTile {

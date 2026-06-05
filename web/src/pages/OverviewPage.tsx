@@ -28,6 +28,13 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   return "stopped";
 }
 
+function jarProviderLabel(provider?: string) {
+  if (provider === "mcjars") return "MCJars";
+  if (provider === "legacy") return "Legacy/manual";
+  if (provider === "manual") return "Manual";
+  return "Unknown";
+}
+
 export function OverviewSummary({
   server,
   status,
@@ -50,6 +57,8 @@ export function OverviewSummary({
       : String(activity.playersOnline);
   const minecraftVersion = minecraftVersionInfo(server);
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
+  const runtimeProfile = server.runtimeProfile;
+  const runtimeLegacy = !runtimeProfile || runtimeProfile.compatibilityStatus === "legacy" || runtimeProfile.jarProvider === "legacy";
   return (
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
@@ -66,6 +75,11 @@ export function OverviewSummary({
         <span>Fabric loader</span>
         <strong>{versionValue(fabricLoaderVersion)}</strong>
         <small>{versionSourceLabel(fabricLoaderVersion.source)}</small>
+      </div>
+      <div className={`summaryTile ${runtimeLegacy ? "neutral" : ""}`}>
+        <span>Runtime profile</span>
+        <strong>{runtimeLegacy ? "Legacy / manual" : `${runtimeProfile.minecraftVersion} Fabric`}</strong>
+        <small>{runtimeLegacy ? "Compatibility-aware mod installs are limited until runtime is configured" : `Java ${runtimeProfile.javaMajorVersion} - ${jarProviderLabel(runtimeProfile.jarProvider)}`}</small>
       </div>
       <div className="summaryTile">
         <span>Uptime</span>

@@ -18,6 +18,50 @@ export type ManagedServer = {
   serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
+  runtimeProfile?: ServerRuntimeProfile;
+};
+
+export type LoaderType = "fabric";
+export type ServerJarProviderId = "mcjars" | "manual" | "legacy";
+export type RuntimeCompatibilityStatus = "compatible" | "legacy" | "manual" | "unsupported" | "unknown";
+
+export type ServerRuntimeProfile = {
+  minecraftVersion: string;
+  loader: LoaderType;
+  loaderVersion: string;
+  javaMajorVersion: 17 | 21 | 25;
+  jarProvider: ServerJarProviderId;
+  jarArtifact: {
+    id?: string;
+    filename: string;
+    downloadUrl?: string;
+    sha1?: string;
+    sha256?: string;
+    sizeBytes?: number;
+  };
+  compatibilityStatus: RuntimeCompatibilityStatus;
+  resolvedAt: string;
+};
+
+export type RuntimeMinecraftVersion = {
+  id: string;
+  type?: "release" | "snapshot" | "unknown";
+  supported: boolean;
+  javaMajorVersion: 17 | 21 | 25;
+  releasedAt?: string;
+};
+
+export type RuntimeLoaderVersion = {
+  id: string;
+  loaderVersion: string;
+  stable?: boolean;
+  recommended?: boolean;
+  buildId?: string;
+};
+
+export type RuntimeResolveResponse = {
+  runtimeProfile: ServerRuntimeProfile;
+  warnings: string[];
 };
 
 export type ManagedNode = {
@@ -347,7 +391,7 @@ export type ModrinthInstallVersionsResponse = {
     serverId: string;
     serverName: string;
     minecraftVersion: string;
-    loader: "Fabric";
+    loader: "Fabric" | "fabric";
   };
   channel: ReleaseChannel;
   compatibleVersions: ModrinthInstallVersion[];
