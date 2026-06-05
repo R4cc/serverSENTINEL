@@ -4674,6 +4674,7 @@ button .buttonIcon {
   background: var(--surface-muted);
   padding: var(--space-3);
   margin-bottom: var(--space-3);
+  max-width: 1020px;
 }
 
 .modSearchInput {
@@ -4727,6 +4728,7 @@ button .buttonIcon {
   gap: var(--space-3);
   align-items: center;
   margin: var(--space-3) var(--space-1) var(--space-2);
+  max-width: 1020px;
 }
 
 .modResultsHeader span {
