@@ -4398,7 +4398,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
   }
 });
 
-app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string } }>("/api/modrinth/search", async (request) => {
+app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseChannel; compatibility?: string; offset?: string; limit?: string } }>("/api/modrinth/search", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const query = request.query.query?.trim();
   if (!query) {
@@ -4417,7 +4417,12 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   try {
     const url = new URL("https://api.modrinth.com/v2/search");
     url.searchParams.set("query", query);
-    url.searchParams.set("limit", "20");
+    const limit = request.query.limit ? String(parseInt(request.query.limit, 10)) : "20";
+    url.searchParams.set("limit", limit);
+    if (request.query.offset) {
+      const offset = String(parseInt(request.query.offset, 10));
+      url.searchParams.set("offset", offset);
+    }
 
     const facets: string[][] = [
       ["project_type:mod"],

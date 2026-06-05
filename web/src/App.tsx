@@ -52,6 +52,9 @@ export default function App() {
   const [modSearchResults, setModSearchResults] = useState<ModrinthHit[]>([]);
   const [isSearchingMods, setIsSearchingMods] = useState(false);
   const [modSearchError, setModSearchError] = useState("");
+  const [modSearchTotal, setModSearchTotal] = useState(0);
+  const [isLoadingMoreMods, setIsLoadingMoreMods] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [modInstallModal, setModInstallModal] = useState<ModInstallModalState | null>(null);
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [modsView, setModsView] = useState<"manager" | "search">("manager");
@@ -840,17 +843,44 @@ export default function App() {
     setModSearchError("");
     if (!trimmedQuery) {
       setModSearchResults([]);
+      setModSearchTotal(0);
       setIsSearchingMods(false);
       return;
     }
     setModSearchResults([]);
+    setModSearchTotal(0);
     if (activeServerIsDemo) {
       setIsSearchingMods(true);
       const timeout = window.setTimeout(() => {
-        setModSearchResults(demoSearchResults.filter((mod) => (
-          mod.title.toLowerCase().includes(trimmedQuery.toLowerCase())
-          || mod.description.toLowerCase().includes(trimmedQuery.toLowerCase())
-        )));
+        const value = trimmedQuery.toLowerCase();
+        const baseFiltered = demoSearchResults.filter((mod) => (
+          mod.title.toLowerCase().includes(value)
+          || mod.description.toLowerCase().includes(value)
+        ));
+        const extraMods: ModrinthHit[] = [];
+        if (value.length <= 3) {
+          for (let i = 1; i <= 40; i++) {
+            extraMods.push({
+              project_id: `demo-dummy-${i}`,
+              title: `Fabric Mod Helper ${i}`,
+              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
+              downloads: 100000 + i * 5000,
+              date_modified: new Date().toISOString(),
+              compatibility: {
+                status: "compatible",
+                compatible: true,
+                reason: "Compatible server-side Fabric mod",
+                serverSide: "optional",
+                clientSide: "optional"
+              },
+              server_side: "optional",
+              client_side: "optional"
+            });
+          }
+        }
+        const allFiltered = [...baseFiltered, ...extraMods];
+        setModSearchResults(allFiltered.slice(0, 20));
+        setModSearchTotal(allFiltered.length);
         setIsSearchingMods(false);
       }, 250);
       return () => {
@@ -862,10 +892,13 @@ export default function App() {
     setIsSearchingMods(true);
     const timeout = window.setTimeout(async () => {
       try {
-        const result = await api<{ hits: ModrinthHit[] }>(
+        const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
           `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
         );
-        if (!cancelled) setModSearchResults(result.hits);
+        if (!cancelled) {
+          setModSearchResults(result.hits);
+          setModSearchTotal(result.total_hits ?? 0);
+        }
       } catch (error) {
         if (!cancelled) {
           const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
@@ -2211,20 +2244,46 @@ export default function App() {
       return;
     }
     setModSearchResults([]);
+    setModSearchTotal(0);
     setIsSearchingMods(true);
     if (activeServerIsDemo) {
       window.setTimeout(() => {
         const value = searchQuery.toLowerCase();
-        setModSearchResults(demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value)));
+        const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
+        const extraMods: ModrinthHit[] = [];
+        if (value.length <= 3) {
+          for (let i = 1; i <= 40; i++) {
+            extraMods.push({
+              project_id: `demo-dummy-${i}`,
+              title: `Fabric Mod Helper ${i}`,
+              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
+              downloads: 100000 + i * 5000,
+              date_modified: new Date().toISOString(),
+              compatibility: {
+                status: "compatible",
+                compatible: true,
+                reason: "Compatible server-side Fabric mod",
+                serverSide: "optional",
+                clientSide: "optional"
+              },
+              server_side: "optional",
+              client_side: "optional"
+            });
+          }
+        }
+        const allFiltered = [...baseFiltered, ...extraMods];
+        setModSearchResults(allFiltered.slice(0, 20));
+        setModSearchTotal(allFiltered.length);
         setIsSearchingMods(false);
       }, 250);
       return;
     }
     try {
-      const result = await api<{ hits: ModrinthHit[] }>(
+      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
         `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
       );
       setModSearchResults(result.hits);
+      setModSearchTotal(result.total_hits ?? 0);
     } catch (error) {
       const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
       setModSearchError(message);
@@ -2234,6 +2293,70 @@ export default function App() {
       setIsSearchingMods(false);
     }
   }
+
+  async function loadMoreMods() {
+    if (isLoadingMoreMods || isSearchingMods || !activeServer) return;
+    const currentOffset = modSearchResults.length;
+    if (currentOffset >= modSearchTotal) return;
+    setIsLoadingMoreMods(true);
+    const searchQuery = query.trim();
+    if (activeServerIsDemo) {
+      window.setTimeout(() => {
+        const value = searchQuery.toLowerCase();
+        const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
+        const extraMods: ModrinthHit[] = [];
+        if (value.length <= 3) {
+          for (let i = 1; i <= 40; i++) {
+            extraMods.push({
+              project_id: `demo-dummy-${i}`,
+              title: `Fabric Mod Helper ${i}`,
+              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
+              downloads: 100000 + i * 5000,
+              date_modified: new Date().toISOString(),
+              compatibility: {
+                status: "compatible",
+                compatible: true,
+                reason: "Compatible server-side Fabric mod",
+                serverSide: "optional",
+                clientSide: "optional"
+              },
+              server_side: "optional",
+              client_side: "optional"
+            });
+          }
+        }
+        const allFiltered = [...baseFiltered, ...extraMods];
+        const nextPage = allFiltered.slice(currentOffset, currentOffset + 20);
+        setModSearchResults((prev) => [...prev, ...nextPage]);
+        setIsLoadingMoreMods(false);
+      }, 250);
+      return;
+    }
+    try {
+      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
+        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&offset=${currentOffset}&limit=20`
+      );
+      setModSearchResults((prev) => [...prev, ...result.hits]);
+    } catch (error) {
+      const message = errorMessage(error, "Could not load more search results.");
+      notify("error", message);
+    } finally {
+      setIsLoadingMoreMods(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !isLoadingMoreMods && !isSearchingMods && modSearchResults.length < modSearchTotal) {
+        void loadMoreMods();
+      }
+    }, {
+      rootMargin: "200px"
+    });
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [modSearchResults.length, modSearchTotal, isLoadingMoreMods, isSearchingMods, query]);
 
   async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel) {
     if (!activeServer) return;
@@ -4185,7 +4308,7 @@ export default function App() {
                       </form>
                       <div className="modResultsHeader">
                         <strong>Search results</strong>
-                        <span>{isSearchingMods ? "Searching..." : query.trim() ? `${formatDisplayNumber(modSearchResults.length)} shown` : "No query entered"}</span>
+                        <span>{isSearchingMods ? "Searching..." : query.trim() ? (modSearchTotal > 0 ? `${formatDisplayNumber(modSearchResults.length)} of ${formatDisplayNumber(modSearchTotal)} shown` : `${formatDisplayNumber(modSearchResults.length)} shown`) : "No query entered"}</span>
                       </div>
                       <div className="mods">
                         {isSearchingMods && Array.from({ length: 4 }, (_, index) => (
@@ -4265,6 +4388,20 @@ export default function App() {
                             </article>
                           );
                         })}
+                        {isLoadingMoreMods && Array.from({ length: 2 }, (_, index) => (
+                          <article key={`mod-loadmore-skeleton-${index}`} className="modRow modSkeleton" aria-hidden="true" style={{ opacity: 0.6 }}>
+                            <span className="skeletonBlock icon" />
+                            <div>
+                              <span className="skeletonBlock title" />
+                              <span className="skeletonBlock line" />
+                              <span className="skeletonBlock meta" />
+                            </div>
+                            <span className="skeletonBlock button" />
+                          </article>
+                        ))}
+                        {modSearchResults.length > 0 && modSearchResults.length < modSearchTotal && (
+                          <div ref={sentinelRef} style={{ height: "1px", margin: "10px 0" }} />
+                        )}
                       </div>
                     </>
                   )}
