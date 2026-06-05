@@ -6263,6 +6263,7 @@ details.compatibilityBadge p {
   grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
   margin: 0;
+  padding-top: 2px;
   width: var(--mods-action-width);
 }
 
@@ -6923,6 +6924,11 @@ details.compatibilityBadge p {
   grid-template-rows: 1fr;
   height: max(560px, calc(100vh - 238px));
   min-height: 0;
+}
+
+.tabPage:has(.consolePanel) {
+  max-width: none;
+  align-content: stretch;
 }
 
 .tabPage:has(.modsPanel) .modsPanel {
@@ -9407,11 +9413,23 @@ details.compatibilityBadge p {
   height: 100%;
   min-height: 0;
   gap: var(--space-3);
+  width: 100%;
+}
+
+.consolePanel .panelHeader {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .terminal,
 .consoleLog {
-  min-height: 360px;
+  min-height: 0;
+}
+
+.consolePanel .terminal {
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .consoleCommandForm,
@@ -9448,6 +9466,24 @@ details.compatibilityBadge p {
   height: max(560px, calc(100vh - 238px));
   max-height: none;
   align-items: stretch;
+}
+
+.tabPage.filesPage {
+  max-width: none;
+  align-content: stretch;
+}
+
+.filesPage .filesExplorer,
+.filesPage .filesPanel,
+.filesPage .fileDetailsPanel {
+  height: 100%;
+  min-height: 0;
+}
+
+.filesPage .fileTable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .fileTableHead,
@@ -9584,6 +9620,17 @@ details.compatibilityBadge p {
 .modSearchView .mods {
   width: 100%;
   max-width: none;
+}
+
+.modSearchView.empty {
+  flex: 0 0 auto;
+  align-content: start;
+}
+
+.modSearchView.empty .mods {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 .modSearchResultActions,
@@ -9856,7 +9903,14 @@ details.compatibilityBadge p {
   .filesPage,
   .schedulePage {
     grid-template-columns: 1fr;
+  }
+
+  .filesPage {
     height: auto;
+  }
+
+  .filesPage .filesExplorer {
+    height: max(520px, calc(100vh - 238px));
   }
 
   .overviewPage {

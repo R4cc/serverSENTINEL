@@ -4298,7 +4298,7 @@ export default function App() {
                   )}
 
                   {modsView === "search" && (
-                    <div className="modSearchView">
+                    <div className={`modSearchView ${!query.trim() && !isSearchingMods && !modSearchError && modSearchResults.length === 0 ? "empty" : ""}`}>
                       <form onSubmit={searchMods} className="modSearchToolbar">
                         <label className="modSearchInput">
                           <span aria-hidden="true">
@@ -4311,10 +4311,12 @@ export default function App() {
                         </label>
                         <button className="modSearchButton" disabled={isProvisioning || !canManager || isSearchingMods || !effectiveAppState.modrinthApiConfigured || activeModVersionsUnknown || !query.trim()}>{isSearchingMods ? "Searching" : "Search"}</button>
                       </form>
-                      <div className="modResultsHeader">
-                        <strong>Search results</strong>
-                        <span>{isSearchingMods ? "Searching..." : query.trim() ? (modSearchTotal > 0 ? `${formatDisplayNumber(modSearchResults.length)} of ${formatDisplayNumber(modSearchTotal)} shown` : `${formatDisplayNumber(modSearchResults.length)} shown`) : "No query entered"}</span>
-                      </div>
+                      {(isSearchingMods || query.trim() || modSearchResults.length > 0 || modSearchError) && (
+                        <div className="modResultsHeader">
+                          <strong>Search results</strong>
+                          <span>{isSearchingMods ? "Searching..." : query.trim() ? (modSearchTotal > 0 ? `${formatDisplayNumber(modSearchResults.length)} of ${formatDisplayNumber(modSearchTotal)} shown` : `${formatDisplayNumber(modSearchResults.length)} shown`) : "No query entered"}</span>
+                        </div>
+                      )}
                       <div className="mods">
                         {isSearchingMods && Array.from({ length: 4 }, (_, index) => (
                           <article key={`mod-skeleton-${index}`} className="modRow modSkeleton" aria-hidden="true">
