@@ -3963,7 +3963,7 @@ button .buttonIcon {
 .modsPanel {
   display: flex;
   flex-direction: column;
-  height: max(520px, calc(100vh - 300px));
+  height: max(560px, calc(100vh - 238px));
   min-height: 0;
 }
 
@@ -6906,7 +6906,7 @@ details.compatibilityBadge p {
 }
 
 .tabPage:has(.modsPanel) {
-  height: max(520px, calc(100vh - 300px));
+  height: max(560px, calc(100vh - 238px));
   min-height: 0;
 }
 
@@ -9431,7 +9431,7 @@ details.compatibilityBadge p {
 .filesPage {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: var(--space-4);
-  height: clamp(560px, calc(100vh - 238px), 840px);
+  height: max(560px, calc(100vh - 238px));
   max-height: none;
 }
 
@@ -9474,13 +9474,7 @@ details.compatibilityBadge p {
   word-break: normal;
 }
 
-.tabPage:has(.modsPanel),
-.tabPage:has(.modsPanel) .modsPanel,
-.modsPanel {
-  height: auto;
-  min-height: 0;
-  max-height: none;
-}
+
 
 .modsPanelHeader {
   gap: var(--space-3);
