@@ -9070,10 +9070,6 @@ details.compatibilityBadge p {
   --sidebar-rail-size: 40px;
 }
 
-.appShell {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-}
-
 .workspace {
   width: 100%;
   min-width: 0;
