@@ -9042,3 +9042,882 @@ details.compatibilityBadge p {
     font-size: clamp(21px, 7vw, 30px);
   }
 }
+
+/* Layout normalization pass */
+:root {
+  --page-max-width: 1440px;
+  --content-max-width: 1180px;
+  --panel-gap: var(--space-4);
+  --toolbar-min-height: 44px;
+  --control-height: 38px;
+  --modal-padding: var(--space-4);
+  --modal-small-width: 480px;
+  --modal-medium-width: 760px;
+  --modal-large-width: 1040px;
+  --sidebar-width: 248px;
+  --sidebar-rail-size: 40px;
+}
+
+.appShell {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.workspace {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: var(--space-4) var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.sidebar {
+  padding: var(--space-3);
+  gap: var(--space-3);
+}
+
+.brandBlock {
+  padding-bottom: var(--space-3);
+}
+
+.brandLogo {
+  width: var(--sidebar-rail-size);
+  height: var(--sidebar-rail-size);
+}
+
+.sideNav {
+  gap: 4px;
+}
+
+.sideNav button,
+.serverListItem,
+.accountChip {
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+.sideNav button {
+  padding: 8px 10px;
+  gap: var(--space-2);
+}
+
+.selectedServerReadout {
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-row);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  display: flex;
+  align-items: center;
+}
+
+.accountChip {
+  padding: 6px 8px;
+  gap: var(--space-2);
+}
+
+.sidebarDivider {
+  height: 1px;
+  margin: 6px 0;
+}
+
+.workspaceHeader {
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid var(--border-row);
+  align-items: center;
+}
+
+.workspaceHeader > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.workspaceHeader h2 {
+  font-size: clamp(22px, 1.9vw, 30px);
+  line-height: 1.12;
+}
+
+.workspaceHeader p {
+  max-width: 680px;
+  margin: 0;
+}
+
+.workspaceActions,
+.pageActions,
+.buttonRow,
+.fileActionGroup,
+.selectionActions,
+.nodeCardActions,
+.modInstallActions,
+.modInstallFooter,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter,
+.fileEditorFooter {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.workspaceActions button,
+.buttonRow button,
+.secondaryButton,
+.compactButton,
+.runtimeControlButton,
+.quickActionButton,
+.modalFooter button,
+.userModalFooter button,
+.nodeModalFooter button,
+.fileEditorFooter button,
+.modInstallFooter button {
+  min-height: var(--control-height);
+}
+
+.pageStack,
+.tabPage,
+.settingsList,
+.nodesPage {
+  width: 100%;
+  max-width: var(--page-max-width);
+  display: grid;
+  gap: var(--panel-gap);
+  align-content: start;
+}
+
+.tabPage {
+  min-width: 0;
+}
+
+.panel,
+.emptyState,
+.inlineState,
+.systemBanner,
+.notice,
+.activeServerStrip,
+.modalPanel {
+  border-width: 1px;
+  border-radius: 8px;
+}
+
+.panel {
+  padding: var(--space-4);
+}
+
+.panelHeader,
+.modsPanelHeader,
+.uiSectionHeader,
+.nodeCardHeader,
+.settingsGroupHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modInstallHeader {
+  min-height: 0;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-row);
+}
+
+.panelHeader,
+.modsPanelHeader,
+.uiSectionHeader,
+.nodeCardHeader,
+.settingsGroupHeader,
+.fileEditorHeader,
+.modInstallHeader {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.activeServerStrip {
+  margin: 0;
+  padding: var(--space-3);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.serverStripLeft {
+  flex: 1 1 360px;
+  gap: var(--space-3);
+}
+
+.serverStripIcon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+
+.server-icon-cube {
+  width: 20px;
+  height: 20px;
+}
+
+.serverStripInfo {
+  display: grid;
+  gap: 3px;
+}
+
+.serverStripTitleRow,
+.serverStripMetaRow,
+.serverStripRight {
+  gap: var(--space-2);
+}
+
+.serverStripRight {
+  align-items: center;
+}
+
+.runtimeControls {
+  gap: var(--space-1);
+}
+
+.runtimeControlButton,
+.quickActionButton {
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+}
+
+.overflowButton,
+.nodesRefreshButton {
+  width: var(--control-height);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+}
+
+.overflowDropdown {
+  padding: 6px;
+  min-width: 180px;
+}
+
+.overflowDropdown button {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.emptyState,
+.compactEmpty,
+.inlineState,
+.eventEmpty,
+.nodeServerEmpty,
+.fileDetailsEmpty {
+  max-width: none;
+  padding: var(--space-5);
+  gap: var(--space-3);
+}
+
+.emptyState h2,
+.compactEmpty h2 {
+  font-size: clamp(21px, 2.8vw, 30px);
+}
+
+.systemBanner,
+.notice,
+.inlineState {
+  padding: var(--space-3) var(--space-4);
+}
+
+.serverList {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.serverListItem {
+  padding: var(--space-3);
+  gap: 4px;
+}
+
+.overviewPage {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.overviewSummary {
+  gap: var(--space-3);
+}
+
+.summaryTile {
+  min-height: 84px;
+  padding: var(--space-3);
+  gap: var(--space-1);
+}
+
+.resourcePanel,
+.activityHealthPanel,
+.recentEventsPanel {
+  min-width: 0;
+}
+
+.resourceMetric,
+.eventRow,
+.scheduleRow,
+.nodeServerRow,
+.fileTableRow,
+.modsTableRow,
+.modSearchResult,
+.userRow {
+  min-height: 0;
+}
+
+.resourceMetric {
+  padding: var(--space-3);
+}
+
+.eventRow,
+.scheduleRow,
+.nodeServerRow,
+.modSearchResult {
+  padding: var(--space-3);
+}
+
+.consolePanel,
+.filesPage,
+.schedulePage,
+.modsPanel,
+.propertiesPage,
+.createServerPanel {
+  min-width: 0;
+}
+
+.consolePanel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.terminal,
+.consoleLog {
+  min-height: 360px;
+}
+
+.consoleCommandForm,
+.fileNavBar,
+.fileToolbar,
+.selectionActionBar,
+.modsToolbarCompact,
+.modSearchToolbar,
+.nodesToolbar {
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-3);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.fileNavBar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.fileToolbar,
+.selectionActionBar,
+.modsToolbarCompact,
+.modSearchToolbar,
+.nodesToolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.filesPage {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--space-4);
+  height: clamp(560px, calc(100vh - 238px), 840px);
+  max-height: none;
+}
+
+.fileTableHead,
+.fileTableRow {
+  min-height: 42px;
+}
+
+.fileTableHead,
+.fileTableRow {
+  padding-inline: var(--space-3);
+}
+
+.fileNameCell {
+  min-width: 0;
+}
+
+.fileDetailsPanel {
+  padding: var(--space-4);
+}
+
+.fileDetailsContent dl,
+.nodeInfoGrid,
+.nodeFacts,
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+}
+
+.fileDetailsContent dl {
+  grid-template-columns: 1fr;
+}
+
+.fileDetailsContent dl div {
+  grid-template-columns: minmax(76px, 0.32fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+}
+
+.fileDetailsContent dd {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.tabPage:has(.modsPanel),
+.tabPage:has(.modsPanel) .modsPanel,
+.modsPanel {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.modsPanelHeader {
+  gap: var(--space-3);
+}
+
+.modsPanelHeaderLeft,
+.modsContext,
+.modsCardText,
+.modInfoText,
+.modCompatibilityColumn,
+.modTitleLine,
+.modDetailsHeaderText,
+.modConfirmSelectedText {
+  min-width: 0;
+}
+
+.modsTableHeader,
+.modsTableRow {
+  min-width: 914px;
+  grid-template-columns:
+    minmax(220px, 1.2fr)
+    minmax(116px, 0.58fr)
+    minmax(110px, 0.52fr)
+    minmax(116px, 0.54fr)
+    minmax(66px, 0.32fr)
+    minmax(88px, 0.36fr)
+    minmax(174px, auto);
+}
+
+.modsTableRow {
+  min-height: 64px;
+  padding-block: var(--space-3);
+}
+
+.modsTableCell[data-label="Status"] .switch {
+  width: auto;
+}
+
+.modsTableCell[data-label="Status"] .switchStateLabel {
+  display: none;
+}
+
+.modsTableCell.actions {
+  gap: 6px;
+}
+
+.modsTableCell.actions button {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+}
+
+.modSearchResult {
+  grid-template-columns: 48px minmax(0, 1fr) minmax(180px, 0.32fr) auto;
+  gap: var(--space-3);
+}
+
+.modSearchResultActions,
+.modsTableActions,
+.nodeServerActions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.schedulePage {
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.scheduleForm,
+.scheduleListPanel {
+  min-width: 0;
+}
+
+.scheduleList {
+  gap: var(--space-2);
+}
+
+.settingsList {
+  max-width: var(--content-max-width);
+  gap: var(--space-3);
+}
+
+.settingsGroup {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settingsGroupHeader {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  border-bottom-color: rgb(0 0 0 / 0.08);
+}
+
+.usersGroupHeader {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.settingsGroupHeader > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: 8px;
+}
+
+.settingsRow {
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  border-top: 1px solid rgb(0 0 0 / 0.08);
+  border-bottom: 0;
+}
+
+.themeDark .settingsGroupHeader {
+  border-bottom-color: rgb(255 255 255 / 0.1);
+}
+
+.themeDark .settingsRow {
+  border-top-color: rgb(255 255 255 / 0.1);
+}
+
+.settingsRow select,
+.settingsRow .keyForm,
+.settingsRow .settingsStatus,
+.settingsRow > button {
+  justify-self: start;
+  max-width: 420px;
+}
+
+.settingsRow .keyForm {
+  width: min(420px, 100%);
+}
+
+.usersTable {
+  margin: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.nodesPage {
+  max-width: 1280px;
+  gap: var(--space-3);
+}
+
+.nodesToolbar {
+  margin: 0;
+}
+
+.nodesGrid {
+  gap: var(--space-3);
+  max-height: none;
+  overflow: visible;
+}
+
+.nodeCard {
+  padding: var(--space-3);
+  gap: var(--space-3);
+}
+
+.nodeCardHeader {
+  margin: 0;
+}
+
+.nodeCardTopLine,
+.nodeServerRow {
+  gap: var(--space-3);
+}
+
+.nodeServerList {
+  gap: var(--space-2);
+}
+
+.addNodeCardButton {
+  min-height: 220px;
+  padding: var(--space-4);
+}
+
+.appForm,
+.userModalForm,
+.nodeModalForm,
+.scheduleForm form,
+.keyForm {
+  gap: var(--space-3);
+}
+
+.appForm fieldset,
+.userModalFields,
+.nodeFormGrid,
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.appForm fieldset {
+  padding: var(--space-4);
+}
+
+.modalBackdrop {
+  padding: var(--space-4);
+}
+
+.modalPanel {
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.confirmModalPanel,
+.discardEditorModal {
+  width: min(var(--modal-small-width), calc(100vw - 32px));
+}
+
+.userModalPanel,
+.nodeModalPanel {
+  width: min(var(--modal-medium-width), calc(100vw - 32px));
+}
+
+.modInstallPanel,
+.modDetailsPanel {
+  width: min(var(--modal-large-width), calc(100vw - 32px));
+}
+
+.fileEditorModal {
+  width: min(1120px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 48px));
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modInstallHeader {
+  flex: 0 0 auto;
+  min-height: 56px;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody,
+.modInstallBody,
+.modDetailsBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  overflow: auto;
+}
+
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter,
+.fileEditorFooter,
+.modInstallFooter {
+  flex: 0 0 auto;
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-row);
+}
+
+.fileEditorBody {
+  padding: 0;
+}
+
+.fileEditorTextarea,
+.codeEditorHost {
+  min-height: 0;
+  height: 100%;
+}
+
+.modInstallStep,
+.modInstallReview,
+.modConfirmSection,
+.modInstallVersionTable,
+.nodeInfoCard,
+.addNodeStatusCard,
+.nodePlacementCard {
+  border-width: 1px;
+  border-radius: 8px;
+}
+
+.modInstallStep,
+.modInstallReview,
+.modConfirmSection,
+.nodeInfoCard,
+.addNodeStatusCard,
+.nodePlacementCard {
+  padding: var(--space-3);
+}
+
+.modInstallStepper {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .filesPage,
+  .schedulePage {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .overviewPage {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewPage > *,
+  .resourcePanel,
+  .activityHealthPanel,
+  .recentEventsPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .workspaceHeader,
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .workspaceActions,
+  .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .settingsRow,
+  .settingsGroupHeader,
+  .usersGroupHeader,
+  .modSearchResult,
+  .nodeServerRow {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsRow select,
+  .settingsRow .keyForm,
+  .settingsRow .settingsStatus,
+  .settingsRow > button {
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .usersTable {
+    margin-inline: var(--space-3);
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --sidebar-width: 100%;
+  }
+
+  .appShell,
+  .sidebarCollapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: relative;
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace {
+    padding: var(--space-3);
+  }
+
+  .workspaceHeader {
+    padding-bottom: var(--space-3);
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(22px, 7vw, 28px);
+  }
+
+  .activeServerStrip,
+  .panel,
+  .emptyState,
+  .modalBody,
+  .userModalBody,
+  .nodeModalBody,
+  .modInstallBody {
+    padding: var(--space-3);
+  }
+
+  .serverStripLeft,
+  .serverStripRight,
+  .runtimeControls {
+    width: 100%;
+  }
+
+  .runtimeControlButton,
+  .quickActionButton {
+    flex: 1 1 120px;
+  }
+
+  .fileNavBar,
+  .fileToolbar,
+  .selectionActionBar,
+  .modsToolbarCompact,
+  .modSearchToolbar,
+  .nodesToolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .modalBackdrop {
+    padding: var(--space-2);
+  }
+
+  .modalPanel,
+  .confirmModalPanel,
+  .discardEditorModal,
+  .userModalPanel,
+  .nodeModalPanel,
+  .modInstallPanel,
+  .modDetailsPanel,
+  .fileEditorModal {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .fileEditorModal {
+    height: calc(100vh - 16px);
+  }
+}

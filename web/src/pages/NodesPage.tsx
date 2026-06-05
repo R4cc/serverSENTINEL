@@ -557,7 +557,7 @@ export function NodesPage({
       {sortedNodes.length > 0 && (
         <section className="panel nodesToolbar">
           <div>
-            <h2>Nodes</h2>
+            <h2>Node inventory</h2>
             <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
@@ -571,7 +571,7 @@ export function NodesPage({
       <section className="nodesGrid">
         {sortedNodes.length === 0 && (
           <div className="emptyState nodesEmptyState">
-            <h2>No Nodes Yet</h2>
+            <h2>No nodes yet</h2>
             <p>No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers.</p>
             <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</button>
           </div>

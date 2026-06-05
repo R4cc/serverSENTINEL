@@ -2961,6 +2961,32 @@ export default function App() {
           ? "Add an online, compatible node before creating a server."
           : "Server creation is unavailable right now."
         : provisioningNavigationReason;
+  const pageTitles: Record<ActivePage, string> = {
+    servers: "Servers",
+    create: "New managed server",
+    overview: "Overview",
+    console: "Console",
+    files: "Files",
+    mods: "Mods",
+    schedule: "Schedules",
+    properties: "Properties",
+    settings: "Settings",
+    nodes: "Nodes"
+  };
+  const pageDescriptions: Partial<Record<ActivePage, string>> = {
+    servers: "Choose a managed server or create a new one.",
+    create: "Provision a Fabric server on an available node.",
+    overview: "Runtime, resources, and recent activity.",
+    console: "Live log output and command input.",
+    files: "Browse, preview, and edit server files.",
+    mods: "Review installed mods or search Modrinth.",
+    schedule: "Create and manage scheduled console commands.",
+    properties: "Edit server configuration and deletion settings.",
+    settings: "Interface, integrations, users, and container status.",
+    nodes: "Manage node hosts and server placement."
+  };
+  const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
+  const currentPageDescription = pageDescriptions[activePage];
 
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
@@ -3042,13 +3068,8 @@ export default function App() {
       <section className="workspace">
         <header className="workspaceHeader">
           <div>
-            <h2>
-              {activePage === "servers" && "Servers"}
-              {activePage === "create" && "New Managed Server"}
-              {isServerWorkspacePage(activePage) && (activeServer?.displayName ?? (!applicationReady ? "Loading" : effectiveAppState.servers.length === 0 ? "Welcome" : "No Managed Server Selected"))}
-              {activePage === "settings" && "Settings"}
-              {activePage === "nodes" && "Nodes"}
-            </h2>
+            <h2>{currentPageTitle}</h2>
+            {currentPageDescription && <p>{currentPageDescription}</p>}
           </div>
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</button>}
@@ -3129,7 +3150,7 @@ export default function App() {
               </section>
             ) : (
               <div className="emptyState">
-                <h2>No Managed Servers Yet</h2>
+                <h2>No managed servers yet</h2>
                 {panelOnlyMode && usableContextNodes.length === 0 ? (
                   <>
                     <p>No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers.</p>
@@ -3143,7 +3164,7 @@ export default function App() {
                       disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
                       title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                     >
-                      Add Node
+                      Add node
                     </button>
                   </>
                 ) : (
@@ -3384,7 +3405,7 @@ export default function App() {
                   disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
                   title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                 >
-                  Add Node
+                  Add node
                 </button>
               </>
             ) : (
@@ -3398,9 +3419,9 @@ export default function App() {
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <section className="emptyState">
-            <h2>No Server Selected</h2>
+            <h2>No server selected</h2>
             <p>A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings.</p>
-            <button onClick={() => setActivePage("servers")}>Open Servers</button>
+            <button onClick={() => setActivePage("servers")}>Open servers</button>
           </section>
         )}
 
@@ -3446,7 +3467,7 @@ export default function App() {
                   type="button"
                   className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
                   onClick={() => setActivePage("console")}
-                  title="Open Console"
+                  title="Open console"
                 >
                   <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polyline points="4 17 10 11 4 5" />
@@ -3482,7 +3503,7 @@ export default function App() {
                         disabled={isProvisioning}
                         title={isProvisioning ? provisioningNavigationReason : "Refresh server status"}
                       >
-                        Refresh Status
+                        Refresh status
                       </button>
                       <button
                         type="button"
@@ -3493,7 +3514,7 @@ export default function App() {
                         disabled={logs.length === 0}
                         title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}
                       >
-                        Download Log
+                        Download log
                       </button>
                     </div>
                   )}
