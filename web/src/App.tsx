@@ -3593,6 +3593,7 @@ export default function App() {
                         {activeStatus?.commandInputAvailable
                           ? "Command input enabled"
                           : activeStatus?.commandInputMessage === "Start the runtime container before sending console commands" ||
+                            activeStatus?.commandInputMessage === "Start the server before sending console commands." ||
                             activeStatus?.commandInputMessage === "Start the demo server to enable simulated console input."
                           ? ""
                           : activeStatus?.commandInputMessage}
@@ -3638,6 +3639,8 @@ export default function App() {
                               ? "Enter command"
                               : activeStatus?.commandInputMessage === "Start the runtime container before sending console commands"
                               ? "Start the runtime container before sending console commands"
+                              : activeStatus?.commandInputMessage === "Start the server before sending console commands."
+                              ? "Start the server before sending console commands."
                               : activeStatus?.commandInputMessage === "Start the demo server to enable simulated console input."
                               ? "Start the demo server to enable simulated console input."
                               : "Console input unavailable"
