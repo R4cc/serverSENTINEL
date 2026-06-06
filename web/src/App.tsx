@@ -14,7 +14,7 @@ import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState, FileSortKey, ModInstallModalState } from "./app/uiState";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
-import { ConsoleLine } from "./components/ConsoleLine";
+import { ConsoleLog } from "./components/ConsoleLog";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
@@ -27,6 +27,10 @@ import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
+
+function consoleLine(text: string) {
+  return `${text}\n`;
+}
 
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -642,10 +646,10 @@ export default function App() {
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoStatus(activeServer, demoRunning));
       setLogs([
-        "[demo] Starting minecraft server version 1.21.4",
-        "[demo] Loading Fabric Loader 0.16.10",
-        "[demo] Preparing spawn area: 100%",
-        "[demo] Done (5.132s)! For help, type \"help\""
+        consoleLine("[demo] Starting minecraft server version 1.21.4"),
+        consoleLine("[demo] Loading Fabric Loader 0.16.10"),
+        consoleLine("[demo] Preparing spawn area: 100%"),
+        consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
       ]);
       setListing(demoListing("/", demoFiles, demoInstalledMods));
       setInstalledMods(demoInstalledMods);
@@ -677,7 +681,7 @@ export default function App() {
       try {
         message = JSON.parse(event.data);
       } catch {
-        setLogs(["Console stream sent an unreadable message."]);
+        setLogs([consoleLine("Console stream sent an unreadable message.")]);
         return;
       }
       if (message.type === "log") {
@@ -687,13 +691,13 @@ export default function App() {
         }
       }
       if (message.type === "unavailable") {
-        setLogs([message.message ?? "Console stream is unavailable."]);
+        setLogs([consoleLine(message.message ?? "Console stream is unavailable.")]);
       }
       if (message.type === "empty") {
         setLogs([]);
       }
     };
-    socket.onerror = () => setLogs(["Console stream is unavailable."]);
+    socket.onerror = () => setLogs([consoleLine("Console stream is unavailable.")]);
     return () => socket.close();
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
@@ -1224,8 +1228,8 @@ export default function App() {
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
         setLogs((current) => current.length ? current : [
-          "[demo] Starting minecraft server version 1.21.4",
-          "[demo] Done (5.132s)! For help, type \"help\""
+          consoleLine("[demo] Starting minecraft server version 1.21.4"),
+          consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
         ]);
       }
       return;
@@ -1236,7 +1240,7 @@ export default function App() {
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
-      setLogs(lines.map((line) => `[${result.source}] ${line}`));
+      setLogs(lines.map((line) => consoleLine(`[${result.source}] ${line}`)));
     } catch (error) {
       if (activeServerIdRef.current === serverId) {
         setConsoleError(errorMessage(error, "Could not load console logs. Runtime logs may be unavailable."));
@@ -1255,7 +1259,7 @@ export default function App() {
       .replace(/^-+|-+$/g, "") || "server";
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${safeServerName}-console-${timestamp}.log`;
-    const blob = new Blob([`${logs.join("\n")}\n`], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([logs.join("")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -1593,8 +1597,8 @@ export default function App() {
         setResourceSamples([demoStats(nextRunning)]);
         setLogs((current) => [
           ...current.slice(-496),
-          `[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`,
-          `[demo] Server is now ${nextRunning ? "running" : "stopped"}`
+          consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
+          consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
         ]);
         notify("success", `Demo server ${completedLabel}`);
         return;
@@ -1633,7 +1637,7 @@ export default function App() {
               : command.startsWith("say ")
                 ? `[Server] ${command.slice(4)}`
                 : `Executed demo command: ${command}`;
-        setLogs((current) => [...current.slice(-497), `[command] > ${command}`, `[demo] ${response}`]);
+        setLogs((current) => [...current.slice(-497), consoleLine(`[command] > ${command}`), consoleLine(`[demo] ${response}`)]);
         setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
         setHistoryIndex(null);
         setCommandInput("");
@@ -1643,7 +1647,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ command })
       });
-      setLogs((current) => [...current.slice(-499), `[command] > ${command}`]);
+      setLogs((current) => [...current.slice(-499), consoleLine(`[command] > ${command}`)]);
       setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
       setHistoryIndex(null);
       setCommandInput("");
@@ -3777,7 +3781,7 @@ export default function App() {
                   )}
                   <div className="terminal">
                     <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
-                      {logs.length ? logs.map((line, index) => <ConsoleLine key={index} line={line} />) : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
+                      {logs.length ? <ConsoleLog entries={logs} /> : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
                     </div>
                     {pendingConsoleEntries > 0 && (
                       <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
