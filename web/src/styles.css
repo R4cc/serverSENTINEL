@@ -9888,7 +9888,9 @@ details.compatibilityBadge p {
 
 .modSearchView {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: var(--space-3);
+  align-content: stretch;
   min-height: 0;
   min-width: 0;
   width: 100%;
@@ -9924,21 +9926,22 @@ details.compatibilityBadge p {
 .modSearchView .mods {
   width: 100%;
   max-width: none;
+  min-height: 0;
+  align-self: stretch;
+  justify-content: flex-start;
 }
 
 .modSearchView.empty {
-  flex: 0 0 auto;
-  align-content: start;
+  flex: 1 1 auto;
 }
 
 .modSearchView.searching {
-  align-content: start;
+  align-content: stretch;
 }
 
 .modSearchView.empty .mods {
-  flex: 0 0 auto;
   min-height: 0;
-  overflow: visible;
+  overflow-y: auto;
 }
 
 .modSearchResultActions,
