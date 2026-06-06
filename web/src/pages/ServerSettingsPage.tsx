@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion, RuntimeMinecraftVersion, RuntimeResolveResponse, ServerRuntimeProfile } from '../types';
-import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDockerLabel, nodeStatusLabel } from '../utils/nodes';
 
 function jarProviderLabel(provider?: string) {
@@ -31,24 +31,27 @@ export function MemorySelector({
   onJavaArgsChange: (value: string) => void;
 }) {
   const totalRamGb = totalMemoryGb(totalMemory);
-  const [memoryGb, setMemoryGb] = useState(() => Math.min(Math.max(1, initialMemoryGb), totalRamGb));
+  const memoryInfo = parseJavaMemoryArgs(javaArgs);
+  const sliderMode: "linked" | "maximum" = memoryInfo.xmsGb !== null && memoryInfo.xmxGb !== null && memoryInfo.xmsGb !== memoryInfo.xmxGb ? "maximum" : "linked";
+  const parsedMemoryGb = memoryInfo.xmxGb ?? initialMemoryGb;
+  const [memoryGb, setMemoryGb] = useState(() => Math.min(Math.max(1, parsedMemoryGb), totalRamGb));
 
   useEffect(() => {
-    setMemoryGb((current) => Math.min(Math.max(1, current), totalRamGb));
-  }, [totalRamGb]);
+    setMemoryGb(Math.min(Math.max(1, parsedMemoryGb), totalRamGb));
+  }, [parsedMemoryGb, totalRamGb]);
 
   function updateMemory(value: number) {
     if (!Number.isFinite(value)) return;
     const nextMemoryGb = Math.min(Math.max(1, Math.round(value)), totalRamGb);
     setMemoryGb(nextMemoryGb);
-    onJavaArgsChange(replaceMemoryArgs(javaArgs, nextMemoryGb));
+    onJavaArgsChange(replaceMemoryArgs(javaArgs, nextMemoryGb, { updateInitialHeap: sliderMode === "linked" }));
   }
 
   return (
     <div className="memorySelector">
       <div className="memorySelectorHeader">
-        <label htmlFor="memoryGb">Memory</label>
-        <span className="totalRamLabel">Machine RAM: {totalRamGb} GB total</span>
+        <label htmlFor="memoryGb">Minecraft memory</label>
+        <span className="totalRamLabel">{sliderMode === "linked" ? "Initial and maximum heap linked" : "Adjusting maximum heap"}</span>
       </div>
       <div className="memorySelectorControls">
         <input
@@ -74,9 +77,9 @@ export function MemorySelector({
       </div>
       <p className="safelyAllocateTip">
         {memoryGb > totalRamGb * 0.8 ? (
-          <span className="warn">Allocating over 80% of RAM may cause host instability.</span>
+          <span className="warn">Leave some RAM for the host. Using nearly all memory may cause instability.</span>
         ) : (
-          <span className="ok">Safe allocation level for this host.</span>
+          <span className="ok">{sliderMode === "linked" ? `Writes -Xms${memoryGb}G and -Xmx${memoryGb}G.` : `Advanced args use a custom -Xms value, so the slider changes -Xmx${memoryGb}G only.`}</span>
         )}
       </p>
     </div>
@@ -97,7 +100,6 @@ export function ServerEditForm({
   disabled?: boolean;
 }) {
   const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
-  const [limitContainerMemory, setLimitContainerMemory] = useState(server.limitContainerMemory !== false);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
 
@@ -142,27 +144,22 @@ export function ServerEditForm({
         javaArgs={javaArgs}
         onJavaArgsChange={setJavaArgs}
       />
-      <input type="hidden" name="limitContainerMemory" value={limitContainerMemory ? "true" : "false"} />
-      <label className="checkLine">
-        <input
-          type="checkbox"
-          checked={!limitContainerMemory}
-          onChange={(event) => setLimitContainerMemory(!event.target.checked)}
-        />
-        Do not limit container memory
-      </label>
-      <p className="fieldHint">Java -Xmx still controls the Minecraft heap. This only removes Docker's outer memory cap.</p>
-      <label>
-        Java arguments
-        <textarea
-          className="javaArgsInput"
-          name="javaArgs"
-          value={javaArgs}
-          onChange={(event) => setJavaArgs(event.target.value)}
-          rows={4}
-          spellCheck={false}
-        />
-      </label>
+      <input type="hidden" name="limitContainerMemory" value="false" />
+      <details className="advanced">
+        <summary>Advanced Java arguments</summary>
+        <label>
+          Java arguments
+          <textarea
+            className="javaArgsInput"
+            name="javaArgs"
+            value={javaArgs}
+            onChange={(event) => setJavaArgs(event.target.value)}
+            rows={4}
+            spellCheck={false}
+          />
+        </label>
+        <p className="fieldHint">If -Xms and -Xmx differ, the memory slider adjusts -Xmx only and keeps your custom -Xms value.</p>
+      </details>
       <label>
         Docker runtime image
         <select name="dockerImage" defaultValue={server.dockerImage || "eclipse-temurin:21-jre"}>
@@ -276,7 +273,6 @@ export function ManagedServerForm({
   const [runtimeWarnings, setRuntimeWarnings] = useState<string[]>([]);
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
-  const [limitContainerMemory, setLimitContainerMemory] = useState(true);
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const serverPortValid = isValidServerPort(serverPort);
@@ -550,24 +546,15 @@ export function ManagedServerForm({
         <input name="acceptEula" type="checkbox" required />
         I accept the Minecraft EULA for this server.
       </label>
+      <MemorySelector
+        totalMemory={totalMemory}
+        initialMemoryGb={parseMaxMemoryGb(javaArgs)}
+        javaArgs={javaArgs}
+        onJavaArgsChange={setJavaArgs}
+      />
+      <input type="hidden" name="limitContainerMemory" value="false" />
       <details className="advanced">
         <summary>Advanced settings</summary>
-        <MemorySelector
-          totalMemory={totalMemory}
-          initialMemoryGb={parseMaxMemoryGb(javaArgs)}
-          javaArgs={javaArgs}
-          onJavaArgsChange={setJavaArgs}
-        />
-        <input type="hidden" name="limitContainerMemory" value={limitContainerMemory ? "true" : "false"} />
-        <label className="checkLine">
-          <input
-            type="checkbox"
-            checked={!limitContainerMemory}
-            onChange={(event) => setLimitContainerMemory(!event.target.checked)}
-          />
-          Do not limit container memory
-        </label>
-        <p className="fieldHint">Java -Xmx still controls the Minecraft heap. This only removes Docker's outer memory cap.</p>
         <label>
           Java arguments
           <textarea
@@ -579,6 +566,7 @@ export function ManagedServerForm({
             spellCheck={false}
           />
         </label>
+        <p className="fieldHint">If -Xms and -Xmx differ, the memory slider adjusts -Xmx only and keeps your custom -Xms value.</p>
         <label>
           Docker container name
           <input name="dockerContainer" placeholder="serversentinel-survival" pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />

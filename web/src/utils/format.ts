@@ -37,12 +37,28 @@ export function totalMemoryGb(totalMemory: number) {
 }
 
 export function parseMaxMemoryGb(javaArgs?: string) {
-  const match = (javaArgs || "").match(/-Xmx(\d+)G/);
-  return match ? parseInt(match[1], 10) : 4;
+  return parseJavaMemoryArgs(javaArgs).xmxGb ?? 4;
+}
+
+function parseMemoryToken(javaArgs: string, flag: "Xms" | "Xmx") {
+  const match = javaArgs.match(new RegExp(`-${flag}(\\d+)([gGmM])`));
+  if (!match) return null;
+  const value = parseInt(match[1], 10);
+  if (!Number.isFinite(value)) return null;
+  return match[2].toLowerCase() === "m" ? Math.max(1, Math.round(value / 1024)) : value;
+}
+
+export function parseJavaMemoryArgs(javaArgs?: string) {
+  const args = javaArgs || "";
+  return {
+    xmsGb: parseMemoryToken(args, "Xms"),
+    xmxGb: parseMemoryToken(args, "Xmx")
+  };
 }
 
 export function memoryArgs(memoryGb: number) {
-  return `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G -Xmx${memoryGb}G`;
+  const memory = Math.max(1, Math.round(memoryGb));
+  return `-Xms${memory}G -Xmx${memory}G`;
 }
 
 export function defaultDockerImageForMinecraftVersion(version?: string) {
@@ -52,9 +68,12 @@ export function defaultDockerImageForMinecraftVersion(version?: string) {
   return "eclipse-temurin:17-jre";
 }
 
-export function replaceMemoryArgs(javaArgs: string, memoryGb: number) {
-  const xms = `-Xms${Math.max(1, Math.floor(memoryGb / 2))}G`;
-  const xmx = `-Xmx${memoryGb}G`;
+export function replaceMemoryArgs(javaArgs: string, memoryGb: number, options: { updateInitialHeap?: boolean } = {}) {
+  const memory = Math.max(1, Math.round(memoryGb));
+  const updateInitialHeap = options.updateInitialHeap ?? true;
+  const existingXms = javaArgs.match(/(^|\s)(-Xms\S+)/)?.[2] ?? "";
+  const xms = updateInitialHeap ? `-Xms${memory}G` : existingXms;
+  const xmx = `-Xmx${memory}G`;
   const withoutXms = javaArgs.replace(/(^|\s)-Xms\S+/g, "").trim();
   const withoutMemory = withoutXms.replace(/(^|\s)-Xmx\S+/g, "").trim();
   return [xms, xmx, withoutMemory].filter(Boolean).join(" ");
