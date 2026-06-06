@@ -40,7 +40,7 @@ describe("MCJars runtime provider", () => {
             projectVersionId: "0.16.10",
             type: "FABRIC",
             experimental: false,
-            jarUrl: "https://versions.mcjars.test/fabric.jar",
+            jarUrl: "https://versions.mcjars.app/download/fabric/1.21.4/0.16.10/1.0.1.jar",
             jarSize: 1234
           }
         ]
@@ -57,7 +57,7 @@ describe("MCJars runtime provider", () => {
       jarArtifact: {
         id: "build-1",
         filename: "fabric-server-launch.jar",
-        downloadUrl: "https://versions.mcjars.test/fabric.jar",
+        downloadUrl: "https://meta.fabricmc.net/v2/versions/loader/1.21.4/0.16.10/1.0.1/server/jar",
         sizeBytes: 1234
       }
     });

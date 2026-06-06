@@ -94,7 +94,7 @@ export class McJarsProvider implements ServerJarProvider {
         wantedLoader ? `Fabric loader ${wantedLoader} is not available for Minecraft ${minecraftVersion}` : `MCJars has no Fabric server artifact for Minecraft ${minecraftVersion}`
       );
     }
-    const downloadUrl = stringValue(selected.jarUrl, "MCJars Fabric jar URL");
+    const downloadUrl = this.fabricDownloadUrl(minecraftVersion, selected);
     if (!downloadUrl.startsWith("https://")) {
       throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
     }
@@ -145,6 +145,19 @@ export class McJarsProvider implements ServerJarProvider {
       javaMajorVersion,
       releasedAt: typeof entry.created === "string" ? entry.created : undefined
     };
+  }
+
+  private fabricDownloadUrl(minecraftVersion: string, build: McJarsBuild) {
+    const mcJarsUrl = stringValue(build.jarUrl, "MCJars Fabric jar URL");
+    const loaderVersion = stringValue(build.projectVersionId ?? build.name, "MCJars Fabric loader version");
+    const installerVersion = mcJarsUrl.match(/\/download\/fabric\/[^/]+\/[^/]+\/([^/?#]+)\.jar(?:[?#].*)?$/i)?.[1];
+    const downloadUrl = installerVersion
+      ? `https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(minecraftVersion)}/${encodeURIComponent(loaderVersion)}/${encodeURIComponent(installerVersion)}/server/jar`
+      : mcJarsUrl;
+    if (!downloadUrl.startsWith("https://")) {
+      throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
+    }
+    return downloadUrl;
   }
 
   private async cached<T>(key: string, load: () => Promise<T>, forceRefresh = false): Promise<T> {
