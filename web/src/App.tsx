@@ -1367,13 +1367,7 @@ export default function App() {
       setNotice(message);
       setProvisioningError(message);
       notify("error", message);
-      setActiveJobs((current) => current.map((j) => j.id === "local" || (j.type === "provision" && j.status === "running") ? {
-        ...j,
-        status: "failed",
-        task: "Server setup failed",
-        error: message,
-        dismissible: true
-      } : j));
+      setActiveJobs((current) => current.filter((j) => j.id !== "local" && !(j.type === "provision" && j.status !== "succeeded")));
     } finally {
       provisionSubmitLockRef.current = false;
     }
