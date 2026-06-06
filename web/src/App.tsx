@@ -3184,7 +3184,7 @@ export default function App() {
         : provisioningNavigationReason;
   const pageTitles: Record<ActivePage, string> = {
     servers: "Servers",
-    create: "New managed server",
+    create: "Create new managed server",
     overview: "Overview",
     console: "Console",
     files: "Files",
@@ -3196,7 +3196,7 @@ export default function App() {
   };
   const pageDescriptions: Partial<Record<ActivePage, string>> = {
     servers: "Choose a managed server or create a new one.",
-    create: "Provision a Fabric server on an available node.",
+    create: "Follow the steps below to create and configure your Minecraft server.",
     overview: "Runtime, resources, and recent activity.",
     console: "Live log output and command input.",
     files: "Browse, preview, and edit server files.",
@@ -3406,7 +3406,7 @@ export default function App() {
         )}
 
         {activePage === "create" && (
-          <section className="panel createServerPanel">
+          <section className="createServerPanel">
             {currentProvisionJob && currentProvisionJob.status === "running" && (
               <InlineState
                 tone="loading"
@@ -3433,11 +3433,8 @@ export default function App() {
               </section>
             )}
             <ManagedServerForm
-              onSubmit={createServer}
-              dockerSocketMounted={panelOnlyMode ? true : effectiveAppState.dockerSocketMounted}
               nodes={contextNodes}
               preferredNodeId={preferredCreateNodeId}
-              versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
               disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}

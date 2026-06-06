@@ -3644,6 +3644,265 @@ button .buttonIcon {
   min-width: 44px;
 }
 
+.createServerPanel {
+  width: 100%;
+  max-width: none;
+  margin-bottom: var(--space-4);
+}
+
+.createWizardPage {
+  width: min(1080px, 100%);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.createWizardStepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.createWizardStep {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) minmax(32px, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+
+.createWizardStep:last-child {
+  grid-template-columns: auto minmax(0, max-content);
+}
+
+.createWizardStep > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 900;
+}
+
+.createWizardStep > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.createWizardStep strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.createWizardStep small {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.createWizardStep i {
+  border-top: var(--border-subtle) solid var(--border-muted);
+}
+
+.createWizardStep.active {
+  color: var(--accent);
+}
+
+.createWizardStep.active > span {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--swiss-white);
+}
+
+.createWizardStep.completed {
+  color: var(--text);
+}
+
+.createWizardStep.completed > span {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--swiss-white);
+}
+
+.createWizardStep.completed .buttonIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.createWizardCard {
+  display: grid;
+  gap: var(--space-4);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.createWizardCard > .modInstallStepIntro,
+.createWizardFields,
+.createWizardPlaceholder {
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.createWizardFields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.createWizardField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.createWizardField label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.createWizardField input,
+.createWizardField select {
+  width: 100%;
+}
+
+.createNodeOverview {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.createNodeOverview > strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.createNodeOverviewGrid {
+  display: grid;
+  grid-template-columns: 56px repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.createNodeOverviewIcon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--sentinel-accent-soft);
+  color: var(--accent);
+}
+
+.createNodeOverviewIcon svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.createNodeOverviewMetric {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  border-left: var(--border-subtle) solid var(--border-muted);
+}
+
+.createNodeOverviewMetric span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.createNodeOverviewMetric strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.createNodeOverview p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.createWizardPlaceholder {
+  min-height: 320px;
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.createWizardFooter {
+  margin-top: var(--space-4);
+}
+
+.createWizardFooter button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 980px) {
+  .createWizardStepper {
+    grid-template-columns: 1fr;
+  }
+
+  .createWizardStep,
+  .createWizardStep:last-child {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .createWizardStep i {
+    display: none;
+  }
+
+  .createNodeOverviewGrid {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .createNodeOverviewMetric {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .createWizardFooter button {
+    width: 100%;
+  }
+
+  .createWizardCard > .modInstallStepIntro,
+  .createWizardFields,
+  .createWizardPlaceholder {
+    padding: var(--space-3) var(--space-3) 0;
+  }
+
+  .createNodeOverview {
+    padding: var(--space-3);
+  }
+
+  .nodeSelectRow {
+    align-items: stretch;
+  }
+}
+
 .placementWarning {
   margin: 0;
 }
