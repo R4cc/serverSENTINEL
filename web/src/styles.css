@@ -6040,6 +6040,13 @@ details.compatibilityBadge p {
   flex-direction: column;
 }
 
+.tabPage.scheduleManagementPage {
+  width: 100%;
+  max-width: none;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
 .scheduleCardHeader {
   flex: 0 0 auto;
   display: flex;
@@ -6085,6 +6092,7 @@ details.compatibilityBadge p {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .scheduleTableHeader,
@@ -6290,9 +6298,26 @@ details.compatibilityBadge p {
   font-weight: 650;
 }
 
-.scheduleEmptyState {
-  min-height: 360px;
-  border: 0;
+.scheduleNoRows {
+  min-height: 88px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  color: var(--text-muted);
+}
+
+.scheduleNoRows strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.scheduleNoRows span {
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .scheduledRunsFeed {
@@ -6305,7 +6330,7 @@ details.compatibilityBadge p {
 .scheduledRunItem {
   position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
   padding-bottom: var(--space-4);
@@ -6357,10 +6382,10 @@ details.compatibilityBadge p {
 }
 
 .scheduledRunTime {
+  grid-column: 2;
   display: grid;
-  justify-items: end;
+  justify-items: start;
   gap: 3px;
-  white-space: nowrap;
 }
 
 .scheduledRunTime span {
@@ -6369,7 +6394,15 @@ details.compatibilityBadge p {
 }
 
 .scheduledRunsEmpty {
-  margin: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: var(--space-5);
 }
 
 @media (max-width: 1180px) {
@@ -6461,6 +6494,7 @@ details.compatibilityBadge p {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
+  overflow: hidden;
 }
 
 .scheduleEditFields {
@@ -6468,17 +6502,37 @@ details.compatibilityBadge p {
 }
 
 .scheduleEditOptions {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-2);
 }
 
 .scheduleEditOptions .checkLine {
+  width: auto;
+  display: inline-flex;
   justify-content: flex-start;
+  align-items: center;
   min-height: 28px;
+  gap: var(--space-2);
+  margin: 0;
 }
 
 .scheduleEditOptions .checkLine input {
   flex: 0 0 auto;
+  margin: 0;
+}
+
+.scheduleCommandStack {
+  min-height: 0;
+}
+
+.scheduleCommandList {
+  max-height: min(260px, 34vh);
+  overflow: auto;
+  display: grid;
+  gap: var(--space-2);
+  padding-right: 2px;
 }
 
 .compactEmpty {
@@ -10312,11 +10366,34 @@ details.compatibilityBadge p {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   gap: var(--space-4);
   align-items: stretch;
+  align-content: stretch;
+  width: 100%;
+  max-width: none;
+  height: max(640px, calc(100vh - 238px));
+  min-height: 0;
 }
 
 .scheduleTableCard,
 .scheduledRunsCard {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
+.scheduleEditOptions {
+  align-items: flex-start;
+}
+
+.scheduleEditOptions .checkLine {
+  width: auto;
+  display: inline-flex;
+  grid-template-columns: none;
+  justify-content: flex-start;
+  justify-self: start;
+  text-align: left;
 }
 
 .settingsList {

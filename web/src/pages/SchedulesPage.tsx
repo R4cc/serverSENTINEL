@@ -186,13 +186,9 @@ export function SchedulePage({
                 </details>
               </article>
             )) : (
-              <div className="emptyState scheduleEmptyState">
-                <h2>No schedules</h2>
-                <p>Create a scheduled execution to run console commands automatically.</p>
-                <button type="button" onClick={() => setFormMode({ type: "create" })} disabled={disabled}>
-                  <AppIcon name="plus" />
-                  <span>Add schedule</span>
-                </button>
+              <div className="scheduleNoRows">
+                <strong>No schedules added</strong>
+                <span>Use Add schedule to create an automated console command.</span>
               </div>
             )}
           </div>
@@ -258,18 +254,20 @@ export function SchedulePage({
                     <input name="cron" defaultValue={modalSchedule?.cron ?? ""} placeholder="0 4 * * *" required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
                   </label>
                 </div>
-                <div className="commandStack">
+                <div className="commandStack scheduleCommandStack">
                   <span className="fieldLabel">Commands</span>
-                  {commandIds.map((id, index) => (
-                    <div key={id} className="commandInputRow">
-                      <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
-                      {index > 0 && (
-                        <button type="button" className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
-                          <AppIcon name="x" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  <div className="scheduleCommandList">
+                    {commandIds.map((id, index) => (
+                      <div key={id} className="commandInputRow">
+                        <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
+                        {index > 0 && (
+                          <button type="button" className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
+                            <AppIcon name="x" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                   <button type="button" className="secondaryButton scheduleCommandAdd" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
                     <AppIcon name="plus" />
                     <span>Additional command</span>
