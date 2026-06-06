@@ -41,6 +41,11 @@ const failureTtlMs = 30_000;
 const userAgent = "ServerSentinel/0.5.0 (MCJars runtime provider)";
 const mcjarsReachabilityMessage = "ServerSentinel could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again.";
 
+function withDetails(error: RuntimeResolutionError, details: string) {
+  (error as RuntimeResolutionError & { details?: string }).details = details;
+  return error;
+}
+
 export class McJarsProvider implements ServerJarProvider {
   readonly id = "mcjars" as const;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
@@ -94,7 +99,7 @@ export class McJarsProvider implements ServerJarProvider {
         wantedLoader ? `Fabric loader ${wantedLoader} is not available for Minecraft ${minecraftVersion}` : `MCJars has no Fabric server artifact for Minecraft ${minecraftVersion}`
       );
     }
-    const downloadUrl = this.fabricDownloadUrl(minecraftVersion, selected);
+    const downloadUrl = this.fabricDownloadUrl(selected);
     if (!downloadUrl.startsWith("https://")) {
       throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
     }
@@ -147,17 +152,12 @@ export class McJarsProvider implements ServerJarProvider {
     };
   }
 
-  private fabricDownloadUrl(minecraftVersion: string, build: McJarsBuild) {
+  private fabricDownloadUrl(build: McJarsBuild) {
     const mcJarsUrl = stringValue(build.jarUrl, "MCJars Fabric jar URL");
-    const loaderVersion = stringValue(build.projectVersionId ?? build.name, "MCJars Fabric loader version");
-    const installerVersion = mcJarsUrl.match(/\/download\/fabric\/[^/]+\/[^/]+\/([^/?#]+)\.jar(?:[?#].*)?$/i)?.[1];
-    const downloadUrl = installerVersion
-      ? `https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(minecraftVersion)}/${encodeURIComponent(loaderVersion)}/${encodeURIComponent(installerVersion)}/server/jar`
-      : mcJarsUrl;
-    if (!downloadUrl.startsWith("https://")) {
+    if (!mcJarsUrl.startsWith("https://")) {
       throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
     }
-    return downloadUrl;
+    return mcJarsUrl;
   }
 
   private async cached<T>(key: string, load: () => Promise<T>, forceRefresh = false): Promise<T> {
@@ -185,10 +185,17 @@ export class McJarsProvider implements ServerJarProvider {
     try {
       response = await this.fetchImpl(url.toString(), { headers });
     } catch (error) {
-      throw new RuntimeResolutionError("provider_unavailable", mcjarsReachabilityMessage);
+      throw withDetails(
+        new RuntimeResolutionError("provider_unavailable", mcjarsReachabilityMessage),
+        `MCJars API request failed\nurl=${url.toString()}\nerror=${error instanceof Error ? error.message : String(error)}`
+      );
     }
     if (!response.ok) {
-      throw new RuntimeResolutionError("provider_unavailable", `MCJars is currently unavailable (${response.status}). Try again in a moment.`);
+      const body = await response.text().catch(() => "");
+      throw withDetails(
+        new RuntimeResolutionError("provider_unavailable", `MCJars is currently unavailable (${response.status}). Try again in a moment.`),
+        `MCJars API request failed\nurl=${url.toString()}\nstatus=${response.status} ${response.statusText}\nbody=${body || "(empty)"}`
+      );
     }
     return await response.json() as T;
   }

@@ -18,10 +18,11 @@ type ConnectedNode = {
   }>;
 };
 
-function structuredNodeError(code: string, message: string) {
-  const error = new Error(message) as Error & { code?: string; statusCode?: number };
+function structuredNodeError(code: string, message: string, details?: string) {
+  const error = new Error(message) as Error & { code?: string; statusCode?: number; details?: string };
   error.code = code;
   error.statusCode = 400;
+  if (details) error.details = details;
   return error;
 }
 
@@ -154,7 +155,7 @@ export class PanelNodeConnections {
       const stream = connected.streams.get(message.id);
       if (!stream) return;
       connected.streams.delete(message.id);
-      stream.onClose?.(message.error ? structuredNodeError(message.error.code, message.error.message) : undefined);
+      stream.onClose?.(message.error ? structuredNodeError(message.error.code, message.error.message, message.error.details) : undefined);
       return;
     }
     if (message.type !== "response") return;
@@ -166,6 +167,6 @@ export class PanelNodeConnections {
       pending.resolve(message.result);
       return;
     }
-    pending.reject(structuredNodeError(message.error?.code ?? "command_failed", message.error?.message ?? "Node command failed"));
+    pending.reject(structuredNodeError(message.error?.code ?? "command_failed", message.error?.message ?? "Node command failed", message.error?.details));
   }
 }

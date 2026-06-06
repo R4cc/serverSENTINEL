@@ -2,17 +2,20 @@ type ApiPayload = {
   error?: unknown;
   message?: unknown;
   code?: unknown;
+  errorDetails?: unknown;
 };
 
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: string;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -48,7 +51,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = payloadMessage(payload, response.status === 401 ? "Authentication required. Sign in again to continue." : `Request failed with ${response.status}`);
-    throw new ApiError(message, response.status, typeof payload.code === "string" ? payload.code : undefined);
+    throw new ApiError(message, response.status, typeof payload.code === "string" ? payload.code : undefined, typeof payload.errorDetails === "string" ? payload.errorDetails : undefined);
   }
   return payload as T;
 }

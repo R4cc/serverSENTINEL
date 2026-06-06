@@ -199,6 +199,7 @@ type ProvisionJob = {
   task: string;
   server?: PublicServer;
   error?: string;
+  errorDetails?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -261,12 +262,29 @@ function errorLogFields(error: unknown, fallbackStatusCode?: number): LogFields 
     return { errorMessage: String(error) };
   }
   const statusCode = "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : fallbackStatusCode;
+  const details = "details" in error && typeof error.details === "string" ? error.details : undefined;
   return {
     errorName: error.name,
     errorMessage: error.message,
+    errorDetails: details,
     statusCode,
     stack: statusCode && statusCode < 500 ? undefined : error.stack
   };
+}
+
+function detailedErrorMessage(error: unknown) {
+  if (error instanceof Error && "details" in error && typeof error.details === "string" && error.details.trim()) {
+    return error.details.trim();
+  }
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
+  }
+  return String(error);
+}
+
+function detailedError(error: Error, details: string) {
+  (error as Error & { details?: string }).details = details;
+  return error;
 }
 
 function errorCategory(error: unknown, statusCode?: number) {
@@ -2273,8 +2291,11 @@ async function downloadFabricServerJar(server: ManagedServer) {
     }
   });
   if (!response.ok || !response.body) {
-    logError({ ...serverLogFields(server), statusCode: response.status, durationMs: durationSince(startedAt) }, "Fabric server launcher download failed");
-    throw new Error(`Fabric server jar download failed: ${response.status} ${response.statusText}`);
+    const body = !response.ok ? await response.text().catch(() => "") : "";
+    const details = `Fabric server launcher download failed\nurl=${downloadUrl}\nstatus=${response.status} ${response.statusText}\nbody=${body || "(empty)"}`;
+    const error = detailedError(new Error(`Fabric server download failed: ${response.status} ${response.statusText}`), details);
+    logError({ ...serverLogFields(server), downloadUrl, statusCode: response.status, responseBody: body || undefined, errorDetails: details, durationMs: durationSince(startedAt) }, "Fabric server launcher download failed");
+    throw error;
   }
   await pipeline(
     Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>),
@@ -2457,9 +2478,11 @@ async function startProvisionJob(input: CreateServerInput) {
     });
     setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).catch((error: unknown) => {
+    logError({ jobId: id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning job failed");
     updateProvisionJob(id, {
       status: "failed",
       error: error instanceof Error ? error.message : "Server setup failed",
+      errorDetails: detailedErrorMessage(error),
       task: "Server setup failed"
     });
     setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
@@ -4919,6 +4942,7 @@ app.setErrorHandler((error, _request, reply) => {
   const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
   const errorMessage = error instanceof Error ? error.message : String(error);
   const errorCode = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const errorDetails = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : undefined;
   const publicMessage = statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed";
   const fields = {
     ...routeLogFields(_request, statusCode),
@@ -4936,6 +4960,7 @@ app.setErrorHandler((error, _request, reply) => {
     error: publicMessage,
     message: publicMessage,
     code: errorCode,
+    errorDetails,
     statusCode
   });
 });

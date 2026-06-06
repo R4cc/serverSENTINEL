@@ -335,6 +335,7 @@ export type ProvisionJob = {
   task: string;
   server?: PublicServer;
   error?: string;
+  errorDetails?: string;
 };
 
 export type Client = {

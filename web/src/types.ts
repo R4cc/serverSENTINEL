@@ -455,6 +455,7 @@ export type ProvisionJob = {
   task: string;
   server?: ManagedServer;
   error?: string;
+  errorDetails?: string;
 };
 
 export type GeneralJob = {
@@ -466,6 +467,7 @@ export type GeneralJob = {
   progress: number;
   task: string;
   error?: string;
+  errorDetails?: string;
   dismissible: boolean;
 };
 

@@ -57,8 +57,43 @@ describe("MCJars runtime provider", () => {
       jarArtifact: {
         id: "build-1",
         filename: "fabric-server-launch.jar",
-        downloadUrl: "https://meta.fabricmc.net/v2/versions/loader/1.21.4/0.16.10/1.0.1/server/jar",
+        downloadUrl: "https://versions.mcjars.app/download/fabric/1.21.4/0.16.10/1.0.1.jar",
         sizeBytes: 1234
+      }
+    });
+  });
+
+  it("keeps the MCJars download URL for recommended loader builds", async () => {
+    const provider = new McJarsProvider("https://mcjars.test", undefined, async () => jsonResponse({
+      success: true,
+      builds: [
+        {
+          id: 1,
+          uuid: "build-1",
+          versionId: "26.1.2",
+          projectVersionId: "0.19.3",
+          type: "FABRIC",
+          experimental: false,
+          jarUrl: "https://versions.mcjars.app/download/fabric/26.1.2/0.19.3/1.1.1.jar",
+          jarSize: 179053
+        },
+        {
+          id: 2,
+          uuid: "build-2",
+          versionId: "26.1.2",
+          projectVersionId: "0.19.2",
+          type: "FABRIC",
+          experimental: false,
+          jarUrl: "https://versions.mcjars.app/download/fabric/26.1.2/0.19.2/1.1.1.jar",
+          jarSize: 179053
+        }
+      ]
+    }));
+
+    await expect(provider.resolveFabricServerJar({ minecraftVersion: "26.1.2", loaderVersion: "latest", preferStable: true })).resolves.toMatchObject({
+      loaderVersion: "0.19.3",
+      jarArtifact: {
+        downloadUrl: "https://versions.mcjars.app/download/fabric/26.1.2/0.19.3/1.1.1.jar"
       }
     });
   });

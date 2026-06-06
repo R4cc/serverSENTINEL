@@ -105,6 +105,7 @@ export type NodeStreamEndMessage = {
   error?: {
     code: string;
     message: string;
+    details?: string;
   };
 };
 
@@ -116,6 +117,7 @@ export type NodeResponseMessage = {
   error?: {
     code: string;
     message: string;
+    details?: string;
   };
 };
 

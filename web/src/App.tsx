@@ -94,6 +94,7 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
+  const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
   const [scheduleBusy, setScheduleBusy] = useState(false);
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
@@ -1275,11 +1276,14 @@ export default function App() {
         progress: job.progress,
         task: job.task,
         error: job.error,
+        errorDetails: job.errorDetails,
         dismissible: job.status !== "running"
       } : j));
       if (job.status === "succeeded") return job;
       if (job.status === "failed") {
-        throw new Error(job.error || "Server setup failed");
+        const error = new Error(job.error || "Server setup failed") as Error & { details?: string };
+        error.details = job.errorDetails;
+        throw error;
       }
       await new Promise((resolve) => window.setTimeout(resolve, 700));
     }
@@ -1304,6 +1308,7 @@ export default function App() {
     }
     provisionSubmitLockRef.current = true;
     setProvisioningError("");
+    setProvisioningErrorDetails("");
     const displayName = trimFormValue(form, "displayName");
     const initialJob: GeneralJob = {
       id: "local",
@@ -1343,6 +1348,7 @@ export default function App() {
         progress: job.progress,
         task: job.task,
         error: job.error,
+        errorDetails: job.errorDetails,
         dismissible: job.status !== "running"
       } : j));
       const completed = await waitForProvisionJob(job.id);
@@ -1363,8 +1369,10 @@ export default function App() {
       }, 1200);
     } catch (error) {
       const message = (error as Error).message;
+      const details = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : "";
       setNotice(message);
       setProvisioningError(message);
+      setProvisioningErrorDetails(details);
       notify("error", message);
       setActiveJobs((current) => current.filter((j) => j.id !== "local" && !(j.type === "provision" && j.status !== "succeeded")));
     } finally {
@@ -3227,6 +3235,12 @@ export default function App() {
           <section className="systemBanner error" role="alert">
             <strong>Server setup failed.</strong>
             <span>{provisioningError} Review the form values, then try creating the server again.</span>
+            {provisioningErrorDetails && (
+              <details className="failureDetails">
+                <summary>Show full API failure log</summary>
+                <pre>{provisioningErrorDetails}</pre>
+              </details>
+            )}
           </section>
         )}
 
@@ -3326,13 +3340,22 @@ export default function App() {
               />
             )}
             {provisioningError && (
-              <InlineState
-                tone="error"
-                title="Server setup failed"
-                message={`${provisioningError} Review the details below, adjust the form if needed, then try again.`}
-                actionLabel="Clear error"
-                onAction={() => setProvisioningError("")}
-              />
+              <section className="inlineState inlineState-error" role="alert">
+                <div className="inlineStateText">
+                  <strong>Server setup failed</strong>
+                  <span>{provisioningError} Review the details below, adjust the form if needed, then try again.</span>
+                  {provisioningErrorDetails && (
+                    <details className="failureDetails">
+                      <summary>Show full API failure log</summary>
+                      <pre>{provisioningErrorDetails}</pre>
+                    </details>
+                  )}
+                </div>
+                <button type="button" onClick={() => {
+                  setProvisioningError("");
+                  setProvisioningErrorDetails("");
+                }}>Clear error</button>
+              </section>
             )}
             <ManagedServerForm
               onSubmit={createServer}

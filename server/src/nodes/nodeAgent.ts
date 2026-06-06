@@ -58,6 +58,19 @@ const editorFileSizeLimit = 2 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
 const reconnectDelayMs = 5000;
 
+function detailedError(error: Error, details: string) {
+  (error as Error & { details?: string }).details = details;
+  return error;
+}
+
+function detailedErrorMessage(error: unknown) {
+  if (error instanceof Error && "details" in error && typeof error.details === "string" && error.details.trim()) {
+    return error.details.trim();
+  }
+  if (error instanceof Error) return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
+  return String(error);
+}
+
 async function readNodeConfig() {
   try { return JSON.parse(await readFile(nodeConfigPath, "utf8")) as NodeConfig; } catch { return null; }
 }
@@ -252,7 +265,12 @@ async function downloadFabricJar(server: ManagedServer) {
   const res = await fetch(artifact.downloadUrl, {
     headers: { "User-Agent": "ServerSentinel/0.5.0 (node Fabric runtime downloader)" }
   });
-  if (!res.ok || !res.body) throw new Error(`Fabric server download failed: ${res.statusText}`);
+  if (!res.ok || !res.body) {
+    const body = !res.ok ? await res.text().catch(() => "") : "";
+    const details = `Fabric server launcher download failed\nurl=${artifact.downloadUrl}\nstatus=${res.status} ${res.statusText}\nbody=${body || "(empty)"}`;
+    console.error(details);
+    throw detailedError(new Error(`Fabric server download failed: ${res.status} ${res.statusText}`), details);
+  }
   const target = await inside(server, artifact.filename ?? server.serverJar ?? "fabric-server-launch.jar", false);
   await writeFile(target, Buffer.from(await res.arrayBuffer()));
 }
@@ -992,7 +1010,7 @@ export async function startNodeAgent() {
       if (message.type !== "request") return;
       const response = async (): Promise<NodeResponseMessage> => {
         try { return { type: "response", id: message.id, ok: true, result: await handleCommand(message.command, message.payload) }; }
-        catch (error) { return { type: "response", id: message.id, ok: false, error: { code: "command_failed", message: (error as Error).message } }; }
+        catch (error) { return { type: "response", id: message.id, ok: false, error: { code: "command_failed", message: (error as Error).message, details: detailedErrorMessage(error) } }; }
       };
       socket.send(JSON.stringify(await response()));
     });

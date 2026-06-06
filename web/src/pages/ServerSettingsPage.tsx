@@ -389,6 +389,7 @@ export function ManagedServerForm({
 
   const runtimeReady = Boolean(runtimeProfile && !runtimeError && !runtimeResolving);
   const runtimeDockerImage = defaultDockerImageForMinecraftVersion(runtimeProfile?.minecraftVersion || minecraftVersion);
+  const submittedLoaderVersion = useRecommendedFabric ? runtimeProfile?.loaderVersion || "latest" : selectedLoaderVersion;
   const runtimeIssueMessage = runtimeVersionsError || loaderVersionsError || runtimeError;
   const runtimeBusy = runtimeVersionsLoading || loaderVersionsLoading || runtimeResolving;
 
@@ -531,7 +532,7 @@ export function ManagedServerForm({
             <span className="fieldHint">{loaderVersionsLoading ? "Loading compatible Fabric versions..." : "Exact Fabric versions are advanced. Recommended is best for most servers."}</span>
           </label>
         )}
-        <input type="hidden" name="loaderVersion" value={useRecommendedFabric ? "latest" : selectedLoaderVersion} />
+        <input type="hidden" name="loaderVersion" value={submittedLoaderVersion} />
         <input type="hidden" name="dockerImage" value={runtimeDockerImage} />
         <div className={`runtimePreview ${runtimeReady ? "resolved" : runtimeError ? "error" : "loading"}`}>
           <div>
