@@ -116,7 +116,7 @@ export function SchedulePage({
         {commandInputMessage && (
           <InlineState tone="warning" title="Scheduling is limited" message={commandInputMessage} />
         )}
-        {disabled && disabledReason && (
+        {disabled && disabledReason && !saveRunning && (
           <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
         )}
 
