@@ -175,6 +175,7 @@ export type ManagedNode = {
   capabilities?: string[];
   dockerStatus?: string;
   dataPathStatus?: string;
+  totalMemory?: number;
   compatibility?: "compatible" | "incompatible" | "unknown";
   secretHash?: string;
   joinTokenHash?: string;
@@ -202,7 +203,6 @@ export type ManagedServer = {
   dockerWorkingDir?: string;
   dockerPorts?: string;
   javaArgs?: string;
-  limitContainerMemory?: boolean;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   createdAt: string;
@@ -324,7 +324,6 @@ export type CreateServerInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
-  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };

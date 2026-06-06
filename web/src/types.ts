@@ -13,7 +13,6 @@ export type ManagedServer = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
-  limitContainerMemory?: boolean;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   hasDockerContainer: boolean;
@@ -78,6 +77,7 @@ export type ManagedNode = {
   protocolVersion?: string;
   dockerStatus?: string;
   dataPathStatus?: string;
+  totalMemory?: number;
   joinTokenExpiresAt?: string;
   hasPendingJoinToken?: boolean;
   compatibility?: "compatible" | "incompatible" | "unknown";

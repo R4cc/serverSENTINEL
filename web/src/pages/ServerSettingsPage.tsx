@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion, RuntimeMinecraftVersion, RuntimeResolveResponse, ServerRuntimeProfile } from '../types';
 import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
-import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDockerLabel, nodeStatusLabel } from '../utils/nodes';
+import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
+import { AppIcon } from '../components/FileTypeIcon';
 
 function jarProviderLabel(provider?: string) {
   if (provider === "mcjars") return "MCJars";
@@ -144,7 +145,6 @@ export function ServerEditForm({
         javaArgs={javaArgs}
         onJavaArgsChange={setJavaArgs}
       />
-      <input type="hidden" name="limitContainerMemory" value="false" />
       <details className="advanced">
         <summary>Advanced Java arguments</summary>
         <label>
@@ -237,7 +237,8 @@ export function ManagedServerForm({
   versions,
   totalMemory = 0,
   provisioning = false,
-  disabledReason = ""
+  disabledReason = "",
+  onRefreshNodes
 }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dockerSocketMounted: boolean;
@@ -247,6 +248,7 @@ export function ManagedServerForm({
   totalMemory?: number;
   provisioning?: boolean;
   disabledReason?: string;
+  onRefreshNodes?: () => Promise<void> | void;
 }) {
   const fallbackMinecraftVersions = useMemo(() => versions.game.map((version) => ({
     id: version.version,
@@ -273,10 +275,12 @@ export function ManagedServerForm({
   const [runtimeWarnings, setRuntimeWarnings] = useState<string[]>([]);
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
+  const [refreshingNodes, setRefreshingNodes] = useState(false);
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const serverPortValid = isValidServerPort(serverPort);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const selectedNodeTotalMemory = selectedNode?.totalMemory || totalMemory;
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
   const placementBlockedReason = nodes.length === 0
     ? "Add a node before creating a server."
@@ -389,6 +393,16 @@ export function ManagedServerForm({
     setSelectedNodeId(usableNodes[0]?.id ?? "");
   }, [preferredNodeId, selectedNodeId, usableNodes]);
 
+  async function refreshNodeStatus() {
+    if (!onRefreshNodes) return;
+    setRefreshingNodes(true);
+    try {
+      await onRefreshNodes();
+    } finally {
+      setRefreshingNodes(false);
+    }
+  }
+
   return (
     <form onSubmit={onSubmit} className="appForm">
       <fieldset disabled={provisioning}>
@@ -397,42 +411,41 @@ export function ManagedServerForm({
           <span>Placement</span>
           <h3 id="placement-title">Where should this server run?</h3>
         </div>
-        {nodes.length === 0 ? (
-          <div className="systemBanner warning placementWarning">
-            <strong>No nodes available.</strong>
-            <span>Add a node first so ServerSentinel has a host where it can create this server.</span>
-          </div>
-        ) : (
-          <div className="nodePlacementGrid">
-            {nodes.map((node) => {
-              const usable = isNodeRuntimeUsable(node);
-              const selected = selectedNodeId === node.id;
-              const reason = nodeBlockReason(node);
-              return (
-                <label key={node.id} className={`nodePlacementCard ${selected ? "selected" : ""} ${!usable ? "disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="nodeId"
-                    value={node.id}
-                    checked={selected}
-                    disabled={!usable}
-                    onChange={() => setSelectedNodeId(node.id)}
-                    required
-                    title={!usable ? reason || "This node cannot host new servers right now." : `Run this server on ${node.name}`}
-                  />
-                  <span className="nodePlacementTitle">
-                    <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
-                    <strong>{node.isInternal ? "Internal Node" : node.name}</strong>
-                  </span>
-                  <span>{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</span>
-                  <span>{nodeDockerLabel(node)}</span>
-                  <span>{nodeCompatibilityLabel(node)}</span>
-                  {reason && <em>{reason}</em>}
-                </label>
-              );
-            })}
-          </div>
-        )}
+        <div className="nodeSelectRow">
+          <label className="nodeSelectField" htmlFor="create-node-select">
+            Node
+            <select
+              id="create-node-select"
+              name="nodeId"
+              value={selectedNodeId}
+              onChange={(event) => setSelectedNodeId(event.target.value)}
+              disabled={provisioning || nodes.length === 0}
+              required
+            >
+              <option value="">{nodes.length === 0 ? "No nodes available" : "Choose a node"}</option>
+              {nodes.map((node) => {
+                const usable = isNodeRuntimeUsable(node);
+                const reason = nodeBlockReason(node);
+                const label = node.isInternal ? "Internal Node" : node.name;
+                return (
+                  <option key={node.id} value={node.id} disabled={!usable}>
+                    {usable ? label : `${label} (${reason || "Unavailable"})`}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="iconButton nodeRefreshInlineButton"
+            onClick={() => void refreshNodeStatus()}
+            disabled={provisioning || refreshingNodes || !onRefreshNodes}
+            aria-label="Refresh node status"
+            title={refreshingNodes ? "Refreshing node status" : "Refresh node status"}
+          >
+            <AppIcon name="refresh" />
+          </button>
+        </div>
         {placementBlocked && nodes.length > 0 && (
           <p className="fieldError">{placementBlockedReason} If none are ready, open Nodes to see what needs attention.</p>
         )}
@@ -547,12 +560,11 @@ export function ManagedServerForm({
         I accept the Minecraft EULA for this server.
       </label>
       <MemorySelector
-        totalMemory={totalMemory}
+        totalMemory={selectedNodeTotalMemory}
         initialMemoryGb={parseMaxMemoryGb(javaArgs)}
         javaArgs={javaArgs}
         onJavaArgsChange={setJavaArgs}
       />
-      <input type="hidden" name="limitContainerMemory" value="false" />
       <details className="advanced">
         <summary>Advanced settings</summary>
         <label>

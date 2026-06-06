@@ -3501,6 +3501,26 @@ button .buttonIcon {
   color: var(--sentinel-danger);
 }
 
+.nodeSelectRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.nodeSelectField {
+  min-width: 0;
+}
+
+.nodeSelectField select {
+  width: 100%;
+}
+
+.nodeRefreshInlineButton {
+  width: 44px;
+  min-width: 44px;
+}
+
 .placementWarning {
   margin: 0;
 }

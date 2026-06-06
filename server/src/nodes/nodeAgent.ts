@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { totalmem } from "node:os";
 import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
@@ -45,7 +46,6 @@ type CreateInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
-  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
@@ -131,39 +131,13 @@ function shellQuote(value: string) {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function parseJavaMaxMemoryBytes(javaArgs?: string) {
-  const match = (javaArgs || "").match(/(?:^|\s)-Xmx(\d+)([kKmMgGtT])?(?=\s|$)/);
-  if (!match) return 4 * 1024 * 1024 * 1024;
-  const value = Number(match[1]);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  const unit = (match[2] || "b").toLowerCase();
-  const multiplier = unit === "t"
-    ? 1024 ** 4
-    : unit === "g"
-      ? 1024 ** 3
-      : unit === "m"
-        ? 1024 ** 2
-        : unit === "k"
-          ? 1024
-          : 1;
-  return value * multiplier;
-}
-
-function containerMemoryHostConfig(server: ManagedServer) {
-  if (server.limitContainerMemory === false) return {};
-  const bytes = parseJavaMaxMemoryBytes(server.javaArgs || "-Xms2G -Xmx4G");
-  return bytes > 0 ? { Memory: Math.max(bytes, 6 * 1024 * 1024) } : {};
-}
-
 function runtimeConfigHash(server: ManagedServer) {
   const targetRuntime = runtimeTarget(server);
   return createHash("sha256").update(JSON.stringify({
     image: server.dockerImage || dockerImage(targetRuntime.minecraftVersion),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar || "fabric-server-launch.jar",
-    javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
-    limitContainerMemory: server.limitContainerMemory !== false,
-    memoryHostConfig: containerMemoryHostConfig(server)
+    javaArgs: server.javaArgs || "-Xms2G -Xmx4G"
   })).digest("hex");
 }
 
@@ -240,7 +214,7 @@ async function createContainer(server: ManagedServer) {
     AttachStdin: true,
     Tty: false,
     ExposedPorts: exposedPorts,
-    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" }, ...containerMemoryHostConfig(server) },
+    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
     Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
   }, [201, 409]);
 }
@@ -317,7 +291,6 @@ async function createServer(input: CreateInput) {
     dockerImage: input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion),
     dockerPorts: input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`,
     javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
-    limitContainerMemory: input.limitContainerMemory ?? true,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
@@ -363,7 +336,6 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   const dockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
-  const limitContainerMemory = input.limitContainerMemory ?? (server.limitContainerMemory !== false);
 
   const jarChanged = server.minecraftVersion !== minecraftVersion
     || server.loaderVersion !== loaderVersion
@@ -373,7 +345,6 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     || server.dockerImage !== dockerImageName
     || server.dockerPorts !== dockerPorts
     || server.javaArgs !== javaArgs
-    || (server.limitContainerMemory !== false) !== limitContainerMemory
     || server.serverJar !== serverJar;
 
   const updated: ManagedServer = {
@@ -388,7 +359,6 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     dockerImage: dockerImageName,
     dockerPorts,
     javaArgs,
-    limitContainerMemory,
     updatedAt: new Date().toISOString()
   };
 
@@ -934,7 +904,7 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.5.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing" };
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.5.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: totalmem() };
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {

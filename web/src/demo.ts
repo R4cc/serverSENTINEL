@@ -270,7 +270,6 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     dockerImage: "simulated-runtime",
     dockerPorts: "25565:25565/tcp",
     javaArgs: "-Xms2G -Xmx4G",
-    limitContainerMemory: true,
     schedules,
     serverType: "fabric",
     hasDockerContainer: true,

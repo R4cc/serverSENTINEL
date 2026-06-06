@@ -181,7 +181,6 @@ type CreateServerInput = {
   dockerImage?: string;
   dockerPorts?: string;
   javaArgs?: string;
-  limitContainerMemory?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
@@ -596,8 +595,13 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
     isInternal: true,
     createdAt: now,
     updatedAt: now,
-    lastSeenAt: now
+    lastSeenAt: now,
+    totalMemory: totalmem()
   };
+}
+
+function optionalNodeTotalMemory(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function normalizeNode(value: unknown): ManagedNode {
@@ -609,6 +613,10 @@ function normalizeNode(value: unknown): ManagedNode {
   const status = node.status ?? "unknown";
   if (status !== "online" && status !== "offline" && status !== "unknown") {
     throw new Error("managed node status must be online, offline, or unknown");
+  }
+  const totalMemory = optionalNodeTotalMemory(node.totalMemory);
+  if (node.totalMemory !== undefined && totalMemory === undefined) {
+    throw new Error("node.totalMemory must be a positive number");
   }
   return {
     id: requiredString(node.id, "node.id"),
@@ -625,6 +633,7 @@ function normalizeNode(value: unknown): ManagedNode {
     capabilities: node.capabilities === undefined ? undefined : asArray(node.capabilities, "node.capabilities").map((capability) => requiredString(capability, "node.capabilities[]")),
     dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
     dataPathStatus: optionalString(node.dataPathStatus, "node.dataPathStatus"),
+    totalMemory,
     compatibility: node.compatibility === "compatible" || node.compatibility === "incompatible" || node.compatibility === "unknown" ? node.compatibility : undefined,
     secretHash: optionalString(node.secretHash, "node.secretHash"),
     joinTokenHash: optionalString(node.joinTokenHash, "node.joinTokenHash"),
@@ -648,7 +657,8 @@ function ensureDefaultInternalNode(nodes: ManagedNode[]) {
     status: "online",
     isInternal: true,
     updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
-    lastSeenAt: current.lastSeenAt ?? now
+    lastSeenAt: current.lastSeenAt ?? now,
+    totalMemory: totalmem()
   };
   const changed = JSON.stringify(current) !== JSON.stringify(normalized);
   nodes[localIndex] = normalized;
@@ -887,7 +897,6 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
-    limitContainerMemory: server.limitContainerMemory !== false,
     schedules: server.schedules ?? [],
     serverType: server.serverType,
     createdAt: server.createdAt,
@@ -954,7 +963,6 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerWorkingDir: optionalString(server.dockerWorkingDir, "server.dockerWorkingDir"),
     dockerPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
-    limitContainerMemory: optionalStrictBoolean(server.limitContainerMemory, "server.limitContainerMemory", true),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
     serverType,
     createdAt: requiredString(server.createdAt, "server.createdAt"),
@@ -1451,35 +1459,6 @@ async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
-function parseJavaMaxMemoryBytes(javaArgs?: string) {
-  const match = (javaArgs || "").match(/(?:^|\s)-Xmx(\d+)([kKmMgGtT])?(?=\s|$)/);
-  if (!match) return 4 * 1024 * 1024 * 1024;
-  const value = Number(match[1]);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  const unit = (match[2] || "b").toLowerCase();
-  const multiplier = unit === "t"
-    ? 1024 ** 4
-    : unit === "g"
-      ? 1024 ** 3
-      : unit === "m"
-        ? 1024 ** 2
-        : unit === "k"
-          ? 1024
-          : 1;
-  return value * multiplier;
-}
-
-function containerMemoryLimitBytes(server: ManagedServer) {
-  if (server.limitContainerMemory === false) return undefined;
-  const bytes = parseJavaMaxMemoryBytes(server.javaArgs || "-Xms2G -Xmx4G");
-  return bytes > 0 ? Math.max(bytes, 6 * 1024 * 1024) : undefined;
-}
-
-function containerMemoryHostConfig(server: ManagedServer) {
-  const memory = containerMemoryLimitBytes(server);
-  return memory ? { Memory: memory } : {};
-}
-
 function dockerRuntimeConfigHash(server: ManagedServer) {
   const targetRuntime = runtimeTarget(server);
   return createHash("sha256").update(JSON.stringify({
@@ -1488,9 +1467,7 @@ function dockerRuntimeConfigHash(server: ManagedServer) {
     bindTarget: serverDockerBindTarget(server),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
-    javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
-    limitContainerMemory: server.limitContainerMemory !== false,
-    memoryLimitBytes: containerMemoryLimitBytes(server) ?? null
+    javaArgs: server.javaArgs || "-Xms2G -Xmx4G"
   })).digest("hex");
 }
 
@@ -1557,7 +1534,6 @@ async function ensureDockerContainer(server: ManagedServer) {
           Privileged: false,
           NetworkMode: "bridge",
           PortBindings: portBindings,
-          ...containerMemoryHostConfig(server),
           Mounts: [
             {
               Type: serverDockerMountSource(server) === config.serversDockerVolume ? "volume" : "bind",
@@ -2386,7 +2362,6 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(storedRuntimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
-  const limitContainerMemory = optionalStrictBoolean(input.limitContainerMemory, "limitContainerMemory", true);
 
   const now = new Date().toISOString();
   const server: ManagedServer = {
@@ -2406,7 +2381,6 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${storageName}` : undefined,
     dockerPorts,
     javaArgs,
-    limitContainerMemory,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
@@ -2623,7 +2597,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
     dockerImage?: string;
     dockerPorts?: string;
     javaArgs?: string;
-    limitContainerMemory?: boolean;
     serverPort?: string;
   };
   let updatedServer: ManagedServer | null = null;
@@ -2686,7 +2659,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
       }
     }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
-    const limitContainerMemory = optionalStrictBoolean(body.limitContainerMemory, "limitContainerMemory", current.limitContainerMemory !== false);
 
     const jarChanged = current.minecraftVersion !== minecraftVersion
       || current.loaderVersion !== loaderVersion
@@ -2696,7 +2668,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
       || current.dockerImage !== dockerImage
       || current.dockerPorts !== dockerPorts
       || current.javaArgs !== javaArgs
-      || (current.limitContainerMemory !== false) !== limitContainerMemory
       || current.serverJar !== serverJar;
 
     const updated: ManagedServer = {
@@ -2711,7 +2682,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
       dockerImage,
       dockerPorts,
       javaArgs,
-      limitContainerMemory,
       updatedAt: new Date().toISOString()
     };
 
@@ -3184,6 +3154,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           capabilities: hello.capabilities ?? [],
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
+          totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
           compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible"
         };
         nodes[nodes.indexOf(node)] = acceptedNode;
@@ -3209,6 +3180,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           capabilities: hello.capabilities ?? [],
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
+          totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
           compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible",
           secretHash: hashNodeSecret(issuedSecret),
           joinTokenHash: undefined,

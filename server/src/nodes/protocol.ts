@@ -44,6 +44,7 @@ export type NodeHello = {
   capabilities?: string[];
   dockerStatus?: string;
   dataPathStatus?: string;
+  totalMemory?: number;
 };
 
 export type PanelWelcome = {

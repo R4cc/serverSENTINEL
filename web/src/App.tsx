@@ -1332,7 +1332,6 @@ export default function App() {
           nodeId: form.get("nodeId"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
-          limitContainerMemory: form.get("limitContainerMemory") === "true",
           serverPort: form.get("serverPort"),
           acceptEula: form.get("acceptEula") === "on"
         })
@@ -1405,7 +1404,6 @@ export default function App() {
           dockerImage: form.get("dockerImage"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
-          limitContainerMemory: form.get("limitContainerMemory") === "true",
           serverPort: form.get("serverPort")
         })
       });
@@ -3344,6 +3342,7 @@ export default function App() {
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
               disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+              onRefreshNodes={refreshNodes}
             />
           </section>
         )}
@@ -4894,7 +4893,7 @@ export default function App() {
                   <ServerEditForm
                     server={activeServer}
                     versions={fabricVersions}
-                    totalMemory={effectiveAppState.totalMemory}
+                    totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                   />
