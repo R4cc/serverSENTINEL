@@ -273,6 +273,7 @@ export function ManagedServerForm({
   const [runtimeResolving, setRuntimeResolving] = useState(false);
   const [runtimeError, setRuntimeError] = useState("");
   const [runtimeWarnings, setRuntimeWarnings] = useState<string[]>([]);
+  const [runtimeRetryKey, setRuntimeRetryKey] = useState(0);
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
   const [refreshingNodes, setRefreshingNodes] = useState(false);
@@ -301,6 +302,15 @@ export function ManagedServerForm({
     } finally {
       setRuntimeVersionsLoading(false);
     }
+  }
+
+  function retryRuntimeLookup() {
+    setRuntimeVersionsError("");
+    setLoaderVersionsError("");
+    setRuntimeError("");
+    setRuntimeWarnings([]);
+    void loadRuntimeVersions();
+    setRuntimeRetryKey((key) => key + 1);
   }
 
   useEffect(() => {
@@ -335,7 +345,7 @@ export function ManagedServerForm({
         if (!cancelled) setLoaderVersionsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [minecraftVersion, useRecommendedFabric]);
+  }, [minecraftVersion, useRecommendedFabric, runtimeRetryKey]);
 
   useEffect(() => {
     if (!minecraftVersion) {
@@ -375,10 +385,12 @@ export function ManagedServerForm({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [minecraftVersion, selectedLoaderVersion, useRecommendedFabric]);
+  }, [minecraftVersion, selectedLoaderVersion, useRecommendedFabric, runtimeRetryKey]);
 
   const runtimeReady = Boolean(runtimeProfile && !runtimeError && !runtimeResolving);
   const runtimeDockerImage = defaultDockerImageForMinecraftVersion(runtimeProfile?.minecraftVersion || minecraftVersion);
+  const runtimeIssueMessage = runtimeVersionsError || loaderVersionsError || runtimeError;
+  const runtimeBusy = runtimeVersionsLoading || loaderVersionsLoading || runtimeResolving;
 
   useEffect(() => {
     if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
@@ -478,8 +490,8 @@ export function ManagedServerForm({
           </select>
           <span className="fieldHint">{runtimeVersionsLoading ? "Loading Fabric-compatible Minecraft versions..." : "Only supported Fabric server versions are shown."}</span>
         </label>
-        {runtimeVersionsError && (
-          <InlineRuntimeError message={runtimeVersionsError} actionLabel="Retry versions" onAction={loadRuntimeVersions} busy={runtimeVersionsLoading} />
+        {runtimeIssueMessage && (
+          <InlineRuntimeError message={runtimeIssueMessage} actionLabel="Retry runtime lookup" onAction={retryRuntimeLookup} busy={runtimeBusy} />
         )}
         {availableMinecraftVersions.some((version) => version.type === "snapshot" && version.supported) && (
           <label className="checkLine">
@@ -521,9 +533,6 @@ export function ManagedServerForm({
         )}
         <input type="hidden" name="loaderVersion" value={useRecommendedFabric ? "latest" : selectedLoaderVersion} />
         <input type="hidden" name="dockerImage" value={runtimeDockerImage} />
-        {loaderVersionsError && (
-          <InlineRuntimeError message={loaderVersionsError} />
-        )}
         <div className={`runtimePreview ${runtimeReady ? "resolved" : runtimeError ? "error" : "loading"}`}>
           <div>
             <span>Runtime summary</span>
@@ -536,7 +545,6 @@ export function ManagedServerForm({
             <div><dt>Status</dt><dd>{runtimeStatusLabel(runtimeProfile?.compatibilityStatus)}</dd></div>
           </dl>
           {runtimeWarnings.map((warning) => <p key={warning} className="fieldHint warningText">{warning}</p>)}
-          {runtimeError && <p className="fieldError">{runtimeError}</p>}
         </div>
       </section>
       <label>
@@ -593,7 +601,7 @@ export function ManagedServerForm({
       </p>
       <button
         disabled={provisioning || !serverPortValid || placementBlocked || !runtimeReady}
-        title={provisioning ? disabledReason || "Server setup is still running." : !serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : !runtimeReady ? runtimeError || "Wait for the runtime profile to resolve." : "Create managed server"}
+        title={provisioning ? disabledReason || "Server setup is still running." : !serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : !runtimeReady ? runtimeIssueMessage || "Wait for the runtime profile to resolve." : "Create managed server"}
       >
         {provisioning ? "Setting up..." : "Create Managed Server"}
       </button>

@@ -39,6 +39,7 @@ type CacheEntry<T> = {
 const successTtlMs = 15 * 60_000;
 const failureTtlMs = 30_000;
 const userAgent = "ServerSentinel/0.5.0 (MCJars runtime provider)";
+const mcjarsReachabilityMessage = "ServerSentinel could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again.";
 
 export class McJarsProvider implements ServerJarProvider {
   readonly id = "mcjars" as const;
@@ -171,10 +172,10 @@ export class McJarsProvider implements ServerJarProvider {
     try {
       response = await this.fetchImpl(url.toString(), { headers });
     } catch (error) {
-      throw new RuntimeResolutionError("provider_unavailable", `MCJars is unavailable: ${error instanceof Error ? error.message : "request failed"}`);
+      throw new RuntimeResolutionError("provider_unavailable", mcjarsReachabilityMessage);
     }
     if (!response.ok) {
-      throw new RuntimeResolutionError("provider_unavailable", `MCJars request failed: ${response.status} ${response.statusText}`);
+      throw new RuntimeResolutionError("provider_unavailable", `MCJars is currently unavailable (${response.status}). Try again in a moment.`);
     }
     return await response.json() as T;
   }

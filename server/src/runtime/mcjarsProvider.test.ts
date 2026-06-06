@@ -67,7 +67,19 @@ describe("MCJars runtime provider", () => {
     const provider = new McJarsProvider("https://mcjars.test", undefined, async () => jsonResponse({ error: "down" }, 503));
 
     await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4" })).rejects.toMatchObject({
-      code: "provider_unavailable"
+      code: "provider_unavailable",
+      message: "MCJars is currently unavailable (503). Try again in a moment."
+    });
+  });
+
+  it("hides low-level fetch failures behind an actionable message", async () => {
+    const provider = new McJarsProvider("https://mcjars.test", undefined, async () => {
+      throw new Error("fetch failed");
+    });
+
+    await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4" })).rejects.toMatchObject({
+      code: "provider_unavailable",
+      message: "ServerSentinel could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again."
     });
   });
 });
