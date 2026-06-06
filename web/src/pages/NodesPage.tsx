@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
+import { formatBytes } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
 
 type AddNodeInput = {
@@ -43,7 +44,7 @@ function PlayerIcon() {
   );
 }
 
-function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "agent" | "panel" | "protocol" | "compatibility" | "docker" | "data" | "created" | "updated" | "seen" | "capabilities" | "warning" }) {
+function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "agent" | "panel" | "protocol" | "compatibility" | "docker" | "data" | "memory" | "created" | "updated" | "seen" | "capabilities" | "warning" }) {
   return (
     <span className={`nodeDetailIcon ${name}`} aria-hidden="true">
       <svg viewBox="0 0 24 24">
@@ -105,6 +106,13 @@ function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "a
           <>
             <path d="M3 8h7l2 2h9v9H3z" />
             <path d="M3 8V5h7l2 3" />
+          </>
+        )}
+        {name === "memory" && (
+          <>
+            <rect x="5" y="6" width="14" height="12" rx="2" />
+            <path d="M8 3v3M12 3v3M16 3v3M8 18v3M12 18v3M16 18v3M3 9h2M3 15h2M19 9h2M19 15h2" />
+            <path d="M9 10h6v4H9z" />
           </>
         )}
         {(name === "created" || name === "updated" || name === "seen") && (
@@ -734,6 +742,10 @@ export function NodesPage({
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="data" />
                   <div><dt>Data path</dt><dd className={statusTone(selectedNode.dataPathStatus)}>{nodeDataPathLabel(selectedNode)}</dd></div>
+                </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="memory" />
+                  <div><dt>Host memory</dt><dd>{selectedNode.totalMemory ? formatBytes(selectedNode.totalMemory) : "Unknown"}</dd></div>
                 </div>
                 <div className="nodeInfoCard secondary">
                   <NodeDetailIcon name="created" />
