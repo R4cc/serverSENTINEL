@@ -5994,6 +5994,53 @@ details.compatibilityBadge p {
   grid-template-columns: 1fr;
 }
 
+.portBindingsEditor {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.portBindingRows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.portBindingRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.portBindingRow:first-child {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.portBindingRow input {
+  width: 100%;
+  min-width: 0;
+}
+
+.portBindingColon {
+  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.portBindingAddButton {
+  width: 100%;
+  min-height: 42px;
+}
+
+.portBindingsEditor.hasExtraBindings .portBindingAddButton {
+  width: calc(100% - 44px - var(--space-2));
+}
+
+.portBindingRemoveButton {
+  align-self: stretch;
+}
+
 .iconDangerButton {
   min-width: 44px;
   width: 44px;

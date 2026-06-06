@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion, RuntimeMinecraftVersion, RuntimeResolveResponse, ServerRuntimeProfile } from '../types';
 import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
@@ -14,6 +14,129 @@ function runtimeStatusLabel(status?: string) {
   if (status === "compatible") return "Compatible";
   if (status === "unsupported") return "Unsupported";
   return "Unknown";
+}
+
+type PortBindingRow = {
+  id: string;
+  hostPort: string;
+  target: string;
+};
+
+function portBindingId() {
+  return `port-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeDefaultPort(value: string) {
+  return isValidServerPort(value) ? value : String(defaultServerPort);
+}
+
+function parsePortBindings(value: string | undefined, defaultHostPort: string): PortBindingRow[] {
+  const fallbackPort = normalizeDefaultPort(defaultHostPort);
+  const rows = (value || `${fallbackPort}:${fallbackPort}/tcp`)
+    .split(",")
+    .map((rawBinding) => rawBinding.trim())
+    .filter(Boolean)
+    .map((binding) => {
+      const pieces = binding.split(":");
+      const hostPort = pieces.length === 2 ? pieces[0].trim() : pieces[0].split("/", 1)[0].trim();
+      const target = pieces.length === 2 ? pieces[1].trim() : pieces[0].trim();
+      return {
+        id: portBindingId(),
+        hostPort,
+        target: target.includes("/") ? target : `${target}/tcp`
+      };
+    });
+  return rows.length ? rows : [{ id: portBindingId(), hostPort: fallbackPort, target: `${fallbackPort}/tcp` }];
+}
+
+function formatPortBindings(rows: PortBindingRow[]) {
+  return rows
+    .map((row) => ({ hostPort: row.hostPort.trim(), target: row.target.trim() }))
+    .filter((row, index) => index === 0 || row.hostPort || row.target)
+    .map((row) => `${row.hostPort}:${row.target}`)
+    .join(",");
+}
+
+function PortBindingsEditor({
+  initialValue,
+  defaultHostPort
+}: {
+  initialValue?: string;
+  defaultHostPort: string;
+}) {
+  const [bindings, setBindings] = useState(() => parsePortBindings(initialValue, defaultHostPort));
+  const previousDefaultPort = useRef(normalizeDefaultPort(defaultHostPort));
+  const serializedBindings = formatPortBindings(bindings);
+
+  useEffect(() => {
+    const nextDefaultPort = normalizeDefaultPort(defaultHostPort);
+    const previous = previousDefaultPort.current;
+    previousDefaultPort.current = nextDefaultPort;
+    setBindings((current) => current.map((binding, index) => {
+      if (index !== 0) return binding;
+      const defaultLike = binding.hostPort === previous && (binding.target === `${previous}/tcp` || binding.target === previous);
+      return defaultLike ? { ...binding, hostPort: nextDefaultPort, target: `${nextDefaultPort}/tcp` } : binding;
+    }));
+  }, [defaultHostPort]);
+
+  function updateBinding(id: string, patch: Partial<PortBindingRow>) {
+    setBindings((current) => current.map((binding) => binding.id === id ? { ...binding, ...patch } : binding));
+  }
+
+  function addBinding() {
+    setBindings((current) => [...current, { id: portBindingId(), hostPort: "", target: "" }]);
+  }
+
+  function removeBinding(id: string) {
+    setBindings((current) => current.filter((binding, index) => index === 0 || binding.id !== id));
+  }
+
+  return (
+    <div className={`portBindingsEditor ${bindings.length > 1 ? "hasExtraBindings" : ""}`}>
+      <span className="fieldLabel">Port bindings</span>
+      <input type="hidden" name="dockerPorts" value={serializedBindings} />
+      <div className="portBindingRows">
+        {bindings.map((binding, index) => (
+          <div key={binding.id} className="portBindingRow">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={binding.hostPort}
+              onChange={(event) => updateBinding(binding.id, { hostPort: event.target.value })}
+              placeholder={index === 0 ? String(defaultServerPort) : "24454"}
+              aria-label={index === 0 ? "Default host port" : "Additional host port"}
+              required={index === 0}
+            />
+            <span className="portBindingColon" aria-hidden="true">:</span>
+            <input
+              type="text"
+              value={binding.target}
+              onChange={(event) => updateBinding(binding.id, { target: event.target.value })}
+              placeholder={index === 0 ? `${defaultServerPort}/tcp` : "24454/udp"}
+              aria-label={index === 0 ? "Default container port and protocol" : "Additional container port and protocol"}
+              required={index === 0}
+            />
+            {index > 0 && (
+              <button
+                type="button"
+                className="iconDangerButton portBindingRemoveButton"
+                onClick={() => removeBinding(binding.id)}
+                aria-label="Remove port binding"
+                title="Remove port binding"
+              >
+                <AppIcon name="trash" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button type="button" className="secondaryButton portBindingAddButton" onClick={addBinding}>
+        <AppIcon name="plus" />
+        <span>Add port binding</span>
+      </button>
+      <span className="fieldHint">Use host port on the left and container port/protocol on the right, for example 24454 : 24454/udp.</span>
+    </div>
+  );
 }
 
 export function MemorySelector({
@@ -172,10 +295,7 @@ export function ServerEditForm({
         Docker container name
         <input name="dockerContainer" defaultValue={server.dockerContainer || ""} pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
       </label>
-      <label>
-        Port bindings
-        <input name="dockerPorts" defaultValue={server.dockerPorts || "25565:25565/tcp"} title="Use formats like 25565 or 25565:25565/tcp. Separate multiple bindings with commas." />
-      </label>
+      <PortBindingsEditor key={server.id} initialValue={server.dockerPorts} defaultHostPort={String(defaultServerPort)} />
       <button>Save server settings</button>
       </fieldset>
     </form>
@@ -588,10 +708,7 @@ export function ManagedServerForm({
           Docker container name
           <input name="dockerContainer" placeholder="serversentinel-survival" pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
         </label>
-        <label>
-          Port bindings
-          <input name="dockerPorts" placeholder="25565:25565/tcp" title="Use formats like 25565 or 25565:25565/tcp. Separate multiple bindings with commas." />
-        </label>
+        <PortBindingsEditor defaultHostPort={serverPort} />
       </details>
       <p className="muted">
         {dockerSocketMounted ? "Docker is connected, so ServerSentinel can create and control this server." : "Docker is not connected yet. Connect Docker in Settings before using local runtime controls."}
