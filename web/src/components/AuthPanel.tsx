@@ -37,7 +37,7 @@ export function AuthPanel({
         </div>
         {notice && <div className="notice">{notice}</div>}
         {setupRequired && (
-          <div className="systemBanner accent compactBanner">
+          <div className="authSetupBanner">
             <strong>First-run setup.</strong>
             <span>Create this admin account first. After sign-in, ServerSentinel will show Docker, node, server, and Modrinth setup actions as needed.</span>
           </div>

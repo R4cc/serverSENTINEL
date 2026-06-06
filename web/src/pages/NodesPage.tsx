@@ -221,8 +221,8 @@ function InstallInstructions({
         </div>
       </div>
       <div className="installTabs" role="tablist" aria-label="Install method">
+        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run Recommended</button>
         <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</button>
-        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run</button>
       </div>
       <div className="installSnippetShell">
         <button type="button" className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">

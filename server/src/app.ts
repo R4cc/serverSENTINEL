@@ -692,6 +692,18 @@ function publicNode(node: ManagedNode): PublicNode {
   };
 }
 
+async function publicNodes(nodes: ManagedNode[], detectedInternalTotalMemory?: number): Promise<PublicNode[]> {
+  const internalTotalMemory = detectedInternalTotalMemory ?? (nodes.some((node) => node.id === localNodeId || node.isInternal)
+    ? await detectedTotalMemory()
+    : undefined);
+  return nodes.map((node) => {
+    const publicFields = publicNode(node);
+    return (node.id === localNodeId || node.isInternal) && internalTotalMemory
+      ? { ...publicFields, totalMemory: internalTotalMemory }
+      : publicFields;
+  });
+}
+
 export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
   return buildNodeInstallInstructions({ ...input, image: nodeImage, defaultPanelPort: config.port });
 }
@@ -2931,20 +2943,21 @@ app.get("/api/app", async (request) => {
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
   const servers = await queuedReadServers();
   const nodes = await queuedReadNodes();
+  const totalMemory = await detectedTotalMemory();
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
-    nodes: nodes.map(publicNode),
+    nodes: await publicNodes(nodes, totalMemory),
     runtimeMode: config.runtimeMode,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
-    totalMemory: await detectedTotalMemory(),
+    totalMemory,
     currentUser: user ? publicUser(user) : undefined
   };
 });
 
 app.get("/api/nodes", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  return { nodes: (await queuedReadNodes()).map(publicNode) };
+  return { nodes: await publicNodes(await queuedReadNodes()) };
 });
 
 app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
@@ -3156,7 +3169,7 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
   if (!node) {
     return reply.code(404).send({ error: "Node not found", code: "node_not_found" });
   }
-  return publicNode(node);
+  return (await publicNodes([node]))[0];
 });
 
 app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
@@ -3266,9 +3279,10 @@ app.get("/api/context", async (request) => {
   const servers = await queuedReadServers();
   const nodes = await queuedReadNodes();
   const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes)));
+  const publicNodeList = await publicNodes(nodes);
   return {
-    nodes: nodes.map((node) => ({
-      ...publicNode(node),
+    nodes: publicNodeList.map((node) => ({
+      ...node,
       servers: publicServers.filter((server) => server.nodeId === node.id)
     }))
   };

@@ -275,6 +275,42 @@ code {
   margin: 0;
 }
 
+.authPanel .appForm fieldset {
+  padding: 0;
+}
+
+.authPanel .muted {
+  margin: 0;
+}
+
+.authSetupBanner {
+  border: var(--border-strong) solid color-mix(in srgb, var(--accent) 64%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
+  color: var(--text);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  box-shadow: none;
+}
+
+.authSetupBanner strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.authSetupBanner span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
 .appShell.themeDark {
   color-scheme: dark;
   --surface: #1b1d22;

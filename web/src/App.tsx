@@ -107,7 +107,7 @@ export default function App() {
   const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
-  const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("compose");
+  const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("run");
   const [discardEditorRequest, setDiscardEditorRequest] = useState<{ action: "close" } | { action: "switch"; path: string } | null>(null);
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const {
@@ -528,7 +528,7 @@ export default function App() {
     panelFirstRunPromptedRef.current = true;
     setActivePage("nodes");
     setAddNodeResult(null);
-    setNodeInstallMethod("compose");
+    setNodeInstallMethod("run");
   }, [appStateLoaded, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
 
   function openCreateServerForNode(nodeId = "") {
@@ -1480,7 +1480,7 @@ export default function App() {
     setNodeBusyId(node.id);
     try {
       const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
-      setNodeInstallMethod("compose");
+      setNodeInstallMethod("run");
       setNodeInstallResult(result);
     } catch (error) {
       notify("error", errorMessage(error, "Could not load install instructions."));
@@ -1497,7 +1497,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: defaultNodeDataPath })
       });
-      setNodeInstallMethod("compose");
+      setNodeInstallMethod("run");
       setNodeInstallResult(result);
       notify("success", `Rotated join token for ${node.name}`);
       await refreshApp();
@@ -1566,7 +1566,7 @@ export default function App() {
           dataMount: input.dataMount
         })
       });
-      setNodeInstallMethod("compose");
+      setNodeInstallMethod("run");
       setAddNodeResult(result);
       notify("success", `Created pending node ${result.node.name}`);
       await refreshApp();
@@ -3310,7 +3310,7 @@ export default function App() {
                       onClick={() => {
                         setActivePage("nodes");
                         setAddNodeResult(null);
-                        setNodeInstallMethod("compose");
+                        setNodeInstallMethod("run");
                         if (canManageUsers) setAddNodeOpen(true);
                       }}
                       disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
@@ -3521,7 +3521,7 @@ export default function App() {
             onInstallMethodChange={setNodeInstallMethod}
             onOpenAddNode={() => {
               setAddNodeResult(null);
-              setNodeInstallMethod("compose");
+              setNodeInstallMethod("run");
               setAddNodeOpen(true);
             }}
             onCloseAddNode={() => {
@@ -3561,7 +3561,7 @@ export default function App() {
                   onClick={() => {
                     setActivePage("nodes");
                     setAddNodeResult(null);
-                    setNodeInstallMethod("compose");
+                    setNodeInstallMethod("run");
                     if (canManageUsers) setAddNodeOpen(true);
                   }}
                   disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}

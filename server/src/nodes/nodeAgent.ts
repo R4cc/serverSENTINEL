@@ -35,6 +35,9 @@ type NodeContainerInspect = {
     Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; EndpointID?: string; Gateway?: string; IPAddress?: string; IPPrefixLen?: number; IPv6Gateway?: string; GlobalIPv6Address?: string; GlobalIPv6PrefixLen?: number; MacAddress?: string; DriverOpts?: Record<string, string> }>;
   };
 };
+type DockerInfo = {
+  MemTotal?: number;
+};
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
@@ -447,6 +450,20 @@ function sendStreamEnd(socket: WebSocket, id: string, error?: NodeStreamEndMessa
   }
 }
 
+async function detectedTotalMemory() {
+  if (dockerAvailable()) {
+    try {
+      const info = await dockerRequest<DockerInfo>("GET", "/info");
+      if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
+        return info.MemTotal;
+      }
+    } catch {
+      // Fall through to Node's view when Docker host info cannot be read.
+    }
+  }
+  return totalmem();
+}
+
 function startConsoleStream(server: ManagedServer, streamId: string, socket: WebSocket, onDone: () => void) {
   let closed = false;
   const finish = () => {
@@ -840,7 +857,7 @@ async function modInstall(server: ManagedServer, input: unknown) {
 
 async function handleCommand(command: string, payload: any) {
   const server = payload?.server as ManagedServer | undefined;
-  if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir };
+  if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir, totalMemory: await detectedTotalMemory() };
   if (command === "node.update") return prepareNodeUpdate(payload);
   if (command === "node.remove") return prepareNodeRemoval();
   if (command === "docker.info") return dockerInfo();
@@ -955,8 +972,9 @@ export async function startNodeAgent() {
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.round(reconnectDelayMs / 1000)}s.`);
       setTimeout(() => void connect(), reconnectDelayMs);
     };
-    socket.on("open", () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.5.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: totalmem() };
+    socket.on("open", async () => {
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.5.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: await detectedTotalMemory() };
+      if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
     });
     socket.on("message", async (raw) => {
