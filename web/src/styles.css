@@ -1328,9 +1328,11 @@ button .buttonIcon {
 .toastRegion {
   position: fixed;
   top: var(--space-4);
-  right: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
   display: grid;
+  justify-items: stretch;
   gap: var(--space-2);
   width: min(400px, calc(100vw - 32px));
 }

@@ -3153,7 +3153,12 @@ export default function App() {
 
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
-      <Notifications notices={notices} activeJobs={activeJobs} onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))} />
+      <Notifications
+        notices={notices}
+        activeJobs={activeJobs}
+        onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))}
+        onDismissNotice={(noticeId) => setNotices(current => current.filter(notice => notice.id !== noticeId))}
+      />
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">

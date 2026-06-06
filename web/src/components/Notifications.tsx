@@ -16,11 +16,13 @@ const jobStatusLabels: Record<GeneralJob["status"], string> = {
 export function Notifications({
   notices,
   activeJobs,
-  onDismissJob
+  onDismissJob,
+  onDismissNotice
 }: {
   notices: Notice[];
   activeJobs: GeneralJob[];
   onDismissJob: (id: string) => void;
+  onDismissNotice: (id: number) => void;
 }) {
   return (
     <div className="toastRegion">
@@ -76,6 +78,14 @@ export function Notifications({
             <div className="toastTitleGroup">
               <strong>{noticeLabels[notice.type]}</strong>
             </div>
+            <button
+              type="button"
+              className="toastDismissButton"
+              onClick={() => onDismissNotice(notice.id)}
+              aria-label={`Dismiss ${noticeLabels[notice.type]} notification`}
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
           </div>
           <p className="toastMessage">{notice.text}</p>
         </div>
