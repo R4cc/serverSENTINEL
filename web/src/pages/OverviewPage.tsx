@@ -100,13 +100,11 @@ export function OverviewSummary({
 export function ActivityHealthPanel({ activity, formatDate }: { activity: ServerActivity; formatDate: (value: string | number | Date) => string }) {
   const items = [
     ["Last started", formatActivityDate(activity.lastStartedAt, formatDate)],
-    ["Last restart", formatActivityDate(activity.lastRestartAt, formatDate)],
     ["Last stopped", formatActivityDate(activity.lastStoppedAt, formatDate)],
     ["Current world", activity.currentWorld || "Unknown"],
     ["Server port", activity.serverPort || "Unknown"],
     ["EULA accepted", activity.eulaAccepted === undefined ? "Unknown" : activity.eulaAccepted ? "Yes" : "No"],
-    ["Java", activity.javaRuntime || "Unknown"],
-    ["Autosave", activity.autosaveStatus || "Unavailable"]
+    ["Java", activity.javaRuntime || "Unknown"]
   ];
   return (
     <section className="panel activityPanel">

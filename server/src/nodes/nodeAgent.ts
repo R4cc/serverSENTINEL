@@ -25,6 +25,7 @@ type NodeUpdateRequest = {
 type NodeContainerInspect = {
   Id: string;
   Name?: string;
+  State?: { Status?: string; Running?: boolean; StartedAt?: string; FinishedAt?: string };
   Config?: Record<string, unknown> & {
     Image?: string;
     Labels?: Record<string, string>;
@@ -414,6 +415,8 @@ async function runtimeStatus(server: ManagedServer) {
       state: details?.State?.Status ?? "unknown",
       running,
       container: containerName(server),
+      startedAt: details?.State?.StartedAt,
+      finishedAt: details?.State?.FinishedAt,
       message: details ? "" : "Container not found on remote node"
     },
     fileLogsAvailable: existsSync(await inside(server, "logs/latest.log", false)),
@@ -859,7 +862,7 @@ async function handleCommand(command: string, payload: any) {
     const networks = Object.values(stats.networks ?? {}) as Array<{ rx_bytes?: number; tx_bytes?: number }>;
     return { available: true, running: true, cpuPercent, memoryUsageBytes: stats.memory_stats?.usage ?? 0, memoryLimitBytes: stats.memory_stats?.limit ?? 0, networkRxBytes: networks.reduce((sum, n) => sum + (n.rx_bytes ?? 0), 0), networkTxBytes: networks.reduce((sum, n) => sum + (n.tx_bytes ?? 0), 0), sampledAt: new Date().toISOString() };
   }
-  if (command === "server.logs.recent") return { text: (await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=300`)).toString("utf8"), source: "docker" };
+  if (command === "server.logs.recent") return { text: stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=300`)).toString("utf8"), source: "docker" };
   if (command === "server.console.send") {
     const commandText = typeof payload?.command === "string" ? payload.command.trim() : "";
     if (!commandText) throw new Error("Console command is required");

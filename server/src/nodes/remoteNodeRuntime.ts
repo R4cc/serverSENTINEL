@@ -1,6 +1,6 @@
 import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
-import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChannel } from "../types.js";
+import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChannel, ServerActivity, ServerEvent } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { protocolCompatible } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
@@ -27,6 +27,95 @@ function normalizeRemotePath(path: string) {
 function publicRemotePath(path: string) {
   const normalized = normalizeRemotePath(path);
   return normalized === "." ? "/" : `/${normalized}`;
+}
+
+function parseProperties(text?: string) {
+  const values: Record<string, string> = {};
+  for (const rawLine of (text ?? "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator === -1) continue;
+    values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+  return values;
+}
+
+function parseOnlinePlayerCount(logText: string) {
+  const matches = [...logText.matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
+  const latest = matches.at(-1);
+  return latest ? Number(latest[1]) : null;
+}
+
+function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
+  const normalized = subject?.trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized ? `${eventType}:${normalized}` : eventType;
+}
+
+function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index: number): ServerEvent | null {
+  const stripped = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
+  if (!stripped) return null;
+  const tsMatch = stripped.match(/^\[(?<time>\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}:\d{2}:\d{2})\]/);
+  let timestamp: string | undefined;
+  let rest = stripped;
+  if (tsMatch) {
+    const rawTime = tsMatch.groups!.time;
+    if (/^\d{2}:\d{2}:\d{2}$/.test(rawTime)) timestamp = rawTime;
+    else {
+      const parsed = new Date(rawTime.replace(" ", "T"));
+      if (!Number.isNaN(parsed.getTime())) timestamp = parsed.toISOString();
+    }
+    rest = stripped.slice(tsMatch[0].length).trim();
+  }
+  const message = rest.match(/^\[[^\]/]+\/[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
+    ?? rest.match(/^\[[^\]]+\]\s+\[[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
+    ?? rest.match(/^\[[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
+    ?? rest.match(/^[A-Z]+:\s*(?<message>.*)$/)?.groups?.message
+    ?? rest;
+  const playerJoin = message.match(/^(.+?) joined the game$/i);
+  const playerLeft = message.match(/^(.+?) left the game$/i) ?? message.match(/^(.+?) lost connection:/i);
+  const start = /Done \([^)]+\)! For help, type "help"/i.test(message) || /Starting minecraft server/i.test(message);
+  const stop = /Stopping server|Stopping the server|ThreadedAnvilChunkStorage: All chunks are saved/i.test(message);
+  const crash = /Encountered an unexpected exception|Minecraft Crash Report|server crashed|The game crashed/i.test(message);
+  const eventType = playerJoin ? "player_joined" : playerLeft ? "player_left" : start ? "server_started" : stop ? "server_stopped" : crash ? "server_crashed" : null;
+  if (!eventType) return null;
+  const subject = playerJoin?.[1] ?? playerLeft?.[1];
+  const text = eventType === "player_joined" ? `Player joined: ${subject?.trim()}`
+    : eventType === "player_left" ? `Player left: ${subject?.trim()}`
+    : eventType === "server_started" ? "Server started"
+    : eventType === "server_stopped" ? "Server stopped"
+    : "Server crashed";
+  const severity = eventType === "server_crashed" ? "error" : eventType === "player_joined" || eventType === "server_started" ? "success" : "info";
+  const signature = eventSignature(eventType, subject);
+  return {
+    id: `${source}-${index}-${timestamp ?? ""}-${signature}`,
+    eventType,
+    type: severity,
+    severity,
+    text,
+    message: text,
+    timestamp,
+    signature,
+    source
+  };
+}
+
+function configuredServerPort(server: ManagedServer, props: Record<string, string>) {
+  if (props["server-port"]) return props["server-port"];
+  const firstTcp = (server.dockerPorts || "25565:25565/tcp").split(",").map((part) => part.trim()).find((part) => /\/tcp$|^\d+:\d+$|^\d+$/.test(part));
+  return firstTcp?.split(":")[0]?.replace(/\/tcp$/, "") || "25565";
+}
+
+function javaRuntimeLabel(server: ManagedServer) {
+  if (/temurin/i.test(server.dockerImage || "")) {
+    const version = server.dockerImage?.match(/temurin:([^,\s]+)/i)?.[1];
+    return version ? `Temurin ${version.replace(/-jre$/i, "")}` : "Temurin";
+  }
+  return server.runtimeProfile?.javaMajorVersion ? `Java ${server.runtimeProfile.javaMajorVersion}` : undefined;
+}
+
+function validDockerTimestamp(value?: string) {
+  return value && !value.startsWith("0001-") ? value : undefined;
 }
 
 export class RemoteNodeRuntime implements NodeRuntime {
@@ -160,8 +249,48 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async serverOverview(server: ManagedServer) {
-    const logs = await this.serverLogs(server) as { text?: string; source?: string };
-    return { events: [], activity: {}, logSources: logs.text ? [{ source: logs.source ?? "remote", text: logs.text }] : [] };
+    const [logsResult, statusResult, propertiesResult, eulaResult] = await Promise.allSettled([
+      this.serverLogs(server) as Promise<{ text?: string; source?: ServerEvent["source"] }>,
+      this.serverStatus(server) as Promise<{ docker?: { running?: boolean; startedAt?: string; finishedAt?: string } }>,
+      this.readFile(server, "server.properties") as Promise<{ content?: string }>,
+      this.readFile(server, "eula.txt") as Promise<{ content?: string }>
+    ]);
+    const logs = logsResult.status === "fulfilled" ? logsResult.value : { text: "", source: "docker" as const };
+    let logText = logs.text ?? "";
+    const source = logs.source === "logs/latest.log" ? "logs/latest.log" : "docker";
+    const parsedEvents = logText
+      .split(/\r?\n/)
+      .map((line, index) => parseRemoteLogEvent(line, source, index))
+      .filter((event): event is ServerEvent => Boolean(event));
+    const reversedEvents = [...parsedEvents].reverse();
+    const status = statusResult.status === "fulfilled" ? statusResult.value : {};
+    let playersOnline = parseOnlinePlayerCount(logText);
+    if (playersOnline === null && status.docker?.running) {
+      playersOnline = await this.onlinePlayerCount(server).catch(() => null);
+      if (playersOnline !== null) {
+        const refreshedLogs = await this.serverLogs(server).catch(() => logs) as { text?: string };
+        logText = refreshedLogs.text ?? logText;
+      }
+    }
+    const props = parseProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
+    const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
+    const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
+    const activity: ServerActivity = {
+      lastStartedAt: validDockerTimestamp(status.docker?.startedAt) ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
+      lastStoppedAt: validDockerTimestamp(status.docker?.finishedAt) ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
+      currentWorld: props["level-name"],
+      serverPort: configuredServerPort(server, props),
+      eulaAccepted,
+      javaRuntime: javaRuntimeLabel(server),
+      playersOnline,
+      maxPlayers: props["max-players"] ? Number(props["max-players"]) : null
+    };
+    return {
+      events: parsedEvents.slice(-10).reverse(),
+      eventsStatus: logsResult.status === "fulfilled" ? "ok" : "unavailable",
+      activity,
+      logSources: logText ? [{ source, text: logText }] : []
+    };
   }
 
   async resolveExistingPath(_server: ManagedServer, path: string): Promise<string> {

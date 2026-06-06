@@ -1901,7 +1901,19 @@ function normalizeJavaRuntime(server: ManagedServer) {
     return version ? `Temurin ${version.replace(/-jre$/i, "")}` : "Temurin";
   }
   if (/java/i.test(image) || /jdk|jre/i.test(image)) return image;
+  const runtime = runtimeProfileForServer(server);
+  if (runtime.javaMajorVersion) return `Java ${runtime.javaMajorVersion}`;
   return undefined;
+}
+
+function configuredServerPort(server: ManagedServer, props: Record<string, string>) {
+  if (props["server-port"]) return props["server-port"];
+  const tcpPort = dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp").find((port) => port.protocol === "tcp");
+  return tcpPort?.port || "25565";
+}
+
+function validDockerTimestamp(value?: string) {
+  return value && !value.startsWith("0001-") ? value : undefined;
 }
 
 type ParsedEventInput = {
@@ -2129,20 +2141,24 @@ async function serverOverviewData(server: ManagedServer) {
     ? /^eula\s*=\s*true\s*$/im.test(eula.value)
     : undefined;
   const logText = logSources.map((source) => source.text).join("\n");
+  const startedAt = dockerInspect.status === "fulfilled"
+    ? validDockerTimestamp(dockerInspect.value?.State?.StartedAt)
+    : undefined;
+  const stoppedAt = dockerInspect.status === "fulfilled"
+    ? validDockerTimestamp(dockerInspect.value?.State?.FinishedAt)
+    : undefined;
+  const parsedPlayersOnline = parseOnlinePlayerCount(logText);
+  const livePlayersOnline = parsedPlayersOnline === null && dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
+    ? await onlinePlayerCount(server).catch(() => null)
+    : parsedPlayersOnline;
   const activity: ServerActivity = {
-    lastStartedAt: dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.StartedAt && !dockerInspect.value.State.StartedAt.startsWith("0001-")
-      ? dockerInspect.value.State.StartedAt
-      : reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
-    lastStoppedAt: dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.FinishedAt && !dockerInspect.value.State.FinishedAt.startsWith("0001-")
-      ? dockerInspect.value.State.FinishedAt
-      : reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
-    lastRestartAt: reversedEvents.find((event) => /restart/i.test(event.text))?.timestamp,
+    lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
+    lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
     currentWorld: props["level-name"],
-    serverPort: props["server-port"],
+    serverPort: configuredServerPort(server, props),
     eulaAccepted,
     javaRuntime: normalizeJavaRuntime(server),
-    autosaveStatus: /Saved the game|Saved the world|Automatic saving is now enabled/i.test(logText) ? "Recently saved" : undefined,
-    playersOnline: parseOnlinePlayerCount(logText),
+    playersOnline: livePlayersOnline,
     maxPlayers: props["max-players"] ? Number(props["max-players"]) : null
   };
   return { events, eventsStatus, activity };
