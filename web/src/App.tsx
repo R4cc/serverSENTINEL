@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
@@ -148,6 +148,7 @@ export default function App() {
   }>>({});
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
+  const staleSessionLogoutRef = useRef(false);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (demoMode && serverId === demoServerId) {
@@ -165,6 +166,7 @@ export default function App() {
         setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
         setOverviewError("");
       } catch (error) {
+        if (handleStaleSession(error)) return;
         setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
       }
     }, 500);
@@ -789,6 +791,7 @@ export default function App() {
         if (cancelled) return;
         setResourceSamples((samples) => [...samples, { ...stats, sampledAt: Date.now() }].slice(-48));
       } catch (error) {
+        if (handleStaleSession(error)) return;
         if (!cancelled) {
           setResourceSamples((samples) => [...samples, {
             available: false,
@@ -848,6 +851,7 @@ export default function App() {
           setOverviewError("");
         }
       } catch (error) {
+        if (handleStaleSession(error)) return;
         if (!cancelled) {
           setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
         }
@@ -952,6 +956,36 @@ export default function App() {
     }, 5000);
   }
 
+  function handleStaleSession(error: unknown) {
+    if (!(error instanceof ApiError) || error.status !== 401) return false;
+    if (staleSessionLogoutRef.current) return true;
+    staleSessionLogoutRef.current = true;
+    window.localStorage.setItem("serversentinel-demo-mode", "false");
+    setDemoMode(false);
+    setAuthNotice("Sign in again to continue.");
+    setAuthSession({ authenticated: false, setupRequired: false, user: null });
+    setAppState(emptyApp);
+    setAppStateLoaded(false);
+    setAppLoadError("");
+    setAppRefreshing(false);
+    setActiveServerId("");
+    activeServerIdRef.current = "";
+    setStatus(null);
+    setStatusError("");
+    setOverviewData({ events: [], activity: {} });
+    setOverviewError("");
+    setOverviewLoading(false);
+    setResourceSamples([]);
+    setConsoleError("");
+    setFilesError("");
+    setModsError("");
+    setLogs([]);
+    setListing({ path: "/", entries: [] });
+    resetEditorState();
+    notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
+    return true;
+  }
+
   function warnIfModServerRunning() {
     if (!modServerRunning) return false;
     notify("error", "Stop the server before adding, removing, updating, or uploading mods.");
@@ -1015,6 +1049,7 @@ export default function App() {
       setNotice("");
       setAppStateLoaded(false);
       setDemoMode(false);
+      staleSessionLogoutRef.current = false;
       setAuthSession(session);
       formElement.reset();
     } catch (error) {
@@ -1034,6 +1069,7 @@ export default function App() {
     setActiveServerId("");
     setStatus(null);
     setLogs([]);
+    staleSessionLogoutRef.current = false;
   }
 
   function parsePermissionsField(form: FormData): PermissionKey[] {
@@ -1201,6 +1237,7 @@ export default function App() {
         setActiveServerId(next.servers[0].id);
       }
     } catch (error) {
+      if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load the application state. Check the server connection and retry.");
       setAppLoadError(message);
       if (!options.silent) {
@@ -1228,6 +1265,7 @@ export default function App() {
         setStatusError("");
       }
     } catch (error) {
+      if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setStatusError(errorMessage(error, "Could not refresh server status. Existing status is preserved."));
       }
@@ -1253,6 +1291,7 @@ export default function App() {
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
       setLogs(lines.map((line) => consoleLine(`[${result.source}] ${line}`)));
     } catch (error) {
+      if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setConsoleError(errorMessage(error, "Could not load console logs. Runtime logs may be unavailable."));
       }
@@ -1736,6 +1775,7 @@ export default function App() {
       }
       return true;
     } catch (error) {
+      if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
       setFilesError(message);
       setNotice(message);
@@ -1789,6 +1829,7 @@ export default function App() {
         setModsError("");
       }
     } catch (error) {
+      if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
       setModsError(message);
       setNotice(message);
@@ -3091,25 +3132,40 @@ export default function App() {
     }
   }
 
+  const notificationTray = (
+    <Notifications
+      notices={notices}
+      activeJobs={activeJobs}
+      onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))}
+      onDismissNotice={(noticeId) => setNotices(current => current.filter(notice => notice.id !== noticeId))}
+    />
+  );
+
   if (!authSession) {
     return (
-      <AuthPanel
-        setupRequired={false}
-        notice={authNotice || "Checking session..."}
-        onSubmit={submitAuth}
-        busy
-      />
+      <>
+        {notificationTray}
+        <AuthPanel
+          setupRequired={false}
+          notice={authNotice || "Checking session..."}
+          onSubmit={submitAuth}
+          busy
+        />
+      </>
     );
   }
 
   if (!authSession.authenticated && !demoMode) {
     return (
-      <AuthPanel
-        setupRequired={authSession.setupRequired}
-        notice={authNotice}
-        onSubmit={submitAuth}
-        busy={authSubmitting}
-      />
+      <>
+        {notificationTray}
+        <AuthPanel
+          setupRequired={authSession.setupRequired}
+          notice={authNotice}
+          onSubmit={submitAuth}
+          busy={authSubmitting}
+        />
+      </>
     );
   }
 
@@ -3153,12 +3209,7 @@ export default function App() {
 
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
-      <Notifications
-        notices={notices}
-        activeJobs={activeJobs}
-        onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))}
-        onDismissNotice={(noticeId) => setNotices(current => current.filter(notice => notice.id !== noticeId))}
-      />
+      {notificationTray}
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
