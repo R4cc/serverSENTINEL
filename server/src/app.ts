@@ -1467,7 +1467,8 @@ function dockerRuntimeConfigHash(server: ManagedServer) {
     bindTarget: serverDockerBindTarget(server),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
-    javaArgs: server.javaArgs || "-Xms2G -Xmx4G"
+    javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
+    restartPolicy: "unless-stopped"
   })).digest("hex");
 }
 
@@ -1534,6 +1535,7 @@ async function ensureDockerContainer(server: ManagedServer) {
           Privileged: false,
           NetworkMode: "bridge",
           PortBindings: portBindings,
+          RestartPolicy: { Name: "unless-stopped" },
           Mounts: [
             {
               Type: serverDockerMountSource(server) === config.serversDockerVolume ? "volume" : "bind",

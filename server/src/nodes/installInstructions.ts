@@ -52,9 +52,10 @@ export function buildNodeInstallInstructions(input: {
     dockerSocketMount,
     dockerCompose: {
       image: input.image,
+      restart: "unless-stopped",
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SS_NODE_DATA_DIR=${shellQuote(containerTarget)} -e SS_NODE_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${input.image}`
+    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SS_NODE_DATA_DIR=${shellQuote(containerTarget)} -e SS_NODE_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${input.image}`
   };
 }

@@ -38,6 +38,7 @@ export type NodeInstallInstructions = {
   dockerSocketMount: string;
   dockerCompose: {
     image: string;
+    restart: "unless-stopped";
     environment: {
       SS_MODE: "node";
       SS_PANEL_URL: string;
