@@ -220,11 +220,10 @@ export default function App() {
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modServerRunning = Boolean(activeStatus?.docker.running);
   const activeRuntimeProfile = activeServer?.runtimeProfile;
-  const activeRuntimeLegacy = Boolean(activeServer && (!activeRuntimeProfile || activeRuntimeProfile.compatibilityStatus === "legacy" || activeRuntimeProfile.jarProvider === "legacy"));
-  const activeRuntimeLabel = activeRuntimeProfile && !activeRuntimeLegacy
+  const activeRuntimeLabel = activeRuntimeProfile
     ? `Minecraft ${activeRuntimeProfile.minecraftVersion} - Fabric ${activeRuntimeProfile.loaderVersion}`
     : activeServer
-      ? "Legacy / manual runtime"
+      ? "Runtime profile unavailable"
       : "No server selected";
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
@@ -4103,13 +4102,9 @@ export default function App() {
                     </section>
                   )}
                   {activeServer && (
-                    <section className={`systemBanner ${activeRuntimeLegacy ? "warning" : "accent"}`}>
-                      <strong>{activeRuntimeLegacy ? "Limited compatibility mode" : "Compatibility target"}</strong>
-                      <span>
-                        {activeRuntimeLegacy
-                          ? "This server does not have a resolved runtime profile. Modrinth compatibility is based on legacy metadata; review runtime settings before relying on automatic matching."
-                          : `${activeRuntimeLabel}. Mod search and installs use this server runtime automatically.`}
-                      </span>
+                    <section className="systemBanner accent">
+                      <strong>Compatibility target</strong>
+                      <span>{`${activeRuntimeLabel}. Mod search and installs use this server runtime automatically.`}</span>
                     </section>
                   )}
                   <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />

@@ -134,9 +134,9 @@ export type ModrinthProject = {
 };
 
 export type LoaderType = "fabric";
-export type ServerJarProviderId = "mcjars" | "manual" | "legacy";
+export type ServerJarProviderId = "mcjars";
 export type JavaMajorVersion = 17 | 21 | 25;
-export type RuntimeCompatibilityStatus = "compatible" | "legacy" | "manual" | "unsupported" | "unknown";
+export type RuntimeCompatibilityStatus = "compatible" | "unsupported" | "unknown";
 
 export type ServerRuntimeProfile = {
   minecraftVersion: string;
@@ -196,7 +196,7 @@ export type ManagedServer = {
   loaderVersion?: string;
   installerVersion?: string;
   serverJar?: string;
-  runtimeProfile?: ServerRuntimeProfile;
+  runtimeProfile: ServerRuntimeProfile;
   dockerContainer?: string;
   dockerImage?: string;
   dockerMountSource?: string;
@@ -228,10 +228,9 @@ export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource"
   hasDockerContainer: boolean;
   nodeName?: string;
   resolvedVersions?: ResolvedServerVersions;
-  runtimeProfile?: ServerRuntimeProfile;
 };
 
-export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
+export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";
 
 export type VersionResolution = {
   version?: string;

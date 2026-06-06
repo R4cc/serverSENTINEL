@@ -266,6 +266,19 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     loaderVersion: "0.16.10",
     installerVersion: "1.0.1",
     serverJar: "fabric-server-launch.jar",
+    runtimeProfile: {
+      minecraftVersion: "1.21.4",
+      loader: "fabric",
+      loaderVersion: "0.16.10",
+      javaMajorVersion: 21,
+      jarProvider: "mcjars",
+      jarArtifact: {
+        filename: "fabric-server-launch.jar",
+        downloadUrl: "https://example.invalid/fabric-server-launch.jar"
+      },
+      compatibilityStatus: "compatible",
+      resolvedAt: new Date(demoStartedAt).toISOString()
+    },
     dockerContainer: "serversentinel-demo",
     dockerImage: "simulated-runtime",
     dockerPorts: "25565:25565/tcp",

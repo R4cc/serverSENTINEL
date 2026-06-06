@@ -2,7 +2,6 @@ import type {
   JavaMajorVersion,
   LoaderType,
   ManagedServer,
-  RuntimeCompatibilityStatus,
   ServerJarProviderId,
   ServerRuntimeProfile
 } from "../types.js";
@@ -43,8 +42,7 @@ export class RuntimeResolutionError extends Error {
       | "provider_unavailable"
       | "no_fabric_artifact"
       | "invalid_loader_version"
-      | "unsupported_java_version"
-      | "legacy_runtime",
+      | "unsupported_java_version",
     message: string
   ) {
     super(message);
@@ -72,32 +70,12 @@ export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVe
   throw new RuntimeResolutionError("unsupported_minecraft_version", "ServerSentinel currently supports Minecraft 1.18 and newer for Fabric servers");
 }
 
-export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile" | "minecraftVersion" | "loaderVersion" | "serverJar">): ServerRuntimeProfile | undefined {
-  if (server.runtimeProfile) return server.runtimeProfile;
-  if (!server.minecraftVersion || !server.loaderVersion || !server.serverJar) return undefined;
-  let javaMajorVersion: JavaMajorVersion = 17;
-  let compatibilityStatus: RuntimeCompatibilityStatus = "legacy";
-  try {
-    javaMajorVersion = minecraftJavaMajorVersion(server.minecraftVersion);
-  } catch {
-    compatibilityStatus = "unknown";
-  }
-  return {
-    minecraftVersion: server.minecraftVersion,
-    loader: "fabric",
-    loaderVersion: server.loaderVersion,
-    javaMajorVersion,
-    jarProvider: "legacy",
-    jarArtifact: {
-      filename: server.serverJar
-    },
-    compatibilityStatus,
-    resolvedAt: new Date(0).toISOString()
-  };
+export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {
+  return server.runtimeProfile;
 }
 
-export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile | undefined {
-  if (value === undefined || value === null) return undefined;
+export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
+  if (value === undefined || value === null) throw new Error("server.runtimeProfile is required");
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new Error("server.runtimeProfile must be an object");
   }
@@ -112,22 +90,20 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile | 
     throw new RuntimeResolutionError("unsupported_loader", "Only Fabric runtime profiles are supported");
   }
   const jarProvider = profile.jarProvider;
-  if (jarProvider !== "mcjars" && jarProvider !== "manual" && jarProvider !== "legacy") {
-    throw new Error("server.runtimeProfile.jarProvider must be mcjars, manual, or legacy");
+  if (jarProvider !== "mcjars") {
+    throw new Error("server.runtimeProfile.jarProvider must be mcjars");
   }
   const javaMajorVersion = profile.javaMajorVersion;
   if (javaMajorVersion !== 17 && javaMajorVersion !== 21 && javaMajorVersion !== 25) {
     throw new RuntimeResolutionError("unsupported_java_version", "Unsupported Java major version in runtime profile");
   }
   const compatibilityStatus = profile.compatibilityStatus;
-  const normalizedCompatibility: RuntimeCompatibilityStatus =
+  const normalizedCompatibility =
     compatibilityStatus === "compatible"
-    || compatibilityStatus === "legacy"
-    || compatibilityStatus === "manual"
     || compatibilityStatus === "unsupported"
     || compatibilityStatus === "unknown"
       ? compatibilityStatus
-      : jarProvider === "mcjars" ? "compatible" : jarProvider;
+      : "compatible";
   return {
     minecraftVersion: stringField(profile.minecraftVersion, "server.runtimeProfile.minecraftVersion"),
     loader,
@@ -151,10 +127,10 @@ export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile" | "mi
   const profile = runtimeProfileForServer(server);
   return {
     profile,
-    minecraftVersion: profile?.minecraftVersion ?? server.minecraftVersion,
-    loader: profile?.loader ?? "fabric" as LoaderType,
-    loaderVersion: profile?.loaderVersion ?? server.loaderVersion,
-    serverJar: profile?.jarArtifact.filename ?? server.serverJar
+    minecraftVersion: profile.minecraftVersion,
+    loader: profile.loader as LoaderType,
+    loaderVersion: profile.loaderVersion,
+    serverJar: profile.jarArtifact.filename
   };
 }
 

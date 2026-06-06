@@ -17,12 +17,12 @@ export type ManagedServer = {
   serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
-  runtimeProfile?: ServerRuntimeProfile;
+  runtimeProfile: ServerRuntimeProfile;
 };
 
 export type LoaderType = "fabric";
-export type ServerJarProviderId = "mcjars" | "manual" | "legacy";
-export type RuntimeCompatibilityStatus = "compatible" | "legacy" | "manual" | "unsupported" | "unknown";
+export type ServerJarProviderId = "mcjars";
+export type RuntimeCompatibilityStatus = "compatible" | "unsupported" | "unknown";
 
 export type ServerRuntimeProfile = {
   minecraftVersion: string;
@@ -125,14 +125,14 @@ export type NodeInstallResponse = {
 
 export type NodeUpdateResponse = {
   ok: boolean;
-  mode: "self" | "manual" | "offline";
+  mode: "self" | "offline";
   message: string;
   image?: string;
   command?: string;
   planPath?: string;
 };
 
-export type VersionSource = "detected" | "stored" | "log" | "unknown" | "demo";
+export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";
 
 export type VersionResolution = {
   version?: string;

@@ -624,11 +624,11 @@ function optionalNodeTotalMemory(value: unknown) {
 
 function normalizeNode(value: unknown): ManagedNode {
   const node = asObject(value, "managed node");
-  const type = node.type ?? "local";
+  const type = node.type;
   if (type !== "local" && type !== "remote") {
     throw new Error("managed node type must be local or remote");
   }
-  const status = node.status ?? "unknown";
+  const status = node.status;
   if (status !== "online" && status !== "offline" && status !== "unknown") {
     throw new Error("managed node status must be online, offline, or unknown");
   }
@@ -775,47 +775,13 @@ function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
   return nodes.find((node) => node.id === server.nodeId);
 }
 
-function parseVersionMetadataText(text: string): VersionMetadata {
-  try {
-    const parsed = JSON.parse(text) as VersionMetadata;
-    return {
-      minecraftVersion: typeof parsed.minecraftVersion === "string" ? parsed.minecraftVersion : undefined,
-      fabricLoaderVersion: typeof parsed.fabricLoaderVersion === "string" ? parsed.fabricLoaderVersion : undefined,
-      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : undefined,
-      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : undefined
-    };
-  } catch {
-    const values = parseProperties(text);
-    return {
-      minecraftVersion: values.minecraftVersion || values["minecraft-version"] || values["game-version"],
-      fabricLoaderVersion: values.fabricLoaderVersion || values["fabric-loader-version"] || values.loaderVersion
-    };
-  }
-}
-
-async function readVersionMetadataFile(server: ManagedServer) {
-  try {
-    const metadataPath = await validateExistingInsideServer(server, versionMetadataFilename);
-    return parseVersionMetadataText(await readFile(metadataPath, "utf8"));
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-    return {};
-  }
-}
-
 async function writeVersionMetadataFile(server: ManagedServer) {
   const now = new Date().toISOString();
-  let existing: VersionMetadata = {};
-  try {
-    existing = await readVersionMetadataFile(server);
-  } catch {
-    existing = {};
-  }
   const targetRuntime = runtimeTarget(server);
   const metadata: VersionMetadata = {
     minecraftVersion: targetRuntime.minecraftVersion,
     fabricLoaderVersion: targetRuntime.loaderVersion,
-    createdAt: existing.createdAt ?? now,
+    createdAt: now,
     updatedAt: now
   };
   const target = await ensureWritableInsideServer(server, versionMetadataFilename);
@@ -896,18 +862,15 @@ async function resolveServerVersions(server: ManagedServer): Promise<ResolvedSer
   const lastCheckedAt = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
   const detected = await detectVersionsFromLauncherJar(server);
-  const metadata = detected.minecraftVersion && detected.fabricLoaderVersion
-    ? {}
-    : await readVersionMetadataFile(server);
   const logs = detected.minecraftVersion && detected.fabricLoaderVersion
     ? {}
     : await detectVersionsFromLogs(server);
 
-  const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : targetRuntime.minecraftVersion || metadata.minecraftVersion ? "stored" : "unknown";
-  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : targetRuntime.loaderVersion || metadata.fabricLoaderVersion ? "stored" : "unknown";
+  const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : targetRuntime.minecraftVersion ? "profile" : "unknown";
+  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : targetRuntime.loaderVersion ? "profile" : "unknown";
   return {
-    minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || targetRuntime.minecraftVersion || metadata.minecraftVersion, minecraftSource, lastCheckedAt),
-    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || targetRuntime.loaderVersion || metadata.fabricLoaderVersion, fabricSource, lastCheckedAt)
+    minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || targetRuntime.minecraftVersion, minecraftSource, lastCheckedAt),
+    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || targetRuntime.loaderVersion, fabricSource, lastCheckedAt)
   };
 }
 
@@ -936,8 +899,8 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     nodeName: node?.name,
     runtimeProfile: runtimeProfileForServer(server),
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
-      minecraftVersion: versionResolution(runtimeTarget(server).minecraftVersion, runtimeTarget(server).minecraftVersion ? "stored" : "unknown", new Date().toISOString()),
-      fabricLoaderVersion: versionResolution(runtimeTarget(server).loaderVersion, runtimeTarget(server).loaderVersion ? "stored" : "unknown", new Date().toISOString())
+      minecraftVersion: versionResolution(runtimeTarget(server).minecraftVersion, runtimeTarget(server).minecraftVersion ? "profile" : "unknown", new Date().toISOString()),
+      fabricLoaderVersion: versionResolution(runtimeTarget(server).loaderVersion, runtimeTarget(server).loaderVersion ? "profile" : "unknown", new Date().toISOString())
     }
   };
 }
@@ -961,18 +924,18 @@ function normalizeSchedule(value: unknown): ScheduledExecution {
 
 function normalizeManagedServer(value: unknown): ManagedServer {
   const server = asObject(value, "managed server");
-  const serverType = server.serverType ?? "fabric";
+  const serverType = server.serverType;
   if (serverType !== "fabric") {
     throw new Error("managed server serverType must be fabric");
   }
   const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const id = validateServerId(server.id);
-  const nodeId = optionalString(server.nodeId, "server.nodeId") ?? localNodeId;
+  const nodeId = requiredString(server.nodeId, "server.nodeId");
   const serversDir = resolve(config.serversDir);
   const serverDir = nodeId === localNodeId
     ? resolve(requiredString(server.serverDir, "server.serverDir"))
-    : resolve(optionalString(server.serverDir, "server.serverDir") ?? join("/remote", id));
+    : resolve(requiredString(server.serverDir, "server.serverDir"));
   if (nodeId === localNodeId && serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
     throw new Error("managed server serverDir must be inside SERVERSENTINEL_SERVERS_DIR");
   }
@@ -1977,10 +1940,10 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     level = matchModern.groups!.level;
     message = matchModern.groups!.message;
   } else {
-    const matchLegacy = rest.match(/^\[(?<thread>[^\]]+)\]\s+\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/);
-    if (matchLegacy) {
-      level = matchLegacy.groups!.level;
-      message = matchLegacy.groups!.message;
+    const bracketedMatch = rest.match(/^\[(?<thread>[^\]]+)\]\s+\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/);
+    if (bracketedMatch) {
+      level = bracketedMatch.groups!.level;
+      message = bracketedMatch.groups!.message;
     } else {
       const matchBrackets = rest.match(/^\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/);
       if (matchBrackets) {
@@ -2288,7 +2251,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
     throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   }
   if (!downloadUrl) {
-    throw new Error("This server uses a legacy/manual runtime jar and cannot refresh the server jar automatically");
+    throw new Error("The runtime profile does not include a Fabric server jar download URL");
   }
   if (!downloadUrl.startsWith("https://")) {
     throw new Error("Refusing to download a non-HTTPS Fabric server jar");
@@ -2385,7 +2348,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     preferStable: true
   });
   const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || runtimeProfile.jarArtifact.filename);
-  const storedRuntimeProfile: ServerRuntimeProfile = {
+  const runtimeProfileForRecord: ServerRuntimeProfile = {
     ...runtimeProfile,
     jarArtifact: {
       ...runtimeProfile.jarArtifact,
@@ -2395,7 +2358,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const { serverPort, dockerPorts } = normalizeCreateServerPorts(input);
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
-  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(storedRuntimeProfile.minecraftVersion));
+  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfileForRecord.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
 
   const now = new Date().toISOString();
@@ -2406,10 +2369,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     serverDir: resolvedServerDir,
     storageName,
     minecraftVersion,
-    loaderVersion: storedRuntimeProfile.loaderVersion,
+    loaderVersion: runtimeProfileForRecord.loaderVersion,
     installerVersion: undefined,
     serverJar,
-    runtimeProfile: storedRuntimeProfile,
+    runtimeProfile: runtimeProfileForRecord,
     dockerContainer,
     dockerImage,
     dockerMountSource: config.serversDockerVolume || resolvedServerDir,
@@ -2421,7 +2384,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     updatedAt: now
   };
 
-  logInfo({ ...serverLogFields(server), jobId, minecraftVersion: storedRuntimeProfile.minecraftVersion, loaderVersion: storedRuntimeProfile.loaderVersion, jarProvider: storedRuntimeProfile.jarProvider }, "Fabric runtime profile resolved for provisioning");
+  logInfo({ ...serverLogFields(server), jobId, minecraftVersion: runtimeProfileForRecord.minecraftVersion, loaderVersion: runtimeProfileForRecord.loaderVersion, jarProvider: runtimeProfileForRecord.jarProvider }, "Fabric runtime profile resolved for provisioning");
   try {
     await createServerFiles(server, input.acceptEula, serverPort, report);
     if (dockerAvailable()) {
@@ -2700,7 +2663,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     const jarChanged = current.minecraftVersion !== minecraftVersion
       || current.loaderVersion !== loaderVersion
       || current.serverJar !== serverJar
-      || current.runtimeProfile?.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
+      || current.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
     const containerConfigChanged = current.dockerContainer !== dockerContainer
       || current.dockerImage !== dockerImage
       || current.dockerPorts !== dockerPorts
@@ -3070,20 +3033,10 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   }
   const nodePanelVersionComparison = compareVersionStrings(node.agentVersion, appVersion);
   if (nodePanelVersionComparison === 1) {
-    return {
-      ok: false,
-      mode: "manual",
-      message: `Node agent ${node.agentVersion} is newer than this panel (${appVersion}). Update the panel before updating this node image.`,
-      image: nodeImage
-    };
+    throw new Error(`Node agent ${node.agentVersion} is newer than this panel (${appVersion}). Update the panel before updating this node image.`);
   }
   if (node.agentVersion && node.agentVersion !== appVersion && nodePanelVersionComparison === null) {
-    return {
-      ok: false,
-      mode: "manual",
-      message: `Node agent version ${node.agentVersion} could not be compared with panel version ${appVersion}. Update the panel and node manually to matching release versions.`,
-      image: nodeImage
-    };
+    throw new Error(`Node agent version ${node.agentVersion} could not be compared with panel version ${appVersion}. Update the panel and node to matching release versions.`);
   }
   const image = validateDockerImageName(body.image?.trim() || nodeImage);
   if (node.status !== "online") {
@@ -3091,15 +3044,6 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
       ok: false,
       mode: "offline",
       message: "Node is offline. Update it on the node host, then refresh this page.",
-      image,
-      command: `docker pull ${image}`
-    };
-  }
-  if (!node.capabilities?.includes("node.update")) {
-    return {
-      ok: false,
-      mode: "manual",
-      message: "This node agent does not support panel-triggered self-update yet. Update it on the node host once, then future updates can be triggered here.",
       image,
       command: `docker pull ${image}`
     };
@@ -3113,7 +3057,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
       command: `docker pull ${image}`
     };
   }
-  return panelNodeConnections.request(node, "node.update", { image, expectedVersion: appVersion }, 30_000);
+  return panelNodeConnections.request(node, "node.update", { image }, 30_000);
 });
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
@@ -3424,7 +3368,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/runtime", async (request) 
   return {
     serverId: server.id,
     runtimeProfile,
-    compatibilityStatus: runtimeProfile?.compatibilityStatus ?? "unknown"
+    compatibilityStatus: runtimeProfile.compatibilityStatus
   };
 });
 
@@ -3432,9 +3376,6 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
   const runtimeProfile = runtimeProfileForServer(server);
-  if (!runtimeProfile?.minecraftVersion) {
-    throw new Error("This server does not have enough runtime metadata to refresh automatically");
-  }
   const refreshed = await serverJarProvider.resolveFabricServerJar({
     minecraftVersion: runtimeProfile.minecraftVersion,
     loaderVersion: runtimeProfile.loaderVersion || "latest",

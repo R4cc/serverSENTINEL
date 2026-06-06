@@ -17,6 +17,22 @@ import {
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import type { ManagedServer } from "./types.js";
 
+function testRuntimeProfile() {
+  return {
+    minecraftVersion: "1.21.4",
+    loader: "fabric" as const,
+    loaderVersion: "0.16.10",
+    javaMajorVersion: 21 as const,
+    jarProvider: "mcjars" as const,
+    jarArtifact: {
+      filename: "fabric-server-launch.jar",
+      downloadUrl: "https://example.invalid/fabric-server-launch.jar"
+    },
+    compatibilityStatus: "compatible" as const,
+    resolvedAt: new Date().toISOString()
+  };
+}
+
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
     const line = "[12:34:56] [Server thread/INFO]: Antigravity joined the game";
@@ -180,9 +196,9 @@ describe("node install instructions", () => {
 describe("node force delete cleanup", () => {
   it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
     const servers = [
-      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", serverType: "fabric", createdAt: "", updatedAt: "" }
+      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
+      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
+      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" }
     ] satisfies ManagedServer[];
 
     expect(removeServersForNode(servers, "deleted-node")).toBe(2);
@@ -198,6 +214,7 @@ describe("server port conflict detection", () => {
       displayName: "Survival",
       serverDir: "/tmp/survival",
       dockerPorts: "25565:25565/tcp,25565:25565/udp",
+      runtimeProfile: testRuntimeProfile(),
       serverType: "fabric",
       createdAt: "",
       updatedAt: ""
@@ -208,6 +225,7 @@ describe("server port conflict detection", () => {
       displayName: "Creative",
       serverDir: "/tmp/creative",
       dockerPorts: "25565:25565/tcp",
+      runtimeProfile: testRuntimeProfile(),
       serverType: "fabric",
       createdAt: "",
       updatedAt: ""

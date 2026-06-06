@@ -7,15 +7,11 @@ import { AppIcon } from '../components/FileTypeIcon';
 
 function jarProviderLabel(provider?: string) {
   if (provider === "mcjars") return "MCJars";
-  if (provider === "legacy") return "Legacy";
-  if (provider === "manual") return "Manual";
   return "Unknown";
 }
 
 function runtimeStatusLabel(status?: string) {
   if (status === "compatible") return "Compatible";
-  if (status === "legacy") return "Legacy";
-  if (status === "manual") return "Manual";
   if (status === "unsupported") return "Unsupported";
   return "Unknown";
 }

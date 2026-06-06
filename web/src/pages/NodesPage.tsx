@@ -779,7 +779,7 @@ export function NodesPage({
               )}
               {nodeVersionMismatch(selectedNode) && (
                 <div className="nodeWarnings nodeDetailsWarnings">
-                  <span>Node agent {selectedNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node manually to matching release versions.</span>
+                  <span>Node agent {selectedNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node to matching release versions.</span>
                 </div>
               )}
               <div className="nodeActions nodeDetailsActions">

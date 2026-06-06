@@ -21,7 +21,6 @@ import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamData
 type NodeConfig = { nodeId: string; nodeSecret: string };
 type NodeUpdateRequest = {
   image?: string;
-  expectedVersion?: string;
 };
 type NodeContainerInspect = {
   Id: string;
@@ -361,7 +360,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   const jarChanged = server.minecraftVersion !== minecraftVersion
     || server.loaderVersion !== loaderVersion
     || server.serverJar !== serverJar
-    || server.runtimeProfile?.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
+    || server.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
   const containerConfigChanged = server.dockerContainer !== dockerContainer
     || server.dockerImage !== dockerImageName
     || server.dockerPorts !== dockerPorts
@@ -550,22 +549,6 @@ function validateNodeDockerImageName(image: string) {
   return value;
 }
 
-function compareVersionStrings(left?: string, right?: string) {
-  if (!left || !right) return null;
-  const parse = (value: string) => {
-    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
-    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
-  };
-  const leftParts = parse(left);
-  const rightParts = parse(right);
-  if (!leftParts || !rightParts) return left === right ? 0 : null;
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] > rightParts[index]) return 1;
-    if (leftParts[index] < rightParts[index]) return -1;
-  }
-  return 0;
-}
-
 function createNetworkingConfig(inspect: NodeContainerInspect) {
   const networks = inspect.NetworkSettings?.Networks;
   if (!networks || Object.keys(networks).length === 0) return undefined;
@@ -580,17 +563,9 @@ function createNetworkingConfig(inspect: NodeContainerInspect) {
 
 async function prepareNodeUpdate(payload: unknown) {
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
-  const currentVersion = process.env.npm_package_version ?? "0.5.0";
-  const expectedComparison = compareVersionStrings(currentVersion, input.expectedVersion);
-  if (input.expectedVersion && expectedComparison === 1) {
-    throw new Error(`Node agent ${currentVersion} is newer than panel ${input.expectedVersion}. Update the panel before changing this node image.`);
-  }
-  if (input.expectedVersion && currentVersion !== input.expectedVersion && expectedComparison === null) {
-    throw new Error(`Node agent version ${currentVersion} cannot be safely compared with panel version ${input.expectedVersion}. Update the panel and node manually to matching release versions.`);
-  }
   const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || "nl2109/serversentinel:latest");
   if (!dockerAvailable()) {
-    throw new Error("Docker socket is not mounted on this node. Manual update is required.");
+    throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before updating the node from the panel.");
   }
   const containerId = currentContainerId();
   if (!containerId) {
@@ -604,8 +579,6 @@ async function prepareNodeUpdate(payload: unknown) {
   const plan = {
     createdAt: new Date().toISOString(),
     image,
-    expectedVersion: input.expectedVersion,
-    currentVersion,
     containerId: inspect.Id || containerId,
     containerName: currentName,
     composeManaged,

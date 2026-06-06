@@ -12,31 +12,35 @@ describe("runtime profile helpers", () => {
     expect(() => minecraftJavaMajorVersion("1.17.1")).toThrow("1.18 and newer");
   });
 
-  it("builds a legacy profile for existing servers without stored runtime metadata", () => {
+  it("returns the current runtime profile for managed servers", () => {
+    const runtimeProfile = {
+      minecraftVersion: "1.20.1",
+      loader: "fabric" as const,
+      loaderVersion: "0.15.11",
+      javaMajorVersion: 17 as const,
+      jarProvider: "mcjars" as const,
+      jarArtifact: {
+        filename: "fabric-server-launch.jar",
+        downloadUrl: "https://example.invalid/fabric-server-launch.jar"
+      },
+      compatibilityStatus: "compatible" as const,
+      resolvedAt: new Date().toISOString()
+    };
     const server = {
       id: "server-1",
       nodeId: "local",
-      displayName: "Legacy",
-      serverDir: "/tmp/legacy",
+      displayName: "Survival",
+      serverDir: "/tmp/survival",
       minecraftVersion: "1.20.1",
       loaderVersion: "0.15.11",
       serverJar: "fabric-server-launch.jar",
+      runtimeProfile,
       serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     } satisfies ManagedServer;
 
-    expect(runtimeProfileForServer(server)).toMatchObject({
-      minecraftVersion: "1.20.1",
-      loader: "fabric",
-      loaderVersion: "0.15.11",
-      javaMajorVersion: 17,
-      jarProvider: "legacy",
-      compatibilityStatus: "legacy",
-      jarArtifact: {
-        filename: "fabric-server-launch.jar"
-      }
-    });
+    expect(runtimeProfileForServer(server)).toBe(runtimeProfile);
   });
 
   it("rejects unsafe runtime artifact filenames during normalization", () => {

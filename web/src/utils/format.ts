@@ -117,11 +117,11 @@ export function runtimeTone(status: ServerStatus | null, dockerSocketMounted: bo
   return status.docker.running ? "running" : "stopped";
 }
 
-function bestVersion(resolved: VersionResolution | undefined, stored: string | undefined): VersionResolution {
+function bestVersion(resolved: VersionResolution | undefined, profileVersion: string | undefined): VersionResolution {
   if (resolved) return resolved;
   return {
-    version: stored || undefined,
-    source: stored ? "stored" : "unknown",
+    version: profileVersion || undefined,
+    source: profileVersion ? "profile" : "unknown",
     lastCheckedAt: ""
   };
 }
@@ -144,8 +144,8 @@ export function versionSourceLabel(source: VersionSource) {
       return "Detected from server files";
     case "log":
       return "Detected from logs";
-    case "stored":
-      return "Stored fallback";
+    case "profile":
+      return "Runtime profile";
     case "demo":
       return "Demo value";
     default:

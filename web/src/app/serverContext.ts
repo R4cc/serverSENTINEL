@@ -44,18 +44,7 @@ export function useServerContext(input: {
       const node = nodesById.get(nodeId);
       if (node) {
         node.servers.push(server);
-        continue;
       }
-      const fallbackNode: ContextNode = {
-        id: nodeId,
-        name: server.nodeName || nodeId,
-        type: "remote",
-        status: "unknown",
-        isInternal: false,
-        servers: [server]
-      };
-      nodes.push(fallbackNode);
-      nodesById.set(nodeId, fallbackNode);
     }
     return nodes;
   }, [effectiveAppState.nodes, effectiveAppState.servers, effectiveAppState.dockerSocketMounted, panelOnlyMode]);
