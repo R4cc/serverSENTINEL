@@ -582,6 +582,7 @@ export function NodesPage({
           const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
           const canAddServer = isNodeRuntimeUsable(node);
           const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
+          const placeholderRows = expanded ? 0 : Math.max(0, collapsedServerLimit - visibleServers.length);
           return (
             <article key={node.id} className={`panel nodeCard ${node.status}`}>
               <header className="nodeCardHeader">
@@ -619,12 +620,6 @@ export function NodesPage({
               <section className="nodeServerSection">
                 <div className="nodeServerSectionLabel">Servers on this node</div>
                 <div className="nodeServerList">
-                  {node.servers.length === 0 && (
-                    <div className="nodeServerEmpty">
-                      <strong>No servers here yet</strong>
-                      <span>{canAddServer ? "Add a server to place it on this node." : "Bring the node online before adding servers here."}</span>
-                    </div>
-                  )}
                   {visibleServers.map((server) => {
                     const state = serverStateLabel(server.id);
                     const playerLabel = playerCountLabel(serverActivities[server.id]);
@@ -645,9 +640,17 @@ export function NodesPage({
                       </button>
                     );
                   })}
+                  <button type="button" className="nodeServerRow nodeAddServerRow" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
+                    <span className="nodeServerIcon"><AppIcon name="plus" /></span>
+                    <span className="nodeServerName">Add server</span>
+                    <span className="nodeAddServerHint">{canAddServer ? "Create on this node" : "Node unavailable"}</span>
+                  </button>
+                  {Array.from({ length: placeholderRows }, (_, index) => (
+                    <div key={`placeholder-${index}`} className="nodeServerPlaceholder" aria-hidden="true" />
+                  ))}
                   {hiddenServerCount > 0 && (
                     <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: true }))}>
-                      + {hiddenServerCount} more servers
+                      Show all {node.servers.length} servers
                     </button>
                   )}
                   {expanded && node.servers.length > collapsedServerLimit && (
@@ -657,11 +660,6 @@ export function NodesPage({
                   )}
                 </div>
               </section>
-
-              <button type="button" className="secondaryButton nodeAddServerButton" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
-                <AppIcon name="plus" />
-                Add server
-              </button>
             </article>
           );
         })}
