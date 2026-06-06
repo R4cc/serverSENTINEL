@@ -157,6 +157,17 @@ export type ScheduledExecution = {
   lastRunAt?: string;
   lastStatus?: string;
   lastMessage?: string;
+  nextRunAt?: string;
+  recentRuns?: ScheduledRun[];
+};
+
+export type ScheduledRun = {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  status: string;
+  message?: string;
+  ranAt: string;
 };
 
 export type AppState = {

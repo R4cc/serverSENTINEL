@@ -1,9 +1,15 @@
-import { FormEvent, useEffect, useState } from 'react';
-import type { ScheduledExecution } from '../types';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
+
+type ScheduleFormMode =
+  | { type: "create" }
+  | { type: "edit"; schedule: ScheduledExecution };
+
+type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "onlyWhenNoPlayers" | "enabled">;
 
 export function SchedulePage({
   schedules,
@@ -16,7 +22,7 @@ export function SchedulePage({
   commandInputMessage
 }: {
   schedules: ScheduledExecution[];
-  onCreate: (event: FormEvent<HTMLFormElement>) => void;
+  onCreate: (event: FormEvent<HTMLFormElement>) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
   onDelete: (schedule: ScheduledExecution) => void;
@@ -24,23 +30,25 @@ export function SchedulePage({
   disabledReason?: string;
   commandInputMessage: string;
 }) {
-  const [commandIds, setCommandIds] = useState(() => [clientId()]);
-  const [editingSchedule, setEditingSchedule] = useState<ScheduledExecution | null>(null);
-  const [editCommandIds, setEditCommandIds] = useState<string[]>([]);
-  const [editError, setEditError] = useState("");
-  const editSaveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
+  const [formMode, setFormMode] = useState<ScheduleFormMode | null>(null);
+  const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
+  const [formError, setFormError] = useState("");
+  const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
 
   useEffect(() => {
-    if (!editingSchedule) {
-      setEditCommandIds([]);
-      setEditError("");
+    if (!formMode) {
+      setCommandIds([clientId()]);
+      setFormError("");
       return;
     }
-    setEditCommandIds(editingSchedule.commands.length ? editingSchedule.commands.map(() => clientId()) : [clientId()]);
-    setEditError("");
-  }, [editingSchedule]);
+    const commands = formMode.type === "edit" ? formMode.schedule.commands : [];
+    setCommandIds(commands.length ? commands.map(() => clientId()) : [clientId()]);
+    setFormError("");
+  }, [formMode]);
 
-  function schedulePatchFromForm(form: FormData) {
+  const recentRuns = useMemo(() => scheduleRuns(schedules), [schedules]);
+
+  function schedulePatchFromForm(form: FormData): SchedulePatch {
     return {
       name: String(form.get("name") ?? "").trim(),
       cron: String(form.get("cron") ?? "").trim(),
@@ -50,194 +58,237 @@ export function SchedulePage({
     };
   }
 
-  async function submitEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editingSchedule || disabled) return;
-    const patch = schedulePatchFromForm(new FormData(event.currentTarget));
-    const message = !patch.name
+  function validatePatch(patch: SchedulePatch) {
+    return !patch.name
       ? "Schedule name is required."
       : validateCronExpression(patch.cron) || validateCommandList(patch.commands) || "";
-    if (message) {
-      setEditError(message);
-      return;
-    }
-    setEditError("");
-    const saved = await onUpdate(editingSchedule, patch);
-    if (saved) setEditingSchedule(null);
   }
 
+  async function submitSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!formMode || disabled) return;
+    const patch = schedulePatchFromForm(new FormData(event.currentTarget));
+    const message = validatePatch(patch);
+    if (message) {
+      setFormError(message);
+      return;
+    }
+    setFormError("");
+    if (formMode.type === "create") {
+      const created = await onCreate(event);
+      if (created !== false) setFormMode(null);
+      return;
+    }
+    const saved = await onUpdate(formMode.schedule, patch);
+    if (saved) setFormMode(null);
+  }
+
+  const modalSchedule = formMode?.type === "edit" ? formMode.schedule : null;
+  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : "Add schedule";
+  const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
+
   return (
-    <section className="tabPage schedulePage">
-      <section className="panel scheduleCreatePanel">
-        <div className="panelHeader">
-          <h2>New scheduled execution</h2>
-          <a href="https://crontab.guru/" target="_blank" rel="noreferrer">Cron Guru</a>
+    <section className="tabPage schedulePage scheduleManagementPage">
+      <section className="panel scheduleTableCard">
+        <div className="scheduleCardHeader">
+          <div>
+            <h2>Schedules</h2>
+            <p>Manage automated console commands for this server.</p>
+          </div>
+          <button
+            type="button"
+            className="scheduleAddButton"
+            onClick={() => setFormMode({ type: "create" })}
+            disabled={disabled}
+            title={disabled ? disabledReason || "Schedule creation is unavailable right now." : "Add schedule"}
+          >
+            <AppIcon name="plus" />
+            <span>Add schedule</span>
+          </button>
         </div>
+
         {commandInputMessage && (
-          <section className="systemBanner warning compactBanner">
-            <strong>Scheduling is limited.</strong>
-            <span>{commandInputMessage}</span>
-          </section>
+          <InlineState tone="warning" title="Scheduling is limited" message={commandInputMessage} />
         )}
         {disabled && disabledReason && (
-          <section className="systemBanner warning compactBanner">
-            <strong>Schedules are unavailable.</strong>
-            <span>{disabledReason}</span>
-          </section>
+          <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
         )}
-        <form onSubmit={onCreate} className="appForm scheduleForm">
-          <fieldset disabled={disabled}>
-            <label>
-              Name
-              <input name="name" placeholder="Nightly maintenance" required maxLength={80} />
-            </label>
-            <label>
-              Cron schedule
-              <input name="cron" placeholder="0 4 * * *" required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
-            </label>
-            <div className="commandStack">
-              <span className="fieldLabel">Commands</span>
-              {commandIds.map((id, index) => (
-                <div key={id} className="commandInputRow">
-                  <input name="commands" placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
-                  {index > 0 && (
-                    <button
-                      type="button"
-                      className="iconDangerButton"
-                      onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))}
-                      aria-label="Remove command"
-                    >
-                      <AppIcon name="x" />
-                    </button>
+
+        <div className="scheduleTableFrame">
+          <div className="scheduleTableHeader" role="row">
+            <span>Name</span>
+            <span>Schedule</span>
+            <span>Last run</span>
+            <span>Next run</span>
+            <span>Enabled</span>
+            <span aria-hidden="true"></span>
+          </div>
+          <div className="scheduleTableBody">
+            {schedules.length ? schedules.map((schedule) => (
+              <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}>
+                <div className="scheduleNameCell" data-label="Name">
+                  <span className={`scheduleIconBubble ${statusTone(schedule.lastStatus)}`}>{schedule.name.slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{schedule.name}</strong>
+                    <small>{scheduleDescription(schedule)}</small>
+                  </div>
+                </div>
+                <div className="scheduleCell" data-label="Schedule">
+                  <code>{schedule.cron}</code>
+                  <small>{cronSummary(schedule.cron)}</small>
+                </div>
+                <div className="scheduleCell" data-label="Last run">
+                  {schedule.lastRunAt ? (
+                    <>
+                      <span>{formatScheduleTime(schedule.lastRunAt)}</span>
+                      <small className={`scheduleStatusText ${statusTone(schedule.lastStatus)}`}>{statusLabel(schedule.lastStatus)}</small>
+                    </>
+                  ) : (
+                    <>
+                      <span>Never run</span>
+                      <small>No execution yet</small>
+                    </>
                   )}
                 </div>
-              ))}
-              <button type="button" className="secondaryButton" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
-                <AppIcon name="plus" />
-                <span>Additional command</span>
-              </button>
-            </div>
-            <label className="checkLine">
-              <input name="onlyWhenNoPlayers" type="checkbox" />
-              Only run when no players are online
-            </label>
-            <label className="checkLine">
-              <input name="enabled" type="checkbox" defaultChecked />
-              Enabled
-            </label>
-            <button title={disabled ? disabledReason || "Scheduled commands are unavailable right now." : "Create scheduled execution"}>
-              {disabled && disabledReason?.includes("saving") ? "Saving..." : "Create scheduled execution"}
-            </button>
-          </fieldset>
-        </form>
-      </section>
-
-      <section className="panel scheduleListPanel">
-        <div className="panelHeader">
-          <h2>Scheduled executions</h2>
-          <span className="muted">{schedules.length} configured</span>
-        </div>
-        <div className="scheduleList">
-          {schedules.length ? schedules.map((schedule) => (
-            <article key={schedule.id} className={`scheduleRow ${schedule.enabled ? "enabled" : "disabled"}`}>
-              <div className="scheduleMain">
-                <div>
-                  <strong>{schedule.name}</strong>
-                  <code>{schedule.cron}</code>
+                <div className="scheduleCell" data-label="Next run">
+                  {schedule.enabled && schedule.nextRunAt ? (
+                    <>
+                      <span>{formatScheduleTime(schedule.nextRunAt)}</span>
+                      <small>{relativeTime(schedule.nextRunAt)}</small>
+                    </>
+                  ) : (
+                    <>
+                      <span>{schedule.enabled ? "Not available" : "Disabled"}</span>
+                      <small>{schedule.enabled ? "Waiting for a valid cron match" : "Enable to resume"}</small>
+                    </>
+                  )}
                 </div>
-                <span className={`runtimeBadge ${schedule.enabled ? "running" : "neutral"}`}>
-                  {schedule.enabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
-              <ul>
-                {schedule.commands.map((command, index) => <li key={`${command}-${index}`}>{command}</li>)}
-              </ul>
-              <div className="scheduleMeta">
-                <span>{schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Runs regardless of player count"}</span>
-                <span className={schedule.lastStatus === "failed" ? "scheduleLastRunFailed" : ""}>
-                  {schedule.lastRunAt
-                    ? schedule.lastStatus === "failed"
-                      ? `Last run failed: ${schedule.lastMessage || "No message from the scheduler"}`
-                      : `Last ${schedule.lastStatus || "run"}: ${schedule.lastMessage || "No message"}`
-                    : "Never run"}
-                </span>
-              </div>
-              <div className="buttonRow">
-                <button type="button" onClick={() => onToggle(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule changes are unavailable right now." : schedule.enabled ? "Disable schedule" : "Enable schedule"}>
-                  {schedule.enabled ? "Disable" : "Enable"}
+                <div className="scheduleEnabledCell" data-label="Enabled">
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={schedule.enabled}
+                      onChange={() => onToggle(schedule)}
+                      disabled={disabled}
+                    />
+                    <span className="slider"></span>
+                    <span className={`switchStateLabel ${schedule.enabled ? "enabled" : ""}`}>
+                      {schedule.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </label>
+                </div>
+                <details className="scheduleRowActions" data-label="Actions">
+                  <summary aria-label={`Actions for ${schedule.name}`}>...</summary>
+                  <div>
+                    <button type="button" onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</button>
+                    <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>Delete</button>
+                  </div>
+                </details>
+              </article>
+            )) : (
+              <div className="emptyState scheduleEmptyState">
+                <h2>No schedules</h2>
+                <p>Create a scheduled execution to run console commands automatically.</p>
+                <button type="button" onClick={() => setFormMode({ type: "create" })} disabled={disabled}>
+                  <AppIcon name="plus" />
+                  <span>Add schedule</span>
                 </button>
-                <button type="button" className="secondaryButton" onClick={() => setEditingSchedule(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule editing is unavailable right now." : "Edit schedule"}>
-                  Edit
-                </button>
-                <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled} title={disabled ? disabledReason || "Schedule deletion is unavailable right now." : "Delete schedule"}>
-                  Delete
-                </button>
               </div>
-            </article>
-          )) : (
-            <div className="emptyState compactEmpty">
-              <h2>No Schedules</h2>
-              <p>No scheduled commands are configured yet. Create one to run console commands automatically at a chosen time.</p>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+
+        <div className="scheduleTableFooter">
+          <span>Showing {schedules.length} of {schedules.length} schedules</span>
         </div>
       </section>
 
-      {editingSchedule && (
+      <aside className="panel scheduledRunsCard">
+        <div className="scheduleCardHeader compact">
+          <div>
+            <h2>Scheduled Runs</h2>
+            <p>Most recent scheduled executions.</p>
+          </div>
+        </div>
+        {recentRuns.length ? (
+          <div className="scheduledRunsFeed">
+            {recentRuns.map((run) => (
+              <article key={run.id} className={`scheduledRunItem ${statusTone(run.status)}`}>
+                <span className="scheduledRunMarker" aria-hidden="true"></span>
+                <div>
+                  <strong>{run.scheduleName}</strong>
+                  <small>{statusLabel(run.status)}</small>
+                </div>
+                <div className="scheduledRunTime">
+                  <span>{relativeTime(run.ranAt)}</span>
+                  <small>{formatScheduleTime(run.ranAt)}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="emptyState compactEmpty scheduledRunsEmpty">
+            <h2>No runs yet</h2>
+            <p>Recent scheduled executions will appear here after schedules run.</p>
+          </div>
+        )}
+      </aside>
+
+      {formMode && (
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !editSaveRunning) setEditingSchedule(null);
+          if (event.target === event.currentTarget && !saveRunning) setFormMode(null);
         }}>
-          <section className="modalPanel userModalPanel scheduleModalPanel" role="dialog" aria-modal="true" aria-labelledby="edit-schedule-title">
-            <form className="userModalForm scheduleModalForm" onSubmit={submitEdit}>
+          <section className="modalPanel userModalPanel scheduleModalPanel" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+            <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
               <div className="userModalHeader">
-                <h2 id="edit-schedule-title">Edit Scheduled Execution</h2>
-                <button type="button" className="iconButton modalCloseButton" onClick={() => setEditingSchedule(null)} disabled={editSaveRunning} aria-label="Close schedule editor" title={editSaveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor"}>
+                <h2 id="schedule-modal-title">{modalTitle}</h2>
+                <button type="button" className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
                   <AppIcon name="x" />
                 </button>
               </div>
               <fieldset disabled={disabled} className="userModalBody scheduleEditBody">
-                {editError && <InlineState tone="error" title="Check schedule details" message={editError} />}
+                {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
                 <div className="userModalFields scheduleEditFields">
                   <label>
                     Name
-                    <input name="name" defaultValue={editingSchedule.name} required maxLength={80} />
+                    <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
                   </label>
                   <label>
                     Cron schedule
-                    <input name="cron" defaultValue={editingSchedule.cron} required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
+                    <input name="cron" defaultValue={modalSchedule?.cron ?? ""} placeholder="0 4 * * *" required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
                   </label>
                 </div>
                 <div className="commandStack">
                   <span className="fieldLabel">Commands</span>
-                  {editCommandIds.map((id, index) => (
+                  {commandIds.map((id, index) => (
                     <div key={id} className="commandInputRow">
-                      <input name="commands" defaultValue={editingSchedule.commands[index] ?? ""} required={index === 0} title="Use one console command per line." />
+                      <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
                       {index > 0 && (
-                        <button type="button" className="iconDangerButton" onClick={() => setEditCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
+                        <button type="button" className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
                           <AppIcon name="x" />
                         </button>
                       )}
                     </div>
                   ))}
-                  <button type="button" className="secondaryButton" onClick={() => setEditCommandIds((ids) => [...ids, clientId()])}>
+                  <button type="button" className="secondaryButton scheduleCommandAdd" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
                     <AppIcon name="plus" />
                     <span>Additional command</span>
                   </button>
                 </div>
                 <div className="scheduleEditOptions">
                   <label className="checkLine">
-                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={editingSchedule.onlyWhenNoPlayers} />
+                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
                     <span>Only run when no players are online</span>
                   </label>
                   <label className="checkLine">
-                    <input name="enabled" type="checkbox" defaultChecked={editingSchedule.enabled} />
+                    <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
                     <span>Enabled</span>
                   </label>
                 </div>
               </fieldset>
               <div className="userModalFooter">
-                <button type="button" className="secondaryButton" onClick={() => setEditingSchedule(null)} disabled={editSaveRunning} title={editSaveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</button>
-                <button disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : "Save schedule changes"}>{editSaveRunning ? "Saving..." : "Save changes"}</button>
+                <button type="button" className="secondaryButton" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</button>
+                <button disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</button>
               </div>
             </form>
           </section>
@@ -245,4 +296,85 @@ export function SchedulePage({
       )}
     </section>
   );
+}
+
+function scheduleRuns(schedules: ScheduledExecution[]) {
+  return schedules
+    .flatMap((schedule) => {
+      if (schedule.recentRuns?.length) return schedule.recentRuns;
+      if (!schedule.lastRunAt) return [];
+      return [{
+        id: `${schedule.id}:${schedule.lastRunAt}`,
+        scheduleId: schedule.id,
+        scheduleName: schedule.name,
+        status: schedule.lastStatus ?? "unknown",
+        message: schedule.lastMessage,
+        ranAt: schedule.lastRunAt
+      } satisfies ScheduledRun];
+    })
+    .sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime())
+    .slice(0, 8);
+}
+
+function scheduleDescription(schedule: ScheduledExecution) {
+  if (schedule.commands.length > 1) return `${schedule.commands.length} console commands`;
+  if (schedule.commands[0]) return schedule.commands[0];
+  return schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Console command automation";
+}
+
+function cronSummary(cron: string) {
+  const [minute, hour, day, month, weekday] = cron.trim().split(/\s+/);
+  if (minute?.startsWith("*/") && hour === "*" && day === "*" && month === "*" && weekday === "*") return `Every ${minute.slice(2)} minutes`;
+  if (minute === "0" && hour?.startsWith("*/") && day === "*" && month === "*" && weekday === "*") return `Every ${hour.slice(2)} hours`;
+  if (day === "*" && month === "*" && weekday === "*") return `Daily at ${padTime(hour)}:${padTime(minute)}`;
+  if (day === "*" && month === "*" && weekday !== "*") return `Weekly on ${weekday} at ${padTime(hour)}:${padTime(minute)}`;
+  return "Custom schedule";
+}
+
+function padTime(value?: string) {
+  return /^\d+$/.test(value ?? "") ? String(value).padStart(2, "0") : value ?? "*";
+}
+
+function statusLabel(status?: string) {
+  const normalized = (status ?? "").toLowerCase();
+  if (normalized === "success" || normalized === "succeeded") return "Succeeded";
+  if (normalized === "failed") return "Failed";
+  if (normalized === "skipped") return "Skipped";
+  return "Not run";
+}
+
+function statusTone(status?: string) {
+  const normalized = (status ?? "").toLowerCase();
+  if (normalized === "success" || normalized === "succeeded") return "success";
+  if (normalized === "failed") return "failed";
+  if (normalized === "skipped") return "skipped";
+  return "unknown";
+}
+
+function formatScheduleTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const now = new Date();
+  const time = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return `Today, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function relativeTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const diffMs = date.getTime() - Date.now();
+  const absMs = Math.abs(diffMs);
+  const minutes = Math.max(1, Math.round(absMs / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const label = days > 0
+    ? `${days}d`
+    : hours > 0
+    ? `${hours}h ${minutes % 60}m`
+    : `${minutes}m`;
+  return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }

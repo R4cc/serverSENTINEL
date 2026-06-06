@@ -178,6 +178,21 @@ export function cronMatches(cron: string, date: Date) {
     && (days.has(normalizedDay) || (normalizedDay === 0 && days.has(7)));
 }
 
+export function nextCronRun(cron: string, from = new Date(), maxDays = 366) {
+  validateCron(cron);
+  const cursor = new Date(from);
+  cursor.setSeconds(0, 0);
+  cursor.setMinutes(cursor.getMinutes() + 1);
+  const maxChecks = Math.max(1, maxDays * 24 * 60);
+  for (let checked = 0; checked < maxChecks; checked += 1) {
+    if (cronMatches(cron, cursor)) {
+      return new Date(cursor);
+    }
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+  return null;
+}
+
 export function parseDockerPorts(ports?: string) {
   const exposedPorts: Record<string, Record<string, never>> = {};
   const portBindings: Record<string, Array<{ HostPort: string }>> = {};

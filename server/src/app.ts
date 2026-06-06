@@ -107,6 +107,7 @@ import type {
   ServerActivity,
   ServerEvent,
   ScheduledExecution,
+  ScheduledRun,
   ServerRuntimeProfile,
   Session,
   StoredUser
@@ -116,6 +117,7 @@ import {
   ensureInsideServer,
   ensureWritableInsideServer,
   ensureWritableResolvedInsideServer,
+  nextCronRun,
   parseDockerPorts,
   safeInstalledModFilename,
   safeModFilename,
@@ -890,7 +892,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
-    schedules: server.schedules ?? [],
+    schedules: (server.schedules ?? []).map(publicSchedule),
     serverType: server.serverType,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
@@ -918,8 +920,38 @@ function normalizeSchedule(value: unknown): ScheduledExecution {
     updatedAt: requiredString(schedule.updatedAt, "schedule.updatedAt"),
     lastRunAt: optionalString(schedule.lastRunAt, "schedule.lastRunAt"),
     lastStatus: optionalString(schedule.lastStatus, "schedule.lastStatus"),
-    lastMessage: optionalString(schedule.lastMessage, "schedule.lastMessage")
+    lastMessage: optionalString(schedule.lastMessage, "schedule.lastMessage"),
+    recentRuns: schedule.recentRuns === undefined ? undefined : asArray(schedule.recentRuns, "schedule.recentRuns").map(normalizeScheduledRun).slice(0, 25)
   };
+}
+
+function normalizeScheduledRun(value: unknown): ScheduledRun {
+  const run = asObject(value, "scheduled run");
+  return {
+    id: requiredString(run.id, "run.id"),
+    scheduleId: validateScheduleId(run.scheduleId),
+    scheduleName: requiredString(run.scheduleName, "run.scheduleName"),
+    status: requiredString(run.status, "run.status"),
+    message: optionalString(run.message, "run.message"),
+    ranAt: requiredString(run.ranAt, "run.ranAt")
+  };
+}
+
+function publicSchedule(schedule: ScheduledExecution): ScheduledExecution {
+  const nextRun = schedule.enabled ? safeNextCronRun(schedule.cron) : null;
+  return {
+    ...schedule,
+    nextRunAt: nextRun?.toISOString(),
+    recentRuns: (schedule.recentRuns ?? []).slice(0, 25)
+  };
+}
+
+function safeNextCronRun(cron: string) {
+  try {
+    return nextCronRun(cron);
+  } catch {
+    return null;
+  }
 }
 
 function normalizeManagedServer(value: unknown): ManagedServer {
@@ -2496,7 +2528,8 @@ function scheduleFromBody(body: {
     updatedAt: now,
     lastRunAt: existing?.lastRunAt,
     lastStatus: existing?.lastStatus,
-    lastMessage: existing?.lastMessage
+    lastMessage: existing?.lastMessage,
+    recentRuns: existing?.recentRuns
   };
 }
 
@@ -2556,10 +2589,20 @@ async function tickSchedules() {
       try {
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
         const result = await runScheduledExecution(server, schedule);
-        schedule.lastRunAt = new Date().toISOString();
+        const ranAt = new Date().toISOString();
+        const run: ScheduledRun = {
+          id: randomUUID(),
+          scheduleId: schedule.id,
+          scheduleName: schedule.name,
+          status: result.status,
+          message: result.message,
+          ranAt
+        };
+        schedule.lastRunAt = ranAt;
         schedule.lastStatus = result.status;
         schedule.lastMessage = result.message;
-        schedule.updatedAt = schedule.lastRunAt;
+        schedule.recentRuns = [run, ...(schedule.recentRuns ?? [])].slice(0, 25);
+        schedule.updatedAt = ranAt;
         changed = true;
       } finally {
         runningSchedules.delete(key);
@@ -2578,6 +2621,7 @@ async function tickSchedules() {
             currentSchedule.lastRunAt = schedule.lastRunAt;
             currentSchedule.lastStatus = schedule.lastStatus;
             currentSchedule.lastMessage = schedule.lastMessage;
+            currentSchedule.recentRuns = schedule.recentRuns;
             currentSchedule.updatedAt = schedule.updatedAt;
           }
         }

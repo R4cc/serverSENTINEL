@@ -6,6 +6,7 @@ import {
   cronMatches,
   ensureInsideServer,
   ensureWritableInsideServer,
+  nextCronRun,
   parseDockerPorts,
   safeInstalledModFilename,
   validateExistingInsideServer,
@@ -74,6 +75,13 @@ describe("cron parsing and matching", () => {
     expect(cronMatches("30 4 * * 1-5", new Date(2026, 4, 26, 4, 30))).toBe(true);
     expect(cronMatches("30 4 * * 1-5", new Date(2026, 4, 26, 4, 31))).toBe(false);
     expect(cronMatches("0 12 26 5 2", new Date(2026, 4, 26, 12, 0))).toBe(true);
+  });
+
+  it("finds the next matching run after the current minute", () => {
+    const nextToday = nextCronRun("0 4 * * *", new Date(2026, 5, 6, 3, 59, 20));
+    expect(nextToday && [nextToday.getDate(), nextToday.getHours(), nextToday.getMinutes()]).toEqual([6, 4, 0]);
+    const nextTomorrow = nextCronRun("0 4 * * *", new Date(2026, 5, 6, 4, 0, 0));
+    expect(nextTomorrow && [nextTomorrow.getDate(), nextTomorrow.getHours(), nextTomorrow.getMinutes()]).toEqual([7, 4, 0]);
   });
 });
 

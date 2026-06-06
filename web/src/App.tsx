@@ -2917,7 +2917,7 @@ export default function App() {
 
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return false;
     setNotice("");
     setScheduleBusy(true);
     const formElement = event.currentTarget;
@@ -2935,7 +2935,7 @@ export default function App() {
       notify("error", message);
     })) {
       setScheduleBusy(false);
-      return;
+      return false;
     }
     if (activeServerIsDemo) {
       const schedule: ScheduledExecution = {
@@ -2953,7 +2953,7 @@ export default function App() {
       formElement.reset();
       notify("success", "Demo scheduled execution created");
       setScheduleBusy(false);
-      return;
+      return true;
     }
     try {
       await api<ScheduledExecution>(`/api/servers/${activeServer.id}/schedules`, {
@@ -2969,10 +2969,12 @@ export default function App() {
       formElement.reset();
       notify("success", "Scheduled execution created");
       await refreshApp();
+      return true;
     } catch (error) {
       const message = errorMessage(error, "Could not create the schedule. Check the cron expression and commands.");
       setNotice(message);
       notify("error", message);
+      return false;
     } finally {
       setScheduleBusy(false);
     }
