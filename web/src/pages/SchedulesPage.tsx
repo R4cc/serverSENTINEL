@@ -93,7 +93,7 @@ export function SchedulePage({
             </label>
             <label>
               Cron schedule
-              <input name="cron" placeholder="0 4 * * *" required pattern="^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$" title="Use five cron fields: minute hour day month weekday." />
+              <input name="cron" placeholder="0 4 * * *" required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
             </label>
             <div className="commandStack">
               <span className="fieldLabel">Commands</span>
@@ -204,7 +204,7 @@ export function SchedulePage({
                   </label>
                   <label>
                     Cron schedule
-                    <input name="cron" defaultValue={editingSchedule.cron} required pattern="^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$" title="Use five cron fields: minute hour day month weekday." />
+                    <input name="cron" defaultValue={editingSchedule.cron} required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
                   </label>
                 </div>
                 <div className="commandStack">
