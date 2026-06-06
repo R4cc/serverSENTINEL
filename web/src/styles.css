@@ -1626,9 +1626,20 @@ button .buttonIcon {
 
 .usersTable {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: var(--surface);
   table-layout: fixed;
+}
+
+.usersTable tbody tr {
+  position: relative;
+  z-index: 0;
+}
+
+.usersTable tbody tr:hover,
+.usersTable tbody tr:focus-within {
+  z-index: 20;
 }
 
 .usersTable th:nth-child(1),
@@ -1650,6 +1661,7 @@ button .buttonIcon {
 .usersTable td {
   border-bottom: var(--border-strong) solid var(--border);
   padding: var(--space-3) var(--space-4);
+  position: relative;
   text-align: left;
   vertical-align: middle;
 }
@@ -1760,6 +1772,7 @@ button .buttonIcon {
   position: relative;
   display: inline-grid;
   place-items: center;
+  z-index: 30;
 }
 
 .roleInfoButton {
@@ -1780,7 +1793,7 @@ button .buttonIcon {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 8px);
-  z-index: 3;
+  z-index: 40;
   width: 220px;
   transform: translateX(-50%);
   border: var(--border-strong) solid var(--border);
@@ -7726,6 +7739,10 @@ button:disabled,
 .usersTable td,
 .usersTable th {
   overflow: hidden;
+}
+
+.usersTable td:nth-child(2) {
+  overflow: visible;
 }
 
 .usersTable td:last-child {
