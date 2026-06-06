@@ -6089,6 +6089,36 @@ details.compatibilityBadge p {
   font-weight: 900;
 }
 
+.scheduleModalPanel {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.scheduleEditBody {
+  border: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.scheduleEditFields {
+  align-items: start;
+}
+
+.scheduleEditOptions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.scheduleEditOptions .checkLine {
+  justify-content: flex-start;
+  min-height: 28px;
+}
+
+.scheduleEditOptions .checkLine input {
+  flex: 0 0 auto;
+}
+
 .compactEmpty {
   max-width: none;
   padding: var(--space-4);

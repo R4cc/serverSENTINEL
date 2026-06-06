@@ -1844,7 +1844,7 @@ async function readLatestServerLog(server: ManagedServer) {
   return (await readFileRange(logPath, start, logStat.size - 1)).toString("utf8");
 }
 
-function parseOnlinePlayerCount(logText: string) {
+export function parseOnlinePlayerCount(logText: string) {
   const matches = [...logText.matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
   const latest = matches.at(-1);
   return latest ? Number(latest[1]) : null;
@@ -2510,7 +2510,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       return { status: "skipped", message: "Skipped because Minecraft server is stopped" };
     }
     if (schedule.onlyWhenNoPlayers) {
-      const count = await onlinePlayerCount(server);
+      const count = await runtime.onlinePlayerCount(server);
       if (count === null) {
         logWarn({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, reason: "player_count_unknown" }, "Schedule skipped");
         return { status: "skipped", message: "Skipped because online player count could not be determined" };
@@ -4832,6 +4832,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   sendConsoleCommand: localSendConsoleCommand,
   streamConsole: localStreamConsole,
   serverLogs: localServerLogs,
+  onlinePlayerCount,
   serverStats: dockerResourceStats,
   serverOverview: serverOverviewData,
   resolveExistingPath: validateExistingInsideServer,

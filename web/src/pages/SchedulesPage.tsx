@@ -187,17 +187,17 @@ export function SchedulePage({
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editSaveRunning) setEditingSchedule(null);
         }}>
-          <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="edit-schedule-title">
-            <form className="userModalForm" onSubmit={submitEdit}>
+          <section className="modalPanel userModalPanel scheduleModalPanel" role="dialog" aria-modal="true" aria-labelledby="edit-schedule-title">
+            <form className="userModalForm scheduleModalForm" onSubmit={submitEdit}>
               <div className="userModalHeader">
                 <h2 id="edit-schedule-title">Edit Scheduled Execution</h2>
                 <button type="button" className="iconButton modalCloseButton" onClick={() => setEditingSchedule(null)} disabled={editSaveRunning} aria-label="Close schedule editor" title={editSaveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor"}>
                   <AppIcon name="x" />
                 </button>
               </div>
-              <fieldset disabled={disabled} className="userModalBody">
+              <fieldset disabled={disabled} className="userModalBody scheduleEditBody">
                 {editError && <InlineState tone="error" title="Check schedule details" message={editError} />}
-                <div className="userModalFields">
+                <div className="userModalFields scheduleEditFields">
                   <label>
                     Name
                     <input name="name" defaultValue={editingSchedule.name} required maxLength={80} />
@@ -224,14 +224,16 @@ export function SchedulePage({
                     <span>Additional command</span>
                   </button>
                 </div>
-                <label className="checkLine">
-                  <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={editingSchedule.onlyWhenNoPlayers} />
-                  Only run when no players are online
-                </label>
-                <label className="checkLine">
-                  <input name="enabled" type="checkbox" defaultChecked={editingSchedule.enabled} />
-                  Enabled
-                </label>
+                <div className="scheduleEditOptions">
+                  <label className="checkLine">
+                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={editingSchedule.onlyWhenNoPlayers} />
+                    <span>Only run when no players are online</span>
+                  </label>
+                  <label className="checkLine">
+                    <input name="enabled" type="checkbox" defaultChecked={editingSchedule.enabled} />
+                    <span>Enabled</span>
+                  </label>
+                </div>
               </fieldset>
               <div className="userModalFooter">
                 <button type="button" className="secondaryButton" onClick={() => setEditingSchedule(null)} disabled={editSaveRunning} title={editSaveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</button>

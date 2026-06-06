@@ -11,6 +11,7 @@ export type LocalNodeRuntimeHandlers = {
   sendConsoleCommand(server: ManagedServer, command: unknown): Promise<unknown>;
   streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void): Promise<void>;
   serverLogs(server: ManagedServer): Promise<unknown>;
+  onlinePlayerCount(server: ManagedServer): Promise<number | null>;
   serverStats(server: ManagedServer): Promise<unknown>;
   serverOverview(server: ManagedServer): Promise<unknown>;
   resolveExistingPath(server: ManagedServer, path: string): Promise<string>;
@@ -78,6 +79,10 @@ export class LocalNodeRuntime implements NodeRuntime {
 
   serverLogs(server: ManagedServer) {
     return this.handlers.serverLogs(server);
+  }
+
+  onlinePlayerCount(server: ManagedServer) {
+    return this.handlers.onlinePlayerCount(server);
   }
 
   serverStats(server: ManagedServer) {

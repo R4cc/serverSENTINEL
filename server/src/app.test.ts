@@ -10,6 +10,7 @@ import {
   validateRuntimeJarFilename,
   dockerHostPortBindings,
   findExistingServerPortConflict,
+  parseOnlinePlayerCount,
   sessionExpired,
   sessionMaxAgeSeconds,
   validateJoinTokenTtlMinutes
@@ -118,6 +119,18 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("ignores Fabric dependency tree lines and JVM informational messages", () => {
     expect(parseLogEvent("|-- fabric-crash-report-info-v1 1.0.3+9f78a5a839", "logs/latest.log", 9)).toBeNull();
     expect(parseLogEvent("[12:34:56] [main/INFO]: Distant Horizons: G1 Garbage collector detected.", "logs/latest.log", 10)).toBeNull();
+  });
+});
+
+describe("online player count parsing", () => {
+  it("uses the newest Minecraft list command response", () => {
+    const logText = [
+      "[12:00:00] [Server thread/INFO]: There are 3 of a max of 20 players online: Alex, Steve, Sam",
+      "[12:01:00] [Server thread/INFO]: There are 0 of a maximum of 20 players online:"
+    ].join("\n");
+
+    expect(parseOnlinePlayerCount(logText)).toBe(0);
+    expect(parseOnlinePlayerCount("Done (5.132s)! For help, type \"help\"")).toBeNull();
   });
 });
 

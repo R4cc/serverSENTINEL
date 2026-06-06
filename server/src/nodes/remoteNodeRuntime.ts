@@ -146,6 +146,15 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.logs.recent");
   }
 
+  async onlinePlayerCount(server: ManagedServer) {
+    await this.sendConsoleCommand(server, "list");
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const logs = await this.serverLogs(server) as { text?: string };
+    const matches = [...(logs.text ?? "").matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
+    const latest = matches.at(-1);
+    return latest ? Number(latest[1]) : null;
+  }
+
   serverStats(server: ManagedServer) {
     return this.command(server, "server.stats");
   }
