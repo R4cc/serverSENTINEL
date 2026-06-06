@@ -1527,14 +1527,15 @@ export default function App() {
       return;
     }
     const assignedMessage = node.servers.length
-      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. It will not contact the node host or delete remote files.`
+      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. If the node is online and supports self-stop, ServerSentinel will ask its container to stop. Remote server files are not deleted.`
       : "";
     if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
     setNodeBusyId(node.id);
     try {
-      const result = await api<{ ok: boolean; deletedServers?: number }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
+      const result = await api<{ ok: boolean; deletedServers?: number; selfRemoval?: { ok: boolean; message: string } }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
       const removedServers = result.deletedServers ?? 0;
-      notify("success", removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`);
+      const selfStopSuffix = result.selfRemoval?.ok ? " The node container will stop itself." : result.selfRemoval?.message ? ` ${result.selfRemoval.message}` : "";
+      notify("success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${selfStopSuffix}`);
       if (nodeDetails?.id === node.id) setNodeDetails(null);
       if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
       await refreshApp();

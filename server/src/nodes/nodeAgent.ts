@@ -602,6 +602,31 @@ async function prepareNodeUpdate(payload: unknown) {
   };
 }
 
+async function prepareNodeRemoval() {
+  if (!dockerAvailable()) {
+    throw new Error("Docker socket is not mounted on this node. Stop the node container manually after removing it from the panel.");
+  }
+  const containerId = currentContainerId();
+  if (!containerId) {
+    throw new Error("Could not determine the current node container id.");
+  }
+
+  const inspect = await dockerRequest<NodeContainerInspect>("GET", `/containers/${encodeURIComponent(containerId)}/json`);
+  const currentName = cleanContainerName(inspect.Name) || containerId;
+  setTimeout(() => {
+    void selfStopContainer(inspect.Id || containerId, currentName).catch((error) => {
+      console.error(`Node self-stop failed: ${(error as Error).message}`);
+    });
+  }, 500);
+
+  return {
+    ok: true,
+    mode: "self-stop",
+    message: "Node removal accepted. The node container will stop itself.",
+    containerName: currentName
+  };
+}
+
 async function selfUpdateContainer(inspect: NodeContainerInspect, image: string, currentName: string, planPath: string) {
   await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(image)}`, [200, 201, 204], 10 * 60 * 1000);
   const oldName = `${currentName}-previous-${Date.now()}`;
@@ -622,6 +647,14 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
   await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
   await dockerRequest("POST", `/containers/${encodeURIComponent(oldName)}/stop?t=10`, [204, 304]);
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(oldName)}?v=1`, [204, 404]);
+}
+
+async function selfStopContainer(containerId: string, currentName: string) {
+  await dockerJsonRequest("POST", `/containers/${encodeURIComponent(containerId)}/update`, {
+    RestartPolicy: { Name: "no" }
+  }, 200);
+  await dockerRequest("POST", `/containers/${encodeURIComponent(containerId)}/stop?t=10`, [204, 304]);
+  console.info(`Node container ${currentName} stopped after panel removal.`);
 }
 
 async function fileList(server: ManagedServer, path: unknown) {
@@ -791,6 +824,7 @@ async function handleCommand(command: string, payload: any) {
   const server = payload?.server as ManagedServer | undefined;
   if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir };
   if (command === "node.update") return prepareNodeUpdate(payload);
+  if (command === "node.remove") return prepareNodeRemoval();
   if (command === "docker.info") return dockerInfo();
   if (command === "server.create") return createServer(payload?.input as CreateInput);
   if (!server) throw new Error("server payload is required");

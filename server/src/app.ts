@@ -3082,11 +3082,30 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
+  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  if (node.isInternal) {
+    throw new Error("Internal node cannot be deleted");
+  }
   const servers = await queuedReadServers();
   const assignedServers = servers.filter((server) => server.nodeId === request.params.nodeId);
   const force = request.query.force === "true";
   if (assignedServers.length && !force) {
     throw new Error("Cannot delete a node while servers are assigned to it");
+  }
+  let selfRemoval: { ok: boolean; message: string } = node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)
+    ? { ok: false, message: "Node container self-stop was not attempted." }
+    : { ok: false, message: "Node is offline or does not support panel-triggered self-stop. Stop its container manually if it is still running." };
+  if (node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)) {
+    try {
+      const result = await panelNodeConnections.request(node, "node.remove", undefined, 10_000) as { message?: string };
+      selfRemoval = { ok: true, message: result.message || "Node container will stop itself." };
+    } catch (error) {
+      selfRemoval = {
+        ok: false,
+        message: error instanceof Error ? error.message : "Node container self-stop failed. Stop it manually if it is still running."
+      };
+    }
   }
   let deletedServers = 0;
   if (force && assignedServers.length) {
@@ -3105,7 +3124,7 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
     deleted = true;
   });
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: deleted, deletedServers };
+  return { ok: deleted, deletedServers, selfRemoval };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
