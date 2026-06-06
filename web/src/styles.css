@@ -4208,10 +4208,14 @@ button .buttonIcon {
   flex-direction: column;
   height: max(560px, calc(100vh - 238px));
   min-height: 0;
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 
 .modsPanelHeader {
   align-items: center;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 .modsPanelHeaderLeft {
@@ -4231,7 +4235,7 @@ button .buttonIcon {
   display: flex;
   align-items: center;
   justify-content: end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-3);
 }
 
