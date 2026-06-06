@@ -6098,7 +6098,7 @@ details.compatibilityBadge p {
 .scheduleTableHeader,
 .scheduleTableRow {
   display: grid;
-  grid-template-columns: minmax(210px, 1.8fr) minmax(150px, 1.2fr) minmax(140px, 1fr) minmax(150px, 1.1fr) minmax(140px, 1fr) 52px;
+  grid-template-columns: minmax(210px, 1.8fr) minmax(150px, 1.2fr) minmax(140px, 1fr) minmax(150px, 1.1fr) minmax(140px, 1fr) minmax(150px, auto);
   gap: var(--space-3);
   align-items: center;
 }
@@ -6140,7 +6140,7 @@ details.compatibilityBadge p {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .scheduleNameCell strong {
@@ -6163,7 +6163,6 @@ details.compatibilityBadge p {
   text-transform: none;
 }
 
-.scheduleIconBubble,
 .scheduledRunMarker {
   flex: 0 0 auto;
   display: grid;
@@ -6174,25 +6173,16 @@ details.compatibilityBadge p {
   font-weight: 900;
 }
 
-.scheduleIconBubble {
-  width: 38px;
-  height: 38px;
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.scheduleIconBubble.success,
 .scheduledRunItem.success .scheduledRunMarker {
   background: color-mix(in srgb, var(--sentinel-success) 14%, var(--surface));
   color: var(--sentinel-success);
 }
 
-.scheduleIconBubble.failed,
 .scheduledRunItem.failed .scheduledRunMarker {
   background: color-mix(in srgb, var(--sentinel-danger) 12%, var(--surface));
   color: var(--sentinel-danger);
 }
 
-.scheduleIconBubble.skipped,
 .scheduledRunItem.skipped .scheduledRunMarker {
   background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface));
   color: var(--sentinel-warning);
@@ -6237,53 +6227,24 @@ details.compatibilityBadge p {
 }
 
 .scheduleRowActions {
-  position: relative;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
   justify-self: end;
-}
-
-.scheduleRowActions summary {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border-row);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  list-style: none;
-  font-weight: 900;
-}
-
-.scheduleRowActions summary::-webkit-details-marker {
-  display: none;
-}
-
-.scheduleRowActions > div {
-  position: absolute;
-  right: 0;
-  top: calc(100% + var(--space-1));
-  z-index: 5;
-  min-width: 130px;
-  display: grid;
-  gap: var(--space-1);
-  border: 1px solid var(--border-row);
-  border-radius: 8px;
-  padding: var(--space-1);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-elevated);
 }
 
 .scheduleRowActions button {
   min-height: 34px;
-  justify-content: flex-start;
-  border: 0;
-  background: transparent;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
 }
 
-.scheduleRowActions button:hover:not(:disabled) {
-  background: var(--surface-muted);
-  color: var(--text);
+.scheduleRowActions .dangerButton {
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--sentinel-danger) 45%, var(--border));
+  color: var(--sentinel-danger);
 }
 
 .scheduleTableFooter {
@@ -6324,25 +6285,49 @@ details.compatibilityBadge p {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
   padding: var(--space-4);
 }
 
 .scheduledRunItem {
-  position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   gap: var(--space-3);
-  align-items: start;
-  padding-bottom: var(--space-4);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
+}
+
+.scheduledRunItem.success {
+  border-left: 3px solid var(--sentinel-success);
+}
+
+.scheduledRunItem.failed {
+  border-left: 3px solid var(--sentinel-danger);
+}
+
+.scheduledRunItem.skipped {
+  border-left: 3px solid var(--sentinel-warning);
+}
+
+.scheduledRunItem.unknown {
+  border-left: 3px solid var(--border-strong);
+}
+
+.scheduledRunItem + .scheduledRunItem {
+  margin-top: 0;
+}
+
+.scheduledRunItem:hover {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
 }
 
 .scheduledRunItem::before {
-  content: "";
-  position: absolute;
-  left: 16px;
-  top: 34px;
-  bottom: 0;
-  width: 1px;
+  display: none;
   background: var(--border-row);
 }
 
@@ -6382,10 +6367,11 @@ details.compatibilityBadge p {
 }
 
 .scheduledRunTime {
-  grid-column: 2;
+  grid-column: auto;
   display: grid;
-  justify-items: start;
+  justify-items: end;
   gap: 3px;
+  text-align: right;
 }
 
 .scheduledRunTime span {
@@ -6461,17 +6447,9 @@ details.compatibilityBadge p {
     letter-spacing: 0.04em;
   }
 
-  .scheduleNameCell {
-    grid-template-columns: 38px minmax(0, 1fr);
-  }
-
-  .scheduleNameCell::before {
-    display: none;
-  }
-
-  .scheduleRowActions > div {
-    left: 110px;
-    right: auto;
+  .scheduleRowActions {
+    grid-template-columns: 110px auto auto;
+    justify-content: start;
   }
 
   .scheduledRunItem {
@@ -6481,6 +6459,7 @@ details.compatibilityBadge p {
   .scheduledRunTime {
     grid-column: 2;
     justify-items: start;
+    text-align: left;
   }
 }
 
@@ -6508,19 +6487,30 @@ details.compatibilityBadge p {
   gap: var(--space-2);
 }
 
-.scheduleEditOptions .checkLine {
-  width: auto;
-  display: inline-flex;
-  justify-content: flex-start;
+.scheduleOptionToggle {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  display: inline-flex !important;
   align-items: center;
-  min-height: 28px;
+  justify-content: flex-start;
   gap: var(--space-2);
   margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
 }
 
-.scheduleEditOptions .checkLine input {
+.scheduleOptionToggle input {
   flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
   margin: 0;
+  accent-color: var(--accent);
 }
 
 .scheduleCommandStack {
@@ -10385,15 +10375,6 @@ details.compatibilityBadge p {
 
 .scheduleEditOptions {
   align-items: flex-start;
-}
-
-.scheduleEditOptions .checkLine {
-  width: auto;
-  display: inline-flex;
-  grid-template-columns: none;
-  justify-content: flex-start;
-  justify-self: start;
-  text-align: left;
 }
 
 .settingsList {

@@ -821,6 +821,15 @@ export default function App() {
   }, [activeServer?.id, demoMode, activeNodeRuntimeBlocked]);
 
   useEffect(() => {
+    if (!activeServer || demoMode || activeNodeRuntimeBlocked || activePage !== "schedule") return;
+    void refreshApp({ silent: true });
+    const interval = window.setInterval(() => {
+      void refreshApp({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [activeServer?.id, activePage, demoMode, activeNodeRuntimeBlocked]);
+
+  useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "overview") return;
     if (demoMode && activeServer.id === demoServerId) {
       setOverviewData(demoOverviewData(demoRunning));
@@ -1173,12 +1182,12 @@ export default function App() {
     }
   }
 
-  async function refreshApp() {
+  async function refreshApp(options: { silent?: boolean } = {}) {
     if (!demoMode && (!authSession || !authSession.authenticated)) {
       return;
     }
     setAppRefreshing(true);
-    setNotice("");
+    if (!options.silent) setNotice("");
     try {
       const next = await api<AppState>("/api/app");
       setAppState(next);
@@ -1194,8 +1203,10 @@ export default function App() {
     } catch (error) {
       const message = errorMessage(error, "Could not load the application state. Check the server connection and retry.");
       setAppLoadError(message);
-      setNotice(message);
-      notify("error", message);
+      if (!options.silent) {
+        setNotice(message);
+        notify("error", message);
+      }
     } finally {
       setAppRefreshing(false);
     }

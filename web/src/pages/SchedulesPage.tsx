@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
@@ -34,6 +34,7 @@ export function SchedulePage({
   const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
   const [formError, setFormError] = useState("");
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
+  const runsFeedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!formMode) {
@@ -47,6 +48,11 @@ export function SchedulePage({
   }, [formMode]);
 
   const recentRuns = useMemo(() => scheduleRuns(schedules), [schedules]);
+  const recentRunsKey = recentRuns.map((run) => run.id).join("|");
+
+  useEffect(() => {
+    runsFeedRef.current?.scrollTo({ top: 0 });
+  }, [schedules, recentRunsKey]);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
     return {
@@ -121,13 +127,12 @@ export function SchedulePage({
             <span>Last run</span>
             <span>Next run</span>
             <span>Enabled</span>
-            <span aria-hidden="true"></span>
+            <span>Actions</span>
           </div>
           <div className="scheduleTableBody">
             {schedules.length ? schedules.map((schedule) => (
               <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}>
                 <div className="scheduleNameCell" data-label="Name">
-                  <span className={`scheduleIconBubble ${statusTone(schedule.lastStatus)}`}>{schedule.name.slice(0, 1).toUpperCase()}</span>
                   <div>
                     <strong>{schedule.name}</strong>
                     <small>{scheduleDescription(schedule)}</small>
@@ -177,13 +182,10 @@ export function SchedulePage({
                     </span>
                   </label>
                 </div>
-                <details className="scheduleRowActions" data-label="Actions">
-                  <summary aria-label={`Actions for ${schedule.name}`}>...</summary>
-                  <div>
-                    <button type="button" onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</button>
-                    <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>Delete</button>
-                  </div>
-                </details>
+                <div className="scheduleRowActions" data-label="Actions">
+                  <button type="button" className="secondaryButton" onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</button>
+                  <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>Delete</button>
+                </div>
               </article>
             )) : (
               <div className="scheduleNoRows">
@@ -207,7 +209,7 @@ export function SchedulePage({
           </div>
         </div>
         {recentRuns.length ? (
-          <div className="scheduledRunsFeed">
+          <div ref={runsFeedRef} className="scheduledRunsFeed">
             {recentRuns.map((run) => (
               <article key={run.id} className={`scheduledRunItem ${statusTone(run.status)}`}>
                 <span className="scheduledRunMarker" aria-hidden="true"></span>
@@ -274,11 +276,11 @@ export function SchedulePage({
                   </button>
                 </div>
                 <div className="scheduleEditOptions">
-                  <label className="checkLine">
+                  <label className="scheduleOptionToggle">
                     <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
                     <span>Only run when no players are online</span>
                   </label>
-                  <label className="checkLine">
+                  <label className="scheduleOptionToggle">
                     <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
                     <span>Enabled</span>
                   </label>
