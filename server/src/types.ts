@@ -202,6 +202,7 @@ export type ManagedServer = {
   dockerMountSource?: string;
   dockerWorkingDir?: string;
   dockerPorts?: string;
+  managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
@@ -223,6 +224,18 @@ export type ScheduledExecution = {
   lastMessage?: string;
   nextRunAt?: string;
   recentRuns?: ScheduledRun[];
+};
+
+export type ManagedServerPort = {
+  id: string;
+  name: string;
+  type: "minecraft" | "query" | "custom";
+  protocol: "tcp" | "udp";
+  internalPort: number;
+  externalPort: number;
+  required: boolean;
+  removable: boolean;
+  advanced: boolean;
 };
 
 export type ScheduledRun = {
@@ -333,6 +346,7 @@ export type CreateServerInput = {
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
+  queryPort?: string;
   javaArgs?: string;
   acceptEula?: boolean;
   serverPort?: string;

@@ -41,12 +41,6 @@ function parseProperties(text?: string) {
   return values;
 }
 
-function parseOnlinePlayerCount(logText: string) {
-  const matches = [...logText.matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
-  const latest = matches.at(-1);
-  return latest ? Number(latest[1]) : null;
-}
-
 function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
   const normalized = subject?.trim().toLowerCase().replace(/\s+/g, " ");
   return normalized ? `${eventType}:${normalized}` : eventType;
@@ -236,12 +230,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async onlinePlayerCount(server: ManagedServer) {
-    await this.sendConsoleCommand(server, "list");
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    const logs = await this.serverLogs(server) as { text?: string };
-    const matches = [...(logs.text ?? "").matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
-    const latest = matches.at(-1);
-    return latest ? Number(latest[1]) : null;
+    const metrics = await this.command(server, "server.queryMetrics") as { playersOnline?: number | null };
+    return metrics.playersOnline ?? null;
   }
 
   serverStats(server: ManagedServer) {
@@ -264,15 +254,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
       .filter((event): event is ServerEvent => Boolean(event));
     const reversedEvents = [...parsedEvents].reverse();
     const status = statusResult.status === "fulfilled" ? statusResult.value : {};
-    let playersOnline = parseOnlinePlayerCount(logText);
-    if (playersOnline === null && status.docker?.running) {
-      playersOnline = await this.onlinePlayerCount(server).catch(() => null);
-      if (playersOnline !== null) {
-        const refreshedLogs = await this.serverLogs(server).catch(() => logs) as { text?: string };
-        logText = refreshedLogs.text ?? logText;
-      }
-    }
     const props = parseProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
+    const queryMetrics = status.docker?.running
+      ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null })) as { playersOnline?: number | null; maxPlayers?: number | null }
+      : { playersOnline: null, maxPlayers: null };
     const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
@@ -282,8 +267,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
       serverPort: configuredServerPort(server, props),
       eulaAccepted,
       javaRuntime: javaRuntimeLabel(server),
-      playersOnline,
-      maxPlayers: props["max-players"] ? Number(props["max-players"]) : null
+      playersOnline: queryMetrics.playersOnline ?? null,
+      maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null)
     };
     return {
       events: parsedEvents.slice(-10).reverse(),

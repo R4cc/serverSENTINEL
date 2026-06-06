@@ -14,7 +14,8 @@ import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile,
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
-import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import { queryMinecraftServer } from "../minecraftQuery.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 
@@ -48,6 +49,7 @@ type CreateInput = {
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
+  queryPort?: string;
   javaArgs?: string;
   acceptEula?: boolean;
   serverPort?: string;
@@ -179,6 +181,61 @@ function isValidServerPort(port: string) {
   return value >= minServerPort && value <= maxServerPort;
 }
 
+function queryPortEntry(port: number): ManagedServerPort {
+  return {
+    id: "minecraft-query",
+    name: "Minecraft Query",
+    type: "query",
+    protocol: "udp",
+    internalPort: port,
+    externalPort: port,
+    required: true,
+    removable: false,
+    advanced: true
+  };
+}
+
+function queryPortFromInput(input: { queryPort?: string; dockerPorts?: string }) {
+  if (input.queryPort?.trim() && isValidServerPort(input.queryPort.trim())) return Number(input.queryPort.trim());
+  const udpBinding = (input.dockerPorts || "").split(",").map((part) => part.trim()).find((part) => part.endsWith("/udp"));
+  const port = udpBinding?.split(":", 1)[0]?.trim();
+  return port && isValidServerPort(port) ? Number(port) : 25566;
+}
+
+function queryPortForServer(server: ManagedServer, props: Record<string, string> = {}) {
+  const stored = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
+  if (stored) return stored;
+  if (props["query.port"] && isValidServerPort(props["query.port"])) return Number(props["query.port"]);
+  return queryPortFromInput({ dockerPorts: server.dockerPorts });
+}
+
+function ensureQueryDockerPort(dockerPorts: string, queryPort: number) {
+  const queryKey = `${queryPort}/udp`;
+  const ports = new Set(dockerPorts.split(",").map((part) => part.trim()).filter(Boolean));
+  const hasQuery = [...ports].some((part) => {
+    const [hostPort, target = hostPort] = part.includes(":") ? part.split(":", 2) : [part, part];
+    return hostPort === String(queryPort) && target === queryKey;
+  });
+  if (!hasQuery) ports.add(`${queryPort}:${queryPort}/udp`);
+  return [...ports].join(",");
+}
+
+function parseProperties(text: string) {
+  const values: Record<string, string> = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator === -1) continue;
+    values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+  return values;
+}
+
+function serializeProperties(values: Record<string, string>) {
+  return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
+}
+
 async function writeVersionMetadata(server: ManagedServer) {
   const now = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
@@ -297,6 +354,8 @@ async function createServer(input: CreateInput) {
       filename: serverJar
     }
   };
+  const queryPort = queryPortFromInput(input);
+  const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`, queryPort);
   const server: ManagedServer = {
     id: randomUUID(),
     nodeId: input.nodeId || "",
@@ -310,7 +369,8 @@ async function createServer(input: CreateInput) {
     runtimeProfile,
     dockerContainer: input.dockerContainer?.trim() || defaultContainerName(displayName),
     dockerImage: input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion),
-    dockerPorts: input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`,
+    dockerPorts,
+    managedPorts: [queryPortEntry(queryPort)],
     javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
     serverType: "fabric",
     createdAt: now,
@@ -318,7 +378,11 @@ async function createServer(input: CreateInput) {
   };
   await mkdir(await serverRoot(server), { recursive: true });
   await mkdir(await inside(server, "logs", false), { recursive: true });
-  await writeFile(await inside(server, "server.properties", false), `server-port=${input.serverPort?.trim() || "25565"}\n`, { flag: "wx" }).catch((e: any) => { if (e.code !== "EEXIST") throw e; });
+  await writeFile(await inside(server, "server.properties", false), serializeProperties({
+    "server-port": input.serverPort?.trim() || "25565",
+    "enable-query": "true",
+    "query.port": String(queryPort)
+  }), { flag: "wx" }).catch((e: any) => { if (e.code !== "EEXIST") throw e; });
   await writeFile(await inside(server, "eula.txt", false), `eula=${input.acceptEula ? "true" : "false"}\n`, "utf8");
   await writeFile(await inside(server, "logs/latest.log", false), "", { flag: "a" });
   await downloadFabricJar(server);
@@ -354,7 +418,9 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   }
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultContainerName(server.displayName));
   const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(runtimeProfile.minecraftVersion));
-  const dockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });
+  const dockerPorts = requestedDockerPorts ? ensureQueryDockerPort(requestedDockerPorts, queryPort) : requestedDockerPorts;
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
 
@@ -379,6 +445,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     dockerContainer,
     dockerImage: dockerImageName,
     dockerPorts,
+    managedPorts: [queryPortEntry(queryPort)],
     javaArgs,
     updatedAt: new Date().toISOString()
   };
@@ -387,10 +454,20 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     await downloadFabricJar(updated);
   }
   await writeVersionMetadata(updated);
-  if (serverPort) {
-    await writeFile(await inside(updated, "server.properties", false), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    });
+  if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
+    const propertiesPath = await inside(updated, "server.properties", false);
+    let props: Record<string, string> = {};
+    try {
+      props = parseProperties(await readFile(propertiesPath, "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await writeFile(propertiesPath, serializeProperties({
+      ...props,
+      ...(serverPort ? { "server-port": serverPort } : {}),
+      "enable-query": "true",
+      "query.port": String(queryPort)
+    }), "utf8");
   }
   if (containerConfigChanged && dockerAvailable()) {
     await removeManagedContainer(server);
@@ -849,6 +926,12 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, deletedContainer: true, deletedFiles: Boolean(payload?.input?.deleteFiles) };
   }
   if (command === "server.inspect") return runtimeStatus(server);
+  if (command === "server.queryMetrics") {
+    const propsPath = await inside(server, "server.properties", false);
+    const props = parseProperties(await readFile(propsPath, "utf8").catch(() => ""));
+    if (props["enable-query"] && props["enable-query"].toLowerCase() !== "true") return { responding: false, playersOnline: null, maxPlayers: null };
+    return queryMinecraftServer("127.0.0.1", queryPortForServer(server, props)).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }));
+  }
   if (command === "server.start") { await ensureContainer(server); await dockerRequest("POST", `/containers/${name}/start`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.stop") { await dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.restart") { await dockerRequest("POST", `/containers/${name}/restart?t=10`, 204); return runtimeStatus(server); }

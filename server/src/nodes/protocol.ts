@@ -1,4 +1,4 @@
-export const nodeProtocolVersion = "1.1";
+export const nodeProtocolVersion = "1.2";
 
 export const nodeCapabilities = [
   "node.health",
@@ -13,6 +13,7 @@ export const nodeCapabilities = [
   "server.restart",
   "server.inspect",
   "server.stats",
+  "server.queryMetrics",
   "server.logs.recent",
   "server.console.send",
   "server.console.stream",

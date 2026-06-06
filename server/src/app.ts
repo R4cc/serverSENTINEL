@@ -46,6 +46,7 @@ import {
   type ServerJarProvider
 } from "./runtime/profile.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
+import { queryMinecraftServer } from "./minecraftQuery.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -93,6 +94,7 @@ import type {
   InstalledModMetadata,
   ManagedNode,
   ManagedServer,
+  ManagedServerPort,
   ModCompatibility,
   ModPreference,
   ModrinthProject,
@@ -182,6 +184,7 @@ type CreateServerInput = {
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
+  queryPort?: string;
   javaArgs?: string;
   acceptEula?: boolean;
   serverPort?: string;
@@ -962,6 +965,30 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   }
   const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
   if (dockerPorts) parseDockerPorts(dockerPorts);
+  const rawManagedPorts = Array.isArray(server.managedPorts) ? server.managedPorts : [];
+  const managedPorts = normalizeManagedPorts(dockerPorts || "25565:25565/tcp", rawManagedPorts.map((port, index) => {
+    const value = asObject(port, `server.managedPorts[${index}]`);
+    const protocol = optionalString(value.protocol, `server.managedPorts[${index}].protocol`);
+    const type = optionalString(value.type, `server.managedPorts[${index}].type`);
+    return {
+      id: optionalString(value.id, `server.managedPorts[${index}].id`) || `${type || "custom"}-${index}`,
+      name: optionalString(value.name, `server.managedPorts[${index}].name`) || "Port",
+      type: type === "minecraft" || type === "query" ? type : "custom",
+      protocol: protocol === "udp" ? "udp" : "tcp",
+      internalPort: Number(value.internalPort),
+      externalPort: Number(value.externalPort),
+      required: Boolean(value.required),
+      removable: Boolean(value.removable),
+      advanced: Boolean(value.advanced)
+    } satisfies ManagedServerPort;
+  }).filter((port) => (
+    Number.isInteger(port.internalPort)
+    && Number.isInteger(port.externalPort)
+    && port.internalPort >= minServerPort
+    && port.internalPort <= maxServerPort
+    && port.externalPort >= minServerPort
+    && port.externalPort <= maxServerPort
+  )));
   const id = validateServerId(server.id);
   const nodeId = requiredString(server.nodeId, "server.nodeId");
   const serversDir = resolve(config.serversDir);
@@ -987,6 +1014,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerMountSource: optionalString(server.dockerMountSource, "server.dockerMountSource"),
     dockerWorkingDir: optionalString(server.dockerWorkingDir, "server.dockerWorkingDir"),
     dockerPorts,
+    managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
     serverType,
@@ -1280,6 +1308,8 @@ function isValidServerPort(port: string) {
   return value >= minServerPort && value <= maxServerPort;
 }
 
+const defaultQueryPort = 25566;
+
 export function dockerHostPortBindings(dockerPorts?: string): DockerHostPortBinding[] {
   const { portBindings } = parseDockerPorts(dockerPorts);
   return Object.entries(portBindings).flatMap(([containerPort, bindings]) => {
@@ -1303,14 +1333,145 @@ function assertUniqueDockerHostPorts(dockerPorts: string) {
   }
 }
 
-function normalizeCreateServerPorts(input: CreateServerInput) {
+function parsePortNumber(value: string, field: string) {
+  if (!isValidServerPort(value)) {
+    throw new Error(`${field} must be between ${minServerPort} and ${maxServerPort}`);
+  }
+  return Number(value);
+}
+
+function queryPortEntry(port: number): ManagedServerPort {
+  return {
+    id: "minecraft-query",
+    name: "Minecraft Query",
+    type: "query",
+    protocol: "udp",
+    internalPort: port,
+    externalPort: port,
+    required: true,
+    removable: false,
+    advanced: true
+  };
+}
+
+function portEntryBinding(port: ManagedServerPort) {
+  return `${port.externalPort}:${port.internalPort}/${port.protocol}`;
+}
+
+function managedPortsForDockerPorts(dockerPorts: string, existing: ManagedServerPort[] = []) {
+  const queryPort = existing.find((port) => port.type === "query")?.externalPort;
+  const seen = new Set<string>();
+  const ports: ManagedServerPort[] = [];
+  const { portBindings } = parseDockerPorts(dockerPorts);
+  for (const [containerPort, bindings] of Object.entries(portBindings)) {
+    const [internalPortValue, protocol = "tcp"] = containerPort.split("/", 2);
+    for (const binding of bindings) {
+      const externalPort = Number(binding.HostPort);
+      const internalPort = Number(internalPortValue);
+      const key = `${externalPort}/${protocol}`;
+      const existingEntry = existing.find((port) => `${port.externalPort}/${port.protocol}` === key);
+      const type = existingEntry?.type ?? (protocol === "tcp" && ports.length === 0 ? "minecraft" : "custom");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ports.push(existingEntry ?? {
+        id: type === "minecraft" ? "minecraft-server" : `custom-${key}`,
+        name: type === "minecraft" ? "Minecraft Server" : `Port ${externalPort}/${protocol}`,
+        type,
+        protocol: protocol as "tcp" | "udp",
+        internalPort,
+        externalPort,
+        required: type !== "custom",
+        removable: type === "custom",
+        advanced: type !== "minecraft"
+      });
+    }
+  }
+  if (queryPort && !ports.some((port) => port.type === "query")) {
+    ports.push(queryPortEntry(queryPort));
+  }
+  return ports;
+}
+
+function normalizeManagedPorts(dockerPorts: string, managedPorts: ManagedServerPort[] = []) {
+  const ports = managedPortsForDockerPorts(dockerPorts, managedPorts);
+  const query = ports.find((port) => port.type === "query");
+  return query ? ports.map((port) => port.type === "query" ? { ...queryPortEntry(query.externalPort), internalPort: query.internalPort } : port) : ports;
+}
+
+function dockerPortsWithManagedEntries(dockerPorts: string, managedPorts: ManagedServerPort[]) {
+  const bindings = new Map<string, string>();
+  for (const rawPort of dockerPorts.split(",")) {
+    const rawBinding = rawPort.trim();
+    if (!rawBinding) continue;
+    const [hostPort, containerPortWithProtocol] = rawBinding.includes(":") ? rawBinding.split(":", 2) : [rawBinding, rawBinding];
+    const [, protocol = "tcp"] = containerPortWithProtocol.split("/", 2);
+    bindings.set(`${hostPort}/${protocol}`, rawBinding.includes("/") ? rawBinding : `${hostPort}:${containerPortWithProtocol}/tcp`);
+  }
+  for (const port of managedPorts) {
+    bindings.set(`${port.externalPort}/${port.protocol}`, portEntryBinding(port));
+  }
+  return [...bindings.values()].join(",");
+}
+
+function usedPortKeysForNode(servers: ManagedServer[], nodeId: string, ignoreServerId?: string) {
+  const used = new Set<string>();
+  for (const server of servers) {
+    if (server.nodeId !== nodeId || server.id === ignoreServerId) continue;
+    for (const port of dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp")) {
+      used.add(port.key);
+    }
+    for (const port of server.managedPorts ?? []) {
+      used.add(`${port.externalPort}/${port.protocol}`);
+    }
+  }
+  return used;
+}
+
+function usedProvisionPortKeys(nodeId: string, ignoreJobId?: string) {
+  const used = new Set<string>();
+  for (const [jobId, reservation] of activeProvisionPortReservations) {
+    if (jobId === ignoreJobId || reservation.nodeId !== nodeId) continue;
+    for (const port of dockerHostPortBindings(reservation.dockerPorts)) {
+      used.add(port.key);
+    }
+  }
+  return used;
+}
+
+export function allocateQueryPort(servers: ManagedServer[], nodeId: string, dockerPorts: string, explicitQueryPort?: string, options: { ignoreServerId?: string; ignoreJobId?: string } = {}) {
+  const requestedKeys = new Set(dockerHostPortBindings(dockerPorts).map((port) => port.key));
+  const used = usedPortKeysForNode(servers, nodeId, options.ignoreServerId);
+  for (const key of usedProvisionPortKeys(nodeId, options.ignoreJobId)) used.add(key);
+  if (explicitQueryPort?.trim()) {
+    const port = parsePortNumber(explicitQueryPort.trim(), "Query port");
+    const key = `${port}/udp`;
+    if (used.has(key) || requestedKeys.has(`${port}/tcp`)) {
+      throw new Error(`Port ${port}/udp is already used on this node. Choose a different Minecraft Query port.`);
+    }
+    return port;
+  }
+  for (let port = defaultQueryPort; port <= maxServerPort; port += 1) {
+    const udpKey = `${port}/udp`;
+    const tcpKey = `${port}/tcp`;
+    if (!used.has(udpKey) && !used.has(tcpKey) && !requestedKeys.has(udpKey) && !requestedKeys.has(tcpKey)) {
+      return port;
+    }
+  }
+  throw new Error("No free Minecraft Query port is available on this node.");
+}
+
+export function normalizeCreateServerPorts(input: CreateServerInput, servers: ManagedServer[] = [], nodeId = localNodeId, options: { ignoreServerId?: string; ignoreJobId?: string } = {}) {
   const serverPort = input.serverPort?.trim() || "25565";
   if (!isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
   const dockerPorts = input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`;
   assertUniqueDockerHostPorts(dockerPorts);
-  return { serverPort, dockerPorts };
+  const queryPort = allocateQueryPort(servers, nodeId, dockerPorts, input.queryPort, options);
+  const managedPorts = normalizeManagedPorts(dockerPorts, [queryPortEntry(queryPort)]);
+  const completeDockerPorts = dockerPortsWithManagedEntries(dockerPorts, managedPorts);
+  assertUniqueDockerHostPorts(completeDockerPorts);
+  return { serverPort, dockerPorts: completeDockerPorts, queryPort, managedPorts };
 }
 
 function portConflictMessage(port: DockerHostPortBinding, ownerName: string) {
@@ -1876,12 +2037,6 @@ async function readLatestServerLog(server: ManagedServer) {
   return (await readFileRange(logPath, start, logStat.size - 1)).toString("utf8");
 }
 
-export function parseOnlinePlayerCount(logText: string) {
-  const matches = [...logText.matchAll(/There are\s+(\d+)\s+of a max(?:imum)? of\s+\d+\s+players online/gi)];
-  const latest = matches.at(-1);
-  return latest ? Number(latest[1]) : null;
-}
-
 function parseProperties(text: string) {
   const values: Record<string, string> = {};
   for (const rawLine of text.split(/\r?\n/)) {
@@ -1892,6 +2047,21 @@ function parseProperties(text: string) {
     values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
   }
   return values;
+}
+
+function serializeProperties(values: Record<string, string>) {
+  return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
+}
+
+async function updateServerProperties(server: ManagedServer, updates: Record<string, string>) {
+  const path = ensureInsideServer(server, "server.properties");
+  let values: Record<string, string> = {};
+  try {
+    values = parseProperties(await readFile(path, "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await writeFile(path, serializeProperties({ ...values, ...updates }), "utf8");
 }
 
 function normalizeJavaRuntime(server: ManagedServer) {
@@ -1910,6 +2080,14 @@ function configuredServerPort(server: ManagedServer, props: Record<string, strin
   if (props["server-port"]) return props["server-port"];
   const tcpPort = dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp").find((port) => port.protocol === "tcp");
   return tcpPort?.port || "25565";
+}
+
+function configuredQueryPort(server: ManagedServer, props: Record<string, string>) {
+  const storedQuery = server.managedPorts?.find((port) => port.type === "query");
+  if (storedQuery) return storedQuery.externalPort;
+  if (props["query.port"] && isValidServerPort(props["query.port"])) return Number(props["query.port"]);
+  const udpPort = dockerHostPortBindings(server.dockerPorts || "").find((port) => port.protocol === "udp");
+  return udpPort ? Number(udpPort.port) : null;
 }
 
 function validDockerTimestamp(value?: string) {
@@ -2140,17 +2318,15 @@ async function serverOverviewData(server: ManagedServer) {
   const eulaAccepted = eula.status === "fulfilled"
     ? /^eula\s*=\s*true\s*$/im.test(eula.value)
     : undefined;
-  const logText = logSources.map((source) => source.text).join("\n");
   const startedAt = dockerInspect.status === "fulfilled"
     ? validDockerTimestamp(dockerInspect.value?.State?.StartedAt)
     : undefined;
   const stoppedAt = dockerInspect.status === "fulfilled"
     ? validDockerTimestamp(dockerInspect.value?.State?.FinishedAt)
     : undefined;
-  const parsedPlayersOnline = parseOnlinePlayerCount(logText);
-  const livePlayersOnline = parsedPlayersOnline === null && dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
-    ? await onlinePlayerCount(server).catch(() => null)
-    : parsedPlayersOnline;
+  const queryMetrics = dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
+    ? await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }))
+    : { responding: false, playersOnline: null, maxPlayers: null };
   const activity: ServerActivity = {
     lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
     lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
@@ -2158,24 +2334,28 @@ async function serverOverviewData(server: ManagedServer) {
     serverPort: configuredServerPort(server, props),
     eulaAccepted,
     javaRuntime: normalizeJavaRuntime(server),
-    playersOnline: livePlayersOnline,
-    maxPlayers: props["max-players"] ? Number(props["max-players"]) : null
+    playersOnline: queryMetrics.playersOnline,
+    maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null)
   };
   return { events, eventsStatus, activity };
 }
 
+async function queryPlayerMetrics(server: ManagedServer, props: Record<string, string> = {}) {
+  if (props["enable-query"] && props["enable-query"].toLowerCase() !== "true") {
+    return { responding: false, playersOnline: null, maxPlayers: null };
+  }
+  const queryPort = configuredQueryPort(server, props);
+  if (!queryPort) {
+    return { responding: false, playersOnline: null, maxPlayers: null };
+  }
+  return queryMinecraftServer("127.0.0.1", queryPort);
+}
+
 async function onlinePlayerCount(server: ManagedServer) {
-  await sendDockerStdinCommand(server, "list");
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const logs = await Promise.allSettled([
-    readLatestServerLog(server),
-    dockerRecentLogs(server)
-  ]);
-  const text = logs
-    .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
-    .map((result) => result.value)
-    .join("\n");
-  return parseOnlinePlayerCount(text);
+  const path = await validateExistingInsideServer(server, "server.properties").catch(() => "");
+  const props = path ? parseProperties(await readFile(path, "utf8")) : {};
+  const metrics = await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }));
+  return metrics.playersOnline;
 }
 
 function streamLatestServerLog(server: ManagedServer, client: Client) {
@@ -2342,6 +2522,7 @@ async function createServerFiles(
   server: ManagedServer,
   acceptEula: boolean,
   serverPort: string,
+  queryPort: number,
   report?: (progress: number, task: string) => void
 ) {
   report?.(35, "Creating server folders");
@@ -2352,8 +2533,10 @@ async function createServerFiles(
   report?.(45, "Downloading Fabric server launcher");
   await downloadFabricServerJar(server);
   report?.(65, "Writing Minecraft configuration");
-  await writeFile(ensureInsideServer(server, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  await updateServerProperties(server, {
+    "server-port": serverPort,
+    "enable-query": "true",
+    "query.port": String(queryPort)
   });
   await writeFile(ensureInsideServer(server, "eula.txt"), `# Managed by ServerSentinel\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`, "utf8");
   await writeVersionMetadataFile(server);
@@ -2403,7 +2586,8 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
       filename: serverJar
     }
   };
-  const { serverPort, dockerPorts } = normalizeCreateServerPorts(input);
+  const existingServers = await queuedReadServers();
+  const { serverPort, dockerPorts, queryPort, managedPorts } = normalizeCreateServerPorts(input, existingServers, localNodeId, { ignoreJobId: jobId });
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfileForRecord.minecraftVersion));
@@ -2426,6 +2610,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     dockerMountSource: config.serversDockerVolume || resolvedServerDir,
     dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${storageName}` : undefined,
     dockerPorts,
+    managedPorts,
     javaArgs,
     serverType: "fabric",
     createdAt: now,
@@ -2434,7 +2619,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
 
   logInfo({ ...serverLogFields(server), jobId, minecraftVersion: runtimeProfileForRecord.minecraftVersion, loaderVersion: runtimeProfileForRecord.loaderVersion, jarProvider: runtimeProfileForRecord.jarProvider }, "Fabric runtime profile resolved for provisioning");
   try {
-    await createServerFiles(server, input.acceptEula, serverPort, report);
+    await createServerFiles(server, input.acceptEula, serverPort, queryPort, report);
     if (dockerAvailable()) {
       report?.(78, "Pulling runtime image and creating Docker container");
       await ensureDockerContainer(server);
@@ -2471,8 +2656,10 @@ async function startProvisionJob(input: CreateServerInput) {
   if (!nodeId) {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const { dockerPorts } = normalizeCreateServerPorts(input);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await queuedReadServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
+  input.dockerPorts = dockerPorts;
+  input.queryPort = String(queryPort);
   const id = randomUUID();
   const now = new Date().toISOString();
   activeProvisionPortReservations.set(id, {
@@ -2656,6 +2843,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
+    queryPort?: string;
     javaArgs?: string;
     serverPort?: string;
   };
@@ -2706,7 +2894,14 @@ async function localUpdateServer(serverId: string, input: unknown) {
     }
     const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
     const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
-    const dockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
+    const requestedDockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
+    const currentQueryPort = current.managedPorts?.find((port) => port.type === "query")?.externalPort;
+    const queryPortInput = body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
+    const queryPort = queryPortInput
+      ? allocateQueryPort(servers, current.nodeId, requestedDockerPorts || "", queryPortInput, { ignoreServerId: current.id })
+      : allocateQueryPort(servers, current.nodeId, requestedDockerPorts || "", undefined, { ignoreServerId: current.id });
+    const managedPorts = normalizeManagedPorts(requestedDockerPorts || "", [queryPortEntry(queryPort)]);
+    const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
     if (dockerPorts) assertUniqueDockerHostPorts(dockerPorts);
     if (dockerPorts) {
       const existingConflict = findExistingServerPortConflict(servers, current.nodeId, dockerPorts, current.id);
@@ -2741,6 +2936,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
       dockerContainer,
       dockerImage,
       dockerPorts,
+      managedPorts,
       javaArgs,
       updatedAt: new Date().toISOString()
     };
@@ -2753,9 +2949,11 @@ async function localUpdateServer(serverId: string, input: unknown) {
       await ensureDockerContainer(updated);
     }
     await writeVersionMetadataFile(updated);
-    if (serverPort) {
-      await writeFile(ensureInsideServer(updated, "server.properties"), `server-port=${serverPort}\n`, { flag: "wx" }).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (serverPort || queryPort !== currentQueryPort) {
+      await updateServerProperties(updated, {
+        ...(serverPort ? { "server-port": serverPort } : {}),
+        "enable-query": "true",
+        "query.port": String(queryPort)
       });
     }
 
@@ -3361,8 +3559,10 @@ app.post<{
   await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
-  const { dockerPorts } = normalizeCreateServerPorts(request.body);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await queuedReadServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
+  request.body.dockerPorts = dockerPorts;
+  request.body.queryPort = String(queryPort);
   const server = await runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId });
   logInfo(serverLogFields(server), "Managed server created");
   return runtimeForServer(server).publicServer(server);
@@ -3397,6 +3597,7 @@ app.put<{
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
+    queryPort?: string;
     javaArgs?: string;
     serverPort?: string;
   };
@@ -3412,12 +3613,17 @@ app.put<{
   if (serverPort && !isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
-  const dockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  const requestedDockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  const currentQueryPort = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
+  const queryPort = request.body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
+  const allocatedQueryPort = allocateQueryPort(servers, server.nodeId, requestedDockerPorts || "", queryPort, { ignoreServerId: server.id });
+  const managedPorts = normalizeManagedPorts(requestedDockerPorts || "", [queryPortEntry(allocatedQueryPort)]);
+  const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
   if (dockerPorts) {
     assertUniqueDockerHostPorts(dockerPorts);
     await assertNodePortsAvailable(server.nodeId, dockerPorts, { ignoreServerId: server.id });
   }
-  const updatedServer = await runtimeForServer(server).updateServer(server, request.body);
+  const updatedServer = await runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) });
   return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 

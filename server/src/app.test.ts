@@ -10,12 +10,14 @@ import {
   validateRuntimeJarFilename,
   dockerHostPortBindings,
   findExistingServerPortConflict,
-  parseOnlinePlayerCount,
+  normalizeCreateServerPorts,
+  allocateQueryPort,
   sessionExpired,
   sessionMaxAgeSeconds,
   validateJoinTokenTtlMinutes
 } from "./app.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
+import { parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedServer } from "./types.js";
 
 function testRuntimeProfile() {
@@ -122,15 +124,24 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
   });
 });
 
-describe("online player count parsing", () => {
-  it("uses the newest Minecraft list command response", () => {
-    const logText = [
-      "[12:00:00] [Server thread/INFO]: There are 3 of a max of 20 players online: Alex, Steve, Sam",
-      "[12:01:00] [Server thread/INFO]: There are 0 of a maximum of 20 players online:"
-    ].join("\n");
+describe("Minecraft Query metrics parsing", () => {
+  it("parses player counts and player names from a full query response", () => {
+    const sessionId = Buffer.from([1, 2, 3, 4]);
+    const payload = Buffer.concat([
+      Buffer.from("hostname\0Test Server\0numplayers\0", "utf8"),
+      Buffer.from("3\0maxplayers\0", "utf8"),
+      Buffer.from("20\0", "utf8"),
+      Buffer.from([0, 1, 0]),
+      Buffer.from("player_\0Alex\0Steve\0Sam\0\0", "utf8")
+    ]);
+    const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
 
-    expect(parseOnlinePlayerCount(logText)).toBe(0);
-    expect(parseOnlinePlayerCount("Done (5.132s)! For help, type \"help\"")).toBeNull();
+    expect(parseMinecraftQueryResponse(packet, sessionId)).toEqual({
+      responding: true,
+      playersOnline: 3,
+      maxPlayers: 20,
+      playerNames: ["Alex", "Steve", "Sam"]
+    });
   });
 });
 
@@ -262,5 +273,59 @@ describe("server port conflict detection", () => {
     expect(findExistingServerPortConflict(servers, "node-b", "25565:25566/tcp", "server-2")).toBeNull();
     expect(findExistingServerPortConflict(servers, "node-a", "25566:25565/tcp")).toBeNull();
     expect(findExistingServerPortConflict(servers, "node-a", "25565:25565/udp", "server-1")).toBeNull();
+  });
+
+  it("adds a required non-removable advanced Query UDP port when creating a server", () => {
+    const normalized = normalizeCreateServerPorts({ serverPort: "25565" }, [], "node-a");
+    expect(normalized.queryPort).toBe(25566);
+    expect(normalized.dockerPorts).toContain("25566:25566/udp");
+    expect(normalized.managedPorts.find((port) => port.type === "query")).toMatchObject({
+      name: "Minecraft Query",
+      protocol: "udp",
+      internalPort: 25566,
+      externalPort: 25566,
+      required: true,
+      removable: false,
+      advanced: true
+    });
+  });
+
+  it("allocates the next free Query port when 25566 is already used on the node", () => {
+    const normalized = normalizeCreateServerPorts({
+      serverPort: "25565"
+    }, [{
+      id: "server-query",
+      nodeId: "node-a",
+      displayName: "Query Owner",
+      serverDir: "/tmp/query-owner",
+      dockerPorts: "25566:25566/udp",
+      managedPorts: [{
+        id: "minecraft-query",
+        name: "Minecraft Query",
+        type: "query",
+        protocol: "udp",
+        internalPort: 25566,
+        externalPort: 25566,
+        required: true,
+        removable: false,
+        advanced: true
+      }],
+      runtimeProfile: testRuntimeProfile(),
+      serverType: "fabric",
+      createdAt: "",
+      updatedAt: ""
+    }], "node-a");
+
+    expect(normalized.queryPort).toBe(25567);
+    expect(normalized.dockerPorts).toContain("25567:25567/udp");
+  });
+
+  it("does not allocate a Query port that conflicts with the main Minecraft port", () => {
+    const normalized = normalizeCreateServerPorts({ serverPort: "25566" }, [], "node-a");
+    expect(normalized.queryPort).toBe(25567);
+  });
+
+  it("rejects an explicit Query port already used on the same node", () => {
+    expect(() => allocateQueryPort(servers, "node-a", "25567:25567/tcp", "25565")).toThrow("already used");
   });
 });
