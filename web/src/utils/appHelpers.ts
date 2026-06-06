@@ -108,6 +108,14 @@ export function serverConfigValidation(form: FormData, existingNames: string[], 
     const portError = validateServerPort(port);
     if (portError) errors.push({ field: "serverPort", message: portError });
   }
+  const queryPort = trimFormValue(form, "queryPort");
+  if (queryPort) {
+    const queryPortError = validateServerPort(queryPort);
+    if (queryPortError) errors.push({ field: "queryPort", message: queryPortError.replace("Server port", "Query port").replace("server port", "Query port") });
+  }
+  if (port && queryPort && port === queryPort) {
+    errors.push({ field: "queryPort", message: "Query port must be different from the server port." });
+  }
   const jarError = validateRuntimeJarFilename(trimFormValue(form, "serverJar"));
   if (jarError) errors.push({ field: "serverJar", message: jarError });
   const containerError = validateDockerContainerName(trimFormValue(form, "dockerContainer"));

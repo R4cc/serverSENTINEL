@@ -12,12 +12,25 @@ export type ManagedServer = {
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
+  managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   schedules?: ScheduledExecution[];
   serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
   runtimeProfile: ServerRuntimeProfile;
+};
+
+export type ManagedServerPort = {
+  id: string;
+  name: string;
+  type: string;
+  protocol: "tcp" | "udp";
+  internalPort: number;
+  externalPort: number;
+  required?: boolean;
+  removable?: boolean;
+  advanced?: boolean;
 };
 
 export type LoaderType = "fabric";

@@ -1392,6 +1392,7 @@ export default function App() {
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
           serverPort: form.get("serverPort"),
+          queryPort: form.get("queryPort"),
           acceptEula: form.get("acceptEula") === "on"
         })
       });
@@ -1466,7 +1467,8 @@ export default function App() {
           dockerImage: form.get("dockerImage"),
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
-          serverPort: form.get("serverPort")
+          serverPort: form.get("serverPort"),
+          queryPort: form.get("queryPort")
         })
       });
       notify("success", `Updated ${server.displayName}`);

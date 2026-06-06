@@ -2,6 +2,8 @@ import type { ManagedServer, ModCompatibility, ServerStatus, ThemePreference, Lo
 
 export const defaultServerPort = 25565;
 
+export const defaultQueryPort = 25566;
+
 export const minServerPort = 1000;
 
 export const maxServerPort = 65000;

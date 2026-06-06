@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion, RuntimeMinecraftVersion, RuntimeResolveResponse, ServerRuntimeProfile } from '../types';
-import { defaultDockerImageForMinecraftVersion, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
 
@@ -30,54 +30,103 @@ function normalizeDefaultPort(value: string) {
   return isValidServerPort(value) ? value : String(defaultServerPort);
 }
 
-function parsePortBindings(value: string | undefined, defaultHostPort: string): PortBindingRow[] {
-  const fallbackPort = normalizeDefaultPort(defaultHostPort);
-  const rows = (value || `${fallbackPort}:${fallbackPort}/tcp`)
+function normalizeQueryPort(value: string) {
+  return isValidServerPort(value) ? value : String(defaultQueryPort);
+}
+
+function parsePortBinding(binding: string) {
+  const pieces = binding.split(":");
+  const hostPort = pieces.length === 2 ? pieces[0].trim() : pieces[0].split("/", 1)[0].trim();
+  const target = pieces.length === 2 ? pieces[1].trim() : pieces[0].trim();
+  return {
+    id: portBindingId(),
+    hostPort,
+    target: target.includes("/") ? target : `${target}/tcp`
+  };
+}
+
+function parsePortBindings(value: string | undefined): PortBindingRow[] {
+  return (value || "")
     .split(",")
     .map((rawBinding) => rawBinding.trim())
     .filter(Boolean)
-    .map((binding) => {
-      const pieces = binding.split(":");
-      const hostPort = pieces.length === 2 ? pieces[0].trim() : pieces[0].split("/", 1)[0].trim();
-      const target = pieces.length === 2 ? pieces[1].trim() : pieces[0].trim();
-      return {
-        id: portBindingId(),
-        hostPort,
-        target: target.includes("/") ? target : `${target}/tcp`
-      };
-    });
-  return rows.length ? rows : [{ id: portBindingId(), hostPort: fallbackPort, target: `${fallbackPort}/tcp` }];
+    .map(parsePortBinding);
 }
 
-function formatPortBindings(rows: PortBindingRow[]) {
+function parseDockerBindingPorts(value?: string) {
+  const rows = parsePortBindings(value);
+  const serverBinding = rows.find((row) => {
+    const [containerPort, protocol = "tcp"] = row.target.split("/", 2);
+    return protocol === "tcp" && (containerPort === row.hostPort || containerPort === String(defaultServerPort));
+  });
+  const queryBinding = rows.find((row) => {
+    const [containerPort, protocol = "tcp"] = row.target.split("/", 2);
+    return protocol === "udp" && (containerPort === row.hostPort || containerPort === String(defaultQueryPort));
+  });
+  return {
+    serverPort: serverBinding?.hostPort && isValidServerPort(serverBinding.hostPort) ? serverBinding.hostPort : String(defaultServerPort),
+    queryPort: queryBinding?.hostPort && isValidServerPort(queryBinding.hostPort) ? queryBinding.hostPort : String(defaultQueryPort)
+  };
+}
+
+function queryPortForServer(server: ManagedServer) {
+  const managed = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
+  if (managed && isValidServerPort(String(managed))) return String(managed);
+  return parseDockerBindingPorts(server.dockerPorts).queryPort;
+}
+
+function serverPortForServer(server: ManagedServer) {
+  return parseDockerBindingPorts(server.dockerPorts).serverPort;
+}
+
+function parseAdditionalPortBindings(value: string | undefined, serverPort: string, queryPort: string): PortBindingRow[] {
+  const normalizedServerPort = normalizeDefaultPort(serverPort);
+  const normalizedQueryPort = normalizeQueryPort(queryPort);
+  return parsePortBindings(value).filter((row) => {
+    const [containerPort, protocol = "tcp"] = row.target.split("/", 2);
+    const isServerPort = row.hostPort === normalizedServerPort && containerPort === normalizedServerPort && protocol === "tcp";
+    const isQueryPort = row.hostPort === normalizedQueryPort && containerPort === normalizedQueryPort && protocol === "udp";
+    return !isServerPort && !isQueryPort;
+  });
+}
+
+function formatAdditionalPortBindings(rows: PortBindingRow[]) {
   return rows
     .map((row) => ({ hostPort: row.hostPort.trim(), target: row.target.trim() }))
-    .filter((row, index) => index === 0 || row.hostPort || row.target)
+    .filter((row) => row.hostPort || row.target)
     .map((row) => `${row.hostPort}:${row.target}`)
     .join(",");
 }
 
-function PortBindingsEditor({
+function formatManagedPortBindings(serverPort: string, queryPort: string, additionalRows: PortBindingRow[]) {
+  const normalizedServerPort = normalizeDefaultPort(serverPort);
+  const normalizedQueryPort = normalizeQueryPort(queryPort);
+  return [
+    `${normalizedServerPort}:${normalizedServerPort}/tcp`,
+    `${normalizedQueryPort}:${normalizedQueryPort}/udp`,
+    formatAdditionalPortBindings(additionalRows)
+  ].filter(Boolean).join(",");
+}
+
+function AdditionalPortBindingsEditor({
   initialValue,
-  defaultHostPort
+  serverPort,
+  queryPort
 }: {
   initialValue?: string;
-  defaultHostPort: string;
+  serverPort: string;
+  queryPort: string;
 }) {
-  const [bindings, setBindings] = useState(() => parsePortBindings(initialValue, defaultHostPort));
-  const previousDefaultPort = useRef(normalizeDefaultPort(defaultHostPort));
-  const serializedBindings = formatPortBindings(bindings);
+  const [bindings, setBindings] = useState(() => parseAdditionalPortBindings(initialValue, serverPort, queryPort));
+  const serializedBindings = formatManagedPortBindings(serverPort, queryPort, bindings);
 
   useEffect(() => {
-    const nextDefaultPort = normalizeDefaultPort(defaultHostPort);
-    const previous = previousDefaultPort.current;
-    previousDefaultPort.current = nextDefaultPort;
-    setBindings((current) => current.map((binding, index) => {
-      if (index !== 0) return binding;
-      const defaultLike = binding.hostPort === previous && (binding.target === `${previous}/tcp` || binding.target === previous);
-      return defaultLike ? { ...binding, hostPort: nextDefaultPort, target: `${nextDefaultPort}/tcp` } : binding;
+    setBindings((current) => current.filter((row) => {
+      const [containerPort, protocol = "tcp"] = row.target.split("/", 2);
+      return !(row.hostPort === serverPort && containerPort === serverPort && protocol === "tcp")
+        && !(row.hostPort === queryPort && containerPort === queryPort && protocol === "udp");
     }));
-  }, [defaultHostPort]);
+  }, [serverPort, queryPort]);
 
   function updateBinding(id: string, patch: Partial<PortBindingRow>) {
     setBindings((current) => current.map((binding) => binding.id === id ? { ...binding, ...patch } : binding));
@@ -88,12 +137,12 @@ function PortBindingsEditor({
   }
 
   function removeBinding(id: string) {
-    setBindings((current) => current.filter((binding, index) => index === 0 || binding.id !== id));
+    setBindings((current) => current.filter((binding) => binding.id !== id));
   }
 
   return (
     <div className={`portBindingsEditor ${bindings.length > 1 ? "hasExtraBindings" : ""}`}>
-      <span className="fieldLabel">Port bindings</span>
+      <span className="fieldLabel">Additional port bindings</span>
       <input type="hidden" name="dockerPorts" value={serializedBindings} />
       <div className="portBindingRows">
         {bindings.map((binding, index) => (
@@ -103,30 +152,26 @@ function PortBindingsEditor({
               inputMode="numeric"
               value={binding.hostPort}
               onChange={(event) => updateBinding(binding.id, { hostPort: event.target.value })}
-              placeholder={index === 0 ? String(defaultServerPort) : "24454"}
-              aria-label={index === 0 ? "Default host port" : "Additional host port"}
-              required={index === 0}
+              placeholder="24454"
+              aria-label="Additional host port"
             />
             <span className="portBindingColon" aria-hidden="true">:</span>
             <input
               type="text"
               value={binding.target}
               onChange={(event) => updateBinding(binding.id, { target: event.target.value })}
-              placeholder={index === 0 ? `${defaultServerPort}/tcp` : "24454/udp"}
-              aria-label={index === 0 ? "Default container port and protocol" : "Additional container port and protocol"}
-              required={index === 0}
+              placeholder="24454/udp"
+              aria-label="Additional container port and protocol"
             />
-            {index > 0 && (
-              <button
-                type="button"
-                className="iconDangerButton portBindingRemoveButton"
-                onClick={() => removeBinding(binding.id)}
-                aria-label="Remove port binding"
-                title="Remove port binding"
-              >
-                <AppIcon name="trash" />
-              </button>
-            )}
+            <button
+              type="button"
+              className="iconDangerButton portBindingRemoveButton"
+              onClick={() => removeBinding(binding.id)}
+              aria-label="Remove port binding"
+              title="Remove port binding"
+            >
+              <AppIcon name="trash" />
+            </button>
           </div>
         ))}
       </div>
@@ -136,6 +181,66 @@ function PortBindingsEditor({
       </button>
       <span className="fieldHint">Use host port on the left and container port/protocol on the right, for example 24454 : 24454/udp.</span>
     </div>
+  );
+}
+
+function MinecraftPortsSection({
+  serverPort,
+  queryPort,
+  onServerPortChange,
+  onQueryPortChange,
+  serverPortValid,
+  queryPortValid,
+  portConflict
+}: {
+  serverPort: string;
+  queryPort: string;
+  onServerPortChange: (value: string) => void;
+  onQueryPortChange: (value: string) => void;
+  serverPortValid: boolean;
+  queryPortValid: boolean;
+  portConflict: boolean;
+}) {
+  return (
+    <section className="minecraftPortsSection" aria-labelledby="minecraft-ports-title">
+      <div className="placementHeader">
+        <span>Ports</span>
+        <h3 id="minecraft-ports-title">Minecraft network ports</h3>
+      </div>
+      <div className="minecraftPortsGrid">
+        <label>
+          Server port
+          <input
+            name="serverPort"
+            type="number"
+            min={minServerPort}
+            max={maxServerPort}
+            value={serverPort}
+            onChange={(event) => onServerPortChange(event.target.value)}
+            aria-invalid={!serverPortValid || portConflict}
+            required
+          />
+          <span className="fieldHint">TCP port used by Minecraft clients.</span>
+        </label>
+        <label>
+          Query port
+          <input
+            name="queryPort"
+            type="number"
+            min={minServerPort}
+            max={maxServerPort}
+            value={queryPort}
+            onChange={(event) => onQueryPortChange(event.target.value)}
+            aria-invalid={!queryPortValid || portConflict}
+            required
+          />
+          <span className="fieldHint">UDP port used by ServerSentinel for quiet player metrics.</span>
+        </label>
+      </div>
+      {!serverPortValid && <span className="fieldError">Use a server port from {minServerPort} to {maxServerPort}.</span>}
+      {!queryPortValid && <span className="fieldError">Use a Query port from {minServerPort} to {maxServerPort}.</span>}
+      {portConflict && <span className="fieldError">Server port and Query port must be different.</span>}
+    </section>
   );
 }
 
@@ -220,8 +325,18 @@ export function ServerEditForm({
   disabled?: boolean;
 }) {
   const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
+  const [serverPort, setServerPort] = useState(() => serverPortForServer(server));
+  const [queryPort, setQueryPort] = useState(() => queryPortForServer(server));
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
+  const serverPortValid = isValidServerPort(serverPort);
+  const queryPortValid = isValidServerPort(queryPort);
+  const portConflict = serverPort === queryPort;
+
+  useEffect(() => {
+    setServerPort(serverPortForServer(server));
+    setQueryPort(queryPortForServer(server));
+  }, [server.id, server.dockerPorts, server.managedPorts]);
 
   return (
     <form onSubmit={onSubmit} className="appForm">
@@ -295,8 +410,20 @@ export function ServerEditForm({
         Docker container name
         <input name="dockerContainer" defaultValue={server.dockerContainer || ""} pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
       </label>
-      <PortBindingsEditor key={server.id} initialValue={server.dockerPorts} defaultHostPort={String(defaultServerPort)} />
-      <button>Save server settings</button>
+      <MinecraftPortsSection
+        serverPort={serverPort}
+        queryPort={queryPort}
+        onServerPortChange={setServerPort}
+        onQueryPortChange={setQueryPort}
+        serverPortValid={serverPortValid}
+        queryPortValid={queryPortValid}
+        portConflict={portConflict}
+      />
+      <details className="advanced">
+        <summary>Additional port bindings</summary>
+        <AdditionalPortBindingsEditor key={server.id} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
+      </details>
+      <button disabled={!serverPortValid || !queryPortValid || portConflict}>Save server settings</button>
       </fieldset>
     </form>
   );
@@ -391,11 +518,14 @@ export function ManagedServerForm({
   const [runtimeWarnings, setRuntimeWarnings] = useState<string[]>([]);
   const [runtimeRetryKey, setRuntimeRetryKey] = useState(0);
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
+  const [queryPort, setQueryPort] = useState(String(defaultQueryPort));
   const [javaArgs, setJavaArgs] = useState(memoryArgs(4));
   const [refreshingNodes, setRefreshingNodes] = useState(false);
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const serverPortValid = isValidServerPort(serverPort);
+  const queryPortValid = isValidServerPort(queryPort);
+  const portConflict = serverPort === queryPort;
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const selectedNodeTotalMemory = selectedNode?.totalMemory || totalMemory;
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
@@ -664,22 +794,15 @@ export function ManagedServerForm({
           {runtimeWarnings.map((warning) => <p key={warning} className="fieldHint warningText">{warning}</p>)}
         </div>
       </section>
-      <label>
-        Server port
-        <input
-          name="serverPort"
-          type="number"
-          min={minServerPort}
-          max={maxServerPort}
-          value={serverPort}
-          onChange={(event) => setServerPort(event.target.value)}
-          aria-invalid={!serverPortValid}
-          required
-        />
-        {!serverPortValid && (
-          <span className="fieldError">Use a port from {minServerPort} to {maxServerPort}.</span>
-        )}
-      </label>
+      <MinecraftPortsSection
+        serverPort={serverPort}
+        queryPort={queryPort}
+        onServerPortChange={setServerPort}
+        onQueryPortChange={setQueryPort}
+        serverPortValid={serverPortValid}
+        queryPortValid={queryPortValid}
+        portConflict={portConflict}
+      />
       <label className="checkLine">
         <input name="acceptEula" type="checkbox" required />
         I accept the Minecraft EULA for this server.
@@ -708,14 +831,14 @@ export function ManagedServerForm({
           Docker container name
           <input name="dockerContainer" placeholder="serversentinel-survival" pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
         </label>
-        <PortBindingsEditor defaultHostPort={serverPort} />
+        <AdditionalPortBindingsEditor serverPort={serverPort} queryPort={queryPort} />
       </details>
       <p className="muted">
         {dockerSocketMounted ? "Docker is connected, so ServerSentinel can create and control this server." : "Docker is not connected yet. Connect Docker in Settings before using local runtime controls."}
       </p>
       <button
-        disabled={provisioning || !serverPortValid || placementBlocked || !runtimeReady}
-        title={provisioning ? disabledReason || "Server setup is still running." : !serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : placementBlocked ? placementBlockedReason : !runtimeReady ? runtimeIssueMessage || "Wait for the runtime profile to resolve." : "Create managed server"}
+        disabled={provisioning || !serverPortValid || !queryPortValid || portConflict || placementBlocked || !runtimeReady}
+        title={provisioning ? disabledReason || "Server setup is still running." : !serverPortValid ? `Use a port from ${minServerPort} to ${maxServerPort}.` : !queryPortValid ? `Use a Query port from ${minServerPort} to ${maxServerPort}.` : portConflict ? "Server port and Query port must be different." : placementBlocked ? placementBlockedReason : !runtimeReady ? runtimeIssueMessage || "Wait for the runtime profile to resolve." : "Create managed server"}
       >
         {provisioning ? "Setting up..." : "Create Managed Server"}
       </button>
