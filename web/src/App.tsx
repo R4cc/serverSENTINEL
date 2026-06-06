@@ -14,6 +14,7 @@ import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState, FileSortKey, ModInstallModalState } from "./app/uiState";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
+import { ConsoleLine } from "./components/ConsoleLine";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
@@ -3776,7 +3777,7 @@ export default function App() {
                   )}
                   <div className="terminal">
                     <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
-                      {logs.length ? logs.map((line, index) => <pre key={index}>{line}</pre>) : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
+                      {logs.length ? logs.map((line, index) => <ConsoleLine key={index} line={line} />) : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
                     </div>
                     {pendingConsoleEntries > 0 && (
                       <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
