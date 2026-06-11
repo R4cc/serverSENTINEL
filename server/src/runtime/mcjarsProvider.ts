@@ -38,7 +38,7 @@ type CacheEntry<T> = {
 
 const successTtlMs = 15 * 60_000;
 const failureTtlMs = 30_000;
-const userAgent = "ServerSentinel/0.5.0 (MCJars runtime provider)";
+const userAgent = "ServerSentinel/0.6.0 (MCJars runtime provider)";
 const mcjarsReachabilityMessage = "ServerSentinel could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again.";
 
 function withDetails(error: RuntimeResolutionError, details: string) {

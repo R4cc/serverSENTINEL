@@ -130,7 +130,7 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.5.0";
+const appVersion = process.env.npm_package_version ?? "0.6.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const serversFile = join(config.configDir, "servers.json");
@@ -1225,7 +1225,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.5.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.6.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1264,7 +1264,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.5.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.6.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -2490,7 +2490,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.5.0 (Fabric runtime downloader)"
+      "User-Agent": "ServerSentinel/0.6.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
