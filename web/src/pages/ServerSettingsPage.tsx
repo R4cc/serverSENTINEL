@@ -4,6 +4,7 @@ import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion }
 import { defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
+import { validateDisplayName, validateDockerContainerName } from '../utils/validation';
 
 type PortBindingRow = {
   id: string;
@@ -598,7 +599,9 @@ export function ManagedServerForm({
       : !selectedNode
         ? "Choose a node before creating this server."
         : nodeBlockReason(selectedNode) || "Choose a ready node before creating this server.";
-  const identityReady = Boolean(displayName.trim() && dockerContainer.trim() && /^[a-z0-9_-]+$/.test(dockerContainer.trim()));
+  const displayNameError = validateDisplayName(displayName);
+  const dockerContainerError = dockerContainer.trim() ? validateDockerContainerName(dockerContainer) : "Docker container name is required.";
+  const identityReady = !displayNameError && !dockerContainerError;
   const nextDisabled = provisioning || placementBlocked || !identityReady;
   const minecraftOptions = useMemo(() => runtimeMinecraftOptions(versions, showSnapshots), [versions, showSnapshots]);
   const loaderOptions = useMemo(() => {
@@ -621,11 +624,17 @@ export function ManagedServerForm({
   const serverPortValid = isValidServerPort(serverPort);
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
+  const additionalPortKeys = new Set<string>();
   const additionalPortsValid = additionalPortBindings.every((binding) => {
     if (!binding.containerPort.trim()) return false;
+    if (!binding.hostPort.trim()) return false;
     if (!isValidServerPort(binding.containerPort)) return false;
-    if (binding.hostPort.trim() && !isValidServerPort(binding.hostPort)) return false;
-    return binding.protocol === "tcp" || binding.protocol === "udp";
+    if (!isValidServerPort(binding.hostPort)) return false;
+    if (binding.protocol !== "tcp" && binding.protocol !== "udp") return false;
+    const key = `${binding.hostPort.trim()}/${binding.protocol}`;
+    if (key === `${serverPort}/tcp` || key === `${queryPort}/udp` || additionalPortKeys.has(key)) return false;
+    additionalPortKeys.add(key);
+    return true;
   });
   const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb;
   const dockerPorts = wizardDockerPorts(serverPort, additionalPortBindings);
@@ -676,6 +685,12 @@ export function ManagedServerForm({
     setMinimumHeapGb((current) => Math.min(clampNumber(current, memoryBounds.min, memoryBounds.max), maximumHeapGb));
     setMaximumHeapGb((current) => Math.max(clampNumber(current, memoryBounds.min, memoryBounds.max), minimumHeapGb));
   }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
+
+  useEffect(() => {
+    if (wizardError && !placementBlocked && identityReady && runtimeCompatible && resourcesReady) {
+      setWizardError("");
+    }
+  }, [identityReady, placementBlocked, resourcesReady, runtimeCompatible, wizardError]);
 
   function updateMinimumHeap(value: number) {
     const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
@@ -805,7 +820,9 @@ export function ManagedServerForm({
                   onChange={(event) => setDisplayName(event.target.value)}
                   required
                   maxLength={80}
+                  aria-invalid={Boolean(displayNameError)}
                 />
+                {displayNameError && <span className="fieldError">{displayNameError}</span>}
               </div>
 
               <div className="createWizardField">
@@ -817,10 +834,13 @@ export function ManagedServerForm({
                   placeholder="survival-mc"
                   value={dockerContainer}
                   onChange={(event) => setDockerContainer(event.target.value)}
-                  pattern="^[a-z0-9_-]+$"
+                  pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
                   required
+                  maxLength={128}
+                  aria-invalid={Boolean(dockerContainerError)}
                 />
-                <span className="fieldHint">Use lowercase letters, numbers, hyphens, and underscores.</span>
+                <span className="fieldHint">Use letters, numbers, dots, dashes, and underscores.</span>
+                {dockerContainerError && <span className="fieldError">{dockerContainerError}</span>}
               </div>
 
               <NodeOverviewCard node={selectedNode} fallbackMemory={totalMemory} />
@@ -887,7 +907,10 @@ export function ManagedServerForm({
               <span className="modInstallFooterSpacer" />
               <button
                 type="button"
-                onClick={() => setActiveWizardStep(2)}
+                onClick={() => {
+                  setWizardError("");
+                  setActiveWizardStep(2);
+                }}
                 disabled={nextDisabled}
                 title={nextDisabled ? disabledReason || placementBlockedReason || "Complete placement and identity before continuing." : "Continue to runtime"}
               >
@@ -897,24 +920,36 @@ export function ManagedServerForm({
             </>
           ) : activeWizardStep === 2 ? (
             <>
-              <button type="button" className="secondaryButton" onClick={() => setActiveWizardStep(1)}>
+              <button type="button" className="secondaryButton" onClick={() => {
+                setWizardError("");
+                setActiveWizardStep(1);
+              }}>
                 <AppIcon name="chevronLeft" />
                 <span>Back: Placement & Identity</span>
               </button>
               <span className="modInstallFooterSpacer" />
-              <button type="button" onClick={() => setActiveWizardStep(3)} disabled={!runtimeCompatible}>
+              <button type="button" onClick={() => {
+                setWizardError("");
+                setActiveWizardStep(3);
+              }} disabled={!runtimeCompatible}>
                 <span>Next: Resources & Network</span>
                 <AppIcon name="chevronRight" />
               </button>
             </>
           ) : (
             <>
-              <button type="button" className="secondaryButton" onClick={() => setActiveWizardStep(activeWizardStep === 3 ? 2 : 3)}>
+              <button type="button" className="secondaryButton" onClick={() => {
+                setWizardError("");
+                setActiveWizardStep(activeWizardStep === 3 ? 2 : 3);
+              }}>
                 <AppIcon name="chevronLeft" />
                 <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
               </button>
               <span className="modInstallFooterSpacer" />
-              <button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => setActiveWizardStep(4) : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning}>
+              <button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
+                setWizardError("");
+                setActiveWizardStep(4);
+              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning}>
                 {activeWizardStep === 4 && <AppIcon name="server" />}
                 <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
                 {activeWizardStep === 3 && <AppIcon name="chevronRight" />}
@@ -1476,7 +1511,7 @@ function AdditionalPortBindingsPanel({
             <div className="additionalPortsHeader" aria-hidden="true">
               <span>Container port</span>
               <span>Protocol</span>
-              <span>Host port (optional)</span>
+              <span>Host port</span>
               <span>Description (optional)</span>
               <span />
             </div>
@@ -1509,9 +1544,10 @@ function AdditionalPortBindingsPanel({
                   max={maxServerPort}
                   value={binding.hostPort}
                   onChange={(event) => onUpdate(binding.id, { hostPort: event.target.value })}
-                  aria-label="Host port optional"
+                  aria-label="Host port"
                   aria-invalid={Boolean(binding.hostPort) && !isValidServerPort(binding.hostPort)}
-                  placeholder="Auto"
+                  placeholder="8123"
+                  required
                 />
                 <input
                   type="text"
@@ -1534,12 +1570,12 @@ function AdditionalPortBindingsPanel({
             ))}
           </div>
           {bindings.length === 0 && <div className="additionalPortsEmpty">No additional ports have been added.</div>}
-          {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs a valid container port. Host port is optional, but must be valid when entered.</span>}
+          {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs unique, valid host and container ports that do not reuse the server or Query port.</span>}
           <button type="button" className="secondaryButton addPortBindingButton" onClick={onAdd}>
             <AppIcon name="plus" />
             <span>Add port binding</span>
           </button>
-          <p className="fieldHint">Leave host port empty to auto-assign a random available port.</p>
+          <p className="fieldHint">Use a host port that is not already assigned to the server port, Query port, or another binding.</p>
           <input
             type="hidden"
             name="additionalPortBindings"
