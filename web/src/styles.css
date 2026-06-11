@@ -4017,6 +4017,495 @@ button .buttonIcon {
   background: currentColor;
 }
 
+.resourcesWizardFields {
+  gap: var(--space-5);
+}
+
+.resourceStepSection {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.resourceStepSection + .resourceStepSection,
+.resourceDisclosure + .resourceDisclosure {
+  padding-top: var(--space-4);
+  border-top: var(--border-subtle) solid var(--border-muted);
+}
+
+.resourceSectionIntro {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.resourceSectionIntro h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.resourceSectionIntro p {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.memoryRangeLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: var(--space-5);
+  align-items: center;
+}
+
+.memoryRangeControl {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.memoryRangeTrackWrap {
+  position: relative;
+  height: 58px;
+  display: grid;
+  align-items: end;
+  padding-top: 28px;
+}
+
+.memoryRangeTrack {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 var(--xms-percent),
+      var(--accent) var(--xms-percent) var(--xmx-percent),
+      transparent var(--xmx-percent) 100%
+    ),
+    var(--border-muted);
+}
+
+.memoryRangeTrack::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent 24.9%, var(--surface) 25% 25.2%, transparent 25.3%),
+    linear-gradient(90deg, transparent 49.9%, var(--surface) 50% 50.2%, transparent 50.3%),
+    linear-gradient(90deg, transparent 74.9%, var(--surface) 75% 75.2%, transparent 75.3%);
+  opacity: 0.75;
+}
+
+.memoryRangeInput {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -19px;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  pointer-events: none;
+}
+
+.memoryRangeInput:focus {
+  border-color: transparent;
+}
+
+.memoryRangeInput::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+  border: 0;
+}
+
+.memoryRangeInput::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: var(--border-strong) solid var(--swiss-white);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 70%, var(--border));
+  appearance: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.memoryRangeInput::-moz-range-track {
+  height: 6px;
+  background: transparent;
+  border: 0;
+}
+
+.memoryRangeInput::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: var(--border-strong) solid var(--swiss-white);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 70%, var(--border));
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.memoryRangeInput.xms {
+  z-index: 3;
+}
+
+.memoryRangeInput.xmx {
+  z-index: 4;
+}
+
+.memoryValueBubble {
+  position: absolute;
+  top: 0;
+  min-width: 42px;
+  padding: 3px 8px;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 56%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--sentinel-accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.memoryValueBubble.xms {
+  left: var(--xms-percent);
+}
+
+.memoryValueBubble.xmx {
+  left: var(--xmx-percent);
+}
+
+.memoryTicks,
+.memoryRangeMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.memoryTicks span {
+  min-width: 0;
+}
+
+.memoryRangeMeta {
+  padding-top: var(--space-2);
+  border-top: var(--border-subtle) solid var(--border-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.memoryNumberFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.memoryNumberField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.memoryNumberInputWrap,
+.protocolInputWrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.memoryNumberInputWrap input,
+.protocolInputWrap input {
+  height: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.memoryNumberInputWrap strong,
+.protocolInputWrap strong {
+  min-width: 48px;
+  display: grid;
+  place-items: center;
+  border-left: var(--border-subtle) solid var(--border-muted);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.memoryNumberField small,
+.protocolInputField small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.memoryHeapDivider {
+  padding-top: 13px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.networkPortsSection {
+  gap: var(--space-4);
+}
+
+.networkPortGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.protocolInputField {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.protocolInputField > span:first-child {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.protocolInputWrap:focus-within,
+.memoryNumberInputWrap:focus-within {
+  border-color: var(--accent);
+}
+
+.protocolInputWrap input[aria-invalid="true"] {
+  color: var(--sentinel-danger);
+}
+
+.resourceDisclosure {
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.resourceDisclosureSummary {
+  width: 100%;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.resourceDisclosureSummary:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text);
+  border-color: transparent;
+  transform: none;
+}
+
+.resourceDisclosureSummary > span,
+.advancedResourceDisclosure summary > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.resourceDisclosureSummary strong,
+.advancedResourceDisclosure summary strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.resourceDisclosureSummary em,
+.advancedResourceDisclosure summary em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.resourceDisclosureSummary small,
+.advancedResourceDisclosure summary small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.additionalPortsBody {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.additionalPortsGrid {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.additionalPortsHeader,
+.additionalPortRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(110px, 0.55fr) minmax(120px, 0.8fr) minmax(160px, 1fr) 44px;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.additionalPortsHeader {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.additionalPortRow input,
+.additionalPortRow select {
+  height: 40px;
+}
+
+.additionalPortRemoveButton {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.additionalPortsEmpty {
+  border: var(--border-subtle) dashed var(--border-muted);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: var(--space-3);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.addPortBindingButton {
+  width: 100%;
+  border-style: dashed;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+}
+
+.eulaSection {
+  gap: var(--space-2);
+}
+
+.eulaActionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.resourceCheckboxLine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.resourceCheckboxLine input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.resourceInlineLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.resourceInlineLink:hover {
+  text-decoration: underline;
+}
+
+.resourceInlineLink svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+}
+
+.advancedResourceDisclosure {
+  padding-top: 0;
+}
+
+.advancedResourceDisclosure summary {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+
+.advancedResourceDisclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.advancedResourceDisclosure summary::after {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.advancedResourceIcon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.advancedResourceIcon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+}
+
 .createNodeOverview {
   display: grid;
   gap: var(--space-3);
@@ -4136,6 +4625,39 @@ button .buttonIcon {
     padding: 0;
     border-left: 0;
   }
+
+  .memoryRangeLayout {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .memoryNumberFields {
+    max-width: 420px;
+  }
+
+  .networkPortGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .additionalPortsHeader {
+    display: none;
+  }
+
+  .additionalPortRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 44px;
+  }
+
+  .additionalPortRow input[aria-label="Description optional"] {
+    grid-column: 1 / 3;
+  }
+
+  .additionalPortRemoveButton {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    align-self: stretch;
+    height: auto;
+  }
 }
 
 @media (max-width: 680px) {
@@ -4163,6 +4685,37 @@ button .buttonIcon {
 
   .runtimeSummaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .memoryNumberFields,
+  .additionalPortRow {
+    grid-template-columns: 1fr;
+  }
+
+  .memoryHeapDivider {
+    display: none;
+  }
+
+  .memoryRangeMeta,
+  .eulaActionRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .memoryTicks span:nth-child(2),
+  .memoryTicks span:nth-child(4) {
+    display: none;
+  }
+
+  .additionalPortRow input[aria-label="Description optional"],
+  .additionalPortRemoveButton {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .additionalPortRemoveButton {
+    width: 100%;
   }
 }
 

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
 import { defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
@@ -9,6 +9,14 @@ type PortBindingRow = {
   id: string;
   hostPort: string;
   target: string;
+};
+
+type CreateWizardPortBinding = {
+  id: string;
+  containerPort: string;
+  protocol: "tcp" | "udp";
+  hostPort: string;
+  description: string;
 };
 
 function portBindingId() {
@@ -132,6 +140,31 @@ function javaMajorVersionForMinecraft(version: string): 17 | 21 | 25 {
   const patch = Number(match?.[2] ?? "0");
   if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
   return 17;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
+function memoryBoundsForNode(totalMemory: number) {
+  const max = totalMemoryGb(totalMemory);
+  return {
+    min: 1,
+    max,
+    recommendedMin: Math.min(2, max),
+    recommendedMax: Math.min(Math.max(2, max), 8)
+  };
+}
+
+function makeCreatePortBinding(partial: Partial<CreateWizardPortBinding> = {}): CreateWizardPortBinding {
+  return {
+    id: portBindingId(),
+    containerPort: partial.containerPort ?? "",
+    protocol: partial.protocol ?? "tcp",
+    hostPort: partial.hostPort ?? "",
+    description: partial.description ?? ""
+  };
 }
 
 function AdditionalPortBindingsEditor({
@@ -525,7 +558,16 @@ export function ManagedServerForm({
   const [fabricLoaderVersion, setFabricLoaderVersion] = useState("");
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [compatibleLoaderVersions, setCompatibleLoaderVersions] = useState<RuntimeLoaderVersion[]>([]);
+  const [minimumHeapGb, setMinimumHeapGb] = useState(2);
+  const [maximumHeapGb, setMaximumHeapGb] = useState(8);
+  const [serverPort, setServerPort] = useState(String(defaultServerPort));
+  const [queryPort, setQueryPort] = useState(String(defaultQueryPort));
+  const [additionalPortsOpen, setAdditionalPortsOpen] = useState(false);
+  const [additionalPortBindings, setAdditionalPortBindings] = useState<CreateWizardPortBinding[]>([]);
+  const [acceptEula, setAcceptEula] = useState(false);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const nodeMemoryTotal = selectedNode?.totalMemory || totalMemory;
+  const memoryBounds = useMemo(() => memoryBoundsForNode(nodeMemoryTotal), [nodeMemoryTotal]);
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
   const placementBlockedReason = nodes.length === 0
     ? "Add a node before creating a server."
@@ -554,6 +596,16 @@ export function ManagedServerForm({
   const recommendedLoader = loaderOptions.find((version) => version.recommended) || loaderOptions.find((version) => version.stable !== false) || loaderOptions[0];
   const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
   const runtimeCompatible = Boolean(minecraftVersion && fabricLoaderVersion);
+  const serverPortValid = isValidServerPort(serverPort);
+  const queryPortValid = isValidServerPort(queryPort);
+  const portConflict = serverPort === queryPort;
+  const additionalPortsValid = additionalPortBindings.every((binding) => {
+    if (!binding.containerPort.trim()) return false;
+    if (!isValidServerPort(binding.containerPort)) return false;
+    if (binding.hostPort.trim() && !isValidServerPort(binding.hostPort)) return false;
+    return binding.protocol === "tcp" || binding.protocol === "udp";
+  });
+  const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb;
 
   useEffect(() => {
     if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
@@ -595,6 +647,34 @@ export function ManagedServerForm({
     if (loaderOptions.some((version) => version.loaderVersion === fabricLoaderVersion)) return;
     setFabricLoaderVersion(recommendedLoader?.loaderVersion || loaderOptions[0]?.loaderVersion || "");
   }, [fabricLoaderVersion, loaderOptions, recommendedLoader]);
+
+  useEffect(() => {
+    setMinimumHeapGb((current) => Math.min(clampNumber(current, memoryBounds.min, memoryBounds.max), maximumHeapGb));
+    setMaximumHeapGb((current) => Math.max(clampNumber(current, memoryBounds.min, memoryBounds.max), minimumHeapGb));
+  }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
+
+  function updateMinimumHeap(value: number) {
+    const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
+    setMinimumHeapGb(Math.min(next, maximumHeapGb));
+  }
+
+  function updateMaximumHeap(value: number) {
+    const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
+    setMaximumHeapGb(Math.max(next, minimumHeapGb));
+  }
+
+  function updateAdditionalPort(id: string, patch: Partial<CreateWizardPortBinding>) {
+    setAdditionalPortBindings((current) => current.map((binding) => binding.id === id ? { ...binding, ...patch } : binding));
+  }
+
+  function addAdditionalPort() {
+    setAdditionalPortsOpen(true);
+    setAdditionalPortBindings((current) => [...current, makeCreatePortBinding()]);
+  }
+
+  function removeAdditionalPort(id: string) {
+    setAdditionalPortBindings((current) => current.filter((binding) => binding.id !== id));
+  }
 
   async function refreshNodeStatus() {
     if (!onRefreshNodes) return;
@@ -705,11 +785,35 @@ export function ManagedServerForm({
             onFabricLoaderVersionChange={setFabricLoaderVersion}
             onShowSnapshotsChange={setShowSnapshots}
           />
+        ) : activeWizardStep === 3 ? (
+          <ResourcesNetworkWizardStep
+            memoryBounds={memoryBounds}
+            minimumHeapGb={minimumHeapGb}
+            maximumHeapGb={maximumHeapGb}
+            serverPort={serverPort}
+            queryPort={queryPort}
+            serverPortValid={serverPortValid}
+            queryPortValid={queryPortValid}
+            portConflict={portConflict}
+            additionalPortsOpen={additionalPortsOpen}
+            additionalPortBindings={additionalPortBindings}
+            additionalPortsValid={additionalPortsValid}
+            acceptEula={acceptEula}
+            onMinimumHeapChange={updateMinimumHeap}
+            onMaximumHeapChange={updateMaximumHeap}
+            onServerPortChange={setServerPort}
+            onQueryPortChange={setQueryPort}
+            onAdditionalPortsOpenChange={setAdditionalPortsOpen}
+            onAddAdditionalPort={addAdditionalPort}
+            onUpdateAdditionalPort={updateAdditionalPort}
+            onRemoveAdditionalPort={removeAdditionalPort}
+            onAcceptEulaChange={setAcceptEula}
+          />
         ) : (
           <div className="createWizardPlaceholder">
             <div className="modInstallStepIntro">
-              <h3>{activeWizardStep === 3 ? "Resources & Network" : "Review & Create"}</h3>
-              <p>{activeWizardStep === 3 ? "This step will be implemented next. Runtime choices are saved in this wizard state." : "Review and creation will be implemented in a later step."}</p>
+              <h3>Review & Create</h3>
+              <p>Review and creation will be implemented in a later step.</p>
             </div>
           </div>
         )}
@@ -746,7 +850,7 @@ export function ManagedServerForm({
                 <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
               </button>
               <span className="modInstallFooterSpacer" />
-              <button type="button" disabled>
+              <button type="button" onClick={() => setActiveWizardStep(4)} disabled={activeWizardStep === 3 ? !resourcesReady : true}>
                 <span>{activeWizardStep === 3 ? "Next: Review & Create" : "Create server"}</span>
                 <AppIcon name="chevronRight" />
               </button>
@@ -943,6 +1047,431 @@ function RuntimeSummaryIcon({ icon }: { icon: "grass" | "loader" | "java" }) {
       <path d="M4 9v6l8 4 8-4V9" />
       <path d="M12 13v6" />
     </svg>
+  );
+}
+
+function ResourcesNetworkWizardStep({
+  memoryBounds,
+  minimumHeapGb,
+  maximumHeapGb,
+  serverPort,
+  queryPort,
+  serverPortValid,
+  queryPortValid,
+  portConflict,
+  additionalPortsOpen,
+  additionalPortBindings,
+  additionalPortsValid,
+  acceptEula,
+  onMinimumHeapChange,
+  onMaximumHeapChange,
+  onServerPortChange,
+  onQueryPortChange,
+  onAdditionalPortsOpenChange,
+  onAddAdditionalPort,
+  onUpdateAdditionalPort,
+  onRemoveAdditionalPort,
+  onAcceptEulaChange
+}: {
+  memoryBounds: { min: number; max: number; recommendedMin: number; recommendedMax: number };
+  minimumHeapGb: number;
+  maximumHeapGb: number;
+  serverPort: string;
+  queryPort: string;
+  serverPortValid: boolean;
+  queryPortValid: boolean;
+  portConflict: boolean;
+  additionalPortsOpen: boolean;
+  additionalPortBindings: CreateWizardPortBinding[];
+  additionalPortsValid: boolean;
+  acceptEula: boolean;
+  onMinimumHeapChange: (value: number) => void;
+  onMaximumHeapChange: (value: number) => void;
+  onServerPortChange: (value: string) => void;
+  onQueryPortChange: (value: string) => void;
+  onAdditionalPortsOpenChange: (value: boolean) => void;
+  onAddAdditionalPort: () => void;
+  onUpdateAdditionalPort: (id: string, patch: Partial<CreateWizardPortBinding>) => void;
+  onRemoveAdditionalPort: (id: string) => void;
+  onAcceptEulaChange: (value: boolean) => void;
+}) {
+  const javaArgs = `-Xms${minimumHeapGb}G -Xmx${maximumHeapGb}G`;
+
+  return (
+    <>
+      <div className="modInstallStepIntro">
+        <h3>Resources & Network</h3>
+        <p>Configure the resources your server will use and how it can be accessed.</p>
+      </div>
+
+      <div className="createWizardFields resourcesWizardFields">
+        <section className="resourceStepSection" aria-labelledby="create-memory-title">
+          <div className="resourceSectionIntro">
+            <h4 id="create-memory-title">Memory</h4>
+            <p>Configure the memory allocation for your server.</p>
+          </div>
+          <div className="memoryRangeLayout">
+            <MemoryRangeControl
+              bounds={memoryBounds}
+              minimumHeapGb={minimumHeapGb}
+              maximumHeapGb={maximumHeapGb}
+              onMinimumHeapChange={onMinimumHeapChange}
+              onMaximumHeapChange={onMaximumHeapChange}
+            />
+            <div className="memoryNumberFields">
+              <MemoryNumberInput
+                id="create-minimum-heap"
+                label="Minimum heap (Xms)"
+                value={minimumHeapGb}
+                min={memoryBounds.min}
+                max={maximumHeapGb}
+                onChange={onMinimumHeapChange}
+              />
+              <span className="memoryHeapDivider" aria-hidden="true">/</span>
+              <MemoryNumberInput
+                id="create-maximum-heap"
+                label="Maximum heap (Xmx)"
+                value={maximumHeapGb}
+                min={minimumHeapGb}
+                max={memoryBounds.max}
+                onChange={onMaximumHeapChange}
+              />
+            </div>
+          </div>
+          <div className="memoryRangeMeta">
+            <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
+            <span>Total available: {memoryBounds.max} GB</span>
+          </div>
+          <input type="hidden" name="javaArgs" value={javaArgs} />
+        </section>
+
+        <section className="resourceStepSection networkPortsSection" aria-labelledby="create-network-title">
+          <div className="resourceSectionIntro">
+            <h4 id="create-network-title">Network ports</h4>
+            <p>Configure the primary ports used by your server.</p>
+          </div>
+          <div className="networkPortGrid">
+            <ProtocolInput
+              id="create-server-port"
+              name="serverPort"
+              label="Server port"
+              helper="The port players use to join your server."
+              protocol="TCP"
+              value={serverPort}
+              invalid={!serverPortValid || portConflict}
+              onChange={onServerPortChange}
+            />
+            <ProtocolInput
+              id="create-query-port"
+              name="queryPort"
+              label="Query port"
+              helper="Used by ServerSentinel for player metrics."
+              protocol="UDP"
+              value={queryPort}
+              invalid={!queryPortValid || portConflict}
+              onChange={onQueryPortChange}
+            />
+          </div>
+          {!serverPortValid && <span className="fieldError">Use a server port from {minServerPort} to {maxServerPort}.</span>}
+          {!queryPortValid && <span className="fieldError">Use a Query port from {minServerPort} to {maxServerPort}.</span>}
+          {portConflict && <span className="fieldError">Server port and Query port must be different.</span>}
+
+          <AdditionalPortBindingsPanel
+            open={additionalPortsOpen}
+            bindings={additionalPortBindings}
+            valid={additionalPortsValid}
+            onOpenChange={onAdditionalPortsOpenChange}
+            onAdd={onAddAdditionalPort}
+            onUpdate={onUpdateAdditionalPort}
+            onRemove={onRemoveAdditionalPort}
+          />
+        </section>
+
+        <section className="resourceStepSection eulaSection" aria-labelledby="create-eula-title">
+          <div className="resourceSectionIntro">
+            <h4 id="create-eula-title">EULA</h4>
+            <p>You must accept the Minecraft End User License Agreement to create a server.</p>
+          </div>
+          <div className="eulaActionRow">
+            <label className="resourceCheckboxLine">
+              <input
+                type="checkbox"
+                name="acceptEula"
+                checked={acceptEula}
+                onChange={(event) => onAcceptEulaChange(event.target.checked)}
+              />
+              <span>I accept the Minecraft EULA for this server.</span>
+            </label>
+            <a href="https://www.minecraft.net/eula" target="_blank" rel="noopener noreferrer" className="resourceInlineLink">
+              View Minecraft EULA
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <path d="M15 3h6v6" />
+                <path d="M10 14 21 3" />
+              </svg>
+            </a>
+          </div>
+        </section>
+
+        <details className="resourceDisclosure advancedResourceDisclosure">
+          <summary>
+            <span className="advancedResourceIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+                <path d="m19 13.5.1-1.5-.1-1.5 1.8-1.4-1.8-3.1-2.2.9a7.5 7.5 0 0 0-2.2-1.3L14.2 3h-4.4l-.4 2.6A7.5 7.5 0 0 0 7.2 6.9L5 6 3.2 9.1 5 10.5 4.9 12l.1 1.5-1.8 1.4L5 18l2.2-.9c.7.6 1.4 1 2.2 1.3l.4 2.6h4.4l.4-2.6c.8-.3 1.5-.7 2.2-1.3L19 18l1.8-3.1Z" />
+              </svg>
+            </span>
+            <span>
+              <strong>Advanced settings <em>(optional)</em></strong>
+              <small>Java arguments, Docker container name, and other advanced options.</small>
+            </span>
+          </summary>
+        </details>
+      </div>
+    </>
+  );
+}
+
+function MemoryRangeControl({
+  bounds,
+  minimumHeapGb,
+  maximumHeapGb,
+  onMinimumHeapChange,
+  onMaximumHeapChange
+}: {
+  bounds: { min: number; max: number; recommendedMin: number; recommendedMax: number };
+  minimumHeapGb: number;
+  maximumHeapGb: number;
+  onMinimumHeapChange: (value: number) => void;
+  onMaximumHeapChange: (value: number) => void;
+}) {
+  const span = Math.max(1, bounds.max - bounds.min);
+  const minPercent = ((minimumHeapGb - bounds.min) / span) * 100;
+  const maxPercent = ((maximumHeapGb - bounds.min) / span) * 100;
+  const quarter = Math.round(bounds.min + span * 0.25);
+  const midpoint = Math.round(bounds.min + span * 0.5);
+  const threeQuarter = Math.round(bounds.min + span * 0.75);
+  const sliderStyle = {
+    "--xms-percent": `${minPercent}%`,
+    "--xmx-percent": `${maxPercent}%`
+  } as CSSProperties;
+
+  return (
+    <div className="memoryRangeControl" style={sliderStyle}>
+      <div className="memoryRangeTrackWrap">
+        <span className="memoryValueBubble xms">{minimumHeapGb} GB</span>
+        <span className="memoryValueBubble xmx">{maximumHeapGb} GB</span>
+        <div className="memoryRangeTrack" aria-hidden="true" />
+        <input
+          aria-label="Minimum heap Xms"
+          type="range"
+          min={bounds.min}
+          max={bounds.max}
+          step="1"
+          value={minimumHeapGb}
+          onChange={(event) => onMinimumHeapChange(Number(event.target.value))}
+          className="memoryRangeInput xms"
+        />
+        <input
+          aria-label="Maximum heap Xmx"
+          type="range"
+          min={bounds.min}
+          max={bounds.max}
+          step="1"
+          value={maximumHeapGb}
+          onChange={(event) => onMaximumHeapChange(Number(event.target.value))}
+          className="memoryRangeInput xmx"
+        />
+      </div>
+      <div className="memoryTicks" aria-hidden="true">
+        <span>{bounds.min} GB</span>
+        <span>{quarter} GB</span>
+        <span>{midpoint} GB</span>
+        <span>{threeQuarter} GB</span>
+        <span>{bounds.max} GB</span>
+      </div>
+    </div>
+  );
+}
+
+function MemoryNumberInput({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onChange
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="memoryNumberField" htmlFor={id}>
+      <span className="memoryNumberInputWrap">
+        <input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <strong>GB</strong>
+      </span>
+      <small>{label}</small>
+    </label>
+  );
+}
+
+function ProtocolInput({
+  id,
+  name,
+  label,
+  helper,
+  protocol,
+  value,
+  invalid,
+  onChange
+}: {
+  id: string;
+  name: string;
+  label: string;
+  helper: string;
+  protocol: "TCP" | "UDP";
+  value: string;
+  invalid: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="protocolInputField" htmlFor={id}>
+      <span>{label}</span>
+      <small>{helper}</small>
+      <span className="protocolInputWrap">
+        <input
+          id={id}
+          name={name}
+          type="number"
+          inputMode="numeric"
+          min={minServerPort}
+          max={maxServerPort}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={invalid}
+        />
+        <strong>{protocol}</strong>
+      </span>
+    </label>
+  );
+}
+
+function AdditionalPortBindingsPanel({
+  open,
+  bindings,
+  valid,
+  onOpenChange,
+  onAdd,
+  onUpdate,
+  onRemove
+}: {
+  open: boolean;
+  bindings: CreateWizardPortBinding[];
+  valid: boolean;
+  onOpenChange: (value: boolean) => void;
+  onAdd: () => void;
+  onUpdate: (id: string, patch: Partial<CreateWizardPortBinding>) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <section className={`resourceDisclosure additionalPortsDisclosure ${open ? "open" : ""}`} aria-labelledby="additional-ports-title">
+      <button type="button" className="resourceDisclosureSummary" onClick={() => onOpenChange(!open)} aria-expanded={open}>
+        <span>
+          <strong id="additional-ports-title">Additional port bindings <em>(optional)</em></strong>
+          <small>Expose additional ports to the server, for example for mods or plugins.</small>
+        </span>
+        <AppIcon name={open ? "chevronUp" : "chevronDown"} />
+      </button>
+      {open && (
+        <div className="additionalPortsBody">
+          <div className="additionalPortsGrid" role="group" aria-label="Additional port bindings">
+            <div className="additionalPortsHeader" aria-hidden="true">
+              <span>Container port</span>
+              <span>Protocol</span>
+              <span>Host port (optional)</span>
+              <span>Description (optional)</span>
+              <span />
+            </div>
+            {bindings.map((binding) => (
+              <div className="additionalPortRow" key={binding.id}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={minServerPort}
+                  max={maxServerPort}
+                  value={binding.containerPort}
+                  onChange={(event) => onUpdate(binding.id, { containerPort: event.target.value })}
+                  aria-label="Container port"
+                  aria-invalid={Boolean(binding.containerPort) && !isValidServerPort(binding.containerPort)}
+                  placeholder="8123"
+                  required
+                />
+                <select
+                  value={binding.protocol}
+                  onChange={(event) => onUpdate(binding.id, { protocol: event.target.value as "tcp" | "udp" })}
+                  aria-label="Protocol"
+                >
+                  <option value="tcp">TCP</option>
+                  <option value="udp">UDP</option>
+                </select>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={minServerPort}
+                  max={maxServerPort}
+                  value={binding.hostPort}
+                  onChange={(event) => onUpdate(binding.id, { hostPort: event.target.value })}
+                  aria-label="Host port optional"
+                  aria-invalid={Boolean(binding.hostPort) && !isValidServerPort(binding.hostPort)}
+                  placeholder="Auto"
+                />
+                <input
+                  type="text"
+                  value={binding.description}
+                  onChange={(event) => onUpdate(binding.id, { description: event.target.value })}
+                  aria-label="Description optional"
+                  placeholder="Web UI"
+                  maxLength={80}
+                />
+                <button
+                  type="button"
+                  className="iconDangerButton additionalPortRemoveButton"
+                  onClick={() => onRemove(binding.id)}
+                  aria-label="Remove port binding"
+                  title="Remove port binding"
+                >
+                  <AppIcon name="trash" />
+                </button>
+              </div>
+            ))}
+          </div>
+          {bindings.length === 0 && <div className="additionalPortsEmpty">No additional ports have been added.</div>}
+          {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs a valid container port. Host port is optional, but must be valid when entered.</span>}
+          <button type="button" className="secondaryButton addPortBindingButton" onClick={onAdd}>
+            <AppIcon name="plus" />
+            <span>Add port binding</span>
+          </button>
+          <p className="fieldHint">Leave host port empty to auto-assign a random available port.</p>
+          <input
+            type="hidden"
+            name="additionalPortBindings"
+            value={JSON.stringify(bindings.map(({ id: _id, ...binding }) => binding))}
+          />
+        </div>
+      )}
+    </section>
   );
 }
 
