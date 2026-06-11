@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import type { ContextNode, FabricVersions, ManagedServer } from '../types';
+import { api } from '../api';
+import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
 import { defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
@@ -94,6 +95,43 @@ function formatManagedPortBindings(serverPort: string, queryPort: string, additi
     `${normalizedQueryPort}:${normalizedQueryPort}/udp`,
     formatAdditionalPortBindings(additionalRows)
   ].filter(Boolean).join(",");
+}
+
+const fallbackMinecraftVersions = [
+  { version: "1.21.6", stable: true },
+  { version: "1.21.4", stable: true },
+  { version: "1.21.1", stable: true },
+  { version: "1.20.6", stable: true },
+  { version: "1.20.1", stable: true }
+];
+
+const fallbackFabricLoaderVersions: RuntimeLoaderVersion[] = [
+  { id: "0.16.14", loaderVersion: "0.16.14", stable: true, recommended: true },
+  { id: "0.16.13", loaderVersion: "0.16.13", stable: true },
+  { id: "0.16.10", loaderVersion: "0.16.10", stable: true }
+];
+
+function runtimeMinecraftOptions(versions: FabricVersions, showSnapshots: boolean) {
+  const source = versions.game.length > 0 ? versions.game : fallbackMinecraftVersions;
+  const filtered = showSnapshots ? source : source.filter((version) => version.stable !== false);
+  return filtered.length > 0 ? filtered : source;
+}
+
+function preferredMinecraftVersion(options: Array<{ version: string; stable: boolean }>) {
+  return options.find((version) => version.version === "1.21.6")?.version
+    || options.find((version) => version.stable !== false)?.version
+    || options[0]?.version
+    || "1.21.6";
+}
+
+function javaMajorVersionForMinecraft(version: string): 17 | 21 | 25 {
+  const modernMajor = version.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+  if (modernMajor && Number(modernMajor[1]) >= 26) return 25;
+  const match = version.trim().match(/^1\.(\d+)(?:\.(\d+))?/);
+  const minor = Number(match?.[1] ?? "21");
+  const patch = Number(match?.[2] ?? "0");
+  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
+  return 17;
 }
 
 function AdditionalPortBindingsEditor({
@@ -463,6 +501,7 @@ export function DeleteServerPanel({
 export function ManagedServerForm({
   nodes = [],
   preferredNodeId = "",
+  versions,
   totalMemory = 0,
   provisioning = false,
   disabledReason = "",
@@ -470,6 +509,7 @@ export function ManagedServerForm({
 }: {
   nodes?: ContextNode[];
   preferredNodeId?: string;
+  versions: FabricVersions;
   totalMemory?: number;
   provisioning?: boolean;
   disabledReason?: string;
@@ -480,7 +520,11 @@ export function ManagedServerForm({
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [dockerContainer, setDockerContainer] = useState("");
-  const [activeWizardStep, setActiveWizardStep] = useState(1);
+  const [activeWizardStep, setActiveWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [minecraftVersion, setMinecraftVersion] = useState("");
+  const [fabricLoaderVersion, setFabricLoaderVersion] = useState("");
+  const [showSnapshots, setShowSnapshots] = useState(false);
+  const [compatibleLoaderVersions, setCompatibleLoaderVersions] = useState<RuntimeLoaderVersion[]>([]);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
   const placementBlockedReason = nodes.length === 0
@@ -492,6 +536,24 @@ export function ManagedServerForm({
         : nodeBlockReason(selectedNode) || "Choose a ready node before creating this server.";
   const identityReady = Boolean(displayName.trim() && dockerContainer.trim() && /^[a-z0-9_-]+$/.test(dockerContainer.trim()));
   const nextDisabled = provisioning || placementBlocked || !identityReady;
+  const minecraftOptions = useMemo(() => runtimeMinecraftOptions(versions, showSnapshots), [versions, showSnapshots]);
+  const loaderOptions = useMemo(() => {
+    const source = compatibleLoaderVersions.length > 0
+      ? compatibleLoaderVersions
+      : versions.loader.length > 0
+        ? versions.loader.map((version, index) => ({
+            id: version.version,
+            loaderVersion: version.version,
+            stable: version.stable,
+            recommended: index === 0
+          }))
+        : fallbackFabricLoaderVersions;
+    const filtered = showSnapshots ? source : source.filter((version) => version.stable !== false);
+    return filtered.length > 0 ? filtered : source;
+  }, [compatibleLoaderVersions, showSnapshots, versions.loader]);
+  const recommendedLoader = loaderOptions.find((version) => version.recommended) || loaderOptions.find((version) => version.stable !== false) || loaderOptions[0];
+  const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
+  const runtimeCompatible = Boolean(minecraftVersion && fabricLoaderVersion);
 
   useEffect(() => {
     if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
@@ -505,6 +567,34 @@ export function ManagedServerForm({
     if (selectedNodeId && usableNodes.some((node) => node.id === selectedNodeId)) return;
     setSelectedNodeId(usableNodes[0]?.id ?? "");
   }, [preferredNodeId, selectedNodeId, usableNodes]);
+
+  useEffect(() => {
+    if (minecraftOptions.some((version) => version.version === minecraftVersion)) return;
+    setMinecraftVersion(preferredMinecraftVersion(minecraftOptions));
+  }, [minecraftOptions, minecraftVersion]);
+
+  useEffect(() => {
+    if (!minecraftVersion) {
+      setCompatibleLoaderVersions([]);
+      return;
+    }
+    let cancelled = false;
+    api<{ minecraftVersion: string; loaderVersions: RuntimeLoaderVersion[] }>(`/api/runtime/fabric/loader-versions?minecraftVersion=${encodeURIComponent(minecraftVersion)}`)
+      .then((result) => {
+        if (!cancelled) setCompatibleLoaderVersions(result.loaderVersions);
+      })
+      .catch(() => {
+        if (!cancelled) setCompatibleLoaderVersions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [minecraftVersion]);
+
+  useEffect(() => {
+    if (loaderOptions.some((version) => version.loaderVersion === fabricLoaderVersion)) return;
+    setFabricLoaderVersion(recommendedLoader?.loaderVersion || loaderOptions[0]?.loaderVersion || "");
+  }, [fabricLoaderVersion, loaderOptions, recommendedLoader]);
 
   async function refreshNodeStatus() {
     if (!onRefreshNodes) return;
@@ -601,33 +691,258 @@ export function ManagedServerForm({
               <NodeOverviewCard node={selectedNode} fallbackMemory={totalMemory} />
             </div>
           </>
+        ) : activeWizardStep === 2 ? (
+          <RuntimeWizardStep
+            minecraftVersion={minecraftVersion}
+            minecraftOptions={minecraftOptions}
+            fabricLoaderVersion={fabricLoaderVersion}
+            loaderOptions={loaderOptions}
+            recommendedLoaderVersion={recommendedLoader?.loaderVersion || ""}
+            showSnapshots={showSnapshots}
+            javaVersion={summaryJavaVersion}
+            runtimeCompatible={runtimeCompatible}
+            onMinecraftVersionChange={setMinecraftVersion}
+            onFabricLoaderVersionChange={setFabricLoaderVersion}
+            onShowSnapshotsChange={setShowSnapshots}
+          />
         ) : (
           <div className="createWizardPlaceholder">
             <div className="modInstallStepIntro">
-              <h3>Runtime</h3>
-              <p>This step will be implemented next. Placement and identity are saved in this wizard state.</p>
+              <h3>{activeWizardStep === 3 ? "Resources & Network" : "Review & Create"}</h3>
+              <p>{activeWizardStep === 3 ? "This step will be implemented next. Runtime choices are saved in this wizard state." : "Review and creation will be implemented in a later step."}</p>
             </div>
-            <button type="button" className="secondaryButton" onClick={() => setActiveWizardStep(1)}>Back to Placement & Identity</button>
           </div>
         )}
         <div className="modInstallFooter createWizardFooter">
-          <span className="modInstallFooterSpacer" />
           {activeWizardStep === 1 ? (
-            <button
-              type="button"
-              onClick={() => setActiveWizardStep(2)}
-              disabled={nextDisabled}
-              title={nextDisabled ? disabledReason || placementBlockedReason || "Complete placement and identity before continuing." : "Continue to runtime"}
-            >
-              <span>Next: Runtime</span>
-              <AppIcon name="chevronRight" />
-            </button>
+            <>
+              <span className="modInstallFooterSpacer" />
+              <button
+                type="button"
+                onClick={() => setActiveWizardStep(2)}
+                disabled={nextDisabled}
+                title={nextDisabled ? disabledReason || placementBlockedReason || "Complete placement and identity before continuing." : "Continue to runtime"}
+              >
+                <span>Next: Runtime</span>
+                <AppIcon name="chevronRight" />
+              </button>
+            </>
+          ) : activeWizardStep === 2 ? (
+            <>
+              <button type="button" className="secondaryButton" onClick={() => setActiveWizardStep(1)}>
+                <AppIcon name="chevronLeft" />
+                <span>Back: Placement & Identity</span>
+              </button>
+              <span className="modInstallFooterSpacer" />
+              <button type="button" onClick={() => setActiveWizardStep(3)} disabled={!runtimeCompatible}>
+                <span>Next: Resources & Network</span>
+                <AppIcon name="chevronRight" />
+              </button>
+            </>
           ) : (
-            <button type="button" disabled>Next: Resources & Network</button>
+            <>
+              <button type="button" className="secondaryButton" onClick={() => setActiveWizardStep(activeWizardStep === 3 ? 2 : 3)}>
+                <AppIcon name="chevronLeft" />
+                <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
+              </button>
+              <span className="modInstallFooterSpacer" />
+              <button type="button" disabled>
+                <span>{activeWizardStep === 3 ? "Next: Review & Create" : "Create server"}</span>
+                <AppIcon name="chevronRight" />
+              </button>
+            </>
           )}
         </div>
       </section>
     </section>
+  );
+}
+
+function RuntimeWizardStep({
+  minecraftVersion,
+  minecraftOptions,
+  fabricLoaderVersion,
+  loaderOptions,
+  recommendedLoaderVersion,
+  showSnapshots,
+  javaVersion,
+  runtimeCompatible,
+  onMinecraftVersionChange,
+  onFabricLoaderVersionChange,
+  onShowSnapshotsChange
+}: {
+  minecraftVersion: string;
+  minecraftOptions: Array<{ version: string; stable: boolean }>;
+  fabricLoaderVersion: string;
+  loaderOptions: RuntimeLoaderVersion[];
+  recommendedLoaderVersion: string;
+  showSnapshots: boolean;
+  javaVersion: 17 | 21 | 25;
+  runtimeCompatible: boolean;
+  onMinecraftVersionChange: (value: string) => void;
+  onFabricLoaderVersionChange: (value: string) => void;
+  onShowSnapshotsChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <div className="modInstallStepIntro">
+        <h3>Runtime</h3>
+        <p>Select the Minecraft version and loader you want to run.</p>
+      </div>
+
+      <div className="createWizardFields runtimeWizardFields">
+        <div className="createWizardField">
+          <label htmlFor="create-minecraft-version">Minecraft version</label>
+          <span className="fieldHint">Choose the Minecraft version for your server.</span>
+          <select
+            id="create-minecraft-version"
+            name="minecraftVersion"
+            value={minecraftVersion}
+            onChange={(event) => onMinecraftVersionChange(event.target.value)}
+            required
+          >
+            {minecraftOptions.map((version) => (
+              <option key={version.version} value={version.version}>{version.version}</option>
+            ))}
+          </select>
+        </div>
+
+        <section className="runtimeLoaderSection" aria-labelledby="runtime-loader-title">
+          <div>
+            <strong id="runtime-loader-title">Loader</strong>
+            <span className="fieldHint">Select the loader type for your server.</span>
+          </div>
+          <button type="button" className="runtimeLoaderCard selected" aria-pressed="true">
+            <span className="fabricLoaderMark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 3 21 12 12 21 3 12Z" />
+                <path d="M12 3v18M3 12h18M7.5 7.5l9 9M16.5 7.5l-9 9" />
+              </svg>
+            </span>
+            <span className="runtimeLoaderCopy">
+              <span>
+                <strong>Fabric</strong>
+                <mark className="settingsStatus ready">Recommended</mark>
+              </span>
+              <small>Lightweight and modular modding framework.</small>
+            </span>
+            <span className="runtimeLoaderCheck" aria-hidden="true"><AppIcon name="check" /></span>
+          </button>
+        </section>
+
+        <div className="createWizardField">
+          <label htmlFor="create-fabric-loader-version">Fabric loader version</label>
+          <span className="fieldHint">Choose the Fabric loader version that is compatible with your selected Minecraft version.</span>
+          <select
+            id="create-fabric-loader-version"
+            name="loaderVersion"
+            value={fabricLoaderVersion}
+            onChange={(event) => onFabricLoaderVersionChange(event.target.value)}
+            required
+          >
+            {loaderOptions.map((version) => (
+              <option key={version.id || version.loaderVersion} value={version.loaderVersion}>
+                {version.loaderVersion}{version.loaderVersion === recommendedLoaderVersion ? " (Recommended)" : ""}
+              </option>
+            ))}
+          </select>
+          <input type="hidden" name="serverJar" value="fabric-server-launch.jar" />
+        </div>
+
+        <label className="runtimeSnapshotToggle">
+          <span className="switch">
+            <input
+              type="checkbox"
+              checked={showSnapshots}
+              onChange={(event) => onShowSnapshotsChange(event.target.checked)}
+            />
+            <span className="slider" />
+          </span>
+          <span>
+            <strong>Show snapshot versions</strong>
+            <small>Include snapshot and development builds.</small>
+          </span>
+        </label>
+
+        <RuntimeSummary
+          minecraftVersion={minecraftVersion}
+          fabricLoaderVersion={fabricLoaderVersion}
+          javaVersion={javaVersion}
+          runtimeCompatible={runtimeCompatible}
+        />
+      </div>
+    </>
+  );
+}
+
+function RuntimeSummary({
+  minecraftVersion,
+  fabricLoaderVersion,
+  javaVersion,
+  runtimeCompatible
+}: {
+  minecraftVersion: string;
+  fabricLoaderVersion: string;
+  javaVersion: 17 | 21 | 25;
+  runtimeCompatible: boolean;
+}) {
+  return (
+    <section className="runtimeSummaryCard" aria-labelledby="runtime-summary-title">
+      <div className="runtimeSummaryHeader">
+        <strong id="runtime-summary-title">Runtime summary</strong>
+        <span>Review your selected runtime details.</span>
+      </div>
+      <div className="runtimeSummaryGrid">
+        <RuntimeSummaryItem label="Minecraft version" value={minecraftVersion || "Choose version"} icon="grass" />
+        <RuntimeSummaryItem label="Loader" value="Fabric" icon="loader" />
+        <RuntimeSummaryItem label="Fabric version" value={fabricLoaderVersion || "Choose version"} />
+        <RuntimeSummaryItem label="Java version" value={`Java ${javaVersion}`} icon="java" />
+        <RuntimeSummaryItem label="Server JAR source" value="fabric-server-launch.jar" />
+        <RuntimeSummaryItem label="Compatibility" value={runtimeCompatible ? "Compatible" : "Incomplete"} tone={runtimeCompatible ? "ok" : "warning"} />
+      </div>
+    </section>
+  );
+}
+
+function RuntimeSummaryItem({
+  label,
+  value,
+  icon,
+  tone
+}: {
+  label: string;
+  value: string;
+  icon?: "grass" | "loader" | "java";
+  tone?: "ok" | "warning";
+}) {
+  return (
+    <div className="runtimeSummaryItem">
+      <span>{label}</span>
+      <strong className={tone ? `runtimeSummaryStatus ${tone}` : ""}>
+        {icon && <RuntimeSummaryIcon icon={icon} />}
+        {tone && <span className="runtimeSummaryDot" aria-hidden="true" />}
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function RuntimeSummaryIcon({ icon }: { icon: "grass" | "loader" | "java" }) {
+  if (icon === "java") return <span className="runtimeSummaryEmoji" aria-hidden="true">J</span>;
+  if (icon === "loader") {
+    return (
+      <svg className="runtimeSummaryIcon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 4h8l4 7-8 9-8-9Z" />
+        <path d="M8 4l4 16 4-16" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="runtimeSummaryIcon grass" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9 12 5l8 4-8 4Z" />
+      <path d="M4 9v6l8 4 8-4V9" />
+      <path d="M12 13v6" />
+    </svg>
   );
 }
 

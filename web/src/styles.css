@@ -3773,6 +3773,250 @@ button .buttonIcon {
   width: 100%;
 }
 
+.runtimeWizardFields {
+  gap: var(--space-5);
+}
+
+.runtimeLoaderSection {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.runtimeLoaderSection > div {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.runtimeLoaderSection > div > strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.runtimeLoaderCard {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-3);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.runtimeLoaderCard.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 36%, var(--surface));
+}
+
+.runtimeLoaderCard:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 48%, var(--surface));
+  color: var(--text);
+  transform: none;
+}
+
+.fabricLoaderMark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.fabricLoaderMark svg {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.runtimeLoaderCopy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.runtimeLoaderCopy > span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.runtimeLoaderCopy strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.runtimeLoaderCopy small {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.runtimeLoaderCheck {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.runtimeLoaderCheck .buttonIcon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 3;
+}
+
+.runtimeSnapshotToggle {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.runtimeSnapshotToggle > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.runtimeSnapshotToggle strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.runtimeSnapshotToggle small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.runtimeSummaryCard {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.runtimeSummaryHeader {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.runtimeSummaryHeader strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.runtimeSummaryHeader span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.runtimeSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+}
+
+.runtimeSummaryItem {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border-left: var(--border-subtle) solid var(--border-muted);
+}
+
+.runtimeSummaryItem:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.runtimeSummaryItem > span:first-child {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.runtimeSummaryItem strong {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.runtimeSummaryIcon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.runtimeSummaryIcon.grass {
+  color: var(--sentinel-success);
+}
+
+.runtimeSummaryEmoji {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 68%, var(--border));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.runtimeSummaryStatus.ok {
+  color: var(--sentinel-success);
+}
+
+.runtimeSummaryStatus.warning {
+  color: var(--sentinel-warning);
+}
+
+.runtimeSummaryDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 .createNodeOverview {
   display: grid;
   gap: var(--space-3);
@@ -3881,6 +4125,17 @@ button .buttonIcon {
     padding-left: 0;
     border-left: 0;
   }
+
+  .runtimeSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .runtimeSummaryItem,
+  .runtimeSummaryItem:first-child {
+    padding: 0;
+    border-left: 0;
+  }
 }
 
 @media (max-width: 680px) {
@@ -3900,6 +4155,14 @@ button .buttonIcon {
 
   .nodeSelectRow {
     align-items: stretch;
+  }
+
+  .runtimeLoaderCard {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .runtimeSummaryGrid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -3435,6 +3435,7 @@ export default function App() {
             <ManagedServerForm
               nodes={contextNodes}
               preferredNodeId={preferredCreateNodeId}
+              versions={fabricVersions}
               totalMemory={effectiveAppState.totalMemory}
               provisioning={isProvisioning || !canCreateServers}
               disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
