@@ -3440,6 +3440,7 @@ export default function App() {
               provisioning={isProvisioning || !canCreateServers}
               disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
               onRefreshNodes={refreshNodes}
+              onSubmit={createServer}
             />
           </section>
         )}

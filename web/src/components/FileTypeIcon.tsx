@@ -81,7 +81,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
@@ -171,6 +171,14 @@ export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chev
         </>
       )}
       {name === "check" && <path d="m5 12 4 4L19 6" />}
+      {name === "server" && (
+        <>
+          <rect x="4" y="5" width="16" height="5" rx="1.5" />
+          <rect x="4" y="14" width="16" height="5" rx="1.5" />
+          <path d="M7 7.5h.01" />
+          <path d="M7 16.5h.01" />
+        </>
+      )}
     </svg>
   );
 }

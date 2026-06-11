@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
 import { defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
@@ -165,6 +165,25 @@ function makeCreatePortBinding(partial: Partial<CreateWizardPortBinding> = {}): 
     hostPort: partial.hostPort ?? "",
     description: partial.description ?? ""
   };
+}
+
+function wizardDockerPorts(serverPort: string, additionalBindings: CreateWizardPortBinding[]) {
+  return [
+    `${serverPort}:${serverPort}/tcp`,
+    ...additionalBindings
+      .filter((binding) => binding.hostPort.trim() && binding.containerPort.trim())
+      .map((binding) => `${binding.hostPort.trim()}:${binding.containerPort.trim()}/${binding.protocol}`)
+  ].join(",");
+}
+
+function nodeDisplayName(node: ContextNode | undefined) {
+  if (!node) return "No node selected";
+  return node.isInternal ? "Internal Node" : node.name;
+}
+
+function nodeStatusTextLabel(node: ContextNode | undefined) {
+  if (!node) return "Not selected";
+  return nodeStatusText(node);
 }
 
 function AdditionalPortBindingsEditor({
@@ -538,7 +557,8 @@ export function ManagedServerForm({
   totalMemory = 0,
   provisioning = false,
   disabledReason = "",
-  onRefreshNodes
+  onRefreshNodes,
+  onSubmit
 }: {
   nodes?: ContextNode[];
   preferredNodeId?: string;
@@ -547,6 +567,7 @@ export function ManagedServerForm({
   provisioning?: boolean;
   disabledReason?: string;
   onRefreshNodes?: () => Promise<void> | void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [refreshingNodes, setRefreshingNodes] = useState(false);
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
@@ -565,6 +586,7 @@ export function ManagedServerForm({
   const [additionalPortsOpen, setAdditionalPortsOpen] = useState(false);
   const [additionalPortBindings, setAdditionalPortBindings] = useState<CreateWizardPortBinding[]>([]);
   const [acceptEula, setAcceptEula] = useState(false);
+  const [wizardError, setWizardError] = useState("");
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const nodeMemoryTotal = selectedNode?.totalMemory || totalMemory;
   const memoryBounds = useMemo(() => memoryBoundsForNode(nodeMemoryTotal), [nodeMemoryTotal]);
@@ -606,6 +628,8 @@ export function ManagedServerForm({
     return binding.protocol === "tcp" || binding.protocol === "udp";
   });
   const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb;
+  const dockerPorts = wizardDockerPorts(serverPort, additionalPortBindings);
+  const javaArgs = `-Xms${minimumHeapGb}G -Xmx${maximumHeapGb}G`;
 
   useEffect(() => {
     if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
@@ -676,6 +700,36 @@ export function ManagedServerForm({
     setAdditionalPortBindings((current) => current.filter((binding) => binding.id !== id));
   }
 
+  function validateWizardBeforeCreate() {
+    if (placementBlocked || !identityReady) {
+      setActiveWizardStep(1);
+      setWizardError(placementBlocked ? placementBlockedReason : "Complete placement and identity before creating this server.");
+      return false;
+    }
+    if (!runtimeCompatible) {
+      setActiveWizardStep(2);
+      setWizardError("Choose a valid Minecraft runtime before creating this server.");
+      return false;
+    }
+    if (!resourcesReady) {
+      setActiveWizardStep(3);
+      setWizardError(!acceptEula
+        ? "Accept the Minecraft EULA before creating this server."
+        : "Review memory, port, and additional binding values before creating this server.");
+      return false;
+    }
+    setWizardError("");
+    return true;
+  }
+
+  function submitWizard(event: FormEvent<HTMLFormElement>) {
+    if (!validateWizardBeforeCreate()) {
+      event.preventDefault();
+      return;
+    }
+    onSubmit(event);
+  }
+
   async function refreshNodeStatus() {
     if (!onRefreshNodes) return;
     setRefreshingNodes(true);
@@ -687,10 +741,11 @@ export function ManagedServerForm({
   }
 
   return (
-    <section className="createWizardPage">
+    <form className="createWizardPage" onSubmit={submitWizard}>
       <CreateServerStepper activeStep={activeWizardStep} />
 
       <section className="createWizardCard">
+        {wizardError && <div className="createWizardValidation" role="alert">{wizardError}</div>}
         {activeWizardStep === 1 ? (
           <>
             <div className="modInstallStepIntro">
@@ -810,12 +865,21 @@ export function ManagedServerForm({
             onAcceptEulaChange={setAcceptEula}
           />
         ) : (
-          <div className="createWizardPlaceholder">
-            <div className="modInstallStepIntro">
-              <h3>Review & Create</h3>
-              <p>Review and creation will be implemented in a later step.</p>
-            </div>
-          </div>
+          <ReviewCreateWizardStep
+            node={selectedNode}
+            displayName={displayName}
+            dockerContainer={dockerContainer}
+            minecraftVersion={minecraftVersion}
+            fabricLoaderVersion={fabricLoaderVersion}
+            javaVersion={summaryJavaVersion}
+            minimumHeapGb={minimumHeapGb}
+            maximumHeapGb={maximumHeapGb}
+            serverPort={serverPort}
+            queryPort={queryPort}
+            additionalPortBindings={additionalPortBindings}
+            acceptEula={acceptEula}
+            onEditStep={setActiveWizardStep}
+          />
         )}
         <div className="modInstallFooter createWizardFooter">
           {activeWizardStep === 1 ? (
@@ -850,15 +914,27 @@ export function ManagedServerForm({
                 <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
               </button>
               <span className="modInstallFooterSpacer" />
-              <button type="button" onClick={() => setActiveWizardStep(4)} disabled={activeWizardStep === 3 ? !resourcesReady : true}>
-                <span>{activeWizardStep === 3 ? "Next: Review & Create" : "Create server"}</span>
-                <AppIcon name="chevronRight" />
+              <button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => setActiveWizardStep(4) : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning}>
+                {activeWizardStep === 4 && <AppIcon name="server" />}
+                <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
+                {activeWizardStep === 3 && <AppIcon name="chevronRight" />}
               </button>
             </>
           )}
         </div>
       </section>
-    </section>
+      <input type="hidden" name="nodeId" value={selectedNodeId} />
+      <input type="hidden" name="displayName" value={displayName} />
+      <input type="hidden" name="dockerContainer" value={dockerContainer} />
+      <input type="hidden" name="minecraftVersion" value={minecraftVersion} />
+      <input type="hidden" name="loaderVersion" value={fabricLoaderVersion} />
+      <input type="hidden" name="serverJar" value="fabric-server-launch.jar" />
+      <input type="hidden" name="javaArgs" value={javaArgs} />
+      <input type="hidden" name="serverPort" value={serverPort} />
+      <input type="hidden" name="queryPort" value={queryPort} />
+      <input type="hidden" name="dockerPorts" value={dockerPorts} />
+      {acceptEula && <input type="hidden" name="acceptEula" value="on" />}
+    </form>
   );
 }
 
@@ -1472,6 +1548,142 @@ function AdditionalPortBindingsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function ReviewCreateWizardStep({
+  node,
+  displayName,
+  dockerContainer,
+  minecraftVersion,
+  fabricLoaderVersion,
+  javaVersion,
+  minimumHeapGb,
+  maximumHeapGb,
+  serverPort,
+  queryPort,
+  additionalPortBindings,
+  acceptEula,
+  onEditStep
+}: {
+  node?: ContextNode;
+  displayName: string;
+  dockerContainer: string;
+  minecraftVersion: string;
+  fabricLoaderVersion: string;
+  javaVersion: 17 | 21 | 25;
+  minimumHeapGb: number;
+  maximumHeapGb: number;
+  serverPort: string;
+  queryPort: string;
+  additionalPortBindings: CreateWizardPortBinding[];
+  acceptEula: boolean;
+  onEditStep: (step: 1 | 2 | 3) => void;
+}) {
+  const additionalCount = additionalPortBindings.length;
+
+  return (
+    <>
+      <div className="modInstallStepIntro">
+        <h3>Review & Create</h3>
+        <p>Review your server configuration before creating it.</p>
+      </div>
+
+      <div className="createWizardFields reviewWizardFields">
+        <ReviewSummaryCard title="Placement & Identity" onEdit={() => onEditStep(1)}>
+          <ReviewSummaryItem label="Node" value={nodeDisplayName(node)} icon="node" />
+          <ReviewSummaryItem label="Node status" value={nodeStatusTextLabel(node)} tone={node?.status === "online" ? "ok" : "warning"} />
+          <ReviewSummaryItem label="Display name" value={displayName || "Missing"} />
+          <ReviewSummaryItem label="Docker container name" value={dockerContainer || "Missing"} />
+        </ReviewSummaryCard>
+
+        <ReviewSummaryCard title="Runtime" onEdit={() => onEditStep(2)}>
+          <ReviewSummaryItem label="Minecraft version" value={minecraftVersion || "Missing"} icon="grass" />
+          <ReviewSummaryItem label="Loader" value="Fabric" icon="loader" />
+          <ReviewSummaryItem label="Fabric version" value={fabricLoaderVersion || "Missing"} />
+          <ReviewSummaryItem label="Java version" value={`Java ${javaVersion}`} icon="java" />
+          <ReviewSummaryItem label="Server JAR source" value="fabric-server-launch.jar" />
+        </ReviewSummaryCard>
+
+        <ReviewSummaryCard title="Resources & Network" onEdit={() => onEditStep(3)}>
+          <ReviewSummaryItem label="Minimum heap" value={`${minimumHeapGb} GB`} sublabel="Xms" />
+          <ReviewSummaryItem label="Maximum heap" value={`${maximumHeapGb} GB`} sublabel="Xmx" />
+          <ReviewSummaryItem label="Server port" value={serverPort} sublabel="TCP" />
+          <ReviewSummaryItem label="Query port" value={queryPort} sublabel="UDP" />
+          <ReviewSummaryItem label="Additional port bindings" value={String(additionalCount)} sublabel={`${additionalCount === 1 ? "binding" : "bindings"} configured`} />
+          <ReviewSummaryItem label="EULA" value={acceptEula ? "Accepted" : "Not accepted"} tone={acceptEula ? "ok" : "warning"} />
+        </ReviewSummaryCard>
+
+        <section className="reviewInfoCard" aria-labelledby="review-summary-title">
+          <strong id="review-summary-title">Summary</strong>
+          <div className="reviewInfoCallout">
+            <span className="reviewInfoIcon" aria-hidden="true">i</span>
+            <p>Once the server is created, ServerSentinel will download the required files, start the container, and launch your Minecraft server. This process may take a few minutes.</p>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function ReviewSummaryCard({
+  title,
+  onEdit,
+  children
+}: {
+  title: string;
+  onEdit: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="reviewSummaryCard" aria-labelledby={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+      <div className="reviewSummaryHeader">
+        <strong id={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>{title}</strong>
+        <button type="button" className="reviewEditButton" onClick={onEdit}>
+          <AppIcon name="edit" />
+          <span>Edit</span>
+        </button>
+      </div>
+      <div className="reviewSummaryGrid">{children}</div>
+    </section>
+  );
+}
+
+function ReviewSummaryItem({
+  label,
+  value,
+  sublabel,
+  icon,
+  tone
+}: {
+  label: string;
+  value: string;
+  sublabel?: string;
+  icon?: "node" | "grass" | "loader" | "java";
+  tone?: "ok" | "warning";
+}) {
+  return (
+    <div className="reviewSummaryItem">
+      <span>{label}</span>
+      <strong className={tone ? `reviewSummaryStatus ${tone}` : ""}>
+        {icon === "node" && <ReviewNodeIcon />}
+        {icon && icon !== "node" && <RuntimeSummaryIcon icon={icon} />}
+        {tone && <span className="runtimeSummaryDot" aria-hidden="true" />}
+        {value}
+      </strong>
+      {sublabel && <small>{sublabel}</small>}
+    </div>
+  );
+}
+
+function ReviewNodeIcon() {
+  return (
+    <svg className="runtimeSummaryIcon node" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="5" rx="1.5" />
+      <rect x="4" y="14" width="16" height="5" rx="1.5" />
+      <path d="M7 7.5h.01" />
+      <path d="M7 16.5h.01" />
+    </svg>
   );
 }
 
