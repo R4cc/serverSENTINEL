@@ -32,6 +32,10 @@ function consoleLine(text: string) {
   return `${text}\n`;
 }
 
+const modSearchDebounceMs = 650;
+const provisionJobPollMs = 1_500;
+const serverStatusPollMs = 10_000;
+
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
@@ -54,6 +58,8 @@ export default function App() {
   const [savedEditorText, setSavedEditorText] = useState("");
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedModSearchQuery, setDebouncedModSearchQuery] = useState("");
+  const [modSearchRequestVersion, setModSearchRequestVersion] = useState(0);
   const [modSearchResults, setModSearchResults] = useState<ModrinthHit[]>([]);
   const [isSearchingMods, setIsSearchingMods] = useState(false);
   const [modSearchError, setModSearchError] = useState("");
@@ -142,6 +148,9 @@ export default function App() {
   const activeServerIdRef = useRef("");
   const panelFirstRunPromptedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
+  const appRefreshInFlightRef = useRef(false);
+  const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
+  const loadMoreModsInFlightRef = useRef(false);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
     inFlightEnabled: boolean | null;
@@ -567,23 +576,30 @@ export default function App() {
     }
 
     let cancelled = false;
+    let inFlight = false;
     async function loadNodeServerActivity() {
-      const entries = await Promise.all(servers.map(async (server) => {
-        try {
-          const data = await api<ServerOverviewData>(`/api/servers/${server.id}/events`);
-          return [server.id, data.activity] as const;
-        } catch {
-          return [server.id, undefined] as const;
-        }
-      }));
-      if (cancelled) return;
-      setServerActivities((current) => {
-        const next = { ...current };
-        for (const [serverId, activity] of entries) {
-          if (activity) next[serverId] = activity;
-        }
-        return next;
-      });
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      try {
+        const entries = await Promise.all(servers.map(async (server) => {
+          try {
+            const data = await api<ServerOverviewData>(`/api/servers/${server.id}/events`);
+            return [server.id, data.activity] as const;
+          } catch {
+            return [server.id, undefined] as const;
+          }
+        }));
+        if (cancelled) return;
+        setServerActivities((current) => {
+          const next = { ...current };
+          for (const [serverId, activity] of entries) {
+            if (activity) next[serverId] = activity;
+          }
+          return next;
+        });
+      } finally {
+        inFlight = false;
+      }
     }
 
     void loadNodeServerActivity();
@@ -764,6 +780,7 @@ export default function App() {
     const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
     if (currentNode && currentNode.status === "online" && currentNode.compatibility === "compatible" && isNodeRuntimeUsable(currentNode)) return;
     const interval = window.setInterval(() => {
+      if (document.hidden) return;
       void refreshApp();
     }, 2500);
     return () => window.clearInterval(interval);
@@ -778,8 +795,11 @@ export default function App() {
     }
     const serverId = activeServer.id;
     let cancelled = false;
+    let inFlight = false;
     setResourceSamples([]);
     async function pollStats() {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
       try {
         const stats = await api<ResourceStats>(`/api/servers/${serverId}/stats`);
         if (cancelled) return;
@@ -798,6 +818,8 @@ export default function App() {
             sampledAt: Date.now()
           }].slice(-48));
         }
+      } finally {
+        inFlight = false;
       }
     }
     void pollStats();
@@ -812,8 +834,9 @@ export default function App() {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
     const interval = window.setInterval(() => {
+      if (document.hidden) return;
       void refreshStatus(serverId);
-    }, resourcePollMs);
+    }, serverStatusPollMs);
     return () => window.clearInterval(interval);
   }, [activeServer?.id, demoMode, activeNodeRuntimeBlocked]);
 
@@ -821,8 +844,9 @@ export default function App() {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked || activePage !== "schedule") return;
     void refreshApp({ silent: true });
     const interval = window.setInterval(() => {
+      if (document.hidden) return;
       void refreshApp({ silent: true });
-    }, 5000);
+    }, 15_000);
     return () => window.clearInterval(interval);
   }, [activeServer?.id, activePage, demoMode, activeNodeRuntimeBlocked]);
 
@@ -834,9 +858,12 @@ export default function App() {
     }
     const serverId = activeServer.id;
     let cancelled = false;
+    let inFlight = false;
     setOverviewLoading(!overviewData.events.length && Object.keys(overviewData.activity).length === 0);
     setOverviewError("");
     async function loadOverviewData() {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
       try {
         const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
         if (!cancelled) {
@@ -850,6 +877,7 @@ export default function App() {
           setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
         }
       } finally {
+        inFlight = false;
         if (!cancelled) setOverviewLoading(false);
       }
     }
@@ -862,16 +890,32 @@ export default function App() {
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
+    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) {
+      setDebouncedModSearchQuery("");
+      setIsSearchingMods(false);
+      return;
+    }
     const trimmedQuery = query.trim();
     setModInstallModal(null);
     setModSearchError("");
     if (!trimmedQuery) {
+      setDebouncedModSearchQuery("");
       setModSearchResults([]);
       setModSearchTotal(0);
       setIsSearchingMods(false);
       return;
     }
+    setIsSearchingMods(true);
+    const timeout = window.setTimeout(() => {
+      setDebouncedModSearchQuery(trimmedQuery);
+    }, modSearchDebounceMs);
+    return () => window.clearTimeout(timeout);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query]);
+
+  useEffect(() => {
+    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
+    const trimmedQuery = debouncedModSearchQuery.trim();
+    if (!trimmedQuery) return;
     setModSearchResults([]);
     setModSearchTotal(0);
     if (activeServerIsDemo) {
@@ -914,33 +958,35 @@ export default function App() {
       };
     }
     let cancelled = false;
+    const abortController = new AbortController();
+    const serverId = activeServer.id;
     setIsSearchingMods(true);
-    const timeout = window.setTimeout(async () => {
+    async function runSearch() {
       try {
         const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
-          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
+          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(serverId)}&channel=release`,
+          { signal: abortController.signal }
         );
         if (!cancelled) {
           setModSearchResults(result.hits);
           setModSearchTotal(result.total_hits ?? 0);
         }
       } catch (error) {
-        if (!cancelled) {
-          const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
-          setModSearchError(message);
-          setNotice(message);
-          notify("error", message);
-        }
+        if (cancelled || abortController.signal.aborted) return;
+        const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
+        setModSearchError(message);
+        setNotice(message);
+        notify("error", message);
       } finally {
         if (!cancelled) setIsSearchingMods(false);
       }
-    }, 250);
+    }
+    void runSearch();
     return () => {
       cancelled = true;
-      setIsSearchingMods(false);
-      window.clearTimeout(timeout);
+      abortController.abort();
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query, activeServerIsDemo]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, debouncedModSearchQuery, modSearchRequestVersion, activeServerIsDemo]);
 
   function notify(type: Notice["type"], text: string) {
     const id = Date.now() + Math.random();
@@ -1216,6 +1262,8 @@ export default function App() {
     if (!demoMode && (!authSession || !authSession.authenticated)) {
       return;
     }
+    if (appRefreshInFlightRef.current) return;
+    appRefreshInFlightRef.current = true;
     setAppRefreshing(true);
     if (!options.silent) setNotice("");
     try {
@@ -1239,6 +1287,7 @@ export default function App() {
         notify("error", message);
       }
     } finally {
+      appRefreshInFlightRef.current = false;
       setAppRefreshing(false);
     }
   }
@@ -1252,6 +1301,8 @@ export default function App() {
       }
       return;
     }
+    if (statusRefreshInFlightRef.current.has(serverId)) return;
+    statusRefreshInFlightRef.current.add(serverId);
     try {
       const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`);
       if (activeServerIdRef.current === serverId) {
@@ -1263,6 +1314,8 @@ export default function App() {
       if (activeServerIdRef.current === serverId) {
         setStatusError(errorMessage(error, "Could not refresh server status. Existing status is preserved."));
       }
+    } finally {
+      statusRefreshInFlightRef.current.delete(serverId);
     }
   }
 
@@ -1333,7 +1386,7 @@ export default function App() {
         error.details = job.errorDetails;
         throw error;
       }
-      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      await new Promise((resolve) => window.setTimeout(resolve, provisionJobPollMs));
     }
   }
 
@@ -2317,58 +2370,16 @@ export default function App() {
     setModSearchResults([]);
     setModSearchTotal(0);
     setIsSearchingMods(true);
-    if (activeServerIsDemo) {
-      window.setTimeout(() => {
-        const value = searchQuery.toLowerCase();
-        const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
-        const extraMods: ModrinthHit[] = [];
-        if (value.length <= 3) {
-          for (let i = 1; i <= 40; i++) {
-            extraMods.push({
-              project_id: `demo-dummy-${i}`,
-              title: `Fabric Mod Helper ${i}`,
-              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
-              downloads: 100000 + i * 5000,
-              date_modified: new Date().toISOString(),
-              compatibility: {
-                status: "compatible",
-                compatible: true,
-                reason: "Compatible server-side Fabric mod",
-                serverSide: "optional",
-                clientSide: "optional"
-              },
-              server_side: "optional",
-              client_side: "optional"
-            });
-          }
-        }
-        const allFiltered = [...baseFiltered, ...extraMods];
-        setModSearchResults(allFiltered.slice(0, 20));
-        setModSearchTotal(allFiltered.length);
-        setIsSearchingMods(false);
-      }, 250);
-      return;
-    }
-    try {
-      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
-        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`
-      );
-      setModSearchResults(result.hits);
-      setModSearchTotal(result.total_hits ?? 0);
-    } catch (error) {
-      const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
-      setModSearchError(message);
-      setNotice(message);
-      notify("error", message);
-    } finally {
-      setIsSearchingMods(false);
-    }
+    setDebouncedModSearchQuery(searchQuery);
+    setModSearchRequestVersion((current) => current + 1);
   }
 
   async function loadMoreMods() {
+    if (loadMoreModsInFlightRef.current) return;
     if (isLoadingMoreMods || isSearchingMods || !activeServer) return;
     const currentOffset = modSearchResults.length;
     if (currentOffset >= modSearchTotal) return;
+    loadMoreModsInFlightRef.current = true;
     setIsLoadingMoreMods(true);
     const searchQuery = query.trim();
     if (activeServerIsDemo) {
@@ -2399,6 +2410,7 @@ export default function App() {
         const allFiltered = [...baseFiltered, ...extraMods];
         const nextPage = allFiltered.slice(currentOffset, currentOffset + 20);
         setModSearchResults((prev) => [...prev, ...nextPage]);
+        loadMoreModsInFlightRef.current = false;
         setIsLoadingMoreMods(false);
       }, 250);
       return;
@@ -2412,6 +2424,7 @@ export default function App() {
       const message = errorMessage(error, "Could not load more search results.");
       notify("error", message);
     } finally {
+      loadMoreModsInFlightRef.current = false;
       setIsLoadingMoreMods(false);
     }
   }

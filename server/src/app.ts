@@ -23,7 +23,6 @@ import {
   fetchProjectVersions,
   modrinthJarFile,
   normalizeReleaseChannel,
-  resolveModrinthProjectCompatibility,
   unknownCompatibility,
   versionChannel
 } from "./modrinth/compatibility.js";
@@ -1286,16 +1285,20 @@ async function fetchModrinthIcon(iconUrl: unknown) {
   return { bytes, contentType: safeContentType };
 }
 
-async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string) {
+async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata) {
   if (await modIconUrl(server, filename)) return;
   try {
+    if (metadata?.projectId) {
+      const project = await fetchProject(metadata.projectId) as { icon_url?: string | null };
+      await saveModIcon(server, filename, project.icon_url);
+      return;
+    }
     const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
     const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
     const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
     const version = await versionResponse.json() as { project_id?: string };
     if (!version.project_id) return;
-    const projectResponse = await modrinthFetch(`https://api.modrinth.com/v2/project/${encodeURIComponent(version.project_id)}`);
-    const project = await projectResponse.json() as { icon_url?: string | null };
+    const project = await fetchProject(version.project_id) as { icon_url?: string | null };
     await saveModIcon(server, filename, project.icon_url);
   } catch {
     // Non-Modrinth/manual mods simply keep the generic JAR icon.
@@ -2363,6 +2366,7 @@ function streamLatestServerLog(server: ManagedServer, client: Client) {
   let closed = false;
   let announcedEmpty = false;
   let lastLoggedError = "";
+  let inFlight = false;
 
   const send = (text: string) => {
     if (text && client.readyState === 1) {
@@ -2371,7 +2375,8 @@ function streamLatestServerLog(server: ManagedServer, client: Client) {
   };
 
   const poll = async () => {
-    if (closed) return;
+    if (closed || inFlight) return;
+    inFlight = true;
     try {
       const logPath = await validateExistingInsideServer(server, "logs/latest.log");
       const logStat = await stat(logPath);
@@ -2408,6 +2413,8 @@ function streamLatestServerLog(server: ManagedServer, client: Client) {
       if (client.readyState === 1) {
         client.send(JSON.stringify({ type: "unavailable", message }));
       }
+    } finally {
+      inFlight = false;
     }
   };
 
@@ -4246,18 +4253,26 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
   return { status: "compatible", compatible: true, reason: "Compatibility verified for this server.", serverSide, clientSide };
 }
 
-async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel) {
+async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata) {
   const targetRuntime = runtimeTarget(server);
   if (!targetRuntime.minecraftVersion) return null;
-  const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
-  const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
-  const current = await currentRes.json() as { project_id?: string; version_number?: string; version_type?: string };
-  if (!current.project_id) return null;
-  const versionsUrl = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(current.project_id)}/version`);
-  versionsUrl.searchParams.set("loaders", JSON.stringify(["fabric"]));
-  versionsUrl.searchParams.set("game_versions", JSON.stringify([targetRuntime.minecraftVersion]));
-  const versionsRes = await modrinthFetch(versionsUrl.toString());
-  const versions = await versionsRes.json() as ModrinthVersion[];
+  let current: { project_id?: string; version_number?: string; version_type?: string } | undefined;
+  if (metadata?.projectId) {
+    current = {
+      project_id: metadata.projectId,
+      version_number: metadata.versionNumber,
+      version_type: metadata.versionType
+    };
+  } else {
+    const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
+    const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+    current = await currentRes.json() as { project_id?: string; version_number?: string; version_type?: string };
+  }
+  if (!current?.project_id) return null;
+  const versions = await fetchProjectVersions(current.project_id, {
+    loader: "fabric",
+    minecraftVersion: targetRuntime.minecraftVersion
+  });
   const target = versions.find((version) => allowedForChannel(version, preferredChannel));
   return {
     projectId: current.project_id,
@@ -4282,7 +4297,6 @@ async function localListMods(server: ManagedServer) {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(async (entry) => {
         const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
-        await ensureModrinthIconForFile(server, entry.name, modPath);
         const modStat = await stat(modPath);
         const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
         let metadata = prefs[entry.name]?.modrinth;
@@ -4322,8 +4336,9 @@ async function localListMods(server: ManagedServer) {
           }
         }
 
+        await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
         let versionInfo: any = null;
-        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel); } catch { versionInfo = null; }
+        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata); } catch { versionInfo = null; }
         return {
           filename: entry.name,
           displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
@@ -5035,11 +5050,14 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   try {
     const url = new URL("https://api.modrinth.com/v2/search");
     url.searchParams.set("query", query);
-    const limit = request.query.limit ? String(parseInt(request.query.limit, 10)) : "20";
-    url.searchParams.set("limit", limit);
+    const parsedLimit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 20;
+    url.searchParams.set("limit", String(limit));
     if (request.query.offset) {
-      const offset = String(parseInt(request.query.offset, 10));
-      url.searchParams.set("offset", offset);
+      const parsedOffset = parseInt(request.query.offset, 10);
+      if (Number.isFinite(parsedOffset) && parsedOffset > 0) {
+        url.searchParams.set("offset", String(parsedOffset));
+      }
     }
 
     const facets: string[][] = [
@@ -5054,8 +5072,10 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 
     const response = await modrinthFetch(url.toString());
     const body = await response.json() as { hits?: ModrinthProject[] };
-    const hits = await Promise.all((body.hits ?? []).map(async (hit) => {
+    const hits = (body.hits ?? []).map((hit) => {
       const projectId = hit.project_id || hit.id;
+      const serverSide = hit.server_side;
+      const serverSupported = modrinthServerSideSupported(serverSide);
       if (!projectId) {
         return {
           ...hit,
@@ -5066,14 +5086,37 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
         ...hit,
         project_id: projectId,
         icon_url: modrinthIconProxyUrl(hit.icon_url),
-        compatibility: await resolveModrinthProjectCompatibility({
-          projectId,
-          minecraftVersion,
-          loader: targetRuntime.loader,
-          channel: selectedChannel
-        })
+        compatibility: serverSupported
+          ? {
+              status: "compatible",
+              compatible: true,
+              reason: "Matches this Fabric server search",
+              matchedLoaders: [targetRuntime.loader],
+              matchedGameVersions: [minecraftVersion],
+              serverSide,
+              clientSide: hit.client_side
+            }
+          : serverSide === "unknown"
+            ? {
+                status: "unknown",
+                compatible: false,
+                reason: "Server-side support could not be verified",
+                matchedLoaders: [targetRuntime.loader],
+                matchedGameVersions: [minecraftVersion],
+                serverSide,
+                clientSide: hit.client_side
+              }
+            : {
+                status: "incompatible",
+                compatible: false,
+                reason: "Client-only mod; server-side support is unsupported",
+                matchedLoaders: [targetRuntime.loader],
+                matchedGameVersions: [minecraftVersion],
+                serverSide,
+                clientSide: hit.client_side
+              }
       };
-    }));
+    });
     logInfo({ ...serverLogFields(server), resultCount: hits.length, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
     return { ...body, hits, status: hits.length > 0 ? "projects_found" : "no_project_found" };
   } catch (error) {
