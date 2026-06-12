@@ -120,15 +120,17 @@ const fallbackFabricLoaderVersions: RuntimeLoaderVersion[] = [
   { id: "0.16.10", loaderVersion: "0.16.10", stable: true }
 ];
 
-function runtimeMinecraftOptions(versions: FabricVersions, showSnapshots: boolean) {
-  const source = versions.game.length > 0 ? versions.game : fallbackMinecraftVersions;
-  const filtered = showSnapshots ? source : source.filter((version) => version.stable !== false);
+type CreateWizardMinecraftVersion = FabricVersions["game"][number];
+
+function runtimeMinecraftOptions(versions: FabricVersions, showSnapshots: boolean): CreateWizardMinecraftVersion[] {
+  const source: CreateWizardMinecraftVersion[] = versions.game.length > 0 ? versions.game : fallbackMinecraftVersions;
+  const filtered = showSnapshots ? source : source.filter((version) => version.type === undefined || version.type === "release");
   return filtered.length > 0 ? filtered : source;
 }
 
-function preferredMinecraftVersion(options: Array<{ version: string; stable: boolean }>) {
+function preferredMinecraftVersion(options: CreateWizardMinecraftVersion[]) {
   return options.find((version) => version.version === "1.21.6")?.version
-    || options.find((version) => version.stable !== false)?.version
+    || options.find((version) => version.type === undefined || version.type === "release")?.version
     || options[0]?.version
     || "1.21.6";
 }
@@ -177,12 +179,53 @@ function wizardDockerPorts(serverPort: string, additionalBindings: CreateWizardP
   ].join(",");
 }
 
+function serverUsedPortKeys(server: ManagedServer) {
+  const keys = new Set<string>();
+  for (const row of parsePortBindings(server.dockerPorts)) {
+    const protocol = row.target.split("/", 2)[1] || "tcp";
+    if (row.hostPort && (protocol === "tcp" || protocol === "udp")) {
+      keys.add(`${row.hostPort}/${protocol}`);
+    }
+  }
+  for (const port of server.managedPorts || []) {
+    keys.add(`${port.externalPort}/${port.protocol}`);
+  }
+  return keys;
+}
+
+function usedPortKeysForNode(node: ContextNode | undefined) {
+  const keys = new Set<string>();
+  for (const server of node?.servers || []) {
+    for (const key of serverUsedPortKeys(server)) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function findAvailablePort(usedKeys: Set<string>, protocol: "tcp" | "udp", preferred: number, avoidPorts: Set<string> = new Set()) {
+  for (let port = preferred; port <= maxServerPort; port += 1) {
+    const value = String(port);
+    if (!avoidPorts.has(value) && !usedKeys.has(`${value}/${protocol}`)) return value;
+  }
+  for (let port = minServerPort; port < preferred; port += 1) {
+    const value = String(port);
+    if (!avoidPorts.has(value) && !usedKeys.has(`${value}/${protocol}`)) return value;
+  }
+  return String(preferred);
+}
+
 function wizardJavaArgs(minimumHeapGb: number, maximumHeapGb: number, currentArgs = "") {
   const withoutMemory = currentArgs
     .replace(/(^|\s)-Xms\S+/g, "")
     .replace(/(^|\s)-Xmx\S+/g, "")
     .trim();
   return [`-Xms${minimumHeapGb}G`, `-Xmx${maximumHeapGb}G`, withoutMemory].filter(Boolean).join(" ");
+}
+
+function createDockerContainerName(displayName: string) {
+  const slug = displayName.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug ? `serversentinel-${slug}`.slice(0, 128) : "";
 }
 
 function nodeDisplayName(node: ContextNode | undefined) {
@@ -583,6 +626,7 @@ export function ManagedServerForm({
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [dockerContainer, setDockerContainer] = useState("");
+  const [dockerContainerCustomized, setDockerContainerCustomized] = useState(false);
   const [dockerImage, setDockerImage] = useState("");
   const [dockerImageCustomized, setDockerImageCustomized] = useState(false);
   const [serverJar, setServerJar] = useState("fabric-server-launch.jar");
@@ -596,6 +640,8 @@ export function ManagedServerForm({
   const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(2, 8));
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [queryPort, setQueryPort] = useState(String(defaultQueryPort));
+  const [serverPortCustomized, setServerPortCustomized] = useState(false);
+  const [queryPortCustomized, setQueryPortCustomized] = useState(false);
   const [additionalPortsOpen, setAdditionalPortsOpen] = useState(false);
   const [additionalPortBindings, setAdditionalPortBindings] = useState<CreateWizardPortBinding[]>([]);
   const [acceptEula, setAcceptEula] = useState(false);
@@ -635,9 +681,12 @@ export function ManagedServerForm({
   const recommendedLoader = loaderOptions.find((version) => version.recommended) || loaderOptions.find((version) => version.stable !== false) || loaderOptions[0];
   const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
   const runtimeCompatible = Boolean(minecraftVersion && fabricLoaderVersion);
+  const usedPortKeys = useMemo(() => usedPortKeysForNode(selectedNode), [selectedNode]);
   const serverPortValid = isValidServerPort(serverPort);
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
+  const serverPortInUse = serverPortValid && usedPortKeys.has(`${serverPort}/tcp`);
+  const queryPortInUse = queryPortValid && usedPortKeys.has(`${queryPort}/udp`);
   const additionalPortKeys = new Set<string>();
   const additionalPortsValid = additionalPortBindings.every((binding) => {
     if (!binding.containerPort.trim()) return false;
@@ -646,11 +695,27 @@ export function ManagedServerForm({
     if (!isValidServerPort(binding.hostPort)) return false;
     if (binding.protocol !== "tcp" && binding.protocol !== "udp") return false;
     const key = `${binding.hostPort.trim()}/${binding.protocol}`;
-    if (key === `${serverPort}/tcp` || key === `${queryPort}/udp` || additionalPortKeys.has(key)) return false;
+    if (key === `${serverPort}/tcp` || key === `${queryPort}/udp` || usedPortKeys.has(key) || additionalPortKeys.has(key)) return false;
     additionalPortKeys.add(key);
     return true;
   });
-  const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb && !dockerContainerError && !serverJarError && !javaArgsError;
+  const portSettingsReady = serverPortValid && queryPortValid && !portConflict && !serverPortInUse && !queryPortInUse && additionalPortsValid;
+  const resourcesReady = acceptEula && portSettingsReady && minimumHeapGb <= maximumHeapGb && !dockerContainerError && !serverJarError && !javaArgsError;
+  const resourcesBlockedReason = !acceptEula
+    ? "Accept the Minecraft EULA before continuing."
+    : !serverPortValid
+      ? `Use a server port from ${minServerPort} to ${maxServerPort}.`
+      : serverPortInUse
+        ? `Server port ${serverPort}/tcp is already used on this node.`
+        : !queryPortValid
+          ? `Use a Query port from ${minServerPort} to ${maxServerPort}.`
+          : queryPortInUse
+            ? `Query port ${queryPort}/udp is already used on this node.`
+            : portConflict
+              ? "Server port and Query port must be different."
+              : !additionalPortsValid
+                ? "Fix the additional port bindings before continuing."
+                : dockerContainerError || serverJarError || javaArgsError || "";
   const dockerPorts = wizardDockerPorts(serverPort, additionalPortBindings);
 
   useEffect(() => {
@@ -670,6 +735,24 @@ export function ManagedServerForm({
     if (minecraftOptions.some((version) => version.version === minecraftVersion)) return;
     setMinecraftVersion(preferredMinecraftVersion(minecraftOptions));
   }, [minecraftOptions, minecraftVersion]);
+
+  useEffect(() => {
+    if (!dockerContainerCustomized) {
+      setDockerContainer(createDockerContainerName(displayName));
+    }
+  }, [displayName, dockerContainerCustomized]);
+
+  useEffect(() => {
+    if (!selectedNode) return;
+    const nextServerPort = serverPortCustomized
+      ? serverPort
+      : findAvailablePort(usedPortKeys, "tcp", defaultServerPort);
+    const nextQueryPort = queryPortCustomized
+      ? queryPort
+      : findAvailablePort(usedPortKeys, "udp", defaultQueryPort, new Set([nextServerPort]));
+    if (!serverPortCustomized && nextServerPort !== serverPort) setServerPort(nextServerPort);
+    if (!queryPortCustomized && nextQueryPort !== queryPort) setQueryPort(nextQueryPort);
+  }, [queryPort, queryPortCustomized, selectedNode, serverPort, serverPortCustomized, usedPortKeys]);
 
   useEffect(() => {
     if (!minecraftVersion) {
@@ -741,6 +824,24 @@ export function ManagedServerForm({
     setDockerImage(value);
   }
 
+  function updateDockerContainer(value: string) {
+    setDockerContainerCustomized(Boolean(value.trim()));
+    setDockerContainer(value);
+  }
+
+  function updateServerPort(value: string) {
+    setServerPortCustomized(true);
+    setServerPort(value);
+    if (!queryPortCustomized && value === queryPort) {
+      setQueryPort(findAvailablePort(usedPortKeys, "udp", defaultQueryPort, new Set([value])));
+    }
+  }
+
+  function updateQueryPort(value: string) {
+    setQueryPortCustomized(true);
+    setQueryPort(value);
+  }
+
   function updateAdditionalPort(id: string, patch: Partial<CreateWizardPortBinding>) {
     setAdditionalPortBindings((current) => current.map((binding) => binding.id === id ? { ...binding, ...patch } : binding));
   }
@@ -769,7 +870,7 @@ export function ManagedServerForm({
       setActiveWizardStep(3);
       setWizardError(!acceptEula
         ? "Accept the Minecraft EULA before creating this server."
-        : "Review memory, port, and advanced setting values before creating this server.");
+        : resourcesBlockedReason || "Review memory, port, and advanced setting values before creating this server.");
       return false;
     }
     setWizardError("");
@@ -895,6 +996,8 @@ export function ManagedServerForm({
             serverPortValid={serverPortValid}
             queryPortValid={queryPortValid}
             portConflict={portConflict}
+            serverPortInUse={serverPortInUse}
+            queryPortInUse={queryPortInUse}
             additionalPortsOpen={additionalPortsOpen}
             additionalPortBindings={additionalPortBindings}
             additionalPortsValid={additionalPortsValid}
@@ -907,9 +1010,9 @@ export function ManagedServerForm({
             onJavaArgsChange={updateJavaArgs}
             onServerJarChange={setServerJar}
             onDockerImageChange={updateDockerImage}
-            onDockerContainerChange={setDockerContainer}
-            onServerPortChange={setServerPort}
-            onQueryPortChange={setQueryPort}
+            onDockerContainerChange={updateDockerContainer}
+            onServerPortChange={updateServerPort}
+            onQueryPortChange={updateQueryPort}
             onAdditionalPortsOpenChange={setAdditionalPortsOpen}
             onAddAdditionalPort={addAdditionalPort}
             onUpdateAdditionalPort={updateAdditionalPort}
@@ -984,7 +1087,7 @@ export function ManagedServerForm({
               <button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
                 setWizardError("");
                 setActiveWizardStep(4);
-              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning}>
+              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning} title={activeWizardStep === 3 && !resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined}>
                 {activeWizardStep === 4 && <AppIcon name="server" />}
                 <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
                 {activeWizardStep === 3 && <AppIcon name="chevronRight" />}
@@ -1023,7 +1126,7 @@ function RuntimeWizardStep({
   onShowSnapshotsChange
 }: {
   minecraftVersion: string;
-  minecraftOptions: Array<{ version: string; stable: boolean }>;
+  minecraftOptions: CreateWizardMinecraftVersion[];
   fabricLoaderVersion: string;
   loaderOptions: RuntimeLoaderVersion[];
   recommendedLoaderVersion: string;
@@ -1053,7 +1156,9 @@ function RuntimeWizardStep({
             required
           >
             {minecraftOptions.map((version) => (
-              <option key={version.version} value={version.version}>{version.version}</option>
+              <option key={version.version} value={version.version}>
+                {version.version}{version.type === "snapshot" ? " (Snapshot)" : ""}
+              </option>
             ))}
           </select>
         </div>
@@ -1065,9 +1170,12 @@ function RuntimeWizardStep({
           </div>
           <button type="button" className="runtimeLoaderCard selected" aria-pressed="true">
             <span className="fabricLoaderMark" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 3 21 12 12 21 3 12Z" />
-                <path d="M12 3v18M3 12h18M7.5 7.5l9 9M16.5 7.5l-9 9" />
+              <svg viewBox="0 0 13 14" shapeRendering="crispEdges">
+                <path className="fabricLogoOutline" d="M7 0h1v1h1v1h1v1h1v1h1v1h1v3h-1v1h-1v1h-1v1H9v1H8v1H6v1H4v-1H3v-1H2v-1H1v-1H0V8h1V7h1V6h1V5h1V4h1V3h1V1h1Z" />
+                <path className="fabricLogoMain" d="M7 1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1H9v1H8v1H7v1H5v1H4v-1H3v-1H2v-1H1V8h1V7h1V6h1V5h1V4h1V2h1Z" />
+                <path className="fabricLogoHighlight" d="M7 1h1v1h1v1h1v1h1v1h-1v1H9V5H8V4H7V3H6V2h1Z" />
+                <path className="fabricLogoShade" d="M11 5h1v2h-1v1h-1v1H9v1H8v1H7v1H5v1H4v-1h1v-1h1v-1h1V9h1V8h1V7h1V6h1Z" />
+                <path className="fabricLogoThread" d="M10 3h1v1h1v1h-1V4h-1ZM11 7h1v1h-1ZM9 9h1v1H9Z" />
               </svg>
             </span>
             <span className="runtimeLoaderCopy">
@@ -1209,6 +1317,8 @@ function ResourcesNetworkWizardStep({
   serverPortValid,
   queryPortValid,
   portConflict,
+  serverPortInUse,
+  queryPortInUse,
   additionalPortsOpen,
   additionalPortBindings,
   additionalPortsValid,
@@ -1242,6 +1352,8 @@ function ResourcesNetworkWizardStep({
   serverPortValid: boolean;
   queryPortValid: boolean;
   portConflict: boolean;
+  serverPortInUse: boolean;
+  queryPortInUse: boolean;
   additionalPortsOpen: boolean;
   additionalPortBindings: CreateWizardPortBinding[];
   additionalPortsValid: boolean;
@@ -1319,27 +1431,43 @@ function ResourcesNetworkWizardStep({
           <div className="networkPortGrid">
             <ProtocolInput
               id="create-server-port"
-              name="serverPort"
-              label="Server port"
-              helper="The port players use to join your server."
-              protocol="TCP"
-              value={serverPort}
-              invalid={!serverPortValid || portConflict}
+            name="serverPort"
+            label="Server port"
+            helper="The port players use to join your server."
+            protocol="TCP"
+            value={serverPort}
+              invalid={!serverPortValid || portConflict || serverPortInUse}
+              error={!serverPortValid
+                ? `Use ${minServerPort}-${maxServerPort}.`
+                : serverPortInUse
+                  ? `${serverPort}/tcp is already used on this node.`
+                  : portConflict
+                    ? "Must differ from Query port."
+                    : ""}
               onChange={onServerPortChange}
             />
             <ProtocolInput
               id="create-query-port"
               name="queryPort"
               label="Query port"
-              helper="Used by ServerSentinel for player metrics."
-              protocol="UDP"
-              value={queryPort}
-              invalid={!queryPortValid || portConflict}
+            helper="Used by ServerSentinel for player metrics."
+            protocol="UDP"
+            value={queryPort}
+              invalid={!queryPortValid || portConflict || queryPortInUse}
+              error={!queryPortValid
+                ? `Use ${minServerPort}-${maxServerPort}.`
+                : queryPortInUse
+                  ? `${queryPort}/udp is already used on this node.`
+                  : portConflict
+                    ? "Must differ from server port."
+                    : ""}
               onChange={onQueryPortChange}
             />
           </div>
           {!serverPortValid && <span className="fieldError">Use a server port from {minServerPort} to {maxServerPort}.</span>}
           {!queryPortValid && <span className="fieldError">Use a Query port from {minServerPort} to {maxServerPort}.</span>}
+          {serverPortInUse && <span className="fieldError">Server port {serverPort}/tcp is already used on this node.</span>}
+          {queryPortInUse && <span className="fieldError">Query port {queryPort}/udp is already used on this node.</span>}
           {portConflict && <span className="fieldError">Server port and Query port must be different.</span>}
 
           <AdditionalPortBindingsPanel
@@ -1439,7 +1567,7 @@ function ResourcesNetworkWizardStep({
 
               <label className="advancedResourceField" htmlFor="create-docker-container">
                 <span>Docker container name</span>
-                <small>Leave blank to generate a container name from the display name.</small>
+                <small>Generated from the display name. Edit it to override.</small>
                 <input
                   id="create-docker-container"
                   type="text"
@@ -1563,6 +1691,7 @@ function ProtocolInput({
   protocol,
   value,
   invalid,
+  error,
   onChange
 }: {
   id: string;
@@ -1572,6 +1701,7 @@ function ProtocolInput({
   protocol: "TCP" | "UDP";
   value: string;
   invalid: boolean;
+  error?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -1592,6 +1722,7 @@ function ProtocolInput({
         />
         <strong>{protocol}</strong>
       </span>
+      {error && <span className="fieldErrorBubble" role="tooltip">{error}</span>}
     </label>
   );
 }
@@ -1687,7 +1818,7 @@ function AdditionalPortBindingsPanel({
             ))}
           </div>
           {bindings.length === 0 && <div className="additionalPortsEmpty">No additional ports have been added.</div>}
-          {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs unique, valid host and container ports that do not reuse the server or Query port.</span>}
+          {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs unique, valid host and container ports that do not reuse the server port, Query port, or another port on this node.</span>}
           <button type="button" className="secondaryButton addPortBindingButton" onClick={onAdd}>
             <AppIcon name="plus" />
             <span>Add port binding</span>

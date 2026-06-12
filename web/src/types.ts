@@ -461,7 +461,7 @@ export type InstalledMod = {
 };
 
 export type FabricVersions = {
-  game: Array<{ version: string; stable: boolean }>;
+  game: Array<{ version: string; stable: boolean; type?: "release" | "snapshot" | "unknown" }>;
   loader: Array<{ version: string; stable: boolean }>;
   installer: Array<{ version: string; stable: boolean }>;
 };

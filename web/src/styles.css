@@ -3648,6 +3648,15 @@ button .buttonIcon {
   width: 100%;
   max-width: none;
   margin-bottom: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+}
+
+.createServerPanel > .inlineState {
+  width: min(1080px, 100%);
+  margin: 0;
+  align-items: flex-start;
 }
 
 .createWizardPage {
@@ -3827,15 +3836,32 @@ button .buttonIcon {
   height: 36px;
   display: grid;
   place-items: center;
-  color: var(--accent);
 }
 
 .fabricLoaderMark svg {
   width: 32px;
   height: 32px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
+  image-rendering: pixelated;
+}
+
+.fabricLogoOutline {
+  fill: #171717;
+}
+
+.fabricLogoMain {
+  fill: #d7c9a3;
+}
+
+.fabricLogoHighlight {
+  fill: #f3ead2;
+}
+
+.fabricLogoShade {
+  fill: #b9aa83;
+}
+
+.fabricLogoThread {
+  fill: #7a735f;
 }
 
 .runtimeLoaderCopy {
@@ -4290,6 +4316,7 @@ button .buttonIcon {
   min-width: 0;
   display: grid;
   gap: var(--space-2);
+  position: relative;
 }
 
 .protocolInputField > span:first-child {
@@ -4306,6 +4333,21 @@ button .buttonIcon {
 
 .protocolInputWrap input[aria-invalid="true"] {
   color: var(--sentinel-danger);
+}
+
+.fieldErrorBubble {
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-danger) 62%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 80%, var(--sentinel-danger) 20%);
+  color: var(--sentinel-danger);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.25;
 }
 
 .resourceDisclosure {
