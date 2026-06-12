@@ -47,6 +47,23 @@ async function realServerDir(server: ServerPathScope) {
   }
 }
 
+async function ensureWritableTargetInsideServer(server: ServerPathScope, target: string) {
+  const serverDir = await realServerDir(server);
+  let realParent: string;
+  try {
+    realParent = await realpath(dirname(target));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
+    }
+    throw error;
+  }
+  if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
+    assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
+  }
+  return target;
+}
+
 export async function validateExistingInsideServer(server: ServerPathScope, userPath = ".") {
   const target = ensureInsideServer(server, userPath);
   return validateExistingResolvedInsideServer(server, target);
@@ -70,38 +87,12 @@ export async function validateExistingResolvedInsideServer(server: ServerPathSco
 
 export async function ensureWritableInsideServer(server: ServerPathScope, userPath = ".") {
   const target = ensureInsideServer(server, userPath);
-  const serverDir = await realServerDir(server);
-  let realParent: string;
-  try {
-    realParent = await realpath(dirname(target));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
-    }
-    throw error;
-  }
-  if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
-    assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
-  }
-  return target;
+  return ensureWritableTargetInsideServer(server, target);
 }
 
 export async function ensureWritableResolvedInsideServer(server: ServerPathScope, targetPath: string) {
   const target = ensureResolvedInsideServer(server, targetPath);
-  const serverDir = await realServerDir(server);
-  let realParent: string;
-  try {
-    realParent = await realpath(dirname(target));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
-    }
-    throw error;
-  }
-  if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
-    assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
-  }
-  return target;
+  return ensureWritableTargetInsideServer(server, target);
 }
 
 export function safeModFilename(name: string) {

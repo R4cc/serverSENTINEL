@@ -1,7 +1,7 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
-import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, javaMajorVersionForMinecraft, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from '../utils/validation';
@@ -137,16 +137,6 @@ function preferredMinecraftVersion(options: CreateWizardMinecraftVersion[]) {
     || options.find((version) => version.type === undefined || version.type === "release")?.version
     || options[0]?.version
     || "1.21.6";
-}
-
-function javaMajorVersionForMinecraft(version: string): 17 | 21 | 25 {
-  const modernMajor = version.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
-  if (modernMajor && Number(modernMajor[1]) >= 26) return 25;
-  const match = version.trim().match(/^1\.(\d+)(?:\.(\d+))?/);
-  const minor = Number(match?.[1] ?? "21");
-  const patch = Number(match?.[2] ?? "0");
-  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
-  return 17;
 }
 
 function clampNumber(value: number, min: number, max: number) {
