@@ -6920,7 +6920,15 @@ details.compatibilityBadge p {
 
 .modInstallVersionRow:hover:not(:disabled),
 .modInstallVersionRow.selected {
-  background: var(--sentinel-accent-soft);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 86%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-muted));
+  color: var(--text);
+  transform: none;
+}
+
+.modInstallVersionRow:hover:not(:disabled) .installStatusBadge,
+.modInstallVersionRow.selected .installStatusBadge {
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
 }
 
 .modInstallVersionRow:disabled {

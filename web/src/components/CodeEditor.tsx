@@ -47,20 +47,26 @@ const serverSentinelEditorTheme = EditorView.theme({
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--font-mono)",
-    lineHeight: "1.5"
+    lineHeight: "20px"
   },
   ".cm-content": {
     minHeight: "100%",
     caretColor: "var(--text)",
-    padding: "var(--space-3) 0"
+    padding: "var(--space-3) 0",
+    lineHeight: "20px"
   },
   ".cm-line": {
-    padding: "0 var(--space-3)"
+    padding: "0 var(--space-3)",
+    lineHeight: "20px"
   },
   ".cm-gutters": {
     borderRight: "var(--border-strong) solid var(--border)",
     backgroundColor: "var(--surface-muted)",
-    color: "var(--text-soft)"
+    color: "var(--text-soft)",
+    lineHeight: "20px"
+  },
+  ".cm-gutterElement": {
+    lineHeight: "20px"
   },
   ".cm-lineNumbers .cm-gutterElement": {
     minWidth: "44px",
@@ -160,9 +166,19 @@ export default function CodeEditor({
     });
 
     viewRef.current = view;
-    window.requestAnimationFrame(() => view.focus());
+    const measureFrame = window.requestAnimationFrame(() => {
+      view.requestMeasure();
+      view.focus();
+    });
+    const resizeObserver = new ResizeObserver(() => view.requestMeasure());
+    resizeObserver.observe(hostRef.current);
+    void document.fonts?.ready.then(() => {
+      if (viewRef.current === view) view.requestMeasure();
+    });
 
     return () => {
+      window.cancelAnimationFrame(measureFrame);
+      resizeObserver.disconnect();
       view.destroy();
       if (viewRef.current === view) viewRef.current = null;
     };

@@ -42,23 +42,58 @@ export function AuthPanel({
             <span>Create this admin account first. After sign-in, ServerSentinel will show Docker, node, server, and Modrinth setup actions as needed.</span>
           </div>
         )}
-        <form onSubmit={onSubmit} className="appForm">
-          <fieldset disabled={busy}>
-            <label>
+        <form
+          onSubmit={onSubmit}
+          className="appForm"
+          autoComplete="on"
+          method="post"
+          action={setupRequired ? "/api/auth/register-first" : "/api/auth/login"}
+          aria-busy={busy}
+        >
+          <fieldset>
+            <label htmlFor="auth-username">
               Username
-              <input name="username" autoComplete="username" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" placeholder={setupRequired ? "admin" : "Username"} />
+              <input
+                id="auth-username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                minLength={3}
+                maxLength={32}
+                pattern="[a-zA-Z0-9_.-]+"
+                placeholder={setupRequired ? "admin" : "Username"}
+                autoCapitalize="none"
+                spellCheck={false}
+              />
             </label>
-            <label>
+            <label htmlFor="auth-password">
               Password
-              <input name="password" type="password" autoComplete={setupRequired ? "new-password" : "current-password"} required minLength={setupRequired ? 8 : 1} placeholder={setupRequired ? "At least 8 characters" : "Password"} />
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                autoComplete={setupRequired ? "new-password" : "current-password"}
+                required
+                minLength={setupRequired ? 8 : 1}
+                placeholder={setupRequired ? "At least 8 characters" : "Password"}
+              />
             </label>
             {setupRequired && (
-              <label>
+              <label htmlFor="auth-confirm-password">
                 Confirm password
-                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} placeholder="Repeat password" />
+                <input
+                  id="auth-confirm-password"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  placeholder="Repeat password"
+                />
               </label>
             )}
-            <button>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
+            <button type="submit" disabled={busy}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
           </fieldset>
         </form>
         <p className="muted">Use demo / demo to enter simulated mode without creating a real session.</p>

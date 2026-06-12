@@ -226,12 +226,6 @@ export default function App() {
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
   const modServerRunning = Boolean(activeStatus?.docker.running);
-  const activeRuntimeProfile = activeServer?.runtimeProfile;
-  const activeRuntimeLabel = activeRuntimeProfile
-    ? `Minecraft ${activeRuntimeProfile.minecraftVersion} - Fabric ${activeRuntimeProfile.loaderVersion}`
-    : activeServer
-      ? "Runtime profile unavailable"
-      : "No server selected";
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const scheduleDisabledReason = scheduleBusy
@@ -2681,13 +2675,9 @@ export default function App() {
         };
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
+        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
         notify("success", `Installed ${title}`);
         setModInstallModal(null);
-
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}`, dismissible: true } : j));
-        window.setTimeout(() => {
-          setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        }, 4000);
       } catch (err) {
         const msg = (err as Error).message;
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: msg, dismissible: true } : j));
@@ -2726,8 +2716,8 @@ export default function App() {
         await loadFiles(activeServer.id, "/mods");
         const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
         const installSummary = requiredCount > 0 ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`;
+        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
         notify("success", installSummary);
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: installSummary, dismissible: true } : j));
       } catch (refreshErr) {
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
       }
@@ -4174,12 +4164,6 @@ export default function App() {
                     <section className="systemBanner accent">
                       <strong>Modrinth API key is not configured.</strong>
                       <span>Installed mod management still works. Add a key in Settings to search and install new mods.</span>
-                    </section>
-                  )}
-                  {activeServer && (
-                    <section className="systemBanner accent">
-                      <strong>Compatibility target</strong>
-                      <span>{`${activeRuntimeLabel}. Mod search and installs use this server runtime automatically.`}</span>
                     </section>
                   )}
                   <input ref={modUploadRef} className="hiddenInput" type="file" accept=".jar" onChange={uploadMod} />
