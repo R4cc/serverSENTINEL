@@ -18,8 +18,7 @@ export function SchedulePage({
   onUpdate,
   onDelete,
   disabled,
-  disabledReason,
-  commandInputMessage
+  disabledReason
 }: {
   schedules: ScheduledExecution[];
   onCreate: (event: FormEvent<HTMLFormElement>) => boolean | void | Promise<boolean | void>;
@@ -28,7 +27,6 @@ export function SchedulePage({
   onDelete: (schedule: ScheduledExecution) => void;
   disabled: boolean;
   disabledReason?: string;
-  commandInputMessage: string;
 }) {
   const [formMode, setFormMode] = useState<ScheduleFormMode | null>(null);
   const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
@@ -113,9 +111,6 @@ export function SchedulePage({
           </button>
         </div>
 
-        {commandInputMessage && (
-          <InlineState tone="warning" title="Scheduling is limited" message={commandInputMessage} />
-        )}
         {disabled && disabledReason && !saveRunning && (
           <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
         )}

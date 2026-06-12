@@ -4960,7 +4960,6 @@ export default function App() {
                 onDelete={deleteSchedule}
                 disabled={scheduleBusy || isProvisioning || !canExpanded || dockerOperationalLock}
                 disabledReason={scheduleDisabledReason}
-                commandInputMessage={activeStatus?.commandInputAvailable ? "" : activeStatus?.commandInputMessage || "Scheduled commands need Docker command input when they run."}
               />
             )}
 
