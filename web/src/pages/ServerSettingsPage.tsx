@@ -1,10 +1,10 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
-import { defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
-import { validateDisplayName, validateDockerContainerName } from '../utils/validation';
+import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from '../utils/validation';
 
 type PortBindingRow = {
   id: string;
@@ -175,6 +175,14 @@ function wizardDockerPorts(serverPort: string, additionalBindings: CreateWizardP
       .filter((binding) => binding.hostPort.trim() && binding.containerPort.trim())
       .map((binding) => `${binding.hostPort.trim()}:${binding.containerPort.trim()}/${binding.protocol}`)
   ].join(",");
+}
+
+function wizardJavaArgs(minimumHeapGb: number, maximumHeapGb: number, currentArgs = "") {
+  const withoutMemory = currentArgs
+    .replace(/(^|\s)-Xms\S+/g, "")
+    .replace(/(^|\s)-Xmx\S+/g, "")
+    .trim();
+  return [`-Xms${minimumHeapGb}G`, `-Xmx${maximumHeapGb}G`, withoutMemory].filter(Boolean).join(" ");
 }
 
 function nodeDisplayName(node: ContextNode | undefined) {
@@ -575,6 +583,9 @@ export function ManagedServerForm({
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [dockerContainer, setDockerContainer] = useState("");
+  const [dockerImage, setDockerImage] = useState("");
+  const [dockerImageCustomized, setDockerImageCustomized] = useState(false);
+  const [serverJar, setServerJar] = useState("fabric-server-launch.jar");
   const [activeWizardStep, setActiveWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [fabricLoaderVersion, setFabricLoaderVersion] = useState("");
@@ -582,6 +593,7 @@ export function ManagedServerForm({
   const [compatibleLoaderVersions, setCompatibleLoaderVersions] = useState<RuntimeLoaderVersion[]>([]);
   const [minimumHeapGb, setMinimumHeapGb] = useState(2);
   const [maximumHeapGb, setMaximumHeapGb] = useState(8);
+  const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(2, 8));
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [queryPort, setQueryPort] = useState(String(defaultQueryPort));
   const [additionalPortsOpen, setAdditionalPortsOpen] = useState(false);
@@ -600,8 +612,10 @@ export function ManagedServerForm({
         ? "Choose a node before creating this server."
         : nodeBlockReason(selectedNode) || "Choose a ready node before creating this server.";
   const displayNameError = validateDisplayName(displayName);
-  const dockerContainerError = dockerContainer.trim() ? validateDockerContainerName(dockerContainer) : "Docker container name is required.";
-  const identityReady = !displayNameError && !dockerContainerError;
+  const dockerContainerError = dockerContainer.trim() ? validateDockerContainerName(dockerContainer) : null;
+  const serverJarError = validateRuntimeJarFilename(serverJar);
+  const javaArgsError = validateJavaArgs(javaArgs);
+  const identityReady = !displayNameError;
   const nextDisabled = provisioning || placementBlocked || !identityReady;
   const minecraftOptions = useMemo(() => runtimeMinecraftOptions(versions, showSnapshots), [versions, showSnapshots]);
   const loaderOptions = useMemo(() => {
@@ -636,9 +650,8 @@ export function ManagedServerForm({
     additionalPortKeys.add(key);
     return true;
   });
-  const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb;
+  const resourcesReady = acceptEula && serverPortValid && queryPortValid && !portConflict && additionalPortsValid && minimumHeapGb <= maximumHeapGb && !dockerContainerError && !serverJarError && !javaArgsError;
   const dockerPorts = wizardDockerPorts(serverPort, additionalPortBindings);
-  const javaArgs = `-Xms${minimumHeapGb}G -Xmx${maximumHeapGb}G`;
 
   useEffect(() => {
     if (preferredNodeId && usableNodes.some((node) => node.id === preferredNodeId)) {
@@ -687,6 +700,16 @@ export function ManagedServerForm({
   }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
 
   useEffect(() => {
+    setJavaArgs((current) => wizardJavaArgs(minimumHeapGb, maximumHeapGb, current));
+  }, [minimumHeapGb, maximumHeapGb]);
+
+  useEffect(() => {
+    if (!dockerImageCustomized) {
+      setDockerImage(defaultDockerImageForMinecraftVersion(minecraftVersion));
+    }
+  }, [dockerImageCustomized, minecraftVersion]);
+
+  useEffect(() => {
     if (wizardError && !placementBlocked && identityReady && runtimeCompatible && resourcesReady) {
       setWizardError("");
     }
@@ -700,6 +723,22 @@ export function ManagedServerForm({
   function updateMaximumHeap(value: number) {
     const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
     setMaximumHeapGb(Math.max(next, minimumHeapGb));
+  }
+
+  function updateJavaArgs(value: string) {
+    setJavaArgs(value);
+    const memory = parseJavaMemoryArgs(value);
+    if (memory.xmsGb !== null) {
+      setMinimumHeapGb(clampNumber(memory.xmsGb, memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb)));
+    }
+    if (memory.xmxGb !== null) {
+      setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max));
+    }
+  }
+
+  function updateDockerImage(value: string) {
+    setDockerImageCustomized(true);
+    setDockerImage(value);
   }
 
   function updateAdditionalPort(id: string, patch: Partial<CreateWizardPortBinding>) {
@@ -730,7 +769,7 @@ export function ManagedServerForm({
       setActiveWizardStep(3);
       setWizardError(!acceptEula
         ? "Accept the Minecraft EULA before creating this server."
-        : "Review memory, port, and additional binding values before creating this server.");
+        : "Review memory, port, and advanced setting values before creating this server.");
       return false;
     }
     setWizardError("");
@@ -825,24 +864,6 @@ export function ManagedServerForm({
                 {displayNameError && <span className="fieldError">{displayNameError}</span>}
               </div>
 
-              <div className="createWizardField">
-                <label htmlFor="create-docker-container">Docker container name</label>
-                <span className="fieldHint">A unique name for the server's Docker container.</span>
-                <input
-                  id="create-docker-container"
-                  name="dockerContainer"
-                  placeholder="survival-mc"
-                  value={dockerContainer}
-                  onChange={(event) => setDockerContainer(event.target.value)}
-                  pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
-                  required
-                  maxLength={128}
-                  aria-invalid={Boolean(dockerContainerError)}
-                />
-                <span className="fieldHint">Use letters, numbers, dots, dashes, and underscores.</span>
-                {dockerContainerError && <span className="fieldError">{dockerContainerError}</span>}
-              </div>
-
               <NodeOverviewCard node={selectedNode} fallbackMemory={totalMemory} />
             </div>
           </>
@@ -865,6 +886,10 @@ export function ManagedServerForm({
             memoryBounds={memoryBounds}
             minimumHeapGb={minimumHeapGb}
             maximumHeapGb={maximumHeapGb}
+            javaArgs={javaArgs}
+            serverJar={serverJar}
+            dockerImage={dockerImage}
+            dockerContainer={dockerContainer}
             serverPort={serverPort}
             queryPort={queryPort}
             serverPortValid={serverPortValid}
@@ -873,9 +898,16 @@ export function ManagedServerForm({
             additionalPortsOpen={additionalPortsOpen}
             additionalPortBindings={additionalPortBindings}
             additionalPortsValid={additionalPortsValid}
+            javaArgsError={javaArgsError}
+            serverJarError={serverJarError}
+            dockerContainerError={dockerContainerError}
             acceptEula={acceptEula}
             onMinimumHeapChange={updateMinimumHeap}
             onMaximumHeapChange={updateMaximumHeap}
+            onJavaArgsChange={updateJavaArgs}
+            onServerJarChange={setServerJar}
+            onDockerImageChange={updateDockerImage}
+            onDockerContainerChange={setDockerContainer}
             onServerPortChange={setServerPort}
             onQueryPortChange={setQueryPort}
             onAdditionalPortsOpenChange={setAdditionalPortsOpen}
@@ -889,6 +921,9 @@ export function ManagedServerForm({
             node={selectedNode}
             displayName={displayName}
             dockerContainer={dockerContainer}
+            dockerImage={dockerImage}
+            serverJar={serverJar}
+            javaArgs={javaArgs}
             minecraftVersion={minecraftVersion}
             fabricLoaderVersion={fabricLoaderVersion}
             javaVersion={summaryJavaVersion}
@@ -961,9 +996,10 @@ export function ManagedServerForm({
       <input type="hidden" name="nodeId" value={selectedNodeId} />
       <input type="hidden" name="displayName" value={displayName} />
       <input type="hidden" name="dockerContainer" value={dockerContainer} />
+      <input type="hidden" name="dockerImage" value={dockerImage} />
       <input type="hidden" name="minecraftVersion" value={minecraftVersion} />
       <input type="hidden" name="loaderVersion" value={fabricLoaderVersion} />
-      <input type="hidden" name="serverJar" value="fabric-server-launch.jar" />
+      <input type="hidden" name="serverJar" value={serverJar} />
       <input type="hidden" name="javaArgs" value={javaArgs} />
       <input type="hidden" name="serverPort" value={serverPort} />
       <input type="hidden" name="queryPort" value={queryPort} />
@@ -1061,7 +1097,6 @@ function RuntimeWizardStep({
               </option>
             ))}
           </select>
-          <input type="hidden" name="serverJar" value="fabric-server-launch.jar" />
         </div>
 
         <label className="runtimeSnapshotToggle">
@@ -1165,6 +1200,10 @@ function ResourcesNetworkWizardStep({
   memoryBounds,
   minimumHeapGb,
   maximumHeapGb,
+  javaArgs,
+  serverJar,
+  dockerImage,
+  dockerContainer,
   serverPort,
   queryPort,
   serverPortValid,
@@ -1173,9 +1212,16 @@ function ResourcesNetworkWizardStep({
   additionalPortsOpen,
   additionalPortBindings,
   additionalPortsValid,
+  javaArgsError,
+  serverJarError,
+  dockerContainerError,
   acceptEula,
   onMinimumHeapChange,
   onMaximumHeapChange,
+  onJavaArgsChange,
+  onServerJarChange,
+  onDockerImageChange,
+  onDockerContainerChange,
   onServerPortChange,
   onQueryPortChange,
   onAdditionalPortsOpenChange,
@@ -1187,6 +1233,10 @@ function ResourcesNetworkWizardStep({
   memoryBounds: { min: number; max: number; recommendedMin: number; recommendedMax: number };
   minimumHeapGb: number;
   maximumHeapGb: number;
+  javaArgs: string;
+  serverJar: string;
+  dockerImage: string;
+  dockerContainer: string;
   serverPort: string;
   queryPort: string;
   serverPortValid: boolean;
@@ -1195,9 +1245,16 @@ function ResourcesNetworkWizardStep({
   additionalPortsOpen: boolean;
   additionalPortBindings: CreateWizardPortBinding[];
   additionalPortsValid: boolean;
+  javaArgsError: string | null;
+  serverJarError: string | null;
+  dockerContainerError: string | null;
   acceptEula: boolean;
   onMinimumHeapChange: (value: number) => void;
   onMaximumHeapChange: (value: number) => void;
+  onJavaArgsChange: (value: string) => void;
+  onServerJarChange: (value: string) => void;
+  onDockerImageChange: (value: string) => void;
+  onDockerContainerChange: (value: string) => void;
   onServerPortChange: (value: string) => void;
   onQueryPortChange: (value: string) => void;
   onAdditionalPortsOpenChange: (value: boolean) => void;
@@ -1206,8 +1263,6 @@ function ResourcesNetworkWizardStep({
   onRemoveAdditionalPort: (id: string) => void;
   onAcceptEulaChange: (value: boolean) => void;
 }) {
-  const javaArgs = `-Xms${minimumHeapGb}G -Xmx${maximumHeapGb}G`;
-
   return (
     <>
       <div className="modInstallStepIntro">
@@ -1337,6 +1392,68 @@ function ResourcesNetworkWizardStep({
               <small>Java arguments, Docker container name, and other advanced options.</small>
             </span>
           </summary>
+          <div className="advancedResourceBody">
+            <div className="advancedResourceGrid">
+              <label className="advancedResourceField" htmlFor="create-java-args">
+                <span>Java arguments</span>
+                <small>Customize the launch flags used by the Minecraft runtime.</small>
+                <textarea
+                  id="create-java-args"
+                  className="javaArgsInput"
+                  value={javaArgs}
+                  onChange={(event) => onJavaArgsChange(event.target.value)}
+                  rows={3}
+                  spellCheck={false}
+                  aria-invalid={Boolean(javaArgsError)}
+                />
+                {javaArgsError && <span className="fieldError">{javaArgsError}</span>}
+              </label>
+
+              <label className="advancedResourceField" htmlFor="create-docker-image">
+                <span>Docker runtime image</span>
+                <small>Choose the Java runtime image used for the server container.</small>
+                <select
+                  id="create-docker-image"
+                  value={dockerImage}
+                  onChange={(event) => onDockerImageChange(event.target.value)}
+                >
+                  <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
+                  <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
+                  <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
+                </select>
+              </label>
+
+              <label className="advancedResourceField" htmlFor="create-server-jar">
+                <span>Server jar filename</span>
+                <small>The downloaded Fabric launcher will be saved with this local filename.</small>
+                <input
+                  id="create-server-jar"
+                  type="text"
+                  value={serverJar}
+                  onChange={(event) => onServerJarChange(event.target.value)}
+                  placeholder="fabric-server-launch.jar"
+                  aria-invalid={Boolean(serverJarError)}
+                />
+                {serverJarError && <span className="fieldError">{serverJarError}</span>}
+              </label>
+
+              <label className="advancedResourceField" htmlFor="create-docker-container">
+                <span>Docker container name</span>
+                <small>Leave blank to generate a container name from the display name.</small>
+                <input
+                  id="create-docker-container"
+                  type="text"
+                  placeholder="survival-mc"
+                  value={dockerContainer}
+                  onChange={(event) => onDockerContainerChange(event.target.value)}
+                  pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                  maxLength={128}
+                  aria-invalid={Boolean(dockerContainerError)}
+                />
+                {dockerContainerError && <span className="fieldError">{dockerContainerError}</span>}
+              </label>
+            </div>
+          </div>
         </details>
       </div>
     </>
@@ -1591,6 +1708,9 @@ function ReviewCreateWizardStep({
   node,
   displayName,
   dockerContainer,
+  dockerImage,
+  serverJar,
+  javaArgs,
   minecraftVersion,
   fabricLoaderVersion,
   javaVersion,
@@ -1605,6 +1725,9 @@ function ReviewCreateWizardStep({
   node?: ContextNode;
   displayName: string;
   dockerContainer: string;
+  dockerImage: string;
+  serverJar: string;
+  javaArgs: string;
   minecraftVersion: string;
   fabricLoaderVersion: string;
   javaVersion: 17 | 21 | 25;
@@ -1630,7 +1753,7 @@ function ReviewCreateWizardStep({
           <ReviewSummaryItem label="Node" value={nodeDisplayName(node)} icon="node" />
           <ReviewSummaryItem label="Node status" value={nodeStatusTextLabel(node)} tone={node?.status === "online" ? "ok" : "warning"} />
           <ReviewSummaryItem label="Display name" value={displayName || "Missing"} />
-          <ReviewSummaryItem label="Docker container name" value={dockerContainer || "Missing"} />
+          <ReviewSummaryItem label="Docker container name" value={dockerContainer || "Auto-generated"} />
         </ReviewSummaryCard>
 
         <ReviewSummaryCard title="Runtime" onEdit={() => onEditStep(2)}>
@@ -1638,12 +1761,14 @@ function ReviewCreateWizardStep({
           <ReviewSummaryItem label="Loader" value="Fabric" icon="loader" />
           <ReviewSummaryItem label="Fabric version" value={fabricLoaderVersion || "Missing"} />
           <ReviewSummaryItem label="Java version" value={`Java ${javaVersion}`} icon="java" />
-          <ReviewSummaryItem label="Server JAR source" value="fabric-server-launch.jar" />
+          <ReviewSummaryItem label="Docker image" value={dockerImage || defaultDockerImageForMinecraftVersion(minecraftVersion)} />
+          <ReviewSummaryItem label="Server JAR filename" value={serverJar || "Default Fabric launcher"} />
         </ReviewSummaryCard>
 
         <ReviewSummaryCard title="Resources & Network" onEdit={() => onEditStep(3)}>
           <ReviewSummaryItem label="Minimum heap" value={`${minimumHeapGb} GB`} sublabel="Xms" />
           <ReviewSummaryItem label="Maximum heap" value={`${maximumHeapGb} GB`} sublabel="Xmx" />
+          <ReviewSummaryItem label="Java arguments" value={javaArgs || "Default memory args"} />
           <ReviewSummaryItem label="Server port" value={serverPort} sublabel="TCP" />
           <ReviewSummaryItem label="Query port" value={queryPort} sublabel="UDP" />
           <ReviewSummaryItem label="Additional port bindings" value={String(additionalCount)} sublabel={`${additionalCount === 1 ? "binding" : "bindings"} configured`} />

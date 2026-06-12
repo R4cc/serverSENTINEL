@@ -4500,6 +4500,11 @@ button .buttonIcon {
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg);
+  transition: transform 150ms linear;
+}
+
+.advancedResourceDisclosure[open] summary::after {
+  transform: rotate(225deg);
 }
 
 .advancedResourceIcon {
@@ -4516,6 +4521,46 @@ button .buttonIcon {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.9;
+}
+
+.advancedResourceBody {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.advancedResourceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.advancedResourceField {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.advancedResourceField:first-child {
+  grid-column: 1 / -1;
+}
+
+.advancedResourceField > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.advancedResourceField > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.advancedResourceField textarea.javaArgsInput {
+  min-height: 92px;
 }
 
 .reviewWizardFields {
@@ -4795,6 +4840,10 @@ button .buttonIcon {
   .networkPortGrid {
     grid-template-columns: 1fr;
     gap: var(--space-3);
+  }
+
+  .advancedResourceGrid {
+    grid-template-columns: 1fr;
   }
 
   .additionalPortsHeader {
