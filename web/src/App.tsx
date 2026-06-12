@@ -3218,6 +3218,59 @@ export default function App() {
   const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
   const currentPageDescription = pageDescriptions[activePage];
 
+  function resetPageToDefault(page: ActivePage) {
+    if (page === "mods") {
+      setModsView("manager");
+      setQuery("");
+      setDebouncedModSearchQuery("");
+      setModSearchRequestVersion((current) => current + 1);
+      setModSearchResults([]);
+      setModSearchTotal(0);
+      setModSearchError("");
+      setModInstallModal(null);
+      setDetailsMod(null);
+      setInstalledQuery("");
+      return;
+    }
+    if (page === "files") {
+      setSelectedFilePaths([]);
+      setFileBackStack([]);
+      setFileForwardStack([]);
+      setFileReadError("");
+      setFilePreview({ path: "", loading: false, data: null, error: "" });
+      resetEditorState();
+      if (activeServer) void navigateFiles("/");
+      return;
+    }
+    if (page === "console") {
+      setCommandInput("");
+      setHistoryIndex(null);
+      setConsolePinnedToBottom(true);
+      setPendingConsoleEntries(0);
+      window.requestAnimationFrame(() => {
+        consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
+      });
+      return;
+    }
+    if (page === "nodes") {
+      setNodeDetails(null);
+      setAddNodeOpen(false);
+      return;
+    }
+    if (page === "settings") {
+      setUserModal(null);
+    }
+  }
+
+  function openSidebarPage(page: ActivePage) {
+    setActivePage(page);
+  }
+
+  function resetActiveSidebarPage(page: ActivePage) {
+    if (activePage !== page) return;
+    resetPageToDefault(page);
+  }
+
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
       {notificationTray}
@@ -3235,7 +3288,7 @@ export default function App() {
           </button>
         </div>
         <nav className="sideNav">
-          <button className={activePage === "nodes" ? "active" : ""} onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
+          <button className={activePage === "nodes" ? "active" : ""} onClick={() => openSidebarPage("nodes")} onDoubleClick={() => resetActiveSidebarPage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
             <SidebarIcon name="nodes" />
             <span className="navLabel">Nodes</span>
           </button>
@@ -3243,33 +3296,33 @@ export default function App() {
           <div className="selectedServerReadout" aria-label="Selected server" title={activeServer?.displayName ?? "No server selected"}>
             {activeServer?.displayName ?? "No server selected"}
           </div>
-          <button className={activePage === "overview" ? "active" : ""} onClick={() => setActivePage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
+          <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} onDoubleClick={() => resetActiveSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
             <SidebarIcon name="overview" />
             <span className="navLabel">Overview</span>
           </button>
-          <button className={activePage === "console" ? "active" : ""} onClick={() => setActivePage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
+          <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} onDoubleClick={() => resetActiveSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
             <SidebarIcon name="console" />
             <span className="navLabel">Console</span>
           </button>
-          <button className={activePage === "files" ? "active" : ""} onClick={() => setActivePage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
+          <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} onDoubleClick={() => resetActiveSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
             <SidebarIcon name="files" />
             <span className="navLabel">Files</span>
           </button>
-          <button className={activePage === "mods" ? "active" : ""} onClick={() => setActivePage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
+          <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} onDoubleClick={() => resetActiveSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
             <SidebarIcon name="mods" />
             <span className="navLabel">Mods</span>
           </button>
-          <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
+          <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} onDoubleClick={() => resetActiveSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
             <SidebarIcon name="schedule" />
             <span className="navLabel">Schedules</span>
           </button>
-          <button className={activePage === "properties" ? "active" : ""} onClick={() => setActivePage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
+          <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} onDoubleClick={() => resetActiveSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
             <SidebarIcon name="properties" />
             <span className="navLabel">Properties</span>
           </button>
         </nav>
         <nav className="sideNav sideNavBottom">
-          <button className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
+          <button className={activePage === "settings" ? "active" : ""} onClick={() => openSidebarPage("settings")} onDoubleClick={() => resetActiveSidebarPage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
             <SidebarIcon name="settings" />
             <span className="navLabel settingsNavLabel">
               <span>Settings</span>
