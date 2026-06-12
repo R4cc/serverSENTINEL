@@ -111,7 +111,11 @@ const fallbackMinecraftVersions = [
   { version: "1.21.4", stable: true },
   { version: "1.21.1", stable: true },
   { version: "1.20.6", stable: true },
-  { version: "1.20.1", stable: true }
+  { version: "1.20.1", stable: true },
+  { version: "1.19.4", stable: true },
+  { version: "1.19.2", stable: true },
+  { version: "1.18.2", stable: true },
+  { version: "1.18", stable: true }
 ];
 
 const fallbackFabricLoaderVersions: RuntimeLoaderVersion[] = [

@@ -3511,7 +3511,7 @@ app.get("/api/fabric/versions", async (request) => {
   const latestGame = game.find((version) => version.type === "release") ?? game[0];
   const loader = latestGame ? await serverJarProvider.listFabricLoaderVersions(latestGame.id).catch(() => []) : [];
   return {
-    game: game.slice(0, 40).map((version) => ({ version: version.id, stable: version.type === "release" && version.supported, type: version.type ?? "unknown" })),
+    game: game.map((version) => ({ version: version.id, stable: version.type === "release" && version.supported, type: version.type ?? "unknown" })),
     loader: loader.slice(0, 20).map((version) => ({ version: version.loaderVersion, stable: version.stable !== false })),
     installer: []
   };
