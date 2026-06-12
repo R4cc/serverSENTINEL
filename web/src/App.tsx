@@ -2029,7 +2029,7 @@ export default function App() {
     const itemLabel = selectedEntries.length === 1 ? selectedEntries[0].name : `${selectedEntries.length} selected items`;
     const previewList = selectedEntries.slice(0, 5).map((entry) => `- ${entry.path}`).join("\n");
     const moreText = selectedEntries.length > 5 ? `\n- ...and ${selectedEntries.length - 5} more` : "";
-    const directoryWarning = directoryCount ? "\n\nDirectories must be empty. Non-empty directories are blocked in the browser file manager." : "";
+    const directoryWarning = directoryCount ? "\n\nSelected folders and their contents will be deleted." : "";
     if (!window.confirm(`Delete ${itemLabel}?\n\nFiles: ${fileCount}\nFolders: ${directoryCount}\n${previewList}${moreText}${directoryWarning}\n\nThis cannot be undone.`)) return;
 
     setFileOperationBusy("delete");
@@ -2056,9 +2056,15 @@ export default function App() {
 
       const failures: string[] = [];
       const deletedEntries: FileEntry[] = [];
-      for (const entry of selectedEntries) {
+      const deleteTargets = selectedEntries.filter((entry) => !selectedEntries.some((candidate) => (
+        candidate.path !== entry.path
+        && candidate.type === "directory"
+        && publicPathContains(candidate.path, entry.path)
+      )));
+      for (const entry of deleteTargets) {
         try {
-          await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}`, {
+          const recursive = entry.type === "directory" ? "&recursive=true" : "";
+          await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}${recursive}`, {
             method: "DELETE"
           });
           deletedEntries.push(entry);
