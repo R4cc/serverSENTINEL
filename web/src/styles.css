@@ -8667,17 +8667,26 @@ details.compatibilityBadge p {
   justify-items: start;
   font-size: 13px;
   min-height: 35px;
+  min-width: 0;
+  width: 100%;
 }
 
 .updateStatus {
   display: grid;
-  grid-template-columns: 18px minmax(0, auto);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   justify-items: start;
   gap: 4px;
   font-weight: 800;
   line-height: 18px;
   white-space: nowrap;
+  max-width: 100%;
+}
+
+.updateStatus > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .updateStatus .statusIconSmall {
@@ -8698,11 +8707,19 @@ details.compatibilityBadge p {
 }
 
 .updateMeta {
+  display: block;
+  max-width: 100%;
   font-size: 11px;
   line-height: 15px;
   color: var(--text-muted);
   padding-left: 22px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.updateVersionText {
+  font-family: var(--font-mono);
 }
 
 .sourceCol {

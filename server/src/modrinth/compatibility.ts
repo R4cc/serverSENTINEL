@@ -109,6 +109,18 @@ export function minecraftVersionsInclude(gameVersions: string[], minecraftVersio
   return gameVersions.some((version) => minecraftVersionMatches(version, minecraftVersion));
 }
 
+export function latestCompatibleProjectVersion(
+  versions: ModrinthVersion[],
+  options: VersionCompatibilityOptions
+) {
+  return versions.find((version) => (
+    allowedForChannel(version, options.channel)
+    && version.loaders.includes(options.loader)
+    && minecraftVersionsInclude(version.game_versions, options.minecraftVersion)
+    && modrinthJarFile(version)
+  ));
+}
+
 function compatibleResult(
   version: ModrinthVersion,
   file: ModrinthJarFile,

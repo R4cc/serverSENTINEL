@@ -10,7 +10,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -897,11 +897,15 @@ async function remoteLookupModrinthUpdate(server: ManagedServer, version: Modrin
   const target = runtimeTarget(server);
   if (!target.minecraftVersion || target.loader !== "fabric" || !version.project_id) return null;
 
-  const versions = await fetchProjectVersions(version.project_id, {
+  const versionFilter = {
     loader: target.loader,
     minecraftVersion: target.minecraftVersion
-  });
-  const latest = versions.find((candidate) => allowedForChannel(candidate, preferredChannel) && modrinthJarFile(candidate));
+  };
+  const versions = await fetchProjectVersions(version.project_id, versionFilter);
+  let latest = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
+  if (!latest) {
+    latest = latestCompatibleProjectVersion(await fetchProjectVersions(version.project_id), { ...versionFilter, channel: preferredChannel });
+  }
   return {
     projectId: version.project_id,
     currentVersion: version.version_number,

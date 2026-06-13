@@ -21,6 +21,7 @@ import {
   allowedForChannel,
   fetchProject,
   fetchProjectVersions,
+  latestCompatibleProjectVersion,
   minecraftVersionFacetValues,
   minecraftVersionsInclude,
   modrinthJarFile,
@@ -4285,11 +4286,15 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
     current = await currentRes.json() as { project_id?: string; version_number?: string; version_type?: string };
   }
   if (!current?.project_id) return null;
-  const versions = await fetchProjectVersions(current.project_id, {
+  const versionFilter = {
     loader: "fabric",
     minecraftVersion: targetRuntime.minecraftVersion
-  });
-  const target = versions.find((version) => allowedForChannel(version, preferredChannel));
+  };
+  const versions = await fetchProjectVersions(current.project_id, versionFilter);
+  let target = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
+  if (!target) {
+    target = latestCompatibleProjectVersion(await fetchProjectVersions(current.project_id), { ...versionFilter, channel: preferredChannel });
+  }
   return {
     projectId: current.project_id,
     currentVersion: current.version_number,

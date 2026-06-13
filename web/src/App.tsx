@@ -4461,7 +4461,15 @@ export default function App() {
                                           </svg>
                                           <span>Update available</span>
                                         </span>
-                                        <span className="updateMeta">Latest: {mod.versionInfo.latestVersion}</span>
+                                        <span className="updateMeta" title={mod.versionInfo.latestVersion ? `Latest: ${mod.versionInfo.latestVersion}` : "Latest version could not be determined"}>
+                                          {mod.versionInfo.latestVersion ? (
+                                            <>
+                                              Latest: <span className="updateVersionText">{mod.versionInfo.latestVersion}</span>
+                                            </>
+                                          ) : (
+                                            "Latest unknown"
+                                          )}
+                                        </span>
                                       </>
                                     ) : (
                                       <span className="updateStatus unknown">Unknown</span>
