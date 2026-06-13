@@ -52,24 +52,31 @@ export function OverviewSummary({
   return (
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
+        <span>Status</span>
         <strong>{state}</strong>
       </div>
       <div className="summaryTile">
+        <span>Minecraft</span>
         <strong>{versionValue(minecraftVersion)}</strong>
       </div>
       <div className="summaryTile">
+        <span>Fabric</span>
         <strong>{versionValue(fabricLoaderVersion)}</strong>
       </div>
       <div className="summaryTile">
+        <span>Runtime</span>
         <strong>{`${runtimeProfile.minecraftVersion} Fabric`}</strong>
       </div>
       <div className="summaryTile">
+        <span>Uptime</span>
         <strong>{running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
       </div>
       <div className="summaryTile">
+        <span>Players</span>
         <strong>{players}</strong>
       </div>
       <div className={`summaryTile ${runtimeTone(status, dockerSocketMounted)}`}>
+        <span>Container</span>
         <strong>{runtimeLabel(status, dockerSocketMounted).replace(/^Container /, "")}</strong>
       </div>
     </section>

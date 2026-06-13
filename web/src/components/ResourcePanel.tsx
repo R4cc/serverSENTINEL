@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
 import { parseMaxMemoryGb } from '../utils/format';
@@ -38,6 +39,15 @@ type ChartPoint = {
   time: string;
   value: number;
 };
+
+const resourceGraphScopes = [
+  { label: "1m", milliseconds: 60 * 1000 },
+  { label: "5m", milliseconds: 5 * 60 * 1000 },
+  { label: "15m", milliseconds: 15 * 60 * 1000 },
+  { label: "All", milliseconds: null }
+] as const;
+
+type ResourceGraphScope = typeof resourceGraphScopes[number]["label"];
 
 function ResourceChartTooltip({
   active,
@@ -136,7 +146,16 @@ export function ResourcePanel({
   dockerSocketMounted: boolean;
   formatNumber: (value: number) => string;
 }) {
+  const [graphScope, setGraphScope] = useState<ResourceGraphScope>("5m");
   const latest = samples.at(-1);
+  const scopedSamples = useMemo(() => {
+    const selected = resourceGraphScopes.find((scope) => scope.label === graphScope);
+    if (!selected?.milliseconds || !latest) return samples;
+    const cutoff = latest.sampledAt - selected.milliseconds;
+    const minimumSamples = 2;
+    const filtered = samples.filter((sample) => sample.sampledAt >= cutoff);
+    return filtered.length >= minimumSamples ? filtered : samples.slice(-minimumSamples);
+  }, [graphScope, latest, samples]);
   const hasStats = Boolean(latest?.available && latest.running);
   const statsUnavailableLabel = !dockerSocketMounted ? "Not connected" : status?.docker.running ? "Collecting" : "Not running";
   const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
@@ -166,6 +185,19 @@ export function ResourcePanel({
     <section className="panel resourcePanel">
       <div className="panelHeader">
         <h2>Resource Usage</h2>
+        <div className="resourceScopeControl" role="group" aria-label="Resource graph time range">
+          {resourceGraphScopes.map((scope) => (
+            <button
+              type="button"
+              key={scope.label}
+              className={graphScope === scope.label ? "active" : ""}
+              onClick={() => setGraphScope(scope.label)}
+              aria-pressed={graphScope === scope.label}
+            >
+              {scope.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="resourceRows">
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
@@ -174,7 +206,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB / ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB` : statsUnavailableLabel}</strong>
             <small>{hasStats ? `${memoryPercent.toFixed(1)}%` : `Configured limit ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</small>
           </div>
-          <ResourceChart samples={samples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={scopedSamples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -182,7 +214,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
             <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
           </div>
-          <ResourceChart samples={samples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={scopedSamples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -191,7 +223,7 @@ export function ResourcePanel({
             <small>{hasStats ? "Current transfer rate" : "Start the server to collect network activity"}</small>
           </div>
           <ResourceChart
-            samples={samples}
+            samples={scopedSamples}
             value={(sample, index, chartSamples) => {
               const previous = chartSamples[index - 1];
               if (!previous || sample.networkRxBytes === undefined || sample.networkTxBytes === undefined || previous.networkRxBytes === undefined || previous.networkTxBytes === undefined) return 0;

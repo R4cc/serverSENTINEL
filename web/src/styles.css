@@ -5137,6 +5137,45 @@ button .buttonIcon {
   min-width: 0;
 }
 
+.resourcePanel .panelHeader {
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.resourceScopeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 3px;
+  margin-left: auto;
+}
+
+.resourceScopeControl button {
+  min-width: 40px;
+  height: 30px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.resourceScopeControl button:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.resourceScopeControl button.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .resourceRows,
 .eventList {
   display: grid;
@@ -5151,7 +5190,7 @@ button .buttonIcon {
   display: grid;
   grid-template-columns: minmax(210px, 0.38fr) minmax(240px, 1fr);
   gap: var(--space-4);
-  align-items: center;
+  align-items: start;
   min-height: 172px;
 }
 
@@ -5159,6 +5198,8 @@ button .buttonIcon {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
+  align-self: start;
+  padding-top: 4px;
 }
 
 .resourceMetricLabel span,
@@ -8202,6 +8243,19 @@ details.compatibilityBadge p {
   .keyFormActions button,
   .keyFormConfigured button {
     width: 100%;
+  }
+
+  .resourcePanel .panelHeader {
+    align-items: flex-start;
+  }
+
+  .resourceScopeControl {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .resourceScopeControl button {
+    flex: 1;
   }
 
   .nodesToolbar .buttonRow {
