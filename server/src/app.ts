@@ -21,6 +21,8 @@ import {
   allowedForChannel,
   fetchProject,
   fetchProjectVersions,
+  minecraftVersionFacetValues,
+  minecraftVersionsInclude,
   modrinthJarFile,
   modrinthServerSideSupported,
   normalizeReleaseChannel,
@@ -4244,7 +4246,7 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
   if (!metadata.loaders.includes("fabric")) {
     return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
   }
-  if (target.minecraftVersion && !metadata.gameVersions.includes(target.minecraftVersion)) {
+  if (target.minecraftVersion && !minecraftVersionsInclude(metadata.gameVersions, target.minecraftVersion)) {
     return {
       status: "no_minecraft_version",
       compatible: false,
@@ -4567,7 +4569,7 @@ async function planRequiredModrinthInstalls(input: {
       throw new Error(`Required dependency ${project.title || projectId} has no installable .jar file for this runtime`);
     }
     const hasFabric = version.loaders.includes("fabric");
-    const matchesMinecraft = version.game_versions.includes(input.minecraftVersion);
+    const matchesMinecraft = minecraftVersionsInclude(version.game_versions, input.minecraftVersion);
     if (!hasFabric) {
       throw new Error(`Required dependency ${project.title || projectId} is not available for Fabric`);
     }
@@ -4658,7 +4660,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       : versions.find((version) => (
         allowedForChannel(version, selectedChannel)
         && version.loaders.includes("fabric")
-        && version.game_versions.includes(minecraftVersion)
+        && minecraftVersionsInclude(version.game_versions, minecraftVersion)
         && modrinthJarFile(version)
         && modrinthServerSideSupported(project.server_side)
       ));
@@ -4670,7 +4672,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     }
     const file = modrinthJarFile(selectedVersion);
     const hasFabric = selectedVersion.loaders.includes("fabric");
-    const matchesMinecraft = selectedVersion.game_versions.includes(minecraftVersion);
+    const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, minecraftVersion);
     const serverSide = project.server_side;
     const serverSupported = modrinthServerSideSupported(serverSide);
     if (!file) {
@@ -4886,7 +4888,7 @@ function classifyModrinthInstallVersion(input: {
 }) {
   const file = modrinthJarFile(input.version);
   const hasFabric = input.version.loaders.includes("fabric");
-  const matchesMinecraft = input.version.game_versions.includes(input.minecraftVersion);
+  const matchesMinecraft = minecraftVersionsInclude(input.version.game_versions, input.minecraftVersion);
   const serverSide = input.projectSides.server_side;
   const serverSupported = modrinthServerSideSupported(serverSide);
   const selectable = Boolean(file && hasFabric && serverSupported);
@@ -4984,7 +4986,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
     };
     const firstCompatibleId = allowedVersions.find((version) => (
       version.loaders.includes("fabric")
-      && version.game_versions.includes(targetRuntime.minecraftVersion!)
+      && minecraftVersionsInclude(version.game_versions, targetRuntime.minecraftVersion!)
       && modrinthJarFile(version)
       && modrinthServerSideSupported(project.server_side)
     ))?.id;
@@ -5055,12 +5057,14 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     }
 
     const facets: string[][] = [
-      ["project_type:mod"],
+      ["project_type:mod", "project_type:plugin"],
       ["categories:fabric"],
-      [`versions:${minecraftVersion}`]
+      minecraftVersionFacetValues(minecraftVersion).map((version) => `versions:${version}`)
     ];
-    if (compatibilityFilter !== "all") {
+    if (compatibilityFilter === "compatible") {
       facets.push(["server_side:required", "server_side:optional"]);
+    } else if (compatibilityFilter !== "all") {
+      facets.push(["server_side:required", "server_side:optional", "server_side:unknown"]);
     }
     url.searchParams.set("facets", JSON.stringify(facets));
 

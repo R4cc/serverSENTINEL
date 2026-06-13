@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
+import { minecraftVersionFacetValues, minecraftVersionsInclude, resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
 import type { ModrinthVersion, ReleaseChannel } from "../types.js";
 
 function version(input: Partial<ModrinthVersion> & { id: string; loaders: string[]; game_versions: string[]; version_type?: ReleaseChannel; jar?: boolean }): ModrinthVersion {
@@ -22,13 +22,14 @@ function version(input: Partial<ModrinthVersion> & { id: string; loaders: string
 function resolve(
   versions: ModrinthVersion[],
   channel: ReleaseChannel = "release",
-  projectSides?: { server_side?: string; client_side?: string }
+  projectSides?: { server_side?: string; client_side?: string },
+  minecraftVersion = "1.21.4"
 ) {
   return resolveCompatibilityFromVersions(
     versions,
     {
       loader: "fabric",
-      minecraftVersion: "1.21.4",
+      minecraftVersion,
       channel
     },
     projectSides ?? { server_side: "required" }
@@ -49,6 +50,23 @@ describe("Modrinth compatibility resolver", () => {
 
     expect(result.compatible).toBe(true);
     expect(result.matchedLoaders).toEqual(["fabric", "neoforge"]);
+  });
+
+  it("accepts wildcard Minecraft patch versions from Modrinth", () => {
+    const result = resolve(
+      [version({ id: "minecraft-family", loaders: ["fabric"], game_versions: ["26.1.x"] })],
+      "release",
+      { server_side: "required" },
+      "26.1.2"
+    );
+
+    expect(result.compatible).toBe(true);
+    expect(result.matchedVersionId).toBe("minecraft-family");
+    expect(minecraftVersionsInclude(["26.1.x"], "26.1.2")).toBe(true);
+  });
+
+  it("builds Modrinth search facets with exact and wildcard Minecraft versions", () => {
+    expect(minecraftVersionFacetValues("26.1.2")).toEqual(["26.1.2", "26.1.x"]);
   });
 
   it("rejects a NeoForge-only version as not Fabric", () => {

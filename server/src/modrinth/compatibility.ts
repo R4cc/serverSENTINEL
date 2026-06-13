@@ -82,6 +82,33 @@ export function modrinthServerSideSupported(serverSide?: string) {
   return serverSide === undefined || serverSide === "required" || serverSide === "optional";
 }
 
+export function minecraftVersionFacetValues(minecraftVersion: string) {
+  const normalized = minecraftVersion.trim();
+  const values = new Set<string>();
+  if (normalized) values.add(normalized);
+  const parts = normalized.split(".");
+  if (parts.length >= 3 && parts.slice(0, 3).every((part) => /^\d+$/.test(part))) {
+    values.add(`${parts[0]}.${parts[1]}.x`);
+  }
+  return Array.from(values);
+}
+
+export function minecraftVersionMatches(advertisedVersion: string, minecraftVersion: string) {
+  const advertised = advertisedVersion.trim();
+  const target = minecraftVersion.trim();
+  if (!advertised || !target) return false;
+  if (advertised === target) return true;
+
+  const advertisedParts = advertised.split(".");
+  const targetParts = target.split(".");
+  if (advertisedParts.length !== targetParts.length) return false;
+  return advertisedParts.every((part, index) => part.toLowerCase() === "x" || part === targetParts[index]);
+}
+
+export function minecraftVersionsInclude(gameVersions: string[], minecraftVersion: string) {
+  return gameVersions.some((version) => minecraftVersionMatches(version, minecraftVersion));
+}
+
 function compatibleResult(
   version: ModrinthVersion,
   file: ModrinthJarFile,
@@ -138,7 +165,7 @@ export function resolveCompatibilityFromVersions(
   projectSides?: { server_side?: string; client_side?: string }
 ): ModrinthCompatibilityMatch {
   const loaderVersions = versions.filter((version) => version.loaders.includes(options.loader));
-  const loaderAndGameVersions = loaderVersions.filter((version) => version.game_versions.includes(options.minecraftVersion));
+  const loaderAndGameVersions = loaderVersions.filter((version) => minecraftVersionsInclude(version.game_versions, options.minecraftVersion));
   const loaderGameJarVersions = loaderAndGameVersions.filter((version) => modrinthJarFile(version));
   const matchingVersion = loaderGameJarVersions.find((version) => allowedForChannel(version, options.channel));
   const matchingFile = modrinthJarFile(matchingVersion);
@@ -183,7 +210,7 @@ export function resolveCompatibilityFromVersions(
   const fallbackVersion = loaderGameJarVersions[0]
     ?? loaderAndGameVersions[0]
     ?? loaderVersions[0]
-    ?? versions.find((version) => version.game_versions.includes(options.minecraftVersion) && modrinthJarFile(version))
+    ?? versions.find((version) => minecraftVersionsInclude(version.game_versions, options.minecraftVersion) && modrinthJarFile(version))
     ?? versions.find((version) => modrinthJarFile(version));
 
   if (loaderVersions.length === 0) {
@@ -210,7 +237,7 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
     url.searchParams.set("loaders", JSON.stringify([filters.loader]));
   }
   if (filters?.minecraftVersion) {
-    url.searchParams.set("game_versions", JSON.stringify([filters.minecraftVersion]));
+    url.searchParams.set("game_versions", JSON.stringify(minecraftVersionFacetValues(filters.minecraftVersion)));
   }
   const request = (async () => {
     const response = await modrinthFetch(url.toString());

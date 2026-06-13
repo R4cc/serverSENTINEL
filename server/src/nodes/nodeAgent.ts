@@ -10,7 +10,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -865,7 +865,7 @@ function remoteInstalledModCompatibility(server: ManagedServer, version: Modrint
   if (!version.loaders.includes(target.loader)) {
     return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
   }
-  if (!version.game_versions.includes(target.minecraftVersion)) {
+  if (!minecraftVersionsInclude(version.game_versions, target.minecraftVersion)) {
     return {
       status: "no_minecraft_version",
       compatible: false,
@@ -1008,7 +1008,7 @@ async function modInstall(server: ManagedServer, input: unknown) {
   if (!file?.url || !file.filename) throw new Error("No installable jar found");
   if (!selectedVersion.loaders.includes("fabric")) throw new Error("The selected version is not a Fabric version");
   if (project.server_side === "unsupported") throw new Error("Client-only mods cannot be installed on the server");
-  const matchesMinecraft = selectedVersion.game_versions.includes(targetRuntime.minecraftVersion);
+  const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, targetRuntime.minecraftVersion);
   if (!matchesMinecraft && !overrideMinecraftVersion) throw new Error(`This version is not marked for Minecraft ${targetRuntime.minecraftVersion}. Confirm the Minecraft version override before installing.`);
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   if (!file.url.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS mod file");
