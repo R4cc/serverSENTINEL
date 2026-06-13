@@ -123,7 +123,7 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
   );
 }
 
-function formatEventTimestamp(value: string | undefined, formatDate: (value: string | number | Date) => string) {
+function formatEventTimestamp(value: string | undefined) {
   if (!value) return "No timestamp";
   if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value;
   const date = new Date(value);
@@ -152,12 +152,10 @@ function formatEventTimestamp(value: string | undefined, formatDate: (value: str
 export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
-  formatDate,
   onOpenConsole
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
-  formatDate: (value: string | number | Date) => string;
   onOpenConsole: () => void;
 }) {
   const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
@@ -201,7 +199,7 @@ export function RecentEventsPanel({
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
-            <small>{formatEventTimestamp(event.timestamp, formatDate)}</small>
+            <small>{formatEventTimestamp(event.timestamp)}</small>
             <button
               type="button"
               className="eventHideButton"

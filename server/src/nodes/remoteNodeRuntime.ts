@@ -1,6 +1,6 @@
-import { basename, dirname, join } from "node:path";
+import { basename, dirname } from "node:path";
 import { Readable } from "node:stream";
-import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChannel, ServerActivity, ServerEvent } from "../types.js";
+import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { protocolCompatible } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
@@ -359,10 +359,6 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown) {
     return this.command(server, "mods.enableDisable", { filename, enabled });
-  }
-
-  async setModChannel(_server: ManagedServer, _filename: unknown, _channel: ReleaseChannel | undefined) {
-    return { ok: true };
   }
 
   removeMod(server: ManagedServer, filename: unknown) {

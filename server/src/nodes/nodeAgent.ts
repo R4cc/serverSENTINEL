@@ -10,7 +10,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { parseDockerPorts } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -785,10 +785,6 @@ async function writeRelativeFile(server: ManagedServer, path: unknown, content: 
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, content);
   return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
-}
-
-function modrinthServerSideSupported(serverSide?: string) {
-  return serverSide === undefined || serverSide === "required" || serverSide === "optional";
 }
 
 function remoteInstalledModCompatibility(server: ManagedServer, version: ModrinthVersion, project: { server_side?: string; client_side?: string }): ModCompatibility {

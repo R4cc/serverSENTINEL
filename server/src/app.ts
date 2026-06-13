@@ -22,6 +22,7 @@ import {
   fetchProject,
   fetchProjectVersions,
   modrinthJarFile,
+  modrinthServerSideSupported,
   normalizeReleaseChannel,
   unknownCompatibility,
   versionChannel
@@ -31,12 +32,12 @@ import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeCapabilities, nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
+import { nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
-import type { NodeRuntime, RuntimeAction } from "./nodes/types.js";
+import type { NodeRuntime } from "./nodes/types.js";
 import { defaultServerJarProvider } from "./runtime/mcjarsProvider.js";
 import {
   normalizeRuntimeProfile,
@@ -57,7 +58,7 @@ import {
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
-import { modrinthApiKey, updateSettings, queuedReadSettings } from "./storage/settingsStore.js";
+import { modrinthApiKey, updateSettings } from "./storage/settingsStore.js";
 import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
 import {
   badRequest,
@@ -4410,16 +4411,6 @@ async function localToggleMod(server: ManagedServer, filenameInput: unknown, ena
   return { ok: true, filename: basename(target), enabled };
 }
 
-async function localSetModChannel(server: ManagedServer, filenameInput: unknown, channelInput: ReleaseChannel | undefined) {
-  const filename = safeInstalledModFilename(filenameInput as string | undefined);
-  const channel = optionalReleaseChannel(channelInput);
-  const prefs = await readModPreferences(server);
-  prefs[filename] = { ...prefs[filename], channel };
-  await writeModPreferences(server, prefs);
-  logInfo({ ...serverLogFields(server), filename, channel, action: "set_mod_channel" }, "Mod update channel changed");
-  return { ok: true, filename, channel };
-}
-
 async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
   await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
@@ -4852,12 +4843,6 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 });
 
 
-app.put<{ Params: { id: string }; Body: { filename?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/channel", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
-  const server = await getServer(request.params.id);
-  return runtimeForServer(server).setModChannel(server, request.body.filename, request.body.channel);
-});
-
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
@@ -4878,10 +4863,6 @@ type ModrinthInstallVersionStatus =
   | "no_installable_jar"
   | "client_only"
   | "server_support_unknown";
-
-function modrinthServerSideSupported(serverSide?: string) {
-  return serverSide === undefined || serverSide === "required" || serverSide === "optional";
-}
 
 function classifyModrinthInstallVersion(input: {
   version: ModrinthVersion;
@@ -5164,7 +5145,6 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   listMods: localListMods,
   modIcon: localModIcon,
   toggleMod: localToggleMod,
-  setModChannel: localSetModChannel,
   removeMod: localRemoveMod,
   uploadMod: localUploadMod,
   installMod: localInstallMod

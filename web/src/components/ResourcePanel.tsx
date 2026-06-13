@@ -1,5 +1,5 @@
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
-import { formatBytes, parseMaxMemoryGb } from '../utils/format';
+import { parseMaxMemoryGb } from '../utils/format';
 
 export function formatUptime(startedAt?: string, running?: boolean) {
   if (!running || !startedAt || /^\d{2}:\d{2}:\d{2}$/.test(startedAt)) return "Unknown";

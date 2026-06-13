@@ -3,11 +3,11 @@ import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, fabricLoaderVersionInfo, formatBytes, minecraftVersionInfo, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
-import { applyFormErrors, trimFormValue, validateCommandList, validateCronExpression, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJarFilename, validateJavaArgs, validatePassword, validateSafePath, validateServerPort, validateUsername } from "./utils/validation";
+import { trimFormValue, validateCommandList, validateCronExpression, validateJarFilename, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
-import { isNodeRuntimeUsable, nodeBlockReason, nodeStatusLabel } from "./utils/nodes";
+import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
@@ -199,7 +199,6 @@ export default function App() {
     activeNode,
     usableContextNodes,
     activeMinecraftVersion,
-    activeFabricLoaderVersion,
     activeModContext,
     activeModVersionsUnknown,
     activeStatus,
@@ -387,11 +386,6 @@ export default function App() {
 
   function formatDisplayNumber(value: number) {
     return numberFormatter.format(value);
-  }
-
-  function formatDisplayMegabytes(value: number) {
-    if (!value) return "0 MB";
-    return `${formatDisplayNumber(Math.round(value / 1024 / 1024))} MB`;
   }
 
   function modCompatibilityNote(mod: ModrinthHit) {
@@ -2857,22 +2851,6 @@ export default function App() {
     }
   }
 
-  async function updateModChannel(mod: InstalledMod, channel: ReleaseChannel) {
-    if (!canManager || !activeServer || !mod.filename) return;
-    if (activeServerIsDemo) {
-      setInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
-      setDemoInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, preferredChannel: channel } : candidate));
-      return;
-    }
-    try {
-      await api(`/api/servers/${activeServer.id}/mods/channel`, { method: "PUT", body: JSON.stringify({ filename: mod.filename, channel }) });
-      await loadInstalledMods(activeServer.id);
-      notify("success", `Updated ${mod.displayName} update channel`);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not update the mod channel."));
-    }
-  }
-
   async function processModToggleQueue(filename: string, modDisplayName: string) {
     const queueItem = modToggleStateQueueRef.current[filename];
     if (!queueItem || queueItem.inFlightEnabled !== null) {
@@ -3873,7 +3851,7 @@ export default function App() {
                 />
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />
-                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} />
+                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} onOpenConsole={() => setActivePage("console")} />
 
               </section>
             )}

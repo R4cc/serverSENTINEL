@@ -1,4 +1,4 @@
-import type { FileListing, FileEntry, InstalledMod, ManagedServer, ModrinthHit, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus } from './types';
+import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus } from './types';
 
 const demoStartedAt = Date.now();
 

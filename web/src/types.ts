@@ -55,25 +55,12 @@ export type ServerRuntimeProfile = {
   resolvedAt: string;
 };
 
-export type RuntimeMinecraftVersion = {
-  id: string;
-  type?: "release" | "snapshot" | "unknown";
-  supported: boolean;
-  javaMajorVersion: 17 | 21 | 25;
-  releasedAt?: string;
-};
-
 export type RuntimeLoaderVersion = {
   id: string;
   loaderVersion: string;
   stable?: boolean;
   recommended?: boolean;
   buildId?: string;
-};
-
-export type RuntimeResolveResponse = {
-  runtimeProfile: ServerRuntimeProfile;
-  warnings: string[];
 };
 
 export type ManagedNode = {

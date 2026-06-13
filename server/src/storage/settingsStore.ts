@@ -7,15 +7,15 @@ import { asObject, optionalString, readJsonFile, writeJsonFile } from "./jsonFil
 const settingsFile = join(config.configDir, "settings.json");
 const settingsQueue = new AsyncQueue();
 
-export async function readSettings() {
+async function readSettings() {
   return readJsonFile(settingsFile, initialSettings(), validateSettings);
 }
 
-export function queuedReadSettings() {
+function queuedReadSettings() {
   return settingsQueue.enqueue(() => readSettings());
 }
 
-export async function writeSettings(settings: AppSettings) {
+async function writeSettings(settings: AppSettings) {
   await writeJsonFile(settingsFile, validateSettings(settings));
 }
 

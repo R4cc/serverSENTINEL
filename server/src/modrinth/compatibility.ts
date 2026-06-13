@@ -78,6 +78,10 @@ export function modrinthJarFile(version?: ModrinthVersion): ModrinthJarFile | un
     ?? version?.files.find((candidate) => candidate.filename.endsWith(".jar"));
 }
 
+export function modrinthServerSideSupported(serverSide?: string) {
+  return serverSide === undefined || serverSide === "required" || serverSide === "optional";
+}
+
 function compatibleResult(
   version: ModrinthVersion,
   file: ModrinthJarFile,

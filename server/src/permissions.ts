@@ -203,23 +203,10 @@ export function hasPermission(user: Pick<StoredUser, "permissions">, permission:
   return user.permissions.includes(permission);
 }
 
-export function hasAnyPermission(user: Pick<StoredUser, "permissions">, permissions: readonly Permission[]) {
-  return permissions.some((permission) => hasPermission(user, permission));
-}
-
 export function requirePermission(permission: Permission) {
   return (user: Pick<StoredUser, "permissions">) => {
     if (!hasPermission(user, permission)) {
       throwPermissionError(`You need permission to ${PERMISSION_LABELS[permission]} before performing this action.`, 403);
-    }
-  };
-}
-
-export function requireAnyPermission(permissions: readonly Permission[]) {
-  return (user: Pick<StoredUser, "permissions">) => {
-    if (!hasAnyPermission(user, permissions)) {
-      const labels = permissions.map((permission) => PERMISSION_LABELS[permission]).join(" or ");
-      throwPermissionError(`You need permission to ${labels} before performing this action.`, 403);
     }
   };
 }

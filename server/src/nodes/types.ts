@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import type { ManagedNode, ManagedServer, Permission, PublicServer, ReleaseChannel } from "../types.js";
+import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
 export type RuntimeAction = "start" | "stop" | "restart";
@@ -49,7 +49,6 @@ export type NodeRuntime = {
   listMods(server: ManagedServer): Promise<unknown>;
   modIcon(server: ManagedServer, filename: unknown): Promise<ModIconResult | null>;
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown): Promise<unknown>;
-  setModChannel(server: ManagedServer, filename: unknown, channel: ReleaseChannel | undefined): Promise<unknown>;
   removeMod(server: ManagedServer, filename: unknown): Promise<unknown>;
   uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown): Promise<unknown>;
   installMod(server: ManagedServer, input: unknown): Promise<unknown>;

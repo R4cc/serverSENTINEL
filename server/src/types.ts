@@ -277,40 +277,6 @@ export type DockerExecInspect = {
   ExitCode?: number | null;
 };
 
-export type DockerContainerInspect = {
-  State?: {
-    Status?: DockerState;
-    Running?: boolean;
-    StartedAt?: string;
-    FinishedAt?: string;
-  };
-  HostConfig?: {
-    Binds?: string[];
-  };
-  Mounts?: Array<{
-    Type?: string;
-    Source?: string;
-    Destination?: string;
-  }>;
-};
-
-export type DockerStats = {
-  read: string;
-  cpu_stats?: {
-    cpu_usage?: { total_usage?: number; percpu_usage?: number[] };
-    system_cpu_usage?: number;
-  };
-  precpu_stats?: {
-    cpu_usage?: { total_usage?: number };
-    system_cpu_usage?: number;
-  };
-  memory_stats?: {
-    usage?: number;
-    limit?: number;
-  };
-  networks?: Record<string, { rx_bytes?: number; tx_bytes?: number }>;
-};
-
 export type ServerEvent = {
   id: string;
   eventType: "server_started" | "server_stopped" | "player_joined" | "player_left" | "mod_disabled" | "server_crashed";
@@ -334,36 +300,4 @@ export type ServerActivity = {
   autosaveStatus?: string;
   playersOnline?: number | null;
   maxPlayers?: number | null;
-};
-
-export type CreateServerInput = {
-  nodeId?: string;
-  displayName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
-  dockerContainer?: string;
-  dockerImage?: string;
-  dockerPorts?: string;
-  queryPort?: string;
-  javaArgs?: string;
-  acceptEula?: boolean;
-  serverPort?: string;
-};
-
-export type ProvisionJob = {
-  id: string;
-  status: "running" | "succeeded" | "failed";
-  progress: number;
-  task: string;
-  server?: PublicServer;
-  error?: string;
-  errorDetails?: string;
-};
-
-export type Client = {
-  readyState: number;
-  send(data: string): void;
-  close(): void;
 };

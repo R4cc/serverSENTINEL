@@ -269,7 +269,7 @@ function AdditionalPortBindingsEditor({
       <span className="fieldLabel">Additional port bindings</span>
       <input type="hidden" name="dockerPorts" value={serializedBindings} />
       <div className="portBindingRows">
-        {bindings.map((binding, index) => (
+        {bindings.map((binding) => (
           <div key={binding.id} className="portBindingRow">
             <input
               type="text"
