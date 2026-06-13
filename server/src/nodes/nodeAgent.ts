@@ -836,6 +836,25 @@ function remoteInstalledModCompatibility(server: ManagedServer, version: Modrint
   };
 }
 
+async function remoteLookupModrinthUpdate(server: ManagedServer, version: ModrinthVersion, preferredChannel: ReleaseChannel) {
+  const target = runtimeTarget(server);
+  if (!target.minecraftVersion || target.loader !== "fabric" || !version.project_id) return null;
+
+  const versions = await fetchProjectVersions(version.project_id, {
+    loader: target.loader,
+    minecraftVersion: target.minecraftVersion
+  });
+  const latest = versions.find((candidate) => allowedForChannel(candidate, preferredChannel) && modrinthJarFile(candidate));
+  return {
+    projectId: version.project_id,
+    currentVersion: version.version_number,
+    currentChannel: versionChannel(version.version_type),
+    latestVersion: latest?.version_number,
+    latestChannel: latest ? versionChannel(latest.version_type) : undefined,
+    upToDate: Boolean(latest && version.version_number === latest.version_number)
+  };
+}
+
 async function modsList(server: ManagedServer) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
@@ -850,7 +869,7 @@ async function modsList(server: ManagedServer) {
           enabled: filename.endsWith(".jar"),
           size: entry.size,
           modifiedAt: entry.modifiedAt,
-          preferredChannel: "release",
+          preferredChannel: "release" as ReleaseChannel,
           compatibility: { status: "unknown", compatible: false, reason: "Remote mod metadata sync pending" }
         };
         try {
@@ -865,6 +884,7 @@ async function modsList(server: ManagedServer) {
             ...base,
             iconUrl: project.icon_url,
             compatibility: remoteInstalledModCompatibility(server, version, project),
+            versionInfo: await remoteLookupModrinthUpdate(server, version, base.preferredChannel),
             modrinth: {
               projectId: version.project_id,
               versionId: version.id,
