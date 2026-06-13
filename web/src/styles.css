@@ -8660,17 +8660,29 @@ details.compatibilityBadge p {
 }
 
 .updateCol {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 18px 15px;
   gap: 2px;
+  align-content: center;
+  justify-items: start;
   font-size: 13px;
+  min-height: 35px;
 }
 
 .updateStatus {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, auto);
   align-items: center;
+  justify-items: start;
   gap: 4px;
   font-weight: 800;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.updateStatus .statusIconSmall {
+  justify-self: center;
+  margin-right: 0;
 }
 
 .updateStatus.up-to-date {
@@ -8687,7 +8699,10 @@ details.compatibilityBadge p {
 
 .updateMeta {
   font-size: 11px;
+  line-height: 15px;
   color: var(--text-muted);
+  padding-left: 22px;
+  white-space: nowrap;
 }
 
 .sourceCol {
@@ -8856,8 +8871,11 @@ details.compatibilityBadge p {
     justify-self: stretch;
     justify-content: flex-end;
   }
-  .compatCol, .updateCol {
+  .compatCol {
     align-items: flex-end;
+  }
+  .updateCol {
+    justify-items: end;
   }
 }
 
