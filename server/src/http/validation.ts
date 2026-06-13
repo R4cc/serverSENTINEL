@@ -140,3 +140,36 @@ export function validateJavaArgs(args: unknown) {
   }
   return value;
 }
+
+export function javaArgsToArgv(args: unknown) {
+  const value = validateJavaArgs(args);
+  const argv: string[] = [];
+  let current = "";
+  let quote: "'" | "\"" | null = null;
+
+  for (const char of value) {
+    if (quote) {
+      if (char === quote) quote = null;
+      else current += char;
+      continue;
+    }
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        argv.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+
+  if (quote) {
+    badRequest("Java arguments contain an unterminated quote");
+  }
+  if (current) argv.push(current);
+  return argv;
+}

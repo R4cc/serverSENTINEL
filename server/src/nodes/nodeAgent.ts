@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
@@ -7,9 +7,9 @@ import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
-import { parseDockerPorts } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
-import { validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateRuntimeJarFilename } from "../http/validation.js";
+import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
@@ -60,6 +60,7 @@ const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
 const nodeUpdateDir = join(config.nodeDataDir, "node", "updates");
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
+const fileUploadSizeLimit = 32 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
 const reconnectDelayMs = 5000;
 
@@ -99,8 +100,10 @@ function slugify(input: string) {
 }
 
 function safeName(value: unknown) {
-  const name = basename(typeof value === "string" ? value.trim() : "");
-  if (!name || name === "." || name === ".." || /[<>:"/\\|?*\u0000-\u001f]/.test(name)) throw new Error("A valid filename is required");
+  const raw = typeof value === "string" ? value : "";
+  const name = basename(raw).trim();
+  if (!name || name !== raw || name === "." || name === "..") throw new Error("A valid file or folder name is required");
+  if (name.length > 160 || /[<>:"/\\|?*\u0000-\u001f]/.test(name)) throw new Error("File or folder name contains unsafe characters");
   return name;
 }
 
@@ -120,16 +123,18 @@ async function serverRoot(server: ManagedServer) {
 
 async function inside(server: ManagedServer, rel: unknown, mustExist = true) {
   const root = await serverRoot(server);
-  const target = resolve(root, safeRelative(rel));
-  if (target !== root && !target.startsWith(root + sep)) throw new Error("Path escapes server directory");
-  if (mustExist) {
-    const realRoot = resolve(root);
-    const realTarget = resolve(target);
-    const st = await lstat(realTarget);
-    if (st.isSymbolicLink()) throw new Error("Symlink paths are not allowed");
-    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) throw new Error("Path escapes server directory");
-  }
-  return target;
+  const path = safeRelative(rel);
+  return mustExist ? validateExistingInsideServer({ serverDir: root }, path) : ensureInsideServer({ serverDir: root }, path);
+}
+
+async function writableInside(server: ManagedServer, rel: unknown) {
+  const root = await serverRoot(server);
+  return ensureWritableInsideServer({ serverDir: root }, safeRelative(rel));
+}
+
+async function writableResolvedInside(server: ManagedServer, targetPath: string) {
+  const root = await serverRoot(server);
+  return ensureWritableResolvedInsideServer({ serverDir: root }, targetPath);
 }
 
 function publicPath(root: string, target: string) {
@@ -137,25 +142,34 @@ function publicPath(root: string, target: string) {
   return rel ? `/${rel}` : "/";
 }
 
+function validateBase64Content(value: unknown, allowEmpty = false) {
+  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
+    throw new Error("Uploaded content must be valid base64");
+  }
+  return value;
+}
+
+function assertJarBuffer(buffer: Buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b || ![0x03, 0x05, 0x07].includes(buffer[2])) {
+    throw new Error("Uploaded mod must be a valid .jar file");
+  }
+}
+
 function defaultContainerName(displayName: string) {
   return `serversentinel-${slugify(displayName)}`;
 }
 
 function containerName(server: ManagedServer) {
-  return server.dockerContainer?.trim() || defaultContainerName(server.displayName);
-}
-
-function shellQuote(value: string) {
-  return `'${value.replace(/'/g, "'\\''")}'`;
+  return validateDockerContainerName(server.dockerContainer?.trim() || defaultContainerName(server.displayName));
 }
 
 function runtimeConfigHash(server: ManagedServer) {
   const targetRuntime = runtimeTarget(server);
   return createHash("sha256").update(JSON.stringify({
-    image: server.dockerImage || dockerImage(targetRuntime.minecraftVersion),
+    image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
     ports: server.dockerPorts || "25565:25565/tcp",
-    serverJar: targetRuntime.serverJar || "fabric-server-launch.jar",
-    javaArgs: server.javaArgs || "-Xms2G -Xmx4G"
+    serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
+    javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G")
   })).digest("hex");
 }
 
@@ -239,7 +253,7 @@ function serializeProperties(values: Record<string, string>) {
 async function writeVersionMetadata(server: ManagedServer) {
   const now = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
-  const target = await inside(server, ".serversentinel-version.json", false);
+  const target = await writableInside(server, ".serversentinel-version.json");
   let createdAt = now;
   try {
     const existing = JSON.parse(await readFile(target, "utf8")) as { createdAt?: string };
@@ -256,33 +270,23 @@ async function writeVersionMetadata(server: ManagedServer) {
 }
 
 async function pullImage(image: string) {
+  validateDockerImageName(image);
   const [fromImage, tag] = image.includes(":") ? image.split(/:(.*)/, 2) : [image, "latest"];
   await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag || "latest")}`, [200, 201]);
 }
 
 async function createContainer(server: ManagedServer) {
   const targetRuntime = runtimeTarget(server);
-  const image = server.dockerImage || dockerImage(targetRuntime.minecraftVersion);
+  const image = validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion));
   await pullImage(image);
   const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
-  const exposedPorts: Record<string, unknown> = {};
-  const portBindings: Record<string, Array<{ HostPort: string }>> = {};
-  for (const part of (server.dockerPorts ?? "25565:25565/tcp").split(",")) {
-    const [host, containerProto] = part.trim().split(":");
-    if (!host || !containerProto) continue;
-    const key = containerProto.includes("/") ? containerProto : `${containerProto}/tcp`;
-    exposedPorts[key] = {};
-    portBindings[key] = [{ HostPort: host }];
-  }
-  const serverJar = targetRuntime.serverJar ?? "fabric-server-launch.jar";
-  const quotedServerJar = shellQuote(serverJar);
-  const javaArgs = server.javaArgs ?? "-Xms2G -Xmx4G";
-  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
-  await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(containerName(server))}`, {
+  const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts ?? "25565:25565/tcp");
+  const command = minecraftContainerCommand(server);
+  await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(validateDockerContainerName(containerName(server)))}`, {
     Image: image,
     WorkingDir: "/data",
-    Cmd: ["sh", "-lc", command],
+    Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
     Tty: false,
@@ -290,6 +294,19 @@ async function createContainer(server: ManagedServer) {
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
     Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
   }, [201, 409]);
+}
+
+function minecraftContainerCommand(server: ManagedServer) {
+  const targetRuntime = runtimeTarget(server);
+  const serverJar = validateRuntimeJarFilename(targetRuntime.serverJar ?? "fabric-server-launch.jar");
+  return [
+    "sh",
+    "-c",
+    "server_jar=$1; shift; if [ ! -f \"$server_jar\" ]; then printf '%s\\n' \"ServerSentinel could not find $server_jar in $(pwd)\" >&2; ls -la >&2; exit 66; fi; exec java \"$@\" -jar \"$server_jar\" nogui",
+    "serversentinel-entrypoint",
+    serverJar,
+    ...javaArgsToArgv(server.javaArgs ?? "-Xms2G -Xmx4G")
+  ];
 }
 
 async function removeManagedContainer(server: ManagedServer) {
@@ -331,21 +348,19 @@ async function downloadFabricJar(server: ManagedServer) {
     console.error(details);
     throw detailedError(new Error(`Fabric server download failed: ${res.status} ${res.statusText}`), details);
   }
-  const target = await inside(server, artifact.filename ?? server.serverJar ?? "fabric-server-launch.jar", false);
+  const target = await writableInside(server, artifact.filename ?? server.serverJar ?? "fabric-server-launch.jar");
   await writeFile(target, Buffer.from(await res.arrayBuffer()));
 }
 
-async function createServer(input: CreateInput) {
+function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeProfile, now = new Date().toISOString()) {
   const displayName = input.displayName?.trim();
-  if (!displayName || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
   if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
-  const now = new Date().toISOString();
+  const serverPort = input.serverPort?.trim() || "25565";
+  if (!isValidServerPort(serverPort)) {
+    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+  }
   const storageName = slugify(displayName);
-  const resolvedRuntime = await defaultServerJarProvider.resolveFabricServerJar({
-    minecraftVersion: input.minecraftVersion.trim(),
-    loaderVersion: input.loaderVersion?.trim() || "latest",
-    preferStable: true
-  });
   const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || resolvedRuntime.jarArtifact.filename);
   const runtimeProfile: ServerRuntimeProfile = {
     ...resolvedRuntime,
@@ -355,7 +370,11 @@ async function createServer(input: CreateInput) {
     }
   };
   const queryPort = queryPortFromInput(input);
-  const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${input.serverPort?.trim() || "25565"}:${input.serverPort?.trim() || "25565"}/tcp`, queryPort);
+  const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`, queryPort);
+  parseDockerPorts(dockerPorts);
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion));
+  const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const server: ManagedServer = {
     id: randomUUID(),
     nodeId: input.nodeId || "",
@@ -367,24 +386,38 @@ async function createServer(input: CreateInput) {
     installerVersion: undefined,
     serverJar,
     runtimeProfile,
-    dockerContainer: input.dockerContainer?.trim() || defaultContainerName(displayName),
-    dockerImage: input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion),
+    dockerContainer,
+    dockerImage: dockerImageName,
     dockerPorts,
     managedPorts: [queryPortEntry(queryPort)],
-    javaArgs: input.javaArgs?.trim() || "-Xms2G -Xmx4G",
+    javaArgs,
     serverType: "fabric",
     createdAt: now,
     updatedAt: now
   };
+  return { server, serverPort, queryPort };
+}
+
+async function createServer(input: CreateInput) {
+  const displayName = input.displayName?.trim();
+  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
+  validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
+  const resolvedRuntime = await defaultServerJarProvider.resolveFabricServerJar({
+    minecraftVersion: input.minecraftVersion?.trim() || "",
+    loaderVersion: input.loaderVersion?.trim() || "latest",
+    preferStable: true
+  });
+  const { server, serverPort, queryPort } = createdServerRecord(input, resolvedRuntime);
   await mkdir(await serverRoot(server), { recursive: true });
   await mkdir(await inside(server, "logs", false), { recursive: true });
-  await writeFile(await inside(server, "server.properties", false), serializeProperties({
-    "server-port": input.serverPort?.trim() || "25565",
+  await writeFile(await writableInside(server, "server.properties"), serializeProperties({
+    "server-port": serverPort,
     "enable-query": "true",
     "query.port": String(queryPort)
   }), { flag: "wx" }).catch((e: any) => { if (e.code !== "EEXIST") throw e; });
-  await writeFile(await inside(server, "eula.txt", false), `eula=${input.acceptEula ? "true" : "false"}\n`, "utf8");
-  await writeFile(await inside(server, "logs/latest.log", false), "", { flag: "a" });
+  await writeFile(await writableInside(server, "eula.txt"), `eula=${input.acceptEula ? "true" : "false"}\n`, "utf8");
+  await writeFile(await writableInside(server, "logs/latest.log"), "", { flag: "a" });
   await downloadFabricJar(server);
   if (dockerAvailable()) await ensureContainer(server);
   return server;
@@ -455,7 +488,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   }
   await writeVersionMetadata(updated);
   if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
-    const propertiesPath = await inside(updated, "server.properties", false);
+    const propertiesPath = await writableInside(updated, "server.properties");
     let props: Record<string, string> = {};
     try {
       props = parseProperties(await readFile(propertiesPath, "utf8"));
@@ -781,10 +814,38 @@ async function fileDownload(server: ManagedServer, path: unknown) {
 
 async function writeRelativeFile(server: ManagedServer, path: unknown, content: Buffer | string) {
   const root = await serverRoot(server);
-  const target = await inside(server, path, false);
-  await mkdir(dirname(target), { recursive: true });
+  const target = await writableInside(server, path);
+  if (existsSync(target)) {
+    throw new Error("A file or folder with that name already exists");
+  }
   await writeFile(target, content);
   return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
+}
+
+async function writeEditableFile(server: ManagedServer, path: unknown, content: unknown) {
+  if (typeof content !== "string") throw new Error("Content is required");
+  if (Buffer.byteLength(content, "utf8") > editorFileSizeLimit) throw new Error("File content is larger than the editor limit");
+  if (content.includes("\0")) throw new Error("Binary files cannot be edited");
+  const root = await serverRoot(server);
+  const target = await inside(server, path);
+  const targetStat = await stat(target);
+  if (!targetStat.isFile()) throw new Error("Path is not a file");
+  await writeFile(target, content, "utf8");
+  return { ok: true, path: publicPath(root, target) };
+}
+
+async function uploadFile(server: ManagedServer, parentInput: unknown, filenameInput: unknown, contentBase64Input: unknown) {
+  const parent = await inside(server, parentInput);
+  const parentStat = await stat(parent);
+  if (!parentStat.isDirectory()) throw new Error("Upload path is not a directory");
+  const contentBase64 = validateBase64Content(contentBase64Input, true);
+  const content = Buffer.from(contentBase64, "base64");
+  if (content.length > fileUploadSizeLimit) throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
+  const root = await serverRoot(server);
+  const target = await writableResolvedInside(server, join(parent, safeName(filenameInput)));
+  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+  await writeFile(target, content);
+  return { ok: true, path: publicPath(root, target), size: content.length };
 }
 
 function remoteInstalledModCompatibility(server: ManagedServer, version: ModrinthVersion, project: { server_side?: string; client_side?: string }): ModCompatibility {
@@ -905,33 +966,37 @@ async function modsList(server: ManagedServer) {
 }
 
 async function modUpload(server: ManagedServer, filename: unknown, contentBase64: unknown) {
-  const name = safeName(filename);
+  const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
   if (!name.endsWith(".jar")) throw new Error("Mod uploads must be .jar files");
-  if (typeof contentBase64 !== "string") throw new Error("Mod content is required");
-  const content = Buffer.from(contentBase64, "base64");
-  if (!content.length || content.length > uploadLimit || content[0] !== 0x50 || content[1] !== 0x4b) throw new Error("Uploaded mod must be a valid jar");
+  const content = Buffer.from(validateBase64Content(contentBase64), "base64");
+  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded mod must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
+  assertJarBuffer(content);
+  await mkdir(await inside(server, "mods", false), { recursive: true });
+  await inside(server, "mods");
   return writeRelativeFile(server, join("mods", name), content);
 }
 
 async function modInstall(server: ManagedServer, input: unknown) {
   const payload = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
-  const projectId = typeof payload.projectId === "string" ? payload.projectId.trim() : "";
-  const versionId = typeof payload.versionId === "string" ? payload.versionId.trim() : "";
+  const projectId = validateModrinthProjectId(payload.projectId);
+  const versionId = validateModrinthVersionId(payload.versionId);
   const forceIncompatible = payload.forceIncompatible === true;
   const overrideMinecraftVersion = payload.overrideMinecraftVersion === true;
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
-  if (!projectId || !targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
+  if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
 
   if (!versionId) {
     const compatibility = await resolveModrinthProjectCompatibility({ projectId, minecraftVersion: targetRuntime.minecraftVersion, loader: targetRuntime.loader, channel });
     if (!compatibility.compatible && !forceIncompatible) throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
     const file = compatibility.file;
     if (!file?.url || !file.filename) throw new Error("No installable jar found");
+    if (!file.url.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS mod file");
+    if (file.size && file.size > uploadLimit) throw new Error(`Mod download is larger than ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
     const response = await modrinthFetch(file.url);
     if (!response.ok) throw new Error(`Mod download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
-    const written = await modUpload(server, file.filename, content.toString("base64"));
+    const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
 
@@ -947,10 +1012,11 @@ async function modInstall(server: ManagedServer, input: unknown) {
   if (!matchesMinecraft && !overrideMinecraftVersion) throw new Error(`This version is not marked for Minecraft ${targetRuntime.minecraftVersion}. Confirm the Minecraft version override before installing.`);
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   if (!file.url.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS mod file");
+  if (file.size && file.size > uploadLimit) throw new Error(`Mod download is larger than ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
   const response = await modrinthFetch(file.url);
   if (!response.ok) throw new Error(`Mod download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
-  const written = await modUpload(server, file.filename, content.toString("base64"));
+  const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
   return {
     ...written,
     filename: file.filename,
@@ -1021,35 +1087,61 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.list") return fileList(server, payload?.path);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
-  if (command === "files.write") return writeRelativeFile(server, payload?.path, String(payload?.content ?? ""));
-  if (command === "files.upload") {
-    if (typeof payload?.contentBase64 !== "string") throw new Error("File content is required");
-    return writeRelativeFile(server, join(safeRelative(payload?.parent), safeName(payload?.filename)), Buffer.from(payload.contentBase64, "base64"));
-  }
+  if (command === "files.write") return writeEditableFile(server, payload?.path, payload?.content);
+  if (command === "files.upload") return uploadFile(server, payload?.parent, payload?.filename, payload?.contentBase64);
   if (command === "files.mkdir") {
     const root = await serverRoot(server);
-    const target = await inside(server, join(safeRelative(payload?.parent), safeName(payload?.name)), false);
+    const parent = await inside(server, payload?.parent);
+    const parentStat = await stat(parent);
+    if (!parentStat.isDirectory()) throw new Error("Parent path is not a directory");
+    const target = await writableResolvedInside(server, join(parent, safeName(payload?.name)));
+    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
     await mkdir(target, { recursive: false });
     return { ok: true, path: publicPath(root, target) };
   }
   if (command === "files.rename") {
     const root = await serverRoot(server);
     const source = await inside(server, payload?.path);
-    const target = await inside(server, join(dirname(safeRelative(payload?.path)), safeName(payload?.name)), false);
+    if (resolve(source) === resolve(root)) throw new Error("Refusing to rename the server root directory");
+    const target = await writableResolvedInside(server, join(dirname(source), safeName(payload?.name)));
+    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
     await rename(source, target);
     return { ok: true, path: publicPath(root, target) };
   }
   if (command === "files.copy") {
     const root = await serverRoot(server);
     const source = await inside(server, payload?.path);
-    const target = await inside(server, join(safeRelative(payload?.parent), safeName(payload?.name)), false);
+    const sourceStat = await stat(source);
+    if (!sourceStat.isFile()) throw new Error("Only files can be duplicated from the browser file manager");
+    const parent = await inside(server, payload?.parent);
+    const parentStat = await stat(parent);
+    if (!parentStat.isDirectory()) throw new Error("Parent path is not a directory");
+    const target = await writableResolvedInside(server, join(parent, safeName(payload?.name)));
+    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
     await copyFile(source, target);
     return { ok: true, path: publicPath(root, target) };
   }
   if (command === "files.delete") {
+    if (payload?.recursive !== undefined && payload.recursive !== "true" && payload.recursive !== "false") {
+      throw new Error("recursive must be true or false");
+    }
+    const root = await serverRoot(server);
     const target = await inside(server, payload?.path);
+    if (resolve(target) === resolve(root)) throw new Error("Refusing to delete the server root directory");
     const st = await stat(target);
-    if (st.isDirectory()) await rm(target, { recursive: payload?.recursive === "true", force: false });
+    if (st.isDirectory()) {
+      if (payload?.recursive === "true") {
+        await rm(target, { recursive: true, force: false });
+      } else {
+        try {
+          await rmdir(target);
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "ENOTEMPTY" || code === "EEXIST") throw new Error("Directory is not empty. Recursive deletion requires recursive=true and explicit confirmation.");
+          throw error;
+        }
+      }
+    }
     else await rm(target, { force: false });
     return { ok: true };
   }
@@ -1057,20 +1149,30 @@ async function handleCommand(command: string, payload: any) {
   if (command === "mods.upload") return modUpload(server, payload?.filename, payload?.contentBase64);
   if (command === "mods.install") return modInstall(server, payload);
   if (command === "mods.enableDisable") {
-    const filename = safeName(payload?.filename);
-    const source = await inside(server, join("mods", filename));
-    const targetName = payload?.enabled === true ? filename.replace(/\.jar\.disabled$/, ".jar") : filename.endsWith(".jar.disabled") ? filename : `${filename}.disabled`;
-    const target = await inside(server, join("mods", safeName(targetName)), false);
+    const filename = safeInstalledModFilename(payload?.filename as string | undefined);
+    const enabled = requireStrictBoolean(payload?.enabled, "enabled");
+    const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, join("mods", filename)))
+      ? `${filename}.disabled`
+      : filename;
+    const source = await inside(server, join("mods", sourceName));
+    const targetName = enabled ? sourceName.replace(/\.jar\.disabled$/, ".jar") : sourceName.endsWith(".jar.disabled") ? sourceName : `${sourceName}.disabled`;
+    const target = await writableInside(server, join("mods", safeInstalledModFilename(targetName)));
     if (source !== target) await rename(source, target);
-    return { ok: true, filename: basename(target), enabled: payload?.enabled === true };
+    return { ok: true, filename: basename(target), enabled };
   }
   if (command === "mods.remove") {
-    const filename = safeName(payload?.filename);
+    const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     await rm(await inside(server, join("mods", filename)), { force: true });
     return { ok: true, filename };
   }
   throw new Error(`Unsupported node command ${command}`);
 }
+
+export const __nodeAgentTestHooks = {
+  createdServerRecord,
+  handleCommand,
+  minecraftContainerCommand
+};
 
 export async function startNodeAgent() {
   await mkdir(config.nodeDataDir, { recursive: true });
