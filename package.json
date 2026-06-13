@@ -14,5 +14,9 @@
     "test": "npm --workspace server run test",
     "typecheck": "npm run typecheck --workspaces",
     "start": "npm --workspace server run start"
+  },
+  "overrides": {
+    "vite": "^8.0.16",
+    "esbuild": "^0.28.1"
   }
 }
