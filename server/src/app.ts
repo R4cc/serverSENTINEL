@@ -61,6 +61,7 @@ import {
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
+import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { modrinthApiKey, updateSettings } from "./storage/settingsStore.js";
 import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
 import {
@@ -133,7 +134,7 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.6.0";
+const appVersion = process.env.npm_package_version ?? "0.6.5";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const serversFile = join(config.configDir, "servers.json");
@@ -246,6 +247,8 @@ const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 
 const destructiveRateLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
 const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } };
 const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+const resourceStatsPollMs = 5_000;
+const resourceStatsHistoryWindowMs = 60 * 60 * 1000;
 
 type LogFields = Record<string, unknown>;
 
@@ -764,6 +767,7 @@ async function updateNodes(updater: (nodes: ManagedNode[]) => Promise<void> | vo
 }
 
 let runtimeRegistry: NodeRuntimeRegistry | undefined;
+let resourceStatsCollector: ResourceStatsCollector | undefined;
 
 function runtimeForServer(server: ManagedServer): NodeRuntime {
   if (!runtimeRegistry) {
@@ -1228,7 +1232,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.6.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.6.5 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1267,7 +1271,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.6.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.6.5 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -2501,7 +2505,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.6.0 (Fabric runtime downloader)"
+      "User-Agent": "ServerSentinel/0.6.5 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -3840,7 +3844,35 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/logs", async (request) => 
 app.get<{ Params: { id: string } }>("/api/servers/:id/stats", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).serverStats(server);
+  return resourceStatsCollector
+    ? resourceStatsCollector.collectServer(server)
+    : runtimeForServer(server).serverStats(server);
+});
+
+app.get<{ Params: { id: string } }>("/api/servers/:id/stats/history", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const server = await getServer(request.params.id);
+  if (!resourceStatsCollector) {
+    const sampledAt = Date.now();
+    const stats = await runtimeForServer(server).serverStats(server);
+    return {
+      samples: [
+        stats && typeof stats === "object"
+          ? { ...(stats as Record<string, unknown>), sampledAt }
+          : {
+              available: false,
+              running: false,
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              memoryLimitBytes: 0,
+              readAt: new Date(sampledAt).toISOString(),
+              message: "Container stats are unavailable",
+              sampledAt
+            }
+      ]
+    };
+  }
+  return resourceStatsCollector.history(server);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
@@ -5204,6 +5236,16 @@ runtimeRegistry = new NodeRuntimeRegistry(
     }
   )
 );
+resourceStatsCollector = new ResourceStatsCollector({
+  pollMs: resourceStatsPollMs,
+  historyWindowMs: resourceStatsHistoryWindowMs,
+  readServers: queuedReadServers,
+  runtimeForServer
+});
+resourceStatsCollector.start();
+app.addHook("onClose", async () => {
+  resourceStatsCollector?.stop();
+});
 
 await registerStaticFrontend(app);
 

@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -848,13 +848,13 @@ export default function App() {
       if (inFlight || document.hidden) return;
       inFlight = true;
       try {
-        const stats = await api<ResourceStats>(`/api/servers/${serverId}/stats`);
+        const history = await api<ResourceStatsHistory>(`/api/servers/${serverId}/stats/history`);
         if (cancelled) return;
-        setResourceSamples((samples) => [...samples, { ...stats, sampledAt: Date.now() }].slice(-resourceHistorySampleLimit));
+        setResourceSamples(history.samples);
       } catch (error) {
         if (handleStaleSession(error)) return;
         if (!cancelled) {
-          setResourceSamples((samples) => [...samples, {
+          setResourceSamples([{
             available: false,
             running: false,
             cpuPercent: 0,
@@ -863,7 +863,7 @@ export default function App() {
             readAt: new Date().toISOString(),
             message: (error as Error).message || "Container stats are unavailable",
             sampledAt: Date.now()
-          }].slice(-resourceHistorySampleLimit));
+          }]);
         }
       } finally {
         inFlight = false;

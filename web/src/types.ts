@@ -265,6 +265,10 @@ export type ResourceSample = ResourceStats & {
   sampledAt: number;
 };
 
+export type ResourceStatsHistory = {
+  samples: ResourceSample[];
+};
+
 export type ServerEvent = {
   id: string;
   eventType: "server_started" | "server_stopped" | "player_joined" | "player_left" | "mod_disabled" | "server_crashed";
