@@ -3402,7 +3402,6 @@ export default function App() {
           <div className="workspaceActions">
             {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</button>}
             {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</button>}
-            {isServerWorkspacePage(activePage) && activeServer && <button onClick={() => activeNodeRuntimeBlocked ? refreshApp() : refreshStatus()} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : activeNodeRuntimeBlocked ? "Refresh app and node status" : "Refresh server status"}>Refresh</button>}
           </div>
         </header>
 
@@ -3932,15 +3931,6 @@ export default function App() {
                       <button type="button" onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
                         Download log
                       </button>
-                      <span className="muted">
-                        {activeStatus?.commandInputAvailable
-                          ? "Command input enabled"
-                          : activeStatus?.commandInputMessage === "Start the runtime container before sending console commands" ||
-                            activeStatus?.commandInputMessage === "Start the server before sending console commands." ||
-                            activeStatus?.commandInputMessage === "Start the demo server to enable simulated console input."
-                          ? ""
-                          : activeStatus?.commandInputMessage}
-                      </span>
                     </div>
                   </div>
                   {consoleLoading && (
