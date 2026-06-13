@@ -3905,7 +3905,6 @@ export default function App() {
                   status={activeStatus}
                   dockerSocketMounted={activeServerDockerSocketMounted}
                   activity={overviewData.activity}
-                  formatDate={formatDisplayDate}
                 />
 
                 <ResourcePanel

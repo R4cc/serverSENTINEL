@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '../types';
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
-import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionSourceLabel, versionValue } from '../utils/format';
+import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
 import { AppIcon } from '../components/FileTypeIcon';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
@@ -28,23 +28,16 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   return "stopped";
 }
 
-function jarProviderLabel(provider?: string) {
-  if (provider === "mcjars") return "MCJars";
-  return "Unknown";
-}
-
 export function OverviewSummary({
   server,
   status,
   dockerSocketMounted,
-  activity,
-  formatDate
+  activity
 }: {
   server: ManagedServer;
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
-  formatDate: (value: string | number | Date) => string;
 }) {
   const running = Boolean(status?.docker.running);
   const state = dockerStateLabel(status, dockerSocketMounted);
@@ -59,39 +52,25 @@ export function OverviewSummary({
   return (
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
-        <span>State</span>
         <strong>{state}</strong>
-        <small>{running ? `Since ${formatActivityDate(activity.lastStartedAt, formatDate)}` : status?.docker.message || "Not running"}</small>
       </div>
       <div className="summaryTile">
-        <span>Minecraft version</span>
         <strong>{versionValue(minecraftVersion)}</strong>
-        <small>{versionSourceLabel(minecraftVersion.source)}</small>
       </div>
       <div className="summaryTile">
-        <span>Fabric loader</span>
         <strong>{versionValue(fabricLoaderVersion)}</strong>
-        <small>{versionSourceLabel(fabricLoaderVersion.source)}</small>
       </div>
       <div className="summaryTile">
-        <span>Runtime profile</span>
         <strong>{`${runtimeProfile.minecraftVersion} Fabric`}</strong>
-        <small>{`Java ${runtimeProfile.javaMajorVersion} - ${jarProviderLabel(runtimeProfile.jarProvider)}`}</small>
       </div>
       <div className="summaryTile">
-        <span>Uptime</span>
         <strong>{running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
-        <small>{running ? "Container start time" : "Start the server to track uptime"}</small>
       </div>
       <div className="summaryTile">
-        <span>Players online</span>
         <strong>{players}</strong>
-        <small>{players === "Unknown" ? "Start the server to detect players" : activity.maxPlayers ? "Max players" : "From recent server output"}</small>
       </div>
       <div className={`summaryTile ${runtimeTone(status, dockerSocketMounted)}`}>
-        <span>Runtime status</span>
         <strong>{runtimeLabel(status, dockerSocketMounted).replace(/^Container /, "")}</strong>
-        <small>{status?.docker.container || "No container is available yet"}</small>
       </div>
     </section>
   );
