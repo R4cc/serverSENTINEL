@@ -28,30 +28,68 @@ export function formatRate(bytesPerSecond?: number) {
   return `${(bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`;
 }
 
+function formatChartTime(sampledAt: number) {
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(sampledAt));
+}
+
 export function Sparkline({
   samples,
   value,
   tone = "blue",
-  emptyLabel = "No history yet"
+  emptyLabel = "No history yet",
+  formatValue = (item) => item.toFixed(1)
 }: {
   samples: ResourceSample[];
-  value: (sample: ResourceSample) => number;
+  value: (sample: ResourceSample, index: number, samples: ResourceSample[]) => number;
   tone?: "blue" | "green";
   emptyLabel?: string;
+  formatValue?: (value: number) => string;
 }) {
-  const values = samples.filter((sample) => sample.available && sample.running).map(value).filter((item) => Number.isFinite(item));
+  const validSamples = samples.filter((sample) => sample.available && sample.running);
+  const values = validSamples
+    .map((sample, index) => ({ sample, value: value(sample, index, validSamples) }))
+    .filter((item) => Number.isFinite(item.value));
   if (values.length < 2) return <div className="sparklineEmpty">{emptyLabel}</div>;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const range = Math.max(1, max - min);
-  const points = values.map((item, index) => {
-    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
-    const y = 36 - ((item - min) / range) * 32 - 2;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  }).join(" ");
+
+  const chart = { left: 42, right: 8, top: 10, bottom: 92, width: 240, height: 118 };
+  const rawMax = Math.max(...values.map((item) => item.value), 1);
+  const rawMin = Math.min(...values.map((item) => item.value), 0);
+  const paddedMax = rawMax === rawMin ? rawMax + 1 : rawMax;
+  const paddedMin = rawMax === rawMin ? Math.max(0, rawMin - 1) : rawMin;
+  const range = Math.max(1, paddedMax - paddedMin);
+  const plotWidth = chart.width - chart.left - chart.right;
+  const plotHeight = chart.bottom - chart.top;
+  const plotted = values.map((item, index) => {
+    const x = chart.left + (values.length === 1 ? 0 : (index / (values.length - 1)) * plotWidth);
+    const y = chart.bottom - ((item.value - paddedMin) / range) * plotHeight;
+    return { ...item, x, y };
+  });
+  const points = plotted.map((item) => `${item.x.toFixed(2)},${item.y.toFixed(2)}`).join(" ");
+  const firstSample = values[0].sample;
+  const lastSample = values.at(-1)!.sample;
+  const midValue = paddedMin + range / 2;
+
   return (
-    <svg className={`sparkline ${tone}`} viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+    <svg className={`sparkline resourceChart ${tone}`} viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img" aria-label="Resource usage history">
+      <line className="chartAxis" x1={chart.left} y1={chart.top} x2={chart.left} y2={chart.bottom} />
+      <line className="chartAxis" x1={chart.left} y1={chart.bottom} x2={chart.width - chart.right} y2={chart.bottom} />
+      {[paddedMax, midValue, paddedMin].map((tick, index) => {
+        const y = chart.top + (index / 2) * plotHeight;
+        return (
+          <g key={`${tick}-${index}`}>
+            <line className="chartGridLine" x1={chart.left} y1={y} x2={chart.width - chart.right} y2={y} />
+            <text className="chartTickLabel y" x={chart.left - 5} y={y + 3}>{formatValue(tick)}</text>
+          </g>
+        );
+      })}
+      <text className="chartTickLabel x" x={chart.left} y={chart.height - 8}>{formatChartTime(firstSample.sampledAt)}</text>
+      <text className="chartTickLabel x end" x={chart.width - chart.right} y={chart.height - 8}>{formatChartTime(lastSample.sampledAt)}</text>
       <polyline points={points} />
+      {plotted.map((item, index) => (
+        <circle key={`${item.sample.sampledAt}-${index}`} className="chartPoint" cx={item.x} cy={item.y} r="6">
+          <title>{`${formatChartTime(item.sample.sampledAt)} - ${formatValue(item.value)}`}</title>
+        </circle>
+      ))}
     </svg>
   );
 }
@@ -107,7 +145,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB / ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB` : statsUnavailableLabel}</strong>
             <small>{hasStats ? `${memoryPercent.toFixed(1)}%` : `Configured limit ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.memoryUsageBytes} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <Sparkline samples={samples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -115,7 +153,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
             <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.cpuPercent} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <Sparkline samples={samples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -123,7 +161,18 @@ export function ResourcePanel({
             <strong>{networkValue}</strong>
             <small>{hasStats ? "Current transfer rate" : "Start the server to collect network activity"}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.networkRxBytes ?? 0} tone="green" emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <Sparkline
+            samples={samples}
+            value={(sample, index, chartSamples) => {
+              const previous = chartSamples[index - 1];
+              if (!previous || sample.networkRxBytes === undefined || sample.networkTxBytes === undefined || previous.networkRxBytes === undefined || previous.networkTxBytes === undefined) return 0;
+              const seconds = Math.max(1, (sample.sampledAt - previous.sampledAt) / 1000);
+              return Math.max(0, ((sample.networkRxBytes - previous.networkRxBytes) + (sample.networkTxBytes - previous.networkTxBytes)) / seconds);
+            }}
+            tone="green"
+            formatValue={formatRate}
+            emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel}
+          />
         </div>
       </div>
     </section>

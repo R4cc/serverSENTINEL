@@ -5146,13 +5146,13 @@ button .buttonIcon {
 .resourceRow {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-4);
   background: var(--surface-muted);
   display: grid;
   grid-template-columns: minmax(210px, 0.38fr) minmax(240px, 1fr);
   gap: var(--space-4);
   align-items: center;
-  min-height: 86px;
+  min-height: 172px;
 }
 
 .resourceMetricLabel {
@@ -5188,12 +5188,11 @@ button .buttonIcon {
 
 .sparkline {
   width: 100%;
-  height: 50px;
+  height: 122px;
   border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
-  background:
-    linear-gradient(var(--border-muted) 1px, transparent 1px) 0 50% / 100% 50%,
-    var(--surface);
+  background: var(--surface);
+  overflow: visible;
 }
 
 .sparkline polyline {
@@ -5207,8 +5206,57 @@ button .buttonIcon {
   stroke: var(--sentinel-success);
 }
 
+.resourceChart {
+  color: var(--text-muted);
+}
+
+.chartAxis {
+  stroke: var(--border);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartGridLine {
+  stroke: var(--border-muted);
+  stroke-width: 0.8;
+  opacity: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartTickLabel {
+  fill: var(--text-soft);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.chartTickLabel.y {
+  text-anchor: end;
+}
+
+.chartTickLabel.x {
+  text-anchor: start;
+}
+
+.chartTickLabel.x.end {
+  text-anchor: end;
+}
+
+.chartPoint {
+  fill: transparent;
+  stroke: transparent;
+  cursor: crosshair;
+}
+
+.chartPoint:hover {
+  fill: currentColor;
+  fill-opacity: 0.16;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
 .sparklineEmpty {
-  min-height: 50px;
+  min-height: 122px;
   border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   background: var(--surface);
