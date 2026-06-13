@@ -151,6 +151,8 @@ export default function App() {
   const appRefreshInFlightRef = useRef(false);
   const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
   const loadMoreModsInFlightRef = useRef(false);
+  const consoleReconnectTimeoutRef = useRef<number | null>(null);
+  const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
   const modToggleStateQueueRef = useRef<Record<string, {
     targetEnabled: boolean;
     inFlightEnabled: boolean | null;
@@ -522,6 +524,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (consoleReconnectTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectTimeoutRef.current);
+      }
+      if (consoleCommandRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
 
@@ -680,8 +693,23 @@ export default function App() {
     void loadFiles(activeServer.id, "/");
     void loadInstalledMods(activeServer.id);
 
+    if (consoleReconnectTimeoutRef.current !== null) {
+      window.clearTimeout(consoleReconnectTimeoutRef.current);
+      consoleReconnectTimeoutRef.current = null;
+    }
+    if (consoleCommandRefreshTimeoutRef.current !== null) {
+      window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
+      consoleCommandRefreshTimeoutRef.current = null;
+    }
+
+    let closedByCleanup = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(activeServer.id)}`);
+    socket.onopen = () => {
+      if (activeServerIdRef.current === activeServer.id) {
+        setConsoleError("");
+      }
+    };
     socket.onmessage = (event) => {
       let message: { type?: string; source?: string; text?: string; message?: string };
       try {
@@ -703,8 +731,29 @@ export default function App() {
         setLogs([]);
       }
     };
-    socket.onerror = () => setLogs([consoleLine("Console stream is unavailable.")]);
-    return () => socket.close();
+    const reconnect = () => {
+      if (closedByCleanup || activeServerIdRef.current !== activeServer.id) return;
+      setConsoleError("Live console stream disconnected. Reconnecting automatically.");
+      if (consoleReconnectTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectTimeoutRef.current);
+      }
+      consoleReconnectTimeoutRef.current = window.setTimeout(() => {
+        consoleReconnectTimeoutRef.current = null;
+        if (activeServerIdRef.current === activeServer.id) {
+          setConsoleStreamVersion((version) => version + 1);
+        }
+      }, 2_000);
+    };
+    socket.onerror = reconnect;
+    socket.onclose = reconnect;
+    return () => {
+      closedByCleanup = true;
+      if (consoleReconnectTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectTimeoutRef.current);
+        consoleReconnectTimeoutRef.current = null;
+      }
+      socket.close();
+    };
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
   useEffect(() => {
@@ -1744,6 +1793,14 @@ export default function App() {
       setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
       setHistoryIndex(null);
       setCommandInput("");
+      setConsoleStreamVersion((version) => version + 1);
+      if (consoleCommandRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
+      }
+      consoleCommandRefreshTimeoutRef.current = window.setTimeout(() => {
+        consoleCommandRefreshTimeoutRef.current = null;
+        void refreshConsoleLogs(activeServer.id);
+      }, 1_500);
     } catch (error) {
       const message = errorMessage(error, "Could not send the console command. Refresh server status and try again.");
       setNotice(message);
