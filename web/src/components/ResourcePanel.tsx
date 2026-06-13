@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
-import { parseMaxMemoryGb } from '../utils/format';
+import { parseMaxMemoryGb, resourcePollMs } from '../utils/format';
 
 export function formatUptime(startedAt?: string, running?: boolean) {
   if (!running || !startedAt || /^\d{2}:\d{2}:\d{2}$/.test(startedAt)) return "Unknown";
@@ -44,6 +44,7 @@ const resourceGraphScopes = [
   { label: "1m", milliseconds: 60 * 1000 },
   { label: "5m", milliseconds: 5 * 60 * 1000 },
   { label: "15m", milliseconds: 15 * 60 * 1000 },
+  { label: "1h", milliseconds: 60 * 60 * 1000 },
   { label: "All", milliseconds: null }
 ] as const;
 
@@ -69,6 +70,19 @@ function ResourceChartTooltip({
       <span>{label}</span>
     </div>
   );
+}
+
+function formatCollectedHistory(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes ? `${hours}h ${remainingMinutes}m collected` : `${hours}h collected`;
+  }
+  if (minutes > 0) return `${minutes}m collected`;
+  return `${seconds}s collected`;
 }
 
 export function ResourceChart({
@@ -148,14 +162,23 @@ export function ResourcePanel({
 }) {
   const [graphScope, setGraphScope] = useState<ResourceGraphScope>("5m");
   const latest = samples.at(-1);
+  const selectedScope = resourceGraphScopes.find((scope) => scope.label === graphScope) ?? resourceGraphScopes[1];
   const scopedSamples = useMemo(() => {
-    const selected = resourceGraphScopes.find((scope) => scope.label === graphScope);
-    if (!selected?.milliseconds || !latest) return samples;
-    const cutoff = latest.sampledAt - selected.milliseconds;
+    if (!selectedScope.milliseconds || !latest) return samples;
+    const cutoff = latest.sampledAt - selectedScope.milliseconds;
     const minimumSamples = 2;
     const filtered = samples.filter((sample) => sample.sampledAt >= cutoff);
     return filtered.length >= minimumSamples ? filtered : samples.slice(-minimumSamples);
-  }, [graphScope, latest, samples]);
+  }, [latest, samples, selectedScope.milliseconds]);
+  const scopedValidSamples = scopedSamples.filter((sample) => sample.available && sample.running);
+  const collectedHistoryMs = scopedValidSamples.length >= 2
+    ? scopedValidSamples.at(-1)!.sampledAt - scopedValidSamples[0].sampledAt
+    : 0;
+  const showPartialHistory = Boolean(
+    selectedScope.milliseconds
+    && collectedHistoryMs > 0
+    && collectedHistoryMs < selectedScope.milliseconds - resourcePollMs
+  );
   const hasStats = Boolean(latest?.available && latest.running);
   const statsUnavailableLabel = !dockerSocketMounted ? "Not connected" : status?.docker.running ? "Collecting" : "Not running";
   const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
@@ -198,6 +221,9 @@ export function ResourcePanel({
             </button>
           ))}
         </div>
+        {showPartialHistory && (
+          <span className="resourceScopeHint">{formatCollectedHistory(collectedHistoryMs)}</span>
+        )}
       </div>
       <div className="resourceRows">
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>

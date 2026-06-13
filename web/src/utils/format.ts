@@ -10,6 +10,10 @@ export const maxServerPort = 65000;
 
 export const resourcePollMs = 5_000;
 
+export const resourceHistoryWindowMs = 60 * 60 * 1000;
+
+export const resourceHistorySampleLimit = Math.ceil(resourceHistoryWindowMs / resourcePollMs) + 1;
+
 export function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;

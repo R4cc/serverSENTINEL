@@ -3,7 +3,7 @@ import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStats, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validateJarFilename, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { minecraftCommandSuggestions } from "./utils/commands";
@@ -837,7 +837,7 @@ export default function App() {
     if (!activeServer || activeNodeRuntimeBlocked) return;
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples([demoStats(demoRunning)]);
-      const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-48)), resourcePollMs);
+      const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-resourceHistorySampleLimit)), resourcePollMs);
       return () => window.clearInterval(interval);
     }
     const serverId = activeServer.id;
@@ -850,7 +850,7 @@ export default function App() {
       try {
         const stats = await api<ResourceStats>(`/api/servers/${serverId}/stats`);
         if (cancelled) return;
-        setResourceSamples((samples) => [...samples, { ...stats, sampledAt: Date.now() }].slice(-48));
+        setResourceSamples((samples) => [...samples, { ...stats, sampledAt: Date.now() }].slice(-resourceHistorySampleLimit));
       } catch (error) {
         if (handleStaleSession(error)) return;
         if (!cancelled) {
@@ -863,7 +863,7 @@ export default function App() {
             readAt: new Date().toISOString(),
             message: (error as Error).message || "Container stats are unavailable",
             sampledAt: Date.now()
-          }].slice(-48));
+          }].slice(-resourceHistorySampleLimit));
         }
       } finally {
         inFlight = false;
