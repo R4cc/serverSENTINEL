@@ -5176,13 +5176,6 @@ button .buttonIcon {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.resourceScopeHint {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
 .resourceRows,
 .eventList {
   display: grid;
@@ -8263,10 +8256,6 @@ details.compatibilityBadge p {
 
   .resourceScopeControl button {
     flex: 1;
-  }
-
-  .resourceScopeHint {
-    width: 100%;
   }
 
   .nodesToolbar .buttonRow {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
-import { parseMaxMemoryGb, resourcePollMs } from '../utils/format';
+import { parseMaxMemoryGb } from '../utils/format';
 
 export function formatUptime(startedAt?: string, running?: boolean) {
   if (!running || !startedAt || /^\d{2}:\d{2}:\d{2}$/.test(startedAt)) return "Unknown";
@@ -70,19 +70,6 @@ function ResourceChartTooltip({
       <span>{label}</span>
     </div>
   );
-}
-
-function formatCollectedHistory(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return remainingMinutes ? `${hours}h ${remainingMinutes}m collected` : `${hours}h collected`;
-  }
-  if (minutes > 0) return `${minutes}m collected`;
-  return `${seconds}s collected`;
 }
 
 export function ResourceChart({
@@ -170,15 +157,6 @@ export function ResourcePanel({
     const filtered = samples.filter((sample) => sample.sampledAt >= cutoff);
     return filtered.length >= minimumSamples ? filtered : samples.slice(-minimumSamples);
   }, [latest, samples, selectedScope.milliseconds]);
-  const scopedValidSamples = scopedSamples.filter((sample) => sample.available && sample.running);
-  const collectedHistoryMs = scopedValidSamples.length >= 2
-    ? scopedValidSamples.at(-1)!.sampledAt - scopedValidSamples[0].sampledAt
-    : 0;
-  const showPartialHistory = Boolean(
-    selectedScope.milliseconds
-    && collectedHistoryMs > 0
-    && collectedHistoryMs < selectedScope.milliseconds - resourcePollMs
-  );
   const hasStats = Boolean(latest?.available && latest.running);
   const statsUnavailableLabel = !dockerSocketMounted ? "Not connected" : status?.docker.running ? "Collecting" : "Not running";
   const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
@@ -221,9 +199,6 @@ export function ResourcePanel({
             </button>
           ))}
         </div>
-        {showPartialHistory && (
-          <span className="resourceScopeHint">{formatCollectedHistory(collectedHistoryMs)}</span>
-        )}
       </div>
       <div className="resourceRows">
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
