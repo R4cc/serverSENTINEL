@@ -35,6 +35,7 @@ function consoleLine(text: string) {
 const modSearchDebounceMs = 650;
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
+const nodeUpdateGraceMs = 5 * 60 * 1000;
 
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -115,6 +116,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
+  const [nodeUpdatingSince, setNodeUpdatingSince] = useState<Record<string, number>>({});
+  const [nodeUpdateNow, setNodeUpdateNow] = useState(() => Date.now());
   const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
@@ -627,6 +630,41 @@ export default function App() {
     window.addEventListener("click", handleOutsideClick);
     return () => window.removeEventListener("click", handleOutsideClick);
   }, [overflowOpen]);
+
+  useEffect(() => {
+    if (Object.keys(nodeUpdatingSince).length === 0) return;
+    const interval = window.setInterval(() => setNodeUpdateNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [nodeUpdatingSince]);
+
+  useEffect(() => {
+    setNodeUpdatingSince((current) => {
+      const now = Date.now();
+      const next = { ...current };
+      let changed = false;
+      for (const [nodeId, startedAt] of Object.entries(current)) {
+        const node = contextNodes.find((candidate) => candidate.id === nodeId);
+        if (node?.status === "online" || now - startedAt >= nodeUpdateGraceMs) {
+          delete next[nodeId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [contextNodes, nodeUpdateNow]);
+
+  useEffect(() => {
+    if (Object.keys(nodeUpdatingSince).length === 0 || demoMode) return;
+    let inFlight = false;
+    const interval = window.setInterval(() => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      void refreshApp({ silent: true }).finally(() => {
+        inFlight = false;
+      });
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [nodeUpdatingSince, demoMode]);
 
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
@@ -1670,6 +1708,8 @@ export default function App() {
       });
       notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
       if (result.ok && result.mode === "self") {
+        setNodeUpdatingSince((current) => ({ ...current, [node.id]: Date.now() }));
+        setNodeUpdateNow(Date.now());
         setAppState((current) => ({
           ...current,
           nodes: current.nodes?.map((candidate) => candidate.id === node.id ? { ...candidate, status: "offline" } : candidate)
@@ -3693,7 +3733,10 @@ export default function App() {
             busy={Boolean(nodeBusyId)}
             busyNodeId={nodeBusyId}
             defaultPanelUrl={currentPanelUrl()}
-            selectedNode={nodeDetails}
+            selectedNode={nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null}
+            nodeUpdatingSince={nodeUpdatingSince}
+            nodeUpdateNow={nodeUpdateNow}
+            nodeUpdateGraceMs={nodeUpdateGraceMs}
             installResult={nodeInstallResult}
             addNodeOpen={addNodeOpen}
             addNodeResult={addNodeResult}

@@ -25,6 +25,13 @@ function statusTone(value?: string) {
   return "";
 }
 
+function formatElapsedTime(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function ServerRowIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -478,6 +485,9 @@ export function NodesPage({
   busyNodeId,
   defaultPanelUrl,
   selectedNode,
+  nodeUpdatingSince,
+  nodeUpdateNow,
+  nodeUpdateGraceMs,
   installResult,
   addNodeOpen,
   addNodeResult,
@@ -509,6 +519,9 @@ export function NodesPage({
   busyNodeId: string;
   defaultPanelUrl: string;
   selectedNode: ManagedNode | null;
+  nodeUpdatingSince: Record<string, number>;
+  nodeUpdateNow: number;
+  nodeUpdateGraceMs: number;
   installResult: NodeInstallResponse | CreateNodeResponse | null;
   addNodeOpen: boolean;
   addNodeResult: CreateNodeResponse | null;
@@ -557,8 +570,19 @@ export function NodesPage({
     ];
   }, [externalNodes, internalNode]);
   const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
-  const selectedWarnings = selectedNode ? nodeWarnings(selectedNode) : [];
-  const selectedCapabilities = selectedNode?.capabilities?.length ? selectedNode.capabilities : [];
+  const selectedDetailsNode = selectedContextNode ?? selectedNode;
+  const selectedUpdateStartedAt = selectedDetailsNode ? nodeUpdatingSince[selectedDetailsNode.id] : undefined;
+  const selectedUpdateElapsedMs = selectedUpdateStartedAt ? Math.max(0, nodeUpdateNow - selectedUpdateStartedAt) : 0;
+  const selectedNodeUpdating = Boolean(
+    selectedDetailsNode
+    && selectedDetailsNode.status === "offline"
+    && selectedUpdateStartedAt
+    && selectedUpdateElapsedMs < nodeUpdateGraceMs
+  );
+  const selectedWarnings = selectedDetailsNode
+    ? nodeWarnings(selectedDetailsNode).filter((warning) => !(selectedNodeUpdating && warning === "Node is offline."))
+    : [];
+  const selectedCapabilities = selectedDetailsNode?.capabilities?.length ? selectedDetailsNode.capabilities : [];
 
   return (
     <section className="pageStack nodesPage">
@@ -690,7 +714,7 @@ export function NodesPage({
         )}
       </section>
 
-      {selectedNode && (
+      {selectedDetailsNode && (
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onCloseDetails();
         }}>
@@ -699,7 +723,7 @@ export function NodesPage({
               <div className="nodeDetailsTitleBlock">
                 <NodeDetailIcon name="node" />
                 <div>
-                  <h2 id="node-details-title">{selectedNode.name}</h2>
+                  <h2 id="node-details-title">{selectedDetailsNode.name}</h2>
                   <p>Technical node details and maintenance actions.</p>
                 </div>
               </div>
@@ -709,19 +733,19 @@ export function NodesPage({
               <dl className="nodeInfoGrid">
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="status" />
-                  <div><dt>Status</dt><dd className={statusTone(selectedNode.status)}><span className={`nodeStatusDot ${selectedNode.status}`} aria-hidden="true" />{selectedNode.status}</dd></div>
+                  <div><dt>Status</dt><dd className={statusTone(selectedDetailsNode.status)}><span className={`nodeStatusDot ${selectedDetailsNode.status}`} aria-hidden="true" />{selectedDetailsNode.status}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="type" />
-                  <div><dt>Type</dt><dd>{selectedNode.type}</dd></div>
+                  <div><dt>Type</dt><dd>{selectedDetailsNode.type}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="agent" />
-                  <div><dt>Agent</dt><dd>{selectedNode.agentVersion || "Unknown"}</dd></div>
+                  <div><dt>Agent</dt><dd>{selectedDetailsNode.agentVersion || "Unknown"}</dd></div>
                 </div>
                 <div className="nodeInfoCard wide">
                   <NodeDetailIcon name="id" />
-                  <div><dt>ID</dt><dd className="technicalValue">{selectedNode.id}</dd></div>
+                  <div><dt>ID</dt><dd className="technicalValue">{selectedDetailsNode.id}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="panel" />
@@ -729,35 +753,35 @@ export function NodesPage({
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="protocol" />
-                  <div><dt>Protocol</dt><dd>{selectedNode.protocolVersion || "Unknown"}</dd></div>
+                  <div><dt>Protocol</dt><dd>{selectedDetailsNode.protocolVersion || "Unknown"}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="compatibility" />
-                  <div><dt>Compatibility</dt><dd className={statusTone(selectedNode.compatibility)}>{nodeCompatibilityLabel(selectedNode)}</dd></div>
+                  <div><dt>Compatibility</dt><dd className={statusTone(selectedDetailsNode.compatibility)}>{nodeCompatibilityLabel(selectedDetailsNode)}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="docker" />
-                  <div><dt>Docker</dt><dd className={statusTone(selectedNode.dockerStatus)}>{nodeDockerLabel(selectedNode)}</dd></div>
+                  <div><dt>Docker</dt><dd className={statusTone(selectedDetailsNode.dockerStatus)}>{nodeDockerLabel(selectedDetailsNode)}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="data" />
-                  <div><dt>Data path</dt><dd className={statusTone(selectedNode.dataPathStatus)}>{nodeDataPathLabel(selectedNode)}</dd></div>
+                  <div><dt>Data path</dt><dd className={statusTone(selectedDetailsNode.dataPathStatus)}>{nodeDataPathLabel(selectedDetailsNode)}</dd></div>
                 </div>
                 <div className="nodeInfoCard">
                   <NodeDetailIcon name="memory" />
-                  <div><dt>Host memory</dt><dd>{selectedNode.totalMemory ? formatBytes(selectedNode.totalMemory) : "Unknown"}</dd></div>
+                  <div><dt>Host memory</dt><dd>{selectedDetailsNode.totalMemory ? formatBytes(selectedDetailsNode.totalMemory) : "Unknown"}</dd></div>
                 </div>
                 <div className="nodeInfoCard secondary">
                   <NodeDetailIcon name="created" />
-                  <div><dt>Created</dt><dd>{formatNodeDate(selectedNode.createdAt, formatDate)}</dd></div>
+                  <div><dt>Created</dt><dd>{formatNodeDate(selectedDetailsNode.createdAt, formatDate)}</dd></div>
                 </div>
                 <div className="nodeInfoCard secondary">
                   <NodeDetailIcon name="updated" />
-                  <div><dt>Updated</dt><dd>{formatNodeDate(selectedNode.updatedAt, formatDate)}</dd></div>
+                  <div><dt>Updated</dt><dd>{formatNodeDate(selectedDetailsNode.updatedAt, formatDate)}</dd></div>
                 </div>
                 <div className="nodeInfoCard secondary">
                   <NodeDetailIcon name="seen" />
-                  <div><dt>Last seen</dt><dd>{formatNodeDate(selectedNode.lastSeenAt ?? selectedNode.connectedAt, formatDate)}</dd></div>
+                  <div><dt>Last seen</dt><dd>{formatNodeDate(selectedDetailsNode.lastSeenAt ?? selectedDetailsNode.connectedAt, formatDate)}</dd></div>
                 </div>
               </dl>
 
@@ -773,10 +797,16 @@ export function NodesPage({
                 </div>
               </details>
 
-              {selectedNode.hasPendingJoinToken && (
+              {selectedDetailsNode.hasPendingJoinToken && (
                 <div className="nodeAlert joinTokenAlert">
                   <NodeDetailIcon name="warning" />
-                  <span>{nodeJoinTokenExpired(selectedNode) ? "Join token expired. Rotate the token, copy the new install command, and run it on the node host." : `Join token pending${selectedNode.joinTokenExpiresAt ? ` until ${formatNodeDate(selectedNode.joinTokenExpiresAt, formatDate)}` : ""}. Run the install command on the node host to finish connecting this node.`}</span>
+                  <span>{nodeJoinTokenExpired(selectedDetailsNode) ? "Join token expired. Rotate the token, copy the new install command, and run it on the node host." : `Join token pending${selectedDetailsNode.joinTokenExpiresAt ? ` until ${formatNodeDate(selectedDetailsNode.joinTokenExpiresAt, formatDate)}` : ""}. Run the install command on the node host to finish connecting this node.`}</span>
+                </div>
+              )}
+              {selectedNodeUpdating && (
+                <div className="nodeAlert nodeUpdatingAlert">
+                  <span className="nodeUpdatingSpinner" aria-hidden="true" />
+                  <span>Node is updating. Waiting for it to reconnect. Elapsed {formatElapsedTime(selectedUpdateElapsedMs)}.</span>
                 </div>
               )}
               {selectedWarnings.length > 0 && (
@@ -784,29 +814,29 @@ export function NodesPage({
                   {selectedWarnings.map((warning) => <span key={warning}>{warning}</span>)}
                 </div>
               )}
-              {nodePanelUpdateRequired(selectedNode) && (
+              {nodePanelUpdateRequired(selectedDetailsNode) && (
                 <div className="nodeWarnings nodeDetailsWarnings">
-                  <span>Node agent {selectedNode.agentVersion} is newer than this panel ({panelVersion}). Update the panel before updating or managing this node image.</span>
+                  <span>Node agent {selectedDetailsNode.agentVersion} is newer than this panel ({panelVersion}). Update the panel before updating or managing this node image.</span>
                 </div>
               )}
-              {nodeVersionMismatch(selectedNode) && (
+              {nodeVersionMismatch(selectedDetailsNode) && (
                 <div className="nodeWarnings nodeDetailsWarnings">
-                  <span>Node agent {selectedNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node to matching release versions.</span>
+                  <span>Node agent {selectedDetailsNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node to matching release versions.</span>
                 </div>
               )}
               <div className="nodeActions nodeDetailsActions">
                 <div className="nodeActionGroup maintenance">
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedNode)} disabled={busyNodeId === selectedNode.id}><AppIcon name="download" />Install instructions</button>
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id}><AppIcon name="download" />Install instructions</button>
                   <button
                     type="button"
                     className="secondaryButton compactButton"
-                    onClick={() => onUpdateNode(selectedNode)}
-                    disabled={busyNodeId === selectedNode.id || !canManageNodes || !nodeUpdateAvailable(selectedNode) || !nodeCanPanelUpdate(selectedNode)}
-                    title={!nodeUpdateAvailable(selectedNode) ? "Node agent is already current" : nodeCanPanelUpdate(selectedNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
+                    onClick={() => onUpdateNode(selectedDetailsNode)}
+                    disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || !nodeUpdateAvailable(selectedDetailsNode) || !nodeCanPanelUpdate(selectedDetailsNode)}
+                    title={!nodeUpdateAvailable(selectedDetailsNode) ? "Node agent is already current" : nodeCanPanelUpdate(selectedDetailsNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
                   >
                     <AppIcon name="arrowUp" />Upgrade
                   </button>
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedNode)} disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !canManageNodes} title={selectedNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</button>
+                  <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</button>
                   <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</button>
                 </div>
                 <div className="nodeActionGroup destructive">
@@ -816,8 +846,8 @@ export function NodesPage({
                     onClick={() => {
                       if (selectedContextNode) onRemoveNode(selectedContextNode);
                     }}
-                    disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || Boolean(selectedContextNode?.servers.length) || !canManageNodes}
-                    title={selectedNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Move or delete assigned servers first" : ""}
+                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || Boolean(selectedContextNode?.servers.length) || !canManageNodes}
+                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Move or delete assigned servers first" : ""}
                   >
                     <AppIcon name="trash" />Remove node
                   </button>
@@ -827,8 +857,8 @@ export function NodesPage({
                     onClick={() => {
                       if (selectedContextNode) onRemoveNode(selectedContextNode, true);
                     }}
-                    disabled={busyNodeId === selectedNode.id || selectedNode.isInternal || !Boolean(selectedContextNode?.servers.length) || !canManageNodes}
-                    title={selectedNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and its assigned server records from the panel without contacting the node host" : "Force remove is only available when server records are assigned"}
+                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !Boolean(selectedContextNode?.servers.length) || !canManageNodes}
+                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and its assigned server records from the panel without contacting the node host" : "Force remove is only available when server records are assigned"}
                   >
                     <NodeDetailIcon name="warning" />Force remove node
                   </button>
