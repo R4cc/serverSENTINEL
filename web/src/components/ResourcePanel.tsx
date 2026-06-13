@@ -1,3 +1,4 @@
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
 import { parseMaxMemoryGb } from '../utils/format';
 
@@ -32,7 +33,35 @@ function formatChartTime(sampledAt: number) {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(sampledAt));
 }
 
-export function Sparkline({
+type ChartPoint = {
+  sampledAt: number;
+  time: string;
+  value: number;
+};
+
+function ResourceChartTooltip({
+  active,
+  payload,
+  label,
+  formatValue
+}: {
+  active?: boolean;
+  payload?: readonly { value?: unknown }[];
+  label?: string | number;
+  formatValue: (value: number) => string;
+}) {
+  const rawValue = payload?.[0]?.value;
+  const value = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!active || !Number.isFinite(value)) return null;
+  return (
+    <div className="resourceChartTooltip">
+      <strong>{formatValue(value)}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+export function ResourceChart({
   samples,
   value,
   tone = "blue",
@@ -46,51 +75,51 @@ export function Sparkline({
   formatValue?: (value: number) => string;
 }) {
   const validSamples = samples.filter((sample) => sample.available && sample.running);
-  const values = validSamples
+  const points: ChartPoint[] = validSamples
     .map((sample, index) => ({ sample, value: value(sample, index, validSamples) }))
-    .filter((item) => Number.isFinite(item.value));
-  if (values.length < 2) return <div className="sparklineEmpty">{emptyLabel}</div>;
-
-  const chart = { left: 42, right: 8, top: 10, bottom: 92, width: 240, height: 118 };
-  const rawMax = Math.max(...values.map((item) => item.value), 1);
-  const rawMin = Math.min(...values.map((item) => item.value), 0);
-  const paddedMax = rawMax === rawMin ? rawMax + 1 : rawMax;
-  const paddedMin = rawMax === rawMin ? Math.max(0, rawMin - 1) : rawMin;
-  const range = Math.max(1, paddedMax - paddedMin);
-  const plotWidth = chart.width - chart.left - chart.right;
-  const plotHeight = chart.bottom - chart.top;
-  const plotted = values.map((item, index) => {
-    const x = chart.left + (values.length === 1 ? 0 : (index / (values.length - 1)) * plotWidth);
-    const y = chart.bottom - ((item.value - paddedMin) / range) * plotHeight;
-    return { ...item, x, y };
-  });
-  const points = plotted.map((item) => `${item.x.toFixed(2)},${item.y.toFixed(2)}`).join(" ");
-  const firstSample = values[0].sample;
-  const lastSample = values.at(-1)!.sample;
-  const midValue = paddedMin + range / 2;
+    .filter((item) => Number.isFinite(item.value))
+    .map((item) => ({
+      sampledAt: item.sample.sampledAt,
+      time: formatChartTime(item.sample.sampledAt),
+      value: item.value
+    }));
+  if (points.length < 2) return <div className="resourceChartEmpty">{emptyLabel}</div>;
 
   return (
-    <svg className={`sparkline resourceChart ${tone}`} viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img" aria-label="Resource usage history">
-      <line className="chartAxis" x1={chart.left} y1={chart.top} x2={chart.left} y2={chart.bottom} />
-      <line className="chartAxis" x1={chart.left} y1={chart.bottom} x2={chart.width - chart.right} y2={chart.bottom} />
-      {[paddedMax, midValue, paddedMin].map((tick, index) => {
-        const y = chart.top + (index / 2) * plotHeight;
-        return (
-          <g key={`${tick}-${index}`}>
-            <line className="chartGridLine" x1={chart.left} y1={y} x2={chart.width - chart.right} y2={y} />
-            <text className="chartTickLabel y" x={chart.left - 5} y={y + 3}>{formatValue(tick)}</text>
-          </g>
-        );
-      })}
-      <text className="chartTickLabel x" x={chart.left} y={chart.height - 8}>{formatChartTime(firstSample.sampledAt)}</text>
-      <text className="chartTickLabel x end" x={chart.width - chart.right} y={chart.height - 8}>{formatChartTime(lastSample.sampledAt)}</text>
-      <polyline points={points} />
-      {plotted.map((item, index) => (
-        <circle key={`${item.sample.sampledAt}-${index}`} className="chartPoint" cx={item.x} cy={item.y} r="6">
-          <title>{`${formatChartTime(item.sample.sampledAt)} - ${formatValue(item.value)}`}</title>
-        </circle>
-      ))}
-    </svg>
+    <div className={`resourceChart ${tone}`} role="img" aria-label="Resource usage history">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={points} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="time"
+            minTickGap={36}
+            tickLine={false}
+            axisLine
+            tickMargin={8}
+          />
+          <YAxis
+            width={76}
+            tickFormatter={formatValue}
+            tickLine={false}
+            axisLine
+            domain={["auto", "auto"]}
+          />
+          <Tooltip
+            content={(props) => <ResourceChartTooltip {...props} formatValue={formatValue} />}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="value"
+            dot={false}
+            activeDot={{ r: 4 }}
+            stroke="currentColor"
+            strokeWidth={2}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -145,7 +174,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB / ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB` : statsUnavailableLabel}</strong>
             <small>{hasStats ? `${memoryPercent.toFixed(1)}%` : `Configured limit ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={samples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -153,7 +182,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
             <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
           </div>
-          <Sparkline samples={samples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={samples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -161,7 +190,7 @@ export function ResourcePanel({
             <strong>{networkValue}</strong>
             <small>{hasStats ? "Current transfer rate" : "Start the server to collect network activity"}</small>
           </div>
-          <Sparkline
+          <ResourceChart
             samples={samples}
             value={(sample, index, chartSamples) => {
               const previous = chartSamples[index - 1];
