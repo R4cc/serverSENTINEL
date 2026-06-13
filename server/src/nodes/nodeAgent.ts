@@ -14,7 +14,7 @@ import { allowedForChannel, fetchProject, fetchProjectVersions, modrinthJarFile,
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
-import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
@@ -787,6 +787,55 @@ async function writeRelativeFile(server: ManagedServer, path: unknown, content: 
   return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
 }
 
+function modrinthServerSideSupported(serverSide?: string) {
+  return serverSide === undefined || serverSide === "required" || serverSide === "optional";
+}
+
+function remoteInstalledModCompatibility(server: ManagedServer, version: ModrinthVersion, project: { server_side?: string; client_side?: string }): ModCompatibility {
+  const target = runtimeTarget(server);
+  const serverSide = project.server_side;
+  const clientSide = project.client_side;
+
+  if (!target.minecraftVersion || target.loader !== "fabric") {
+    return { status: "unknown", compatible: false, reason: "A resolved Fabric runtime profile is required to verify compatibility.", serverSide, clientSide };
+  }
+  if (serverSide === "unsupported") {
+    return { status: "incompatible", compatible: false, reason: "Client-only mod; server-side support is unsupported", serverSide, clientSide };
+  }
+  if (serverSide === "unknown") {
+    return { status: "unknown", compatible: false, reason: "Server-side support could not be verified", serverSide, clientSide };
+  }
+  if (!version.loaders.includes(target.loader)) {
+    return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
+  }
+  if (!version.game_versions.includes(target.minecraftVersion)) {
+    return {
+      status: "no_minecraft_version",
+      compatible: false,
+      reason: `This mod was installed for Minecraft ${version.game_versions.join(", ") || "unknown"}, but this server is ${target.minecraftVersion}.`,
+      serverSide,
+      clientSide
+    };
+  }
+  if (!modrinthServerSideSupported(serverSide)) {
+    return { status: "incompatible", compatible: false, reason: "Server-side support could not be verified.", serverSide, clientSide };
+  }
+  const file = modrinthJarFile(version);
+  return {
+    status: "compatible",
+    compatible: true,
+    reason: "Compatibility verified for this server.",
+    matchedVersionId: version.id,
+    matchedVersionNumber: version.version_number,
+    matchedVersionType: versionChannel(version.version_type),
+    matchedLoaders: version.loaders,
+    matchedGameVersions: version.game_versions,
+    file,
+    serverSide,
+    clientSide
+  };
+}
+
 async function modsList(server: ManagedServer) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
@@ -808,14 +857,14 @@ async function modsList(server: ManagedServer) {
           const target = await inside(server, join("mods", filename));
           const hash = createHash("sha1").update(await readFile(target)).digest("hex");
           const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
-          const version = await versionResponse.json() as any;
+          const version = await versionResponse.json() as ModrinthVersion;
           if (!version?.project_id) return base;
           const project = await fetchProject(version.project_id);
           const primaryFile = version.files?.find((file: any) => file.hashes?.sha1 === hash || file.primary);
           return {
             ...base,
             iconUrl: project.icon_url,
-            compatibility: { status: "unknown", compatible: false, reason: "Remote compatibility metadata is available after panel sync", serverSide: project.server_side, clientSide: project.client_side },
+            compatibility: remoteInstalledModCompatibility(server, version, project),
             modrinth: {
               projectId: version.project_id,
               versionId: version.id,
