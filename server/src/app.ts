@@ -4738,8 +4738,10 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     await validateExistingInsideServer(server, "mods");
     const installed: Array<{ projectId: string; version: string; filename: string; dependencyType: "root" | "required"; path: string }> = [];
     const prefs = await readModPreferences(server);
+    const installedProjectIds = new Set(Object.values(prefs).map((pref) => pref.modrinth?.projectId).filter(Boolean));
 
     for (const planned of installPlan.installs) {
+      if (planned.dependencyType === "required" && installedProjectIds.has(planned.projectId)) continue;
       if (!planned.file.url.startsWith("https://")) {
         throw new Error("Refusing to download a non-HTTPS mod file");
       }
@@ -4796,6 +4798,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
           forceIncompatible: planned.dependencyType === "root" && forceIncompatible && !compatibility.compatible
         }
       };
+      installedProjectIds.add(planned.projectId);
       installed.push({
         projectId: planned.projectId,
         version: planned.version.version_number,

@@ -339,9 +339,13 @@ export default function App() {
     return [...modInstallModal.data.compatibleVersions, ...modInstallModal.data.otherVersions]
       .find((version) => version.id === modInstallModal.selectedVersionId) ?? null;
   }, [modInstallModal?.data, modInstallModal?.selectedVersionId]);
-  const selectedRequiredDependencyCount = useMemo(() => {
-    return selectedInstallVersion?.dependencies.filter((dependency) => dependency.dependencyType === "required").length ?? 0;
-  }, [selectedInstallVersion]);
+  const selectedPendingRequiredDependencyCount = useMemo(() => {
+    if (!activeServerUsesInternalNode) return 0;
+    return selectedInstallVersion?.dependencies.filter((dependency) => (
+      dependency.dependencyType === "required"
+      && (!dependency.projectId || !installedModrinthProjectIds.has(dependency.projectId))
+    )).length ?? 0;
+  }, [activeServerUsesInternalNode, installedModrinthProjectIds, selectedInstallVersion]);
   const canContinueModInstall = Boolean(
     selectedInstallVersion
     && selectedInstallVersion.selectable
@@ -435,7 +439,7 @@ export default function App() {
     if (dependency.projectId && installedMods.some((mod) => mod.modrinth?.projectId === dependency.projectId)) {
       return "Already installed";
     }
-    if (dependency.dependencyType === "required") return "Will install";
+    if (dependency.dependencyType === "required") return activeServerUsesInternalNode ? "Will install" : "Install separately";
     if (dependency.dependencyType === "optional") return "Optional";
     return "Informational";
   }
@@ -4828,8 +4832,8 @@ export default function App() {
                           {modInstallModal.step === 2 && modInstallModal.data && selectedInstallVersion && (
                             <div className="modInstallConfirm">
                               <p className="modInstallReviewCopy">
-                                {selectedRequiredDependencyCount > 0
-                                  ? `Review the selected mod and ${selectedRequiredDependencyCount} required ${selectedRequiredDependencyCount === 1 ? "dependency" : "dependencies"} before installing all files.`
+                                {selectedPendingRequiredDependencyCount > 0
+                                  ? `Review the selected mod and ${selectedPendingRequiredDependencyCount} required ${selectedPendingRequiredDependencyCount === 1 ? "dependency" : "dependencies"} before installing all files.`
                                   : "Review the details below before installing."}
                               </p>
                               <section className="modConfirmSection">
@@ -4947,7 +4951,7 @@ export default function App() {
                             </button>
                           ) : (
                             <button type="button" onClick={installSelectedMod} disabled={!canContinueModInstall || modInstallModal.installing}>
-                              {modInstallModal.installing ? "Installing" : selectedRequiredDependencyCount > 0 ? "Install all" : "Install mod"}
+                              {modInstallModal.installing ? "Installing" : selectedPendingRequiredDependencyCount > 0 ? "Install all" : "Install mod"}
                             </button>
                           )}
                         </div>
