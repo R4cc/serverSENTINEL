@@ -834,7 +834,7 @@ export default function App() {
   }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
 
   useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "overview" && activePage !== "console")) return;
+    if (!activeServer || activeNodeRuntimeBlocked) return;
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples([demoStats(demoRunning)]);
       const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-48)), resourcePollMs);
@@ -875,7 +875,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, demoMode, demoRunning]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
