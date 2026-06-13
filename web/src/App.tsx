@@ -1665,7 +1665,13 @@ export default function App() {
         body: JSON.stringify({})
       });
       notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
-      setNodeDetails((current) => current?.id === node.id ? { ...current, status: result.ok && result.mode === "self" ? "offline" : current.status } : current);
+      if (result.ok && result.mode === "self") {
+        setAppState((current) => ({
+          ...current,
+          nodes: current.nodes?.map((candidate) => candidate.id === node.id ? { ...candidate, status: "offline" } : candidate)
+        }));
+        setNodeDetails((current) => current?.id === node.id ? { ...current, status: "offline" } : current);
+      }
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
       notify("error", errorMessage(error, "Could not start the node update."));

@@ -3323,7 +3323,19 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
       command: `docker pull ${image}`
     };
   }
-  return panelNodeConnections.request(node, "node.update", { image }, 30_000);
+  const result = await panelNodeConnections.request(node, "node.update", { image }, 30_000);
+  const updateResult = result as { ok?: boolean; mode?: string };
+  if (updateResult.ok && updateResult.mode === "self") {
+    const connectedAt = node.connectedAt;
+    const now = new Date().toISOString();
+    await updateNodes((nodes) => {
+      const current = nodes.find((candidate) => candidate.id === node.id);
+      if (!current || current.connectedAt !== connectedAt) return;
+      current.status = "offline";
+      current.updatedAt = now;
+    });
+  }
+  return result;
 });
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
@@ -3473,9 +3485,10 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);
     ws.on("close", () => {
+      if (panelNodeConnections.isConnected(acceptedNode!.id)) return;
       void updateNodes((nodes) => {
         const node = nodes.find((candidate) => candidate.id === acceptedNode!.id);
-        if (node) {
+        if (node && node.connectedAt === acceptedNode!.connectedAt) {
           node.status = "offline";
           node.updatedAt = new Date().toISOString();
         }
