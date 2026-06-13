@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { yaml } from "@codemirror/lang-yaml";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, defaultHighlightStyle, foldGutter, foldKeymap, indentOnInput, syntaxHighlighting, StreamLanguage } from "@codemirror/language";
-import { EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, rectangularSelection } from "@codemirror/view";
-import { properties } from "@codemirror/legacy-modes/mode/properties";
-import { toml } from "@codemirror/legacy-modes/mode/toml";
 
 type CodeEditorProps = {
   selectedPath: string;
@@ -19,15 +14,30 @@ type CodeEditorProps = {
   onSave: () => void;
 };
 
-function editorLanguage(path: string): Extension {
+async function loadEditorLanguage(path: string): Promise<Extension> {
   const fileName = path.split("/").pop()?.toLowerCase() ?? "";
   const extension = fileName.includes(".") ? fileName.split(".").pop() ?? "" : "";
 
-  if (extension === "json" || extension === "json5") return json();
-  if (extension === "yml" || extension === "yaml") return yaml();
-  if (extension === "md" || extension === "markdown") return markdown();
-  if (extension === "toml") return StreamLanguage.define(toml);
-  if (["properties", "cfg", "conf", "env"].includes(extension) || fileName === ".env") return StreamLanguage.define(properties);
+  if (extension === "json" || extension === "json5") {
+    const { json } = await import("@codemirror/lang-json");
+    return json();
+  }
+  if (extension === "yml" || extension === "yaml") {
+    const { yaml } = await import("@codemirror/lang-yaml");
+    return yaml();
+  }
+  if (extension === "md" || extension === "markdown") {
+    const { markdown } = await import("@codemirror/lang-markdown");
+    return markdown();
+  }
+  if (extension === "toml") {
+    const { toml } = await import("@codemirror/legacy-modes/mode/toml");
+    return StreamLanguage.define(toml);
+  }
+  if (["properties", "cfg", "conf", "env"].includes(extension) || fileName === ".env") {
+    const { properties } = await import("@codemirror/legacy-modes/mode/properties");
+    return StreamLanguage.define(properties);
+  }
   return [];
 }
 
@@ -106,7 +116,7 @@ export default function CodeEditor({
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
   const saveDisabledRef = useRef(saveDisabled);
-  const language = useMemo(() => editorLanguage(selectedPath), [selectedPath]);
+  const languageCompartment = useMemo(() => new Compartment(), []);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -141,7 +151,7 @@ export default function CodeEditor({
           highlightActiveLine(),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           serverSentinelEditorTheme,
-          language,
+          languageCompartment.of([]),
           EditorState.readOnly.of(disabled),
           EditorView.editable.of(!disabled),
           keymap.of([
@@ -182,7 +192,18 @@ export default function CodeEditor({
       view.destroy();
       if (viewRef.current === view) viewRef.current = null;
     };
-  }, [disabled, language, selectedPath]);
+  }, [disabled, languageCompartment]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEditorLanguage(selectedPath).then((language) => {
+      if (cancelled) return;
+      viewRef.current?.dispatch({ effects: languageCompartment.reconfigure(language) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [languageCompartment, selectedPath]);
 
   useEffect(() => {
     const view = viewRef.current;
