@@ -32,6 +32,28 @@ function consoleLine(text: string) {
   return `${text}\n`;
 }
 
+function mergeConsoleLogTail(current: string[], next: string[]) {
+  if (!next.length) return current.length ? current : next;
+  if (!current.length) return next;
+
+  for (let start = Math.max(0, current.length - next.length); start < current.length; start += 1) {
+    if (next.every((line, index) => current[start + index] === line)) {
+      return current;
+    }
+  }
+
+  const maxOverlap = Math.min(current.length, next.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    const currentTail = current.slice(current.length - overlap);
+    const nextHead = next.slice(0, overlap);
+    if (currentTail.every((line, index) => line === nextHead[index])) {
+      return [...current, ...next.slice(overlap)].slice(-500);
+    }
+  }
+
+  return current;
+}
+
 const modSearchDebounceMs = 650;
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
@@ -1452,7 +1474,7 @@ export default function App() {
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
       const nextLogs = lines.map((line) => consoleLine(`[${result.source}] ${line}`));
-      setLogs((current) => nextLogs.length ? nextLogs : current.length ? current : []);
+      setLogs((current) => mergeConsoleLogTail(current, nextLogs));
     } catch (error) {
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
@@ -1868,7 +1890,6 @@ export default function App() {
         body: JSON.stringify({ command })
       });
       setCommandHistory((current) => appendCommandHistory(current, command));
-      setConsoleStreamVersion((version) => version + 1);
       if (consoleCommandRefreshTimeoutRef.current !== null) {
         window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
       }
