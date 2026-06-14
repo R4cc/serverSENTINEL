@@ -2691,12 +2691,8 @@ export default function App() {
         };
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
+        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
         notify("success", `Uploaded ${file.name}`);
-
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Uploaded ${file.name}`, dismissible: true } : j));
-        window.setTimeout(() => {
-          setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        }, 4000);
       } catch (err) {
         const msg = (err as Error).message;
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Upload failed", error: msg, dismissible: true } : j));
@@ -2712,13 +2708,13 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ filename: file.name, contentBase64: bufferToBase64(arrayBuffer) })
       });
-      notify("success", `Uploaded ${file.name}`);
 
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
       try {
         await loadInstalledMods(activeServer.id);
         await loadFiles(activeServer.id, "/mods");
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Uploaded ${file.name}`, dismissible: true } : j));
+        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
+        notify("success", `Uploaded ${file.name}`);
       } catch (refreshErr) {
         setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
       }
