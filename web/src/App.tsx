@@ -216,6 +216,8 @@ export default function App() {
   const overviewLoadToastRunningRef = useRef(false);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
+  const authSubmittingRef = useRef(false);
+  const staleSessionSuppressUntilRef = useRef(0);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (demoMode && serverId === demoServerId) {
@@ -1246,10 +1248,22 @@ export default function App() {
     toast.info(text, options);
   }
 
+  function resetSessionRequestGuards() {
+    appRefreshInFlightRef.current = false;
+    statusRefreshInFlightRef.current.clear();
+    loadMoreModsInFlightRef.current = false;
+    if (overviewRefreshTimeoutRef.current !== null) {
+      window.clearTimeout(overviewRefreshTimeoutRef.current);
+      overviewRefreshTimeoutRef.current = null;
+    }
+  }
+
   function handleStaleSession(error: unknown) {
     if (!(error instanceof ApiError) || error.status !== 401) return false;
+    if (authSubmittingRef.current || Date.now() < staleSessionSuppressUntilRef.current) return true;
     if (staleSessionLogoutRef.current) return true;
     staleSessionLogoutRef.current = true;
+    resetSessionRequestGuards();
     window.localStorage.setItem("serversentinel-demo-mode", "false");
     setDemoMode(false);
     setAuthNotice("Sign in again to continue.");
@@ -1319,16 +1333,23 @@ export default function App() {
       }
     }
     setAuthSubmitting(true);
+    authSubmittingRef.current = true;
+    staleSessionSuppressUntilRef.current = Date.now() + 10_000;
+    let loginSucceeded = false;
     try {
       const session = await api<AuthSession>(setupRequired && !demoLogin ? "/api/auth/register-first" : "/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ username, password })
       });
+      loginSucceeded = true;
+      resetSessionRequestGuards();
       if (session.demo) {
         window.localStorage.setItem("serversentinel-demo-mode", "true");
         setAuthNotice("");
         setNotice("");
         setAppStateLoaded(false);
+        staleSessionLogoutRef.current = false;
+        staleSessionSuppressUntilRef.current = Date.now() + 5_000;
         setDemoMode(true);
         setAuthSession({ ...session, setupRequired: false });
         setActiveServerId(demoServerId);
@@ -1340,17 +1361,21 @@ export default function App() {
       setAppStateLoaded(false);
       setDemoMode(false);
       staleSessionLogoutRef.current = false;
+      staleSessionSuppressUntilRef.current = Date.now() + 5_000;
       setAuthSession(session);
       formElement.reset();
     } catch (error) {
       setAuthNotice((error as Error).message);
     } finally {
+      authSubmittingRef.current = false;
+      if (!loginSucceeded) staleSessionSuppressUntilRef.current = 0;
       setAuthSubmitting(false);
     }
   }
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => null);
+    resetSessionRequestGuards();
     window.localStorage.setItem("serversentinel-demo-mode", "false");
     setDemoMode(false);
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
@@ -1360,6 +1385,7 @@ export default function App() {
     setStatus(null);
     setLogs([]);
     staleSessionLogoutRef.current = false;
+    staleSessionSuppressUntilRef.current = 0;
   }
 
   function parsePermissionsField(form: FormData): PermissionKey[] {
