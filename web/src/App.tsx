@@ -76,6 +76,24 @@ function installedModUpdateStatus(mod: InstalledMod) {
   return "unknown";
 }
 
+const installedModHeaderLabels: Record<string, string> = {
+  actions: "Actions",
+  compatibility: "Compatibility",
+  displayName: "Mod",
+  enabled: "Status",
+  installedVersion: "Installed Version",
+  source: "Source",
+  updateStatus: "Update Status"
+};
+
+function installedModMatchesQuery(mod: InstalledMod, value: unknown) {
+  const queryText = String(value).trim().toLowerCase();
+  if (!queryText) return true;
+  return mod.displayName.toLowerCase().includes(queryText)
+    || mod.filename.toLowerCase().includes(queryText)
+    || (mod.description || "").toLowerCase().includes(queryText);
+}
+
 function AppToaster({ darkMode }: { darkMode: boolean }) {
   return (
     <Toaster
@@ -416,15 +434,7 @@ export default function App() {
   const installedModColumns = useMemo<ColumnDef<InstalledMod>[]>(() => [
     {
       id: "displayName",
-      accessorKey: "displayName",
-      filterFn: (row, _columnId, value) => {
-        const queryText = String(value).toLowerCase();
-        if (!queryText) return true;
-        const mod = row.original;
-        return mod.displayName.toLowerCase().includes(queryText)
-          || mod.filename.toLowerCase().includes(queryText)
-          || (mod.description || "").toLowerCase().includes(queryText);
-      }
+      accessorKey: "displayName"
     },
     {
       id: "compatibility",
@@ -461,14 +471,7 @@ export default function App() {
     getRowId: (mod) => mod.filename,
     onSortingChange: setInstalledModSorting,
     onGlobalFilterChange: setInstalledQuery,
-    globalFilterFn: (row, _columnId, value) => {
-      const queryText = String(value).toLowerCase();
-      if (!queryText) return true;
-      const mod = row.original;
-      return mod.displayName.toLowerCase().includes(queryText)
-        || mod.filename.toLowerCase().includes(queryText)
-        || (mod.description || "").toLowerCase().includes(queryText);
-    },
+    globalFilterFn: (row, _columnId, value) => installedModMatchesQuery(row.original, value),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel()
@@ -4455,20 +4458,10 @@ export default function App() {
                             {installedModsTable.getHeaderGroups()[0]?.headers.map((header) => (
                               <div key={header.id} className={`modsTableCell ${header.id === "actions" ? "alignEnd" : ""}`}>
                                 {header.id === "actions" ? (
-                                  "Actions"
+                                  installedModHeaderLabels.actions
                                 ) : (
                                   <SortHeaderButton header={header}>
-                                    {header.id === "displayName"
-                                      ? "Mod"
-                                      : header.id === "installedVersion"
-                                        ? "Installed Version"
-                                        : header.id === "updateStatus"
-                                          ? "Update Status"
-                                          : header.id === "enabled"
-                                            ? "Status"
-                                            : header.id === "source"
-                                              ? "Source"
-                                              : "Compatibility"}
+                                    {installedModHeaderLabels[header.id] ?? header.id}
                                   </SortHeaderButton>
                                 )}
                               </div>
@@ -4585,7 +4578,12 @@ export default function App() {
                                         </span>
                                       </>
                                     ) : (
-                                      <span className="updateStatus unknown">Unknown</span>
+                                      <span className="updateStatus unknown">
+                                        <svg className="buttonIcon statusIconSmall" viewBox="0 0 24 24">
+                                          <path d="M12 9v4m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                        <span>Unknown</span>
+                                      </span>
                                     )}
                                   </div>
                                 </div>
