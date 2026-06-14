@@ -486,6 +486,10 @@ export type GeneralJob = {
   dismissible: boolean;
 };
 
+export type OverviewLoadToast = {
+  status: "running" | "succeeded";
+};
+
 export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
 
 export type ThemePreference = "light" | "dark" | "system";

@@ -1,4 +1,4 @@
-import type { Notice, GeneralJob } from '../types';
+import type { Notice, GeneralJob, OverviewLoadToast } from '../types';
 
 const noticeLabels: Record<Notice["type"], string> = {
   error: "Error",
@@ -16,16 +16,37 @@ const jobStatusLabels: Record<GeneralJob["status"], string> = {
 export function Notifications({
   notices,
   activeJobs,
+  overviewLoadToast,
   onDismissJob,
   onDismissNotice
 }: {
   notices: Notice[];
   activeJobs: GeneralJob[];
+  overviewLoadToast: OverviewLoadToast | null;
   onDismissJob: (id: string) => void;
   onDismissNotice: (id: number) => void;
 }) {
   return (
     <div className="toastRegion">
+      {overviewLoadToast && (
+        <div className={`toast overviewLoadToast toast-${overviewLoadToast.status}`} role="status" aria-live="polite">
+          <div className="toastHeader">
+            <div className="toastTitleGroup">
+              <strong>{overviewLoadToast.status === "running" ? "Loading overview" : "Overview updated"}</strong>
+              <span>{overviewLoadToast.status === "running" ? "Loading" : "Complete"}</span>
+            </div>
+            <span
+              className={`toastStatusIcon toastStatusIcon-${overviewLoadToast.status}`}
+              aria-hidden="true"
+            />
+          </div>
+          <p className="toastMessage">
+            {overviewLoadToast.status === "running"
+              ? "Loading server activity, health, and recent events."
+              : "Server activity, health, and recent events are up to date."}
+          </p>
+        </div>
+      )}
       {activeJobs.map((job) => {
         const progress = Math.max(0, Math.min(100, job.progress));
         const statusLabel = jobStatusLabels[job.status];

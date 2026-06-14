@@ -1353,6 +1353,12 @@ button .buttonIcon {
     linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
 }
 
+.overviewLoadToast.toast-running {
+  border-color: var(--accent);
+  background:
+    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
+}
+
 .toastHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1378,6 +1384,37 @@ button .buttonIcon {
 
 .toastTitleGroup span {
   color: var(--text-muted);
+}
+
+.toastStatusIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  align-self: center;
+}
+
+.toastStatusIcon-running {
+  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-top-color: var(--accent);
+  animation: spin 0.85s linear infinite;
+}
+
+.toastStatusIcon-succeeded {
+  position: relative;
+  border: 0;
+  background: var(--sentinel-success);
+}
+
+.toastStatusIcon-succeeded::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 4px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--surface);
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
 }
 
 .toastMessage,
@@ -1418,6 +1455,7 @@ button .buttonIcon {
 }
 
 .provisioningToast.toast-succeeded,
+.overviewLoadToast.toast-succeeded,
 .toast.toast-success {
   border-color: var(--sentinel-success);
   background:
@@ -1427,6 +1465,8 @@ button .buttonIcon {
 .provisioningToast.toast-succeeded strong,
 .provisioningToast.toast-succeeded small,
 .provisioningToast.toast-succeeded .toastTitleGroup span,
+.overviewLoadToast.toast-succeeded strong,
+.overviewLoadToast.toast-succeeded .toastTitleGroup span,
 .toast.toast-success strong {
   color: var(--sentinel-success);
 }

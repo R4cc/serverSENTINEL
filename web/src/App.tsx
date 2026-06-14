@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, OverviewLoadToast, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -79,6 +79,7 @@ export default function App() {
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
   const [serverActivities, setServerActivities] = useState<Record<string, ServerActivity>>({});
   const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewLoadToast, setOverviewLoadToast] = useState<OverviewLoadToast | null>(null);
   const [overviewError, setOverviewError] = useState("");
   const [statusError, setStatusError] = useState("");
   const [consoleLoading, setConsoleLoading] = useState(false);
@@ -156,6 +157,7 @@ export default function App() {
   }>>({});
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
+  const overviewLoadToastTimeoutRef = useRef<number | null>(null);
   const staleSessionLogoutRef = useRef(false);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
@@ -916,6 +918,40 @@ export default function App() {
       window.clearInterval(interval);
     };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
+
+  useEffect(() => {
+    if (overviewLoadToastTimeoutRef.current !== null) {
+      window.clearTimeout(overviewLoadToastTimeoutRef.current);
+      overviewLoadToastTimeoutRef.current = null;
+    }
+
+    if (activePage !== "overview" || !activeServer || activeNodeRuntimeBlocked || overviewError) {
+      setOverviewLoadToast(null);
+      return;
+    }
+
+    if (overviewLoading) {
+      setOverviewLoadToast({ status: "running" });
+      return;
+    }
+
+    setOverviewLoadToast((current) => {
+      if (current?.status !== "running") return current;
+      overviewLoadToastTimeoutRef.current = window.setTimeout(() => {
+        setOverviewLoadToast(null);
+        overviewLoadToastTimeoutRef.current = null;
+      }, 3000);
+      return { status: "succeeded" };
+    });
+  }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (overviewLoadToastTimeoutRef.current !== null) {
+        window.clearTimeout(overviewLoadToastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) {
@@ -3136,6 +3172,7 @@ export default function App() {
     <Notifications
       notices={notices}
       activeJobs={activeJobs}
+      overviewLoadToast={overviewLoadToast}
       onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))}
       onDismissNotice={(noticeId) => setNotices(current => current.filter(notice => notice.id !== noticeId))}
     />
@@ -3816,13 +3853,6 @@ export default function App() {
 
             {activePage === "overview" && (
               <section className="tabPage overviewPage">
-                {overviewLoading && (
-                  <InlineState
-                    tone="loading"
-                    title="Loading overview"
-                    message="Loading server activity, health, and recent events."
-                  />
-                )}
                 {overviewError && (
                   <InlineState
                     tone="warning"
