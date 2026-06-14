@@ -1322,6 +1322,8 @@ button .buttonIcon {
 }
 
 .sonnerToast {
+  position: relative !important;
+  padding-right: 36px !important;
   border: var(--border-strong) solid var(--border-panel) !important;
   border-radius: var(--radius-sm) !important;
   background: var(--surface-raised) !important;
@@ -1339,6 +1341,44 @@ button .buttonIcon {
   color: var(--text-muted) !important;
   font-weight: 700 !important;
   overflow-wrap: anywhere;
+}
+
+/* Custom styling for Sonner toast close button to place it in the top right, non-colored */
+.sonnerToast [data-close-button] {
+  position: absolute !important;
+  left: auto !important;
+  right: 8px !important;
+  top: 8px !important;
+  transform: none !important;
+  
+  /* Reset generic button styles */
+  min-height: unset !important;
+  height: 20px !important;
+  width: 20px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  /* Make it non-colored / transparent background with neutral border/text */
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  border-radius: 50% !important;
+  transition: background 150ms linear, color 150ms linear !important;
+}
+
+.sonnerToast [data-close-button]:hover {
+  background: var(--surface-muted) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+
+.sonnerToast [data-close-button] svg {
+  width: 10px !important;
+  height: 10px !important;
+  color: currentColor !important;
 }
 
 .appForm label,
