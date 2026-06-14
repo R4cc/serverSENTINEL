@@ -7426,6 +7426,20 @@ details.compatibilityBadge p {
   letter-spacing: 0.04em;
 }
 
+.scheduleTableHeader button {
+  justify-content: start;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
 .scheduleTableBody {
   flex: 1 1 auto;
   min-height: 0;
@@ -8458,6 +8472,20 @@ details.compatibilityBadge p {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.modsTableHeader button {
+  justify-content: start;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
 }
 
 .modsTableRow {

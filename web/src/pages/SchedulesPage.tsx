@@ -1,7 +1,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState
+} from '@tanstack/react-table';
 import type { ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
+import { SortHeaderButton } from '../components/TableControls';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 
@@ -31,6 +39,7 @@ export function SchedulePage({
   const [formMode, setFormMode] = useState<ScheduleFormMode | null>(null);
   const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
   const [formError, setFormError] = useState("");
+  const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
   const runsFeedRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +56,44 @@ export function SchedulePage({
 
   const recentRuns = useMemo(() => scheduleRuns(schedules), [schedules]);
   const recentRunsKey = recentRuns.map((run) => run.id).join("|");
+  const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
+    {
+      id: "name",
+      accessorKey: "name"
+    },
+    {
+      id: "cron",
+      accessorKey: "cron"
+    },
+    {
+      id: "lastRunAt",
+      accessorFn: (schedule) => schedule.lastRunAt ? new Date(schedule.lastRunAt).getTime() : 0
+    },
+    {
+      id: "nextRunAt",
+      accessorFn: (schedule) => schedule.nextRunAt ? new Date(schedule.nextRunAt).getTime() : 0
+    },
+    {
+      id: "enabled",
+      accessorFn: (schedule) => schedule.enabled ? 1 : 0
+    },
+    {
+      id: "actions",
+      enableSorting: false
+    }
+  ], []);
+  const scheduleTable = useReactTable({
+    data: schedules,
+    columns: scheduleColumns,
+    getRowId: (schedule) => schedule.id,
+    state: {
+      sorting: scheduleSorting
+    },
+    onSortingChange: setScheduleSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  });
+  const scheduleRows = scheduleTable.getRowModel().rows;
 
   useEffect(() => {
     runsFeedRef.current?.scrollTo({ top: 0 });
@@ -117,15 +164,30 @@ export function SchedulePage({
 
         <div className="scheduleTableFrame">
           <div className="scheduleTableHeader" role="row">
-            <span>Name</span>
-            <span>Schedule</span>
-            <span>Last run</span>
-            <span>Next run</span>
-            <span>Enabled</span>
-            <span>Actions</span>
+            {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
+              <span key={header.id}>
+                {header.id === "actions" ? (
+                  "Actions"
+                ) : (
+                  <SortHeaderButton header={header}>
+                    {header.id === "name"
+                      ? "Name"
+                      : header.id === "cron"
+                        ? "Schedule"
+                        : header.id === "lastRunAt"
+                          ? "Last run"
+                          : header.id === "nextRunAt"
+                            ? "Next run"
+                            : "Enabled"}
+                  </SortHeaderButton>
+                )}
+              </span>
+            ))}
           </div>
           <div className="scheduleTableBody">
-            {schedules.length ? schedules.map((schedule) => (
+            {scheduleRows.length ? scheduleRows.map((row) => {
+              const schedule = row.original;
+              return (
               <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}>
                 <div className="scheduleNameCell" data-label="Name">
                   <div>
@@ -182,7 +244,8 @@ export function SchedulePage({
                   <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>Delete</button>
                 </div>
               </article>
-            )) : (
+              );
+            }) : (
               <div className="scheduleNoRows">
                 <strong>No schedules added</strong>
                 <span>Use Add schedule to create an automated console command.</span>

@@ -1,7 +1,5 @@
 import type { FilePreview, ModrinthHit, ModrinthInstallVersionsResponse, ReleaseChannel } from "../types";
 
-export type FileSortKey = "name" | "modifiedAt" | "type" | "size";
-
 export type FilePreviewState = {
   path: string;
   loading: boolean;

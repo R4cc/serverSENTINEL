@@ -1,4 +1,14 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  functionalUpdate,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type RowSelectionState,
+  type SortingState
+} from "@tanstack/react-table";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
@@ -11,7 +21,7 @@ import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
-import type { FilePreviewState, FileSortKey, ModInstallModalState } from "./app/uiState";
+import type { FilePreviewState, ModInstallModalState } from "./app/uiState";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
@@ -23,6 +33,7 @@ import { ModInstallVersionSkeleton } from "./components/ModInstallVersionSkeleto
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
+import { SortHeaderButton } from "./components/TableControls";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -91,7 +102,7 @@ export default function App() {
   const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
   const [fileBackStack, setFileBackStack] = useState<string[]>([]);
   const [fileForwardStack, setFileForwardStack] = useState<string[]>([]);
-  const [fileSort, setFileSort] = useState<{ key: FileSortKey; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
+  const [fileSorting, setFileSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
   const [fileOperationBusy, setFileOperationBusy] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
@@ -111,6 +122,7 @@ export default function App() {
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [modsView, setModsView] = useState<"manager" | "search">("manager");
   const [installedQuery, setInstalledQuery] = useState("");
+  const [installedModSorting, setInstalledModSorting] = useState<SortingState>([{ id: "displayName", desc: false }]);
   const [detailsMod, setDetailsMod] = useState<InstalledMod | null>(null);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
@@ -304,23 +316,63 @@ export default function App() {
   }, [listing.entries, selectedFilePaths]);
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
-  const sortedFileEntries = useMemo(() => {
-    const direction = fileSort.direction === "asc" ? 1 : -1;
-    return [...listing.entries].sort((a, b) => {
-      const folderOrder = Number(b.type === "directory") - Number(a.type === "directory");
-      if (folderOrder !== 0) return folderOrder;
-      let result = 0;
-      if (fileSort.key === "name") result = a.name.localeCompare(b.name);
-      if (fileSort.key === "modifiedAt") result = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
-      if (fileSort.key === "type") result = fileDisplayType(a).localeCompare(fileDisplayType(b));
-      if (fileSort.key === "size") result = a.size - b.size;
-      return result === 0 ? a.name.localeCompare(b.name) : result * direction;
-    });
-  }, [fileSort, listing.entries]);
-  const visibleFilePaths = useMemo(() => sortedFileEntries.map((entry) => entry.path), [sortedFileEntries]);
-  const visibleSelectedCount = visibleFilePaths.filter((path) => selectedFilePaths.includes(path)).length;
-  const allVisibleFilesSelected = visibleFilePaths.length > 0 && visibleSelectedCount === visibleFilePaths.length;
-  const someVisibleFilesSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleFilePaths.length;
+  const fileRowSelection = useMemo<RowSelectionState>(() => (
+    Object.fromEntries(selectedFilePaths.map((path) => [path, true]))
+  ), [selectedFilePaths]);
+  const fileColumns = useMemo<ColumnDef<FileEntry>[]>(() => {
+    const sortedColumn = fileSorting.find((sort) => sort.id !== "select")?.id;
+    const fileSortWithFolders = (columnId: string, compare: (left: FileEntry, right: FileEntry) => number) => (left: { original: FileEntry }, right: { original: FileEntry }) => {
+      const folderOrder = Number(right.original.type === "directory") - Number(left.original.type === "directory");
+      if (folderOrder !== 0) return sortedColumn === columnId && fileSorting[0]?.desc ? -folderOrder : folderOrder;
+      const result = compare(left.original, right.original);
+      return result === 0 ? left.original.name.localeCompare(right.original.name) : result;
+    };
+
+    return [
+      { id: "select", enableSorting: false },
+      {
+        id: "name",
+        accessorKey: "name",
+        sortingFn: fileSortWithFolders("name", (left, right) => left.name.localeCompare(right.name))
+      },
+      {
+        id: "modifiedAt",
+        accessorKey: "modifiedAt",
+        sortingFn: fileSortWithFolders("modifiedAt", (left, right) => new Date(left.modifiedAt).getTime() - new Date(right.modifiedAt).getTime())
+      },
+      {
+        id: "type",
+        accessorFn: (entry) => fileDisplayType(entry),
+        sortingFn: fileSortWithFolders("type", (left, right) => fileDisplayType(left).localeCompare(fileDisplayType(right)))
+      },
+      {
+        id: "size",
+        accessorKey: "size",
+        sortingFn: fileSortWithFolders("size", (left, right) => left.size - right.size)
+      }
+    ];
+  }, [fileSorting]);
+  const fileTable = useReactTable({
+    data: listing.entries,
+    columns: fileColumns,
+    getRowId: (entry) => entry.path,
+    state: {
+      sorting: fileSorting,
+      rowSelection: fileRowSelection
+    },
+    enableRowSelection: true,
+    onSortingChange: setFileSorting,
+    onRowSelectionChange: (updater) => {
+      setSelectedFilePaths((current) => {
+        const currentSelection = Object.fromEntries(current.map((path) => [path, true]));
+        const nextSelection = functionalUpdate(updater, currentSelection);
+        return Object.keys(nextSelection).filter((path) => nextSelection[path]);
+      });
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  });
+  const sortedFileRows = fileTable.getRowModel().rows;
   const selectionSummary = selectedEntries.length === 0
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
@@ -353,13 +405,64 @@ export default function App() {
       ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
     ];
   }, [listing.path]);
-  const filteredInstalledMods = useMemo(() => {
-    return installedMods.filter(mod => {
-      return mod.displayName.toLowerCase().includes(installedQuery.toLowerCase()) ||
-             mod.filename.toLowerCase().includes(installedQuery.toLowerCase()) ||
-             (mod.description || "").toLowerCase().includes(installedQuery.toLowerCase());
-    });
-  }, [installedMods, installedQuery]);
+  const installedModColumns = useMemo<ColumnDef<InstalledMod>[]>(() => [
+    {
+      id: "displayName",
+      accessorKey: "displayName",
+      filterFn: (row, _columnId, value) => {
+        const queryText = String(value).toLowerCase();
+        if (!queryText) return true;
+        const mod = row.original;
+        return mod.displayName.toLowerCase().includes(queryText)
+          || mod.filename.toLowerCase().includes(queryText)
+          || (mod.description || "").toLowerCase().includes(queryText);
+      }
+    },
+    {
+      id: "compatibility",
+      accessorFn: (mod) => compatibilityLabel(mod.compatibility)
+    },
+    {
+      id: "installedVersion",
+      accessorFn: (mod) => mod.versionInfo?.currentVersion || mod.modrinth?.versionNumber || "Unknown"
+    },
+    {
+      id: "updateStatus",
+      accessorFn: (mod) => mod.versionInfo?.upToDate === true ? "Up to date" : mod.versionInfo?.upToDate === false ? "Update available" : "Unknown"
+    },
+    {
+      id: "source",
+      accessorFn: (mod) => mod.modrinth ? "Modrinth" : "Uploaded"
+    },
+    {
+      id: "enabled",
+      accessorFn: (mod) => mod.enabled ? "Enabled" : "Disabled"
+    },
+    { id: "actions", enableSorting: false }
+  ], []);
+  const installedModsTable = useReactTable({
+    data: installedMods,
+    columns: installedModColumns,
+    state: {
+      sorting: installedModSorting,
+      globalFilter: installedQuery
+    },
+    getRowId: (mod) => mod.filename,
+    onSortingChange: setInstalledModSorting,
+    onGlobalFilterChange: setInstalledQuery,
+    globalFilterFn: (row, _columnId, value) => {
+      const queryText = String(value).toLowerCase();
+      if (!queryText) return true;
+      const mod = row.original;
+      return mod.displayName.toLowerCase().includes(queryText)
+        || mod.filename.toLowerCase().includes(queryText)
+        || (mod.description || "").toLowerCase().includes(queryText);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  });
+  const filteredInstalledModRows = installedModsTable.getRowModel().rows;
   const installedModrinthProjectIds = useMemo(() => {
     return new Set(installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
   }, [installedMods]);
@@ -387,9 +490,9 @@ export default function App() {
 
   useEffect(() => {
     if (fileSelectAllRef.current) {
-      fileSelectAllRef.current.indeterminate = someVisibleFilesSelected;
+      fileSelectAllRef.current.indeterminate = fileTable.getIsSomeRowsSelected() && !fileTable.getIsAllRowsSelected();
     }
-  }, [someVisibleFilesSelected, allVisibleFilesSelected, visibleFilePaths.length]);
+  }, [fileRowSelection, fileTable, sortedFileRows.length]);
 
 
 
@@ -4075,50 +4178,34 @@ export default function App() {
 
                     <div className="fileTable" role="table" aria-label="Server files">
                       <div className="fileTableHead" role="row">
-                        <label className="fileCheckboxCell fileSelectAllCell" aria-label={allVisibleFilesSelected ? "Clear visible selection" : "Select all visible files"}>
+                        <label className="fileCheckboxCell fileSelectAllCell" aria-label={fileTable.getIsAllRowsSelected() ? "Clear visible selection" : "Select all visible files"}>
                           <input
                             ref={fileSelectAllRef}
                             type="checkbox"
-                            checked={allVisibleFilesSelected}
-                            disabled={sortedFileEntries.length === 0}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setSelectedFilePaths((current) => {
-                                const visible = new Set(visibleFilePaths);
-                                return checked
-                                  ? [...new Set([...current, ...visibleFilePaths])]
-                                  : current.filter((path) => !visible.has(path));
-                              });
-                            }}
+                            checked={fileTable.getIsAllRowsSelected()}
+                            disabled={sortedFileRows.length === 0}
+                            onChange={fileTable.getToggleAllRowsSelectedHandler()}
                           />
                         </label>
-                        {([
-                          ["name", "Name"],
-                          ["modifiedAt", "Date Modified"],
-                          ["type", "Type"],
-                          ["size", "Size"]
-                        ] as Array<[FileSortKey, string]>).map(([key, label]) => (
-                          <button key={key} type="button" onClick={() => setFileSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" })}>
-                            {label}
-                            {fileSort.key === key ? (fileSort.direction === "asc" ? " asc" : " desc") : ""}
-                          </button>
+                        {fileTable.getHeaderGroups()[0]?.headers.filter((header) => header.id !== "select").map((header) => (
+                          <SortHeaderButton key={header.id} header={header}>
+                            {header.id === "name" ? "Name" : header.id === "modifiedAt" ? "Date Modified" : header.id === "type" ? "Type" : "Size"}
+                          </SortHeaderButton>
                         ))}
                       </div>
-                      {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
+                      {!filesLoading && !filesError && sortedFileRows.length === 0 && (
                         <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
                       )}
-                      {sortedFileEntries.map((entry) => {
-                        const selected = selectedFilePaths.includes(entry.path);
+                      {sortedFileRows.map((row) => {
+                        const entry = row.original;
+                        const selected = row.getIsSelected();
                         return (
                           <div key={entry.path} className={`fileTableRow ${selected ? "selected" : ""}`} role="row" onDoubleClick={() => entry.type === "directory" ? navigateFiles(entry.path) : openFile(entry.path)}>
                             <label className="fileCheckboxCell" aria-label={`Select ${entry.name}`}>
                               <input
                                 type="checkbox"
                                 checked={selected}
-                                onChange={(event) => {
-                                  const checked = event.target.checked;
-                                  setSelectedFilePaths((current) => checked ? [...new Set([...current, entry.path])] : current.filter((path) => path !== entry.path));
-                                }}
+                                onChange={row.getToggleSelectedHandler()}
                               />
                             </label>
                             <button type="button" className="fileNameCell" onClick={() => entry.type === "directory" ? navigateFiles(entry.path) : setSelectedFilePaths([entry.path])} title={entry.path}>
@@ -4133,7 +4220,7 @@ export default function App() {
                       })}
                     </div>
                     <div className="fileTableFooter">
-                      <span>{sortedFileEntries.length} items</span>
+                      <span>{sortedFileRows.length} items</span>
                       <span>{selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
                     </div>
                   </section>
@@ -4329,23 +4416,38 @@ export default function App() {
                       <div className="modsTableFrame">
                         <div className="modsTable">
                           <div className="modsTableHeader">
-                            <div className="modsTableCell">Mod</div>
-                            <div className="modsTableCell">Compatibility</div>
-                            <div className="modsTableCell">Installed Version</div>
-                            <div className="modsTableCell">Update Status</div>
-                            <div className="modsTableCell">Source</div>
-                            <div className="modsTableCell">Status</div>
-                            <div className="modsTableCell alignEnd">Actions</div>
+                            {installedModsTable.getHeaderGroups()[0]?.headers.map((header) => (
+                              <div key={header.id} className={`modsTableCell ${header.id === "actions" ? "alignEnd" : ""}`}>
+                                {header.id === "actions" ? (
+                                  "Actions"
+                                ) : (
+                                  <SortHeaderButton header={header}>
+                                    {header.id === "displayName"
+                                      ? "Mod"
+                                      : header.id === "installedVersion"
+                                        ? "Installed Version"
+                                        : header.id === "updateStatus"
+                                          ? "Update Status"
+                                          : header.id === "enabled"
+                                            ? "Status"
+                                            : header.id === "source"
+                                              ? "Source"
+                                              : "Compatibility"}
+                                  </SortHeaderButton>
+                                )}
+                              </div>
+                            ))}
                           </div>
 
                           <div className="modsTableBody">
-                            {filteredInstalledMods.length === 0 ? (
+                            {filteredInstalledModRows.length === 0 ? (
                               <div className="emptyInline noBorder">
                                 <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
                                 <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
                               </div>
                             ) : (
-                              filteredInstalledMods.map((mod) => {
+                              filteredInstalledModRows.map((row) => {
+                                const mod = row.original;
                                 const isComp = mod.compatibility?.compatible;
                                 const compStatus = mod.compatibility?.status;
                                 const iconSrc = modIconSource(mod.iconUrl);
