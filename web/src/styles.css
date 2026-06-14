@@ -8438,6 +8438,15 @@ details.compatibilityBadge p {
 }
 
 .modsTable {
+  --mods-table-columns:
+    minmax(240px, 2fr)
+    minmax(150px, 1.05fr)
+    minmax(150px, 1fr)
+    minmax(190px, 1.12fr)
+    minmax(96px, 0.52fr)
+    minmax(76px, 0.38fr)
+    minmax(164px, auto);
+
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -8466,7 +8475,7 @@ details.compatibilityBadge p {
 .modsTableHeader {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(240px, 2.5fr) minmax(130px, 1.2fr) minmax(140px, 1.2fr) minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(110px, 1.1fr) minmax(210px, 1.8fr);
+  grid-template-columns: var(--mods-table-columns);
   background: var(--surface-muted);
   border-bottom: var(--border-strong) solid var(--border);
   padding: var(--space-3);
@@ -8493,7 +8502,7 @@ details.compatibilityBadge p {
 
 .modsTableRow {
   display: grid;
-  grid-template-columns: minmax(240px, 2.5fr) minmax(130px, 1.2fr) minmax(140px, 1.2fr) minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(110px, 1.1fr) minmax(210px, 1.8fr);
+  grid-template-columns: var(--mods-table-columns);
   border-bottom: var(--border-strong) solid var(--border);
   padding: var(--space-3);
   align-items: center;
@@ -8641,6 +8650,7 @@ details.compatibilityBadge p {
   font-weight: 800;
   line-height: 18px;
   white-space: nowrap;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -11645,15 +11655,8 @@ details.compatibilityBadge p {
 
 .modsTableHeader,
 .modsTableRow {
-  min-width: 914px;
-  grid-template-columns:
-    minmax(220px, 1.2fr)
-    minmax(116px, 0.58fr)
-    minmax(110px, 0.52fr)
-    minmax(116px, 0.54fr)
-    minmax(66px, 0.32fr)
-    minmax(88px, 0.36fr)
-    minmax(174px, auto);
+  min-width: 1066px;
+  grid-template-columns: var(--mods-table-columns);
 }
 
 .modsTableRow {
