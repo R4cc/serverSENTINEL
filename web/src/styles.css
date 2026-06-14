@@ -5479,6 +5479,10 @@ button .buttonIcon {
   box-shadow: none;
 }
 
+.eventLogButton {
+  padding-inline: var(--space-2);
+}
+
 .textLinkButton.compact {
   margin-top: 0;
   font-size: 12px;

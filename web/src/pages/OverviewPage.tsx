@@ -203,17 +203,17 @@ export function RecentEventsPanel({
         )) : (
           <div className="eventEmpty">
             <strong>{hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}</strong>
-            <span>
-              {hasHiddenEvents
-                ? "Reset hidden events to show them again."
-                : eventsStatus === "unavailable"
-                  ? "Open the console to inspect raw logs, or try again after the server writes new output."
-                  : "Start the server or use it normally; important activity will appear here."}
-            </span>
+            {(hasHiddenEvents || eventsStatus === "unavailable") && (
+              <span>
+                {hasHiddenEvents
+                  ? "Reset hidden events to show them again."
+                  : "Open the console to inspect raw logs, or try again after the server writes new output."}
+              </span>
+            )}
           </div>
         )}
       </div>
-      <button type="button" className="textLinkButton" onClick={onOpenConsole}>View full log</button>
+      <button type="button" className="textLinkButton eventLogButton" onClick={onOpenConsole}>View full log</button>
 
       {confirmHide && (
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {

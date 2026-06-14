@@ -145,6 +145,7 @@ export default function App() {
   } = usePreferencesState();
   const consoleRef = useRef<HTMLDivElement>(null);
   const previousLogCountRef = useRef(0);
+  const consoleLogServerIdRef = useRef("");
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
@@ -699,7 +700,9 @@ export default function App() {
   useEffect(() => {
     if (!activeServer) return;
     setActiveServerId(activeServer.id);
-    setLogs([]);
+    const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
+    consoleLogServerIdRef.current = activeServer.id;
+    if (serverChanged) setLogs([]);
     resetEditorState();
     setResourceSamples([]);
     setModSearchResults([]);
@@ -770,7 +773,7 @@ export default function App() {
         setLogs([consoleLine(message.message ?? "Console stream is unavailable.")]);
       }
       if (message.type === "empty") {
-        setLogs([]);
+        setLogs((current) => current.length ? current : []);
       }
     };
     const reconnect = () => {
@@ -1422,7 +1425,8 @@ export default function App() {
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
-      setLogs(lines.map((line) => consoleLine(`[${result.source}] ${line}`)));
+      const nextLogs = lines.map((line) => consoleLine(`[${result.source}] ${line}`));
+      setLogs((current) => nextLogs.length ? nextLogs : current.length ? current : []);
     } catch (error) {
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
