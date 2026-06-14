@@ -5523,6 +5523,7 @@ button .buttonIcon {
   min-height: 0;
   height: auto;
   overflow: auto;
+  overflow-anchor: none;
   padding: var(--space-3);
   font-size: 12px;
   line-height: 1.5;

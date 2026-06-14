@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
@@ -798,22 +798,23 @@ export default function App() {
     };
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
-  useEffect(() => {
+  function scrollConsoleToBottom() {
+    const element = consoleRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+    setPendingConsoleEntries(0);
+  }
+
+  useLayoutEffect(() => {
     if (activePage !== "overview" && activePage !== "console") return;
     if (!consolePinnedToBottom) return;
-    window.requestAnimationFrame(() => {
-      consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
-      setPendingConsoleEntries(0);
-    });
-  }, [logs, activePage]);
+    scrollConsoleToBottom();
+  }, [logs, activePage, consolePinnedToBottom]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activePage === "overview" || activePage === "console") {
       setConsolePinnedToBottom(true);
-      window.requestAnimationFrame(() => {
-        consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
-        setPendingConsoleEntries(0);
-      });
+      scrollConsoleToBottom();
     }
   }, [activePage]);
 
@@ -1817,6 +1818,8 @@ export default function App() {
     const command = commandInput.trim().replace(/^\//, "");
     if (!command) return;
     setCommandSending(true);
+    setConsolePinnedToBottom(true);
+    scrollConsoleToBottom();
     setNotice("");
     try {
       if (activeServerIsDemo) {
