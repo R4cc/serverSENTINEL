@@ -233,6 +233,7 @@ export function MinecraftTerminal({
   function writePrompt() {
     if (promptVisibleRef.current || !terminalRef.current) return;
     terminalRef.current.write(`${prompt}${inputRef.current}`);
+    terminalRef.current.scrollToBottom();
     promptVisibleRef.current = true;
   }
 
@@ -244,6 +245,7 @@ export function MinecraftTerminal({
     if (!terminalRef.current) return;
     promptVisibleRef.current = true;
     terminalRef.current.write(`\r\x1b[2K${prompt}${inputRef.current}`);
+    terminalRef.current.scrollToBottom();
   }
 
   return (
