@@ -9561,7 +9561,6 @@ button:disabled,
   scrollbar-width: thin;
 }
 
-.terminal pre,
 .installSnippet code,
 .modDetailsHashes {
   overflow-wrap: normal;
@@ -11573,8 +11572,7 @@ details.compatibilityBadge p {
   padding-bottom: 0;
 }
 
-.terminal,
-.consoleLog {
+.terminal {
   min-height: 0;
 }
 
@@ -11583,7 +11581,6 @@ details.compatibilityBadge p {
   width: 100%;
 }
 
-.consoleCommandForm,
 .fileNavBar,
 .fileToolbar,
 .selectionActionBar,
