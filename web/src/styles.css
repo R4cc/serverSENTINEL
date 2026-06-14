@@ -5515,7 +5515,7 @@ button .buttonIcon {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 18%, var(--terminal-bg));
   border-radius: var(--radius-md);
   background: var(--terminal-bg);
   color: var(--terminal-text);
@@ -5528,17 +5528,22 @@ button .buttonIcon {
   flex-direction: column;
   min-height: 0;
   width: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--radius-md) - 1px);
+  background: var(--terminal-bg);
 }
 
 .minecraftTerminal {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  padding: var(--space-3);
+  overflow: hidden;
+  padding: 6px 8px;
 }
 
 .minecraftTerminal .xterm {
   height: 100%;
+  padding: 0;
 }
 
 .minecraftTerminal .xterm-viewport {
