@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
@@ -6,18 +6,18 @@ import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableF
 import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validateJarFilename, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
-import { minecraftCommandSuggestions } from "./utils/commands";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState, FileSortKey, ModInstallModalState } from "./app/uiState";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
+import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
-import { ConsoleLog } from "./components/ConsoleLog";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
+import { MinecraftTerminal } from "./components/MinecraftTerminal";
 import { ModInstallVersionSkeleton } from "./components/ModInstallVersionSkeleton";
 import { Notifications } from "./components/Notifications";
 import { ResourcePanel } from "./components/ResourcePanel";
@@ -94,13 +94,8 @@ export default function App() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
-  const [commandInput, setCommandInput] = useState("");
   const [commandSending, setCommandSending] = useState(false);
-  const [commandInputFocused, setCommandInputFocused] = useState(false);
-  const [consolePinnedToBottom, setConsolePinnedToBottom] = useState(true);
-  const [pendingConsoleEntries, setPendingConsoleEntries] = useState(0);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory());
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -143,8 +138,6 @@ export default function App() {
     setDemoSchedules,
     systemDark
   } = usePreferencesState();
-  const consoleRef = useRef<HTMLDivElement>(null);
-  const previousLogCountRef = useRef(0);
   const consoleLogServerIdRef = useRef("");
   const modUploadRef = useRef<HTMLInputElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
@@ -261,9 +254,12 @@ export default function App() {
           ? "Console command permission is required."
           : !activeStatus?.commandInputAvailable
             ? activeStatus?.commandInputMessage || "Console command input is unavailable."
-            : !commandInput.trim()
-              ? "Enter a command to send."
-              : "";
+            : "";
+  const canSendConsoleCommands = !commandSending
+    && !isProvisioning
+    && !dockerOperationalLock
+    && canExpanded
+    && Boolean(activeStatus?.commandInputAvailable);
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
     return listing.entries.filter((entry) => selected.has(entry.path));
@@ -319,14 +315,6 @@ export default function App() {
       ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
     ];
   }, [listing.path]);
-  const commandSuggestions = useMemo(() => {
-    const value = commandInput.trimStart().toLowerCase().replace(/^\//, "");
-    const matches = value
-      ? minecraftCommandSuggestions.filter((suggestion) => suggestion.command.toLowerCase().startsWith(value))
-      : minecraftCommandSuggestions.slice(0, 8);
-    return matches.slice(0, 8);
-  }, [commandInput]);
-
   const filteredInstalledMods = useMemo(() => {
     return installedMods.filter(mod => {
       return mod.displayName.toLowerCase().includes(installedQuery.toLowerCase()) ||
@@ -801,26 +789,6 @@ export default function App() {
     };
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
-  function scrollConsoleToBottom() {
-    const element = consoleRef.current;
-    if (!element) return;
-    element.scrollTop = element.scrollHeight;
-    setPendingConsoleEntries(0);
-  }
-
-  useLayoutEffect(() => {
-    if (activePage !== "overview" && activePage !== "console") return;
-    if (!consolePinnedToBottom) return;
-    scrollConsoleToBottom();
-  }, [logs, activePage, consolePinnedToBottom]);
-
-  useLayoutEffect(() => {
-    if (activePage === "overview" || activePage === "console") {
-      setConsolePinnedToBottom(true);
-      scrollConsoleToBottom();
-    }
-  }, [activePage]);
-
   useEffect(() => {
     if (activePage === "mods") {
       setModsView("manager");
@@ -830,35 +798,6 @@ export default function App() {
       setModSearchError("");
     }
   }, [activePage]);
-
-  useEffect(() => {
-    const previousCount = previousLogCountRef.current;
-    const addedEntries = Math.max(0, logs.length - previousCount);
-    previousLogCountRef.current = logs.length;
-    if (!addedEntries) return;
-    if (!consolePinnedToBottom && (activePage === "overview" || activePage === "console")) {
-      setPendingConsoleEntries((current) => current + addedEntries);
-    }
-  }, [logs, activePage, consolePinnedToBottom]);
-
-  function handleConsoleScroll() {
-    const element = consoleRef.current;
-    if (!element) return;
-    const threshold = 24;
-    const pinned = element.scrollTop + element.clientHeight >= element.scrollHeight - threshold;
-    setConsolePinnedToBottom(pinned);
-    if (pinned) {
-      setPendingConsoleEntries(0);
-    }
-  }
-
-  function jumpToLatestLogs() {
-    const element = consoleRef.current;
-    if (!element) return;
-    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
-    setConsolePinnedToBottom(true);
-    setPendingConsoleEntries(0);
-  }
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
@@ -1815,15 +1754,12 @@ export default function App() {
     }
   }
 
-  async function sendCommand(event: FormEvent) {
-    event.preventDefault();
+  async function sendCommand(commandText: string) {
     if (isProvisioning || commandSending || dockerOperationalLock || !canExpanded) return;
     if (!activeServer) return;
-    const command = commandInput.trim().replace(/^\//, "");
+    const command = commandText.trim().replace(/^\//, "");
     if (!command) return;
     setCommandSending(true);
-    setConsolePinnedToBottom(true);
-    scrollConsoleToBottom();
     setNotice("");
     try {
       if (activeServerIsDemo) {
@@ -1836,20 +1772,15 @@ export default function App() {
               : command.startsWith("say ")
                 ? `[Server] ${command.slice(4)}`
                 : `Executed demo command: ${command}`;
-        setLogs((current) => [...current.slice(-497), consoleLine(`[command] > ${command}`), consoleLine(`[demo] ${response}`)]);
-        setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
-        setHistoryIndex(null);
-        setCommandInput("");
+        setLogs((current) => [...current.slice(-498), consoleLine(`[demo] ${response}`)]);
+        setCommandHistory((current) => appendCommandHistory(current, command));
         return;
       }
       await api(`/api/servers/${activeServer.id}/command`, {
         method: "POST",
         body: JSON.stringify({ command })
       });
-      setLogs((current) => [...current.slice(-499), consoleLine(`[command] > ${command}`)]);
-      setCommandHistory((current) => [...current.filter((entry) => entry !== command), command].slice(-50));
-      setHistoryIndex(null);
-      setCommandInput("");
+      setCommandHistory((current) => appendCommandHistory(current, command));
       setConsoleStreamVersion((version) => version + 1);
       if (consoleCommandRefreshTimeoutRef.current !== null) {
         window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
@@ -1865,36 +1796,6 @@ export default function App() {
       await refreshStatus(activeServer.id);
     } finally {
       setCommandSending(false);
-    }
-  }
-
-  function handleCommandKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      if (!commandHistory.length) return;
-      const nextIndex = historyIndex === null ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
-      setHistoryIndex(nextIndex);
-      setCommandInput(commandHistory[nextIndex]);
-    }
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      if (historyIndex === null) return;
-      const nextIndex = historyIndex + 1;
-      if (nextIndex >= commandHistory.length) {
-        setHistoryIndex(null);
-        setCommandInput("");
-      } else {
-        setHistoryIndex(nextIndex);
-        setCommandInput(commandHistory[nextIndex]);
-      }
-    }
-    if (event.key === "Tab") {
-      const suggestion = commandSuggestions[0];
-      if (suggestion) {
-        event.preventDefault();
-        setCommandInput(suggestion.command);
-        setHistoryIndex(null);
-      }
     }
   }
 
@@ -3331,13 +3232,6 @@ export default function App() {
       return;
     }
     if (page === "console") {
-      setCommandInput("");
-      setHistoryIndex(null);
-      setConsolePinnedToBottom(true);
-      setPendingConsoleEntries(0);
-      window.requestAnimationFrame(() => {
-        consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
-      });
       return;
     }
     if (page === "nodes") {
@@ -3992,64 +3886,15 @@ export default function App() {
                     />
                   )}
                   <div className="terminal">
-                    <div className="console" ref={consoleRef} onScroll={handleConsoleScroll}>
-                      {logs.length ? <ConsoleLog entries={logs} /> : <span className="terminalMuted">No console output yet. Start the server or wait for new log lines to appear.</span>}
-                    </div>
-                    {pendingConsoleEntries > 0 && (
-                      <button type="button" className="consoleNotice" onClick={jumpToLatestLogs}>
-                        {pendingConsoleEntries} new {pendingConsoleEntries === 1 ? "entry" : "entries"} - Jump to latest
-                      </button>
-                    )}
-                    <form onSubmit={sendCommand} className="terminalPrompt">
-                      <span>&gt;</span>
-                      <div className="commandInputWrap">
-                        <input
-                          value={commandInput}
-                          onChange={(event) => {
-                            setCommandInput(event.target.value);
-                            setHistoryIndex(null);
-                          }}
-                          onKeyDown={handleCommandKeyDown}
-                          onFocus={() => setCommandInputFocused(true)}
-                          onBlur={() => window.setTimeout(() => setCommandInputFocused(false), 120)}
-                          placeholder={
-                            activeStatus?.commandInputAvailable
-                              ? "Enter command"
-                              : activeStatus?.commandInputMessage === "Start the runtime container before sending console commands"
-                              ? "Start the runtime container before sending console commands"
-                              : activeStatus?.commandInputMessage === "Start the server before sending console commands."
-                              ? "Start the server before sending console commands."
-                              : activeStatus?.commandInputMessage === "Start the demo server to enable simulated console input."
-                              ? "Start the demo server to enable simulated console input."
-                              : "Console input unavailable"
-                          }
-                          disabled={isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable}
-                          title={isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable ? consoleCommandDisabledReason : "Enter a console command"}
-                          spellCheck={false}
-                          autoComplete="off"
-                        />
-                        {commandInputFocused && commandInput.trim().length > 0 && activeStatus?.commandInputAvailable && commandSuggestions.length > 0 && (
-                          <div className="suggestions">
-                            {commandSuggestions.map((suggestion) => (
-                              <button
-                                key={suggestion.command}
-                                type="button"
-                                onClick={() => {
-                                  setCommandInput(suggestion.command);
-                                  setHistoryIndex(null);
-                                }}
-                              >
-                                <strong>{suggestion.command}</strong>
-                                <span>{suggestion.description}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button disabled={commandSending || isProvisioning || dockerOperationalLock || !canExpanded || !activeStatus?.commandInputAvailable || !commandInput.trim()} title={consoleCommandDisabledReason || "Send command"}>
-                        {commandSending ? "Sending" : "Send"}
-                      </button>
-                    </form>
+                    <MinecraftTerminal
+                      entries={logs}
+                      canSendCommands={canSendConsoleCommands}
+                      disabledReason={consoleCommandDisabledReason}
+                      commandHistory={commandHistory}
+                      onCommand={(command) => {
+                        void sendCommand(command);
+                      }}
+                    />
                   </div>
                 </section>
               </section>

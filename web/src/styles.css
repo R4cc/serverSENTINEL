@@ -5522,110 +5522,41 @@ button .buttonIcon {
   font-family: var(--font-mono);
 }
 
-.console {
+.minecraftTerminalShell {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.minecraftTerminal {
   flex: 1 1 auto;
   min-height: 0;
-  height: auto;
-  overflow: auto;
-  overflow-anchor: none;
-  padding: var(--space-3);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.console pre {
-  margin: 0 0 var(--space-1);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.terminalPrompt {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  border-top: var(--border-strong) solid var(--terminal-text);
-  padding: var(--space-2) var(--space-3);
-}
-
-.terminalPrompt > span {
-  color: var(--sentinel-accent-muted);
-  font-weight: 900;
-  line-height: 1;
-}
-
-.terminalPrompt input {
   width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--terminal-text);
-  padding: var(--space-1) 0;
-  font-family: inherit;
+  padding: var(--space-3);
 }
 
-.terminalPrompt input:focus {
-  outline: none;
+.minecraftTerminal .xterm {
+  height: 100%;
 }
 
-.terminalPrompt button {
-  min-height: 34px;
-  padding: 0 var(--space-3);
-  border-color: var(--terminal-text);
-  background: var(--terminal-text);
-  color: var(--terminal-bg);
+.minecraftTerminal .xterm-viewport {
+  scrollbar-width: thin;
 }
 
-.terminalMuted {
+.minecraftTerminalStatus {
+  flex: 0 0 auto;
+  border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 36%, transparent);
+  padding: var(--space-2) var(--space-3);
   color: var(--text-soft);
-}
-
-.consoleNotice {
-  margin: 0 var(--space-3) var(--space-2);
-  align-self: flex-start;
-  min-height: 30px;
-  padding: 0 var(--space-2);
-  border-color: var(--sentinel-accent-muted);
-  background: transparent;
-  color: var(--sentinel-accent-muted);
+  font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 800;
 }
 
-.commandInputWrap {
-  position: relative;
-  flex: 1;
-}
-
-.suggestions {
-  position: absolute;
-  z-index: 4;
-  bottom: calc(100% + 10px);
-  left: 0;
-  right: 0;
-  display: grid;
-  gap: var(--space-1);
-  max-height: 260px;
-  overflow: auto;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: var(--space-2);
-}
-
-.suggestions button {
-  height: auto;
-  min-height: 44px;
-  display: grid;
-  grid-template-columns: minmax(120px, 180px) 1fr;
-  gap: var(--space-3);
-  align-items: center;
-  text-align: left;
-  background: var(--surface);
-  color: var(--text);
-}
-
-.suggestions span {
-  color: var(--text-muted);
-  font-size: 12px;
+.minecraftTerminalShell.disabled .minecraftTerminal {
+  opacity: 0.82;
 }
 
 .fileActions {
@@ -8332,16 +8263,6 @@ details.compatibilityBadge p {
     justify-self: start;
   }
 
-  .terminalPrompt {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .terminalPrompt button {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-
   .modRow {
     grid-template-columns: 44px 1fr;
   }
@@ -8399,7 +8320,7 @@ details.compatibilityBadge p {
     flex: 1;
   }
 
-  .console {
+  .minecraftTerminal {
     height: 360px;
   }
 }
@@ -9629,7 +9550,6 @@ button:disabled,
 }
 
 .terminal,
-.console,
 .installSnippet,
 .fileEditorTextarea,
 .modDetailsHashes {
@@ -9637,7 +9557,6 @@ button:disabled,
 }
 
 .terminal pre,
-.console pre,
 .installSnippet code,
 .modDetailsHashes {
   overflow-wrap: normal;
@@ -10201,7 +10120,6 @@ input,
 select,
 textarea,
 .modSearchInput,
-.consoleInput,
 .fileBreadcrumbs button,
 .fileOpenButton,
 .roleInfoButton,
@@ -10358,7 +10276,7 @@ textarea:hover:not(:disabled),
 }
 
 .terminal,
-.console,
+.minecraftTerminal,
 .fileCodeEditor,
 .installSnippetShell {
   border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
@@ -10431,7 +10349,6 @@ textarea:hover:not(:disabled),
 .resourceChart,
 .resourceChartEmpty,
 .resourceMessage,
-.consoleNotice,
 .commandHelp,
 .modDropzone,
 .uploadDropzone,
@@ -10765,9 +10682,8 @@ textarea {
 
 textarea,
 .fileEditorTextarea,
-.consoleInput,
 .terminal,
-.console,
+.minecraftTerminal,
 .installSnippet,
 .fileCodeEditor .cm-editor,
 .codeValue,
