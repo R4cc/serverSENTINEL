@@ -2183,6 +2183,27 @@ export default function App() {
     void openFile(request.path, true);
   }
 
+  function unsupportedEditorMessage(entry: FileEntry) {
+    if (entry.type !== "file") return "Folders cannot be edited in the browser editor.";
+    if (entry.size > 2 * 1024 * 1024) return "Only files up to 2 MiB can be edited in the browser editor.";
+    return "Only small text files can be edited in the browser editor.";
+  }
+
+  function activateFileEntry(entry: FileEntry) {
+    if (entry.type === "directory") {
+      void navigateFiles(entry.path);
+      return;
+    }
+    if (!isEditableFile(entry)) {
+      const message = unsupportedEditorMessage(entry);
+      setSelectedFilePaths([entry.path]);
+      setNotice(message);
+      notify("warning", message);
+      return;
+    }
+    void openFile(entry.path);
+  }
+
   async function loadFilePreview(entry: FileEntry) {
     if (!activeServer) return;
     setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
@@ -2234,6 +2255,14 @@ export default function App() {
     if (pathError) {
       setFileReadError(pathError);
       setNotice(pathError);
+      return;
+    }
+    const targetEntry = listing.entries.find((entry) => entry.path === path);
+    if (targetEntry && !isEditableFile(targetEntry)) {
+      const message = unsupportedEditorMessage(targetEntry);
+      setSelectedFilePaths([path]);
+      setNotice(message);
+      notify("warning", message);
       return;
     }
     setSelectedPath(path);
@@ -4239,7 +4268,7 @@ export default function App() {
                         const entry = row.original;
                         const selected = row.getIsSelected();
                         return (
-                          <div key={entry.path} className={`fileTableRow ${selected ? "selected" : ""}`} role="row" onDoubleClick={() => entry.type === "directory" ? navigateFiles(entry.path) : openFile(entry.path)}>
+                          <div key={entry.path} className={`fileTableRow ${selected ? "selected" : ""}`} role="row" onDoubleClick={() => activateFileEntry(entry)}>
                             <label className="fileCheckboxCell" aria-label={`Select ${entry.name}`}>
                               <input
                                 type="checkbox"

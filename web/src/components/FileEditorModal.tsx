@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { AppIcon } from "./FileTypeIcon";
 import { InlineState } from "./InlineState";
 import { parentPath } from "../utils/files";
@@ -24,6 +24,34 @@ type FileEditorModalProps = {
 };
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
+
+type EditorLoadBoundaryProps = {
+  children: ReactNode;
+};
+
+type EditorLoadBoundaryState = {
+  failed: boolean;
+};
+
+class EditorLoadBoundary extends Component<EditorLoadBoundaryProps, EditorLoadBoundaryState> {
+  state: EditorLoadBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): EditorLoadBoundaryState {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="fileEditorStateFill">
+          <InlineState tone="error" title="Editor failed to load" message="Reload the page and try opening the file again." />
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function EditorLoadingState() {
   return (
@@ -136,17 +164,19 @@ export function FileEditorModal({
                       </div>
                     )}
                     {!fileOpenFailed && (
-                      <Suspense fallback={<EditorLoadingState />}>
-                        <CodeEditor
-                          selectedPath={selectedPath}
-                          fileName={editorFileName}
-                          value={editorText}
-                          disabled={editorDisabled}
-                          saveDisabled={saveDisabled}
-                          onChange={onTextChange}
-                          onSave={onSave}
-                        />
-                      </Suspense>
+                      <EditorLoadBoundary key={selectedPath}>
+                        <Suspense fallback={<EditorLoadingState />}>
+                          <CodeEditor
+                            selectedPath={selectedPath}
+                            fileName={editorFileName}
+                            value={editorText}
+                            disabled={editorDisabled}
+                            saveDisabled={saveDisabled}
+                            onChange={onTextChange}
+                            onSave={onSave}
+                          />
+                        </Suspense>
+                      </EditorLoadBoundary>
                     )}
                   </>
                 )}
