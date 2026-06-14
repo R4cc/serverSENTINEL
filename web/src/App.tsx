@@ -246,9 +246,7 @@ export default function App() {
         : dockerOperationalLock
           ? runtimeControlsDisabledReason || "Server runtime is unavailable."
           : "";
-  const consoleCommandDisabledReason = commandSending
-    ? "Command is already being sent."
-    : isProvisioning
+  const consoleCommandDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
@@ -257,8 +255,7 @@ export default function App() {
           : !activeStatus?.commandInputAvailable
             ? activeStatus?.commandInputMessage || "Console command input is unavailable."
             : "";
-  const canSendConsoleCommands = !commandSending
-    && !isProvisioning
+  const canSendConsoleCommands = !isProvisioning
     && !dockerOperationalLock
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
