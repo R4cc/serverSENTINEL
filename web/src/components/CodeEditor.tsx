@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useRef } from "react";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching, defaultHighlightStyle, foldGutter, foldKeymap, indentOnInput, syntaxHighlighting, StreamLanguage } from "@codemirror/language";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, rectangularSelection } from "@codemirror/view";
+import { useMemo } from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import { javascript } from "@codemirror/lang-javascript";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
+import { yaml } from "@codemirror/lang-yaml";
+import { defaultHighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
+import { type Extension } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
+import { properties } from "@codemirror/legacy-modes/mode/properties";
+import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { toml } from "@codemirror/legacy-modes/mode/toml";
 
 type CodeEditorProps = {
   selectedPath: string;
@@ -14,32 +21,15 @@ type CodeEditorProps = {
   onSave: () => void;
 };
 
-async function loadEditorLanguage(path: string): Promise<Extension> {
-  const fileName = path.split("/").pop()?.toLowerCase() ?? "";
-  const extension = fileName.includes(".") ? fileName.split(".").pop() ?? "" : "";
-
-  if (extension === "json" || extension === "json5") {
-    const { json } = await import("@codemirror/lang-json");
-    return json();
-  }
-  if (extension === "yml" || extension === "yaml") {
-    const { yaml } = await import("@codemirror/lang-yaml");
-    return yaml();
-  }
-  if (extension === "md" || extension === "markdown") {
-    const { markdown } = await import("@codemirror/lang-markdown");
-    return markdown();
-  }
-  if (extension === "toml") {
-    const { toml } = await import("@codemirror/legacy-modes/mode/toml");
-    return StreamLanguage.define(toml);
-  }
-  if (["properties", "cfg", "conf", "env"].includes(extension) || fileName === ".env") {
-    const { properties } = await import("@codemirror/legacy-modes/mode/properties");
-    return StreamLanguage.define(properties);
-  }
-  return [];
-}
+type EditorLanguageKind =
+  | "json"
+  | "yaml"
+  | "javascript"
+  | "markdown"
+  | "toml"
+  | "properties"
+  | "shell"
+  | "plain";
 
 const serverSentinelEditorTheme = EditorView.theme({
   "&": {
@@ -99,8 +89,61 @@ const serverSentinelEditorTheme = EditorView.theme({
   },
   ".cm-foldGutter .cm-gutterElement": {
     cursor: "pointer"
+  },
+  "&.cm-editor[aria-readonly='true']": {
+    backgroundColor: "var(--surface-muted)"
   }
 });
+
+const propertiesLanguage = StreamLanguage.define(properties);
+const shellLanguage = StreamLanguage.define(shell);
+const tomlLanguage = StreamLanguage.define(toml);
+
+function fileParts(path: string) {
+  const fileName = path.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  const extension = fileName.includes(".") ? fileName.split(".").pop() ?? "" : "";
+  return { fileName, extension };
+}
+
+export function editorLanguageKind(path: string): EditorLanguageKind {
+  const { fileName, extension } = fileParts(path);
+
+  if (extension === "json" || extension === "json5" || fileName === "pack.mcmeta") return "json";
+  if (extension === "yml" || extension === "yaml") return "yaml";
+  if (["js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts"].includes(extension)) return "javascript";
+  if (extension === "md" || extension === "markdown") return "markdown";
+  if (extension === "toml") return "toml";
+  if (
+    ["properties", "cfg", "conf", "cnf", "env", "ini", "prefs"].includes(extension) ||
+    fileName === ".env" ||
+    fileName.endsWith(".env.local")
+  ) {
+    return "properties";
+  }
+  if (["sh", "bash", "zsh", "fish", "command", "bat", "cmd", "ps1"].includes(extension)) return "shell";
+  return "plain";
+}
+
+function editorLanguage(path: string): Extension {
+  switch (editorLanguageKind(path)) {
+    case "json":
+      return json();
+    case "yaml":
+      return yaml();
+    case "javascript":
+      return javascript({ typescript: true, jsx: true });
+    case "markdown":
+      return markdown();
+    case "toml":
+      return tomlLanguage;
+    case "properties":
+      return propertiesLanguage;
+    case "shell":
+      return shellLanguage;
+    case "plain":
+      return [];
+  }
+}
 
 export default function CodeEditor({
   selectedPath,
@@ -111,109 +154,51 @@ export default function CodeEditor({
   onChange,
   onSave
 }: CodeEditorProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const onChangeRef = useRef(onChange);
-  const onSaveRef = useRef(onSave);
-  const saveDisabledRef = useRef(saveDisabled);
-  const languageCompartment = useMemo(() => new Compartment(), []);
+  const extensions = useMemo<Extension[]>(
+    () => [
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      editorLanguage(selectedPath),
+      keymap.of([
+        {
+          key: "Mod-s",
+          preventDefault: true,
+          run: () => {
+            if (!saveDisabled) onSave();
+            return true;
+          }
+        }
+      ])
+    ],
+    [onSave, saveDisabled, selectedPath]
+  );
 
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
-
-  useEffect(() => {
-    onSaveRef.current = onSave;
-  }, [onSave]);
-
-  useEffect(() => {
-    saveDisabledRef.current = saveDisabled;
-  }, [saveDisabled]);
-
-  useEffect(() => {
-    if (!hostRef.current) return;
-
-    const view = new EditorView({
-      parent: hostRef.current,
-      state: EditorState.create({
-        doc: value,
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          foldGutter(),
-          highlightSpecialChars(),
-          history(),
-          drawSelection(),
-          dropCursor(),
-          indentOnInput(),
-          bracketMatching(),
-          rectangularSelection(),
-          highlightActiveLine(),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          serverSentinelEditorTheme,
-          languageCompartment.of([]),
-          EditorState.readOnly.of(disabled),
-          EditorView.editable.of(!disabled),
-          keymap.of([
-            {
-              key: "Mod-s",
-              preventDefault: true,
-              run: () => {
-                if (!saveDisabledRef.current) onSaveRef.current();
-                return true;
-              }
-            },
-            indentWithTab,
-            ...defaultKeymap,
-            ...historyKeymap,
-            ...foldKeymap
-          ]),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString());
-          })
-        ]
-      })
-    });
-
-    viewRef.current = view;
-    const measureFrame = window.requestAnimationFrame(() => {
-      view.requestMeasure();
-      view.focus();
-    });
-    const resizeObserver = new ResizeObserver(() => view.requestMeasure());
-    resizeObserver.observe(hostRef.current);
-    void document.fonts?.ready.then(() => {
-      if (viewRef.current === view) view.requestMeasure();
-    });
-
-    return () => {
-      window.cancelAnimationFrame(measureFrame);
-      resizeObserver.disconnect();
-      view.destroy();
-      if (viewRef.current === view) viewRef.current = null;
-    };
-  }, [disabled, languageCompartment]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void loadEditorLanguage(selectedPath).then((language) => {
-      if (cancelled) return;
-      viewRef.current?.dispatch({ effects: languageCompartment.reconfigure(language) });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [languageCompartment, selectedPath]);
-
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    const current = view.state.doc.toString();
-    if (current === value) return;
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: value }
-    });
-  }, [value]);
-
-  return <div ref={hostRef} className="fileCodeEditor" aria-label={`Edit ${fileName}`} />;
+  return (
+    <CodeMirror
+      aria-label={`Edit ${fileName}`}
+      basicSetup={{
+        lineNumbers: true,
+        foldGutter: true,
+        highlightActiveLine: true,
+        highlightActiveLineGutter: true,
+        bracketMatching: true,
+        closeBrackets: true,
+        history: true,
+        drawSelection: true,
+        dropCursor: true,
+        highlightSpecialChars: true,
+        rectangularSelection: true,
+        syntaxHighlighting: false
+      }}
+      className={`fileCodeEditor${disabled ? " fileCodeEditor-disabled" : ""}`}
+      editable={!disabled}
+      extensions={extensions}
+      height="100%"
+      indentWithTab
+      minHeight="100%"
+      onChange={onChange}
+      readOnly={disabled}
+      theme={serverSentinelEditorTheme}
+      value={value}
+    />
+  );
 }

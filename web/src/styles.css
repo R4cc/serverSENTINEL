@@ -6171,19 +6171,6 @@ button .buttonIcon {
   align-self: center;
 }
 
-.fileEditorTextarea {
-  min-height: 0;
-  height: 100%;
-  resize: none;
-  overflow: auto;
-  white-space: pre;
-  overflow-wrap: normal;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  tab-size: 2;
-}
-
 .fileEditorFooter {
   border-top: var(--border-strong) solid var(--border);
   background: var(--surface-muted);
@@ -9501,6 +9488,11 @@ button:disabled,
   background: var(--surface);
 }
 
+.fileCodeEditor-disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
 .fileEditorMainArea {
   min-height: 0;
   height: 100%;
@@ -9514,8 +9506,10 @@ button:disabled,
   grid-row: 1 / -1;
 }
 
+.fileCodeEditor .cm-theme,
 .fileCodeEditor .cm-editor {
   height: 100%;
+  min-height: 0;
 }
 
 .fileCodeEditor .cm-scroller {
@@ -9556,7 +9550,6 @@ button:disabled,
 
 .terminal,
 .installSnippet,
-.fileEditorTextarea,
 .modDetailsHashes {
   scrollbar-width: thin;
 }
@@ -10685,7 +10678,6 @@ textarea {
 }
 
 textarea,
-.fileEditorTextarea,
 .terminal,
 .minecraftTerminal,
 .installSnippet,
@@ -12078,12 +12070,6 @@ details.compatibilityBadge p {
 
 .fileEditorBody {
   padding: 0;
-}
-
-.fileEditorTextarea,
-.codeEditorHost {
-  min-height: 0;
-  height: 100%;
 }
 
 .modInstallStep,
