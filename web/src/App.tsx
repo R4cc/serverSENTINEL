@@ -1116,7 +1116,8 @@ export default function App() {
       id: toastId,
       description: "Server activity, health, and recent events are up to date.",
       duration: 3000,
-      closeButton: true
+      closeButton: true,
+      dismissible: true
     });
   }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
 
@@ -1220,7 +1221,7 @@ export default function App() {
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, debouncedModSearchQuery, modSearchRequestVersion, activeServerIsDemo]);
 
   function notify(type: "success" | "error" | "info" | "warning", text: string) {
-    const options = { duration: type === "error" ? 7000 : 5000, closeButton: true };
+    const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
     if (type === "success") {
       toast.success(text, options);
       return;

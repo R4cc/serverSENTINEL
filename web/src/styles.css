@@ -1355,9 +1355,11 @@ button .buttonIcon {
   height: 20px !important;
   width: 20px !important;
   padding: 0 !important;
+  z-index: 2 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  pointer-events: auto !important;
   
   /* Make it non-colored / transparent background with neutral border/text */
   background: transparent !important;
