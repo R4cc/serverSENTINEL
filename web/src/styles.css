@@ -1322,8 +1322,7 @@ button .buttonIcon {
 }
 
 .sonnerToast {
-  position: relative !important;
-  padding-right: 36px !important;
+  padding: 16px 36px 16px 16px !important;
   border: var(--border-strong) solid var(--border-panel) !important;
   border-radius: var(--radius-sm) !important;
   background: var(--surface-raised) !important;
