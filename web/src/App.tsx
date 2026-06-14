@@ -1,7 +1,8 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, Notice, OverviewLoadToast, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { compatibilityClass, compatibilityLabel, formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -19,7 +20,6 @@ import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
 import { MinecraftTerminal } from "./components/MinecraftTerminal";
 import { ModInstallVersionSkeleton } from "./components/ModInstallVersionSkeleton";
-import { Notifications } from "./components/Notifications";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
@@ -36,6 +36,24 @@ const modSearchDebounceMs = 650;
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeUpdateGraceMs = 5 * 60 * 1000;
+
+function AppToaster({ darkMode }: { darkMode: boolean }) {
+  return (
+    <Toaster
+      closeButton
+      expand
+      gap={8}
+      position="top-center"
+      richColors
+      theme={darkMode ? "dark" : "light"}
+      toastOptions={{
+        className: "sonnerToast",
+        descriptionClassName: "sonnerToastDescription"
+      }}
+      visibleToasts={5}
+    />
+  );
+}
 
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -79,7 +97,6 @@ export default function App() {
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
   const [serverActivities, setServerActivities] = useState<Record<string, ServerActivity>>({});
   const [overviewLoading, setOverviewLoading] = useState(false);
-  const [overviewLoadToast, setOverviewLoadToast] = useState<OverviewLoadToast | null>(null);
   const [overviewError, setOverviewError] = useState("");
   const [statusError, setStatusError] = useState("");
   const [consoleLoading, setConsoleLoading] = useState(false);
@@ -99,7 +116,6 @@ export default function App() {
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory());
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
-  const [notices, setNotices] = useState<Notice[]>([]);
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
@@ -157,7 +173,8 @@ export default function App() {
   }>>({});
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
-  const overviewLoadToastTimeoutRef = useRef<number | null>(null);
+  const overviewLoadToastRunningRef = useRef(false);
+  const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
@@ -917,38 +934,66 @@ export default function App() {
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (overviewLoadToastTimeoutRef.current !== null) {
-      window.clearTimeout(overviewLoadToastTimeoutRef.current);
-      overviewLoadToastTimeoutRef.current = null;
-    }
-
-    if (activePage !== "overview" || !activeServer || activeNodeRuntimeBlocked || overviewError) {
-      setOverviewLoadToast(null);
-      return;
-    }
-
-    if (overviewLoading) {
-      setOverviewLoadToast({ status: "running" });
-      return;
-    }
-
-    setOverviewLoadToast((current) => {
-      if (current?.status !== "running") return current;
-      overviewLoadToastTimeoutRef.current = window.setTimeout(() => {
-        setOverviewLoadToast(null);
-        overviewLoadToastTimeoutRef.current = null;
-      }, 3000);
-      return { status: "succeeded" };
+    const currentIds = new Set(activeJobs.map((job) => job.id));
+    activeJobToastIdsRef.current.forEach((jobId) => {
+      if (!currentIds.has(jobId)) {
+        toast.dismiss(jobId);
+        activeJobToastIdsRef.current.delete(jobId);
+      }
     });
-  }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
+
+    activeJobs.forEach((job) => {
+      activeJobToastIdsRef.current.add(job.id);
+      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${job.status === "running" ? ` (${Math.round(job.progress)}%)` : ""}`;
+      const options = {
+        id: job.id,
+        description,
+        dismissible: job.dismissible,
+        closeButton: job.dismissible,
+        duration: job.status === "running" || !job.dismissible ? Infinity : 7000,
+        onDismiss: () => {
+          if (job.dismissible) setActiveJobs((current) => current.filter((candidate) => candidate.id !== job.id));
+        }
+      };
+
+      if (job.status === "running") {
+        toast.loading(job.title, options);
+        return;
+      }
+      if (job.status === "failed") {
+        toast.error(job.title, options);
+        return;
+      }
+      toast.success(job.title, { ...options, duration: job.dismissible ? 5000 : 3000 });
+    });
+  }, [activeJobs]);
 
   useEffect(() => {
-    return () => {
-      if (overviewLoadToastTimeoutRef.current !== null) {
-        window.clearTimeout(overviewLoadToastTimeoutRef.current);
-      }
-    };
-  }, []);
+    const toastId = "overview-load";
+    if (activePage !== "overview" || !activeServer || activeNodeRuntimeBlocked || overviewError) {
+      overviewLoadToastRunningRef.current = false;
+      toast.dismiss(toastId);
+      return;
+    }
+    if (overviewLoading) {
+      overviewLoadToastRunningRef.current = true;
+      toast.loading("Loading overview", {
+        id: toastId,
+        description: "Loading server activity, health, and recent events.",
+        dismissible: false,
+        duration: Infinity
+      });
+      return;
+    }
+    if (!overviewLoadToastRunningRef.current) return;
+    overviewLoadToastRunningRef.current = false;
+    toast.success("Overview updated", {
+      id: toastId,
+      description: "Server activity, health, and recent events are up to date.",
+      duration: 3000,
+      closeButton: true
+    });
+  }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) {
@@ -1049,12 +1094,21 @@ export default function App() {
     };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, debouncedModSearchQuery, modSearchRequestVersion, activeServerIsDemo]);
 
-  function notify(type: Notice["type"], text: string) {
-    const id = Date.now() + Math.random();
-    setNotices((current) => [...current, { id, type, text }]);
-    window.setTimeout(() => {
-      setNotices((current) => current.filter((candidate) => candidate.id !== id));
-    }, 5000);
+  function notify(type: "success" | "error" | "info" | "warning", text: string) {
+    const options = { duration: type === "error" ? 7000 : 5000, closeButton: true };
+    if (type === "success") {
+      toast.success(text, options);
+      return;
+    }
+    if (type === "error") {
+      toast.error(text, options);
+      return;
+    }
+    if (type === "warning") {
+      toast.warning(text, options);
+      return;
+    }
+    toast.info(text, options);
   }
 
   function handleStaleSession(error: unknown) {
@@ -3165,20 +3219,10 @@ export default function App() {
     }
   }
 
-  const notificationTray = (
-    <Notifications
-      notices={notices}
-      activeJobs={activeJobs}
-      overviewLoadToast={overviewLoadToast}
-      onDismissJob={(jobId) => setActiveJobs(current => current.filter(j => j.id !== jobId))}
-      onDismissNotice={(noticeId) => setNotices(current => current.filter(notice => notice.id !== noticeId))}
-    />
-  );
-
   if (!authSession) {
     return (
       <>
-        {notificationTray}
+        <AppToaster darkMode={darkMode} />
         <AuthPanel
           setupRequired={false}
           notice={authNotice || "Checking session..."}
@@ -3192,7 +3236,7 @@ export default function App() {
   if (!authSession.authenticated && !demoMode) {
     return (
       <>
-        {notificationTray}
+        <AppToaster darkMode={darkMode} />
         <AuthPanel
           setupRequired={authSession.setupRequired}
           notice={authNotice}
@@ -3289,7 +3333,7 @@ export default function App() {
 
   return (
     <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
-      {notificationTray}
+      <AppToaster darkMode={darkMode} />
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">

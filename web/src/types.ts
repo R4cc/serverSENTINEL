@@ -457,12 +457,6 @@ export type FabricVersions = {
   installer: Array<{ version: string; stable: boolean }>;
 };
 
-export type Notice = {
-  id: number;
-  type: "success" | "error" | "info" | "warning";
-  text: string;
-};
-
 export type ProvisionJob = {
   id: string;
   status: "running" | "succeeded" | "failed";
@@ -484,10 +478,6 @@ export type GeneralJob = {
   error?: string;
   errorDetails?: string;
   dismissible: boolean;
-};
-
-export type OverviewLoadToast = {
-  status: "running" | "succeeded";
 };
 
 export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";

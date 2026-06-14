@@ -1321,200 +1321,24 @@ button .buttonIcon {
   transition: width 200ms linear;
 }
 
-.provisioningToast.toast-running .progressTrack span {
-  background: var(--sentinel-success);
+.sonnerToast {
+  border: var(--border-strong) solid var(--border-panel) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text) !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.08) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 800 !important;
 }
 
-.toastRegion {
-  position: fixed;
-  top: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: grid;
-  justify-items: stretch;
-  gap: var(--space-2);
-  width: min(400px, calc(100vw - 32px));
-}
-
-.toast {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  font-size: 13px;
-  line-height: 1.4;
-  box-shadow: none;
-  overflow: hidden;
-}
-
-.provisioningToast {
-  border-color: var(--accent);
-  background:
-    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
-}
-
-.overviewLoadToast.toast-running {
-  border-color: var(--accent);
-  background:
-    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
-}
-
-.toastHeader {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: start;
-}
-
-.toastTitleGroup {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.toast strong,
-.toast small,
-.toastTitleGroup span {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.sonnerToast [data-title] {
   overflow-wrap: anywhere;
 }
 
-.toastTitleGroup span {
-  color: var(--text-muted);
-}
-
-.toastStatusIcon {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  align-self: center;
-}
-
-.toastStatusIcon-running {
-  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
-  border-top-color: var(--accent);
-  animation: spin 0.85s linear infinite;
-}
-
-.toastStatusIcon-succeeded {
-  position: relative;
-  border: 0;
-  background: var(--sentinel-success);
-}
-
-.toastStatusIcon-succeeded::after {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 4px;
-  width: 6px;
-  height: 11px;
-  border: solid var(--surface);
-  border-width: 0 3px 3px 0;
-  transform: rotate(45deg);
-}
-
-.toastMessage,
-.toastSubject {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
+.sonnerToastDescription {
+  color: var(--text-muted) !important;
+  font-weight: 700 !important;
   overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.toastMessage {
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.toastSubject {
-  color: var(--text);
-  font-weight: 800;
-}
-
-.provisioningToast.toast-failed,
-.toast.toast-error {
-  border-color: var(--sentinel-danger);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--sentinel-danger) 12%, var(--surface-raised)), var(--surface-raised));
-}
-
-.provisioningToast.toast-failed strong,
-.provisioningToast.toast-failed small,
-.provisioningToast.toast-failed .toastTitleGroup span,
-.toast.toast-error strong {
-  color: var(--sentinel-danger);
-}
-
-.provisioningToast.toast-failed .progressTrack span {
-  background: var(--sentinel-danger);
-}
-
-.provisioningToast.toast-succeeded,
-.overviewLoadToast.toast-succeeded,
-.toast.toast-success {
-  border-color: var(--sentinel-success);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--sentinel-success) 12%, var(--surface-raised)), var(--surface-raised));
-}
-
-.provisioningToast.toast-succeeded strong,
-.provisioningToast.toast-succeeded small,
-.provisioningToast.toast-succeeded .toastTitleGroup span,
-.overviewLoadToast.toast-succeeded strong,
-.overviewLoadToast.toast-succeeded .toastTitleGroup span,
-.toast.toast-success strong {
-  color: var(--sentinel-success);
-}
-
-.provisioningToast.toast-succeeded .progressTrack span {
-  background: var(--sentinel-success);
-}
-
-.toastDismissButton {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.toastDismissButton:hover {
-  background: var(--surface-muted);
-  color: var(--text);
-}
-
-.toast.toast-warning {
-  border-color: var(--sentinel-warning);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--sentinel-warning) 14%, var(--surface-raised)), var(--surface-raised));
-}
-
-.toast.toast-warning strong {
-  color: var(--sentinel-warning);
-}
-
-.toast.toast-info {
-  border-color: var(--accent);
-  background:
-    linear-gradient(90deg, var(--sentinel-accent-soft), var(--surface-raised));
-}
-
-.toast.toast-info strong {
-  color: var(--accent);
 }
 
 .appForm label,
@@ -9238,7 +9062,6 @@ button.compactButton,
 .iconOnlyButton,
 .modalCloseButton,
 .overflowButton,
-.toastDismissButton,
 .eventHideButton,
 .iconDangerButton,
 .roleInfoButton,
@@ -10164,7 +9987,6 @@ textarea,
 .iconOnlyButton,
 .modalCloseButton,
 .overflowButton,
-.toastDismissButton,
 .eventHideButton,
 .accountLogoutButton {
   border-color: var(--border-muted);
@@ -10186,7 +10008,6 @@ textarea:hover:not(:disabled),
 .iconOnlyButton,
 .modalCloseButton,
 .overflowButton,
-.toastDismissButton,
 .eventHideButton,
 .accountLogoutButton {
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
@@ -10199,7 +10020,6 @@ textarea:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
 .modalCloseButton:hover:not(:disabled),
 .overflowButton:hover:not(:disabled),
-.toastDismissButton:hover:not(:disabled),
 .eventHideButton:hover:not(:disabled),
 .accountLogoutButton:hover:not(:disabled) {
   background: var(--sentinel-accent-soft);
@@ -10929,8 +10749,7 @@ textarea,
 .inlineState span,
 .modalBody p,
 .notice,
-.systemBanner span,
-.toastMessage {
+.systemBanner span {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
@@ -10943,7 +10762,6 @@ textarea,
 .fileDetailsEmpty strong,
 .inlineState strong,
 .systemBanner strong,
-.toastTitleGroup span,
 .notice strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
