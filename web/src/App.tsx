@@ -3353,9 +3353,10 @@ export default function App() {
   }
 
   return (
-    <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
+    <>
       <AppToaster darkMode={darkMode} />
-      <aside className="sidebar">
+      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
+        <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
             <img className="brandLogo" src="/logo.png" alt="" />
@@ -5083,6 +5084,7 @@ export default function App() {
           </>
         )}
       </section>
-    </main>
+      </main>
+    </>
   );
 }
