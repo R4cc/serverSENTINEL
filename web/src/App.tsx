@@ -70,6 +70,12 @@ const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 
+function installedModUpdateStatus(mod: InstalledMod) {
+  if (mod.versionInfo?.upToDate === true) return "up-to-date";
+  if (mod.versionInfo?.upToDate === false && mod.versionInfo.latestVersion) return "update-available";
+  return "unknown";
+}
+
 function AppToaster({ darkMode }: { darkMode: boolean }) {
   return (
     <Toaster
@@ -428,7 +434,10 @@ export default function App() {
     },
     {
       id: "updateStatus",
-      accessorFn: (mod) => mod.versionInfo?.upToDate === true ? "Up to date" : mod.versionInfo?.upToDate === false ? "Update available" : "Unknown"
+      accessorFn: (mod) => {
+        const status = installedModUpdateStatus(mod);
+        return status === "up-to-date" ? "Up to date" : status === "update-available" ? "Update available" : "Unknown";
+      }
     },
     {
       id: "source",
@@ -4452,6 +4461,8 @@ export default function App() {
                                 const isComp = mod.compatibility?.compatible;
                                 const compStatus = mod.compatibility?.status;
                                 const iconSrc = modIconSource(mod.iconUrl);
+                                const updateStatus = installedModUpdateStatus(mod);
+                                const latestVersion = mod.versionInfo?.latestVersion;
                                 return (
                                   <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
                                 <div className="modsTableCell mod-col">
@@ -4522,14 +4533,14 @@ export default function App() {
 
                                 <div className="modsTableCell" data-label="Update">
                                   <div className="updateCol">
-                                    {mod.versionInfo?.upToDate === true ? (
+                                    {updateStatus === "up-to-date" ? (
                                       <span className="updateStatus up-to-date">
                                         <svg className="buttonIcon statusIconSmall" viewBox="0 0 24 24">
                                           <path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" />
                                         </svg>
                                         <span>Up to date</span>
                                       </span>
-                                    ) : mod.versionInfo?.upToDate === false ? (
+                                    ) : updateStatus === "update-available" ? (
                                       <>
                                         <span className="updateStatus update-available">
                                           <svg className="buttonIcon statusIconSmall" viewBox="0 0 24 24">
@@ -4537,10 +4548,10 @@ export default function App() {
                                           </svg>
                                           <span>Update available</span>
                                         </span>
-                                        <span className="updateMeta" title={mod.versionInfo.latestVersion ? `Latest: ${mod.versionInfo.latestVersion}` : "Latest version could not be determined"}>
-                                          {mod.versionInfo.latestVersion ? (
+                                        <span className="updateMeta" title={latestVersion ? `Latest: ${latestVersion}` : "Latest version could not be determined"}>
+                                          {latestVersion ? (
                                             <>
-                                              Latest: <span className="updateVersionText">{mod.versionInfo.latestVersion}</span>
+                                              Latest: <span className="updateVersionText">{latestVersion}</span>
                                             </>
                                           ) : (
                                             "Latest unknown"
@@ -4576,7 +4587,7 @@ export default function App() {
 
                                 <div className="modsTableCell actions" data-label="Actions">
                                   <button className="secondaryButton" onClick={() => setDetailsMod(mod)}>Details</button>
-                                  {mod.versionInfo?.upToDate === false && (
+                                  {updateStatus === "update-available" && (
                                     <button
                                       className="warningTextButton"
                                       onClick={() => updateMod(mod)}

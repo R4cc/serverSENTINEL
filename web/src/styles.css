@@ -8399,6 +8399,8 @@ details.compatibilityBadge p {
   align-items: center;
   flex-wrap: wrap;
   width: var(--mods-action-width);
+  box-sizing: border-box;
+  min-height: calc(42px + (var(--space-3) * 2) + 2px);
 }
 
 .modsSearchInputCompact {
@@ -8413,6 +8415,7 @@ details.compatibilityBadge p {
   flex: 1;
   min-width: 0;
   max-width: none;
+  box-sizing: border-box;
 }
 
 .modsSearchInputCompact svg {
