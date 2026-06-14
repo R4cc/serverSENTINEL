@@ -5276,12 +5276,10 @@ button .buttonIcon {
   gap: var(--space-2);
   align-items: center;
   min-height: 30px;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  padding: 6px 0;
-}
-
-.eventRow:first-child {
-  padding-top: 0;
+  border: var(--border-subtle) solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background-clip: padding-box;
 }
 
 .eventMarker {
@@ -11465,10 +11463,13 @@ details.compatibilityBadge p {
   padding: var(--space-3);
 }
 
-.eventRow,
 .nodeServerRow,
 .modSearchResult {
   padding: var(--space-3);
+}
+
+.eventRow {
+  padding: var(--space-2) var(--space-3);
 }
 
 .consolePanel,
