@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { minecraftVersionFacetValues, minecraftVersionsInclude, resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
+import { latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
 import type { ModrinthVersion, ReleaseChannel } from "../types.js";
 
 function version(input: Partial<ModrinthVersion> & { id: string; loaders: string[]; game_versions: string[]; version_type?: ReleaseChannel; jar?: boolean }): ModrinthVersion {
@@ -7,6 +7,7 @@ function version(input: Partial<ModrinthVersion> & { id: string; loaders: string
     id: input.id,
     version_number: input.version_number ?? input.id,
     version_type: input.version_type ?? "release",
+    date_published: input.date_published,
     loaders: input.loaders,
     game_versions: input.game_versions,
     files: input.jar === false ? [] : [{
@@ -97,6 +98,19 @@ describe("Modrinth compatibility resolver", () => {
     expect(releaseOnly.compatible).toBe(false);
     expect(releaseOnly.reason).toBe("No version matched the selected release channel");
     expect(betaAllowed.compatible).toBe(true);
+  });
+
+  it("chooses the newest compatible version by publish date", () => {
+    const latest = latestCompatibleProjectVersion([
+      version({ id: "older", version_number: "1.2.0", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-11T19:29:30Z" }),
+      version({ id: "newer", version_number: "1.2.1", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-15T14:30:22Z" })
+    ], {
+      loader: "fabric",
+      minecraftVersion: "26.1.2",
+      channel: "release"
+    });
+
+    expect(latest?.version_number).toBe("1.2.1");
   });
 
   it("uses unknown for API failure compatibility, not a hard incompatibility", () => {

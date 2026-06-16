@@ -116,12 +116,14 @@ export function latestCompatibleProjectVersion(
   versions: ModrinthVersion[],
   options: VersionCompatibilityOptions
 ) {
-  return versions.find((version) => (
-    allowedForChannel(version, options.channel)
-    && version.loaders.includes(options.loader)
-    && minecraftVersionsInclude(version.game_versions, options.minecraftVersion)
-    && modrinthJarFile(version)
-  ));
+  return versions
+    .filter((version) => (
+      allowedForChannel(version, options.channel)
+      && version.loaders.includes(options.loader)
+      && minecraftVersionsInclude(version.game_versions, options.minecraftVersion)
+      && modrinthJarFile(version)
+    ))
+    .sort((a, b) => new Date(b.date_published ?? 0).getTime() - new Date(a.date_published ?? 0).getTime())[0];
 }
 
 function compatibleResult(
