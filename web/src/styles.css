@@ -8477,7 +8477,7 @@ details.compatibilityBadge p {
     minmax(190px, 1.12fr)
     minmax(96px, 0.52fr)
     minmax(76px, 0.38fr)
-    minmax(164px, auto);
+    190px;
 
   display: flex;
   flex-direction: column;
@@ -8560,6 +8560,9 @@ details.compatibilityBadge p {
   justify-self: end;
   display: flex;
   gap: var(--space-2);
+  width: 100%;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .modsTableCell.alignEnd {
@@ -8570,6 +8573,8 @@ details.compatibilityBadge p {
   min-height: 36px;
   padding: 0 var(--space-3);
   font-size: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .modInfoCol {
@@ -11670,7 +11675,7 @@ details.compatibilityBadge p {
 
 .modsTableHeader,
 .modsTableRow {
-  min-width: 1066px;
+  min-width: 1100px;
   grid-template-columns: var(--mods-table-columns);
 }
 
