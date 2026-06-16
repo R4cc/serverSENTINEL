@@ -8406,7 +8406,7 @@ details.compatibilityBadge p {
 
 .modsInstalledToolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   margin: 0;
   align-items: center;
@@ -8419,6 +8419,11 @@ details.compatibilityBadge p {
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
   padding: var(--space-2);
+}
+
+.modsUpdateCheckButton {
+  min-height: 42px;
+  white-space: nowrap;
 }
 
 .modsSearchInputCompact {
@@ -11733,6 +11738,15 @@ details.compatibilityBadge p {
   .modsCardsGrid,
   .modsToolbarCompact {
     max-width: none;
+  }
+
+  .modsInstalledToolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modsUpdateCheckButton {
+    justify-content: center;
+    width: 100%;
   }
 
   .modsCardsGrid {

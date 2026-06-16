@@ -4492,6 +4492,18 @@ export default function App() {
                               onChange={(e) => setInstalledQuery(e.target.value)}
                             />
                           </label>
+                          <button
+                            type="button"
+                            className="secondaryButton modsUpdateCheckButton"
+                            onClick={() => {
+                              if (activeServer) void loadInstalledMods(activeServer.id);
+                            }}
+                            disabled={modsLoading || isProvisioning || !activeServer}
+                            title={modsLoading ? "Checking installed mods" : "Check installed mods for available updates"}
+                          >
+                            <AppIcon name="refresh" />
+                            {modsLoading ? "Checking..." : "Check for updates"}
+                          </button>
                         </div>
 
                         {modsLoading && installedMods.length === 0 && (
