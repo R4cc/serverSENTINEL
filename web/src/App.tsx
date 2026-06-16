@@ -2916,7 +2916,7 @@ export default function App() {
 
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
       try {
-        await loadInstalledMods(activeServer.id);
+        await loadInstalledMods(activeServer.id, { forceRefresh: true });
         await loadFiles(activeServer.id, "/mods");
         setActiveJobs((current) => current.filter((j) => j.id !== jobId));
         notify("success", `Uploaded ${file.name}`);
@@ -3040,7 +3040,7 @@ export default function App() {
       await new Promise((resolve) => window.setTimeout(resolve, 100));
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
       try {
-        await loadInstalledMods(activeServer.id);
+        await loadInstalledMods(activeServer.id, { forceRefresh: true });
         await loadFiles(activeServer.id, "/mods");
         const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
         const installSummary = requiredCount > 0 ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`;
@@ -3131,18 +3131,13 @@ export default function App() {
     try {
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 30, task: "Downloading new version" } : j));
       
-      const result = await api<{ filename: string; version: string; channel: ReleaseChannel }>("/api/modrinth/install", {
+      const result = await api<{ filename: string; version: string; channel: ReleaseChannel; replaced?: string; upToDate?: boolean }>("/api/modrinth/update", {
         method: "POST",
-        body: JSON.stringify({ serverId: activeServer.id, projectId, channel: mod.preferredChannel || "release", forceIncompatible: mod.modrinth.installedWithForceIncompatible })
+        body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: mod.preferredChannel || "release" })
       });
 
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 70, task: "Removing old version" } : j));
-
-      await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(oldFilename)}`, {
-        method: "DELETE"
-      });
-
-      notify("success", `Updated ${title} to ${result.version}`);
+      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 80, task: "Replacing old version" } : j));
+      notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
 
       setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
       try {

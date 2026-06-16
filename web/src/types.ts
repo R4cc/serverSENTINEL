@@ -446,6 +446,8 @@ export type InstalledMod = {
     currentVersion?: string;
     currentChannel?: ReleaseChannel;
     latestVersion?: string;
+    latestVersionId?: string;
+    latestFilename?: string;
     latestChannel?: ReleaseChannel;
     upToDate?: boolean;
   } | null;
