@@ -4478,67 +4478,68 @@ export default function App() {
                         </button>
                       </div>
 
-                      <div className="modsToolbarCompact">
-                        <div className="modsSearchInputCompact">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter">
-                            <circle cx="11" cy="11" r="6" />
-                            <path d="m16 16 4 4" />
-                          </svg>
-                          <input
-                            type="text"
-                            placeholder="Search installed mods..."
-                            value={installedQuery}
-                            onChange={(e) => setInstalledQuery(e.target.value)}
-                          />
+                      <section className="modsInstalledSection">
+                        <div className="modsInstalledToolbar">
+                          <label className="modsSearchInputCompact">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true">
+                              <circle cx="11" cy="11" r="6" />
+                              <path d="m16 16 4 4" />
+                            </svg>
+                            <input
+                              type="text"
+                              placeholder="Search installed mods..."
+                              value={installedQuery}
+                              onChange={(e) => setInstalledQuery(e.target.value)}
+                            />
+                          </label>
                         </div>
-                      </div>
 
-                      {modsLoading && installedMods.length === 0 && (
-                        <InlineState tone="loading" title="Loading installed mods" message="Checking the server mods folder and compatibility information." />
-                      )}
-                      {modsError && (
-                        <InlineState
-                          tone="error"
-                          title="Could not load installed mods"
-                          message={`${modsError} Check that the mods folder is available, then retry.`}
-                          actionLabel="Retry"
-                          onAction={() => void loadInstalledMods(activeServer.id)}
-                          busy={modsLoading}
-                        />
-                      )}
+                        {modsLoading && installedMods.length === 0 && (
+                          <InlineState tone="loading" title="Loading installed mods" message="Checking the server mods folder and compatibility information." />
+                        )}
+                        {modsError && (
+                          <InlineState
+                            tone="error"
+                            title="Could not load installed mods"
+                            message={`${modsError} Check that the mods folder is available, then retry.`}
+                            actionLabel="Retry"
+                            onAction={() => void loadInstalledMods(activeServer.id)}
+                            busy={modsLoading}
+                          />
+                        )}
 
-                      <div className="modsTableFrame">
-                        <div className="modsTable">
-                          <div className="modsTableHeader">
-                            {installedModsTable.getHeaderGroups()[0]?.headers.map((header) => (
-                              <div key={header.id} className={`modsTableCell ${header.id === "actions" ? "alignEnd" : ""}`}>
-                                {header.id === "actions" ? (
-                                  installedModHeaderLabels.actions
-                                ) : (
-                                  <SortHeaderButton header={header}>
-                                    {installedModHeaderLabels[header.id] ?? header.id}
-                                  </SortHeaderButton>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                        <div className="modsTableFrame">
+                          <div className="modsTable">
+                            <div className="modsTableHeader">
+                              {installedModsTable.getHeaderGroups()[0]?.headers.map((header) => (
+                                <div key={header.id} className={`modsTableCell ${header.id === "actions" ? "alignEnd" : ""}`}>
+                                  {header.id === "actions" ? (
+                                    installedModHeaderLabels.actions
+                                  ) : (
+                                    <SortHeaderButton header={header}>
+                                      {installedModHeaderLabels[header.id] ?? header.id}
+                                    </SortHeaderButton>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
 
-                          <div className="modsTableBody">
-                            {filteredInstalledModRows.length === 0 ? (
-                              <div className="emptyInline noBorder">
-                                <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
-                                <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
-                              </div>
-                            ) : (
-                              filteredInstalledModRows.map((row) => {
-                                const mod = row.original;
-                                const isComp = mod.compatibility?.compatible;
-                                const compStatus = mod.compatibility?.status;
-                                const iconSrc = modIconSource(mod.iconUrl);
-                                const updateStatus = installedModUpdateStatus(mod);
-                                const latestVersion = mod.versionInfo?.latestVersion;
-                                return (
-                                  <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
+                            <div className="modsTableBody">
+                              {filteredInstalledModRows.length === 0 ? (
+                                <div className="emptyInline noBorder">
+                                  <strong>{installedMods.length === 0 ? "No installed mods" : "No matching mods"}</strong>
+                                  <span>{installedMods.length === 0 ? "This server does not have any mods installed yet. Add one from Modrinth or upload a jar file to get started." : "No installed mods match this search. Clear or change the search text to see the full list."}</span>
+                                </div>
+                              ) : (
+                                filteredInstalledModRows.map((row) => {
+                                  const mod = row.original;
+                                  const isComp = mod.compatibility?.compatible;
+                                  const compStatus = mod.compatibility?.status;
+                                  const iconSrc = modIconSource(mod.iconUrl);
+                                  const updateStatus = installedModUpdateStatus(mod);
+                                  const latestVersion = mod.versionInfo?.latestVersion;
+                                  return (
+                                    <article key={mod.filename} className={`modsTableRow ${mod.enabled ? "" : "disabled"}`}>
                                 <div className="modsTableCell mod-col">
                                   <div className="modInfoCol">
                                     {iconSrc ? (
@@ -4677,13 +4678,14 @@ export default function App() {
                                   )}
                                   <button className="dangerTextButton" onClick={() => removeInstalledMod(mod)} disabled={modsLocked}>Remove</button>
                                 </div>
-                                  </article>
-                                );
-                              })
-                            )}
+                                    </article>
+                                  );
+                                })
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </section>
 
                     </div>
                   )}

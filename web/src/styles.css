@@ -8394,7 +8394,17 @@ details.compatibilityBadge p {
   color: var(--text-muted);
 }
 
-.modsToolbarCompact {
+.modsInstalledSection {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.modsInstalledToolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -8402,9 +8412,13 @@ details.compatibilityBadge p {
   align-items: center;
   justify-content: stretch;
   width: 100%;
-  max-width: var(--mods-action-width);
   box-sizing: border-box;
-  min-height: calc(42px + (var(--space-3) * 2) + 2px);
+  min-width: 0;
+  min-height: 56px;
+  border: var(--border-strong) solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
+  padding: var(--space-2);
 }
 
 .modsSearchInputCompact {
@@ -8421,6 +8435,7 @@ details.compatibilityBadge p {
   min-width: 0;
   max-width: none;
   box-sizing: border-box;
+  color: var(--text);
 }
 
 .modsSearchInputCompact svg {
@@ -8471,6 +8486,8 @@ details.compatibilityBadge p {
 .modsTableFrame {
   flex: 1 1 auto;
   min-height: 260px;
+  min-width: 0;
+  width: 100%;
   overflow: hidden;
 }
 
