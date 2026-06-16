@@ -64,6 +64,37 @@ export async function fetchProject(projectId: string): Promise<any> {
   return request;
 }
 
+export async function fetchProjectVersion(versionId: string): Promise<ModrinthVersion> {
+  const response = await modrinthFetch(`https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Modrinth version ${versionId}: ${response.statusText}`);
+  }
+  return await response.json() as ModrinthVersion;
+}
+
+export async function resolveSelectedProjectVersion(input: {
+  projectId?: string;
+  project?: { id?: string; project_id?: string; slug?: string };
+  versionId: string;
+  versions?: ModrinthVersion[];
+}) {
+  const selectedFromList = input.versions?.find((version) => version.id === input.versionId);
+  if (selectedFromList) return selectedFromList;
+
+  const selected = await fetchProjectVersion(input.versionId);
+  const expectedProjectIds = new Set([
+    input.projectId,
+    input.project?.id,
+    input.project?.project_id
+  ].filter((id): id is string => Boolean(id)));
+
+  if (selected.project_id && expectedProjectIds.size > 0 && !expectedProjectIds.has(selected.project_id)) {
+    throw new Error("The selected Modrinth version does not belong to that project");
+  }
+
+  return selected;
+}
+
 export function normalizeReleaseChannel(channel?: string): ReleaseChannel {
   return channel === "alpha" || channel === "beta" ? channel : "release";
 }

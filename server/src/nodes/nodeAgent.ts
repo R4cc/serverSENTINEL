@@ -10,7 +10,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -1005,7 +1005,15 @@ async function modInstall(server: ManagedServer, input: unknown) {
   }
 
   const [project, versions] = await Promise.all([fetchProject(projectId), fetchProjectVersions(projectId)]);
-  const selectedVersion = versions.find((version) => version.id === versionId);
+  const selectedVersion = await resolveSelectedProjectVersion({
+    projectId,
+    project,
+    versionId,
+    versions
+  }).catch((error) => {
+    if ((error as Error).message === "The selected Modrinth version does not belong to that project") throw error;
+    return undefined;
+  });
   if (!selectedVersion) throw new Error("The selected Modrinth version could not be found");
   if (!allowedForChannel(selectedVersion, channel)) throw new Error("The selected version is outside the requested release channel");
   const file = modrinthJarFile(selectedVersion);

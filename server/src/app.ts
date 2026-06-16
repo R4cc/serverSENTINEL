@@ -27,6 +27,7 @@ import {
   modrinthJarFile,
   modrinthServerSideSupported,
   normalizeReleaseChannel,
+  resolveSelectedProjectVersion,
   unknownCompatibility,
   versionChannel
 } from "./modrinth/compatibility.js";
@@ -4636,14 +4637,6 @@ type OptionalModDependency = {
   reason: string;
 };
 
-async function fetchModrinthVersion(versionId: string) {
-  const response = await modrinthFetch(`https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Modrinth version ${versionId}: ${response.statusText}`);
-  }
-  return await response.json() as ModrinthVersion;
-}
-
 async function planRequiredModrinthInstalls(input: {
   rootProjectId: string;
   rootProject: ModrinthProject;
@@ -4703,7 +4696,10 @@ async function planRequiredModrinthInstalls(input: {
       let dependencyVersion: ModrinthVersion | undefined;
       let dependencyProjectId = dependency.project_id;
       if (dependency.version_id) {
-        dependencyVersion = await fetchModrinthVersion(dependency.version_id);
+        dependencyVersion = await resolveSelectedProjectVersion({
+          projectId: dependency.project_id,
+          versionId: dependency.version_id
+        });
         dependencyProjectId ||= dependencyVersion.project_id;
       }
       if (!dependencyProjectId) {
@@ -4759,7 +4755,15 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     ]);
     const projectSides = { server_side: project.server_side, client_side: project.client_side };
     const selectedVersion = install.versionId
-      ? versions.find((version) => version.id === install.versionId)
+      ? await resolveSelectedProjectVersion({
+        projectId,
+        project,
+        versionId: install.versionId,
+        versions
+      }).catch((error) => {
+        if ((error as Error).message === "The selected Modrinth version does not belong to that project") throw error;
+        return undefined;
+      })
       : versions.find((version) => (
         allowedForChannel(version, selectedChannel)
         && version.loaders.includes("fabric")
