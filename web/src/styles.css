@@ -8425,6 +8425,7 @@ details.compatibilityBadge p {
 }
 
 .modsUpdateCheckButton {
+  inline-size: 168px;
   min-height: 42px;
   white-space: nowrap;
 }
@@ -11748,6 +11749,7 @@ details.compatibilityBadge p {
   }
 
   .modsUpdateCheckButton {
+    inline-size: auto;
     justify-content: center;
     width: 100%;
   }
