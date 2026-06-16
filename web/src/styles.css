@@ -287,6 +287,9 @@ code {
 }
 
 .authPanel .notice {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 58%, var(--border));
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--sentinel-warning) 16%);
+  color: color-mix(in srgb, var(--sentinel-warning) 62%, var(--text));
   margin: 0;
 }
 
