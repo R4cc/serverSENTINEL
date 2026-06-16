@@ -1,5 +1,8 @@
+import { join } from "node:path";
+import { rm } from "node:fs/promises";
 import type { ManagedServer } from "./types.js";
 import type { NodeRuntime } from "./nodes/types.js";
+import { readJsonFile, writeJsonFile } from "./storage/jsonFile.js";
 
 export type ResourceStatsSample = {
   available: boolean;
@@ -24,6 +27,7 @@ type CollectorOptions = {
   historyWindowMs: number;
   readServers: () => Promise<ManagedServer[]>;
   runtimeForServer: (server: ManagedServer) => NodeRuntime;
+  historyDir?: string;
 };
 
 function finiteNumber(value: unknown, fallback = 0) {
@@ -75,13 +79,14 @@ function unavailableSample(message: string, sampledAt = Date.now()): ResourceSta
 export class ResourceStatsCollector {
   private readonly samples = new Map<string, ResourceStatsSample[]>();
   private readonly inFlight = new Map<string, Promise<ResourceStatsSample>>();
+  private readonly pendingSave = new Set<string>();
   private interval: NodeJS.Timeout | undefined;
 
   constructor(private readonly options: CollectorOptions) {}
 
   start() {
     if (this.interval) return;
-    void this.collectAll().catch(() => undefined);
+    void this.loadAll().then(() => this.collectAll()).catch(() => undefined);
     this.interval = setInterval(() => void this.collectAll().catch(() => undefined), this.options.pollMs);
     this.interval.unref?.();
   }
@@ -90,13 +95,26 @@ export class ResourceStatsCollector {
     if (!this.interval) return;
     clearInterval(this.interval);
     this.interval = undefined;
+
+    if (this.options.historyDir) {
+      for (const serverId of this.pendingSave) {
+        const samples = this.samples.get(serverId) ?? [];
+        void writeJsonFile(this.historyFilePath(serverId), samples).catch(() => undefined);
+      }
+      this.pendingSave.clear();
+    }
   }
 
   async collectAll() {
     const servers = await this.options.readServers();
     const serverIds = new Set(servers.map((server) => server.id));
     for (const serverId of this.samples.keys()) {
-      if (!serverIds.has(serverId)) this.samples.delete(serverId);
+      if (!serverIds.has(serverId)) {
+        this.samples.delete(serverId);
+        if (this.options.historyDir) {
+          void rm(this.historyFilePath(serverId), { force: true }).catch(() => undefined);
+        }
+      }
     }
     await Promise.allSettled(servers.map((server) => this.collectServer(server)));
   }
@@ -137,6 +155,49 @@ export class ResourceStatsCollector {
     const existing = this.samples.get(serverId) ?? [];
     const next = [...existing, sample].filter((item) => item.sampledAt >= cutoff);
     this.samples.set(serverId, next);
+    this.scheduleSave(serverId);
     return sample;
+  }
+
+  private historyFilePath(serverId: string) {
+    return join(this.options.historyDir!, `history-${serverId}.json`);
+  }
+
+  private async loadAll() {
+    if (!this.options.historyDir) return;
+    try {
+      const servers = await this.options.readServers();
+      const cutoff = Date.now() - this.options.historyWindowMs;
+      await Promise.allSettled(
+        servers.map(async (server) => {
+          const path = this.historyFilePath(server.id);
+          try {
+            const data = await readJsonFile<ResourceStatsSample[]>(
+              path,
+              [],
+              (val) => Array.isArray(val) ? val : []
+            );
+            const valid = data.filter((sample) => sample.sampledAt >= cutoff);
+            if (valid.length > 0) {
+              this.samples.set(server.id, valid);
+            }
+          } catch {
+            // Ignore error loading server history file
+          }
+        })
+      );
+    } catch {
+      // Ignore error reading servers
+    }
+  }
+
+  private scheduleSave(serverId: string) {
+    if (!this.options.historyDir || this.pendingSave.has(serverId)) return;
+    this.pendingSave.add(serverId);
+    setTimeout(() => {
+      this.pendingSave.delete(serverId);
+      const samples = this.samples.get(serverId) ?? [];
+      void writeJsonFile(this.historyFilePath(serverId), samples).catch(() => undefined);
+    }, 10000).unref?.();
   }
 }

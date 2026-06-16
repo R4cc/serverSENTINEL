@@ -37,7 +37,7 @@ function formatChartTime(sampledAt: number) {
 type ChartPoint = {
   sampledAt: number;
   time: string;
-  value: number;
+  value: number | null;
 };
 
 const resourceGraphScopes = [
@@ -86,15 +86,28 @@ export function ResourceChart({
   formatValue?: (value: number) => string;
 }) {
   const validSamples = samples.filter((sample) => sample.available && sample.running);
-  const points: ChartPoint[] = validSamples
-    .map((sample, index) => ({ sample, value: value(sample, index, validSamples) }))
-    .filter((item) => Number.isFinite(item.value))
-    .map((item) => ({
-      sampledAt: item.sample.sampledAt,
-      time: formatChartTime(item.sample.sampledAt),
-      value: item.value
-    }));
-  if (points.length < 2) return <div className="resourceChartEmpty">{emptyLabel}</div>;
+  if (validSamples.length < 2) return <div className="resourceChartEmpty">{emptyLabel}</div>;
+
+  const points: ChartPoint[] = [];
+  for (let i = 0; i < validSamples.length; i++) {
+    const sample = validSamples[i];
+    const prev = validSamples[i - 1];
+
+    if (prev && sample.sampledAt - prev.sampledAt > 15000) {
+      points.push({
+        sampledAt: prev.sampledAt + 5000,
+        time: formatChartTime(prev.sampledAt + 5000),
+        value: null
+      });
+    }
+
+    const val = value(sample, i, validSamples);
+    points.push({
+      sampledAt: sample.sampledAt,
+      time: formatChartTime(sample.sampledAt),
+      value: Number.isFinite(val) ? val : null
+    });
+  }
 
   return (
     <div className={`resourceChart ${tone}`} role="img" aria-label="Resource usage history">

@@ -5556,7 +5556,8 @@ resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
   readServers: queuedReadServers,
-  runtimeForServer
+  runtimeForServer,
+  historyDir: join(config.configDir, "history")
 });
 resourceStatsCollector.start();
 app.addHook("onClose", async () => {
