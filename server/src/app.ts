@@ -5400,11 +5400,63 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       projectId: install.projectId,
       versionId: install.versionId,
       action: "modrinth_install",
-      status: "retry_without_version"
-    }, "Retrying Modrinth install without explicit version for older remote node agent");
+      status: "panel_side_remote_install"
+    }, "Installing selected Modrinth version from panel because remote node agent could not resolve it");
 
-    const body = asObject(input, "mod install request");
-    return await runtime.installMod(server, { ...body, versionId: undefined });
+    const file = modrinthJarFile(selectedVersion);
+    if (!file) throw error;
+    const projectSides = { server_side: project.server_side, client_side: project.client_side };
+    const compatibility = compatibilityFromSelectedVersion({
+      version: selectedVersion,
+      file,
+      projectSides,
+      minecraftVersion: targetRuntime.minecraftVersion,
+      compatible: true,
+      reason: "Compatible server-side Fabric mod"
+    });
+    const installPlan = await planRequiredModrinthInstalls({
+      rootProjectId: install.projectId,
+      rootProject: project,
+      rootVersion: selectedVersion,
+      minecraftVersion: targetRuntime.minecraftVersion,
+      channel: install.channel
+    });
+    const listResult = await enrichInstalledModUpdates(server, await runtime.listMods(server, { forceRefresh: true }), { forceRefresh: true });
+    const installedProjectIds = new Set(modsFromListResult(listResult).map((mod) => remoteModMetadata(mod.modrinth)?.projectId).filter(Boolean));
+    const installedFilenames = new Set(modsFromListResult(listResult).map((mod) => typeof mod.filename === "string" ? mod.filename : undefined).filter(Boolean));
+    const installed: Array<{ projectId: string; version: string; filename: string; dependencyType: "root" | "required"; path?: string }> = [];
+
+    for (const planned of installPlan.installs) {
+      if (planned.dependencyType === "required" && installedProjectIds.has(planned.projectId)) continue;
+      const filename = safeModFilename(safeInstalledModFilename(planned.file.filename));
+      if (installedFilenames.has(filename) || installedFilenames.has(`${filename}.disabled`)) {
+        if (planned.dependencyType === "required") continue;
+        throw new Error("A mod with that filename already exists");
+      }
+      const content = await downloadModrinthJar(planned.file);
+      const written = await runtime.uploadMod(server, filename, content.toString("base64")) as { path?: string };
+      installedProjectIds.add(planned.projectId);
+      installedFilenames.add(filename);
+      installed.push({
+        projectId: planned.projectId,
+        version: planned.version.version_number,
+        filename,
+        dependencyType: planned.dependencyType,
+        path: written.path
+      });
+    }
+
+    const rootInstall = installed.find((item) => item.dependencyType === "root");
+    return {
+      ok: true,
+      projectId: install.projectId,
+      version: selectedVersion.version_number,
+      filename: rootInstall?.filename ?? file.filename,
+      channel: versionChannel(selectedVersion.version_type),
+      installed,
+      optionalDependencies: installPlan.optionalDependencies,
+      compatibility
+    };
   }
 }
 
