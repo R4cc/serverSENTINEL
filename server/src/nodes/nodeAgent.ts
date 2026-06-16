@@ -723,6 +723,27 @@ async function prepareNodeUpdate(payload: unknown) {
   };
 }
 
+async function prepareNodeRestart() {
+  if (!dockerAvailable()) {
+    throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before restarting the node from the panel.");
+  }
+  const containerId = currentContainerId();
+  if (!containerId) {
+    throw new Error("Could not determine the current node container id.");
+  }
+
+  setTimeout(() => {
+    void dockerRequest("POST", `/containers/${encodeURIComponent(containerId)}/restart?t=10`, 204).catch((error) => {
+      console.error(`Node self-restart failed: ${(error as Error).message}`);
+    });
+  }, 500);
+
+  return {
+    ok: true,
+    message: "Node restart started. The node will reconnect shortly."
+  };
+}
+
 async function prepareNodeRemoval() {
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Stop the node container manually after removing it from the panel.");
@@ -1063,6 +1084,7 @@ async function handleCommand(command: string, payload: any) {
   const server = payload?.server as ManagedServer | undefined;
   if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir, totalMemory: await detectedTotalMemory() };
   if (command === "node.update") return prepareNodeUpdate(payload);
+  if (command === "node.restart") return prepareNodeRestart();
   if (command === "node.remove") return prepareNodeRemoval();
   if (command === "docker.info") return dockerInfo();
   if (command === "server.create") return createServer(payload?.input as CreateInput);

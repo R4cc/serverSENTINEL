@@ -1944,6 +1944,37 @@ export default function App() {
     }
   }
 
+  async function restartNode(node: ManagedNode) {
+    if (!canManageUsers) return;
+    if (node.isInternal) {
+      if (!window.confirm(`Restart the Panel container ("${node.name}")?\n\nThis will temporarily disconnect your current session while the Panel restarts.`)) return;
+    } else {
+      if (!window.confirm(`Restart node container "${node.name}"?\n\nThe node will disconnect briefly while the container restarts.`)) return;
+    }
+    setNodeBusyId(node.id);
+    try {
+      const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
+        method: "POST"
+      });
+      notify(result.ok ? "success" : "info", result.message || `Node ${node.name} restart started.`);
+      
+      const now = Date.now();
+      setNodeUpdatingSince((current) => ({ ...current, [node.id]: now }));
+      setNodeUpdateNow(now);
+      setAppState((current) => ({
+        ...current,
+        nodes: current.nodes?.map((candidate) => candidate.id === node.id ? { ...candidate, status: "offline" } : candidate)
+      }));
+      setNodeDetails((current) => current?.id === node.id ? { ...current, status: "offline" } : current);
+      
+      window.setTimeout(() => void refreshApp(), 5000);
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not restart the node container."));
+    } finally {
+      setNodeBusyId("");
+    }
+  }
+
   async function removeNode(node: ContextNode, force = false) {
     if (node.isInternal || !canManageUsers) return;
     if (node.servers.length > 0 && !force) {
@@ -3949,6 +3980,7 @@ export default function App() {
             onShowInstall={showNodeInstall}
             onRotateToken={rotateNodeToken}
             onUpdateNode={updateNodeImage}
+            onRestartNode={restartNode}
             onRemoveNode={removeNode}
             onCloseDetails={() => setNodeDetails(null)}
             onSelectServer={openServerFromNode}

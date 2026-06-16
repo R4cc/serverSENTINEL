@@ -3347,6 +3347,51 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   return result;
 });
 
+app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  if (node.isInternal) {
+    if (!dockerAvailable()) {
+      throw new Error("Docker socket is not mounted on the panel container. Mount the Docker socket to restart the panel container.");
+    }
+    const containerId = process.env.HOSTNAME || "";
+    if (!containerId) {
+      throw new Error("Could not determine the panel container ID.");
+    }
+    setTimeout(() => {
+      void dockerRequest("POST", `/containers/${encodeURIComponent(containerId)}/restart?t=10`, 204).catch((error) => {
+        console.error(`Panel self-restart failed: ${(error as Error).message}`);
+      });
+    }, 500);
+    return {
+      ok: true,
+      message: "Panel container restart started. The panel will reconnect shortly."
+    };
+  }
+
+  if (node.status !== "online") {
+    throw new Error("Node is offline.");
+  }
+  if (!panelNodeConnections.isConnected(node.id)) {
+    throw new Error("Node is not connected to the panel right now.");
+  }
+
+  const result = await panelNodeConnections.request(node, "node.restart", {}, 30_000);
+  const restartResult = result as { ok?: boolean };
+  if (restartResult.ok) {
+    const connectedAt = node.connectedAt;
+    const now = new Date().toISOString();
+    await updateNodes((nodes) => {
+      const current = nodes.find((candidate) => candidate.id === node.id);
+      if (!current || current.connectedAt !== connectedAt) return;
+      current.status = "offline";
+      current.updatedAt = now;
+    });
+  }
+  return result;
+});
+
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);

@@ -502,6 +502,7 @@ export function NodesPage({
   onShowInstall,
   onRotateToken,
   onUpdateNode,
+  onRestartNode,
   onRemoveNode,
   onCloseDetails,
   onSelectServer,
@@ -536,6 +537,7 @@ export function NodesPage({
   onShowInstall: (node: ManagedNode) => void;
   onRotateToken: (node: ManagedNode) => void;
   onUpdateNode: (node: ManagedNode) => void;
+  onRestartNode: (node: ManagedNode) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
@@ -838,6 +840,15 @@ export function NodesPage({
                   </button>
                   <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</button>
                   <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</button>
+                  <button
+                    type="button"
+                    className="secondaryButton compactButton"
+                    onClick={() => onRestartNode(selectedDetailsNode)}
+                    disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || (!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online")}
+                    title={!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online" ? "Bring the node online before restarting" : "Restart the node container"}
+                  >
+                    <AppIcon name="refresh" />Restart node
+                  </button>
                 </div>
                 <div className="nodeActionGroup destructive">
                   <button
