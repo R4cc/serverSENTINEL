@@ -314,6 +314,31 @@ export default function App() {
   const modServerRunning = Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
+  const modServerRunningReason = "Stop the server before adding, removing, updating, or uploading mods.";
+  const addModFromModrinthDisabled = modServerRunning || isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured;
+  const uploadModDisabled = modServerRunning || modsLocked;
+  const addModFromModrinthDisabledReason = modServerRunning
+    ? modServerRunningReason
+    : isProvisioning
+      ? "Server setup is still running."
+      : !canManager
+        ? "Server management permission is required."
+        : !effectiveAppState.modrinthApiConfigured
+          ? "Add a Modrinth API key in Settings before searching for mods."
+          : "Search Modrinth for compatible Fabric mods.";
+  const uploadModDisabledReason = modServerRunning
+    ? modServerRunningReason
+    : isProvisioning
+      ? "Server setup is still running."
+      : dockerOperationalLock
+        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+        : !canManager
+          ? "Server management permission is required."
+          : !activeStatus
+            ? "Server status is still loading."
+            : isAnyModJobRunning
+              ? "A mod operation is already running."
+              : "Upload a local Fabric mod file.";
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
     : isProvisioning
@@ -3533,7 +3558,6 @@ export default function App() {
             <img className="brandLogo" src="/logo.png" alt="" />
             <div>
               <h1>ServerSentinel</h1>
-              <p>Managed server web panel</p>
             </div>
           </div>
           <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
@@ -4423,7 +4447,8 @@ export default function App() {
                             if (warnIfModServerRunning()) return;
                             setModsView("search");
                           }}
-                          disabled={isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured}
+                          disabled={addModFromModrinthDisabled}
+                          title={addModFromModrinthDisabledReason}
                         >
                           <span className="modsCardIcon">
                             <AppIcon name="plus" />
@@ -4440,7 +4465,8 @@ export default function App() {
                             if (warnIfModServerRunning()) return;
                             modUploadRef.current?.click();
                           }}
-                          disabled={modsLocked}
+                          disabled={uploadModDisabled}
+                          title={uploadModDisabledReason}
                         >
                           <span className="modsCardIcon">
                             <AppIcon name="fileUp" />

@@ -96,7 +96,6 @@ export function AuthPanel({
             <button type="submit" disabled={busy}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
           </fieldset>
         </form>
-        <p className="muted">Use demo / demo to enter simulated mode without creating a real session.</p>
       </section>
     </main>
   );

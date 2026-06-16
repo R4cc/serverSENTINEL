@@ -5482,14 +5482,16 @@ button .buttonIcon {
 }
 
 .modsPanel .mods {
-  --mods-action-width: min(100%, 780px);
+  --mods-action-width: min(100%, 1180px);
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  width: 100%;
   max-width: none;
   gap: var(--space-3);
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .modsPanel {
@@ -8326,7 +8328,9 @@ details.compatibilityBadge p {
   gap: var(--space-3);
   margin: 0;
   padding-top: 2px;
-  width: var(--mods-action-width);
+  width: 100%;
+  max-width: var(--mods-action-width);
+  box-sizing: border-box;
 }
 
 .modsCard {
@@ -8391,12 +8395,14 @@ details.compatibilityBadge p {
 }
 
 .modsToolbarCompact {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   margin: 0;
   align-items: center;
-  flex-wrap: wrap;
-  width: var(--mods-action-width);
+  justify-content: stretch;
+  width: 100%;
+  max-width: var(--mods-action-width);
   box-sizing: border-box;
   min-height: calc(42px + (var(--space-3) * 2) + 2px);
 }
@@ -8410,7 +8416,8 @@ details.compatibilityBadge p {
   background: var(--surface);
   padding: 0 var(--space-3);
   height: 42px;
-  flex: 1;
+  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: none;
   box-sizing: border-box;
@@ -8427,6 +8434,7 @@ details.compatibilityBadge p {
   border: 0;
   background: transparent;
   width: 100%;
+  min-width: 0;
   height: 100%;
   font-size: 13px;
   color: var(--text);
@@ -10318,9 +10326,7 @@ textarea:hover:not(:disabled),
 }
 
 .fileNameCell,
-.modsTableRow button,
-.nodeServerRow,
-.nodeServerMoreRow {
+.modsTableRow button {
   border-color: transparent;
 }
 
@@ -11704,6 +11710,21 @@ details.compatibilityBadge p {
   max-width: none;
   box-sizing: border-box;
   margin: 0;
+}
+
+@media (max-width: 720px) {
+  .modsCardsGrid,
+  .modsToolbarCompact {
+    max-width: none;
+  }
+
+  .modsCardsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modsSearchInputCompact {
+    padding-inline: var(--space-2);
+  }
 }
 
 .modSearchView .mods {
