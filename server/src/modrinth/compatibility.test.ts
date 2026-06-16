@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
+import { latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthVersionIsNewer, resolveCompatibilityFromVersions, unknownCompatibility } from "./compatibility.js";
 import type { ModrinthVersion, ReleaseChannel } from "../types.js";
 
 function version(input: Partial<ModrinthVersion> & { id: string; loaders: string[]; game_versions: string[]; version_type?: ReleaseChannel; jar?: boolean }): ModrinthVersion {
@@ -111,6 +111,14 @@ describe("Modrinth compatibility resolver", () => {
     });
 
     expect(latest?.version_number).toBe("1.2.1");
+  });
+
+  it("detects an installed version newer than a stale update candidate", () => {
+    const installed = version({ id: "fabric-api-new", version_number: "0.152.1+26.1.2", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-15T09:40:14Z" });
+    const staleLatest = version({ id: "fabric-api-old", version_number: "0.151.0+26.1.2", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-07T13:21:50Z" });
+
+    expect(modrinthVersionIsNewer(installed, staleLatest)).toBe(true);
+    expect(modrinthVersionIsNewer(staleLatest, installed)).toBe(false);
   });
 
   it("uses unknown for API failure compatibility, not a hard incompatibility", () => {

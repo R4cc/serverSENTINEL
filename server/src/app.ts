@@ -26,6 +26,7 @@ import {
   minecraftVersionsInclude,
   modrinthJarFile,
   modrinthServerSideSupported,
+  modrinthVersionIsNewer,
   normalizeReleaseChannel,
   resolveSelectedProjectVersion,
   unknownCompatibility,
@@ -4334,6 +4335,24 @@ async function lookupModrinthUpdateForCurrent(server: ManagedServer, current: In
   let target = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
   if (!target) {
     target = latestCompatibleProjectVersion(await fetchProjectVersions(current.project_id, undefined, options), { ...versionFilter, channel: preferredChannel });
+  }
+  const currentVersionId = current.version_id ?? current.id;
+  let currentVersion: ModrinthVersion | undefined;
+  if (currentVersionId) {
+    currentVersion = await resolveSelectedProjectVersion({
+      projectId: current.project_id,
+      versionId: currentVersionId,
+      versions
+    }).catch(() => undefined);
+  }
+  if (currentVersion
+    && allowedForChannel(currentVersion, preferredChannel)
+    && currentVersion.loaders.includes(versionFilter.loader)
+    && minecraftVersionsInclude(currentVersion.game_versions, versionFilter.minecraftVersion)
+    && modrinthJarFile(currentVersion)
+    && modrinthVersionIsNewer(currentVersion, target)
+  ) {
+    target = currentVersion;
   }
   const currentMatchesTarget = Boolean(target && (
     current.version_id

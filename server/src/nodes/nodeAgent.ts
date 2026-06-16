@@ -10,7 +10,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -905,6 +905,14 @@ async function remoteLookupModrinthUpdate(server: ManagedServer, version: Modrin
   let latest = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
   if (!latest) {
     latest = latestCompatibleProjectVersion(await fetchProjectVersions(version.project_id, undefined, options), { ...versionFilter, channel: preferredChannel });
+  }
+  if (allowedForChannel(version, preferredChannel)
+    && version.loaders.includes(versionFilter.loader)
+    && minecraftVersionsInclude(version.game_versions, versionFilter.minecraftVersion)
+    && modrinthJarFile(version)
+    && modrinthVersionIsNewer(version, latest)
+  ) {
+    latest = version;
   }
   return {
     projectId: version.project_id,

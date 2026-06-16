@@ -157,6 +157,19 @@ export function latestCompatibleProjectVersion(
     .sort((a, b) => new Date(b.date_published ?? 0).getTime() - new Date(a.date_published ?? 0).getTime())[0];
 }
 
+export function modrinthVersionPublishedTime(version?: ModrinthVersion) {
+  const value = version?.date_published ? new Date(version.date_published).getTime() : 0;
+  return Number.isFinite(value) ? value : 0;
+}
+
+export function modrinthVersionIsNewer(left: ModrinthVersion, right?: ModrinthVersion) {
+  if (!right) return true;
+  const leftTime = modrinthVersionPublishedTime(left);
+  const rightTime = modrinthVersionPublishedTime(right);
+  if (leftTime !== rightTime) return leftTime > rightTime;
+  return left.id !== right.id && left.version_number.localeCompare(right.version_number, undefined, { numeric: true, sensitivity: "base" }) > 0;
+}
+
 function compatibleResult(
   version: ModrinthVersion,
   file: ModrinthJarFile,
