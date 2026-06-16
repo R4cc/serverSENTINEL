@@ -29,20 +29,23 @@ export type CompatibilityResolverOptions = {
 
 export type VersionCompatibilityOptions = Omit<CompatibilityResolverOptions, "projectId">;
 
-type CachedVersions = {
-  filtered?: ModrinthVersion[];
-  all?: ModrinthVersion[];
+type TimedCacheEntry<T> = {
+  value: T;
+  expiresAt: number;
 };
 
-const compatibilityVersionCache = new Map<string, CachedVersions>();
-const projectCache = new Map<string, any>();
+const projectCacheTtlMs = 60 * 60 * 1000;
+const projectVersionsCacheTtlMs = 5 * 60 * 1000;
+
+const projectCache = new Map<string, TimedCacheEntry<any>>();
 const projectRequestCache = new Map<string, Promise<any>>();
-const projectVersionsCache = new Map<string, ModrinthVersion[]>();
+const projectVersionsCache = new Map<string, TimedCacheEntry<ModrinthVersion[]>>();
 const projectVersionsRequestCache = new Map<string, Promise<ModrinthVersion[]>>();
 
 export async function fetchProject(projectId: string): Promise<any> {
-  let cached = projectCache.get(projectId);
-  if (cached) return cached;
+  const cached = projectCache.get(projectId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) projectCache.delete(projectId);
   const pending = projectRequestCache.get(projectId);
   if (pending) return pending;
   const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`;
@@ -52,7 +55,7 @@ export async function fetchProject(projectId: string): Promise<any> {
       throw new Error(`Failed to fetch project ${projectId}: ${response.statusText}`);
     }
     const data = await response.json();
-    projectCache.set(projectId, data);
+    projectCache.set(projectId, { value: data, expiresAt: Date.now() + projectCacheTtlMs });
     return data;
   })().finally(() => {
     projectRequestCache.delete(projectId);
@@ -237,12 +240,14 @@ export function resolveCompatibilityFromVersions(
   return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion, projectSides);
 }
 
-export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }) {
+export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }, options: { forceRefresh?: boolean } = {}) {
   const cacheKey = `${projectId}|${filters?.loader ?? ""}|${filters?.minecraftVersion ?? ""}`;
   const cached = projectVersionsCache.get(cacheKey);
-  if (cached) return cached;
+  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached && (options.forceRefresh || cached.expiresAt <= Date.now())) projectVersionsCache.delete(cacheKey);
   const pending = projectVersionsRequestCache.get(cacheKey);
-  if (pending) return pending;
+  if (!options.forceRefresh && pending) return pending;
+  if (options.forceRefresh) projectVersionsRequestCache.delete(cacheKey);
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
   url.searchParams.set("include_changelog", "false");
   if (filters?.loader) {
@@ -254,7 +259,7 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
   const request = (async () => {
     const response = await modrinthFetch(url.toString());
     const versions = await response.json() as ModrinthVersion[];
-    projectVersionsCache.set(cacheKey, versions);
+    projectVersionsCache.set(cacheKey, { value: versions, expiresAt: Date.now() + projectVersionsCacheTtlMs });
     return versions;
   })().finally(() => {
     projectVersionsRequestCache.delete(cacheKey);
@@ -264,10 +269,6 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
 }
 
 export async function resolveModrinthProjectCompatibility(options: CompatibilityResolverOptions): Promise<ModrinthCompatibilityMatch> {
-  const cacheKey = `${options.projectId}|${options.minecraftVersion}|${options.loader}|${options.channel}`;
-  const cached = compatibilityVersionCache.get(cacheKey) ?? {};
-  compatibilityVersionCache.set(cacheKey, cached);
-
   try {
     const project = await fetchProject(options.projectId);
     const projectSides = {
@@ -275,17 +276,16 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
       client_side: project.client_side
     };
 
-    cached.filtered ??= await fetchProjectVersions(options.projectId, {
+    const filteredVersions = await fetchProjectVersions(options.projectId, {
       loader: options.loader,
       minecraftVersion: options.minecraftVersion
     });
-    const filteredResult = resolveCompatibilityFromVersions(cached.filtered, options, projectSides);
+    const filteredResult = resolveCompatibilityFromVersions(filteredVersions, options, projectSides);
     if (filteredResult.compatible || filteredResult.matchedVersionId) {
       return filteredResult;
     }
 
-    cached.all ??= await fetchProjectVersions(options.projectId);
-    return resolveCompatibilityFromVersions(cached.all, options, projectSides);
+    return resolveCompatibilityFromVersions(await fetchProjectVersions(options.projectId), options, projectSides);
   } catch (err) {
     console.error(err);
     return unknownCompatibility();

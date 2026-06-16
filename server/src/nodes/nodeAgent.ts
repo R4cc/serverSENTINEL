@@ -893,7 +893,7 @@ function remoteInstalledModCompatibility(server: ManagedServer, version: Modrint
   };
 }
 
-async function remoteLookupModrinthUpdate(server: ManagedServer, version: ModrinthVersion, preferredChannel: ReleaseChannel) {
+async function remoteLookupModrinthUpdate(server: ManagedServer, version: ModrinthVersion, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
   const target = runtimeTarget(server);
   if (!target.minecraftVersion || target.loader !== "fabric" || !version.project_id) return null;
 
@@ -901,10 +901,10 @@ async function remoteLookupModrinthUpdate(server: ManagedServer, version: Modrin
     loader: target.loader,
     minecraftVersion: target.minecraftVersion
   };
-  const versions = await fetchProjectVersions(version.project_id, versionFilter);
+  const versions = await fetchProjectVersions(version.project_id, versionFilter, options);
   let latest = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
   if (!latest) {
-    latest = latestCompatibleProjectVersion(await fetchProjectVersions(version.project_id), { ...versionFilter, channel: preferredChannel });
+    latest = latestCompatibleProjectVersion(await fetchProjectVersions(version.project_id, undefined, options), { ...versionFilter, channel: preferredChannel });
   }
   return {
     projectId: version.project_id,
@@ -916,7 +916,7 @@ async function remoteLookupModrinthUpdate(server: ManagedServer, version: Modrin
   };
 }
 
-async function modsList(server: ManagedServer) {
+async function modsList(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
   const mods = await Promise.all(
@@ -945,7 +945,7 @@ async function modsList(server: ManagedServer) {
             ...base,
             iconUrl: project.icon_url,
             compatibility: remoteInstalledModCompatibility(server, version, project),
-            versionInfo: await remoteLookupModrinthUpdate(server, version, base.preferredChannel),
+            versionInfo: await remoteLookupModrinthUpdate(server, version, base.preferredChannel, options),
             modrinth: {
               projectId: version.project_id,
               versionId: version.id,
@@ -1149,7 +1149,7 @@ async function handleCommand(command: string, payload: any) {
     else await rm(target, { force: false });
     return { ok: true };
   }
-  if (command === "mods.list") return modsList(server);
+  if (command === "mods.list") return modsList(server, { forceRefresh: payload?.forceRefresh === true });
   if (command === "mods.upload") return modUpload(server, payload?.filename, payload?.contentBase64);
   if (command === "mods.install") return modInstall(server, payload);
   if (command === "mods.enableDisable") {

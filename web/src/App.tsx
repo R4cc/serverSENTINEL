@@ -2144,7 +2144,7 @@ export default function App() {
     }
   }
 
-  async function loadInstalledMods(serverId: string) {
+  async function loadInstalledMods(serverId: string, options: { forceRefresh?: boolean } = {}) {
     if (isProvisioning) return;
     setModsLoading(true);
     setModsError("");
@@ -2156,7 +2156,7 @@ export default function App() {
       return;
     }
     try {
-      const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods`);
+      const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
       if (activeServerIdRef.current === serverId) {
         setInstalledMods(result.mods);
         setModsError("");
@@ -4496,7 +4496,7 @@ export default function App() {
                             type="button"
                             className="secondaryButton modsUpdateCheckButton"
                             onClick={() => {
-                              if (activeServer) void loadInstalledMods(activeServer.id);
+                              if (activeServer) void loadInstalledMods(activeServer.id, { forceRefresh: true });
                             }}
                             disabled={modsLoading || isProvisioning || !activeServer}
                             title={modsLoading ? "Checking installed mods" : "Check installed mods for available updates"}

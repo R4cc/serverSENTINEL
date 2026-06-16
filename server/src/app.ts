@@ -4302,7 +4302,7 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
   return { status: "compatible", compatible: true, reason: "Compatibility verified for this server.", serverSide, clientSide };
 }
 
-async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata) {
+async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata, options: { forceRefresh?: boolean } = {}) {
   const targetRuntime = runtimeTarget(server);
   if (!targetRuntime.minecraftVersion) return null;
   let current: { project_id?: string; version_number?: string; version_type?: string } | undefined;
@@ -4322,10 +4322,10 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
     loader: "fabric",
     minecraftVersion: targetRuntime.minecraftVersion
   };
-  const versions = await fetchProjectVersions(current.project_id, versionFilter);
+  const versions = await fetchProjectVersions(current.project_id, versionFilter, options);
   let target = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
   if (!target) {
-    target = latestCompatibleProjectVersion(await fetchProjectVersions(current.project_id), { ...versionFilter, channel: preferredChannel });
+    target = latestCompatibleProjectVersion(await fetchProjectVersions(current.project_id, undefined, options), { ...versionFilter, channel: preferredChannel });
   }
   return {
     projectId: current.project_id,
@@ -4337,7 +4337,7 @@ async function lookupModrinthUpdate(server: ManagedServer, modPath: string, pref
   };
 }
 
-async function localListMods(server: ManagedServer) {
+async function localListMods(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
   await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, "mods");
   const entries = await readdir(modsDir, { withFileTypes: true });
@@ -4391,7 +4391,7 @@ async function localListMods(server: ManagedServer) {
 
         await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
         let versionInfo: any = null;
-        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata); } catch { versionInfo = null; }
+        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata, options); } catch { versionInfo = null; }
         return {
           filename: entry.name,
           displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
@@ -4865,10 +4865,10 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
   }
 }
 
-app.get<{ Params: { id: string } }>("/api/servers/:id/mods", async (request) => {
+app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/api/servers/:id/mods", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).listMods(server);
+  return runtimeForServer(server).listMods(server, { forceRefresh: request.query.forceRefresh === "true" });
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {

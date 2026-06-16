@@ -349,8 +349,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "files.delete", { path: normalizeRemotePath(target), recursive });
   }
 
-  listMods(server: ManagedServer) {
-    return this.command(server, "mods.list");
+  listMods(server: ManagedServer, options?: { forceRefresh?: boolean }) {
+    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined);
   }
 
   async modIcon(): Promise<ModIconResult | null> {

@@ -46,7 +46,7 @@ export type NodeRuntime = {
   renameFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
   duplicateFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
   deleteFile(server: ManagedServer, target: string, recursive: unknown): Promise<unknown>;
-  listMods(server: ManagedServer): Promise<unknown>;
+  listMods(server: ManagedServer, options?: { forceRefresh?: boolean }): Promise<unknown>;
   modIcon(server: ManagedServer, filename: unknown): Promise<ModIconResult | null>;
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown): Promise<unknown>;
   removeMod(server: ManagedServer, filename: unknown): Promise<unknown>;
