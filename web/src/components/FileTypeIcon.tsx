@@ -81,7 +81,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
@@ -171,6 +171,13 @@ export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chev
         </>
       )}
       {name === "check" && <path d="m5 12 4 4L19 6" />}
+      {name === "search" && (
+        <>
+          <circle cx="10.5" cy="10.5" r="6" />
+          <path d="m15 15 5 5" />
+        </>
+      )}
+      {name === "shield" && <path d="M12 3 5 6v5c0 4.6 2.9 8 7 10 4.1-2 7-5.4 7-10V6z" />}
       {name === "server" && (
         <>
           <rect x="4" y="5" width="16" height="5" rx="1.5" />
