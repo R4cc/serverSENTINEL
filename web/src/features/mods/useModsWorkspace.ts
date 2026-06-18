@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { api } from "../../api";
 import { demoSearchResults, demoServerId } from "../../demo";
-import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel } from "../../types";
+import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import type { ModInstallModalState } from "../../app/uiState";
 import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { validateJarFilename } from "../../utils/validation";
 import { getInstallVersionHealth } from "./modHealth";
 import { fallbackReleaseChannel, hasInstallVersions, preferredInstallVersionId } from "./modsWorkspaceHelpers";
+import { createDemoUpdatePlan } from "./modUpdatePlan";
 
 const modSearchDebounceMs = 650;
 
@@ -136,6 +137,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [installState, setInstallState] = useState<ModInstallModalState | null>(null);
+  const [updatePlan, setUpdatePlan] = useState<ModUpdatePlan | null>(null);
+  const [updatePlanLoading, setUpdatePlanLoading] = useState(false);
+  const [updatePlanError, setUpdatePlanError] = useState("");
+  const [batchUpdateRunning, setBatchUpdateRunning] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const activeServerIdRef = useRef("");
   const loadMoreInFlightRef = useRef(false);
@@ -195,6 +200,38 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
   }
 
+  async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean } = {}) {
+    if (!serverId || isProvisioning) return null;
+    setUpdatePlanLoading(true);
+    setUpdatePlanError("");
+    if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
+      const plan = createDemoUpdatePlan(serverId, demoInstalledMods);
+      if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
+      setUpdatePlanLoading(false);
+      return plan;
+    }
+    try {
+      const plan = await api<ModUpdatePlan>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`);
+      if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
+      return plan;
+    } catch (error) {
+      if (handleStaleSession(error)) return null;
+      const message = errorMessage(error, "Could not build the mod update plan.");
+      setUpdatePlanError(message);
+      notify("error", message);
+      return null;
+    } finally {
+      if (activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
+    }
+  }
+
+  async function refreshUpdates(forceRefresh = true) {
+    await Promise.all([
+      loadInstalledMods(activeServer?.id, { forceRefresh }),
+      loadUpdatePlan(activeServer?.id, { forceRefresh })
+    ]);
+  }
+
   function resetPageState() {
     setAddOpen(false);
     setQuery("");
@@ -216,6 +253,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     toggleQueueRef.current = {};
     if (!activeServer) {
       setInstalledMods([]);
+      setUpdatePlan(null);
+      setUpdatePlanError("");
       setModsError("");
       setModsLoading(false);
       return;
@@ -224,13 +263,18 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setModsError(activeNodeBlockMessage);
       setModsLoading(false);
       setInstalledMods([]);
+      setUpdatePlan(null);
+      setUpdatePlanError(activeNodeBlockMessage);
       return;
     }
-    void loadInstalledMods(activeServer.id);
+    void refreshUpdates(false);
   }, [activeServer?.id, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
 
   useEffect(() => {
-    if (activeServerIsDemo) setInstalledMods(demoInstalledMods);
+    if (activeServerIsDemo) {
+      setInstalledMods(demoInstalledMods);
+      if (activeServer) setUpdatePlan(createDemoUpdatePlan(activeServer.id, demoInstalledMods));
+    }
   }, [activeServerIsDemo, demoInstalledMods]);
 
   useEffect(() => {
@@ -434,7 +478,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: JSON.stringify({ filename: file.name, contentBase64: content }) });
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await loadInstalledMods(activeServer.id, { forceRefresh: true });
+        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]);
         await refreshFiles(activeServer.id, "/mods");
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
@@ -496,7 +540,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setInstallState(null);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await loadInstalledMods(activeServer.id, { forceRefresh: true });
+        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]);
         await refreshFiles(activeServer.id, "/mods");
         const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
         removeJob(jobId);
@@ -509,7 +553,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const message = (error as Error).message;
       setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Install failed", error: message, dismissible: true });
       setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
-      void loadInstalledMods(activeServer.id); void refreshFiles(activeServer.id, "/mods");
+      void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
     }
   }
 
@@ -518,6 +562,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setNotice("");
     const title = mod.displayName;
     const oldFilename = mod.filename;
+    const plannedChannel = updatePlan?.updates.find((entry) => entry.filename === mod.filename)?.channel;
     const jobId = `update-${mod.modrinth.projectId}-${Date.now()}`;
     setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Updating mod", subject: title, progress: 10, task: "Checking compatibility", dismissible: false }]);
     if (activeServerIsDemo) {
@@ -539,11 +584,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     try {
       patchJob(jobId, { progress: 30, task: "Downloading new version" });
-      const result = await api<{ version: string; upToDate?: boolean }>("/api/modrinth/update", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: mod.preferredChannel || "release" }) });
+      const result = await api<{ version: string; upToDate?: boolean }>("/api/modrinth/update", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: plannedChannel || mod.preferredChannel || "release" }) });
       notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await loadInstalledMods(activeServer.id); await refreshFiles(activeServer.id, "/mods");
+        await Promise.all([loadInstalledMods(activeServer.id), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true });
       } catch (error) {
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
@@ -552,7 +597,72 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } catch (error) {
       const message = (error as Error).message;
       setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Update failed", error: message, dismissible: true });
-      void loadInstalledMods(activeServer.id); void refreshFiles(activeServer.id, "/mods");
+      void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
+    }
+  }
+
+  async function updateAllSafe() {
+    if (warnIfServerRunning() || modsLocked || !canManage || !activeServer || batchUpdateRunning) return;
+    const plan = updatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
+    const safeEntries = plan?.updates.filter((entry) => entry.status === "safe_update" && entry.safeBatchEligible) ?? [];
+    if (!safeEntries.length) {
+      notify("info", "No safe mod updates are available.");
+      return;
+    }
+    setBatchUpdateRunning(true);
+    setNotice("");
+    const jobId = `update-safe-${activeServer.id}-${Date.now()}`;
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Updating safe mods", subject: `${safeEntries.length} ${safeEntries.length === 1 ? "mod" : "mods"}`, progress: 10, task: "Validating update plan", dismissible: false }]);
+    try {
+      let result: SafeBatchUpdateResult;
+      if (activeServerIsDemo) {
+        patchJob(jobId, { progress: 45, task: "Applying safe updates" });
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+        const safeByFilename = new Map(safeEntries.map((entry) => [entry.filename, entry]));
+        const apply = (mods: InstalledMod[]) => mods.map((mod) => {
+          const entry = safeByFilename.get(mod.filename);
+          if (!entry || !mod.modrinth || !entry.targetVersion) return mod;
+          const filename = entry.targetFilename || mod.filename.replace(mod.modrinth.versionNumber, entry.targetVersion);
+          return {
+            ...mod,
+            filename,
+            modifiedAt: new Date().toISOString(),
+            versionInfo: { ...mod.versionInfo, currentVersion: entry.targetVersion, latestVersion: entry.targetVersion, latestFilename: filename, upToDate: true },
+            modrinth: { ...mod.modrinth, filename, versionNumber: entry.targetVersion, installedAt: new Date().toISOString() }
+          };
+        });
+        setDemoInstalledMods(apply);
+        setInstalledMods(apply);
+        result = {
+          updated: safeEntries.map((entry) => ({ filename: entry.filename, result: { ok: true, version: entry.targetVersion } })),
+          skipped: [],
+          failed: [],
+          counts: { requested: safeEntries.length, updated: safeEntries.length, skipped: 0, failed: 0 }
+        };
+      } else {
+        patchJob(jobId, { progress: 35, task: "Applying safe updates" });
+        result = await api<SafeBatchUpdateResult>("/api/modrinth/update-safe", {
+          method: "POST",
+          body: JSON.stringify({ serverId: activeServer.id, filenames: safeEntries.map((entry) => entry.filename), channel: "release" })
+        });
+      }
+      patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
+      await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true }), refreshFiles(activeServer.id, "/mods")]);
+      const summary = `Updated ${result.counts.updated}; skipped ${result.counts.skipped}; failed ${result.counts.failed}.`;
+      const issueDetails = [
+        ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
+        ...result.failed.map((entry) => `${entry.filename} failed: ${entry.reason}`)
+      ].join("; ");
+      if (result.counts.failed || result.counts.skipped) notify("warning", summary);
+      else notify("success", summary);
+      patchJob(jobId, { status: result.counts.failed ? "failed" : "succeeded", progress: 100, task: summary, error: issueDetails || undefined, dismissible: true });
+      window.setTimeout(() => removeJob(jobId), 5000);
+    } catch (error) {
+      const message = errorMessage(error, "Safe mod updates failed.");
+      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Safe updates failed", error: message, dismissible: true });
+      void refreshUpdates(true);
+    } finally {
+      setBatchUpdateRunning(false);
     }
   }
 
@@ -592,6 +702,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (toggleLocked || !canManage || !activeServer) return;
     setNotice("");
     setInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, enabled } : candidate));
+    setUpdatePlan((current) => current ? { ...current, updates: current.updates.map((entry) => entry.filename === mod.filename ? { ...entry, enabled } : entry) } : current);
     if (demoMode) setDemoInstalledMods((current) => current.map((candidate) => candidate.filename === mod.filename ? { ...candidate, enabled } : candidate));
     const queued = toggleQueueRef.current[mod.filename];
     if (queued) queued.targetEnabled = enabled;
@@ -611,7 +722,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, { method: "DELETE" });
       notify("success", `Removed ${mod.displayName}`); setDetailsMod(null);
-      await loadInstalledMods(activeServer.id); await refreshFiles(activeServer.id, "/mods");
+      await Promise.all([loadInstalledMods(activeServer.id), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
     } catch (error) {
       const message = errorMessage(error, "Could not remove the mod.");
       setNotice(message); notify("error", message);
@@ -619,15 +730,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   return {
-    data: { installedMods, searchResults, searchTotal },
-    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, searching, loadingMore, searchError, installState },
+    data: { installedMods, searchResults, searchTotal, updatePlan },
+    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
     derived: { selectedVersion, dependencyCount, canContinueInstall },
     refs: { sentinelRef },
     actions: {
       setInstalledQuery, setDetailsMod, setQuery, setInstallState,
       openAdd: () => { if (!warnIfServerRunning()) { setDetailsMod(null); setAddOpen(true); } },
       closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
-      refresh: (forceRefresh = true) => loadInstalledMods(activeServer?.id, { forceRefresh }),
+      refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
       searchMods, loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
@@ -638,7 +749,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         return { ...current, showOtherVersions, selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? preferredInstallVersionId(current.data) : "", acknowledgeMinecraftMismatch: false };
       }),
       acknowledgeInstall: (checked: boolean) => setInstallState((current) => current ? { ...current, acknowledgeMinecraftMismatch: checked } : current),
-      uploadMod, installSelectedMod, updateMod, setInstalledModEnabled, removeMod, resetPageState
+      uploadMod, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, resetPageState
     }
   };
 }

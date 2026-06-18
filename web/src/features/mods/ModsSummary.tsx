@@ -1,19 +1,22 @@
-import type { InstalledMod } from "../../types";
+import type { InstalledMod, ModUpdatePlan } from "../../types";
 import { getInstalledModHealth } from "./modHealth";
 
 type Props = {
   mods: InstalledMod[];
   serverRunning: boolean;
   changesAllowed: boolean;
+  updatePlan?: ModUpdatePlan | null;
 };
 
-export function ModsSummary({ mods, serverRunning, changesAllowed }: Props) {
+export function ModsSummary({ mods, serverRunning, changesAllowed, updatePlan }: Props) {
   const enabled = mods.filter((mod) => mod.enabled).length;
   const health = mods.map(getInstalledModHealth);
-  const safeUpdates = health.filter((item) => item.hasSafeUpdate).length;
-  const reviewUpdates = health.filter((item) => item.hasReviewUpdate).length;
+  const safeUpdates = updatePlan?.counts.safeUpdates ?? health.filter((item) => item.hasSafeUpdate).length;
+  const reviewUpdates = updatePlan?.counts.reviewUpdates ?? health.filter((item) => item.hasReviewUpdate).length;
   const updates = safeUpdates + reviewUpdates;
-  const attention = health.filter((item) => item.needsAttention).length;
+  const attention = updatePlan
+    ? updatePlan.counts.reviewUpdates + updatePlan.counts.blockedUpdates
+    : health.filter((item) => item.needsAttention).length;
 
   const items = [
     { label: "Total mods", value: mods.length, detail: `${enabled} enabled · ${mods.length - enabled} disabled`, tone: "blue" },

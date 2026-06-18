@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { InstalledMod } from "../../types";
+import type { InstalledMod, ModUpdatePlanEntry } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
@@ -13,9 +13,10 @@ type Props = {
   onToggle: (mod: InstalledMod, enabled: boolean) => void;
   onUpdate: (mod: InstalledMod) => void;
   onRemove: (mod: InstalledMod) => void;
+  updatePlanEntry?: ModUpdatePlanEntry | null;
 };
 
-export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, onUpdate, onRemove }: Props) {
+export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, onUpdate, onRemove, updatePlanEntry }: Props) {
   const health = getInstalledModHealth(mod);
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
@@ -39,7 +40,8 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
         <dl className="modsDetailsFacts">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
-          {(health.hasSafeUpdate || health.hasReviewUpdate) && <div><dt>Latest version</dt><dd>{mod.versionInfo?.latestVersion}</dd></div>}
+          {updatePlanEntry?.targetVersion && <div><dt>Target version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}
+          {updatePlanEntry?.targetFilename && <div><dt>Target filename</dt><dd>{updatePlanEntry.targetFilename}</dd></div>}
           <div><dt>Source</dt><dd>{mod.modrinth ? "Modrinth" : "Manual upload"}</dd></div>
           <div><dt>Filename</dt><dd>{mod.filename}</dd></div>
           <div><dt>File size</dt><dd>{formatBytes(mod.size)}</dd></div>
@@ -64,10 +66,16 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
             </dl>
           </details>
         </section>
-        {reviewingUpdate && health.hasReviewUpdate && (
+        {updatePlanEntry && ["safe_update", "needs_review", "blocked"].includes(updatePlanEntry.status) && (
+          <section className={`modsCompatibilityCard ${updatePlanEntry.status === "safe_update" ? "ready" : updatePlanEntry.status === "blocked" ? "not-recommended" : "review"}`}>
+            <strong>{updatePlanEntry.status === "safe_update" ? "Safe update" : updatePlanEntry.status === "blocked" ? "Update blocked" : "Update needs review"}</strong>
+            <p>{updatePlanEntry.reason}</p>
+          </section>
+        )}
+        {reviewingUpdate && updatePlanEntry?.status === "needs_review" && (
           <section className="modsUpdateReview" aria-labelledby="review-update-title">
-            <strong id="review-update-title">Review update to {mod.versionInfo?.latestVersion}</strong>
-            <p>{health.detailDescription}</p>
+            <strong id="review-update-title">Review update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</strong>
+            <p>{updatePlanEntry.reason}</p>
             <label className="modsRiskAcknowledgement">
               <input type="checkbox" checked={updateAcknowledged} onChange={(event) => setUpdateAcknowledged(event.target.checked)} />
               <span><strong>Compatibility is not fully verified.</strong>I understand this update may not be safe for this server.</span>
@@ -94,8 +102,8 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
         )}
       </div>
       <div className="modsDrawerFooter">
-        {health.hasSafeUpdate && <button type="button" onClick={() => onUpdate(mod)} disabled={locked}>Update to {mod.versionInfo?.latestVersion}</button>}
-        {health.hasReviewUpdate && !reviewingUpdate && <button type="button" onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</button>}
+        {updatePlanEntry?.status === "safe_update" && <button type="button" onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</button>}
+        {updatePlanEntry?.status === "needs_review" && !reviewingUpdate && <button type="button" onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</button>}
         <button type="button" className="secondaryButton" onClick={() => onToggle(mod, !mod.enabled)} disabled={locked}>{mod.enabled ? "Disable" : "Enable"}</button>
         <button type="button" className="dangerButton" onClick={() => onRemove(mod)} disabled={locked}>Remove</button>
       </div>

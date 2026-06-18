@@ -459,6 +459,52 @@ export type FabricVersions = {
   installer: Array<{ version: string; stable: boolean }>;
 };
 
+export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" | "blocked" | "unknown";
+
+export type ModUpdatePlanEntry = {
+  filename: string;
+  displayName: string;
+  projectId?: string;
+  currentVersion?: string;
+  currentFilename: string;
+  targetVersion?: string;
+  targetFilename?: string;
+  channel: ReleaseChannel;
+  status: ModUpdatePlanStatus;
+  reason: string;
+  compatibility?: {
+    status?: string;
+    compatible: boolean;
+    reason?: string;
+    serverSide?: string;
+    clientSide?: string;
+  };
+  safeBatchEligible: boolean;
+  acknowledgementRequired: boolean;
+  enabled: boolean;
+};
+
+export type ModUpdatePlan = {
+  serverId: string;
+  generatedAt: string;
+  counts: {
+    totalInstalled: number;
+    safeUpdates: number;
+    reviewUpdates: number;
+    blockedUpdates: number;
+    upToDate: number;
+    unknown: number;
+  };
+  updates: ModUpdatePlanEntry[];
+};
+
+export type SafeBatchUpdateResult = {
+  updated: Array<{ filename: string; result: unknown }>;
+  skipped: Array<{ filename: string; reason: string }>;
+  failed: Array<{ filename: string; reason: string }>;
+  counts: { requested: number; updated: number; skipped: number; failed: number };
+};
+
 export type ProvisionJob = {
   id: string;
   status: "running" | "succeeded" | "failed";
