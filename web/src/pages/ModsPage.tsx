@@ -1,22 +1,20 @@
-import { useRef, type ChangeEvent, type FormEvent, type RefObject } from "react";
-import type { ModInstallModalState } from "../app/uiState";
-import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../types";
+import { useRef } from "react";
 import { AppIcon } from "../components/FileTypeIcon";
 import { InlineState } from "../components/InlineState";
 import { AddModsWorkflow } from "../features/mods/AddModsWorkflow";
 import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
 import { ModsSummary } from "../features/mods/ModsSummary";
+import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 
-type Props = {
+export type ModsPageServerContext = {
   serverName: string;
   minecraftVersion: string;
-  mods: InstalledMod[];
-  loading: boolean;
-  error: string;
-  installedQuery: string;
-  addOpen: boolean;
-  detailsMod: InstalledMod | null;
+  versionsUnknown: boolean;
+  contextMessage: string;
+};
+
+export type ModsPageAccess = {
   serverRunning: boolean;
   changesAllowed: boolean;
   locked: boolean;
@@ -28,64 +26,40 @@ type Props = {
   addDisabledReason: string;
   uploadDisabled: boolean;
   uploadDisabledReason: string;
-  searchQuery: string;
-  searchResults: ModrinthHit[];
-  searchTotal: number;
-  searching: boolean;
-  loadingMore: boolean;
-  searchError: string;
-  versionsUnknown: boolean;
-  contextMessage: string;
-  sentinelRef: RefObject<HTMLDivElement | null>;
-  installState: ModInstallModalState | null;
-  selectedVersion: ModrinthInstallVersion | null;
-  dependencyCount: number;
-  canContinueInstall: boolean;
-  formatDate: (value: string | number | Date) => string;
-  formatNumber: (value: number) => string;
-  onInstalledQueryChange: (value: string) => void;
-  onOpenAdd: () => void;
-  onCloseAdd: () => void;
-  onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
-  onRefresh: () => void;
-  onRetry: () => void;
-  onStopServer: () => void;
-  onToggle: (mod: InstalledMod, enabled: boolean) => void;
-  onUpdate: (mod: InstalledMod) => void;
-  onDetails: (mod: InstalledMod | null) => void;
-  onRemove: (mod: InstalledMod) => void;
-  onSearchQueryChange: (value: string) => void;
-  onSearch: (event: FormEvent) => void;
-  onChooseMod: (mod: ModrinthHit) => void;
-  onInstallClose: () => void;
-  onChannelChange: (mod: ModrinthHit, channel: ReleaseChannel) => void;
-  onSelectVersion: (version: ModrinthInstallVersion) => void;
-  onToggleAdvanced: () => void;
-  onAcknowledge: (checked: boolean) => void;
-  onContinueInstall: () => void;
-  onBackInstall: () => void;
-  onInstall: () => void;
 };
 
-export function ModsPage(props: Props) {
+type Props = {
+  workspace: ModsWorkspaceController;
+  serverContext: ModsPageServerContext;
+  access: ModsPageAccess;
+  formatters: {
+    date: (value: string | number | Date) => string;
+    number: (value: number) => string;
+  };
+  onStopServer: () => void;
+};
+
+export function ModsPage({ workspace, serverContext, access, formatters, onStopServer }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
+  const { data, state, derived, refs, actions } = workspace;
+
   return (
     <section className="tabPage modsWorkspacePage">
-      <header className="modsWorkspaceHeader"><div><h1>Mods</h1><p>Manage installed mods and add compatible Fabric mods.</p></div><span className="modsWorkspaceTarget">Fabric · Minecraft {props.minecraftVersion}</span></header>
-      {props.serverRunning && <section className="modsLockBanner"><span><AppIcon name="shield" /></span><div><strong>Stop the server to change mods.</strong><p>Installs, uploads, removals, updates, and enable or disable changes require the server to be stopped.</p></div>{props.canStopServer && <button type="button" className="secondaryButton" onClick={props.onStopServer} disabled={props.stoppingServer}>{props.stoppingServer ? "Stopping…" : "Stop server"}</button>}</section>}
-      {!props.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
-      <ModsSummary mods={props.mods} serverRunning={props.serverRunning} changesAllowed={props.changesAllowed} />
+      <header className="modsWorkspaceHeader"><div><h1>Mods</h1><p>Manage installed mods and add compatible Fabric mods.</p></div><span className="modsWorkspaceTarget">Fabric · Minecraft {serverContext.minecraftVersion}</span></header>
+      {access.serverRunning && <section className="modsLockBanner"><span><AppIcon name="shield" /></span><div><strong>Stop the server to change mods.</strong><p>Installs, uploads, removals, updates, and enable or disable changes require the server to be stopped.</p></div>{access.canStopServer && <button type="button" className="secondaryButton" onClick={onStopServer} disabled={access.stoppingServer}>{access.stoppingServer ? "Stopping…" : "Stop server"}</button>}</section>}
+      {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
+      <ModsSummary mods={data.installedMods} serverRunning={access.serverRunning} changesAllowed={access.changesAllowed} />
       <div className="modsWorkspaceToolbar">
-        <div><button type="button" onClick={props.onOpenAdd} disabled={props.addDisabled} title={props.addDisabledReason}><AppIcon name="plus" /> Add mods</button><button type="button" className="secondaryButton" onClick={() => uploadRef.current?.click()} disabled={props.uploadDisabled} title={props.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</button><button type="button" className="secondaryButton" onClick={props.onRefresh} disabled={props.loading}><AppIcon name="refresh" /> {props.loading ? "Checking…" : "Check updates"}</button></div>
-        <span>{props.serverName}</span>
+        <div><button type="button" onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add mods</button><button type="button" className="secondaryButton" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</button><button type="button" className="secondaryButton" onClick={() => void actions.refresh()} disabled={state.modsLoading}><AppIcon name="refresh" /> {state.modsLoading ? "Checking…" : "Check updates"}</button></div>
+        <span>{serverContext.serverName}</span>
       </div>
-      <input ref={uploadRef} className="hiddenInput" type="file" accept=".jar" onChange={props.onUpload} />
-      {props.loading && props.mods.length === 0 && <InlineState tone="loading" title="Loading installed mods" message="Checking the mods folder and compatibility information." />}
-      {props.error && <InlineState tone="error" title="Could not load installed mods" message={props.error} actionLabel="Retry" onAction={props.onRetry} busy={props.loading} />}
-      <InstalledModsList mods={props.mods} query={props.installedQuery} busy={props.loading} locked={props.toggleLocked} onQueryChange={props.onInstalledQueryChange} onToggle={props.onToggle} onUpdate={props.onUpdate} onDetails={(mod) => props.onDetails(mod)} />
-      {(props.addOpen || props.detailsMod) && <div className="modsDrawerBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) props.addOpen ? props.onCloseAdd() : props.onDetails(null); }}>
-        {props.addOpen && <aside className="modsWorkflowDrawer" role="dialog" aria-modal="true" aria-label="Add mods"><AddModsWorkflow query={props.searchQuery} results={props.searchResults} total={props.searchTotal} installedMods={props.mods} searching={props.searching} loadingMore={props.loadingMore} error={props.searchError} configured={props.modrinthConfigured} versionsUnknown={props.versionsUnknown} contextMessage={props.contextMessage} locked={props.locked} sentinelRef={props.sentinelRef} installState={props.installState} selectedVersion={props.selectedVersion} dependencyCount={props.dependencyCount} canContinue={props.canContinueInstall} formatDate={props.formatDate} formatNumber={props.formatNumber} onClose={props.onCloseAdd} onQueryChange={props.onSearchQueryChange} onSearch={props.onSearch} onChoose={props.onChooseMod} onInstallClose={props.onInstallClose} onChannelChange={props.onChannelChange} onSelectVersion={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinueInstall} onBack={props.onBackInstall} onInstall={props.onInstall} /></aside>}
-        {props.detailsMod && <ModDetailsPanel mod={props.detailsMod} locked={props.locked} formatDate={props.formatDate} onClose={() => props.onDetails(null)} onToggle={props.onToggle} onUpdate={props.onUpdate} onRemove={props.onRemove} />}
+      <input ref={uploadRef} className="hiddenInput" type="file" accept=".jar" onChange={actions.uploadMod} />
+      {state.modsLoading && data.installedMods.length === 0 && <InlineState tone="loading" title="Loading installed mods" message="Checking the mods folder and compatibility information." />}
+      {state.modsError && <InlineState tone="error" title="Could not load installed mods" message={state.modsError} actionLabel="Retry" onAction={actions.retry} busy={state.modsLoading} />}
+      <InstalledModsList mods={data.installedMods} query={state.installedQuery} busy={state.modsLoading} locked={access.toggleLocked} onQueryChange={actions.setInstalledQuery} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onDetails={actions.setDetailsMod} />
+      {(state.addOpen || state.detailsMod) && <div className="modsDrawerBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) state.addOpen ? actions.closeAdd() : actions.setDetailsMod(null); }}>
+        {state.addOpen && <aside className="modsWorkflowDrawer" role="dialog" aria-modal="true" aria-label="Add mods"><AddModsWorkflow query={state.query} results={data.searchResults} total={data.searchTotal} installedMods={data.installedMods} searching={state.searching} loadingMore={state.loadingMore} error={state.searchError} configured={access.modrinthConfigured} versionsUnknown={serverContext.versionsUnknown} contextMessage={serverContext.contextMessage} locked={access.locked} sentinelRef={refs.sentinelRef} installState={state.installState} selectedVersion={derived.selectedVersion} dependencyCount={derived.dependencyCount} canContinue={derived.canContinueInstall} formatDate={formatters.date} formatNumber={formatters.number} onClose={actions.closeAdd} onQueryChange={actions.setQuery} onSearch={actions.searchMods} onChoose={actions.openInstallReview} onInstallClose={actions.closeInstall} onChannelChange={(mod, channel) => void actions.loadInstallVersions(mod, channel)} onSelectVersion={actions.selectInstallVersion} onToggleAdvanced={actions.toggleAdvanced} onAcknowledge={actions.acknowledgeInstall} onContinue={actions.continueInstallReview} onBack={actions.backInstall} onInstall={actions.installSelectedMod} /></aside>}
+        {state.detailsMod && <ModDetailsPanel mod={state.detailsMod} locked={access.locked} formatDate={formatters.date} onClose={() => actions.setDetailsMod(null)} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onRemove={actions.removeMod} />}
       </div>}
     </section>
   );

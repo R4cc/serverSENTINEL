@@ -11,16 +11,16 @@ import {
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, InstalledMod, LocalePreference, ManagedNode, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ReleaseChannel, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
-import { trimFormValue, validateCommandList, validateCronExpression, validateJarFilename, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
+import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
-import type { FilePreviewState, ModInstallModalState } from "./app/uiState";
+import type { FilePreviewState } from "./app/uiState";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
@@ -37,7 +37,7 @@ import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 import { ModsPage } from "./pages/ModsPage";
-import { getInstallVersionHealth } from "./features/mods/modHealth";
+import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -65,7 +65,6 @@ function mergeConsoleLogTail(current: string[], next: string[]) {
   return current;
 }
 
-const modSearchDebounceMs = 650;
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeUpdateGraceMs = 5 * 60 * 1000;
@@ -109,20 +108,6 @@ export default function App() {
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [query, setQuery] = useState("");
-  const [debouncedModSearchQuery, setDebouncedModSearchQuery] = useState("");
-  const [modSearchRequestVersion, setModSearchRequestVersion] = useState(0);
-  const [modSearchResults, setModSearchResults] = useState<ModrinthHit[]>([]);
-  const [isSearchingMods, setIsSearchingMods] = useState(false);
-  const [modSearchError, setModSearchError] = useState("");
-  const [modSearchTotal, setModSearchTotal] = useState(0);
-  const [isLoadingMoreMods, setIsLoadingMoreMods] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [modInstallModal, setModInstallModal] = useState<ModInstallModalState | null>(null);
-  const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
-  const [modsView, setModsView] = useState<"manager" | "search">("manager");
-  const [installedQuery, setInstalledQuery] = useState("");
-  const [detailsMod, setDetailsMod] = useState<InstalledMod | null>(null);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
@@ -140,8 +125,6 @@ export default function App() {
   const [fileOpenFailed, setFileOpenFailed] = useState(false);
   const [fileOpening, setFileOpening] = useState(false);
   const [fileSaving, setFileSaving] = useState(false);
-  const [modsLoading, setModsLoading] = useState(false);
-  const [modsError, setModsError] = useState("");
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
@@ -196,13 +179,8 @@ export default function App() {
   const provisionSubmitLockRef = useRef(false);
   const appRefreshInFlightRef = useRef(false);
   const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
-  const loadMoreModsInFlightRef = useRef(false);
   const consoleReconnectTimeoutRef = useRef<number | null>(null);
   const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
-  const modToggleStateQueueRef = useRef<Record<string, {
-    targetEnabled: boolean;
-    inFlightEnabled: boolean | null;
-  }>>({});
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
   const overviewLoadToastRunningRef = useRef(false);
@@ -313,6 +291,28 @@ export default function App() {
             : isAnyModJobRunning
               ? "A mod operation is already running."
               : "Upload a local Fabric mod file.";
+  const modsWorkspace = useModsWorkspace({
+    activeServer,
+    activePage,
+    activeServerIsDemo,
+    activeServerUsesInternalNode,
+    activeNodeRuntimeBlocked,
+    activeNodeBlockMessage,
+    demoMode,
+    demoInstalledMods,
+    setDemoInstalledMods,
+    modrinthConfigured: effectiveAppState.modrinthApiConfigured,
+    isProvisioning,
+    serverRunning: modServerRunning,
+    canManage: canManager,
+    modsLocked,
+    toggleLocked: modToggleLocked,
+    notify,
+    setNotice,
+    setActiveJobs,
+    handleStaleSession,
+    refreshFiles: loadFiles
+  });
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
     : isProvisioning
@@ -430,31 +430,6 @@ export default function App() {
       ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
     ];
   }, [listing.path]);
-  const installedModrinthProjectIds = useMemo(() => {
-    return new Set(installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
-  }, [installedMods]);
-
-  const selectedInstallVersion = useMemo(() => {
-    if (!modInstallModal?.data || !modInstallModal.selectedVersionId) return null;
-    return [...modInstallModal.data.compatibleVersions, ...modInstallModal.data.otherVersions]
-      .find((version) => version.id === modInstallModal.selectedVersionId) ?? null;
-  }, [modInstallModal?.data, modInstallModal?.selectedVersionId]);
-  const selectedPendingRequiredDependencyCount = useMemo(() => {
-    if (!activeServerUsesInternalNode) return 0;
-    return selectedInstallVersion?.dependencies.filter((dependency) => (
-      dependency.dependencyType === "required"
-      && (!dependency.projectId || !installedModrinthProjectIds.has(dependency.projectId))
-    )).length ?? 0;
-  }, [activeServerUsesInternalNode, installedModrinthProjectIds, selectedInstallVersion]);
-  const canContinueModInstall = Boolean(
-    selectedInstallVersion
-    && selectedInstallVersion.selectable
-    && (
-      getInstallVersionHealth(selectedInstallVersion).safeToRunDirectly
-      || (modInstallModal?.showOtherVersions && getInstallVersionHealth(selectedInstallVersion).requiresAcknowledgement && modInstallModal.acknowledgeMinecraftMismatch)
-    )
-  );
-
   useEffect(() => {
     if (fileSelectAllRef.current) {
       fileSelectAllRef.current.indeterminate = fileTable.getIsSomeRowsSelected() && !fileTable.getIsAllRowsSelected();
@@ -494,85 +469,6 @@ export default function App() {
     return numberFormatter.format(value);
   }
 
-  function firstSelectableVersionId(data: ModrinthInstallVersionsResponse) {
-    return data.compatibleVersions.find((version) => version.status === "recommended")?.id
-      ?? data.compatibleVersions[0]?.id
-      ?? "";
-  }
-
-  function hasVisibleInstallVersions(data: ModrinthInstallVersionsResponse) {
-    return data.compatibleVersions.length > 0 || data.otherVersions.length > 0;
-  }
-
-  function nextReleaseChannel(channel: ReleaseChannel): ReleaseChannel | null {
-    if (channel === "release") return "beta";
-    if (channel === "beta") return "alpha";
-    return null;
-  }
-
-  function demoInstallVersions(mod: ModrinthHit, channel: ReleaseChannel): ModrinthInstallVersionsResponse {
-    const minecraftVersion = activeServer?.minecraftVersion || "1.21.1";
-    const now = new Date().toISOString();
-    return {
-      project: {
-        id: mod.project_id,
-        title: mod.title,
-        description: mod.description,
-        iconUrl: mod.icon_url,
-        clientSide: mod.client_side,
-        serverSide: mod.server_side ?? "optional"
-      },
-      target: {
-        serverId: activeServer?.id || demoServerId,
-        serverName: activeServer?.displayName || "Demo Server",
-        minecraftVersion,
-        loader: "Fabric"
-      },
-      channel,
-      compatibleVersions: [
-        {
-          id: `${mod.project_id}-demo-compatible`,
-          versionNumber: mod.compatibility?.matchedVersionNumber || "1.0.0",
-          releaseChannel: channel,
-          publishedAt: now,
-          minecraftVersions: [minecraftVersion],
-          loaders: ["fabric"],
-          file: { filename: `${mod.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jar`, size: mod.compatibility?.file?.size ?? 1_048_576 },
-          compatible: true,
-          selectable: true,
-          requiresMinecraftAcknowledgement: false,
-          status: "recommended",
-          statusLabel: "Recommended",
-          reason: "Compatible Fabric server mod",
-          dependencies: [
-            {
-              projectId: "fabric-api",
-              dependencyType: "required",
-              title: "Fabric API"
-            }
-          ]
-        }
-      ],
-      otherVersions: [
-        {
-          id: `${mod.project_id}-demo-mismatch`,
-          versionNumber: "0.9.0",
-          releaseChannel: "release",
-          publishedAt: now,
-          minecraftVersions: ["1.20.1"],
-          loaders: ["fabric"],
-          file: { filename: `${mod.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-old.jar`, size: 900_000 },
-          compatible: false,
-          selectable: true,
-          requiresMinecraftAcknowledgement: true,
-          status: "version_mismatch",
-          statusLabel: "Version mismatch",
-          reason: `Not marked for Minecraft ${minecraftVersion}`,
-          dependencies: []
-        }
-      ]
-    };
-  }
   useEffect(() => {
     void refreshAuth();
   }, []);
@@ -751,8 +647,6 @@ export default function App() {
     if (serverChanged) setLogs([]);
     resetEditorState();
     setResourceSamples([]);
-    setModSearchResults([]);
-    setModsView("manager");
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoStatus(activeServer, demoRunning));
       setLogs([
@@ -762,7 +656,6 @@ export default function App() {
         consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
       ]);
       setListing(demoListing("/", demoFiles, demoInstalledMods));
-      setInstalledMods(demoInstalledMods);
       return;
     }
     if (activeNodeRuntimeBlocked) {
@@ -770,19 +663,15 @@ export default function App() {
       setStatusError(activeNodeBlockMessage);
       setConsoleError(activeNodeBlockMessage);
       setFilesError(activeNodeBlockMessage);
-      setModsError(activeNodeBlockMessage);
       setOverviewError(activeNodeBlockMessage);
       setOverviewLoading(false);
       setFilesLoading(false);
       setConsoleLoading(false);
-      setModsLoading(false);
       setListing({ path: "/", entries: [] });
-      setInstalledMods([]);
       return;
     }
     void refreshStatus(activeServer.id);
     void loadFiles(activeServer.id, "/");
-    void loadInstalledMods(activeServer.id);
 
     if (consoleReconnectTimeoutRef.current !== null) {
       window.clearTimeout(consoleReconnectTimeoutRef.current);
@@ -846,16 +735,6 @@ export default function App() {
       socket.close();
     };
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
-
-  useEffect(() => {
-    if (activePage === "mods") {
-      setModsView("manager");
-      setQuery("");
-      setInstalledQuery("");
-      setModSearchResults([]);
-      setModSearchError("");
-    }
-  }, [activePage]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
@@ -1038,105 +917,6 @@ export default function App() {
     });
   }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
 
-  useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) {
-      setDebouncedModSearchQuery("");
-      setIsSearchingMods(false);
-      return;
-    }
-    const trimmedQuery = query.trim();
-    setModInstallModal(null);
-    setModSearchError("");
-    if (!trimmedQuery) {
-      setDebouncedModSearchQuery("");
-      setModSearchResults([]);
-      setModSearchTotal(0);
-      setIsSearchingMods(false);
-      return;
-    }
-    setIsSearchingMods(true);
-    const timeout = window.setTimeout(() => {
-      setDebouncedModSearchQuery(trimmedQuery);
-    }, modSearchDebounceMs);
-    return () => window.clearTimeout(timeout);
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, query]);
-
-  useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || modsView !== "search" || !effectiveAppState.modrinthApiConfigured) return;
-    const trimmedQuery = debouncedModSearchQuery.trim();
-    if (!trimmedQuery) return;
-    setModSearchResults([]);
-    setModSearchTotal(0);
-    if (activeServerIsDemo) {
-      setIsSearchingMods(true);
-      const timeout = window.setTimeout(() => {
-        const value = trimmedQuery.toLowerCase();
-        const baseFiltered = demoSearchResults.filter((mod) => (
-          mod.title.toLowerCase().includes(value)
-          || mod.description.toLowerCase().includes(value)
-        ));
-        const extraMods: ModrinthHit[] = [];
-        if (value.length <= 3) {
-          for (let i = 1; i <= 40; i++) {
-            extraMods.push({
-              project_id: `demo-dummy-${i}`,
-              title: `Fabric Mod Helper ${i}`,
-              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
-              downloads: 100000 + i * 5000,
-              date_modified: new Date().toISOString(),
-              compatibility: {
-                status: "compatible",
-                compatible: true,
-                reason: "Compatible server-side Fabric mod",
-                serverSide: "optional",
-                clientSide: "optional"
-              },
-              server_side: "optional",
-              client_side: "optional"
-            });
-          }
-        }
-        const allFiltered = [...baseFiltered, ...extraMods];
-        setModSearchResults(allFiltered.slice(0, 20));
-        setModSearchTotal(allFiltered.length);
-        setIsSearchingMods(false);
-      }, 250);
-      return () => {
-        setIsSearchingMods(false);
-        window.clearTimeout(timeout);
-      };
-    }
-    let cancelled = false;
-    const abortController = new AbortController();
-    const serverId = activeServer.id;
-    setIsSearchingMods(true);
-    async function runSearch() {
-      try {
-        const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
-          `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(serverId)}&channel=release`,
-          { signal: abortController.signal }
-        );
-        if (!cancelled) {
-          setModSearchResults(result.hits);
-          setModSearchTotal(result.total_hits ?? 0);
-        }
-      } catch (error) {
-        if (cancelled || abortController.signal.aborted) return;
-        const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
-        setModSearchError(message);
-        setNotice(message);
-        notify("error", message);
-      } finally {
-        if (!cancelled) setIsSearchingMods(false);
-      }
-    }
-    void runSearch();
-    return () => {
-      cancelled = true;
-      abortController.abort();
-    };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, effectiveAppState.modrinthApiConfigured, modsView, debouncedModSearchQuery, modSearchRequestVersion, activeServerIsDemo]);
-
   function notify(type: "success" | "error" | "info" | "warning", text: string) {
     const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
     if (type === "success") {
@@ -1157,7 +937,6 @@ export default function App() {
   function resetSessionRequestGuards() {
     appRefreshInFlightRef.current = false;
     statusRefreshInFlightRef.current.clear();
-    loadMoreModsInFlightRef.current = false;
     if (overviewRefreshTimeoutRef.current !== null) {
       window.clearTimeout(overviewRefreshTimeoutRef.current);
       overviewRefreshTimeoutRef.current = null;
@@ -1188,17 +967,10 @@ export default function App() {
     setResourceSamples([]);
     setConsoleError("");
     setFilesError("");
-    setModsError("");
     setLogs([]);
     setListing({ path: "/", entries: [] });
     resetEditorState();
     notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
-    return true;
-  }
-
-  function warnIfModServerRunning() {
-    if (!modServerRunning) return false;
-    notify("error", "Stop the server before adding, removing, updating, or uploading mods.");
     return true;
   }
 
@@ -2053,34 +1825,6 @@ export default function App() {
     }
   }
 
-  async function loadInstalledMods(serverId: string, options: { forceRefresh?: boolean } = {}) {
-    if (isProvisioning) return;
-    setModsLoading(true);
-    setModsError("");
-    if (demoMode && serverId === demoServerId) {
-      if (activeServerIdRef.current === serverId) {
-        setInstalledMods(demoInstalledMods);
-      }
-      setModsLoading(false);
-      return;
-    }
-    try {
-      const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
-      if (activeServerIdRef.current === serverId) {
-        setInstalledMods(result.mods);
-        setModsError("");
-      }
-    } catch (error) {
-      if (handleStaleSession(error)) return;
-      const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
-      setModsError(message);
-      setNotice(message);
-      notify("error", message);
-    } finally {
-      if (activeServerIdRef.current === serverId) setModsLoading(false);
-    }
-  }
-
   function resetEditorState() {
     setSelectedPath("");
     setEditorText("");
@@ -2300,7 +2044,7 @@ export default function App() {
         notify("success", deletedEntries.length === 1 ? `Deleted ${deletedEntries[0].name}` : `Deleted ${deletedEntries.length} items`);
       }
       await loadFiles(activeServer.id, listing.path);
-      await loadInstalledMods(activeServer.id);
+      await modsWorkspace.actions.refresh(false);
       if (failures.length) {
         const message = `Could not delete ${failures.length} item${failures.length === 1 ? "" : "s"}: ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "; ..." : ""}`;
         setNotice(message);
@@ -2574,607 +2318,6 @@ export default function App() {
     requestCloseEditor();
   }
 
-  async function searchMods(event: FormEvent) {
-    event.preventDefault();
-    if (isProvisioning) return;
-    if (!activeServer) return;
-    setNotice("");
-    setModSearchError("");
-    setModInstallModal(null);
-    const searchQuery = query.trim();
-    if (!effectiveAppState.modrinthApiConfigured) {
-      const message = "Modrinth API is not configured. Add an API key in settings.";
-      setModSearchError(message);
-      setNotice(message);
-      notify("error", message);
-      return;
-    }
-    if (!searchQuery) {
-      const message = "Enter a mod name or keyword to search.";
-      setModSearchError(message);
-      setNotice(message);
-      return;
-    }
-    setModSearchResults([]);
-    setModSearchTotal(0);
-    setIsSearchingMods(true);
-    setDebouncedModSearchQuery(searchQuery);
-    setModSearchRequestVersion((current) => current + 1);
-  }
-
-  async function loadMoreMods() {
-    if (loadMoreModsInFlightRef.current) return;
-    if (isLoadingMoreMods || isSearchingMods || !activeServer) return;
-    const currentOffset = modSearchResults.length;
-    if (currentOffset >= modSearchTotal) return;
-    loadMoreModsInFlightRef.current = true;
-    setIsLoadingMoreMods(true);
-    const searchQuery = query.trim();
-    if (activeServerIsDemo) {
-      window.setTimeout(() => {
-        const value = searchQuery.toLowerCase();
-        const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
-        const extraMods: ModrinthHit[] = [];
-        if (value.length <= 3) {
-          for (let i = 1; i <= 40; i++) {
-            extraMods.push({
-              project_id: `demo-dummy-${i}`,
-              title: `Fabric Mod Helper ${i}`,
-              description: `A generated dummy mod to showcase infinite scrolling in demo mode. Index ${i}.`,
-              downloads: 100000 + i * 5000,
-              date_modified: new Date().toISOString(),
-              compatibility: {
-                status: "compatible",
-                compatible: true,
-                reason: "Compatible server-side Fabric mod",
-                serverSide: "optional",
-                clientSide: "optional"
-              },
-              server_side: "optional",
-              client_side: "optional"
-            });
-          }
-        }
-        const allFiltered = [...baseFiltered, ...extraMods];
-        const nextPage = allFiltered.slice(currentOffset, currentOffset + 20);
-        setModSearchResults((prev) => [...prev, ...nextPage]);
-        loadMoreModsInFlightRef.current = false;
-        setIsLoadingMoreMods(false);
-      }, 250);
-      return;
-    }
-    try {
-      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(
-        `/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&offset=${currentOffset}&limit=20`
-      );
-      setModSearchResults((prev) => [...prev, ...result.hits]);
-    } catch (error) {
-      const message = errorMessage(error, "Could not load more search results.");
-      notify("error", message);
-    } finally {
-      loadMoreModsInFlightRef.current = false;
-      setIsLoadingMoreMods(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !isLoadingMoreMods && !isSearchingMods && modSearchResults.length < modSearchTotal) {
-        void loadMoreMods();
-      }
-    }, {
-      rootMargin: "200px"
-    });
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, [modSearchResults.length, modSearchTotal, isLoadingMoreMods, isSearchingMods, query]);
-
-  async function loadModInstallVersions(mod: ModrinthHit, channel: ReleaseChannel, options: { useFallbackChannel?: boolean } = {}) {
-    if (!activeServer) return;
-    setModInstallModal((current) => current && current.mod.project_id === mod.project_id
-      ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null }
-      : current
-    );
-
-    try {
-      const fetchVersions = async (nextChannel: ReleaseChannel) => activeServerIsDemo
-        ? demoInstallVersions(mod, nextChannel)
-        : api<ModrinthInstallVersionsResponse>(
-          `/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`
-        );
-      let resolvedChannel = channel;
-      let data = await fetchVersions(resolvedChannel);
-      while (options.useFallbackChannel && !hasVisibleInstallVersions(data)) {
-        const fallbackChannel = nextReleaseChannel(resolvedChannel);
-        if (!fallbackChannel) break;
-        resolvedChannel = fallbackChannel;
-        data = await fetchVersions(resolvedChannel);
-      }
-      const selectedVersionId = firstSelectableVersionId(data);
-      setModInstallModal((current) => current && current.mod.project_id === mod.project_id
-        ? {
-          ...current,
-          channel: resolvedChannel,
-          loading: false,
-          installing: false,
-          error: "",
-          data,
-          selectedVersionId,
-          showOtherVersions: current.showOtherVersions,
-          acknowledgeMinecraftMismatch: false
-        }
-        : current
-      );
-    } catch (error) {
-      const message = errorMessage(error, "Could not load Modrinth versions for this project.");
-      setModInstallModal((current) => current && current.mod.project_id === mod.project_id
-        ? { ...current, channel, loading: false, installing: false, error: message, data: null, selectedVersionId: "" }
-        : current
-      );
-      notify("error", message);
-    }
-  }
-
-  function openModInstallModal(mod: ModrinthHit) {
-    if (warnIfModServerRunning()) return;
-    const channel: ReleaseChannel = "release";
-    setModInstallModal({
-      mod,
-      step: 1,
-      channel,
-      loading: true,
-      installing: false,
-      error: "",
-      data: null,
-      selectedVersionId: "",
-      showOtherVersions: false,
-      acknowledgeMinecraftMismatch: false
-    });
-    void loadModInstallVersions(mod, channel, { useFallbackChannel: true });
-  }
-
-  function selectInstallVersion(version: ModrinthInstallVersion) {
-    if (!version.selectable) return;
-    setModInstallModal((current) => current
-      ? {
-        ...current,
-        selectedVersionId: version.id,
-        acknowledgeMinecraftMismatch: getInstallVersionHealth(version).requiresAcknowledgement ? current.acknowledgeMinecraftMismatch : false
-      }
-      : current
-    );
-  }
-
-  function continueModInstallReview() {
-    if (!modInstallModal || !selectedInstallVersion || !canContinueModInstall) return;
-    setModInstallModal((current) => current ? { ...current, step: 2 } : current);
-  }
-
-  async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
-    if (warnIfModServerRunning()) {
-      event.target.value = "";
-      return;
-    }
-    if (modsLocked || !canManager || !activeServer) return;
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const filenameError = validateJarFilename(file.name);
-    if (filenameError) {
-      notify("error", filenameError);
-      return;
-    }
-    if (file.size <= 0 || file.size > 128 * 1024 * 1024) {
-      notify("error", "Uploaded mod must be between 1 byte and 128 MiB.");
-      return;
-    }
-    if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) {
-      notify("error", "A mod with that filename is already installed.");
-      return;
-    }
-    setNotice("");
-    const jobId = `upload-${file.name}-${Date.now()}`;
-    const initialJob: GeneralJob = {
-      id: jobId,
-      type: "mod-upload",
-      status: "running",
-      title: "Uploading mod",
-      subject: file.name,
-      progress: 10,
-      task: "Reading file",
-      dismissible: false
-    };
-    setActiveJobs((current) => [...current, initialJob]);
-
-    if (activeServerIsDemo) {
-      try {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 40, task: "Uploading jar" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 800));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 70, task: "Saving mod file" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 95, task: "Refreshing installed mods" } : j));
-
-        const mod: InstalledMod = {
-          filename: file.name,
-          displayName: file.name.replace(/\.jar$/i, "").replace(/[-_]/g, " "),
-          enabled: true,
-          size: file.size,
-          modifiedAt: new Date().toISOString()
-        };
-        setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
-        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        notify("success", `Uploaded ${file.name}`);
-      } catch (err) {
-        const msg = (err as Error).message;
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Upload failed", error: msg, dismissible: true } : j));
-      }
-      return;
-    }
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 40, task: "Uploading jar" } : j));
-
-      await api(`/api/servers/${activeServer.id}/mods/upload`, {
-        method: "POST",
-        body: JSON.stringify({ filename: file.name, contentBase64: bufferToBase64(arrayBuffer) })
-      });
-
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
-      try {
-        await loadInstalledMods(activeServer.id, { forceRefresh: true });
-        await loadFiles(activeServer.id, "/mods");
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        notify("success", `Uploaded ${file.name}`);
-      } catch (refreshErr) {
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
-      }
-
-      window.setTimeout(() => {
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-      }, 4000);
-    } catch (error) {
-      const message = (error as Error).message;
-      setNotice(message);
-      notify("error", message);
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Upload failed", error: message, dismissible: true } : j));
-    } finally {
-      setIsSearchingMods(false);
-    }
-  }
-
-  async function installSelectedMod() {
-    if (warnIfModServerRunning()) return;
-    if (modsLocked || !canManager) return;
-    if (!activeServer) return;
-    if (!modInstallModal || !modInstallModal.data || !selectedInstallVersion || !selectedInstallVersion.selectable) return;
-    const projectId = modInstallModal.mod.project_id;
-    const title = modInstallModal.data.project.title || modInstallModal.mod.title;
-    const forceIncompatible = !selectedInstallVersion.compatible;
-    const overrideMinecraftVersion = selectedInstallVersion.requiresMinecraftAcknowledgement;
-    if (overrideMinecraftVersion && !modInstallModal.acknowledgeMinecraftMismatch) return;
-    setNotice("");
-    setModInstallModal((current) => current ? { ...current, installing: true, error: "" } : current);
-    const jobId = `install-${projectId}-${selectedInstallVersion.id}-${Date.now()}`;
-    const initialJob: GeneralJob = {
-      id: jobId,
-      type: "mod-install",
-      status: "running",
-      title: "Installing mod",
-      subject: `${title} ${selectedInstallVersion.versionNumber}`,
-      progress: 10,
-      task: "Resolving version",
-      dismissible: false
-    };
-    setActiveJobs((current) => [...current, initialJob]);
-
-    if (activeServerIsDemo) {
-      try {
-        await new Promise((resolve) => window.setTimeout(resolve, 600));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 40, task: "Resolving version" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 800));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 70, task: "Downloading jar" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 600));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Saving mod file" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 95, task: "Refreshing installed mods" } : j));
-
-        const filename = selectedInstallVersion.file?.filename || `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || projectId}-demo.jar`;
-        const mod: InstalledMod = {
-          filename,
-          displayName: title,
-          enabled: true,
-          size: selectedInstallVersion.file?.size ?? 1_048_576 + Math.round(Math.random() * 2_000_000),
-          modifiedAt: new Date().toISOString(),
-          iconUrl: modInstallModal.data.project.iconUrl || modInstallModal.mod.icon_url,
-          description: modInstallModal.data.project.description || modInstallModal.mod.description,
-          modrinth: {
-            projectId,
-            versionId: selectedInstallVersion.id,
-            filename,
-            versionNumber: selectedInstallVersion.versionNumber,
-            versionType: selectedInstallVersion.releaseChannel,
-            gameVersions: selectedInstallVersion.minecraftVersions,
-            loaders: selectedInstallVersion.loaders,
-            hashes: selectedInstallVersion.file?.hashes,
-            installedAt: new Date().toISOString(),
-            installedWithForceIncompatible: forceIncompatible,
-            incompatibilityReason: forceIncompatible ? selectedInstallVersion.reason : undefined,
-            overrideMinecraftVersion,
-            overrideReason: overrideMinecraftVersion ? selectedInstallVersion.reason : undefined,
-            clientSide: modInstallModal.data.project.clientSide,
-            serverSide: modInstallModal.data.project.serverSide,
-            forceIncompatible
-          }
-        };
-        setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
-        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        notify("success", `Installed ${title}`);
-        setModInstallModal(null);
-      } catch (err) {
-        const msg = (err as Error).message;
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: msg, dismissible: true } : j));
-        setModInstallModal((current) => current ? { ...current, installing: false, error: msg } : current);
-      }
-      return;
-    }
-
-    try {
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 35, task: "Downloading jar" } : j));
-
-      const result = await api<{
-        filename: string;
-        version: string;
-        channel: ReleaseChannel;
-        installed?: Array<{ filename: string; dependencyType: "root" | "required" }>;
-        optionalDependencies?: Array<{ projectId?: string; versionId?: string; dependencyType: string; reason: string }>;
-      }>("/api/modrinth/install", {
-        method: "POST",
-        body: JSON.stringify({
-          serverId: activeServer.id,
-          projectId,
-          versionId: selectedInstallVersion.id,
-          channel: modInstallModal.channel,
-          forceIncompatible,
-          overrideMinecraftVersion
-        })
-      });
-      setModInstallModal(null);
-
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 75, task: "Saving file" } : j));
-      await new Promise((resolve) => window.setTimeout(resolve, 100));
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
-      try {
-        await loadInstalledMods(activeServer.id, { forceRefresh: true });
-        await loadFiles(activeServer.id, "/mods");
-        const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
-        const installSummary = requiredCount > 0 ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`;
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        notify("success", installSummary);
-      } catch (refreshErr) {
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
-      }
-
-      window.setTimeout(() => {
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-      }, 4000);
-    } catch (error) {
-      const message = (error as Error).message;
-      setNotice(message);
-      notify("error", message);
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Install failed", error: message, dismissible: true } : j));
-      setModInstallModal((current) => current ? { ...current, installing: false, error: message } : current);
-      void loadInstalledMods(activeServer.id);
-      void loadFiles(activeServer.id, "/mods");
-    }
-  }
-
-  async function updateMod(mod: InstalledMod) {
-    if (warnIfModServerRunning()) return;
-    if (modsLocked || !canManager || !activeServer || !mod.modrinth) return;
-    setNotice("");
-    const projectId = mod.modrinth.projectId;
-    const title = mod.displayName;
-    const oldFilename = mod.filename;
-    const jobId = `update-${projectId}-${Date.now()}`;
-    const initialJob: GeneralJob = {
-      id: jobId,
-      type: "mod-install",
-      status: "running",
-      title: "Updating mod",
-      subject: title,
-      progress: 10,
-      task: "Checking compatibility",
-      dismissible: false
-    };
-    setActiveJobs((current) => [...current, initialJob]);
-
-    if (activeServerIsDemo) {
-      try {
-        await new Promise((resolve) => window.setTimeout(resolve, 600));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 45, task: "Downloading update" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 800));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 80, task: "Removing old jar" } : j));
-        await new Promise((resolve) => window.setTimeout(resolve, 600));
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 95, task: "Refreshing installed mods" } : j));
-
-        const updatedMod: InstalledMod = {
-          ...mod,
-          filename: "sodium-fabric-0.6.0+mc26.1.2.jar",
-          size: 1250000,
-          modifiedAt: new Date().toISOString(),
-          versionInfo: {
-            currentVersion: "0.6.0",
-            currentChannel: "release",
-            latestVersion: "0.6.0",
-            latestChannel: "release",
-            upToDate: true
-          },
-          modrinth: {
-            ...mod.modrinth,
-            filename: "sodium-fabric-0.6.0+mc26.1.2.jar",
-            versionNumber: "0.6.0",
-            installedAt: new Date().toISOString()
-          }
-        };
-
-        setDemoInstalledMods((current) => [updatedMod, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
-        setInstalledMods((current) => [updatedMod, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
-        notify("success", `Updated ${title} to 0.6.0`);
-
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true } : j));
-        window.setTimeout(() => {
-          setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-        }, 4000);
-      } catch (err) {
-        const msg = (err as Error).message;
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Update failed", error: msg, dismissible: true } : j));
-      }
-      return;
-    }
-
-    try {
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 30, task: "Downloading new version" } : j));
-      
-      const result = await api<{ filename: string; version: string; channel: ReleaseChannel; replaced?: string; upToDate?: boolean }>("/api/modrinth/update", {
-        method: "POST",
-        body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: mod.preferredChannel || "release" })
-      });
-
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 80, task: "Replacing old version" } : j));
-      notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
-
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, progress: 90, task: "Refreshing installed mods" } : j));
-      try {
-        await loadInstalledMods(activeServer.id);
-        await loadFiles(activeServer.id, "/mods");
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true } : j));
-      } catch (refreshErr) {
-        setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "succeeded", progress: 100, task: `Updated ${title}, but failed to refresh mod list`, error: (refreshErr as Error).message, dismissible: true } : j));
-      }
-
-      window.setTimeout(() => {
-        setActiveJobs((current) => current.filter((j) => j.id !== jobId));
-      }, 4000);
-    } catch (error) {
-      const message = (error as Error).message;
-      setNotice(message);
-      notify("error", message);
-      setActiveJobs((current) => current.map((j) => j.id === jobId ? { ...j, status: "failed", task: "Update failed", error: message, dismissible: true } : j));
-      void loadInstalledMods(activeServer.id);
-      void loadFiles(activeServer.id, "/mods");
-    }
-  }
-
-  async function processModToggleQueue(filename: string, modDisplayName: string) {
-    const queueItem = modToggleStateQueueRef.current[filename];
-    if (!queueItem || queueItem.inFlightEnabled !== null) {
-      return;
-    }
-
-    let currentFilename = filename;
-    while (true) {
-      const runEnabled = queueItem.targetEnabled;
-      queueItem.inFlightEnabled = runEnabled;
-
-      if (activeServerIsDemo) {
-        await new Promise((resolve) => window.setTimeout(resolve, 300));
-      } else if (activeServer) {
-        try {
-          const result = await api<{ filename: string; enabled: boolean }>(`/api/servers/${activeServer.id}/mods`, {
-            method: "PATCH",
-            body: JSON.stringify({ filename: currentFilename, enabled: runEnabled })
-          });
-          const nextFilename = result.filename || currentFilename;
-          setInstalledMods((current) => current.map((m) => m.filename === currentFilename ? {
-            ...m,
-            filename: nextFilename,
-            displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"),
-            enabled: result.enabled
-          } : m));
-          currentFilename = nextFilename;
-          void loadFiles(activeServer.id, "/mods");
-        } catch (error) {
-          const errorMsg = (error as Error).message;
-          setNotice(`Failed to toggle mod ${modDisplayName}: ${errorMsg}`);
-          notify("error", `Failed to toggle mod ${modDisplayName}: ${errorMsg}`);
-
-          const rollBackTo = !runEnabled;
-          setInstalledMods((current) => current.map((m) => m.filename === currentFilename ? { ...m, enabled: rollBackTo } : m));
-          if (demoMode) {
-            setDemoInstalledMods((current) => current.map((m) => m.filename === currentFilename ? { ...m, enabled: rollBackTo } : m));
-          }
-          break;
-        }
-      }
-
-      queueItem.inFlightEnabled = null;
-      if (queueItem.targetEnabled === runEnabled) {
-        break;
-      }
-    }
-
-    delete modToggleStateQueueRef.current[filename];
-    if (activeServer && !activeServerIsDemo) {
-      void loadInstalledMods(activeServer.id);
-    }
-  }
-
-  async function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
-    if (modToggleLocked || !canManager || !activeServer) return;
-    setNotice("");
-
-    // Optimistically update UI instantly
-    setInstalledMods((current) => current.map((m) => m.filename === mod.filename ? { ...m, enabled } : m));
-    if (demoMode) {
-      setDemoInstalledMods((current) => current.map((m) => m.filename === mod.filename ? { ...m, enabled } : m));
-    }
-
-    // Initialize or update queue
-    let queueItem = modToggleStateQueueRef.current[mod.filename];
-    if (!queueItem) {
-      queueItem = {
-        targetEnabled: enabled,
-        inFlightEnabled: null
-      };
-      modToggleStateQueueRef.current[mod.filename] = queueItem;
-    } else {
-      queueItem.targetEnabled = enabled;
-    }
-
-    // Trigger processing
-    void processModToggleQueue(mod.filename, mod.displayName);
-  }
-
-  async function removeInstalledMod(mod: InstalledMod) {
-    if (warnIfModServerRunning()) return;
-    if (modsLocked || !canManager || !activeServer) return;
-    setNotice("");
-    if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder.`)) return;
-    if (activeServerIsDemo) {
-      setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
-      setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
-      notify("success", `Removed ${mod.displayName}`);
-      return;
-    }
-    try {
-      await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, {
-        method: "DELETE"
-      });
-      notify("success", `Removed ${mod.displayName}`);
-      await loadInstalledMods(activeServer.id);
-      await loadFiles(activeServer.id, "/mods");
-    } catch (error) {
-      const message = errorMessage(error, "Could not remove the mod.");
-      setNotice(message);
-      notify("error", message);
-    }
-  }
-
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return false;
@@ -3408,16 +2551,7 @@ export default function App() {
 
   function resetPageToDefault(page: ActivePage) {
     if (page === "mods") {
-      setModsView("manager");
-      setQuery("");
-      setDebouncedModSearchQuery("");
-      setModSearchRequestVersion((current) => current + 1);
-      setModSearchResults([]);
-      setModSearchTotal(0);
-      setModSearchError("");
-      setModInstallModal(null);
-      setDetailsMod(null);
-      setInstalledQuery("");
+      modsWorkspace.actions.resetPageState();
       return;
     }
     if (page === "files") {
@@ -4310,80 +3444,28 @@ export default function App() {
 
             {activePage === "mods" && (
               <ModsPage
-                serverName={activeServer.displayName}
-                minecraftVersion={activeServer.minecraftVersion || "Unknown"}
-                mods={installedMods}
-                loading={modsLoading}
-                error={modsError}
-                installedQuery={installedQuery}
-                addOpen={modsView === "search"}
-                detailsMod={detailsMod}
-                serverRunning={modServerRunning}
-                changesAllowed={!modsLocked && !modServerRunning}
-                locked={modsLocked || modServerRunning}
-                toggleLocked={modToggleLocked || modServerRunning}
-                canStopServer={canBasic && !dockerOperationalLock}
-                stoppingServer={runtimeAction === "stop"}
-                modrinthConfigured={effectiveAppState.modrinthApiConfigured}
-                addDisabled={addModFromModrinthDisabled}
-                addDisabledReason={addModFromModrinthDisabledReason}
-                uploadDisabled={uploadModDisabled}
-                uploadDisabledReason={uploadModDisabledReason}
-                searchQuery={query}
-                searchResults={modSearchResults}
-                searchTotal={modSearchTotal}
-                searching={isSearchingMods}
-                loadingMore={isLoadingMoreMods}
-                searchError={modSearchError}
-                versionsUnknown={activeModVersionsUnknown}
-                contextMessage={activeModContext}
-                sentinelRef={sentinelRef}
-                installState={modInstallModal}
-                selectedVersion={selectedInstallVersion}
-                dependencyCount={selectedPendingRequiredDependencyCount}
-                canContinueInstall={canContinueModInstall}
-                formatDate={formatDisplayDate}
-                formatNumber={formatDisplayNumber}
-                onInstalledQueryChange={setInstalledQuery}
-                onOpenAdd={() => {
-                  if (warnIfModServerRunning()) return;
-                  setDetailsMod(null);
-                  setModsView("search");
+                workspace={modsWorkspace}
+                serverContext={{
+                  serverName: activeServer.displayName,
+                  minecraftVersion: activeServer.minecraftVersion || "Unknown",
+                  versionsUnknown: activeModVersionsUnknown,
+                  contextMessage: activeModContext
                 }}
-                onCloseAdd={() => {
-                  setModInstallModal(null);
-                  setQuery("");
-                  setModSearchResults([]);
-                  setModsView("manager");
+                access={{
+                  serverRunning: modServerRunning,
+                  changesAllowed: !modsLocked && !modServerRunning,
+                  locked: modsLocked || modServerRunning,
+                  toggleLocked: modToggleLocked || modServerRunning,
+                  canStopServer: canBasic && !dockerOperationalLock,
+                  stoppingServer: runtimeAction === "stop",
+                  modrinthConfigured: effectiveAppState.modrinthApiConfigured,
+                  addDisabled: addModFromModrinthDisabled,
+                  addDisabledReason: addModFromModrinthDisabledReason,
+                  uploadDisabled: uploadModDisabled,
+                  uploadDisabledReason: uploadModDisabledReason
                 }}
-                onUpload={uploadMod}
-                onRefresh={() => void loadInstalledMods(activeServer.id, { forceRefresh: true })}
-                onRetry={() => void loadInstalledMods(activeServer.id)}
+                formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
                 onStopServer={() => void runContainerAction("stop")}
-                onToggle={setInstalledModEnabled}
-                onUpdate={updateMod}
-                onDetails={setDetailsMod}
-                onRemove={removeInstalledMod}
-                onSearchQueryChange={setQuery}
-                onSearch={searchMods}
-                onChooseMod={openModInstallModal}
-                onInstallClose={() => setModInstallModal(null)}
-                onChannelChange={(mod, channel) => void loadModInstallVersions(mod, channel)}
-                onSelectVersion={selectInstallVersion}
-                onToggleAdvanced={() => setModInstallModal((current) => {
-                  if (!current) return current;
-                  const showOtherVersions = !current.showOtherVersions;
-                  return {
-                    ...current,
-                    showOtherVersions,
-                    selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? firstSelectableVersionId(current.data) : "",
-                    acknowledgeMinecraftMismatch: false
-                  };
-                })}
-                onAcknowledge={(checked) => setModInstallModal((current) => current ? { ...current, acknowledgeMinecraftMismatch: checked } : current)}
-                onContinueInstall={continueModInstallReview}
-                onBackInstall={() => setModInstallModal((current) => current ? { ...current, step: 1, installing: false } : current)}
-                onInstall={installSelectedMod}
               />
             )}
 
