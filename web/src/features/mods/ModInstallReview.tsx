@@ -4,6 +4,7 @@ import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
 import { ModInstallVersionSkeleton } from "../../components/ModInstallVersionSkeleton";
 import { modIconSource } from "../../utils/appHelpers";
+import { getInstallVersionHealth } from "./modHealth";
 
 type Props = {
   state: ModInstallModalState;
@@ -27,6 +28,8 @@ export function ModInstallReview({ state, selected, dependencyCount, canContinue
   const otherVersions = state.data?.otherVersions || [];
   const icon = modIconSource(state.data?.project.iconUrl || state.mod.icon_url);
   const requiredDependencies = selected?.dependencies.filter((dependency) => dependency.dependencyType === "required") || [];
+  const selectedHealth = selected ? getInstallVersionHealth(selected) : null;
+  const recommendedVersion = versions.find((version) => getInstallVersionHealth(version).safeToRunDirectly);
 
   return (
     <div className="modsInstallReview">
@@ -44,8 +47,8 @@ export function ModInstallReview({ state, selected, dependencyCount, canContinue
         {!state.loading && state.data && state.step === 1 && (
           <>
             <section className="modsRecommendedVersion">
-              <div><small>Recommended for this server</small><strong>{versions[0]?.versionNumber || "No compatible release found"}</strong>{versions[0] && <span>{versions[0].statusLabel}</span>}</div>
-              {versions[0] && <button type="button" onClick={() => { onSelect(versions[0]); onContinue(); }}>Review install</button>}
+              <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Ready to review" : "Open advanced options to review other versions"}</span></div>
+              {recommendedVersion && <button type="button" onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review install</button>}
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
@@ -54,16 +57,19 @@ export function ModInstallReview({ state, selected, dependencyCount, canContinue
                 {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <button key={channel} type="button" className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)}>{channel}</button>)}
               </div>
               <div className="modsVersionList">
-                {[...versions, ...otherVersions].map((version) => (
-                  <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={!version.selectable}>
-                    <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><span>{version.statusLabel}</span>
-                  </button>
-                ))}
+                {[...versions, ...otherVersions].map((version) => {
+                  const health = getInstallVersionHealth(version);
+                  return (
+                    <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={!version.selectable}>
+                      <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><span className={`modsStatusChip ${health.tone}`}>{health.label}</span>
+                    </button>
+                  );
+                })}
               </div>
               {selected && <button type="button" onClick={onContinue} disabled={!canContinue}>Review selected version</button>}
             </details>
-            {selected?.requiresMinecraftAcknowledgement && (
-              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>This version is not recommended.</strong>I understand it is not marked compatible with this server’s Minecraft version.</span></label>
+            {selectedHealth?.requiresAcknowledgement && (
+              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>I understand ServerSentinel cannot verify this version as safe for this server.</span></label>
             )}
           </>
         )}
@@ -72,7 +78,7 @@ export function ModInstallReview({ state, selected, dependencyCount, canContinue
             <section className="modsReviewSection"><h3>What will be installed</h3><div className="modsReviewLine"><strong>{title}</strong><span>{selected.versionNumber}</span></div></section>
             <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>Fabric · Minecraft {state.data.target.minecraftVersion}</span></div></section>
             {requiredDependencies.length > 0 && <details className="modsDependencySummary"><summary>Also installs {dependencyCount || requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
-            {selected.requiresMinecraftAcknowledgement && <div className="modsReviewWarning"><strong>Compatibility warning</strong><span>{selected.reason}</span></div>}
+            {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedHealth.detailDescription}</span></div>}
             <details className="modsAdvancedOptions"><summary>Installation details</summary><dl className="modsDetailsFacts"><div><dt>Release channel</dt><dd>{selected.releaseChannel}</dd></div><div><dt>Published</dt><dd>{selected.publishedAt ? formatDate(selected.publishedAt) : "Unknown"}</dd></div><div><dt>Filename</dt><dd>{selected.file?.filename || "Unknown"}</dd></div></dl></details>
           </>
         )}

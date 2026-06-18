@@ -37,6 +37,7 @@ import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 import { ModsPage } from "./pages/ModsPage";
+import { getInstallVersionHealth } from "./features/mods/modHealth";
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -449,8 +450,8 @@ export default function App() {
     selectedInstallVersion
     && selectedInstallVersion.selectable
     && (
-      selectedInstallVersion.compatible
-      || (modInstallModal?.showOtherVersions && selectedInstallVersion.requiresMinecraftAcknowledgement && modInstallModal.acknowledgeMinecraftMismatch)
+      getInstallVersionHealth(selectedInstallVersion).safeToRunDirectly
+      || (modInstallModal?.showOtherVersions && getInstallVersionHealth(selectedInstallVersion).requiresAcknowledgement && modInstallModal.acknowledgeMinecraftMismatch)
     )
   );
 
@@ -2739,7 +2740,7 @@ export default function App() {
       ? {
         ...current,
         selectedVersionId: version.id,
-        acknowledgeMinecraftMismatch: version.requiresMinecraftAcknowledgement ? current.acknowledgeMinecraftMismatch : false
+        acknowledgeMinecraftMismatch: getInstallVersionHealth(version).requiresAcknowledgement ? current.acknowledgeMinecraftMismatch : false
       }
       : current
     );

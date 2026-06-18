@@ -12312,6 +12312,7 @@ details.compatibilityBadge p {
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .modsStatusChip { display: inline-flex; width: fit-content; padding: 4px 9px; border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1; white-space: nowrap; }
 .modsStatusChip.ready { border-color: color-mix(in srgb, #159267 22%, transparent); color: #12805b; background: color-mix(in srgb, #159267 10%, transparent); }
+.modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
 .modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
 .modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
 .modsStatusChip.unknown { border-color: var(--border); color: var(--text-muted); background: var(--background); }
@@ -12357,6 +12358,7 @@ details.compatibilityBadge p {
 .modsDetailsFacts dd { overflow-wrap: anywhere; margin: 0; font-size: .82rem; }
 .modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); border-radius: 11px; background: var(--background); }
 .modsCompatibilityCard.ready { border-color: color-mix(in srgb, #159267 28%, var(--border)); background: color-mix(in srgb, #159267 6%, var(--panel)); }
+.modsCompatibilityCard.update { border-color: color-mix(in srgb, #e98a15 28%, var(--border)); background: color-mix(in srgb, #e98a15 6%, var(--panel)); }
 .modsCompatibilityCard.review { border-color: color-mix(in srgb, #8b5cf6 28%, var(--border)); }
 .modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, #d14343 28%, var(--border)); }
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
@@ -12395,6 +12397,10 @@ details.compatibilityBadge p {
 .modsDependencySummary > div { padding: 8px 0 0 18px; font-size: .82rem; }
 .modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
 .modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
+.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, #8b5cf6 30%, var(--border)); border-radius: 11px; background: color-mix(in srgb, #8b5cf6 6%, var(--panel)); }
+.modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
+.modsUpdateReview .modsRiskAcknowledgement { margin-top: 4px; }
+.modsUpdateReviewActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 @keyframes modsFadeIn { from { opacity: 0; } }
 @keyframes modsSlideIn { from { transform: translateX(24px); opacity: .8; } }
 @media (max-width: 1100px) {

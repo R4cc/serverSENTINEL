@@ -4,7 +4,7 @@ import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel 
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
 import { modIconSource } from "../../utils/appHelpers";
-import { searchResultStatus } from "./modStatus";
+import { getSearchResultHealth } from "./modHealth";
 import { ModInstallReview } from "./ModInstallReview";
 
 type Props = {
@@ -66,14 +66,14 @@ export function AddModsWorkflow(props: Props) {
         <div className="modsSearchResults" aria-busy={props.searching}>
           {props.searching && Array.from({ length: 4 }, (_, index) => <div key={index} className="modsResultCard isSkeleton" aria-hidden="true" />)}
           {!props.searching && props.results.map((mod) => {
-            const status = searchResultStatus(mod);
+            const health = getSearchResultHealth(mod);
             const installed = installedIds.has(mod.project_id);
             const icon = modIconSource(mod.icon_url);
             return (
               <article key={mod.project_id} className="modsResultCard">
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">MOD</span>}
-                <div className="modsResultContent"><div><strong>{mod.title}</strong><span className={`modsStatusChip ${status.key}`}>{status.label}</span></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
-                <button type="button" className={status.key === "ready" ? "" : "secondaryButton"} onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : status.key === "ready" ? "Install" : status.key === "not-recommended" ? "Review risk" : "Review"}</button>
+                <div className="modsResultContent"><div><strong>{mod.title}</strong><span className={`modsStatusChip ${health.tone}`}>{health.label}</span></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
+                <button type="button" className={health.safeToRunDirectly ? "" : "secondaryButton"} onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</button>
               </article>
             );
           })}

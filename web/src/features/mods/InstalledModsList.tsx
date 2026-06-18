@@ -1,7 +1,7 @@
 import type { InstalledMod } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { modIconSource } from "../../utils/appHelpers";
-import { installedModStatus, installedModUpdateState, modVersion } from "./modStatus";
+import { getInstalledModHealth, modVersion } from "./modHealth";
 
 type Props = {
   mods: InstalledMod[];
@@ -44,8 +44,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
             <span>{mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."}</span>
           </div>
         ) : visible.map((mod) => {
-          const status = installedModStatus(mod);
-          const update = installedModUpdateState(mod);
+          const health = getInstalledModHealth(mod);
           const icon = modIconSource(mod.iconUrl);
           return (
             <article key={mod.filename} className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}>
@@ -53,12 +52,17 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
               </button>
-              <div><span className={`modsStatusChip ${status.key}`}>{status.label}</span></div>
+              <div><span className={`modsStatusChip ${health.tone}`}>{health.label}</span></div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
-                {update === "available" && (
-                  <button type="button" className={status.key === "ready" ? "modsUpdateAction" : "modsReviewAction"} onClick={() => status.key === "ready" ? onUpdate(mod) : onDetails(mod)} disabled={locked}>
-                    {status.key === "ready" ? `Update to ${mod.versionInfo?.latestVersion}` : "Review update"}
+                {health.recommendedAction === "update" && (
+                  <button type="button" className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={health.shortDescription}>
+                    {health.primaryActionLabel}
+                  </button>
+                )}
+                {health.recommendedAction === "review_update" && (
+                  <button type="button" className="modsReviewAction" onClick={() => onDetails(mod)} disabled={locked} title={health.shortDescription}>
+                    {health.primaryActionLabel}
                   </button>
                 )}
               </div>
