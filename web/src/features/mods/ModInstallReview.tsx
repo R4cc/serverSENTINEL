@@ -9,7 +9,7 @@ import { getInstallVersionHealth } from "./modHealth";
 type Props = {
   state: ModInstallModalState;
   selected: ModrinthInstallVersion | null;
-  dependencyCount: number;
+  requiredDependencies: ModrinthInstallVersion["dependencies"];
   canContinue: boolean;
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
@@ -22,12 +22,11 @@ type Props = {
   onInstall: () => void;
 };
 
-export function ModInstallReview({ state, selected, dependencyCount, canContinue, formatDate, onClose, onChannelChange, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
+export function ModInstallReview({ state, selected, requiredDependencies, canContinue, formatDate, onClose, onChannelChange, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
   const title = state.data?.project.title || state.mod.title;
   const versions = state.data?.compatibleVersions || [];
   const otherVersions = state.data?.otherVersions || [];
   const icon = modIconSource(state.data?.project.iconUrl || state.mod.icon_url);
-  const requiredDependencies = selected?.dependencies.filter((dependency) => dependency.dependencyType === "required") || [];
   const selectedHealth = selected ? getInstallVersionHealth(selected) : null;
   const recommendedVersion = versions.find((version) => getInstallVersionHealth(version).safeToRunDirectly);
 
@@ -77,13 +76,13 @@ export function ModInstallReview({ state, selected, dependencyCount, canContinue
           <>
             <section className="modsReviewSection"><h3>What will be installed</h3><div className="modsReviewLine"><strong>{title}</strong><span>{selected.versionNumber}</span></div></section>
             <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>Fabric · Minecraft {state.data.target.minecraftVersion}</span></div></section>
-            {requiredDependencies.length > 0 && <details className="modsDependencySummary"><summary>Also installs {dependencyCount || requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
+            {requiredDependencies.length > 0 && <details className="modsDependencySummary"><summary>Also installs {requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
             {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedHealth.detailDescription}</span></div>}
             <details className="modsAdvancedOptions"><summary>Installation details</summary><dl className="modsDetailsFacts"><div><dt>Release channel</dt><dd>{selected.releaseChannel}</dd></div><div><dt>Published</dt><dd>{selected.publishedAt ? formatDate(selected.publishedAt) : "Unknown"}</dd></div><div><dt>Filename</dt><dd>{selected.file?.filename || "Unknown"}</dd></div></dl></details>
           </>
         )}
       </div>
-      {state.step === 2 && <div className="modsDrawerFooter"><button type="button" onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing…" : dependencyCount > 0 ? "Install mod and dependencies" : "Install mod"}</button></div>}
+      {state.step === 2 && <div className="modsDrawerFooter"><button type="button" onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing…" : requiredDependencies.length > 0 ? "Install mod and dependencies" : "Install mod"}</button></div>}
     </div>
   );
 }

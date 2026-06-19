@@ -7,7 +7,7 @@ import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { validateJarFilename } from "../../utils/validation";
 import { getInstallVersionHealth } from "./modHealth";
-import { fallbackReleaseChannel, hasInstallVersions, preferredInstallVersionId } from "./modsWorkspaceHelpers";
+import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId } from "./modsWorkspaceHelpers";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
 
 const modSearchDebounceMs = 650;
@@ -126,7 +126,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [modsLoading, setModsLoading] = useState(false);
   const [modsError, setModsError] = useState("");
   const [installedQuery, setInstalledQuery] = useState("");
-  const [detailsMod, setDetailsMod] = useState<InstalledMod | null>(null);
+  const [detailsModKey, setDetailsModKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -150,15 +150,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
 
-  const installedProjectIds = useMemo(() => new Set(installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean)), [installedMods]);
+  const detailsMod = useMemo(() => installedMods.find((mod) => installedModKey(mod) === detailsModKey) ?? null, [detailsModKey, installedMods]);
   const selectedVersion = useMemo(() => {
     if (!installState?.data || !installState.selectedVersionId) return null;
     return [...installState.data.compatibleVersions, ...installState.data.otherVersions].find((version) => version.id === installState.selectedVersionId) ?? null;
   }, [installState?.data, installState?.selectedVersionId]);
-  const dependencyCount = useMemo(() => {
-    if (!activeServerUsesInternalNode) return 0;
-    return selectedVersion?.dependencies.filter((dependency) => dependency.dependencyType === "required" && (!dependency.projectId || !installedProjectIds.has(dependency.projectId))).length ?? 0;
-  }, [activeServerUsesInternalNode, installedProjectIds, selectedVersion]);
+  const pendingDependencies = useMemo(() => activeServerUsesInternalNode ? pendingRequiredDependencies(selectedVersion, installedMods) : [], [activeServerUsesInternalNode, installedMods, selectedVersion]);
   const canContinueInstall = Boolean(
     selectedVersion
     && selectedVersion.selectable
@@ -243,7 +240,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearching(false);
     setLoadingMore(false);
     setInstallState(null);
-    setDetailsMod(null);
+    setDetailsModKey("");
     setInstalledQuery("");
     loadMoreInFlightRef.current = false;
   }
@@ -653,9 +650,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
         ...result.failed.map((entry) => `${entry.filename} failed: ${entry.reason}`)
       ].join("; ");
-      if (result.counts.failed || result.counts.skipped) notify("warning", summary);
-      else notify("success", summary);
-      patchJob(jobId, { status: result.counts.failed ? "failed" : "succeeded", progress: 100, task: summary, error: issueDetails || undefined, dismissible: true });
+      const completionTitle = result.counts.failed
+        ? "Safe updates completed with errors"
+        : result.counts.skipped
+          ? "Safe updates completed with skips"
+          : "Safe updates complete";
+      patchJob(jobId, { status: result.counts.failed ? "failed" : "succeeded", title: completionTitle, progress: 100, task: summary, error: issueDetails || undefined, dismissible: true });
       window.setTimeout(() => removeJob(jobId), 5000);
     } catch (error) {
       const message = errorMessage(error, "Safe mod updates failed.");
@@ -717,11 +717,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
       setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
-      setDetailsMod(null); notify("success", `Removed ${mod.displayName}`); return;
+      setDetailsModKey(""); notify("success", `Removed ${mod.displayName}`); return;
     }
     try {
       await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, { method: "DELETE" });
-      notify("success", `Removed ${mod.displayName}`); setDetailsMod(null);
+      notify("success", `Removed ${mod.displayName}`); setDetailsModKey("");
       await Promise.all([loadInstalledMods(activeServer.id), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
     } catch (error) {
       const message = errorMessage(error, "Could not remove the mod.");
@@ -732,11 +732,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   return {
     data: { installedMods, searchResults, searchTotal, updatePlan },
     state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
-    derived: { selectedVersion, dependencyCount, canContinueInstall },
+    derived: { selectedVersion, pendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {
-      setInstalledQuery, setDetailsMod, setQuery, setInstallState,
-      openAdd: () => { if (!warnIfServerRunning()) { setDetailsMod(null); setAddOpen(true); } },
+      setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
+      openAdd: () => { if (!warnIfServerRunning()) { setDetailsModKey(""); setAddOpen(true); } },
       closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),

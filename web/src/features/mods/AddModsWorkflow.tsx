@@ -22,7 +22,7 @@ type Props = {
   sentinelRef: RefObject<HTMLDivElement | null>;
   installState: ModInstallModalState | null;
   selectedVersion: ModrinthInstallVersion | null;
-  dependencyCount: number;
+  requiredDependencies: ModrinthInstallVersion["dependencies"];
   canContinue: boolean;
   formatDate: (value: string | number | Date) => string;
   formatNumber: (value: number) => string;
@@ -42,7 +42,7 @@ type Props = {
 
 export function AddModsWorkflow(props: Props) {
   if (props.installState) {
-    return <ModInstallReview state={props.installState} selected={props.selectedVersion} dependencyCount={props.dependencyCount} canContinue={props.canContinue} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
+    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.requiredDependencies} canContinue={props.canContinue} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
   }
 
   const installedIds = new Set(props.installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
