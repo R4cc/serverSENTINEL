@@ -5,10 +5,10 @@ import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, 
 import type { ModInstallModalState } from "../../app/uiState";
 import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
-import { validateJarFilename } from "../../utils/validation";
 import { getInstallVersionHealth } from "./modHealth";
-import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId } from "./modsWorkspaceHelpers";
+import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
+import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
 const modSearchDebounceMs = 650;
 
@@ -121,6 +121,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     isProvisioning, serverRunning, canManage, modsLocked, toggleLocked, notify, setNotice,
     setActiveJobs, handleStaleSession, refreshFiles
   } = inputs;
+  const demoFixture = readModsDemoFixture();
 
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [modsLoading, setModsLoading] = useState(false);
@@ -202,6 +203,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setUpdatePlanLoading(true);
     setUpdatePlanError("");
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
+      const fixtureError = demoFixtureFailureMessage(demoFixture, "update-plan");
+      if (fixtureError) {
+        if (activeServerIdRef.current === serverId) {
+          setUpdatePlan(null);
+          setUpdatePlanError(fixtureError);
+        }
+        setUpdatePlanLoading(false);
+        return null;
+      }
       const plan = createDemoUpdatePlan(serverId, demoInstalledMods);
       if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
       setUpdatePlanLoading(false);
@@ -308,6 +318,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (activeServerIsDemo) {
       setSearching(true);
       const timeout = window.setTimeout(() => {
+        const fixtureError = demoFixtureFailureMessage(demoFixture, "search");
+        if (fixtureError) {
+          setSearchError(fixtureError);
+          setSearching(false);
+          return;
+        }
         const results = demoSearchPage(trimmedQuery);
         setSearchResults(results.slice(0, 20));
         setSearchTotal(results.length);
@@ -399,7 +415,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null } : current);
     try {
       const fetchVersions = async (nextChannel: ReleaseChannel) => activeServerIsDemo
-        ? demoInstallVersions(activeServer, mod, nextChannel)
+        ? demoFixtureFailureMessage(demoFixture, "versions")
+          ? Promise.reject(new Error(demoFixtureFailureMessage(demoFixture, "versions")))
+          : demoInstallVersions(activeServer, mod, nextChannel)
         : api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`);
       let resolvedChannel = channel;
       let data = await fetchVersions(resolvedChannel);
@@ -447,11 +465,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (modsLocked || !canManage || !activeServer) return;
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    const filenameError = validateJarFilename(file.name);
-    if (filenameError) { notify("error", filenameError); return; }
-    if (file.size <= 0 || file.size > 128 * 1024 * 1024) { notify("error", "Uploaded mod must be between 1 byte and 128 MiB."); return; }
-    if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) { notify("error", "A mod with that filename is already installed."); return; }
+    const selection = validateModUploadSelection(file, installedMods);
+    if (!file || selection.kind === "cancelled") return;
+    if (selection.kind === "error") { notify("error", selection.message); return; }
     setNotice("");
     const jobId = `upload-${file.name}-${Date.now()}`;
     setActiveJobs((current) => [...current, { id: jobId, type: "mod-upload", status: "running", title: "Uploading mod", subject: file.name, progress: 10, task: "Reading file", dismissible: false }]);
@@ -460,7 +476,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         await new Promise((resolve) => window.setTimeout(resolve, 500)); patchJob(jobId, { progress: 40, task: "Uploading jar" });
         await new Promise((resolve) => window.setTimeout(resolve, 800)); patchJob(jobId, { progress: 70, task: "Saving mod file" });
         await new Promise((resolve) => window.setTimeout(resolve, 400)); patchJob(jobId, { progress: 95, task: "Refreshing installed mods" });
-        const mod: InstalledMod = { filename: file.name, displayName: file.name.replace(/\.jar$/i, "").replace(/[-_]/g, " "), enabled: true, size: file.size, modifiedAt: new Date().toISOString() };
+        const mod = uploadedManualMod(file);
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);

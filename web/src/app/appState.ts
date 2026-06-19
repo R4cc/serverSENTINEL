@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { initialDemoFiles, initialDemoMods, initialDemoSchedules } from "../demo";
+import { initialDemoFiles, initialDemoSchedules } from "../demo";
+import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 import type { InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
 import { readLocalePreference, readThemePreference } from "../utils/format";
 
@@ -14,7 +15,7 @@ export function usePreferencesState() {
   const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [demoRunning, setDemoRunning] = useState(true);
   const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => initialDemoFiles);
-  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => initialDemoMods);
+  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
   const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
 

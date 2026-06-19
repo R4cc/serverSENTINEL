@@ -3,6 +3,7 @@ import { AppIcon } from "../../components/FileTypeIcon";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { updatePlanEntryForMod } from "./modUpdatePlan";
+import { filterInstalledMods } from "./modsWorkspaceHelpers";
 
 type Props = {
   mods: InstalledMod[];
@@ -17,10 +18,7 @@ type Props = {
 };
 
 export function InstalledModsList({ mods, query, busy, locked, onQueryChange, onToggle, onUpdate, onDetails, updatePlan }: Props) {
-  const normalized = query.trim().toLowerCase();
-  const visible = [...mods]
-    .filter((mod) => !normalized || `${mod.displayName} ${mod.filename} ${mod.description || ""}`.toLowerCase().includes(normalized))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const visible = filterInstalledMods(mods, query);
 
   return (
     <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">

@@ -64,4 +64,20 @@ describe("safe batch updates", () => {
     expect(result.counts).toEqual({ requested: 2, updated: 1, skipped: 0, failed: 1 });
     expect(result.failed[0].reason).toBe("network failed");
   });
+
+  it("reports updated, skipped, and failed entries in one deterministic batch", async () => {
+    const plan = createModUpdatePlan("server", [
+      mod({ filename: "updated.jar", versionInfo: { currentVersion: "1", latestVersion: "2", upToDate: false } }),
+      mod({ filename: "failed.jar", versionInfo: { currentVersion: "1", latestVersion: "2", upToDate: false } }),
+      mod({ filename: "blocked.jar", compatibility: { status: "incompatible", compatible: false, reason: "Client-only", serverSide: "unsupported" }, versionInfo: { currentVersion: "1", latestVersion: "2", upToDate: false } })
+    ]);
+    const result = await executeSafeUpdatePlan(plan, ["updated.jar", "blocked.jar", "failed.jar", "missing.jar"], async (entry) => {
+      if (entry.filename === "failed.jar") throw new Error("download failed");
+      return { ok: true };
+    });
+    expect(result.counts).toEqual({ requested: 4, updated: 1, skipped: 2, failed: 1 });
+    expect(result.updated.map((entry) => entry.filename)).toEqual(["updated.jar"]);
+    expect(result.skipped.map((entry) => entry.filename)).toEqual(["blocked.jar", "missing.jar"]);
+    expect(result.failed).toEqual([{ filename: "failed.jar", reason: "download failed" }]);
+  });
 });

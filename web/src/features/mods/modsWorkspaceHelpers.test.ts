@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse } from "../../types";
-import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId } from "./modsWorkspaceHelpers";
+import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 
 function response(): ModrinthInstallVersionsResponse {
   return {
@@ -29,6 +29,19 @@ describe("Mods workspace helpers", () => {
     } as ModrinthInstallVersion;
     const installed = [{ filename: "fabric-api.jar", modrinth: { projectId: "fabric-api" } }] as InstalledMod[];
     expect(pendingRequiredDependencies(version, installed).map((dependency) => dependency.projectId)).toEqual(["cloth-config"]);
+  });
+
+  it("covers upload cancellation, validation, duplicates, and successful manual metadata", () => {
+    const installed = [{ filename: "existing.jar" }, { filename: "disabled.jar.disabled" }] as InstalledMod[];
+    expect(validateModUploadSelection(undefined, installed)).toEqual({ kind: "cancelled" });
+    expect(validateModUploadSelection({ name: "not-a-jar.txt", size: 10 }, installed)).toMatchObject({ kind: "error" });
+    expect(validateModUploadSelection({ name: "empty.jar", size: 0 }, installed)).toMatchObject({ kind: "error" });
+    expect(validateModUploadSelection({ name: "too-large.jar", size: 128 * 1024 * 1024 + 1 }, installed)).toMatchObject({ kind: "error" });
+    expect(validateModUploadSelection({ name: "existing.jar", size: 10 }, installed)).toMatchObject({ kind: "error", message: "A mod with that filename is already installed." });
+    expect(validateModUploadSelection({ name: "disabled.jar", size: 10 }, installed)).toMatchObject({ kind: "error", message: "A mod with that filename is already installed." });
+    const ready = validateModUploadSelection({ name: "new-helper.jar", size: 2048 }, installed);
+    expect(ready).toMatchObject({ kind: "ready" });
+    expect(uploadedManualMod({ name: "new-helper.jar", size: 2048 }, "2026-01-01T00:00:00.000Z")).toMatchObject({ filename: "new-helper.jar", displayName: "new helper", enabled: true, size: 2048 });
   });
 
   it("walks release channels in safe fallback order", () => {

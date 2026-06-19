@@ -1,4 +1,28 @@
 import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel } from "../../types";
+import { validateJarFilename } from "../../utils/validation";
+
+export type ModUploadCandidate = Pick<File, "name" | "size">;
+export type ModUploadSelection = { kind: "cancelled" } | { kind: "error"; message: string } | { kind: "ready"; file: ModUploadCandidate };
+
+export function filterInstalledMods(mods: InstalledMod[], query: string) {
+  const normalized = query.trim().toLowerCase();
+  return [...mods]
+    .filter((mod) => !normalized || `${mod.displayName} ${mod.filename} ${mod.description || ""}`.toLowerCase().includes(normalized))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function validateModUploadSelection(file: ModUploadCandidate | undefined, installedMods: InstalledMod[]): ModUploadSelection {
+  if (!file) return { kind: "cancelled" };
+  const filenameError = validateJarFilename(file.name);
+  if (filenameError) return { kind: "error", message: filenameError };
+  if (file.size <= 0 || file.size > 128 * 1024 * 1024) return { kind: "error", message: "Uploaded mod must be between 1 byte and 128 MiB." };
+  if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) return { kind: "error", message: "A mod with that filename is already installed." };
+  return { kind: "ready", file };
+}
+
+export function uploadedManualMod(file: ModUploadCandidate, modifiedAt = new Date().toISOString()): InstalledMod {
+  return { filename: file.name, displayName: file.name.replace(/\.jar$/i, "").replace(/[-_]/g, " "), enabled: true, size: file.size, modifiedAt };
+}
 
 export function installedModKey(mod: InstalledMod) {
   return mod.modrinth?.projectId || mod.filename.replace(/\.disabled$/, "");
