@@ -45,6 +45,9 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
   const showSafeBatch = Boolean(data.updatePlan?.counts.safeUpdates && (access.changesAllowed || state.batchUpdateRunning));
   const updateCheckWaitingForMods = state.modsLoading && !state.updatePlanLoading;
+  const isTransientModrinthError = (message: string) => /Modrinth request failed:\s*5\d\d\b/i.test(message);
+  const visibleModsError = state.modsError && !isTransientModrinthError(state.modsError) ? state.modsError : "";
+  const visibleUpdatePlanError = state.updatePlanError && !isTransientModrinthError(state.updatePlanError) ? state.updatePlanError : "";
 
   return (
     <section className="tabPage modsWorkspacePage">
@@ -57,8 +60,8 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
       </div>
       <input ref={uploadRef} className="hiddenInput" type="file" accept=".jar" onChange={actions.uploadMod} />
       {state.modsLoading && data.installedMods.length === 0 && <InlineState tone="loading" title="Loading installed mods" message="Checking the mods folder and compatibility information." />}
-      {state.modsError && <InlineState tone="error" title="Could not load installed mods" message={state.modsError} actionLabel="Retry" onAction={actions.retry} busy={state.modsLoading} />}
-      {state.updatePlanError && <InlineState tone="error" title="Could not check updates" message={state.updatePlanError} actionLabel="Retry" onAction={() => void actions.refresh()} busy={state.updatePlanLoading} />}
+      {visibleModsError && <InlineState tone="error" title="Could not load installed mods" message={visibleModsError} actionLabel="Retry" onAction={actions.retry} busy={state.modsLoading} />}
+      {visibleUpdatePlanError && <InlineState tone="error" title="Could not check updates" message={visibleUpdatePlanError} actionLabel="Retry" onAction={() => void actions.refresh()} busy={state.updatePlanLoading} />}
       <InstalledModsList mods={data.installedMods} query={state.installedQuery} busy={state.modsLoading} locked={access.toggleLocked} onQueryChange={actions.setInstalledQuery} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onDetails={actions.setDetailsMod} updatePlan={data.updatePlan} />
       {(state.addOpen || state.detailsMod) && <div className="modsDrawerBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) state.addOpen ? actions.closeAdd() : actions.setDetailsMod(null); }}>
         {state.addOpen && <aside className="modsWorkflowDrawer" role="dialog" aria-modal="true" aria-label="Add mods"><AddModsWorkflow query={state.query} results={data.searchResults} total={data.searchTotal} installedMods={data.installedMods} searching={state.searching} loadingMore={state.loadingMore} error={state.searchError} configured={access.modrinthConfigured} versionsUnknown={serverContext.versionsUnknown} contextMessage={serverContext.contextMessage} locked={access.locked} sentinelRef={refs.sentinelRef} installState={state.installState} selectedVersion={derived.selectedVersion} requiredDependencies={derived.pendingDependencies} canContinue={derived.canContinueInstall} formatDate={formatters.date} formatNumber={formatters.number} onClose={actions.closeAdd} onQueryChange={actions.setQuery} onChoose={actions.openInstallReview} onInstallClose={actions.closeInstall} onChannelChange={(mod, channel) => void actions.loadInstallVersions(mod, channel)} onSelectVersion={actions.selectInstallVersion} onToggleAdvanced={actions.toggleAdvanced} onAcknowledge={actions.acknowledgeInstall} onContinue={actions.continueInstallReview} onBack={actions.backInstall} onInstall={actions.installSelectedMod} /></aside>}
