@@ -1,4 +1,4 @@
-import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel } from "../../types";
+import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import { validateJarFilename } from "../../utils/validation";
 
 export type ModUploadCandidate = Pick<File, "name" | "size">;
@@ -22,6 +22,18 @@ export function validateModUploadSelection(file: ModUploadCandidate | undefined,
 
 export function uploadedManualMod(file: ModUploadCandidate, modifiedAt = new Date().toISOString()): InstalledMod {
   return { filename: file.name, displayName: file.name.replace(/\.jar$/i, "").replace(/[-_]/g, " "), enabled: true, size: file.size, modifiedAt };
+}
+
+export function safeBatchUpdateFeedback(result: SafeBatchUpdateResult) {
+  const { updated, skipped, failed } = result.counts;
+  const hasIssues = skipped > 0 || failed > 0;
+  return {
+    status: failed > 0 ? "failed" as const : "succeeded" as const,
+    title: hasIssues
+      ? updated > 0 ? "Safe updates partially completed" : "No safe updates were applied"
+      : `${updated} safe ${updated === 1 ? "mod" : "mods"} updated`,
+    summary: `${updated} updated · ${skipped} skipped · ${failed} failed`
+  };
 }
 
 export function installedModKey(mod: InstalledMod) {

@@ -46,8 +46,8 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
         {!state.loading && state.data && state.step === 1 && (
           <>
             <section className="modsRecommendedVersion">
-              <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Ready to review" : "Open advanced options to review other versions"}</span></div>
-              {recommendedVersion && <button type="button" onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review install</button>}
+              <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Compatible with this server" : "Open advanced options to review other versions"}</span></div>
+              {recommendedVersion && <button type="button" onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review and install</button>}
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
@@ -76,7 +76,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           <>
             <section className="modsReviewSection"><h3>What will be installed</h3><div className="modsReviewLine"><strong>{title}</strong><span>{selected.versionNumber}</span></div></section>
             <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>Fabric · Minecraft {state.data.target.minecraftVersion}</span></div></section>
-            {requiredDependencies.length > 0 && <details className="modsDependencySummary"><summary>Also installs {requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
+            {requiredDependencies.length > 0 && <details className="modsDependencySummary" open><summary>Also installs {requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
             {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedHealth.detailDescription}</span></div>}
             <details className="modsAdvancedOptions"><summary>Installation details</summary><dl className="modsDetailsFacts"><div><dt>Release channel</dt><dd>{selected.releaseChannel}</dd></div><div><dt>Published</dt><dd>{selected.publishedAt ? formatDate(selected.publishedAt) : "Unknown"}</dd></div><div><dt>Filename</dt><dd>{selected.file?.filename || "Unknown"}</dd></div></dl></details>
           </>

@@ -3,27 +3,28 @@ import { getInstalledModHealth } from "./modHealth";
 
 type Props = {
   mods: InstalledMod[];
-  serverRunning: boolean;
-  changesAllowed: boolean;
   updatePlan?: ModUpdatePlan | null;
 };
 
-export function ModsSummary({ mods, serverRunning, changesAllowed, updatePlan }: Props) {
+export function buildModsSummary(mods: InstalledMod[], updatePlan?: ModUpdatePlan | null) {
   const enabled = mods.filter((mod) => mod.enabled).length;
   const health = mods.map(getInstalledModHealth);
   const safeUpdates = updatePlan?.counts.safeUpdates ?? health.filter((item) => item.hasSafeUpdate).length;
   const reviewUpdates = updatePlan?.counts.reviewUpdates ?? health.filter((item) => item.hasReviewUpdate).length;
   const updates = safeUpdates + reviewUpdates;
   const attention = updatePlan
-    ? updatePlan.counts.reviewUpdates + updatePlan.counts.blockedUpdates
+    ? updatePlan.counts.reviewUpdates + updatePlan.counts.blockedUpdates + updatePlan.counts.unknown
     : health.filter((item) => item.needsAttention).length;
 
-  const items = [
+  return [
     { label: "Total mods", value: mods.length, detail: `${enabled} enabled · ${mods.length - enabled} disabled`, tone: "blue" },
-    { label: "Updates", value: updates, detail: reviewUpdates ? `${safeUpdates} safe · ${reviewUpdates} need review` : safeUpdates === 1 ? "1 safe update available" : `${safeUpdates} safe updates available`, tone: "orange" },
-    { label: "Needs attention", value: attention, detail: attention ? "Review recommended" : "Setup looks healthy", tone: "purple" },
-    { label: "Mod changes", value: serverRunning ? "Locked" : changesAllowed ? "Enabled" : "Unavailable", detail: serverRunning ? "Stop server required" : changesAllowed ? "Changes allowed" : "Check permissions", tone: serverRunning ? "orange" : "green" }
+    { label: "Updates", value: updates || "Up to date", detail: reviewUpdates ? `${safeUpdates} safe · ${reviewUpdates} need review` : safeUpdates === 1 ? "1 safe update" : safeUpdates ? `${safeUpdates} safe updates` : "No updates available", tone: "orange" },
+    { label: "Needs attention", value: attention || "All clear", detail: attention ? "Review recommended" : "No action needed", tone: "purple" }
   ];
+}
+
+export function ModsSummary({ mods, updatePlan }: Props) {
+  const items = buildModsSummary(mods, updatePlan);
 
   return (
     <section className="modsWorkspaceSummary" aria-label="Mods status summary">

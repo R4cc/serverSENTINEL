@@ -1674,14 +1674,14 @@ export default function App() {
     }
   }
 
-  async function runContainerAction(action: "start" | "stop" | "restart") {
+  async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean } = {}) {
     if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
     setNotice("");
     setRuntimeAction(action);
     const actionLabel = action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart";
     const completedLabel = action === "start" ? "started" : action === "stop" ? "stopped" : "restarted";
-    notify("info", `${actionLabel} request sent`);
+    if (options.announceRequest !== false) notify("info", `${actionLabel} request sent`);
     try {
       if (activeServerIsDemo) {
         const nextRunning = action !== "stop";
@@ -3446,7 +3446,6 @@ export default function App() {
               <ModsPage
                 workspace={modsWorkspace}
                 serverContext={{
-                  serverName: activeServer.displayName,
                   minecraftVersion: activeServer.minecraftVersion || "Unknown",
                   versionsUnknown: activeModVersionsUnknown,
                   contextMessage: activeModContext
@@ -3465,7 +3464,7 @@ export default function App() {
                   uploadDisabledReason: uploadModDisabledReason
                 }}
                 formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
-                onStopServer={() => void runContainerAction("stop")}
+                onStopServer={() => void runContainerAction("stop", { announceRequest: false })}
               />
             )}
 

@@ -12264,30 +12264,26 @@ details.compatibilityBadge p {
   }
 }
 /* Cohesive Mods workspace */
-.modsWorkspacePage { display: grid; gap: 20px; }
-.modsWorkspaceHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
-.modsWorkspaceHeader h1 { margin: 0; font-size: clamp(1.75rem, 2vw, 2.25rem); letter-spacing: -.035em; }
-.modsWorkspaceHeader p { margin: 5px 0 0; color: var(--text-muted); }
-.modsWorkspaceTarget { padding: 7px 11px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: .82rem; white-space: nowrap; }
-.modsLockBanner { display: flex; align-items: center; gap: 14px; padding: 15px 17px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 12px; background: color-mix(in srgb, #e98a15 7%, var(--panel)); }
-.modsLockBanner > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
+.modsWorkspacePage { display: grid; gap: 14px; }
+.modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--panel)); }
+.modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
 .modsLockBanner > div { flex: 1; }
 .modsLockBanner strong, .modsLockBanner p { display: block; }
-.modsLockBanner p { margin: 3px 0 0; color: var(--text-muted); font-size: .88rem; }
-.modsWorkspaceSummary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.modsWorkspaceMetric { display: flex; gap: 12px; align-items: center; min-height: 92px; padding: 16px; border: 1px solid var(--border); border-radius: 13px; background: var(--panel); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
-.modsWorkspaceMetricDot { width: 38px; height: 38px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #3568ef 6%, transparent); }
+.modsLockBanner p { margin: 2px 0 0; color: var(--text-muted); font-size: .82rem; }
+.modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
+.modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
 .modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, #e98a15 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #e98a15 7%, transparent); }
 .modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, #8b5cf6 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #8b5cf6 7%, transparent); }
 .modsWorkspaceMetric.green .modsWorkspaceMetricDot { background: color-mix(in srgb, #159267 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #159267 7%, transparent); }
 .modsWorkspaceMetric > div { min-width: 0; display: grid; }
 .modsWorkspaceMetric small { color: var(--text-muted); font-size: .76rem; }
-.modsWorkspaceMetric strong { margin: 2px 0; font-size: 1.25rem; line-height: 1.1; }
+.modsWorkspaceMetric strong { margin: 1px 0; font-size: 1.08rem; line-height: 1.1; }
 .modsWorkspaceMetric span:last-child { overflow: hidden; color: var(--text-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 9px; }
+.modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .modsWorkspaceToolbar button { display: inline-flex; gap: 8px; align-items: center; }
-.modsWorkspaceToolbar > span { color: var(--text-muted); font-size: .82rem; }
+.modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceInstalled { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
 .modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
@@ -12339,7 +12335,8 @@ details.compatibilityBadge p {
 .modsDrawerFooter > button:first-child { flex: 1; }
 .modsAddSearch { display: flex; gap: 8px; }
 .modsAddSearch label { flex: 1; min-width: 0; }
-.modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 10px 0 20px; color: var(--text-muted); font-size: .76rem; }
+.modsSearchActivity { min-width: 130px; align-self: center; color: var(--text-muted); font-size: .72rem; text-align: right; }
+.modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
 .modsSafeSearchNote svg { width: 15px; color: #159267; }
 .modsSearchResults { display: grid; gap: 9px; }
 .modsResultCard { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 94px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
@@ -12351,6 +12348,7 @@ details.compatibilityBadge p {
 .modsSearchSentinel { height: 1px; }
 .modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
 .modsDetailsTitle h2 { margin: 0 0 6px; }
+.modsDetailsTitle h2 + span { color: var(--text-muted); font-size: .76rem; }
 .modsDetailsDescription { margin: 0 0 20px; color: var(--text-muted); line-height: 1.55; }
 .modsDetailsFacts { display: grid; gap: 0; margin: 0; }
 .modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -12364,7 +12362,7 @@ details.compatibilityBadge p {
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: 14px; }
 .modsCompatibilityCard summary, .modsTechnicalDetails summary, .modsAdvancedOptions summary, .modsDependencySummary summary { cursor: pointer; color: var(--text-muted); font-size: .8rem; font-weight: 700; }
-.modsTechnicalDetails { padding-top: 18px; border-top: 1px solid var(--border); }
+.modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
 .modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
 .modsTechnicalDetails a { display: inline-block; margin-top: 14px; }
 .modsBackButton { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 6px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; font-size: .78rem; }
@@ -12409,11 +12407,10 @@ details.compatibilityBadge p {
   .modsWorkspaceRow { grid-template-columns: minmax(220px, 1.5fr) 120px 110px 130px 60px 36px; }
 }
 @media (max-width: 760px) {
-  .modsWorkspaceHeader { align-items: flex-start; flex-direction: column; }
   .modsWorkspaceSummary { grid-template-columns: 1fr; }
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
   .modsWorkspaceSearch { min-width: 0; }
-  .modsWorkspaceToolbar > span { display: none; }
+  .modsWorkspaceToolbar > div, .modsWorkspaceToolbar button { width: 100%; }
   .modsWorkspaceRow { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
   .modsWorkspaceIdentity { grid-column: 1 / -1; }
   .modsWorkspaceVersion { display: none; }
@@ -12422,6 +12419,7 @@ details.compatibilityBadge p {
   .modsWorkspaceRow > div:nth-of-type(4) { grid-column: 2; }
   .modsWorkspaceDetailsButton { grid-column: 3; }
   .modsAddSearch { flex-direction: column; }
+  .modsSearchActivity { min-width: 0; text-align: left; }
   .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
   .modsResultCard > button { grid-column: 1 / -1; }
   .modsRecommendedVersion, .modsReviewLine { align-items: stretch; flex-direction: column; }

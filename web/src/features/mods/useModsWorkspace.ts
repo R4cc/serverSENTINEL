@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { api } from "../../api";
 import { demoSearchResults, demoServerId } from "../../demo";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
@@ -6,7 +6,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
-import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
+import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
@@ -352,28 +352,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     return () => { cancelled = true; abortController.abort(); };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo]);
 
-  function searchMods(event: FormEvent) {
-    event.preventDefault();
-    if (isProvisioning || !activeServer) return;
-    setNotice("");
-    setSearchError("");
-    setInstallState(null);
-    const searchQuery = query.trim();
-    if (!modrinthConfigured) {
-      const message = "Modrinth API is not configured. Add an API key in settings.";
-      setSearchError(message); setNotice(message); notify("error", message); return;
-    }
-    if (!searchQuery) {
-      const message = "Enter a mod name or keyword to search.";
-      setSearchError(message); setNotice(message); return;
-    }
-    setSearchResults([]);
-    setSearchTotal(0);
-    setSearching(true);
-    setDebouncedQuery(searchQuery);
-    setSearchRequestVersion((current) => current + 1);
-  }
-
   async function loadMoreMods() {
     if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer) return;
     const offset = searchResults.length;
@@ -661,17 +639,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
       await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true }), refreshFiles(activeServer.id, "/mods")]);
-      const summary = `Updated ${result.counts.updated}; skipped ${result.counts.skipped}; failed ${result.counts.failed}.`;
+      const feedback = safeBatchUpdateFeedback(result);
       const issueDetails = [
         ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
         ...result.failed.map((entry) => `${entry.filename} failed: ${entry.reason}`)
       ].join("; ");
-      const completionTitle = result.counts.failed
-        ? "Safe updates completed with errors"
-        : result.counts.skipped
-          ? "Safe updates completed with skips"
-          : "Safe updates complete";
-      patchJob(jobId, { status: result.counts.failed ? "failed" : "succeeded", title: completionTitle, progress: 100, task: summary, error: issueDetails || undefined, dismissible: true });
+      patchJob(jobId, { status: feedback.status, title: feedback.title, progress: 100, task: feedback.summary, error: issueDetails || undefined, dismissible: true });
       window.setTimeout(() => removeJob(jobId), 5000);
     } catch (error) {
       const message = errorMessage(error, "Safe mod updates failed.");
@@ -756,7 +729,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
-      searchMods, loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
+      loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
       closeInstall: () => setInstallState(null),
       toggleAdvanced: () => setInstallState((current) => {

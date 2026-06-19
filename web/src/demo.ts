@@ -153,7 +153,7 @@ export const initialDemoMods: InstalledMod[] = [
 
 export const demoSearchResults: ModrinthHit[] = [
   {
-    project_id: "demo-sodium",
+    project_id: "sodium",
     title: "Sodium",
     description: "Client and server rendering performance mod shown here as demo data.",
     downloads: 42_500_000,

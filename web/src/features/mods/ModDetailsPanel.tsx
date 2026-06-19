@@ -21,6 +21,16 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);
+  const hasPlannedUpdate = Boolean(updatePlanEntry && ["safe_update", "needs_review", "blocked"].includes(updatePlanEntry.status));
+  const statusTone = updatePlanEntry?.status === "safe_update" ? "ready" : updatePlanEntry?.status === "blocked" ? "not-recommended" : updatePlanEntry?.status === "needs_review" ? "review" : health.tone;
+  const statusTitle = updatePlanEntry?.status === "safe_update"
+    ? `Safe to update${updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}`
+    : updatePlanEntry?.status === "needs_review"
+      ? `Review update${updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}`
+      : updatePlanEntry?.status === "blocked"
+        ? "Update blocked"
+        : health.label;
+  const statusDescription = hasPlannedUpdate ? updatePlanEntry?.reason : health.shortDescription;
 
   useEffect(() => {
     setReviewingUpdate(false);
@@ -32,7 +42,7 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
           {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
-          <div><h2 id="mod-details-title">{mod.displayName}</h2><span className={`modsStatusChip ${health.tone}`}>{health.label}</span></div>
+          <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
         </div>
         <button type="button" className="iconButton" onClick={onClose} aria-label="Close mod details"><AppIcon name="x" /></button>
       </div>
@@ -40,16 +50,11 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
         <dl className="modsDetailsFacts">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
-          {updatePlanEntry?.targetVersion && <div><dt>Target version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}
-          {updatePlanEntry?.targetFilename && <div><dt>Target filename</dt><dd>{updatePlanEntry.targetFilename}</dd></div>}
-          <div><dt>Source</dt><dd>{mod.modrinth ? "Modrinth" : "Manual upload"}</dd></div>
-          <div><dt>Filename</dt><dd>{mod.filename}</dd></div>
-          <div><dt>File size</dt><dd>{formatBytes(mod.size)}</dd></div>
-          <div><dt>Modified</dt><dd>{formatDate(mod.modifiedAt)}</dd></div>
+          {hasPlannedUpdate && updatePlanEntry?.targetVersion && <div><dt>Available version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}
         </dl>
-        <section className={`modsCompatibilityCard ${health.tone}`}>
-          <strong>{health.label}</strong>
-          <p>{health.shortDescription}</p>
+        <section className={`modsCompatibilityCard ${statusTone}`}>
+          <strong>{statusTitle}</strong>
+          <p>{statusDescription}</p>
           <details>
             <summary>Technical compatibility details</summary>
             <dl>
@@ -66,12 +71,6 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
             </dl>
           </details>
         </section>
-        {updatePlanEntry && ["safe_update", "needs_review", "blocked"].includes(updatePlanEntry.status) && (
-          <section className={`modsCompatibilityCard ${updatePlanEntry.status === "safe_update" ? "ready" : updatePlanEntry.status === "blocked" ? "not-recommended" : "review"}`}>
-            <strong>{updatePlanEntry.status === "safe_update" ? "Safe update" : updatePlanEntry.status === "blocked" ? "Update blocked" : "Update needs review"}</strong>
-            <p>{updatePlanEntry.reason}</p>
-          </section>
-        )}
         {reviewingUpdate && updatePlanEntry?.status === "needs_review" && (
           <section className="modsUpdateReview" aria-labelledby="review-update-title">
             <strong id="review-update-title">Review update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</strong>
@@ -86,20 +85,19 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
             </div>
           </section>
         )}
-        {mod.modrinth && (
-          <details className="modsTechnicalDetails">
-            <summary>Modrinth metadata</summary>
+        <details className="modsTechnicalDetails">
+            <summary>File and source details</summary>
             <dl className="modsDetailsFacts">
-              <div><dt>Project ID</dt><dd>{mod.modrinth.projectId}</dd></div>
-              <div><dt>Version ID</dt><dd>{mod.modrinth.versionId}</dd></div>
-              <div><dt>Installed</dt><dd>{formatDate(mod.modrinth.installedAt)}</dd></div>
-              <div><dt>Game versions</dt><dd>{mod.modrinth.gameVersions.join(", ") || "Unknown"}</dd></div>
-              <div><dt>Loaders</dt><dd>{mod.modrinth.loaders.join(", ") || "Unknown"}</dd></div>
+              <div><dt>Source</dt><dd>{mod.modrinth ? "Modrinth" : "Manual upload"}</dd></div>
+              <div><dt>Filename</dt><dd>{mod.filename}</dd></div>
+              <div><dt>File size</dt><dd>{formatBytes(mod.size)}</dd></div>
+              <div><dt>Modified</dt><dd>{formatDate(mod.modifiedAt)}</dd></div>
+              {hasPlannedUpdate && updatePlanEntry?.targetFilename && <div><dt>Available filename</dt><dd>{updatePlanEntry.targetFilename}</dd></div>}
+              {mod.modrinth && <><div><dt>Project ID</dt><dd>{mod.modrinth.projectId}</dd></div><div><dt>Version ID</dt><dd>{mod.modrinth.versionId}</dd></div><div><dt>Installed</dt><dd>{formatDate(mod.modrinth.installedAt)}</dd></div><div><dt>Game versions</dt><dd>{mod.modrinth.gameVersions.join(", ") || "Unknown"}</dd></div><div><dt>Loaders</dt><dd>{mod.modrinth.loaders.join(", ") || "Unknown"}</dd></div></>}
             </dl>
-            {mod.modrinth.hashes && Object.entries(mod.modrinth.hashes).map(([name, hash]) => <code key={name}>{name}: {hash}</code>)}
-            <a href={`https://modrinth.com/mod/${mod.modrinth.projectId}`} target="_blank" rel="noreferrer">View on Modrinth</a>
+            {mod.modrinth?.hashes && Object.entries(mod.modrinth.hashes).map(([name, hash]) => <code key={name}>{name}: {hash}</code>)}
+            {mod.modrinth && <a href={`https://modrinth.com/mod/${mod.modrinth.projectId}`} target="_blank" rel="noreferrer">View on Modrinth</a>}
           </details>
-        )}
       </div>
       <div className="modsDrawerFooter">
         {updatePlanEntry?.status === "safe_update" && <button type="button" onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</button>}

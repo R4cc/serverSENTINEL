@@ -1,4 +1,4 @@
-import type { FormEvent, RefObject } from "react";
+import type { RefObject } from "react";
 import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
@@ -28,7 +28,6 @@ type Props = {
   formatNumber: (value: number) => string;
   onClose: () => void;
   onQueryChange: (value: string) => void;
-  onSearch: (event: FormEvent) => void;
   onChoose: (mod: ModrinthHit) => void;
   onInstallClose: () => void;
   onChannelChange: (mod: ModrinthHit, channel: ReleaseChannel) => void;
@@ -53,11 +52,11 @@ export function AddModsWorkflow(props: Props) {
         <button type="button" className="iconButton" onClick={props.onClose} aria-label="Close add mods"><AppIcon name="x" /></button>
       </div>
       <div className="modsDrawerBody">
-        <form className="modsAddSearch" onSubmit={props.onSearch}>
+        <div className="modsAddSearch">
           <label><AppIcon name="search" /><span className="srOnly">Search Modrinth</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search by mod name…" disabled={!props.configured || props.versionsUnknown} /></label>
-          <button type="submit" disabled={!props.query.trim() || props.searching || !props.configured || props.versionsUnknown}>{props.searching ? "Searching…" : "Search"}</button>
-        </form>
-        <div className="modsSafeSearchNote"><AppIcon name="shield" /><span>Showing Fabric server mods compatible with this server first.</span></div>
+          <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
+        </div>
+        <div className="modsSafeSearchNote"><AppIcon name="shield" /><span>Compatible Fabric server mods appear first.</span></div>
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} />}

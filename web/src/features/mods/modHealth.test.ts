@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstalledMod, ModCompatibility } from "../../types";
-import { getInstalledModHealth } from "./modHealth";
+import { getInstalledModHealth, getSearchResultHealth } from "./modHealth";
 
 const compatible: ModCompatibility = {
   status: "compatible",
@@ -34,6 +34,10 @@ function managedMod(overrides: Partial<InstalledMod> = {}): InstalledMod {
 }
 
 describe("getInstalledModHealth", () => {
+  it("uses confident wording for compatible search results", () => {
+    expect(getSearchResultHealth({ project_id: "example", title: "Example", description: "", downloads: 1, compatibility: compatible })).toMatchObject({ label: "Compatible", primaryActionLabel: "Review and install" });
+  });
+
   it("marks a compatible current mod as healthy", () => {
     expect(getInstalledModHealth(managedMod()).key).toBe("healthy");
   });

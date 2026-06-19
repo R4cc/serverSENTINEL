@@ -203,11 +203,11 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
 
 export type ModChoiceHealth = Pick<InstalledModHealth, "label" | "shortDescription" | "detailDescription" | "tone" | "safeToRunDirectly"> & {
   requiresAcknowledgement: boolean;
-  primaryActionLabel: "Install" | "Review" | "Review risk";
+  primaryActionLabel: "Review and install" | "Review" | "Review risk";
 };
 
 function choiceHealth(assessment: CompatibilityAssessment): ModChoiceHealth {
-  if (assessment.kind === "healthy") return { label: "Ready", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "ready", safeToRunDirectly: true, requiresAcknowledgement: false, primaryActionLabel: "Install" };
+  if (assessment.kind === "healthy") return { label: "Compatible", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "ready", safeToRunDirectly: true, requiresAcknowledgement: false, primaryActionLabel: "Review and install" };
   if (assessment.kind === "not_recommended") return { label: "Not recommended", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "not-recommended", safeToRunDirectly: false, requiresAcknowledgement: true, primaryActionLabel: "Review risk" };
   if (assessment.kind === "review") return { label: "Needs review", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "review", safeToRunDirectly: false, requiresAcknowledgement: true, primaryActionLabel: "Review" };
   return { label: "Unknown", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "unknown", safeToRunDirectly: false, requiresAcknowledgement: true, primaryActionLabel: "Review" };
