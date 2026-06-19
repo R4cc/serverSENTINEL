@@ -12296,7 +12296,7 @@ details.compatibilityBadge p {
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
 .modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px; align-items: center; gap: 14px; }
 .modsWorkspaceTableHead { min-height: 38px; padding: 0 16px; color: var(--text-muted); background: color-mix(in srgb, var(--background) 58%, var(--panel)); font-size: .72rem; font-weight: 700; }
-.modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); transition: background .15s ease; }
+.modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
 .modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
 .modsWorkspaceRow.isDisabled { opacity: .62; }

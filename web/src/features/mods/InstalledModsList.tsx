@@ -29,7 +29,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
         </div>
         <label className="modsWorkspaceSearch">
           <AppIcon name="search" />
-          <span className="srOnly">Search installed mods</span>
+          <span className="srOnly">Search</span>
           <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" />
         </label>
       </div>
@@ -48,7 +48,14 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
           const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
           const icon = modIconSource(mod.iconUrl);
           return (
-            <article key={mod.filename} className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}>
+            <article
+              key={mod.filename}
+              className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}
+              onClick={(event) => {
+                const target = event.target as HTMLElement;
+                if (!target.closest("button, input, label, a, summary, details")) onDetails(mod);
+              }}
+            >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} aria-label={`Open details for ${mod.displayName}`}>
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>

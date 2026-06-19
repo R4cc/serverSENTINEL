@@ -44,6 +44,7 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
   const { data, state, derived, refs, actions } = workspace;
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
   const showSafeBatch = Boolean(data.updatePlan?.counts.safeUpdates && (access.changesAllowed || state.batchUpdateRunning));
+  const updateCheckWaitingForMods = state.modsLoading && !state.updatePlanLoading;
 
   return (
     <section className="tabPage modsWorkspacePage">
@@ -52,7 +53,7 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
       <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} />
       <div className="modsWorkspaceToolbar">
         <div className="modsWorkspacePrimaryActions"><button type="button" onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add mods</button><button type="button" className="secondaryButton" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</button></div>
-        <div className="modsWorkspaceUpdateActions"><button type="button" className="secondaryButton" onClick={() => void actions.refresh()} disabled={state.modsLoading || state.updatePlanLoading}><AppIcon name="refresh" /> {state.modsLoading || state.updatePlanLoading ? "Checking…" : "Check updates"}</button>{showSafeBatch && <button type="button" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch}>{state.batchUpdateRunning ? "Updating safe mods…" : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</button>}</div>
+        <div className="modsWorkspaceUpdateActions"><button type="button" className="secondaryButton" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={state.updatePlanLoading} aria-disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? "Waiting for the current mod change to finish." : state.updatePlanLoading ? "Checking installed mods for updates." : "Check installed mods for updates."}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</button>{showSafeBatch && <button type="button" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch}>{state.batchUpdateRunning ? "Updating safe mods…" : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</button>}</div>
       </div>
       <input ref={uploadRef} className="hiddenInput" type="file" accept=".jar" onChange={actions.uploadMod} />
       {state.modsLoading && data.installedMods.length === 0 && <InlineState tone="loading" title="Loading installed mods" message="Checking the mods folder and compatibility information." />}
