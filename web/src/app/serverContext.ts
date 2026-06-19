@@ -4,6 +4,7 @@ import type { AppState, ContextNode, ManagedServer, ScheduledExecution, ServerSt
 import { fabricLoaderVersionInfo, minecraftVersionInfo, versionValue } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { defaultContextNode, emptyPanelContextNode } from "./appConfig";
+import { demoFixtureModrinthConfigured, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 
 export function useServerContext(input: {
   appState: AppState;
@@ -12,6 +13,7 @@ export function useServerContext(input: {
   demoMode: boolean;
   demoSchedules: ScheduledExecution[];
 }) {
+  const modsDemoFixture = readModsDemoFixture();
   const effectiveAppState = useMemo<AppState>(() => {
     if (!input.demoMode) return input.appState;
     const runtimeMode = input.appState.runtimeMode ?? "all-in-one";
@@ -20,11 +22,11 @@ export function useServerContext(input: {
       servers: [demoServer(input.demoSchedules), ...input.appState.servers.filter((server) => server.id !== demoServerId)],
       nodes: input.appState.nodes?.length ? input.appState.nodes : (runtimeMode === "panel" ? [] : [defaultContextNode]),
       runtimeMode,
-      modrinthApiConfigured: true,
+      modrinthApiConfigured: demoFixtureModrinthConfigured(modsDemoFixture),
       dockerSocketMounted: true,
       totalMemory: input.appState.totalMemory || 16 * 1024 * 1024 * 1024
     };
-  }, [input.appState, input.demoMode, input.demoSchedules]);
+  }, [input.appState, input.demoMode, input.demoSchedules, modsDemoFixture]);
 
   const panelOnlyMode = effectiveAppState.runtimeMode === "panel";
 

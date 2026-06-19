@@ -33,6 +33,7 @@ import {
   versionChannel
 } from "./modrinth/compatibility.js";
 import { modrinthFetch } from "./modrinth/modrinthClient.js";
+import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -2531,7 +2532,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
 async function ensureServerStoppedForModChanges(server: ManagedServer) {
   const status = await dockerStatus(server);
   if (status.running) {
-    throw new Error("Stop the server before enabling, disabling, or removing mods");
+    throw new Error("Stop the server before changing mods");
   }
 }
 
@@ -4692,6 +4693,25 @@ function modsFromListResult(result: unknown) {
   return (result as { mods: Array<Record<string, unknown>> }).mods;
 }
 
+async function buildModUpdatePlan(server: ManagedServer, options: { forceRefresh?: boolean; channel?: ReleaseChannel } = {}): Promise<ModUpdatePlan> {
+  const runtime = runtimeForServer(server);
+  const listed = await enrichInstalledModUpdates(server, await runtime.listMods(server, { forceRefresh: options.forceRefresh }), { forceRefresh: options.forceRefresh });
+  let mods = modsFromListResult(listed);
+  if (options.channel) {
+    mods = await Promise.all(mods.map(async (mod) => {
+      const metadata = remoteModMetadata(mod.modrinth);
+      if (!metadata) return { ...mod, preferredChannel: options.channel };
+      try {
+        const versionInfo = await lookupModrinthUpdateFromMetadata(server, metadata, options.channel!, { forceRefresh: options.forceRefresh });
+        return { ...mod, preferredChannel: options.channel, versionInfo };
+      } catch {
+        return { ...mod, preferredChannel: options.channel, versionInfo: null };
+      }
+    }));
+  }
+  return createModUpdatePlan(server.id, mods);
+}
+
 async function updateModrinthMod(server: ManagedServer, input: unknown) {
   const startedAt = Date.now();
   const body = asObject(input, "mod update request");
@@ -5117,6 +5137,12 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
   return options.forceRefresh ? enrichInstalledModUpdates(server, result, options) : result;
 });
 
+app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel: optionalReleaseChannel(request.query.channel) });
+});
+
 app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
@@ -5413,6 +5439,33 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
   await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
   return updateModrinthMod(server, request.body);
+});
+
+app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.update");
+  const server = await getServer(request.body.serverId);
+  await ensureServerStoppedForModChanges(server);
+  const channel = optionalReleaseChannel(request.body.channel);
+  const filenames = request.body.filenames === undefined
+    ? undefined
+    : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
+  if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
+  const startedAt = Date.now();
+  const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
+  const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
+  for (const skipped of result.skipped) {
+    logInfo({ ...serverLogFields(server), filename: skipped.filename, reason: skipped.reason, action: "update_mod_safe_batch_item", status: "skipped" }, "Safe batch mod update skipped item");
+  }
+  logInfo({
+    ...serverLogFields(server),
+    action: "update_mod_safe_batch",
+    status: result.failed.length ? "partial" : "succeeded",
+    updatedCount: result.counts.updated,
+    skippedCount: result.counts.skipped,
+    failedCount: result.counts.failed,
+    durationMs: durationSince(startedAt)
+  }, "Safe batch mod update completed");
+  return result;
 });
 
 function isSelectedModrinthVersionMissing(error: unknown) {

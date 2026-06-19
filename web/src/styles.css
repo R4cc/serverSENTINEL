@@ -12263,3 +12263,233 @@ details.compatibilityBadge p {
     height: calc(100vh - 16px);
   }
 }
+/* Cohesive Mods workspace */
+.modsWorkspacePage { display: grid; gap: 14px; }
+.modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--panel)); }
+.modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
+.modsLockBanner > div { flex: 1; }
+.modsLockBanner strong, .modsLockBanner p { display: block; }
+.modsLockBanner p { margin: 2px 0 0; color: var(--text-muted); font-size: .82rem; }
+.modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
+.modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
+.modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, #e98a15 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #e98a15 7%, transparent); }
+.modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, #8b5cf6 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #8b5cf6 7%, transparent); }
+.modsWorkspaceMetric.green .modsWorkspaceMetricDot { background: color-mix(in srgb, #159267 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #159267 7%, transparent); }
+.modsWorkspaceMetric > div { min-width: 0; display: grid; }
+.modsWorkspaceMetric small { color: var(--text-muted); font-size: .76rem; }
+.modsWorkspaceMetric strong { margin: 1px 0; font-size: 1.08rem; line-height: 1.1; }
+.modsWorkspaceMetric span:last-child { overflow: hidden; color: var(--text-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.modsWorkspaceToolbar button { display: inline-flex; gap: 8px; align-items: center; }
+.modsWorkspaceUpdateActions { justify-content: flex-end; }
+.modsWorkspaceInstalled { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
+.modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
+.modsWorkspaceListHeader h3 { margin: 0; font-size: 1rem; }
+.modsWorkspaceListHeader > div span { color: var(--text-muted); font-size: .78rem; }
+.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
+.modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
+.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px; align-items: center; gap: 14px; }
+.modsWorkspaceTableHead { min-height: 38px; padding: 0 16px; color: var(--text-muted); background: color-mix(in srgb, var(--background) 58%, var(--panel)); font-size: .72rem; font-weight: 700; }
+.modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); transition: background .15s ease; }
+.modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
+.modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
+.modsWorkspaceRow.isDisabled { opacity: .62; }
+.modsWorkspaceIdentity { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
+.modsWorkspaceIdentity:hover:not(:disabled) { transform: none; background: none; color: inherit; }
+.modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
+.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--background); font-size: .66rem; font-weight: 800; }
+.modsWorkspaceIdentity > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.modsStatusChip { display: inline-flex; width: fit-content; padding: 4px 9px; border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1; white-space: nowrap; }
+.modsStatusChip.ready { border-color: color-mix(in srgb, #159267 22%, transparent); color: #12805b; background: color-mix(in srgb, #159267 10%, transparent); }
+.modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
+.modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
+.modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
+.modsStatusChip.unknown { border-color: var(--border); color: var(--text-muted); background: var(--background); }
+.modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.modsWorkspaceUpdate button { padding: 5px 0; border: 0; background: transparent; box-shadow: none; font-size: .76rem; }
+.modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: transparent; }
+.modsUpdateAction { color: #c66a05; }
+.modsReviewAction { color: #7440d9; }
+.modsWorkspaceSwitch { justify-content: center; }
+.modsWorkspaceSwitch .switchStateLabel { display: none; }
+.modsWorkspaceDetailsButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
+.modsWorkspaceDetailsButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.modsWorkspaceEmpty { display: grid; place-items: center; min-height: 150px; padding: 28px; text-align: center; }
+.modsWorkspaceEmpty span { margin-top: 5px; color: var(--text-muted); font-size: .85rem; }
+.modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: rgb(15 23 42 / 38%); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
+.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: 1px solid var(--border); background: var(--panel); box-shadow: -18px 0 50px rgb(15 23 42 / 15%); animation: modsSlideIn .2s ease-out; }
+.modsDetailsDrawer { width: min(440px, 96vw); }
+.modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
+.modsDrawerHeader h2 { margin: 2px 0 0; font-size: 1.35rem; }
+.modsDrawerHeader p { margin: 4px 0 0; color: var(--text-muted); font-size: .84rem; }
+.modsDrawerHeader small { color: var(--accent); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.modsDrawerBody { flex: 1; overflow: auto; padding: 22px 24px; }
+.modsDrawerFooter { display: flex; flex-wrap: wrap; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--border); }
+.modsDrawerFooter > button:first-child { flex: 1; }
+.modsAddSearch { display: flex; gap: 8px; }
+.modsAddSearch label { flex: 1; min-width: 0; }
+.modsSearchActivity { min-width: 130px; align-self: center; color: var(--text-muted); font-size: .72rem; text-align: right; }
+.modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
+.modsSafeSearchNote svg { width: 15px; color: #159267; }
+.modsSearchResults { display: grid; gap: 9px; }
+.modsResultCard { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 94px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
+.modsResultContent { min-width: 0; }
+.modsResultContent > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; color: var(--text-muted); font-size: .82rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.modsResultContent small { color: var(--text-muted); font-size: .72rem; }
+.modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--background); background-size: 220% 100%; animation: skeleton 1.4s infinite; }
+.modsSearchSentinel { height: 1px; }
+.modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
+.modsDetailsTitle h2 { margin: 0 0 6px; }
+.modsDetailsTitle h2 + span { color: var(--text-muted); font-size: .76rem; }
+.modsDetailsDescription { margin: 0 0 20px; color: var(--text-muted); line-height: 1.55; }
+.modsDetailsFacts { display: grid; gap: 0; margin: 0; }
+.modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.modsDetailsFacts dt { color: var(--text-muted); font-size: .78rem; font-weight: 700; }
+.modsDetailsFacts dd { overflow-wrap: anywhere; margin: 0; font-size: .82rem; }
+.modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); border-radius: 11px; background: var(--background); }
+.modsCompatibilityCard.ready { border-color: color-mix(in srgb, #159267 28%, var(--border)); background: color-mix(in srgb, #159267 6%, var(--panel)); }
+.modsCompatibilityCard.update { border-color: color-mix(in srgb, #e98a15 28%, var(--border)); background: color-mix(in srgb, #e98a15 6%, var(--panel)); }
+.modsCompatibilityCard.review { border-color: color-mix(in srgb, #8b5cf6 28%, var(--border)); }
+.modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, #d14343 28%, var(--border)); }
+.modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
+.modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: 14px; }
+.modsCompatibilityCard summary, .modsTechnicalDetails summary, .modsAdvancedOptions summary, .modsDependencySummary summary { cursor: pointer; color: var(--text-muted); font-size: .8rem; font-weight: 700; }
+.modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
+.modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
+.modsTechnicalDetails a { display: inline-block; margin-top: 14px; }
+.modsBackButton { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 6px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; font-size: .78rem; }
+.modsBackButton:hover:not(:disabled) { transform: none; color: var(--accent); background: transparent; }
+.modsReviewHero { padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
+.modsReviewHero > div { display: grid; gap: 3px; }
+.modsReviewHero span { color: var(--text-muted); font-size: .8rem; }
+.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, #159267 30%, var(--border)); border-radius: 12px; background: color-mix(in srgb, #159267 6%, var(--panel)); }
+.modsRecommendedVersion > div { display: grid; gap: 3px; }
+.modsRecommendedVersion small, .modsRecommendedVersion span { color: var(--text-muted); font-size: .76rem; }
+.modsRecommendedVersion strong { font-size: 1.08rem; }
+.modsAdvancedOptions { padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.modsAdvancedOptions > p { color: var(--text-muted); font-size: .8rem; }
+.modsChannelPicker { display: flex; gap: 5px; margin: 12px 0; }
+.modsChannelPicker button { padding: 6px 10px; color: var(--text-muted); background: transparent; }
+.modsChannelPicker button.active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.modsVersionList { display: grid; max-height: 270px; overflow: auto; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.modsVersionList button { display: flex; justify-content: space-between; gap: 12px; padding: 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; color: inherit; background: transparent; box-shadow: none; text-align: left; }
+.modsVersionList button:last-child { border-bottom: 0; }
+.modsVersionList button:hover:not(:disabled), .modsVersionList button.selected { transform: none; color: inherit; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.modsVersionList button span:first-child { display: grid; gap: 2px; }
+.modsVersionList small { color: var(--text-muted); }
+.modsRiskAcknowledgement { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 32%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
+.modsRiskAcknowledgement > span { display: grid; gap: 3px; font-size: .8rem; }
+.modsReviewSection { margin-top: 18px; }
+.modsReviewSection h3 { margin: 0 0 8px; font-size: .88rem; }
+.modsReviewLine { display: flex; justify-content: space-between; gap: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 9px; }
+.modsReviewLine span { color: var(--text-muted); font-size: .82rem; text-align: right; }
+.modsDependencySummary { padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
+.modsDependencySummary > div { padding: 8px 0 0 18px; font-size: .82rem; }
+.modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
+.modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
+.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, #8b5cf6 30%, var(--border)); border-radius: 11px; background: color-mix(in srgb, #8b5cf6 6%, var(--panel)); }
+.modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
+.modsUpdateReview .modsRiskAcknowledgement { margin-top: 4px; }
+.modsUpdateReviewActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+@keyframes modsFadeIn { from { opacity: 0; } }
+@keyframes modsSlideIn { from { transform: translateX(24px); opacity: .8; } }
+@media (max-width: 1100px) {
+  .modsWorkspaceSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modsWorkspaceTableHead { display: none; }
+  .modsWorkspaceRow { grid-template-columns: minmax(220px, 1.5fr) 120px 110px 130px 60px 36px; }
+}
+@media (max-width: 760px) {
+  .modsWorkspaceSummary { grid-template-columns: 1fr; }
+  .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
+  .modsWorkspaceSearch { min-width: 0; }
+  .modsWorkspaceToolbar > div, .modsWorkspaceToolbar button { width: 100%; }
+  .modsWorkspaceRow { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+  .modsWorkspaceIdentity { grid-column: 1 / -1; }
+  .modsWorkspaceVersion { display: none; }
+  .modsWorkspaceUpdate { grid-column: 1; }
+  .modsWorkspaceRow > div:nth-of-type(1) { grid-column: 1; }
+  .modsWorkspaceRow > div:nth-of-type(4) { grid-column: 2; }
+  .modsWorkspaceDetailsButton { grid-column: 3; }
+  .modsAddSearch { flex-direction: column; }
+  .modsSearchActivity { min-width: 0; text-align: left; }
+  .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
+  .modsResultCard > button { grid-column: 1 / -1; }
+  .modsRecommendedVersion, .modsReviewLine { align-items: stretch; flex-direction: column; }
+  .modsReviewLine span { text-align: left; }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3) !important;
+    padding: var(--space-3) var(--space-4) !important;
+    overflow: hidden;
+  }
+
+  .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    display: flex !important;
+    width: auto;
+    padding: 0 !important;
+    border: 0;
+  }
+
+  .brandBlock p,
+  .brandBlock .iconButton,
+  .sidebarCollapsed .brandBlock .iconButton,
+  .selectedServerReadout,
+  .navLabel,
+  .settingsVersionText,
+  .accountName {
+    display: none !important;
+  }
+
+  .sideNav,
+  .sidebarCollapsed .sideNav,
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .sideNav {
+    overflow-x: auto;
+  }
+
+  .sideNav button,
+  .sidebarCollapsed .sideNav button,
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    width: var(--sidebar-rail-size);
+    min-width: var(--sidebar-rail-size);
+    height: var(--sidebar-rail-size);
+    min-height: var(--sidebar-rail-size);
+    padding: 0;
+    justify-content: center;
+    gap: 0 !important;
+  }
+
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    display: flex;
+  }
+
+  .accountLogoutButton,
+  .sidebarCollapsed .accountLogoutButton {
+    display: none !important;
+  }
+}
