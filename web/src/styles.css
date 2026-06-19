@@ -12264,7 +12264,7 @@ details.compatibilityBadge p {
   }
 }
 /* Cohesive Mods workspace */
-.modsWorkspacePage { display: grid; gap: 14px; }
+.modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 .modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--panel)); }
 .modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
 .modsLockBanner > div { flex: 1; }
@@ -12284,7 +12284,7 @@ details.compatibilityBadge p {
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .modsWorkspaceToolbar button { display: inline-flex; gap: 8px; align-items: center; }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
-.modsWorkspaceInstalled { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
 .modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
 .modsWorkspaceListHeader h3 { margin: 0; font-size: 1rem; }
@@ -12294,8 +12294,9 @@ details.compatibilityBadge p {
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
+.modsWorkspaceTable { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px; align-items: center; gap: 14px; }
-.modsWorkspaceTableHead { min-height: 38px; padding: 0 16px; color: var(--text-muted); background: color-mix(in srgb, var(--background) 58%, var(--panel)); font-size: .72rem; font-weight: 700; }
+.modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; color: var(--text-muted); background: var(--surface-muted); font-size: .72rem; font-weight: 700; }
 .modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
 .modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
@@ -12408,6 +12409,8 @@ details.compatibilityBadge p {
   .modsWorkspaceRow { grid-template-columns: minmax(220px, 1.5fr) 120px 110px 130px 60px 36px; }
 }
 @media (max-width: 760px) {
+  .modsWorkspacePage { height: auto; }
+  .modsWorkspaceInstalled { height: max(420px, calc(100vh - 260px)); flex: none; }
   .modsWorkspaceSummary { grid-template-columns: 1fr; }
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
   .modsWorkspaceSearch { min-width: 0; }
