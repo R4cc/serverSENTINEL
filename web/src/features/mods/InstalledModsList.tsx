@@ -30,7 +30,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
         <label className="modsWorkspaceSearch">
           <AppIcon name="search" />
           <span className="srOnly">Search installed mods</span>
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search mods…" />
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" />
         </label>
       </div>
 

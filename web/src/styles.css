@@ -12290,6 +12290,7 @@ details.compatibilityBadge p {
 .modsWorkspaceListHeader h3 { margin: 0; font-size: 1rem; }
 .modsWorkspaceListHeader > div span { color: var(--text-muted); font-size: .78rem; }
 .modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); }
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
@@ -12299,11 +12300,11 @@ details.compatibilityBadge p {
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
 .modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
 .modsWorkspaceRow.isDisabled { opacity: .62; }
-.modsWorkspaceIdentity { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
+.modsWorkspaceIdentity { display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
 .modsWorkspaceIdentity:hover:not(:disabled) { transform: none; background: none; color: inherit; }
 .modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
 .modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--background); font-size: .66rem; font-weight: 800; }
-.modsWorkspaceIdentity > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.modsWorkspaceIdentity > span:last-child { display: grid; min-width: 0; gap: 3px; text-align: left; }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .modsStatusChip { display: inline-flex; width: fit-content; padding: 4px 9px; border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1; white-space: nowrap; }
@@ -12324,7 +12325,7 @@ details.compatibilityBadge p {
 .modsWorkspaceEmpty { display: grid; place-items: center; min-height: 150px; padding: 28px; text-align: center; }
 .modsWorkspaceEmpty span { margin-top: 5px; color: var(--text-muted); font-size: .85rem; }
 .modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: rgb(15 23 42 / 38%); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
-.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: 1px solid var(--border); background: var(--panel); box-shadow: -18px 0 50px rgb(15 23 42 / 15%); animation: modsSlideIn .2s ease-out; }
+.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: 1px solid var(--border); background: var(--surface-raised); box-shadow: -18px 0 50px rgb(15 23 42 / 15%); animation: modsSlideIn .2s ease-out; }
 .modsDetailsDrawer { width: min(440px, 96vw); }
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
 .modsDrawerHeader h2 { margin: 2px 0 0; font-size: 1.35rem; }
