@@ -579,7 +579,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await Promise.all([loadInstalledMods(activeServer.id), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
+        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true });
       } catch (error) {
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
