@@ -53,7 +53,7 @@ export function AddModsWorkflow(props: Props) {
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
-          <label><AppIcon name="search" /><span className="srOnly">Search Modrinth</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search by mod name…" disabled={!props.configured || props.versionsUnknown} /></label>
+          <label><AppIcon name="search" /><span className="srOnly">Search</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search by mod name…" disabled={!props.configured || props.versionsUnknown} /></label>
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
         </div>
         <div className="modsSafeSearchNote"><AppIcon name="shield" /><span>Compatible Fabric server mods appear first.</span></div>

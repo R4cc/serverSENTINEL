@@ -1,6 +1,6 @@
 import type { ActivePage, AppState, ManagedNode } from "../types";
 
-export const appVersion = "0.6.5";
+export const appVersion = "0.7.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 export const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 

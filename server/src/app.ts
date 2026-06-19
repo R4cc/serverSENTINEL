@@ -137,7 +137,7 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.6.5";
+const appVersion = process.env.npm_package_version ?? "0.7.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const serversFile = join(config.configDir, "servers.json");
@@ -1235,7 +1235,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.6.5 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1274,7 +1274,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.6.5 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -2508,7 +2508,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.6.5 (Fabric runtime downloader)"
+      "User-Agent": "ServerSentinel/0.7.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -5361,9 +5361,11 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     const parsedLimit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 20;
     url.searchParams.set("limit", String(limit));
+    let offset = 0;
     if (request.query.offset) {
       const parsedOffset = parseInt(request.query.offset, 10);
       if (Number.isFinite(parsedOffset) && parsedOffset > 0) {
+        offset = parsedOffset;
         url.searchParams.set("offset", String(parsedOffset));
       }
     }
@@ -5380,12 +5382,43 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     }
     url.searchParams.set("facets", JSON.stringify(facets));
 
-    const response = await modrinthFetch(url.toString());
-    const body = await response.json() as { hits?: ModrinthProject[] };
+    let compatibilityFallback = false;
+    let response;
+    try {
+      response = await modrinthFetch(url.toString());
+    } catch (error) {
+      if (!/Modrinth request failed: 5\d\d\b/.test((error as Error).message)) throw error;
+      compatibilityFallback = true;
+      url.searchParams.set("limit", "100");
+      url.searchParams.delete("offset");
+      url.searchParams.set("facets", JSON.stringify([["project_type:mod"]]));
+      response = await modrinthFetch(url.toString());
+      logWarn({ ...serverLogFields(server), action: "modrinth_search", status: "compatibility_fallback" }, "Modrinth faceted search failed; applying compatibility filters locally");
+    }
+    let body = await response.json() as { hits?: ModrinthProject[]; total_hits?: number; offset?: number; limit?: number };
+    if (compatibilityFallback) {
+      const compatible = (hit: ModrinthProject) => {
+        const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
+        const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
+        const serverMatches = modrinthServerSideSupported(hit.server_side);
+        return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
+      };
+      const filtered = (body.hits ?? []).filter((hit) => {
+        const match = compatible(hit);
+        if (compatibilityFilter === "all") return true;
+        if (compatibilityFilter === "compatible") return match.compatible;
+        if (compatibilityFilter === "incompatible") return !match.compatible;
+        return match.loaderMatches && match.versionMatches && hit.server_side !== "unsupported";
+      });
+      body = { ...body, hits: filtered.slice(offset, offset + limit), total_hits: filtered.length, offset, limit };
+    }
     const hits = (body.hits ?? []).map((hit) => {
       const projectId = hit.project_id || hit.id;
       const serverSide = hit.server_side;
+      const loaderMatches = !compatibilityFallback || hit.categories?.includes(targetRuntime.loader) === true;
+      const versionMatches = !compatibilityFallback || minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
       const serverSupported = modrinthServerSideSupported(serverSide);
+      const compatible = loaderMatches && versionMatches && serverSupported;
       if (!projectId) {
         return {
           ...hit,
@@ -5396,7 +5429,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
         ...hit,
         project_id: projectId,
         icon_url: modrinthIconProxyUrl(hit.icon_url),
-        compatibility: serverSupported
+        compatibility: compatible
           ? {
               status: "compatible",
               compatible: true,
@@ -5406,7 +5439,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
               serverSide,
               clientSide: hit.client_side
             }
-          : serverSide === "unknown"
+          : loaderMatches && versionMatches && serverSide === "unknown"
             ? {
                 status: "unknown",
                 compatible: false,
@@ -5419,7 +5452,11 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
             : {
                 status: "incompatible",
                 compatible: false,
-                reason: "Client-only mod; server-side support is unsupported",
+                reason: !loaderMatches
+                  ? "No Fabric release was found for this project"
+                  : !versionMatches
+                    ? `No release was found for Minecraft ${minecraftVersion}`
+                    : "Client-only mod; server-side support is unsupported",
                 matchedLoaders: [targetRuntime.loader],
                 matchedGameVersions: [minecraftVersion],
                 serverSide,

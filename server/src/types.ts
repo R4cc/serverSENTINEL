@@ -130,6 +130,8 @@ export type ModrinthProject = {
   downloads?: number;
   icon_url?: string | null;
   date_modified?: string;
+  categories?: string[];
+  versions?: string[];
   client_side?: string;
   server_side?: string;
 };

@@ -340,7 +340,7 @@ async function downloadFabricJar(server: ManagedServer) {
   if (!artifact?.downloadUrl) throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   if (!artifact.downloadUrl.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS Fabric server jar");
   const res = await fetch(artifact.downloadUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.6.5 (node Fabric runtime downloader)" }
+    headers: { "User-Agent": "ServerSentinel/0.7.0 (node Fabric runtime downloader)" }
   });
   if (!res.ok || !res.body) {
     const body = !res.ok ? await res.text().catch(() => "") : "";
@@ -1241,7 +1241,7 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", async () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.6.5", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: await detectedTotalMemory() };
+      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.7.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: await detectedTotalMemory() };
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
     });
