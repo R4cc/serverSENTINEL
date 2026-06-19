@@ -22,7 +22,6 @@ import {
   fetchProject,
   fetchProjectVersions,
   latestCompatibleProjectVersion,
-  minecraftVersionFacetValues,
   minecraftVersionsInclude,
   modrinthJarFile,
   modrinthServerSideSupported,
@@ -5360,63 +5359,36 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     url.searchParams.set("query", query);
     const parsedLimit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 20;
-    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("limit", "100");
     let offset = 0;
     if (request.query.offset) {
       const parsedOffset = parseInt(request.query.offset, 10);
       if (Number.isFinite(parsedOffset) && parsedOffset > 0) {
         offset = parsedOffset;
-        url.searchParams.set("offset", String(parsedOffset));
       }
     }
-
-    const facets: string[][] = [
-      ["project_type:mod", "project_type:plugin"],
-      ["categories:fabric"],
-      minecraftVersionFacetValues(minecraftVersion).map((version) => `versions:${version}`)
-    ];
-    if (compatibilityFilter === "compatible") {
-      facets.push(["server_side:required", "server_side:optional"]);
-    } else if (compatibilityFilter !== "all") {
-      facets.push(["server_side:required", "server_side:optional", "server_side:unknown"]);
-    }
-    url.searchParams.set("facets", JSON.stringify(facets));
-
-    let compatibilityFallback = false;
-    let response;
-    try {
-      response = await modrinthFetch(url.toString());
-    } catch (error) {
-      if (!/Modrinth request failed: 5\d\d\b/.test((error as Error).message)) throw error;
-      compatibilityFallback = true;
-      url.searchParams.set("limit", "100");
-      url.searchParams.delete("offset");
-      url.searchParams.set("facets", JSON.stringify([["project_type:mod"]]));
-      response = await modrinthFetch(url.toString());
-      logWarn({ ...serverLogFields(server), action: "modrinth_search", status: "compatibility_fallback" }, "Modrinth faceted search failed; applying compatibility filters locally");
-    }
+    const response = await modrinthFetch(url.toString());
     let body = await response.json() as { hits?: ModrinthProject[]; total_hits?: number; offset?: number; limit?: number };
-    if (compatibilityFallback) {
-      const compatible = (hit: ModrinthProject) => {
-        const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
-        const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
-        const serverMatches = modrinthServerSideSupported(hit.server_side);
-        return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
-      };
-      const filtered = (body.hits ?? []).filter((hit) => {
-        const match = compatible(hit);
-        if (compatibilityFilter === "all") return true;
-        if (compatibilityFilter === "compatible") return match.compatible;
-        if (compatibilityFilter === "incompatible") return !match.compatible;
-        return match.loaderMatches && match.versionMatches && hit.server_side !== "unsupported";
-      });
-      body = { ...body, hits: filtered.slice(offset, offset + limit), total_hits: filtered.length, offset, limit };
-    }
+    const compatibility = (hit: ModrinthProject) => {
+      const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
+      const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
+      const serverMatches = modrinthServerSideSupported(hit.server_side);
+      return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
+    };
+    const filtered = (body.hits ?? []).filter((hit) => {
+      if (hit.project_type && hit.project_type !== "mod") return false;
+      const match = compatibility(hit);
+      if (compatibilityFilter === "all") return true;
+      if (compatibilityFilter === "compatible") return match.compatible;
+      if (compatibilityFilter === "incompatible") return !match.compatible;
+      return match.loaderMatches && match.versionMatches && hit.server_side !== "unsupported";
+    });
+    body = { ...body, hits: filtered.slice(offset, offset + limit), total_hits: filtered.length, offset, limit };
     const hits = (body.hits ?? []).map((hit) => {
       const projectId = hit.project_id || hit.id;
       const serverSide = hit.server_side;
-      const loaderMatches = !compatibilityFallback || hit.categories?.includes(targetRuntime.loader) === true;
-      const versionMatches = !compatibilityFallback || minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
+      const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
+      const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
       const serverSupported = modrinthServerSideSupported(serverSide);
       const compatible = loaderMatches && versionMatches && serverSupported;
       if (!projectId) {

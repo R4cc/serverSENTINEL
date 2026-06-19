@@ -124,6 +124,7 @@ export type ModrinthVersion = {
 export type ModrinthProject = {
   project_id?: string;
   id?: string;
+  project_type?: string;
   slug?: string;
   title?: string;
   description?: string;
