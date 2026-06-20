@@ -172,6 +172,7 @@ export default function App() {
     systemDark
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
+  const fileWorkspaceServerIdRef = useRef("");
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
   const activeServerIdRef = useRef("");
@@ -640,13 +641,20 @@ export default function App() {
   }, [demoMode]);
 
   useEffect(() => {
-    if (!activeServer) return;
+    if (!activeServer) {
+      fileWorkspaceServerIdRef.current = "";
+      return;
+    }
     setActiveServerId(activeServer.id);
     const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
+    const initializeFileWorkspace = fileWorkspaceServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
     if (serverChanged) setLogs([]);
-    resetEditorState();
-    setResourceSamples([]);
+    if (initializeFileWorkspace) {
+      fileWorkspaceServerIdRef.current = activeServer.id;
+      resetEditorState();
+      setResourceSamples([]);
+    }
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoStatus(activeServer, demoRunning));
       setLogs([
@@ -655,10 +663,12 @@ export default function App() {
         consoleLine("[demo] Preparing spawn area: 100%"),
         consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
       ]);
-      setListing(demoListing("/", demoFiles, demoInstalledMods));
+      if (initializeFileWorkspace) setListing(demoListing("/", demoFiles, demoInstalledMods));
       return;
     }
     if (activeNodeRuntimeBlocked) {
+      fileWorkspaceServerIdRef.current = "";
+      resetEditorState();
       setStatus(null);
       setStatusError(activeNodeBlockMessage);
       setConsoleError(activeNodeBlockMessage);
@@ -670,8 +680,10 @@ export default function App() {
       setListing({ path: "/", entries: [] });
       return;
     }
-    void refreshStatus(activeServer.id);
-    void loadFiles(activeServer.id, "/");
+    if (initializeFileWorkspace) {
+      void refreshStatus(activeServer.id);
+      void loadFiles(activeServer.id, "/");
+    }
 
     if (consoleReconnectTimeoutRef.current !== null) {
       window.clearTimeout(consoleReconnectTimeoutRef.current);
