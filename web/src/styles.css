@@ -66,7 +66,6 @@
   --tracking-ui: 0;
   --tracking-label: 0.01em;
   --tracking-badge: 0.035em;
-  --control-height: 40px;
   --control-height-compact: 32px;
   --control-padding-inline: 14px;
   --control-icon-size: 18px;
@@ -411,7 +410,6 @@ code {
 }
 
 .workspace {
-  min-width: 0;
   padding: var(--space-5);
 }
 
@@ -453,8 +451,6 @@ code {
 }
 
 .brandLogo {
-  width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   object-fit: cover;
@@ -603,8 +599,6 @@ button .buttonIcon {
 }
 
 .sideIcon {
-  width: 20px;
-  height: 20px;
   display: block;
   flex: 0 0 auto;
   fill: none;
@@ -623,7 +617,6 @@ button .buttonIcon {
 .sideNav small,
 .serverListItem small,
 .serverListItem span {
-  color: currentColor;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -664,7 +657,6 @@ button .buttonIcon {
 .serverList {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-3);
 }
 
 .emptyState,
@@ -706,7 +698,6 @@ button .buttonIcon {
   background: var(--surface-raised);
   display: flex;
   justify-content: space-between;
-  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-4);
 }
@@ -762,7 +753,6 @@ button .buttonIcon {
 .activeServerStrip strong {
   font-size: 20px;
   font-weight: 900;
-  text-transform: none;
   letter-spacing: -0.02em;
   color: var(--text);
   overflow: hidden;
@@ -798,7 +788,6 @@ button .buttonIcon {
 
 .serverStripRight {
   display: flex;
-  align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
   flex: 0 0 auto;
@@ -908,7 +897,6 @@ button .buttonIcon {
   box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
-  min-width: 180px;
   z-index: 30;
   padding: var(--space-2);
 }
@@ -942,12 +930,6 @@ button .buttonIcon {
   cursor: not-allowed;
 }
 
-.activeServerRuntime {
-  display: flex !important;
-  align-items: center;
-  justify-content: end;
-  gap: var(--space-3);
-}
 
 .runtimeControls {
   display: flex;
@@ -1243,7 +1225,6 @@ button .buttonIcon {
 
 .inlineState {
   border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text);
   padding: var(--space-3);
@@ -1327,24 +1308,7 @@ button .buttonIcon {
   border-style: dashed;
 }
 
-.progressTrack {
-  height: 14px;
-  border: var(--border-strong) solid var(--border);
-  border-radius: 999px;
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.08) 0 1px, transparent 1px 8px),
-    var(--surface);
-  overflow: hidden;
-}
 
-.progressTrack span {
-  display: block;
-  height: 100%;
-  min-width: 4px;
-  margin: 0;
-  background: var(--accent);
-  transition: width 200ms linear;
-}
 
 .sonnerToast {
   padding: 16px 36px 16px 16px !important;
@@ -1409,8 +1373,7 @@ button .buttonIcon {
 
 .appForm label,
 .keyForm label,
-.summaryTile span,
-.meta dt {
+.summaryTile span {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 900;
@@ -1481,7 +1444,6 @@ button .buttonIcon {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: var(--space-2);
   min-height: 46px;
   min-width: 0;
   width: 100%;
@@ -1794,7 +1756,6 @@ button .buttonIcon {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: var(--space-4);
   background: var(--overlay);
 }
 
@@ -1837,16 +1798,6 @@ button .buttonIcon {
   background: var(--text-soft);
 }
 
-.nodePill {
-  border: var(--border-subtle) solid var(--border);
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: var(--surface-muted);
-  color: var(--text);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
 
 .userModalPanel {
   width: min(720px, calc(100vw - 32px));
@@ -2004,38 +1955,12 @@ button .buttonIcon {
   padding-left: var(--space-2);
 }
 
-.serverPath {
-  color: var(--text-muted);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 760px;
-}
 
 .panel {
-  padding: var(--space-4);
   min-width: 0;
 }
 
-.panelHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-2);
-  border-bottom: var(--border-strong) solid var(--border);
-}
 
-.panelHeader code {
-  color: var(--text-muted);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .consoleHeaderActions {
   display: flex;
@@ -2060,28 +1985,9 @@ button .buttonIcon {
   margin: var(--space-2) 0 var(--space-4);
 }
 
-.dangerButton {
-  border-color: var(--sentinel-danger);
-  border-radius: var(--radius-sm);
-  background: var(--sentinel-danger);
-  color: var(--swiss-white);
-}
 
-.dangerButton:hover:not(:disabled) {
-  background: var(--text);
-  border-color: var(--text);
-}
 
-.toggleRow {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  margin-top: var(--space-3);
-  font-weight: 800;
-  text-transform: uppercase;
-}
 
-.toggleRow input,
 .appForm .checkLine input {
   width: auto;
   accent-color: var(--accent);
@@ -2089,7 +1995,6 @@ button .buttonIcon {
 
 .createServerPanel {
   max-width: 820px;
-  margin-bottom: var(--space-4);
 }
 
 .appForm {
@@ -2140,32 +2045,15 @@ button .buttonIcon {
 }
 
 .buttonRow,
-.fileActions,
-.tabs {
+.fileActions {
   display: flex;
   gap: var(--space-2);
   align-items: center;
   flex-wrap: wrap;
 }
 
-.tabs {
-  border-bottom: var(--border-heavy) solid var(--border);
-  margin-bottom: var(--space-4);
-  overflow-x: auto;
-}
 
-.tabs button {
-  border-color: var(--border);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border-bottom: 0;
-  background: var(--surface);
-  color: var(--text);
-}
 
-.tabs button.active {
-  background: var(--text);
-  color: var(--surface);
-}
 
 .tabPage {
   display: grid;
@@ -2173,7 +2061,6 @@ button .buttonIcon {
 }
 
 .overviewPage {
-  grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: start;
   gap: var(--space-4);
 }
@@ -2186,7 +2073,6 @@ button .buttonIcon {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--space-3);
   align-items: stretch;
 }
 
@@ -2211,7 +2097,6 @@ button .buttonIcon {
 
 .filesPage {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  align-items: stretch;
   height: calc(100vh - 300px);
   min-height: 520px;
   max-height: calc(100vh - 220px);
@@ -2234,8 +2119,6 @@ button .buttonIcon {
 }
 
 .settingsGroup {
-  padding: 0;
-  overflow: hidden;
   border-radius: var(--radius-md);
 }
 
@@ -2320,7 +2203,6 @@ button .buttonIcon {
 
 .settingsRow .keyForm {
   width: min(100%, 620px);
-  justify-self: end;
 }
 
 .settingsStatus {
@@ -2334,24 +2216,7 @@ button .buttonIcon {
   text-transform: uppercase;
 }
 
-.settingsToggle {
-  justify-self: end;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: var(--border-strong) solid var(--border);
-  border-radius: 999px;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.settingsToggle input {
-  width: auto;
-  accent-color: var(--accent);
-}
 
 .settingsStatus.ready {
   border-color: var(--sentinel-success);
@@ -2369,14 +2234,9 @@ button .buttonIcon {
 }
 
 .nodesPage {
-  max-width: 1280px;
 }
 
 .nodesToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -2401,7 +2261,6 @@ button .buttonIcon {
 .nodesGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-  gap: var(--space-3);
   max-height: calc(100vh - 250px);
   overflow-y: auto;
   padding-right: var(--space-1);
@@ -2411,7 +2270,6 @@ button .buttonIcon {
 .nodeCard {
   display: grid;
   grid-template-rows: auto auto;
-  gap: var(--space-3);
   border-radius: var(--radius-md);
   min-height: 0;
 }
@@ -2471,8 +2329,7 @@ button .buttonIcon {
   min-width: 0;
 }
 
-.nodeCardHeader .settingsStatus,
-.nodeCardHeader .compactButton {
+.nodeCardHeader .settingsStatus {
   min-height: 34px;
 }
 
@@ -2500,11 +2357,6 @@ button .buttonIcon {
   margin-top: var(--space-3);
 }
 
-.nodeCardActions .compactButton {
-  width: auto;
-  min-width: 104px;
-  flex: 0 0 auto;
-}
 
 .nodeUpgradeButton {
   border-color: var(--accent);
@@ -2527,18 +2379,14 @@ button .buttonIcon {
 
 .nodeServerList {
   display: grid;
-  gap: var(--space-2);
 }
 
 .nodeServerRow,
 .nodeServerMoreRow,
-.nodeServerEmpty,
 .nodeServerPlaceholder {
   min-height: 44px;
   width: 100%;
   border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
   color: var(--text);
   padding: var(--space-2) var(--space-3);
 }
@@ -2549,21 +2397,7 @@ button .buttonIcon {
   pointer-events: none;
 }
 
-.nodeServerEmpty {
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
 
-.nodeServerEmpty strong {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
 
 .nodeServerRow {
   display: grid;
@@ -2698,40 +2532,10 @@ button .buttonIcon {
   white-space: nowrap;
 }
 
-.nodeFacts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin: 0;
-}
 
-.nodeFacts.detailed {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-}
 
-.nodeFacts div {
-  min-width: 0;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  padding: var(--space-2);
-}
 
-.nodeFacts dt {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.nodeFacts dd {
-  margin: 2px 0 0;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
 
 .nodeFacts dd.ready {
   color: var(--sentinel-success);
@@ -2746,7 +2550,6 @@ button .buttonIcon {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-6) var(--space-7);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%), var(--surface-raised));
 }
@@ -2824,7 +2627,6 @@ button .buttonIcon {
 }
 
 .nodeModalBody.nodeDetailsBody {
-  padding: var(--space-6) var(--space-7) var(--space-7);
   background: color-mix(in srgb, var(--surface-muted) 52%, var(--surface-raised));
   overflow: auto;
 }
@@ -3046,8 +2848,7 @@ button .buttonIcon {
   gap: var(--space-2);
 }
 
-.nodeWarnings span,
-.nodeBlockedNote {
+.nodeWarnings span {
   border: var(--border-subtle) solid var(--sentinel-warning);
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--sentinel-warning) 14%);
@@ -3058,9 +2859,6 @@ button .buttonIcon {
   line-height: 1.35;
 }
 
-.nodeBlockedNote {
-  margin: 0;
-}
 
 .addNodeCardButton {
   min-height: 250px;
@@ -3151,28 +2949,8 @@ button .buttonIcon {
   margin-left: auto;
 }
 
-.nodeActions .compactButton,
-.compactButton {
-  min-height: 34px;
-  padding: 0 var(--space-3);
-  font-size: 10px;
-}
 
-.nodeDetailsActions .compactButton {
-  min-height: 48px;
-  border-radius: 10px;
-  padding: 0 var(--space-4);
-  font-size: 11px;
-  gap: var(--space-2);
-  box-shadow: 0 6px 14px rgb(0 0 0 / 0.04);
-}
 
-.nodeDetailsActions .compactButton:disabled {
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
-  color: var(--text-soft);
-  opacity: 1;
-}
 
 .nodeRemoveButton {
   border-color: color-mix(in srgb, var(--sentinel-danger) 62%, var(--surface));
@@ -3416,10 +3194,8 @@ button .buttonIcon {
 
 .addNodeStatusCard p {
   margin: 5px 0 0;
-  color: var(--text-muted);
   font-size: 13px;
   font-weight: 800;
-  line-height: 1.45;
 }
 
 .addNodeStatusCard.waiting {
@@ -3476,14 +3252,6 @@ button .buttonIcon {
   justify-content: flex-end;
 }
 
-.placementStep {
-  display: grid;
-  gap: var(--space-3);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  padding: var(--space-3);
-}
 
 .runtimeSelection,
 .minecraftPortsSection {
@@ -3516,31 +3284,8 @@ button .buttonIcon {
   letter-spacing: 0;
 }
 
-.nodePlacementGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-2);
-}
 
-.nodePlacementCard {
-  display: grid !important;
-  gap: 5px !important;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: var(--space-3);
-  cursor: pointer;
-  color: var(--text) !important;
-  font-size: 12px !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-}
 
-.nodePlacementCard input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
 
 .nodePlacementCard.selected {
   border-color: var(--accent);
@@ -3552,29 +3297,9 @@ button .buttonIcon {
   cursor: not-allowed;
 }
 
-.nodePlacementTitle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 
-.nodePlacementTitle strong {
-  font-size: 13px;
-  font-weight: 900;
-  text-transform: uppercase;
-  overflow-wrap: anywhere;
-}
 
-.nodePlacementCard span,
-.nodePlacementCard em {
-  color: var(--text-muted);
-  font-style: normal;
-  font-weight: 800;
-}
 
-.nodePlacementCard em {
-  color: var(--sentinel-danger);
-}
 
 .nodeSelectRow {
   display: grid;
@@ -3583,13 +3308,7 @@ button .buttonIcon {
   gap: var(--space-2);
 }
 
-.nodeSelectField {
-  min-width: 0;
-}
 
-.nodeSelectField select {
-  width: 100%;
-}
 
 .nodeRefreshInlineButton {
   width: 44px;
@@ -4771,12 +4490,6 @@ button .buttonIcon {
   font-weight: 700;
 }
 
-.createWizardPlaceholder {
-  min-height: 320px;
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-}
 
 .createWizardFooter {
   margin-top: var(--space-4);
@@ -4919,43 +4632,10 @@ button .buttonIcon {
   }
 }
 
-.placementWarning {
-  margin: 0;
-}
 
-.runtimeFixedRow {
-  display: grid;
-  grid-template-columns: minmax(90px, 0.5fr) 1fr auto;
-  align-items: center;
-  gap: var(--space-3);
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: var(--space-2) var(--space-3);
-}
 
-.runtimeFixedRow span,
-.runtimeFixedRow small {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 
-.runtimeFixedRow strong {
-  font-size: 13px;
-  font-weight: 900;
-}
 
-.runtimePreview {
-  display: grid;
-  gap: var(--space-3);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: var(--space-3);
-}
 
 .runtimePreview.resolved {
   border-color: var(--sentinel-success);
@@ -4965,58 +4645,13 @@ button .buttonIcon {
   border-color: var(--sentinel-danger);
 }
 
-.runtimePreview > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
 
-.runtimePreview > div:first-child span {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 
-.runtimePreview > div:first-child strong {
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
 
-.runtimePreview dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: var(--space-2);
-  margin: 0;
-}
 
-.runtimePreview dl div {
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  padding: var(--space-2);
-}
 
-.runtimePreview dt {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 
-.runtimePreview dd {
-  margin: 3px 0 0;
-  font-size: 12px;
-  font-weight: 900;
-  overflow-wrap: anywhere;
-}
 
-.warningText {
-  color: var(--sentinel-warning) !important;
-}
 
 .summaryTile {
   min-height: 118px;
@@ -5086,13 +4721,8 @@ button .buttonIcon {
 }
 
 .resourcePanel {
-  min-width: 0;
 }
 
-.resourcePanel .panelHeader {
-  align-items: center;
-  gap: var(--space-3);
-}
 
 .resourceScopeControl {
   display: inline-flex;
@@ -5303,7 +4933,6 @@ button .buttonIcon {
   min-height: 30px;
   border: var(--border-subtle) solid transparent;
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
   background-clip: padding-box;
 }
 
@@ -5416,32 +5045,12 @@ button .buttonIcon {
   font-size: 12px;
 }
 
-.resourceMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  justify-content: space-between;
-  margin: 0 0 var(--space-3);
-  color: var(--text-muted);
-  font-size: 12px;
-}
 
-.resourceMessage {
-  margin: var(--space-3) 0 0;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  padding: var(--space-2) var(--space-3);
-  font-size: 13px;
-  line-height: 1.4;
-}
 
 .terminal {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   overflow: hidden;
   border: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 22%, var(--terminal-bg));
   border-radius: var(--radius-md);
@@ -5492,9 +5101,6 @@ button .buttonIcon {
   opacity: 0.82;
 }
 
-.fileActions {
-  margin-bottom: var(--space-3);
-}
 
 .fileList,
 .mods {
@@ -5506,136 +5112,26 @@ button .buttonIcon {
   max-width: 1020px;
 }
 
-.modsPanel .mods {
-  --mods-action-width: min(100%, 1180px);
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: none;
-  gap: var(--space-3);
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
 
-.modsPanel {
-  display: flex;
-  flex-direction: column;
-  height: max(560px, calc(100vh - 238px));
-  min-height: 0;
-  overflow: hidden;
-  scrollbar-gutter: stable;
-}
 
-.modsPanelHeader {
-  align-items: center;
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-}
 
-.modsPanelHeaderLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
 
-.modsContext {
-  display: grid;
-  gap: var(--space-1);
-  justify-items: end;
-  text-align: right;
-}
 
-.modsContextRow {
-  display: flex;
-  align-items: center;
-  justify-content: end;
-  flex-wrap: nowrap;
-  gap: var(--space-3);
-}
 
-.compactButton {
-  min-height: 34px;
-  padding: 0 var(--space-3);
-  font-size: 11px;
-}
 
-.modsContext span,
-.modsContext small,
-.modResultsHeader {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.modsContext small {
-  color: var(--text-muted);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.modsToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-3);
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
 
-.segmentedControl {
-  display: flex;
-  gap: var(--space-1);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-1);
-  background: var(--surface-muted);
-}
 
-.segmentedControl button {
-  min-height: 34px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-}
 
 .segmentedControl button.active {
   background: var(--text);
   color: var(--surface);
 }
 
-.fileRow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
-  width: 100%;
-  align-items: center;
-}
 
-.fileOpenButton {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  width: 100%;
-  text-align: left;
-  align-items: center;
-  background: var(--surface);
-  color: var(--text);
-}
 
-.fileOpenButton.active {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--text);
-}
 
-.fileOpenButton.active:hover {
-  background: var(--accent);
-  color: var(--swiss-white);
-  border-color: var(--accent);
-}
 
 .fileTypeIcon {
   width: 34px;
@@ -5650,8 +5146,6 @@ button .buttonIcon {
 }
 
 .fileTypeIcon svg {
-  width: 22px;
-  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -5697,16 +5191,7 @@ button .buttonIcon {
   letter-spacing: 0;
 }
 
-.fileOpenButton .fileName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.fileOpenButton small {
-  color: currentColor;
-  white-space: nowrap;
-}
 
 .filesExplorer {
   display: grid;
@@ -5727,7 +5212,6 @@ button .buttonIcon {
 }
 
 .fileNavBar {
-  display: grid;
   grid-template-columns: auto minmax(160px, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
@@ -5789,7 +5273,6 @@ button .buttonIcon {
 .selectionSummary {
   min-width: 0;
   overflow: hidden;
-  color: var(--text-muted);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.06em;
@@ -5810,19 +5293,7 @@ button .buttonIcon {
   opacity: 0.45;
 }
 
-.linkButton {
-  min-height: 34px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  padding: 0 var(--space-2);
-}
 
-.linkButton:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text);
-  transform: none;
-}
 
 .fileTable {
   flex: 1 1 auto;
@@ -5891,8 +5362,6 @@ button .buttonIcon {
 
 .fileTableRow > span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 var(--space-3);
   color: var(--text-muted);
@@ -5951,20 +5420,8 @@ button .buttonIcon {
   line-height: 1.3;
 }
 
-.fileStatus {
-  color: var(--sentinel-success) !important;
-  font-weight: 900;
-}
 
-.fileStatus.binary,
-.fileStatus.too_large,
-.fileStatus.unknown {
-  color: var(--text-muted) !important;
-}
 
-.fileStatus.locked {
-  color: var(--sentinel-danger) !important;
-}
 
 .fileTableFooter {
   flex: 0 0 auto;
@@ -6083,15 +5540,12 @@ button .buttonIcon {
 
 .fileEditorHeader p {
   margin-top: var(--space-1);
-  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 12px;
 }
 
 .fileEditorBody {
-  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-3);
   overflow: hidden;
   padding: var(--space-4);
@@ -6207,115 +5661,23 @@ button .buttonIcon {
   display: none;
 }
 
-.modSearchToolbar {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  padding: var(--space-3);
-  margin-bottom: var(--space-3);
-  max-width: 1020px;
-}
 
-.modSearchInput {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: 0 var(--space-3);
-}
 
-.modSearchInput span {
-  color: var(--text-muted);
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
 
-.modSearchInput svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 
-.modSearchInput input {
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding-left: 0;
-}
 
-.modSearchInput input:focus {
-  outline: none;
-}
 
-.modSearchButton {
-  min-width: 104px;
-}
 
-.modResultsHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  align-items: center;
-  margin: var(--space-3) var(--space-1) var(--space-2);
-  max-width: 1020px;
-}
 
-.modResultsHeader span {
-  color: var(--text-muted);
-}
 
 .modResultsHeader.placeholder {
   visibility: hidden;
 }
 
-.meta {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-3) 0 var(--space-5);
-  font-size: 13px;
-}
 
-.meta dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-weight: 700;
-}
 
-.modRow {
-  display: grid;
-  grid-template-columns: 52px 1fr auto;
-  gap: var(--space-3);
-  align-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--surface);
-  flex-shrink: 0;
-}
 
-.modSearchResult {
-  grid-template-columns: 60px minmax(220px, 1fr) minmax(210px, 0.36fr) minmax(104px, auto);
-  min-height: 86px;
-}
 
-.modRow:hover {
-  background: var(--sentinel-accent-soft);
-}
 
 .modRow.disabled {
   background:
@@ -6323,32 +5685,10 @@ button .buttonIcon {
     var(--surface-muted);
 }
 
-.modRow img {
-  width: 52px;
-  height: 52px;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-}
 
-.modSkeleton {
-  pointer-events: none;
-  position: relative;
-  overflow: hidden;
-  animation: skeletonCardBreath 1800ms ease-in-out infinite;
-}
 
-.modSkeleton:nth-child(2) {
-  animation-delay: 120ms;
-}
 
-.modSkeleton:nth-child(3) {
-  animation-delay: 240ms;
-}
 
-.modSkeleton:nth-child(4) {
-  animation-delay: 360ms;
-}
 
 .skeletonBlock {
   display: block;
@@ -6385,10 +5725,6 @@ button .buttonIcon {
   margin-bottom: var(--space-2);
 }
 
-.skeletonBlock.meta {
-  width: 120px;
-  height: 12px;
-}
 
 .skeletonBlock.button {
   width: 96px;
@@ -6424,135 +5760,30 @@ button .buttonIcon {
   background: var(--surface);
 }
 
-.modFileIcon {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  color: var(--text);
-  font-weight: 900;
-}
 
-.modRow p {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin: var(--space-1) 0;
-}
 
-.modRow .compatibilityReason {
-  color: var(--sentinel-danger);
-  font-weight: 800;
-}
 
 .modRow .compatibilityReason.ok {
   color: var(--sentinel-success);
 }
 
-.modRow small {
-  color: var(--text-soft);
-  font-weight: 800;
-}
 
-.modResultMain {
-  min-width: 0;
-}
 
-.modResultMain p {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 
-.modCompatibilityColumn {
-  display: grid;
-  gap: var(--space-2);
-  justify-items: start;
-  align-content: center;
-}
 
-.modCompatibilityColumn p {
-  margin: 0;
-  line-height: 1.35;
-}
 
-.modResultAction {
-  justify-self: end;
-  min-width: 104px;
-  display: flex;
-  justify-content: end;
-}
 
-.modResultAction button {
-  min-width: 104px;
-}
 
-.modResultAction .installedSearchButton:disabled {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  background: transparent;
-  color: var(--accent);
-  opacity: 1;
-}
 
-.modTitleLine {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
 
-.compatibilityBadge {
-  border: var(--border-strong) solid currentColor;
-  border-radius: var(--radius-sm);
-  padding: 3px 7px;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
 
-.compatibilityBadge.ok {
-  color: var(--sentinel-success);
-}
 
-.compatibilityBadge.unknown {
-  color: var(--sentinel-warning);
-}
 
-.compatibilityBadge.danger {
-  color: var(--sentinel-danger);
-}
 
-details.compatibilityBadge {
-  cursor: pointer;
-  text-transform: none;
-}
 
-details.compatibilityBadge summary {
-  text-transform: uppercase;
-}
 
-details.compatibilityBadge p {
-  max-width: 440px;
-  margin-top: var(--space-2);
-  color: currentColor;
-  font-size: 12px;
-  line-height: 1.4;
-}
 
-.forceInstallWarning {
-  border: var(--border-strong) solid var(--sentinel-danger);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin-top: var(--space-3);
-  background: color-mix(in srgb, var(--surface) 84%, var(--sentinel-danger) 16%);
-}
 
-.forceInstallWarning strong {
-  color: var(--sentinel-danger);
-}
 
 .forceInstallWarning .buttonRow {
   justify-content: start;
@@ -6564,22 +5795,8 @@ details.compatibilityBadge p {
   margin-top: var(--space-3);
 }
 
-.modInstallBackdrop {
-  align-items: start;
-  padding: 32px var(--space-4);
-  overflow-y: auto;
-}
 
-.modInstallPanel {
-  width: min(900px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-}
 
-.modInstallHeader,
 .modInstallFooter {
   flex: 0 0 auto;
   display: flex;
@@ -6590,9 +5807,6 @@ details.compatibilityBadge p {
   background: var(--surface);
 }
 
-.modInstallHeader {
-  border-bottom: var(--border-strong) solid var(--border);
-}
 
 .modInstallFooter {
   border-top: var(--border-strong) solid var(--border);
@@ -6602,105 +5816,22 @@ details.compatibilityBadge p {
   flex: 1 1 auto;
 }
 
-.modInstallTitleBlock {
-  min-width: 0;
-}
 
-.modInstallTitleBlock h2 {
-  margin: 0 0 var(--space-1);
-  font-size: 24px;
-}
 
-.modInstallTitleBlock strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.modInstallBody {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: var(--space-4);
-  display: grid;
-  gap: var(--space-4);
-  background: var(--surface);
-}
 
-.modInstallStepper {
-  display: grid;
-  grid-template-columns: max-content minmax(40px, 1fr) max-content minmax(40px, 1fr) max-content;
-  align-items: center;
-  gap: var(--space-3);
-}
 
-.modInstallStepper div {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-muted);
-}
 
-.modInstallStepper span {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: var(--border-strong) solid var(--border-muted);
-  border-radius: 999px;
-  background: var(--surface);
-  font-weight: 900;
-}
 
-.modInstallStepper .active {
-  color: var(--accent);
-}
 
-.modInstallStepper .active span {
-  color: var(--swiss-white);
-  background: var(--accent);
-  border-color: var(--accent);
-}
 
-.modInstallStepper .completed {
-  color: var(--text);
-}
 
-.modInstallStepper .completed span {
-  color: var(--swiss-white);
-  background: var(--text);
-  border-color: var(--text);
-}
 
-.modInstallStepper .completed .buttonIcon {
-  width: 18px;
-  height: 18px;
-}
 
-.modInstallStepper i {
-  border-top: var(--border-subtle) solid var(--border-muted);
-}
 
-.modInstallTargetSummary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: var(--border-strong) solid var(--border-muted);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-}
 
-.modInstallTargetSummary div {
-  min-width: 0;
-  padding: var(--space-3);
-  border-right: var(--border-subtle) solid var(--border-muted);
-}
 
-.modInstallTargetSummary div:last-child {
-  border-right: 0;
-}
 
-.modInstallTargetSummary small,
-.modInstallChannelRow > strong,
 .modInstallVersionGroupHeader > strong {
   display: block;
   color: var(--text-muted);
@@ -6710,21 +5841,11 @@ details.compatibilityBadge p {
   text-transform: uppercase;
 }
 
-.modInstallTargetSummary strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 2px;
-}
 
 .successText {
   color: var(--sentinel-success);
 }
 
-.dangerText {
-  color: var(--sentinel-danger);
-}
 
 .modInstallStepIntro h3 {
   margin: 0 0 var(--space-2);
@@ -6737,24 +5858,8 @@ details.compatibilityBadge p {
   font-weight: 700;
 }
 
-.modInstallChannelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
 
-.modInstallChannelButtons {
-  display: flex;
-  gap: var(--space-2);
-}
 
-.modInstallChannelButtons button {
-  min-height: 36px;
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 900;
-}
 
 .modInstallChannelButtons button.active {
   border-color: var(--accent);
@@ -6767,9 +5872,6 @@ details.compatibilityBadge p {
   color: var(--text);
 }
 
-.modInstallChannelButtons button:disabled {
-  color: var(--text-soft);
-}
 
 .modInstallVersionGroups {
   display: grid;
@@ -6800,31 +5902,8 @@ details.compatibilityBadge p {
   font-weight: 900;
 }
 
-.modInstallDisclosure {
-  width: 100%;
-  border: 0;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--text);
-  cursor: pointer;
-  letter-spacing: 0;
-  text-align: left;
-  text-transform: none;
-}
 
-.modInstallDisclosure:hover:not(:disabled) {
-  background: var(--sentinel-accent-soft);
-  border-color: var(--border-muted);
-  color: var(--text);
-  transform: none;
-}
 
-.modInstallDisclosureMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 
 .modInstallDisclosureMeta .buttonIcon {
   width: 16px;
@@ -6880,10 +5959,6 @@ details.compatibilityBadge p {
   transform: none;
 }
 
-.modInstallVersionRow:hover:not(:disabled) .installStatusBadge,
-.modInstallVersionRow.selected .installStatusBadge {
-  background: color-mix(in srgb, var(--surface) 76%, transparent);
-}
 
 .modInstallVersionRow:disabled {
   color: var(--text-soft);
@@ -6904,8 +5979,7 @@ details.compatibilityBadge p {
   font-weight: 900;
 }
 
-.modInstallVersionRow input[type="radio"],
-.modInstallCheckbox input {
+.modInstallVersionRow input[type="radio"] {
   accent-color: var(--accent);
 }
 
@@ -6946,267 +6020,43 @@ details.compatibilityBadge p {
   background: var(--surface-muted);
 }
 
-.installStatusBadge {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  border: var(--border-strong) solid currentColor;
-  border-radius: var(--radius-sm);
-  padding: 2px 7px;
-  background: transparent;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
 
-.installStatusBadge.ok {
-  color: var(--sentinel-success);
-}
 
-.installStatusBadge.warning {
-  color: var(--sentinel-warning);
-}
 
-.installStatusBadge.danger {
-  color: var(--sentinel-danger);
-}
 
-.modInstallCheckbox {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: none;
-  letter-spacing: 0;
-}
 
-.modInstallVersionEmpty {
-  padding: var(--space-4);
-  color: var(--text-muted);
-  font-weight: 800;
-}
 
-.modInstallRiskBox {
-  border: var(--border-strong) solid var(--sentinel-warning);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface) 88%, var(--sentinel-warning) 12%);
-  padding: var(--space-3);
-  display: grid;
-  gap: var(--space-2);
-}
 
-.modInstallRiskBox p {
-  margin: 0;
-  color: var(--text-muted);
-  font-weight: 700;
-}
 
-.modInstallConfirm {
-  display: grid;
-  gap: var(--space-4);
-}
 
-.modInstallReviewCopy {
-  margin: 0;
-  color: var(--text-muted);
-  font-weight: 700;
-}
 
-.modConfirmSection {
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--surface);
-}
 
-.modConfirmSectionHeader {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--space-3);
-  background: var(--surface-muted);
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-}
 
-.modConfirmSectionHeader strong {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
 
-.modConfirmSelectedVersion {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: start;
-  padding: var(--space-3);
-}
 
-.modConfirmSelectedVersion > img,
-.modConfirmSelectedVersion .modDetailsIconFallback {
-  width: 64px;
-  height: 64px;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-}
 
-.modConfirmSelectedText {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
-}
 
-.modConfirmSelectedText > strong,
-.modConfirmFilename {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.modConfirmSelectedText small {
-  color: var(--text-muted);
-  font-weight: 800;
-}
 
-.modConfirmMetaLine {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 800;
-}
 
-.subtlePill {
-  display: inline-flex;
-  width: fit-content;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  padding: 2px 6px;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
 
-.modConfirmFilename {
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 800;
-}
 
-.modConfirmInfoBanner {
-  margin: 0 var(--space-3) var(--space-3);
-  border: var(--border-subtle) solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--surface) 86%, var(--accent) 14%);
-  padding: var(--space-3);
-  font-weight: 800;
-}
 
-.modConfirmLocation {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-}
 
-.modConfirmLocation > div:last-child {
-  display: grid;
-  gap: 2px;
-}
 
-.modConfirmLocation span {
-  color: var(--text-muted);
-  font-weight: 800;
-}
 
-.modConfirmRows {
-  display: grid;
-}
 
-.modConfirmRows > div {
-  display: grid;
-  grid-template-columns: minmax(160px, 0.45fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-}
 
-.modConfirmRows > div:last-child {
-  border-bottom: 0;
-}
 
-.modConfirmRows span {
-  color: var(--text-muted);
-  font-weight: 800;
-}
 
-.modConfirmRows strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
 
-.modDependencyList {
-  display: grid;
-}
 
-.modDependencyRow {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-3);
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-}
 
-.modDependencyRow:last-child {
-  border-bottom: 0;
-}
 
-.modDependencyRow img,
-.modDependencyFallback {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  font-weight: 900;
-}
 
-.modDependencyRow div {
-  min-width: 0;
-}
 
-.modDependencyRow strong,
-.modDependencyRow span {
-  display: block;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
 
-.modDependencyRow span {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 800;
-}
 
-.modActions {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: end;
-  flex-wrap: wrap;
-}
 
 .dangerTextButton {
   border-color: var(--sentinel-danger);
@@ -7219,17 +6069,7 @@ details.compatibilityBadge p {
   color: var(--swiss-white);
 }
 
-.warningTextButton {
-  border-color: var(--sentinel-warning);
-  color: var(--sentinel-warning);
-  background: var(--surface);
-}
 
-.warningTextButton:hover:not(:disabled) {
-  background: var(--sentinel-warning);
-  border-color: var(--sentinel-warning);
-  color: var(--swiss-white);
-}
 
 .emptyInline {
   border: var(--border-strong) dashed var(--border);
@@ -7250,25 +6090,10 @@ details.compatibilityBadge p {
 }
 
 .scheduleManagementPage {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  align-items: stretch;
   height: max(620px, calc(100vh - 238px));
-  min-height: 0;
 }
 
-.panelHeader a {
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.compactBanner {
-  margin-bottom: var(--space-3);
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-}
 
 .commandStack {
   display: grid;
@@ -7431,7 +6256,6 @@ details.compatibilityBadge p {
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-row);
   background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface));
-  color: var(--text-muted);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -7578,11 +6402,6 @@ details.compatibilityBadge p {
   white-space: nowrap;
 }
 
-.scheduleRowActions .dangerButton {
-  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--sentinel-danger) 45%, var(--border));
-  color: var(--sentinel-danger);
-}
 
 .scheduleTableFooter {
   flex: 0 0 auto;
@@ -7820,7 +6639,6 @@ details.compatibilityBadge p {
 .scheduleEditOptions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: var(--space-2);
 }
 
@@ -7862,10 +6680,6 @@ details.compatibilityBadge p {
   padding-right: 2px;
 }
 
-.compactEmpty {
-  max-width: none;
-  padding: var(--space-4);
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -7876,8 +6690,7 @@ details.compatibilityBadge p {
     animation-iteration-count: 1 !important;
   }
 
-  .modSkeleton,
-  .skeletonBlock {
+.skeletonBlock {
     animation: none !important;
   }
 }
@@ -7995,24 +6808,12 @@ details.compatibilityBadge p {
     flex-direction: column;
   }
 
-  .modSearchToolbar,
-  .modSearchResult {
-    grid-template-columns: 1fr;
-  }
 
-  .modsContext {
-    justify-items: start;
-    text-align: left;
-  }
 
   .activeServerStrip {
     grid-template-columns: 1fr;
   }
 
-  .activeServerRuntime {
-    justify-content: start;
-    flex-wrap: wrap;
-  }
 
   .runtimeControls {
     flex-wrap: wrap;
@@ -8067,10 +6868,9 @@ details.compatibilityBadge p {
     gap: var(--space-3);
   }
 
-  .settingsRow select,
-  .settingsRow .keyForm,
-  .settingsToggle,
-  .settingsStatus {
+.settingsRow select,
+.settingsRow .keyForm,
+.settingsStatus {
     justify-self: stretch;
     max-width: none;
   }
@@ -8104,28 +6904,23 @@ details.compatibilityBadge p {
     font-size: clamp(24px, 8vw, 44px);
   }
 
-  .workspaceActions,
-  .buttonRow,
-  .fileActions,
-  .fileToolbar,
-  .tabs {
+.workspaceActions,
+.buttonRow,
+.fileActions,
+.fileToolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .tabs button,
-  .workspaceActions button,
-  .buttonRow button,
-  .fileActions button,
-  .fileToolbar button,
-  .keyFormActions button,
-  .keyFormConfigured button {
+.workspaceActions button,
+.buttonRow button,
+.fileActions button,
+.fileToolbar button,
+.keyFormActions button,
+.keyFormConfigured button {
     width: 100%;
   }
 
-  .resourcePanel .panelHeader {
-    align-items: flex-start;
-  }
 
   .resourceScopeControl {
     width: 100%;
@@ -8183,9 +6978,6 @@ details.compatibilityBadge p {
     justify-self: start;
   }
 
-  .modRow {
-    grid-template-columns: 44px 1fr;
-  }
 
   .userActions {
     justify-content: stretch;
@@ -8218,27 +7010,9 @@ details.compatibilityBadge p {
     padding: var(--space-3);
   }
 
-  .modRow button {
-    grid-column: 1 / -1;
-  }
 
-  .modActions {
-    grid-column: 1 / -1;
-    justify-content: stretch;
-  }
 
-  .modActions button,
-  .modsToolbar,
-  .segmentedControl,
-  .modResultAction,
-  .modResultAction button,
-  .modSearchButton {
-    width: 100%;
-  }
 
-  .segmentedControl button {
-    flex: 1;
-  }
 
   .minecraftTerminal {
     height: 360px;
@@ -8331,289 +7105,36 @@ details.compatibilityBadge p {
 }
 
 /* Redesigned Installed Mods Styles */
-.modsCardsGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3);
-  margin: 0;
-  padding-top: 2px;
-  width: 100%;
-  max-width: var(--mods-action-width);
-  box-sizing: border-box;
-}
 
-.modsCard {
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  min-height: 64px;
-  padding: var(--space-3);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  text-align: left;
-  cursor: pointer;
-  transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
-  width: 100%;
-  text-transform: none;
-  letter-spacing: normal;
-  white-space: normal;
-  line-height: 1.4;
-}
 
-.modsCard:hover:not(:disabled) {
-  background: var(--sentinel-accent-soft);
-  border-color: var(--accent);
-}
 
-.modsCardIcon {
-  width: 38px;
-  height: 38px;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  flex-shrink: 0;
-}
 
-.modsCardIcon svg {
-  width: 18px;
-  height: 18px;
-}
 
-.modsCardText {
-  display: grid;
-  gap: 2px;
-}
 
-.modsCardText strong {
-  font-size: 13px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text);
-}
 
-.modsCardText p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
 
-.modsInstalledSection {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: 0;
-  min-width: 0;
-}
 
-.modsInstalledToolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  margin: 0;
-  align-items: center;
-  justify-content: stretch;
-  width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 56px;
-  border: var(--border-strong) solid var(--border-row);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
-  padding: var(--space-2);
-}
 
-.modsUpdateCheckButton {
-  inline-size: 168px;
-  min-height: 42px;
-  white-space: nowrap;
-}
 
-.modsSearchInputCompact {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: 0 var(--space-3);
-  height: 42px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
-  box-sizing: border-box;
-  color: var(--text);
-}
 
-.modsSearchInputCompact svg {
-  width: 16px;
-  height: 16px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
 
-.modsSearchInputCompact input {
-  border: 0;
-  background: transparent;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  font-size: 13px;
-  color: var(--text);
-  padding: 0;
-}
 
-.modsSearchInputCompact input:focus {
-  outline: none;
-}
 
-.modsTable {
-  --mods-table-columns:
-    minmax(240px, 2fr)
-    minmax(150px, 1.05fr)
-    minmax(150px, 1fr)
-    minmax(190px, 1.12fr)
-    minmax(96px, 0.52fr)
-    minmax(76px, 0.38fr)
-    190px;
 
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  border-collapse: collapse;
-  background: var(--surface);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  margin: 0;
-}
 
-.modsTableFrame {
-  flex: 1 1 auto;
-  min-height: 260px;
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
-}
 
-.modsTableBody {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
 
-.modsTableHeader {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: var(--mods-table-columns);
-  background: var(--surface-muted);
-  border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
 
-.modsTableHeader button {
-  justify-content: start;
-  min-height: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  text-align: left;
-  text-transform: inherit;
-}
 
-.modsTableRow {
-  display: grid;
-  grid-template-columns: var(--mods-table-columns);
-  border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3);
-  align-items: center;
-  background: var(--surface);
-  transition: background 150ms ease;
-}
 
-.modsTableRow:hover {
-  background: var(--sentinel-accent-soft);
-}
 
-.modsTableRow:last-child {
-  border-bottom: 0;
-}
 
-.modsTableCell {
-  min-width: 0;
-}
 
-.modsTableCell.actions {
-  justify-self: end;
-  display: flex;
-  gap: var(--space-2);
-  width: 100%;
-  justify-content: flex-end;
-  min-width: 0;
-}
 
-.modsTableCell.alignEnd {
-  justify-self: end;
-}
 
-.modsTableCell.actions button {
-  min-height: 36px;
-  padding: 0 var(--space-3);
-  font-size: 12px;
-  flex: 0 1 auto;
-  min-width: 0;
-}
 
-.modInfoCol {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  min-width: 0;
-}
 
-.modInfoCol img,
-.modInfoCol .modFileIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  border: var(--border-strong) solid var(--border);
-  flex-shrink: 0;
-  object-fit: cover;
-}
 
-.modInfoText {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.modInfoText strong {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .modInfoText .filename {
   font-size: 11px;
@@ -8636,26 +7157,8 @@ details.compatibilityBadge p {
   overflow: hidden;
 }
 
-.compatCol {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-}
 
-.compatStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 800;
-}
 
-.statusIconSmall {
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
-  stroke-width: 3;
-}
 
 .compatStatus.compatible {
   color: var(--sentinel-success);
@@ -8669,88 +7172,21 @@ details.compatibilityBadge p {
   color: var(--text-muted);
 }
 
-.compatMeta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
 
-.updateCol {
-  display: grid;
-  grid-template-rows: 18px 15px;
-  gap: 2px;
-  align-content: center;
-  justify-items: start;
-  font-size: 13px;
-  min-height: 35px;
-  min-width: 0;
-  width: 100%;
-}
 
-.updateStatus {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
-  justify-items: start;
-  gap: 4px;
-  font-weight: 800;
-  line-height: 18px;
-  white-space: nowrap;
-  min-width: 0;
-  max-width: 100%;
-}
 
-.updateStatus > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.updateStatus .statusIconSmall {
-  justify-self: center;
-  margin-right: 0;
-}
 
-.updateStatus.up-to-date {
-  color: var(--sentinel-success);
-}
 
-.updateStatus.update-available {
-  color: var(--sentinel-warning);
-}
 
 .updateStatus.unknown {
   color: var(--text-soft);
 }
 
-.updateMeta {
-  display: block;
-  max-width: 100%;
-  font-size: 11px;
-  line-height: 15px;
-  color: var(--text-muted);
-  padding-left: 22px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.updateVersionText {
-  font-family: var(--font-mono);
-}
 
-.sourceCol {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--text-muted);
-}
 
-.strongValue {
-  font-weight: 800;
-}
 
-.capitalize {
-  text-transform: capitalize;
-}
 
 .switchStateLabel {
   color: var(--text-soft);
@@ -8768,12 +7204,10 @@ details.compatibilityBadge p {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   cursor: pointer;
   user-select: none;
   font-size: 13px;
   font-weight: 800;
-  color: var(--text);
 }
 
 .switch input {
@@ -8826,241 +7260,41 @@ details.compatibilityBadge p {
   cursor: not-allowed;
 }
 
-.modsFooterBanner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: var(--border-strong) solid var(--accent);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--sentinel-accent-soft);
-  margin: 0;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--text);
-}
 
-.modsFooterBanner svg {
-  width: 16px;
-  height: 16px;
-  color: var(--accent);
-  flex-shrink: 0;
-}
 
-.modsFooterBanner span {
-  line-height: 1.4;
-}
 
 /* Responsive Table Styles */
-@media (max-width: 1100px) {
-  .tabPage:has(.modsPanel),
-  .modsPanel {
-    height: auto;
-    min-height: 0;
-  }
-
-  .modsTableFrame {
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .modsTable,
-  .modsTableBody {
-    height: auto;
-    overflow: visible;
-  }
-
-  .modsCardsGrid {
-    grid-template-columns: 1fr;
-  }
-  .modsTableHeader {
-    display: none;
-  }
-  .modsTableRow {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-    padding: var(--space-4);
-  }
-  .modsTableCell {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modsTableCell::before {
-    content: attr(data-label);
-    font-size: 11px;
-    font-weight: 900;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    letter-spacing: 0.08em;
-  }
-  .modsTableCell.mod-col {
-    display: block;
-  }
-  .modsTableCell.mod-col::before {
-    display: none;
-  }
-  .modsTableCell.actions {
-    justify-self: stretch;
-    justify-content: flex-end;
-  }
-  .compatCol {
-    align-items: flex-end;
-  }
-  .updateCol {
-    justify-items: end;
-  }
-}
 
 /* Mod Details Modal Refinements */
-.modDetailsPanel {
-  max-width: 600px;
-  width: 100%;
-}
 
-.modDetailsHeaderRow {
-  display: flex;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-  align-items: center;
-}
 
-.modDetailsIcon,
-.modDetailsIconFallback {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-sm);
-  border: var(--border-strong) solid var(--border);
-  flex-shrink: 0;
-  object-fit: cover;
-}
 
-.modDetailsIconFallback {
-  font-size: 16px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-  background: var(--surface-muted);
-}
 
-.modDetailsHeaderText {
-  display: grid;
-  gap: 4px;
-}
 
-.modDetailsHeaderText strong {
-  font-size: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 
-.modDetailsFilename {
-  font-size: 12px;
-  color: var(--text-soft);
-  font-family: var(--font-mono);
-}
 
-.modDetailsBody {
-  margin-top: var(--space-4);
-  display: grid;
-  gap: var(--space-3);
-}
 
-.modDetailsField {
-  display: grid;
-  gap: 2px;
-}
 
-.modDetailsField div {
-  font-size: 13px;
-}
 
-.modDetailsDesc {
-  font-size: 13px;
-  margin: 4px 0 0;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
 
-.modDetailsGridTwoCol {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
 
-.modDetailsDivider {
-  border-top: var(--border-strong) solid var(--border);
-  padding-top: var(--space-3);
-  margin-top: var(--space-2);
-}
 
-.modDetailsDivider strong {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
 
-.codeValue {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
 
-.modDetailsHashes {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  margin-top: 4px;
-  background: var(--surface-muted);
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  border: var(--border-strong) solid var(--border);
-  display: grid;
-  gap: 4px;
-  word-break: break-all;
-}
 
 .emptyInline.noBorder {
   border: 0;
 }
 
-.modDetailsField div.capitalize {
-  text-transform: capitalize;
-}
 
-.modDetailsHashes span {
-  font-weight: 800;
-  text-transform: uppercase;
-}
 
-.modDetailsLinkRow {
-  margin-top: var(--space-2);
-}
 
-.modDetailsPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
-.modDetailsLinkIcon {
-  width: 12px;
-  height: 12px;
-  stroke-width: 3;
-}
 
-.modDetailsButtonRow {
-  margin-top: var(--space-5);
-  border-top: var(--border-strong) solid var(--border);
-  padding-top: var(--space-4);
-}
 
-/* Focused frontend polish pass */
+/* Responsive application layout */
 .workspace {
-  min-width: 0;
   max-width: 1680px;
-  width: 100%;
 }
 
 .workspaceHeader {
@@ -9087,8 +7321,7 @@ details.compatibilityBadge p {
   min-width: 0;
 }
 
-.tabPage:has(.consolePanel),
-.tabPage:has(.modsPanel) {
+.tabPage:has(.consolePanel) {
   display: grid;
   grid-template-rows: 1fr;
   height: max(560px, calc(100vh - 238px));
@@ -9100,9 +7333,6 @@ details.compatibilityBadge p {
   align-content: stretch;
 }
 
-.tabPage:has(.modsPanel) .modsPanel {
-  height: 100%;
-}
 
 .panel,
 .emptyState,
@@ -9112,34 +7342,23 @@ details.compatibilityBadge p {
 }
 
 .panel {
-  padding: var(--space-4);
 }
 
-.panelHeader {
-  min-height: 44px;
-  align-items: center;
-}
 
-.panelHeader > div,
-.panelHeader h2,
 .settingsGroupHeader > div,
 .settingsRow > div,
-.serverStripInfo,
-.modsCardText {
+.serverStripInfo {
   min-width: 0;
 }
 
-.panelHeader h2,
 .settingsGroupHeader h2 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .emptyState,
-.compactEmpty,
 .emptyInline,
 .eventEmpty,
-.nodeServerEmpty,
 .fileDetailsEmpty {
   border-radius: var(--radius-sm);
 }
@@ -9148,28 +7367,15 @@ details.compatibilityBadge p {
   width: 100%;
 }
 
-.compactEmpty {
-  max-width: none;
-  padding: var(--space-4);
-}
 
-.compactEmpty h2 {
-  font-size: clamp(24px, 4vw, 44px);
-  line-height: 0.92;
-}
 
 button,
 .quickActionButton,
 .runtimeControlButton,
-.secondaryButton,
-.dangerButton {
+.secondaryButton {
   min-height: 42px;
 }
 
-button.compactButton,
-.compactButton {
-  min-height: 34px;
-}
 
 .secondaryButton {
   background: var(--surface);
@@ -9227,8 +7433,7 @@ button:disabled,
 
 .serverListItem,
 .nodeCard,
-.addNodeCardButton,
-.modsCard {
+.addNodeCardButton {
   min-width: 0;
 }
 
@@ -9237,10 +7442,7 @@ button:disabled,
 .nodeServerName,
 .selectedServerReadout,
 .accountName,
-.settingsNavLabel,
-.modInfoText strong,
-.modInfoText .filename,
-.modsCardText strong {
+.settingsNavLabel {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9265,8 +7467,7 @@ button:disabled,
 .inlineState-empty,
 .emptyInline,
 .eventEmpty,
-.fileDetailsEmpty,
-.nodeServerEmpty {
+.fileDetailsEmpty {
   background:
     repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
     var(--surface-muted);
@@ -9275,8 +7476,7 @@ button:disabled,
 .themeDark .inlineState-empty,
 .themeDark .emptyInline,
 .themeDark .eventEmpty,
-.themeDark .fileDetailsEmpty,
-.themeDark .nodeServerEmpty {
+.themeDark .fileDetailsEmpty {
   background:
     repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 10px),
     var(--surface-muted);
@@ -9424,14 +7624,9 @@ button:disabled,
     padding: var(--space-4);
   }
 
-  .nodeDetailsActions .compactButton {
-    width: 100%;
-    justify-content: center;
-  }
 }
 
 .fileEditorModal {
-  width: min(1120px, calc(100vw - 32px));
   height: min(820px, calc(100vh - 80px));
   max-height: calc(100vh - 80px);
 }
@@ -9537,13 +7732,11 @@ button:disabled,
 }
 
 .terminal,
-.installSnippet,
-.modDetailsHashes {
+.installSnippet {
   scrollbar-width: thin;
 }
 
-.installSnippet code,
-.modDetailsHashes {
+.installSnippet code {
   overflow-wrap: normal;
 }
 
@@ -9562,20 +7755,11 @@ button:disabled,
   box-shadow: none;
 }
 
-.fileTableRow > span,
-.modsTableCell,
-.modsTableCell span,
-.modsTableCell code,
-.sourceCol,
-.compatMeta,
-.updateMeta {
+.fileTableRow > span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.modsCardsGrid {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-}
 
 .settingsRow,
 .settingsGroupHeader {
@@ -9626,7 +7810,6 @@ button:disabled,
 }
 
 /* Unified interaction primitives */
-.uiToolbar,
 .buttonRow,
 .userActions,
 .keyFormActions,
@@ -9636,7 +7819,6 @@ button:disabled,
 .nodeCardActions,
 .nodeActions,
 .nodeDetailsActions,
-.modDetailsButtonRow,
 .modalFooter,
 .userModalFooter,
 .nodeModalFooter.inline,
@@ -9648,12 +7830,9 @@ button:disabled,
   flex-wrap: wrap;
 }
 
-.uiToolbar,
 .fileToolbar,
 .selectionActionBar,
-.nodesToolbar,
-.modsToolbarCompact,
-.modSearchToolbar {
+.nodesToolbar {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
@@ -9667,7 +7846,6 @@ button:disabled,
   gap: var(--space-4);
 }
 
-.uiPanel,
 .panel,
 .authPanel,
 .activeServerStrip,
@@ -9678,17 +7856,13 @@ button:disabled,
   border-radius: var(--radius-sm);
 }
 
-.uiSectionHeader,
-.panelHeader,
 .settingsGroupHeader,
 .nodeCardHeader,
 .nodeInstallHeader,
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
-.fileEditorHeader,
-.modsPanelHeader,
-.modInstallHeader {
+.fileEditorHeader {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -9696,14 +7870,11 @@ button:disabled,
   gap: var(--space-3);
 }
 
-.uiSectionHeader h2,
-.panelHeader h2,
 .settingsGroupHeader h2,
 .modalHeader h2,
 .userModalHeader h2,
 .nodeModalHeader h2,
-.fileEditorHeader h2,
-.modInstallHeader h2 {
+.fileEditorHeader h2 {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9755,15 +7926,9 @@ button:disabled,
   text-transform: none;
 }
 
-.uiStatusPill,
 .settingsStatus,
 .runtimeBadge,
-.compatibilityBadge,
-.installStatusBadge,
-.roleBadge,
-.nodePill,
-.subtlePill,
-.modDetailsPill {
+.roleBadge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9784,8 +7949,6 @@ button:disabled,
 
 .settingsStatus.ready,
 .runtimeBadge.running,
-.compatibilityBadge.ok,
-.installStatusBadge.ok,
 .nodeServerState.running {
   border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
@@ -9793,9 +7956,7 @@ button:disabled,
 }
 
 .settingsStatus.warning,
-.runtimeBadge.starting,
-.compatibilityBadge.unknown,
-.installStatusBadge.warning {
+.runtimeBadge.starting {
   border-color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
   color: var(--sentinel-warning);
@@ -9804,8 +7965,6 @@ button:disabled,
 .settingsStatus.limited,
 .runtimeBadge.stopped,
 .runtimeBadge.exited,
-.compatibilityBadge.danger,
-.installStatusBadge.danger,
 .nodeServerState.stopped {
   border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
@@ -9819,11 +7978,8 @@ button:disabled,
   color: var(--text-muted);
 }
 
-.uiListRow,
 .nodeServerRow,
 .nodeServerMoreRow,
-.modsTableRow,
-.modRow,
 .fileTableRow,
 .eventRow,
 .settingsRow {
@@ -9832,8 +7988,6 @@ button:disabled,
 
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled),
-.modsTableRow:hover,
-.modRow:hover,
 .fileTableRow:hover,
 .eventRow:hover,
 .settingsRow:hover {
@@ -9842,15 +7996,12 @@ button:disabled,
 
 .modalPanel {
   padding: 0;
-  overflow: hidden;
 }
 
 .modalBody,
 .userModalBody,
 .nodeModalBody,
-.fileEditorBody,
-.modInstallBody {
-  overflow: auto;
+.fileEditorBody {
 }
 
 .modalFooter,
@@ -9866,45 +8017,21 @@ button:disabled,
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
-.fileEditorHeader,
-.modInstallHeader {
+.fileEditorHeader {
   border-bottom: var(--border-strong) solid var(--border);
   padding: var(--space-4);
 }
 
-.modDetailsPanel > .panelHeader {
-  padding: var(--space-4);
-  border-bottom: var(--border-strong) solid var(--border);
-}
 
-.modDetailsPanel > .modDetailsHeaderRow,
-.modDetailsPanel > .modDetailsBody,
-.modDetailsPanel > .modDetailsButtonRow {
-  margin: 0;
-  padding: var(--space-4);
-}
 
-.modDetailsPanel > .modDetailsBody {
-  overflow: auto;
-}
 
-.modDetailsPanel > .modDetailsButtonRow {
-  border-top: var(--border-strong) solid var(--border);
-  background: var(--surface-muted);
-}
 
-.dangerButton,
 .dangerTextButton,
 .iconDangerButton {
   border-color: var(--sentinel-danger);
 }
 
-.dangerButton {
-  background: var(--sentinel-danger);
-  color: var(--swiss-white);
-}
 
-.dangerButton:hover:not(:disabled),
 .dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   background: var(--sentinel-danger);
@@ -9912,16 +8039,13 @@ button:disabled,
   color: var(--swiss-white);
 }
 
-.themeDark .uiToolbar,
 .themeDark .fileToolbar,
 .themeDark .selectionActionBar,
-.themeDark .nodesToolbar,
-.themeDark .modsToolbarCompact,
-.themeDark .modSearchToolbar {
+.themeDark .nodesToolbar {
   background: var(--surface-raised);
 }
 
-/* Visual hierarchy cleanup */
+/* Surface and interaction hierarchy */
 .sidebar {
   border-right: var(--border-subtle) solid var(--border-panel);
   background:
@@ -9939,19 +8063,13 @@ button:disabled,
 .userModalHeader,
 .nodeModalHeader,
 .fileEditorHeader,
-.modInstallHeader,
-.panelHeader,
 .settingsGroupHeader,
-.modsPanelHeader,
 .fileNavBar,
 .usersTable th,
 .usersTable td,
-.modsTableHeader,
-.modsTableRow,
 .fileTableHead,
 .fileTableRow,
-.settingsRow,
-.modDetailsPanel > .panelHeader {
+.settingsRow {
   border-color: var(--border-row);
 }
 
@@ -9963,8 +8081,6 @@ button:disabled,
 .brandLogo,
 .serverStripIcon,
 .fileTypeIcon,
-.modFileIcon,
-.modRow img,
 .accountIcon,
 .nodeDetailIcon,
 .addNodeStepCircle {
@@ -10012,11 +8128,9 @@ button:disabled,
 }
 
 .sidebarDivider {
-  height: 1px;
   background-color: var(--border-row);
 }
 
-.uiPanel,
 .panel,
 .authPanel,
 .activeServerStrip,
@@ -10024,8 +8138,6 @@ button:disabled,
 .modalPanel,
 .nodeCard,
 .addNodeCardButton,
-.modsCard,
-.modDetailsPanel,
 .fileCodeEditor,
 .fileEditorStateFill,
 .installSnippetShell,
@@ -10034,7 +8146,6 @@ button:disabled,
   box-shadow: 0 14px 34px rgb(0 0 0 / 0.045);
 }
 
-.themeDark .uiPanel,
 .themeDark .panel,
 .themeDark .authPanel,
 .themeDark .activeServerStrip,
@@ -10042,8 +8153,6 @@ button:disabled,
 .themeDark .modalPanel,
 .themeDark .nodeCard,
 .themeDark .addNodeCardButton,
-.themeDark .modsCard,
-.themeDark .modDetailsPanel,
 .themeDark .fileCodeEditor,
 .themeDark .fileEditorStateFill,
 .themeDark .installSnippetShell,
@@ -10055,7 +8164,6 @@ button:disabled,
 .modalPanel .panel,
 .nodeModalBody .panel,
 .fileEditorBody .panel,
-.modInstallBody .panel,
 .settingsGroup,
 .permissionsCategory,
 .presetSummary,
@@ -10066,19 +8174,14 @@ button:disabled,
 .toast,
 .emptyInline,
 .eventEmpty,
-.nodeServerEmpty,
 .fileDetailsEmpty {
   border-color: var(--border-row);
   box-shadow: none;
 }
 
-.uiToolbar,
 .fileToolbar,
 .selectionActionBar,
-.nodesToolbar,
-.modsToolbarCompact,
-.modSearchToolbar,
-.segmentedControl {
+.nodesToolbar {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
   box-shadow: none;
@@ -10087,9 +8190,7 @@ button:disabled,
 input,
 select,
 textarea,
-.modSearchInput,
 .fileBreadcrumbs button,
-.fileOpenButton,
 .roleInfoButton,
 .iconButton,
 .iconOnlyButton,
@@ -10137,59 +8238,37 @@ textarea:hover:not(:disabled),
 }
 
 .runtimeControlButton,
-.modSearchButton,
-.workspaceActions > button:not(.secondaryButton),
-.modalFooter > button:not(.secondaryButton):not(.dangerButton),
-.userModalFooter > button:not(.secondaryButton):not(.dangerButton),
-.nodeModalFooter > button:not(.secondaryButton):not(.dangerButton),
-.fileEditorFooter > button:not(.secondaryButton):not(.dangerButton),
-.modInstallFooter > button:not(.secondaryButton):not(.dangerButton),
-.appForm > button:not(.secondaryButton):not(.dangerButton) {
+.workspaceActions > button:not(.secondaryButton) {
   border-color: var(--text);
 }
 
-.uiStatusPill,
 .settingsStatus,
 .runtimeBadge,
-.compatibilityBadge,
-.installStatusBadge,
-.roleBadge,
-.nodePill,
-.subtlePill,
-.modDetailsPill {
+.roleBadge {
   border-color: color-mix(in srgb, currentColor 34%, transparent);
   letter-spacing: 0.06em;
 }
 
 .settingsStatus.ready,
 .runtimeBadge.running,
-.compatibilityBadge.ok,
-.installStatusBadge.ok,
 .nodeServerState.running {
   border-color: color-mix(in srgb, var(--sentinel-success) 36%, transparent);
 }
 
 .settingsStatus.warning,
-.runtimeBadge.starting,
-.compatibilityBadge.unknown,
-.installStatusBadge.warning {
+.runtimeBadge.starting {
   border-color: color-mix(in srgb, var(--sentinel-warning) 38%, transparent);
 }
 
 .settingsStatus.limited,
 .runtimeBadge.stopped,
 .runtimeBadge.exited,
-.compatibilityBadge.danger,
-.installStatusBadge.danger,
 .nodeServerState.stopped {
   border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
 }
 
-.uiListRow,
 .nodeServerRow,
 .nodeServerMoreRow,
-.modsTableRow,
-.modRow,
 .fileTableRow,
 .eventRow,
 .settingsRow {
@@ -10199,8 +8278,6 @@ textarea:hover:not(:disabled),
 
 .nodeServerRow,
 .nodeServerMoreRow,
-.modsTableRow,
-.modRow,
 .fileTableRow,
 .eventRow,
 .settingsRow {
@@ -10209,8 +8286,6 @@ textarea:hover:not(:disabled),
 
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled),
-.modsTableRow:hover,
-.modRow:hover,
 .fileTableRow:hover,
 .eventRow:hover,
 .settingsRow:hover {
@@ -10222,12 +8297,10 @@ textarea:hover:not(:disabled),
 .userModalHeader,
 .nodeModalHeader,
 .fileEditorHeader,
-.modInstallHeader,
 .modalFooter,
 .userModalFooter,
 .nodeModalFooter.inline,
-.fileEditorFooter,
-.modDetailsPanel > .modDetailsButtonRow {
+.fileEditorFooter {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
 }
@@ -10235,8 +8308,7 @@ textarea:hover:not(:disabled),
 .modalBody,
 .userModalBody,
 .nodeModalBody,
-.fileEditorBody,
-.modInstallBody {
+.fileEditorBody {
   background: var(--surface-raised);
 }
 
@@ -10253,10 +8325,8 @@ textarea:hover:not(:disabled),
 }
 
 .emptyState,
-.compactEmpty,
 .emptyInline,
 .eventEmpty,
-.nodeServerEmpty,
 .fileDetailsEmpty,
 .inlineState-empty {
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
@@ -10279,8 +8349,6 @@ textarea:hover:not(:disabled),
 .activityGrid,
 .activityItem,
 .resourceMessage,
-.nodePlacementCard,
-.modsTable,
 .usersTable,
 .fileTable,
 .scheduleCommands,
@@ -10350,40 +8418,28 @@ textarea:hover:not(:disabled),
 }
 
 .usersTable th,
-.modsTableHeader,
 .fileTableHead,
 .settingsGroupHeader {
   background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
 }
 
 .usersTable td,
-.modsTableRow,
 .fileTableRow {
   border-color: var(--border-row);
 }
 
-.fileNameCell,
-.modsTableRow button {
+.fileNameCell {
   border-color: transparent;
 }
 
 .fileNameCell:hover,
-.modsTableRow button:hover:not(:disabled),
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled) {
   border-color: var(--border-row);
 }
 
-.tabs {
-  border-color: var(--border-panel);
-}
 
-.tabs button {
-  border-color: var(--border-row);
-}
 
-.tabs button.active,
-.segmentedControl button.active,
 .installTabs button.active {
   background: var(--text);
   color: var(--surface);
@@ -10486,91 +8542,19 @@ textarea:hover:not(:disabled),
   }
 }
 
-/* Typography hierarchy pass */
-.typeBrand,
-.typePageTitle,
-.typeSectionTitle,
-.typeCardTitle,
-.typeRowTitle,
-.typeBody,
-.typeHelper,
-.typeMeta,
-.typeBadge,
-.typeButton,
-.typeFormLabel,
-.typeCode {
-  letter-spacing: var(--tracking-ui);
-  text-transform: none;
-}
+/* Canonical typography scale */
 
-.typeBrand {
-  font-size: var(--type-brand-size);
-  font-weight: var(--weight-title);
-}
 
-.typePageTitle {
-  font-size: var(--type-page-title-size);
-  font-weight: var(--weight-title);
-  line-height: 1.15;
-}
 
-.typeSectionTitle {
-  font-size: var(--type-section-title-size);
-  font-weight: var(--weight-heading);
-}
 
-.typeCardTitle,
-.typeRowTitle {
-  font-size: var(--type-card-title-size);
-  font-weight: var(--weight-strong);
-}
 
-.typeRowTitle {
-  font-size: var(--type-row-title-size);
-}
 
-.typeBody {
-  font-size: var(--type-body-size);
-  font-weight: var(--weight-body);
-  line-height: 1.5;
-}
 
-.typeHelper {
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-body);
-  line-height: 1.45;
-}
 
-.typeMeta {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  line-height: 1.4;
-}
 
-.typeBadge {
-  font-size: var(--type-badge-size);
-  font-weight: 700;
-  letter-spacing: var(--tracking-badge);
-  text-transform: uppercase;
-}
 
-.typeButton {
-  font-size: var(--type-button-size);
-  font-weight: var(--weight-button);
-}
 
-.typeFormLabel {
-  color: var(--text-muted);
-  font-size: var(--type-form-label-size);
-  font-weight: var(--weight-meta);
-}
 
-.typeCode {
-  font-family: var(--font-mono);
-  font-size: var(--type-code-size);
-}
 
 body {
   font-size: var(--type-body-size);
@@ -10621,11 +8605,7 @@ button,
 .quickActionButton,
 .runtimeControlButton,
 .secondaryButton,
-.dangerButton,
 .dangerTextButton,
-.warningTextButton,
-.compactButton,
-.fileOpenButton,
 .fileNameCell,
 .modInstallVersionRow,
 .accountLogoutButton,
@@ -10636,7 +8616,6 @@ button,
   text-transform: none;
 }
 
-.compactButton,
 .overflowDropdown button {
   font-size: var(--type-meta-size);
 }
@@ -10653,8 +8632,6 @@ textarea,
 .minecraftTerminal,
 .installSnippet,
 .fileCodeEditor .cm-editor,
-.codeValue,
-.modDetailsHashes,
 .fileEditorHeader p {
   font-family: var(--font-mono);
   font-size: var(--type-code-size);
@@ -10682,7 +8659,6 @@ textarea,
 }
 
 .sideNav {
-  gap: 4px;
 }
 
 .sideNav button {
@@ -10738,7 +8714,6 @@ textarea,
   font-size: var(--type-page-title-size);
   font-weight: var(--weight-title);
   letter-spacing: 0;
-  line-height: 1.12;
   text-transform: none;
 }
 
@@ -10778,13 +8753,8 @@ textarea,
 }
 
 .runtimeBadge,
-.uiStatusPill,
 .settingsStatus,
-.compatibilityBadge,
-.installStatusBadge,
-.nodeServerState,
-.subtlePill,
-.modDetailsPill {
+.nodeServerState {
   font-size: var(--type-badge-size);
   font-weight: 700;
   letter-spacing: var(--tracking-badge);
@@ -10792,8 +8762,7 @@ textarea,
   text-transform: uppercase;
 }
 
-.roleBadge,
-.nodePill {
+.roleBadge {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
   letter-spacing: 0;
@@ -10801,20 +8770,15 @@ textarea,
   text-transform: none;
 }
 
-.panelHeader h2,
-.uiSectionHeader h2,
 .settingsGroupHeader h2,
 .modalHeader h2,
 .userModalHeader h2,
 .nodeModalHeader h2,
 .fileEditorHeader h2,
-.modInstallHeader h2,
-.modsPanelHeader h2,
 .nodesToolbar h2,
 .nodeInstallHeader h3,
 .permissionsHeader h3,
-.modInstallStepIntro h3,
-.modConfirmSectionHeader strong {
+.modInstallStepIntro h3 {
   font-size: var(--type-section-title-size);
   font-weight: var(--weight-heading);
   letter-spacing: 0;
@@ -10822,21 +8786,13 @@ textarea,
   text-transform: none;
 }
 
-.panelHeader code,
 .fileEditorHeader p {
   color: var(--text-muted);
   font-weight: var(--weight-body);
 }
 
-.panelHeader a {
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-button);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.emptyState h2,
-.compactEmpty h2 {
+.emptyState h2 {
   font-size: clamp(22px, 3vw, 34px);
   font-weight: var(--weight-title);
   letter-spacing: 0;
@@ -10845,12 +8801,10 @@ textarea,
 }
 
 .emptyState p,
-.compactEmpty p,
 .emptyInline,
 .emptyInline span,
 .eventEmpty,
 .eventEmpty span,
-.nodeServerEmpty,
 .fileDetailsEmpty,
 .inlineState span,
 .modalBody p,
@@ -10864,7 +8818,6 @@ textarea,
 
 .emptyInline strong,
 .eventEmpty strong,
-.nodeServerEmpty strong,
 .fileDetailsEmpty strong,
 .inlineState strong,
 .systemBanner strong,
@@ -10883,11 +8836,8 @@ textarea,
 .fieldLabel,
 .settingsRow strong,
 .nodeServerSectionLabel,
-.nodeFacts dt,
 .nodeInfoCard dt,
 .resourceMetricLabel span,
-.modInstallTargetSummary small,
-.modInstallChannelRow > strong,
 .modInstallVersionGroupHeader > strong,
 .fileDetailsContent dt {
   color: var(--text-muted);
@@ -10912,7 +8862,6 @@ textarea,
 .checkLine,
 .appForm label.checkLine,
 .userModalForm label.checkLine,
-.modInstallCheckbox,
 .permissionRow span {
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
@@ -10938,8 +8887,7 @@ textarea,
   line-height: 1.45;
 }
 
-.settingsStatus,
-.settingsToggle {
+.settingsStatus {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
   letter-spacing: 0;
@@ -10947,7 +8895,6 @@ textarea,
 }
 
 .usersTable th,
-.modsTableHeader,
 .fileTableHead button,
 .fileTableHead label,
 .fileTableHead span,
@@ -10960,7 +8907,6 @@ textarea,
 }
 
 .usersTable td,
-.modsTableCell,
 .fileTableRow > span {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
@@ -10968,22 +8914,13 @@ textarea,
 }
 
 .userNameCell strong,
-.modsCardText strong,
-.modInfoText strong,
-.modDetailsHeaderText strong,
-.modConfirmSelectedText > strong,
-.modDependencyRow strong,
 .fileNameCell > span:last-child,
 .fileDetailsTitle h2,
 .nodeCardTitle h3,
 .nodeServerName,
 .resourceMetricLabel strong,
 .eventRow strong,
-.modTitleLine strong,
-.modInstallTargetSummary strong,
-.modInstallVersionRow span:first-child,
-.modConfirmRows strong,
-.modConfirmLocation strong {
+.modInstallVersionRow span:first-child {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
@@ -10996,27 +8933,12 @@ textarea,
 .nodeInstallHeader p,
 .nodeModalHeader p,
 .nodeDetailsTitleBlock p,
-.modsCardText p,
-.modRow p,
-.modRow small,
-.modCompatibilityColumn p,
 .modInstallStepIntro p,
-.modInstallReviewCopy,
-.modInstallRiskBox p,
-.modConfirmMetaLine,
-.modConfirmSelectedText small,
-.modConfirmFilename,
-.modConfirmLocation span,
-.modConfirmRows span,
-.modDependencyRow span,
 .fileDetailsTitle > div > span,
 .fileDetailsContent dd,
 .resourceMetricLabel small,
 .resourceMeta,
-.eventRow small,
-.modsContext span,
-.modsContext small,
-.modResultsHeader {
+.eventRow small {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
@@ -11027,14 +8949,12 @@ textarea,
 
 .nodeDetailsTitleBlock h2 {
   font-size: clamp(21px, 2.2vw, 28px);
-  font-weight: var(--weight-title);
   letter-spacing: 0;
   line-height: 1.12;
   text-transform: none;
 }
 
 .nodeInfoCard dd,
-.nodeFacts dd,
 .nodeServerPlayers {
   font-size: var(--type-helper-size);
   font-weight: var(--weight-meta);
@@ -11044,61 +8964,29 @@ textarea,
 .addNodeCardInner span,
 .addNodeStepLabel,
 .addNodeStatusCard h3,
-.placementHeader h3,
-.nodePlacementTitle strong {
+.placementHeader h3 {
   font-size: var(--type-card-title-size);
   font-weight: var(--weight-strong);
   letter-spacing: 0;
   text-transform: none;
 }
 
-.addNodeStatusCard p,
-.nodePlacementCard span,
-.nodePlacementCard em {
+.addNodeStatusCard p {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
   line-height: 1.45;
 }
 
-.modFileIcon,
-.modDetailsIconFallback,
-.modDependencyFallback {
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.modInstallTitleBlock h2 {
-  font-size: var(--type-section-title-size);
-  font-weight: var(--weight-heading);
-}
 
-.modInstallTitleBlock strong {
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-body);
-}
 
-.modInstallStepper div,
-.modInstallStepper span,
 .modInstallVersionGroupHeader > span {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
 }
 
-.modInstallChannelButtons button {
-  font-weight: var(--weight-button);
-}
 
-.compatibilityBadge p,
-details.compatibilityBadge p {
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-body);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
 .fileEditorMetaRow span {
   font-size: var(--type-badge-size);
@@ -11106,9 +8994,6 @@ details.compatibilityBadge p {
   letter-spacing: var(--tracking-badge);
 }
 
-.fileStatus {
-  font-weight: 700;
-}
 
 .switchStateLabel {
   font-size: var(--type-badge-size);
@@ -11168,13 +9053,12 @@ details.compatibilityBadge p {
     font-size: clamp(22px, 7vw, 30px);
   }
 
-  .emptyState h2,
-  .compactEmpty h2 {
+.emptyState h2 {
     font-size: clamp(21px, 7vw, 30px);
   }
 }
 
-/* Layout normalization pass */
+/* Canonical application layout */
 :root {
   --page-max-width: 1440px;
   --content-max-width: 1180px;
@@ -11276,7 +9160,6 @@ details.compatibilityBadge p {
 .workspaceActions,
 .pageActions,
 .buttonRow,
-.fileActionGroup,
 .selectionActions,
 .nodeCardActions,
 .modInstallActions,
@@ -11295,7 +9178,6 @@ details.compatibilityBadge p {
 .workspaceActions button,
 .buttonRow button,
 .secondaryButton,
-.compactButton,
 .runtimeControlButton,
 .quickActionButton,
 .modalFooter button,
@@ -11336,29 +9218,21 @@ details.compatibilityBadge p {
   padding: var(--space-4);
 }
 
-.panelHeader,
-.modsPanelHeader,
-.uiSectionHeader,
 .nodeCardHeader,
 .settingsGroupHeader,
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
-.fileEditorHeader,
-.modInstallHeader {
+.fileEditorHeader {
   min-height: 0;
   padding-bottom: var(--space-3);
   margin-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-row);
 }
 
-.panelHeader,
-.modsPanelHeader,
-.uiSectionHeader,
 .nodeCardHeader,
 .settingsGroupHeader,
-.fileEditorHeader,
-.modInstallHeader {
+.fileEditorHeader {
   display: flex;
   gap: var(--space-3);
   align-items: center;
@@ -11433,18 +9307,15 @@ details.compatibilityBadge p {
 }
 
 .emptyState,
-.compactEmpty,
 .inlineState,
 .eventEmpty,
-.nodeServerEmpty,
 .fileDetailsEmpty {
   max-width: none;
   padding: var(--space-5);
   gap: var(--space-3);
 }
 
-.emptyState h2,
-.compactEmpty h2 {
+.emptyState h2 {
   font-size: clamp(21px, 2.8vw, 30px);
 }
 
@@ -11479,28 +9350,19 @@ details.compatibilityBadge p {
   gap: var(--space-1);
 }
 
-.resourcePanel,
-.activityHealthPanel,
-.recentEventsPanel {
+.resourcePanel {
   min-width: 0;
 }
 
-.resourceMetric,
 .eventRow,
 .nodeServerRow,
 .fileTableRow,
-.modsTableRow,
-.modSearchResult,
 .userRow {
   min-height: 0;
 }
 
-.resourceMetric {
-  padding: var(--space-3);
-}
 
-.nodeServerRow,
-.modSearchResult {
+.nodeServerRow {
   padding: var(--space-3);
 }
 
@@ -11511,7 +9373,6 @@ details.compatibilityBadge p {
 .consolePanel,
 .filesPage,
 .schedulePage,
-.modsPanel,
 .propertiesPage,
 .createServerPanel {
   min-width: 0;
@@ -11526,15 +9387,6 @@ details.compatibilityBadge p {
   width: 100%;
 }
 
-.consolePanel .panelHeader {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  background: var(--surface-raised);
-  border-bottom: 0;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
 
 .terminal {
   min-height: 0;
@@ -11548,8 +9400,6 @@ details.compatibilityBadge p {
 .fileNavBar,
 .fileToolbar,
 .selectionActionBar,
-.modsToolbarCompact,
-.modSearchToolbar,
 .nodesToolbar {
   min-height: var(--toolbar-min-height);
   padding: var(--space-3);
@@ -11573,8 +9423,6 @@ details.compatibilityBadge p {
 
 .fileToolbar,
 .selectionActionBar,
-.modsToolbarCompact,
-.modSearchToolbar,
 .nodesToolbar {
   display: flex;
   justify-content: space-between;
@@ -11664,143 +9512,25 @@ details.compatibilityBadge p {
 
 
 
-.modsPanelHeader {
-  gap: var(--space-3);
-}
 
-.modsPanelHeaderLeft,
-.modsContext,
-.modsCardText,
-.modInfoText,
-.modCompatibilityColumn,
-.modTitleLine,
-.modDetailsHeaderText,
-.modConfirmSelectedText {
-  min-width: 0;
-}
 
-.modsTableHeader,
-.modsTableRow {
-  min-width: 1100px;
-  grid-template-columns: var(--mods-table-columns);
-}
 
-.modsTableRow {
-  min-height: 64px;
-  padding-block: var(--space-3);
-}
 
-.modsTableCell[data-label="Status"] .switch {
-  width: auto;
-}
 
-.modsTableCell[data-label="Status"] .switchStateLabel {
-  display: none;
-}
 
-.modsTableCell.actions {
-  gap: 6px;
-}
 
-.modsTableCell.actions button {
-  min-height: 32px;
-  padding: 0 var(--space-2);
-}
 
-.modSearchResult {
-  grid-template-columns: 48px minmax(0, 1fr) minmax(180px, 0.32fr) auto;
-  gap: var(--space-3);
-}
 
-.modSearchView {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: var(--space-3);
-  align-content: stretch;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  flex: 1 1 auto;
-}
 
-.modSearchView .modSearchToolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-  margin: 0;
-}
 
-.modSearchView .modSearchInput {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
 
-.modSearchView .modSearchButton {
-  justify-self: end;
-}
 
-.modSearchView .modResultsHeader {
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-  margin: 0;
-}
 
-@media (max-width: 720px) {
-  .modsCardsGrid,
-  .modsToolbarCompact {
-    max-width: none;
-  }
 
-  .modsInstalledToolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
-  .modsUpdateCheckButton {
-    inline-size: auto;
-    justify-content: center;
-    width: 100%;
-  }
 
-  .modsCardsGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
-  .modsSearchInputCompact {
-    padding-inline: var(--space-2);
-  }
-}
 
-.modSearchView .mods {
-  width: 100%;
-  max-width: none;
-  min-height: 0;
-  align-self: stretch;
-  justify-content: flex-start;
-}
-
-.modSearchView.empty {
-  flex: 1 1 auto;
-}
-
-.modSearchView.searching {
-  align-content: stretch;
-}
-
-.modSearchView.empty .mods {
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.modSearchResultActions,
-.modsTableActions,
-.nodeServerActions {
-  margin-left: auto;
-  justify-content: flex-end;
-}
 
 .scheduleManagementPage {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
@@ -12013,10 +9743,6 @@ details.compatibilityBadge p {
   }
 }
 
-.modInstallPanel,
-.modDetailsPanel {
-  width: min(var(--modal-large-width), calc(100vw - 32px));
-}
 
 .fileEditorModal {
   width: min(1120px, calc(100vw - 32px));
@@ -12026,8 +9752,7 @@ details.compatibilityBadge p {
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
-.fileEditorHeader,
-.modInstallHeader {
+.fileEditorHeader {
   flex: 0 0 auto;
   min-height: 56px;
   margin: 0;
@@ -12037,9 +9762,7 @@ details.compatibilityBadge p {
 .modalBody,
 .userModalBody,
 .nodeModalBody,
-.fileEditorBody,
-.modInstallBody,
-.modDetailsBody {
+.fileEditorBody {
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--space-4);
@@ -12064,28 +9787,20 @@ details.compatibilityBadge p {
 
 .modInstallStep,
 .modInstallReview,
-.modConfirmSection,
 .modInstallVersionTable,
 .nodeInfoCard,
-.addNodeStatusCard,
-.nodePlacementCard {
+.addNodeStatusCard {
   border-width: 1px;
   border-radius: 8px;
 }
 
 .modInstallStep,
 .modInstallReview,
-.modConfirmSection,
 .nodeInfoCard,
-.addNodeStatusCard,
-.nodePlacementCard {
+.addNodeStatusCard {
   padding: var(--space-3);
 }
 
-.modInstallStepper {
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
 
 @media (max-width: 1180px) {
   .workspace {
@@ -12109,10 +9824,8 @@ details.compatibilityBadge p {
     grid-template-columns: 1fr;
   }
 
-  .overviewPage > *,
-  .resourcePanel,
-  .activityHealthPanel,
-  .recentEventsPanel {
+.overviewPage > *,
+.resourcePanel {
     grid-column: 1 / -1;
   }
 }
@@ -12129,11 +9842,10 @@ details.compatibilityBadge p {
     justify-content: flex-start;
   }
 
-  .settingsRow,
-  .settingsGroupHeader,
-  .usersGroupHeader,
-  .modSearchResult,
-  .nodeServerRow {
+.settingsRow,
+.settingsGroupHeader,
+.usersGroupHeader,
+.nodeServerRow {
     grid-template-columns: 1fr;
   }
 
@@ -12210,13 +9922,12 @@ details.compatibilityBadge p {
     font-size: clamp(22px, 7vw, 28px);
   }
 
-  .activeServerStrip,
-  .panel,
-  .emptyState,
-  .modalBody,
-  .userModalBody,
-  .nodeModalBody,
-  .modInstallBody {
+.activeServerStrip,
+.panel,
+.emptyState,
+.modalBody,
+.userModalBody,
+.nodeModalBody {
     padding: var(--space-3);
   }
 
@@ -12231,36 +9942,26 @@ details.compatibilityBadge p {
     flex: 1 1 120px;
   }
 
-  .fileNavBar,
-  .fileToolbar,
-  .selectionActionBar,
-  .modsToolbarCompact,
-  .modSearchToolbar,
-  .nodesToolbar {
+.fileNavBar,
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  .modSearchView .modSearchToolbar {
-    grid-template-columns: 1fr;
-  }
 
-  .modSearchView .modSearchButton {
-    justify-self: stretch;
-  }
 
   .modalBackdrop {
     padding: var(--space-2);
   }
 
-  .modalPanel,
-  .confirmModalPanel,
-  .discardEditorModal,
-  .userModalPanel,
-  .nodeModalPanel,
-  .modInstallPanel,
-  .modDetailsPanel,
-  .fileEditorModal {
+.modalPanel,
+.confirmModalPanel,
+.discardEditorModal,
+.userModalPanel,
+.nodeModalPanel,
+.fileEditorModal {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
   }
@@ -12275,7 +9976,7 @@ details.compatibilityBadge p {
 .modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
 .modsLockBanner > div { flex: 1; }
 .modsLockBanner strong, .modsLockBanner p { display: block; }
-.modsLockBanner p { margin: 2px 0 0; color: var(--text-muted); font-size: .82rem; }
+.modsLockBanner p { margin: 2px 0 0; font-size: .82rem; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
 .modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
@@ -12317,7 +10018,7 @@ details.compatibilityBadge p {
 .modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
 .modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
 .modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
-.modsStatusChip.unknown { border-color: var(--border); color: var(--text-muted); background: var(--background); }
+.modsStatusChip.unknown { border-color: var(--border); background: var(--background); }
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate button { padding: 5px 0; border: 0; background: transparent; box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: transparent; }
@@ -12335,7 +10036,7 @@ details.compatibilityBadge p {
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
 .modsDrawerHeader h2 { margin: 2px 0 0; font-size: 1.35rem; }
 .modsDrawerHeader p { margin: 4px 0 0; color: var(--text-muted); font-size: .84rem; }
-.modsDrawerHeader small { color: var(--accent); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.modsDrawerHeader small { font-size: .72rem; font-weight: 800; letter-spacing: .06em; }
 .modsDrawerBody { flex: 1; overflow: auto; padding: 22px 24px; }
 .modsDrawerFooter { display: flex; flex-wrap: wrap; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--border); }
 .modsDrawerFooter > button:first-child { flex: 1; }
@@ -12507,12 +10208,7 @@ details.compatibilityBadge p {
 
 .uiButton,
 .secondaryButton,
-.dangerButton,
 .dangerTextButton,
-.warningTextButton,
-.ghostButton,
-.textButton,
-.compactButton,
 .iconButton,
 .iconOnlyButton {
   min-height: var(--control-height);
@@ -12547,8 +10243,6 @@ details.compatibilityBadge p {
 }
 
 .uiButton--ghost,
-.ghostButton,
-.textButton,
 .linkButton,
 .textLinkButton,
 .modsBackButton {
@@ -12559,8 +10253,6 @@ details.compatibilityBadge p {
 }
 
 .uiButton--ghost:hover:not(:disabled),
-.ghostButton:hover:not(:disabled),
-.textButton:hover:not(:disabled),
 .linkButton:hover:not(:disabled),
 .textLinkButton:hover:not(:disabled),
 .modsBackButton:hover:not(:disabled) {
@@ -12570,15 +10262,13 @@ details.compatibilityBadge p {
   transform: none;
 }
 
-.uiButton--critical,
-.dangerButton {
+.uiButton--critical {
   border-color: var(--sentinel-danger);
   background: var(--sentinel-danger);
   color: var(--swiss-white);
 }
 
-.uiButton--critical:hover:not(:disabled),
-.dangerButton:hover:not(:disabled) {
+.uiButton--critical:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--sentinel-danger) 78%, var(--text));
   background: color-mix(in srgb, var(--sentinel-danger) 84%, var(--text));
   color: var(--swiss-white);
@@ -12591,8 +10281,7 @@ details.compatibilityBadge p {
   color: var(--sentinel-danger);
 }
 
-.uiButton--compact,
-.compactButton {
+.uiButton--compact {
   min-height: var(--control-height-compact);
   padding-inline: var(--space-3);
   font-size: var(--type-meta-size);
@@ -12610,10 +10299,6 @@ details.compatibilityBadge p {
 
 .uiButton:active:not(:disabled),
 .secondaryButton:active:not(:disabled),
-.dangerButton:active:not(:disabled),
-.ghostButton:active:not(:disabled),
-.textButton:active:not(:disabled),
-.compactButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
 .iconOnlyButton:active:not(:disabled) {
   transform: translateY(0);
@@ -12621,10 +10306,6 @@ details.compatibilityBadge p {
 
 .uiButton:disabled,
 .secondaryButton:disabled,
-.dangerButton:disabled,
-.ghostButton:disabled,
-.textButton:disabled,
-.compactButton:disabled,
 .iconButton:disabled,
 .iconOnlyButton:disabled {
   opacity: 0.42;
@@ -12670,16 +10351,10 @@ details.compatibilityBadge p {
 }
 
 .uiStatusBadge,
-.uiStatusPill,
 .pill,
 .runtimeBadge,
 .settingsStatus,
-.compatibilityBadge,
-.installStatusBadge,
 .roleBadge,
-.nodePill,
-.subtlePill,
-.modDetailsPill,
 .modsStatusChip {
   display: inline-flex;
   align-items: center;
@@ -12747,10 +10422,7 @@ details.compatibilityBadge p {
 }
 
 .uiPanelHeader,
-.panelHeader,
-.uiSectionHeader,
-.settingsGroupHeader,
-.modsPanelHeader {
+.settingsGroupHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -12858,7 +10530,6 @@ details.compatibilityBadge p {
   line-height: 1.45;
 }
 
-.actionIcon,
 .buttonIcon,
 .sideIcon,
 .fileTypeIcon svg {
@@ -13044,18 +10715,6 @@ details.compatibilityBadge p {
   letter-spacing: var(--tracking-ui);
 }
 
-.fileStatus {
-  width: fit-content;
-  border-radius: 999px;
-  padding: 3px 7px;
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  font-size: var(--type-badge-size);
-  font-weight: 700;
-  letter-spacing: var(--tracking-badge);
-  line-height: 1;
-  text-transform: uppercase;
-}
 
 .scheduleTableHeader {
   color: var(--text-muted);
@@ -13150,8 +10809,7 @@ details.compatibilityBadge p {
 
 .modsLockBanner,
 .nodeAlert,
-.nodeWarnings span,
-.nodeBlockedNote {
+.nodeWarnings span {
   border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
@@ -13623,15 +11281,13 @@ details.compatibilityBadge p {
   color: var(--terminal-text);
 }
 
-.addNodeStepper,
-.modInstallStepper {
+.addNodeStepper {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
 }
 
-.addNodeStepCircle,
-.modInstallStepper span {
+.addNodeStepCircle {
   border-color: var(--border-muted);
   box-shadow: none;
 }
