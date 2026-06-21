@@ -1,6 +1,6 @@
 import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
 import type { ServerAccess, Session, StoredUser } from "../types.js";
-import { asArray, asObject, optionalString, requiredString } from "./jsonFile.js";
+import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
 import type { StorageDatabase } from "./database.js";
 
 type UserRow = {

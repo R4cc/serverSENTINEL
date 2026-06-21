@@ -6,6 +6,8 @@ import type { ManagedNode, ManagedServer } from "../types.js";
 import { openStorageDatabase, type StorageDatabase } from "./database.js";
 import { NodesRepository } from "./nodesRepository.js";
 import { ServersRepository } from "./serversRepository.js";
+import { ResourceStatsRepository } from "./resourceStatsRepository.js";
+import { ModPreferencesRepository } from "./modPreferencesRepository.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -183,12 +185,26 @@ describe("ServersRepository", () => {
   it("cascades dependent ports, schedules, and runs when deleting a server", async () => {
     const { storage, servers } = await createRepositories();
     servers.create(managedServer());
+    new ResourceStatsRepository(storage).append("server-id", {
+      available: true,
+      running: true,
+      cpuPercent: 1,
+      memoryUsageBytes: 2,
+      memoryLimitBytes: 3,
+      readAt: "2026-01-01T00:00:00.000Z",
+      sampledAt: 1
+    }, 0);
+    const modPreferences = new ModPreferencesRepository(storage);
+    modPreferences.replaceAll("server-id", { "fabric-api.jar": { channel: "release" } });
+    expect(modPreferences.list("server-id")).toEqual({ "fabric-api.jar": { channel: "release" } });
     servers.delete("server-id");
 
     expect(servers.list()).toEqual([]);
     for (const table of ["managed_ports", "schedules", "scheduled_runs"]) {
       expect(storage.connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
     }
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM resource_stats").get()).toEqual({ count: 0 });
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM mod_preferences").get()).toEqual({ count: 0 });
   });
 
   it("deletes a node and its servers in one transaction only when forced", async () => {

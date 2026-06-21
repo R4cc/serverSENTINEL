@@ -1,5 +1,5 @@
 import type { ManagedNode } from "../types.js";
-import { asArray, asObject, optionalString, requiredString } from "./jsonFile.js";
+import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
 import type { StorageDatabase } from "./database.js";
 
 type NodeRow = {

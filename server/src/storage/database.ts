@@ -174,6 +174,36 @@ const migrations: readonly Migration[] = [
         CREATE INDEX file_edit_leases_expiry_idx ON file_edit_leases(expires_at);
       `);
     }
+  },
+  {
+    version: 5,
+    name: "resource-stats-history",
+    up(database) {
+      database.exec(`
+        CREATE TABLE resource_stats (
+          server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+          sampled_at INTEGER NOT NULL,
+          sample_json TEXT NOT NULL,
+          PRIMARY KEY (server_id, sampled_at)
+        );
+        CREATE INDEX resource_stats_sampled_at_idx ON resource_stats(sampled_at);
+      `);
+    }
+  },
+  {
+    version: 6,
+    name: "mod-preferences",
+    up(database) {
+      database.exec(`
+        CREATE TABLE mod_preferences (
+          server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+          filename TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          metadata_json TEXT,
+          PRIMARY KEY (server_id, filename)
+        );
+      `);
+    }
   }
 ];
 

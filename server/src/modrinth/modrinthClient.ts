@@ -9,7 +9,7 @@ export function configureModrinthApiKeyProvider(provider: () => Promise<string>)
 export async function modrinthFetch(url: string) {
   const apiKey = await apiKeyProvider();
   const headers: Record<string, string> = {
-    "User-Agent": "ServerSentinel/0.7.0 (managed Fabric server panel)"
+    "User-Agent": "ServerSentinel/0.8.0 (managed Fabric server panel)"
   };
   if (apiKey) {
     headers.Authorization = apiKey;

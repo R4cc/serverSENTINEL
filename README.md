@@ -101,7 +101,7 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Live console output
 - Console command input
 - File manager
-- Browser file editor with line numbers and syntax highlighting for common config files
+- Browser file editor with read-only viewing, exclusive edit leases, revision checks, line numbers, and syntax highlighting
 - Modrinth search and install flow
 - Mod upload and management
 - Schedules
@@ -122,7 +122,21 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 
 ## Storage
 
-serverSENTINEL stores configuration as JSON files on disk and does not require an external database.
+ServerSentinel 0.8.0 stores panel state in a local SQLite database. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, and file edit leases are stored there. No external database service is required.
+
+The default database path is:
+
+```text
+/config/serversentinel.sqlite
+```
+
+Set `SERVERSENTINEL_DATABASE_PATH` to override it. Relative values are resolved from the process working directory, so an absolute path is recommended. The parent directory is created automatically.
+
+Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, and settings JSON files are not read, imported, or migrated. A fresh database starts with empty panel state and prompts for initial setup.
+
+Back up the SQLite database together with your Minecraft server folders. The simplest reliable file-copy backup is to stop the panel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present), then restart it. Files inside managed Minecraft server directories remain separate from the panel database and need their own backups.
+
+The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside ServerSentinel after edit mode began.
 
 Recommended host folders:
 
@@ -132,7 +146,7 @@ Recommended host folders:
 /opt/serversentinel/data
 ```
 
-Use `config` for panel settings and users, `servers` for all-in-one managed server files, and `data` for node-managed server files.
+Use `config` for the panel SQLite database, `servers` for all-in-one managed server files, and `data` for node-managed server files.
 
 ## Deployment
 
@@ -291,6 +305,7 @@ Common panel variables:
 SS_MODE=all-in-one
 PORT=8080
 SERVERSENTINEL_CONFIG_DIR=/config
+SERVERSENTINEL_DATABASE_PATH=/config/serversentinel.sqlite
 SERVERSENTINEL_SERVERS_DIR=/data/servers
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
 SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
@@ -312,6 +327,8 @@ SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
 ```
 
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
+
+`SERVERSENTINEL_DATABASE_PATH` overrides the panel SQLite file location. Keep it on persistent local storage and include it in backups. It is only used by panel and all-in-one modes.
 
 `SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
 

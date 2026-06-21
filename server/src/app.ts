@@ -63,7 +63,7 @@ import {
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
-import { asArray, asObject, optionalString, requiredString, writeJsonFile } from "./storage/jsonFile.js";
+import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { openStorageDatabase } from "./storage/database.js";
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
@@ -71,6 +71,8 @@ import { SettingsRepository } from "./storage/settingsRepository.js";
 import { SessionsRepository } from "./storage/sessionsRepository.js";
 import { ServersRepository } from "./storage/serversRepository.js";
 import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
+import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
+import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import {
   badRequest,
   forbidden,
@@ -141,7 +143,7 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.7.0";
+const appVersion = process.env.npm_package_version ?? "0.8.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const versionMetadataFilename = ".serversentinel-version.json";
@@ -240,6 +242,7 @@ let settingsRepository: SettingsRepository;
 let sessionsRepository: SessionsRepository;
 let serversRepository: ServersRepository;
 let fileEditLeasesRepository: FileEditLeasesRepository;
+let modPreferencesRepository: ModPreferencesRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -1151,7 +1154,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1190,7 +1193,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -2424,7 +2427,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.7.0 (Fabric runtime downloader)"
+      "User-Agent": "ServerSentinel/0.8.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -2976,6 +2979,7 @@ settingsRepository = new SettingsRepository(storageDatabase);
 sessionsRepository = new SessionsRepository(storageDatabase);
 serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
 fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
+modPreferencesRepository = new ModPreferencesRepository(storageDatabase);
 configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
   storageDatabase.close();
@@ -4123,20 +4127,11 @@ async function localDeleteFile(server: ManagedServer, target: string, recursive:
 
 
 async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
-  let path: string;
-  try {
-    path = await validateExistingInsideServer(server, "mods/.serversentinel-mods.json");
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-    return {};
-  }
-  if (!existsSync(path)) return {};
-  return normalizeModPreferences(JSON.parse(await readFile(path, "utf8")) as unknown);
+  return normalizeModPreferences(modPreferencesRepository.list(server.id));
 }
 
 async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
-  const path = await ensureWritableInsideServer(server, "mods/.serversentinel-mods.json");
-  await writeJsonFile(path, normalizeModPreferences(data));
+  modPreferencesRepository.replaceAll(server.id, normalizeModPreferences(data));
 }
 
 function normalizeModPreferences(value: unknown): Record<string, ModPreference> {
@@ -5543,7 +5538,7 @@ resourceStatsCollector = new ResourceStatsCollector({
   historyWindowMs: resourceStatsHistoryWindowMs,
   readServers: listManagedServers,
   runtimeForServer,
-  historyDir: join(config.configDir, "history")
+  statsRepository: new ResourceStatsRepository(storageDatabase)
 });
 resourceStatsCollector.start();
 app.addHook("onClose", async () => {
