@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
+import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
 import { formatBytes } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
@@ -23,6 +24,11 @@ function statusTone(value?: string) {
   if (value === "online" || value === "available" || value === "compatible" || value === "ready") return "ready";
   if (value === "offline" || value === "unavailable" || value === "incompatible" || value === "missing") return "limited";
   return "";
+}
+
+function sharedStatusTone(value?: string): "success" | "danger" | "neutral" {
+  const tone = statusTone(value);
+  return tone === "ready" ? "success" : tone === "limited" ? "danger" : "neutral";
 }
 
 function formatElapsedTime(milliseconds: number) {
@@ -54,7 +60,7 @@ function PlayerIcon() {
 function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "agent" | "panel" | "protocol" | "compatibility" | "docker" | "data" | "memory" | "created" | "updated" | "seen" | "capabilities" | "warning" }) {
   return (
     <span className={`nodeDetailIcon ${name}`} aria-hidden="true">
-      <svg viewBox="0 0 24 24">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {name === "node" && (
           <>
             <rect x="6" y="4" width="12" height="4" rx="1" />
@@ -236,13 +242,13 @@ function InstallInstructions({
         </div>
       </div>
       <div className="installTabs" role="tablist" aria-label="Install method">
-        <button type="button" className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run Recommended</button>
-        <button type="button" className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</button>
+        <Button variant="ghost" compact className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run Recommended</Button>
+        <Button variant="ghost" compact className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</Button>
       </div>
       <div className="installSnippetShell">
-        <button type="button" className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
+        <Button variant="secondary" iconOnly className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
           <AppIcon name="copy" />
-        </button>
+        </Button>
         <pre className="installSnippet"><code>{snippet}</code></pre>
       </div>
     </section>
@@ -419,8 +425,9 @@ function AddNodeModal({
             <h2 id="add-node-title">Add node</h2>
             <p>Create a remote node and connect it to this panel.</p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            iconOnly
             className="iconButton modalCloseButton"
             onClick={onClose}
             disabled={!canClose}
@@ -428,7 +435,7 @@ function AddNodeModal({
             title={canClose ? "Close add node modal" : "Node creation is still in progress"}
           >
             <AppIcon name="x" />
-          </button>
+          </Button>
         </header>
 
         {!created ? (
@@ -447,7 +454,7 @@ function AddNodeModal({
                 <span className="fieldLabelWithInfo">
                   Data folder on node
                   <span className="roleInfoWrap">
-                    <button type="button" className="roleInfoButton" aria-describedby="node-data-folder-tip">i</button>
+                    <Button variant="ghost" iconOnly className="roleInfoButton" aria-label="About the node data folder" aria-describedby="node-data-folder-tip">i</Button>
                     <span id="node-data-folder-tip" role="tooltip" className="roleTooltip fieldTooltip">
                       Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts this folder into the node container.
                     </span>
@@ -456,8 +463,8 @@ function AddNodeModal({
                 <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
               </label>
               <div className="nodeModalFooter inline">
-                <button type="submit">{busy ? "Creating..." : "Create pending node"}</button>
-                <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</button>
+                <Button type="submit">{busy ? "Creating..." : "Create pending node"}</Button>
+                <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
               </div>
             </fieldset>
           </form>
@@ -467,8 +474,8 @@ function AddNodeModal({
             <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
             {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />}
             <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-              {!isSuccess && <button type="button" className="secondaryButton" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>Cancel</button>}
-              <button type="button" onClick={isSuccess ? onDone : onClose}>Done</button>
+              {!isSuccess && <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>Cancel</Button>}
+              <Button onClick={isSuccess ? onDone : onClose}>Done</Button>
             </div>
           </div>
         )}
@@ -595,20 +602,21 @@ export function NodesPage({
             <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
-            <button type="button" className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
+            <Button variant="secondary" iconOnly className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
               <AppIcon name="refresh" />
-            </button>
+            </Button>
           </div>
         </section>
       )}
 
       <section className="nodesGrid">
         {sortedNodes.length === 0 && (
-          <div className="emptyState nodesEmptyState">
-            <h2>No nodes yet</h2>
-            <p>No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers.</p>
-            <button type="button" onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</button>
-          </div>
+          <EmptyState
+            className="nodesEmptyState"
+            title="No nodes yet"
+            message="No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers."
+            action={<Button onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</Button>}
+          />
         )}
         {sortedNodes.map((node) => {
           const expanded = Boolean(expandedNodeIds[node.id]);
@@ -626,28 +634,29 @@ export function NodesPage({
                     <h3>{node.name}</h3>
                   </div>
                   <div className="nodeStatusPills">
-                    <span className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</span>
+                    <StatusBadge tone={sharedStatusTone(node.status)} className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</StatusBadge>
                     {nodePanelUpdateRequired(node) && (
-                      <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</span>
+                      <StatusBadge tone="warning" className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</StatusBadge>
                     )}
                     {nodeVersionMismatch(node) && (
-                      <span className="settingsStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</span>
+                      <StatusBadge tone="warning" className="settingsStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</StatusBadge>
                     )}
                   </div>
                 </div>
                 <div className="nodeCardActions">
                   {nodeUpdateAvailable(node) && (
-                    <button
-                      type="button"
-                      className="secondaryButton compactButton nodeUpgradeButton"
+                    <Button
+                      variant="secondary"
+                      compact
+                      className="nodeUpgradeButton"
                       onClick={() => onUpdateNode(node)}
                       disabled={busyNodeId === node.id || !canManageNodes || !nodeCanPanelUpdate(node)}
                       title={nodeCanPanelUpdate(node) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
                     >
                       Upgrade
-                    </button>
+                    </Button>
                   )}
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</button>
+                  <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
                 </div>
               </header>
 
@@ -707,9 +716,7 @@ export function NodesPage({
             title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
           >
             <div className="addNodeCardInner">
-              <svg className="addNodeIcon" viewBox="0 0 24 24">
-                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" />
-              </svg>
+              <span className="addNodeIcon"><AppIcon name="plus" /></span>
               <span>Add node</span>
             </div>
           </button>
@@ -729,7 +736,7 @@ export function NodesPage({
                   <p>Technical node details and maintenance actions.</p>
                 </div>
               </div>
-              <button type="button" className="iconButton modalCloseButton polishedCloseButton" onClick={onCloseDetails} aria-label="Close node details"><AppIcon name="x" /></button>
+              <Button variant="secondary" iconOnly className="iconButton modalCloseButton polishedCloseButton" onClick={onCloseDetails} aria-label="Close node details"><AppIcon name="x" /></Button>
             </header>
             <div className="nodeModalBody nodeDetailsBody">
               <dl className="nodeInfoGrid">
@@ -828,32 +835,33 @@ export function NodesPage({
               )}
               <div className="nodeActions nodeDetailsActions">
                 <div className="nodeActionGroup maintenance">
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onShowInstall(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id}><AppIcon name="download" />Install instructions</button>
-                  <button
-                    type="button"
-                    className="secondaryButton compactButton"
+                  <Button variant="secondary" compact onClick={() => onShowInstall(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id}><AppIcon name="download" />Install instructions</Button>
+                  <Button
+                    variant="secondary"
+                    compact
                     onClick={() => onUpdateNode(selectedDetailsNode)}
                     disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || !nodeUpdateAvailable(selectedDetailsNode) || !nodeCanPanelUpdate(selectedDetailsNode)}
                     title={!nodeUpdateAvailable(selectedDetailsNode) ? "Node agent is already current" : nodeCanPanelUpdate(selectedDetailsNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
                   >
                     <AppIcon name="arrowUp" />Upgrade
-                  </button>
-                  <button type="button" className="secondaryButton compactButton" onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</button>
-                  <button type="button" className="secondaryButton compactButton" onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</button>
-                  <button
-                    type="button"
-                    className="secondaryButton compactButton"
+                  </Button>
+                  <Button variant="secondary" compact onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</Button>
+                  <Button variant="secondary" compact onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</Button>
+                  <Button
+                    variant="secondary"
+                    compact
                     onClick={() => onRestartNode(selectedDetailsNode)}
                     disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || (!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online")}
                     title={!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online" ? "Bring the node online before restarting" : "Restart the node container"}
                   >
                     <AppIcon name="refresh" />Restart node
-                  </button>
+                  </Button>
                 </div>
                 <div className="nodeActionGroup destructive">
-                  <button
-                    type="button"
-                    className="dangerButton compactButton nodeRemoveButton"
+                  <Button
+                    variant="critical"
+                    compact
+                    className="nodeRemoveButton"
                     onClick={() => {
                       if (selectedContextNode) onRemoveNode(selectedContextNode);
                     }}
@@ -861,10 +869,11 @@ export function NodesPage({
                     title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Move or delete assigned servers first" : ""}
                   >
                     <AppIcon name="trash" />Remove node
-                  </button>
-                  <button
-                    type="button"
-                    className="dangerButton compactButton forceRemoveButton"
+                  </Button>
+                  <Button
+                    variant="critical"
+                    compact
+                    className="forceRemoveButton"
                     onClick={() => {
                       if (selectedContextNode) onRemoveNode(selectedContextNode, true);
                     }}
@@ -872,7 +881,7 @@ export function NodesPage({
                     title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and its assigned server records from the panel without contacting the node host" : "Force remove is only available when server records are assigned"}
                   >
                     <NodeDetailIcon name="warning" />Force remove node
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -890,7 +899,7 @@ export function NodesPage({
                 <h2 id="install-node-title">Node Install</h2>
                 <p>Use this on the host that should run the node agent.</p>
               </div>
-              <button type="button" className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></button>
+              <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
             </header>
             <div className="nodeModalBody">
               <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />

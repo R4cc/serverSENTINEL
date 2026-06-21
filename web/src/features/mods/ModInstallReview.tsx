@@ -2,9 +2,11 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
+import { Button } from "../../components/UiPrimitives";
 import { ModInstallVersionSkeleton } from "../../components/ModInstallVersionSkeleton";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
+import { ModStatusBadge } from "./ModStatusBadge";
 
 type Props = {
   state: ModInstallModalState;
@@ -33,8 +35,8 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
   return (
     <div className="modsInstallReview">
       <div className="modsDrawerHeader">
-        <div><button type="button" className="modsBackButton" onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : "Search"}</button><h2>{state.step === 2 ? "Review installation" : "Choose a version"}</h2></div>
-        <button type="button" className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review"><AppIcon name="x" /></button>
+        <div><Button variant="ghost" compact className="modsBackButton" onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : "Search"}</Button><h2>{state.step === 2 ? "Review installation" : "Choose a version"}</h2></div>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review"><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         <div className="modsReviewHero">
@@ -47,25 +49,25 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           <>
             <section className="modsRecommendedVersion">
               <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Compatible with this server" : "Open advanced options to review other versions"}</span></div>
-              {recommendedVersion && <button type="button" onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review and install</button>}
+              {recommendedVersion && <Button onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review and install</Button>}
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
               <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
-                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <button key={channel} type="button" className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)}>{channel}</button>)}
+                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant="ghost" compact className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)}>{channel}</Button>)}
               </div>
               <div className="modsVersionList">
                 {[...versions, ...otherVersions].map((version) => {
                   const health = getInstallVersionHealth(version);
                   return (
                     <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={!version.selectable}>
-                      <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><span className={`modsStatusChip ${health.tone}`}>{health.label}</span>
+                      <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>
                     </button>
                   );
                 })}
               </div>
-              {selected && <button type="button" onClick={onContinue} disabled={!canContinue}>Review selected version</button>}
+              {selected && <Button onClick={onContinue} disabled={!canContinue}>Review selected version</Button>}
             </details>
             {selectedHealth?.requiresAcknowledgement && (
               <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>I understand ServerSentinel cannot verify this version as safe for this server.</span></label>
@@ -82,7 +84,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           </>
         )}
       </div>
-      {state.step === 2 && <div className="modsDrawerFooter"><button type="button" onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing…" : requiredDependencies.length > 0 ? "Install mod and dependencies" : "Install mod"}</button></div>}
+      {state.step === 2 && <div className="modsDrawerFooter"><Button onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing…" : requiredDependencies.length > 0 ? "Install mod and dependencies" : "Install mod"}</Button></div>}
     </div>
   );
 }

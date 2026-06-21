@@ -3,9 +3,11 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
+import { Button, EmptyState } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
 import { ModInstallReview } from "./ModInstallReview";
+import { ModStatusBadge } from "./ModStatusBadge";
 
 type Props = {
   query: string;
@@ -49,7 +51,7 @@ export function AddModsWorkflow(props: Props) {
     <div className="modsAddWorkflow">
       <div className="modsDrawerHeader">
         <div><small>Add mods</small><h2>Find a Fabric mod</h2><p>Results are matched to this server automatically.</p></div>
-        <button type="button" className="iconButton" onClick={props.onClose} aria-label="Close add mods"><AppIcon name="x" /></button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label="Close add mods"><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
@@ -60,8 +62,8 @@ export function AddModsWorkflow(props: Props) {
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} />}
-        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <div className="modsWorkspaceEmpty"><strong>What would you like to add?</strong><span>Search Modrinth and ServerSentinel will recommend the safest release.</span></div>}
-        {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && <div className="modsWorkspaceEmpty"><strong>No matching mods</strong><span>Try a shorter or different search.</span></div>}
+        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and ServerSentinel will recommend the safest release." />}
+        {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && <EmptyState compact className="modsWorkspaceEmpty" title="No matching mods" message="Try a shorter or different search." />}
         <div className="modsSearchResults" aria-busy={props.searching}>
           {props.searching && Array.from({ length: 4 }, (_, index) => <div key={index} className="modsResultCard isSkeleton" aria-hidden="true" />)}
           {!props.searching && props.results.map((mod) => {
@@ -71,8 +73,8 @@ export function AddModsWorkflow(props: Props) {
             return (
               <article key={mod.project_id} className="modsResultCard">
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">MOD</span>}
-                <div className="modsResultContent"><div><strong>{mod.title}</strong><span className={`modsStatusChip ${health.tone}`}>{health.label}</span></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
-                <button type="button" className={health.safeToRunDirectly ? "" : "secondaryButton"} onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</button>
+                <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
+                <Button variant={health.safeToRunDirectly ? "primary" : "secondary"} compact onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</Button>
               </article>
             );
           })}

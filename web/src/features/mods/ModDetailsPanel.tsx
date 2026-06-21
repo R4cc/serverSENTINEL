@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { InstalledMod, ModUpdatePlanEntry } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
+import { Button } from "../../components/UiPrimitives";
 import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
@@ -44,7 +45,7 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
           {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
           <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
         </div>
-        <button type="button" className="iconButton" onClick={onClose} aria-label="Close mod details"><AppIcon name="x" /></button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label="Close mod details"><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
@@ -80,8 +81,8 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
               <span><strong>Compatibility is not fully verified.</strong>I understand this update may not be safe for this server.</span>
             </label>
             <div className="modsUpdateReviewActions">
-              <button type="button" className="secondaryButton" onClick={() => { setReviewingUpdate(false); setUpdateAcknowledged(false); }}>Cancel</button>
-              <button type="button" onClick={() => onUpdate(mod)} disabled={locked || !updateAcknowledged}>Confirm update</button>
+              <Button variant="secondary" onClick={() => { setReviewingUpdate(false); setUpdateAcknowledged(false); }}>Cancel</Button>
+              <Button onClick={() => onUpdate(mod)} disabled={locked || !updateAcknowledged}>Confirm update</Button>
             </div>
           </section>
         )}
@@ -100,10 +101,10 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
           </details>
       </div>
       <div className="modsDrawerFooter">
-        {updatePlanEntry?.status === "safe_update" && <button type="button" onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</button>}
-        {updatePlanEntry?.status === "needs_review" && !reviewingUpdate && <button type="button" onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</button>}
-        <button type="button" className="secondaryButton" onClick={() => onToggle(mod, !mod.enabled)} disabled={locked}>{mod.enabled ? "Disable" : "Enable"}</button>
-        <button type="button" className="dangerButton" onClick={() => onRemove(mod)} disabled={locked}>Remove</button>
+        {updatePlanEntry?.status === "safe_update" && <Button onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</Button>}
+        {updatePlanEntry?.status === "needs_review" && !reviewingUpdate && <Button onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</Button>}
+        <Button variant="secondary" onClick={() => onToggle(mod, !mod.enabled)} disabled={locked}>{mod.enabled ? "Disable" : "Enable"}</Button>
+        <Button variant="critical" onClick={() => onRemove(mod)} disabled={locked}>Remove</Button>
       </div>
     </aside>
   );

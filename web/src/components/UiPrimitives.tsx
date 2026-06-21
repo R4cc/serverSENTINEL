@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -31,13 +31,12 @@ export function Button({
 export function StatusBadge({
   tone = "neutral",
   className,
-  children
-}: {
+  children,
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & {
   tone?: StatusTone;
-  className?: string;
-  children: ReactNode;
 }) {
-  return <span className={classes("uiStatusBadge", `uiStatusBadge--${tone}`, className)}>{children}</span>;
+  return <span {...props} className={classes("uiStatusBadge", `uiStatusBadge--${tone}`, className)}>{children}</span>;
 }
 
 export function PanelHeader({

@@ -12288,7 +12288,6 @@ details.compatibilityBadge p {
 .modsWorkspaceMetric span:last-child { overflow: hidden; color: var(--text-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.modsWorkspaceToolbar button { display: inline-flex; gap: 8px; align-items: center; }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
@@ -12314,7 +12313,6 @@ details.compatibilityBadge p {
 .modsWorkspaceIdentity > span:last-child { display: grid; min-width: 0; gap: 3px; text-align: left; }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.modsStatusChip { display: inline-flex; width: fit-content; padding: 4px 9px; border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1; white-space: nowrap; }
 .modsStatusChip.ready { border-color: color-mix(in srgb, #159267 22%, transparent); color: #12805b; background: color-mix(in srgb, #159267 10%, transparent); }
 .modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
 .modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
@@ -13146,4 +13144,494 @@ details.compatibilityBadge p {
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
   line-height: 1.45;
+}
+
+/* Mods and Nodes adoption -------------------------------------------------- */
+
+.modsLockBanner,
+.nodeAlert,
+.nodeWarnings span,
+.nodeBlockedNote {
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
+  color: var(--text);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.modsLockBanner > span {
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
+  color: var(--sentinel-warning);
+}
+
+.modsLockBanner p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.modsWorkspaceMetric,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodeCard,
+.nodeInfoCard,
+.nodeInstallBox {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.modsWorkspaceMetric {
+  min-height: 76px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.modsWorkspaceMetric small,
+.modsWorkspaceTableHead,
+.nodeServerSectionLabel,
+.nodeInfoCard dt {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceMetric strong,
+.modsWorkspaceIdentity strong,
+.modsResultContent strong,
+.nodeCardTitle h3,
+.nodeServerName {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.modsWorkspaceMetric span:last-child,
+.modsWorkspaceIdentity small,
+.modsResultContent p,
+.modsResultContent small,
+.modsDetailsDescription,
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.modsWorkspaceToolbar .uiButton,
+.modsDrawerFooter .uiButton,
+.modsUpdateReviewActions .uiButton,
+.modsResultCard > .uiButton,
+.nodeCardActions .uiButton,
+.nodeDetailsActions .uiButton,
+.nodeModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeCardHeader,
+.nodeModalHeader,
+.nodeModalFooter {
+  border-color: var(--border-row);
+}
+
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeInstallHeader h3,
+.nodeModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.modsWorkspaceListHeader > div span,
+.modsDrawerHeader p,
+.modsDrawerHeader small,
+.modsSearchActivity,
+.modsSafeSearchNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.4;
+}
+
+.modsDrawerHeader small {
+  color: var(--accent);
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceSearch,
+.modsAddSearch label {
+  min-height: var(--control-height);
+  border-color: var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.modsWorkspaceSearch .buttonIcon,
+.modsAddSearch .buttonIcon,
+.modsSafeSearchNote .buttonIcon {
+  width: var(--control-icon-size);
+  height: var(--control-icon-size);
+}
+
+.modsWorkspaceSearch input,
+.modsAddSearch input {
+  min-height: calc(var(--control-height) - 2px);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+.modsSafeSearchNote {
+  gap: var(--space-2);
+}
+
+.modsSafeSearchNote .buttonIcon {
+  color: var(--sentinel-success);
+}
+
+.modsWorkspaceRow {
+  border-color: var(--border-row);
+  transition: background var(--control-transition), opacity var(--control-transition);
+}
+
+.modsWorkspaceRow:hover {
+  background: var(--sentinel-accent-soft);
+}
+
+.modsWorkspaceIdentity {
+  border-radius: var(--radius-sm);
+}
+
+.modsWorkspaceIdentity:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.modsWorkspaceUpdate .uiButton {
+  min-height: var(--control-height-compact);
+  padding-inline: var(--space-2);
+}
+
+.modsUpdateAction {
+  color: var(--sentinel-warning);
+}
+
+.modsReviewAction {
+  color: var(--accent);
+}
+
+.modsWorkspaceDetailsButton.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+}
+
+.modsStatusChip.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.modsStatusChip.update {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.modsStatusChip.review {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.modsStatusChip.not-recommended {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.modsStatusChip.unknown {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.modsWorkspaceEmpty.uiEmptyState {
+  min-height: 140px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.modsResultCard {
+  border-color: var(--border-row);
+  padding: var(--space-3);
+}
+
+.modsResultCard:hover:not(.isSkeleton) {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface-raised));
+}
+
+.modsWorkflowDrawer,
+.modsDetailsDrawer {
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+}
+
+.modsDrawerHeader,
+.modsDrawerFooter {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.modsBackButton.uiButton {
+  min-height: var(--control-height-compact);
+  margin-bottom: var(--space-1);
+  padding-inline: var(--space-1);
+}
+
+.modsRecommendedVersion,
+.modsCompatibilityCard.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.modsReviewWarning,
+.modsRiskAcknowledgement {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.modsChannelPicker .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.modsChannelPicker .uiButton.active,
+.installTabs .uiButton.active {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.nodesToolbar,
+.nodeCard {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.nodesToolbar h2 {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.nodesRefreshButton.uiButton {
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+}
+
+.nodeCard.online,
+.nodeCard.offline,
+.nodeCard.unknown {
+  box-shadow: inset 3px 0 0 var(--text-soft);
+}
+
+.nodeCard.online {
+  box-shadow: inset 3px 0 0 var(--sentinel-success);
+}
+
+.nodeCard.offline {
+  box-shadow: inset 3px 0 0 var(--sentinel-danger);
+}
+
+.nodeStatusPills .uiStatusBadge {
+  min-height: 24px;
+}
+
+.nodeCardActions .uiButton {
+  min-width: 96px;
+}
+
+.nodeUpgradeButton.uiButton {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.nodeServerPlaceholder {
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+}
+
+.nodeServerIcon svg,
+.nodePlayerIcon svg,
+.nodeDetailIcon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeServerState {
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--surface-muted);
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+}
+
+.nodeDetailIcon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-color: var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+.nodeDetailIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nodeDetailsTitleBlock > .nodeDetailIcon {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+
+.nodeDetailsTitleBlock > .nodeDetailIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.nodeDetailsTitleBlock h2 {
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+}
+
+.nodeInfoCard {
+  min-height: 72px;
+  gap: var(--space-3);
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.nodeInfoCard dd {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-meta);
+}
+
+.nodeDetailsActions .uiButton {
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  font-size: var(--type-button-size);
+  box-shadow: none;
+}
+
+.nodeDetailsActions .uiButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.addNodeIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  stroke: none;
+}
+
+.addNodeIcon .buttonIcon {
+  width: 24px;
+  height: 24px;
+}
+
+.addNodeCardInner > span:last-child {
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.installTabs .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.installCopyButton.uiButton {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-color: rgb(255 255 255 / 0.36);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--terminal-text);
+}
+
+.addNodeStepper,
+.modInstallStepper {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.addNodeStepCircle,
+.modInstallStepper span {
+  border-color: var(--border-muted);
+  box-shadow: none;
 }

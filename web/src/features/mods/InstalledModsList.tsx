@@ -1,9 +1,11 @@
 import type { InstalledMod, ModUpdatePlan } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
+import { Button, EmptyState } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { updatePlanEntryForMod } from "./modUpdatePlan";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
+import { ModStatusBadge } from "./ModStatusBadge";
 
 type Props = {
   mods: InstalledMod[];
@@ -39,10 +41,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
           <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
         </div>
         {visible.length === 0 ? (
-          <div className="modsWorkspaceEmpty">
-            <strong>{mods.length ? "No matching mods" : "No mods installed yet"}</strong>
-            <span>{mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."}</span>
-          </div>
+          <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
         ) : visible.map((mod) => {
           const health = getInstalledModHealth(mod);
           const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
@@ -60,18 +59,18 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
               </button>
-              <div><span className={`modsStatusChip ${health.tone}`}>{health.label}</span></div>
+              <div><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {plannedUpdate?.status === "safe_update" && (
-                  <button type="button" className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={health.shortDescription}>
+                  <Button variant="ghost" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={health.shortDescription}>
                     {health.primaryActionLabel}
-                  </button>
+                  </Button>
                 )}
                 {plannedUpdate?.status === "needs_review" && (
-                  <button type="button" className="modsReviewAction" onClick={() => onDetails(mod)} disabled={locked} title={health.shortDescription}>
+                  <Button variant="ghost" compact className="modsReviewAction" onClick={() => onDetails(mod)} disabled={locked} title={health.shortDescription}>
                     {health.primaryActionLabel}
-                  </button>
+                  </Button>
                 )}
               </div>
               <div>
@@ -80,7 +79,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                   <span className="slider" />
                 </label>
               </div>
-              <button type="button" className="modsWorkspaceDetailsButton" onClick={() => onDetails(mod)} aria-label={`More options for ${mod.displayName}`}><AppIcon name="chevronRight" /></button>
+              <Button variant="ghost" iconOnly className="modsWorkspaceDetailsButton" onClick={() => onDetails(mod)} aria-label={`More options for ${mod.displayName}`}><AppIcon name="chevronRight" /></Button>
             </article>
           );
         })}
