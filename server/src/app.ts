@@ -66,6 +66,7 @@ import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { modrinthApiKey, updateSettings } from "./storage/settingsStore.js";
 import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
+import { openStorageDatabase } from "./storage/database.js";
 import {
   badRequest,
   forbidden,
@@ -3076,6 +3077,10 @@ const app = Fastify({
   },
   disableRequestLogging: true,
   bodyLimit: 180 * 1024 * 1024
+});
+const storageDatabase = openStorageDatabase();
+app.addHook("onClose", async () => {
+  storageDatabase.close();
 });
 appLogger = app.log;
 await app.register(helmet, {
