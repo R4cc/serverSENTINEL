@@ -54,16 +54,23 @@ describe("SQLite repositories", () => {
       rolePreset: "operator",
       permissions: [...ROLE_PRESETS.operator]
     });
-    users.update((records) => records.push(admin, operator));
+    users.createFirst(admin, { id: "admin-session", userId: admin.id, createdAt: "2026-01-01T00:00:00.000Z" });
+    users.create(operator);
     sessions.create({ id: "session-id", userId: operator.id, createdAt: "2026-01-02T00:00:00.000Z" });
 
-    users.update((records) => {
-      const index = records.findIndex((user) => user.id === operator.id);
-      records.splice(index, 1);
-    });
+    users.delete(operator.id);
 
     expect(users.list()).toEqual([admin]);
     expect(sessions.find("session-id")).toBeUndefined();
+    expect(sessions.find("admin-session")).toBeDefined();
+    expect(() => users.createFirst(storedUser({ id: "other" }), { id: "other-session", userId: "other", createdAt: "2026-01-03T00:00:00.000Z" }))
+      .toThrow("Initial registration is already complete");
+    expect(() => users.updateById(admin.id, (current) => ({
+      ...current,
+      rolePreset: "viewer",
+      permissions: [...ROLE_PRESETS.viewer]
+    }))).toThrow("At least one admin user is required");
+    expect(users.list()[0].rolePreset).toBe("admin");
   });
 
   it("stores complete node records and applies metadata updates", async () => {
@@ -83,11 +90,8 @@ describe("SQLite repositories", () => {
       secretHash: "secret"
     };
 
-    nodes.update((records) => records.push(node));
-    nodes.update((records) => {
-      records[0].status = "offline";
-      records[0].agentVersion = "0.8.0";
-    });
+    nodes.create(node);
+    nodes.updateById(node.id, (current) => ({ ...current, status: "offline", agentVersion: "0.8.0" }));
 
     expect(nodes.list()).toEqual([{ ...node, status: "offline", agentVersion: "0.8.0" }]);
   });
@@ -97,9 +101,7 @@ describe("SQLite repositories", () => {
     const settings = new SettingsRepository(storage);
     expect(settings.get()).toEqual({ modrinthApiKey: undefined });
 
-    settings.update((value) => {
-      value.modrinthApiKey = "  modrinth-secret  ";
-    });
+    settings.setModrinthApiKey("  modrinth-secret  ");
 
     expect(settings.get()).toEqual({ modrinthApiKey: "modrinth-secret" });
   });

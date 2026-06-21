@@ -63,7 +63,7 @@ import {
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
-import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
+import { asArray, asObject, optionalString, requiredString, writeJsonFile } from "./storage/jsonFile.js";
 import { openStorageDatabase } from "./storage/database.js";
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
@@ -101,7 +101,6 @@ import type {
   DockerExecCreate,
   DockerExecInspect,
   DockerState,
-  AppSettings,
   InstalledModMetadata,
   ManagedNode,
   ManagedServer,
@@ -146,7 +145,7 @@ const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const versionMetadataFilename = ".serversentinel-version.json";
 
-const serversQueue = new AsyncQueue();
+const serverSideEffectsQueue = new AsyncQueue();
 export const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 export const minNodeJoinTokenTtlMinutes = 5;
 export const maxNodeJoinTokenTtlMinutes = 1440;
@@ -496,18 +495,6 @@ async function readUsers() {
   return usersRepository.list();
 }
 
-function queuedReadUsers() {
-  return readUsers();
-}
-
-async function updateUsers(updater: (users: StoredUser[]) => void) {
-  usersRepository.update(updater);
-}
-
-async function updateSettings(updater: (settings: AppSettings) => void) {
-  settingsRepository.update(updater);
-}
-
 async function modrinthApiKey() {
   return settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
 }
@@ -540,7 +527,7 @@ async function currentUserFromCookie(cookieHeader?: string) {
     sessionsRepository.delete(sessionId);
     return null;
   }
-  const users = await queuedReadUsers();
+  const users = await readUsers();
   return users.find((user) => user.id === session.userId) ?? null;
 }
 
@@ -677,10 +664,6 @@ async function readNodes() {
   return normalized;
 }
 
-function queuedReadNodes() {
-  return readNodes();
-}
-
 async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
   nodesRepository.update((stored) => {
     const nodes = stored.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
@@ -813,7 +796,7 @@ async function resolveServerVersions(server: ManagedServer): Promise<ResolvedSer
 }
 
 async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer> {
-  const availableNodes = nodes ?? await queuedReadNodes();
+  const availableNodes = nodes ?? await readNodes();
   const node = findServerNode(server, availableNodes);
   return {
     id: server.id,
@@ -960,20 +943,8 @@ async function readServers() {
   return serversRepository.list();
 }
 
-async function writeServers(servers: ManagedServer[]) {
-  const nodes = await readNodes();
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const normalized = servers.map(normalizeManagedServer);
-  for (const server of normalized) {
-    if (!nodeIds.has(server.nodeId)) {
-      throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
-    }
-  }
-  serversRepository.saveAll(normalized);
-}
-
-function queuedReadServers() {
-  return serversQueue.enqueue(() => readServers());
+function listManagedServers() {
+  return readServers();
 }
 
 export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
@@ -985,14 +956,6 @@ export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
     }
   }
   return removed;
-}
-
-async function updateServers(updater: (servers: ManagedServer[]) => Promise<void> | void) {
-  return serversQueue.enqueue(async () => {
-    const servers = await readServers();
-    await updater(servers);
-    await writeServers(servers);
-  });
 }
 
 function slugify(input: string) {
@@ -1019,7 +982,7 @@ async function getServer(serverId?: string) {
   if (serverId !== undefined) {
     validateServerId(serverId);
   }
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
   if (!server) {
     throw new Error("No managed server instance is registered");
@@ -1444,7 +1407,7 @@ function findProvisionPortConflict(nodeId: string, dockerPorts: string, ignoreJo
 }
 
 async function assertNodePortsAvailable(nodeId: string, dockerPorts: string, options: { ignoreServerId?: string; ignoreJobId?: string } = {}) {
-  const existingConflict = findExistingServerPortConflict(await queuedReadServers(), nodeId, dockerPorts, options.ignoreServerId);
+  const existingConflict = findExistingServerPortConflict(await listManagedServers(), nodeId, dockerPorts, options.ignoreServerId);
   if (existingConflict) {
     throw new Error(portConflictMessage(existingConflict.port, existingConflict.ownerName));
   }
@@ -2487,7 +2450,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   if (input.acceptEula !== true) {
     throw new Error("You must confirm Minecraft EULA acceptance to create a runnable server");
   }
-  if ((await queuedReadServers()).some((server) => server.displayName.toLowerCase() === displayName.toLowerCase())) {
+  if ((await listManagedServers()).some((server) => server.displayName.toLowerCase() === displayName.toLowerCase())) {
     throw new Error("A managed server with this display name already exists");
   }
 
@@ -2516,7 +2479,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
       filename: serverJar
     }
   };
-  const existingServers = await queuedReadServers();
+  const existingServers = await listManagedServers();
   const { serverPort, dockerPorts, queryPort, managedPorts } = normalizeCreateServerPorts(input, existingServers, localNodeId, { ignoreJobId: jobId });
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
@@ -2559,9 +2522,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     }
 
     report?.(92, "Saving server registration");
-    await updateServers((servers) => {
-      servers.push(server);
-    });
+    serversRepository.create(server);
     report?.(100, "Server setup complete");
     logInfo({ ...serverLogFields(server), jobId, durationMs: durationSince(startedAt), status: "succeeded" }, "Provisioning succeeded");
     return server;
@@ -2586,7 +2547,7 @@ async function startProvisionJob(input: CreateServerInput) {
   if (!nodeId) {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await queuedReadServers(), nodeId);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   input.dockerPorts = dockerPorts;
   input.queryPort = String(queryPort);
@@ -2703,9 +2664,7 @@ const runningSchedules = new Set<string>();
 async function tickSchedules() {
   const now = new Date();
   const runKey = now.toISOString().slice(0, 16);
-  const servers = await queuedReadServers();
-  let changed = false;
-
+  const servers = await listManagedServers();
   for (const server of servers) {
     for (const schedule of server.schedules ?? []) {
       if (!schedule.enabled) continue;
@@ -2731,36 +2690,13 @@ async function tickSchedules() {
           message: result.message,
           ranAt
         };
-        schedule.lastRunAt = ranAt;
-        schedule.lastStatus = result.status;
-        schedule.lastMessage = result.message;
-        schedule.recentRuns = [run, ...(schedule.recentRuns ?? [])].slice(0, 25);
-        schedule.updatedAt = ranAt;
-        changed = true;
+        serversRepository.recordScheduledRun(server.id, schedule.id, run);
       } finally {
         runningSchedules.delete(key);
       }
     }
   }
 
-  if (changed) {
-    await updateServers((currentServers) => {
-      for (const server of servers) {
-        const currentServer = currentServers.find((s) => s.id === server.id);
-        if (!currentServer) continue;
-        for (const schedule of server.schedules ?? []) {
-          const currentSchedule = currentServer.schedules?.find((sch) => sch.id === schedule.id);
-          if (currentSchedule) {
-            currentSchedule.lastRunAt = schedule.lastRunAt;
-            currentSchedule.lastStatus = schedule.lastStatus;
-            currentSchedule.lastMessage = schedule.lastMessage;
-            currentSchedule.recentRuns = schedule.recentRuns;
-            currentSchedule.updatedAt = schedule.updatedAt;
-          }
-        }
-      }
-    });
-  }
 }
 
 async function localUpdateServer(serverId: string, input: unknown) {
@@ -2778,7 +2714,8 @@ async function localUpdateServer(serverId: string, input: unknown) {
     serverPort?: string;
   };
   let updatedServer: ManagedServer | null = null;
-  await updateServers(async (servers) => {
+  await serverSideEffectsQueue.enqueue(async () => {
+    const servers = await readServers();
     const index = servers.findIndex((candidate) => candidate.id === serverId);
     if (index === -1) {
       throw new Error("Server not found");
@@ -2887,7 +2824,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
       });
     }
 
-    servers[index] = updated;
+    serversRepository.replaceMetadata(updated);
     updatedServer = updated;
   });
   return updatedServer!;
@@ -2899,7 +2836,8 @@ async function localDeleteServer(server: ManagedServer, input: unknown) {
   let deletedFiles = false;
   let serverFields: Record<string, unknown> = {};
 
-  await updateServers(async (servers) => {
+  await serverSideEffectsQueue.enqueue(async () => {
+    const servers = await readServers();
     const index = servers.findIndex((candidate) => candidate.id === server.id);
     if (index === -1) {
       throw new Error("Server not found");
@@ -2923,7 +2861,7 @@ async function localDeleteServer(server: ManagedServer, input: unknown) {
       deletedFiles = true;
     }
 
-    servers.splice(index, 1);
+    serversRepository.delete(current.id);
   });
 
   logInfo({ ...serverFields, deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
@@ -3061,13 +2999,12 @@ registerAuthRoutes(app, {
   authRateLimit,
   destructiveRateLimit,
   sessions: sessionsRepository,
+  users: usersRepository,
   sessionCookieName,
   sessionMaxAgeSeconds,
   parseCookies,
   sessionCookie,
   currentUserFromCookie,
-  queuedReadUsers,
-  updateUsers,
   requireRequestPermission,
   validateUsername,
   validatePassword,
@@ -3102,8 +3039,8 @@ app.addHook("preHandler", async (request) => {
 app.get("/api/app", async (request) => {
   const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
-  const servers = await queuedReadServers();
-  const nodes = await queuedReadNodes();
+  const servers = await listManagedServers();
+  const nodes = await readNodes();
   const totalMemory = await detectedTotalMemory();
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
@@ -3118,7 +3055,7 @@ app.get("/api/app", async (request) => {
 
 app.get("/api/nodes", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  return { nodes: await publicNodes(await queuedReadNodes()) };
+  return { nodes: await publicNodes(await readNodes()) };
 });
 
 app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
@@ -3142,9 +3079,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
   };
-  await updateNodes((nodes) => {
-    nodes.push(node);
-  });
+  nodesRepository.create(node);
   return {
     node: publicNode(node),
     joinToken: token.joinToken,
@@ -3173,9 +3108,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
   };
-  await updateNodes((nodes) => {
-    nodes.push(node);
-  });
+  nodesRepository.create(node);
   return {
     node: publicNode(node),
     joinToken: token.joinToken,
@@ -3189,23 +3122,22 @@ app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMou
   const token = createJoinToken(request.body.tokenTtlMinutes);
   const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
   const dataMount = optionalNodeDataMount(request.body.dataMount);
-  let updatedNode: ManagedNode | undefined;
-  await updateNodes((nodes) => {
-    const node = nodes.find((candidate) => candidate.id === request.params.nodeId);
-    if (!node) nodeNotFound(request.params.nodeId);
+  const updatedNode = nodesRepository.updateById(request.params.nodeId, (node) => {
     if (node.isInternal) {
       throw new Error("Internal node tokens cannot be rotated");
     }
-    node.joinTokenHash = hashNodeSecret(token.joinToken);
-    node.joinTokenExpiresAt = token.expiresAt;
-    node.updatedAt = new Date().toISOString();
-    updatedNode = node;
+    return {
+      ...node,
+      joinTokenHash: hashNodeSecret(token.joinToken),
+      joinTokenExpiresAt: token.expiresAt,
+      updatedAt: new Date().toISOString()
+    };
   });
   return {
-    node: publicNode(updatedNode!),
+    node: publicNode(updatedNode),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode!.name })
+    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode.name })
   };
 });
 
@@ -3213,7 +3145,7 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   await requireRequestPermission(request, "servers.view");
   const panelUrl = optionalNodePanelUrl(request.query.panelUrl);
   const dataMount = optionalNodeDataMount(request.query.dataMount);
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   return {
     node: publicNode(node),
@@ -3224,7 +3156,7 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
 app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:nodeId/update", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const body = request.body ?? {};
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     throw new Error("Internal node cannot be updated from the Nodes page.");
@@ -3272,7 +3204,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
 
 app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     if (!dockerAvailable()) {
@@ -3317,12 +3249,12 @@ app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructi
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     throw new Error("Internal node cannot be deleted");
   }
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   const assignedServers = servers.filter((server) => server.nodeId === request.params.nodeId);
   const force = request.query.force === "true";
   if (assignedServers.length && !force) {
@@ -3342,29 +3274,14 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
       };
     }
   }
-  let deletedServers = 0;
-  if (force && assignedServers.length) {
-    await updateServers((currentServers) => {
-      deletedServers = removeServersForNode(currentServers, request.params.nodeId);
-    });
-  }
-  let deleted = false;
-  await updateNodes((nodes) => {
-    const index = nodes.findIndex((candidate) => candidate.id === request.params.nodeId);
-    if (index === -1) nodeNotFound(request.params.nodeId);
-    if (nodes[index].isInternal) {
-      throw new Error("Internal node cannot be deleted");
-    }
-    nodes.splice(index, 1);
-    deleted = true;
-  });
+  const { deletedServers } = nodesRepository.deleteWithServers(request.params.nodeId, force);
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: deleted, deletedServers, selfRemoval };
+  return { ok: true, deletedServers, selfRemoval };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
   await requireRequestPermission(request, "servers.view");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) {
     return reply.code(404).send({ error: "Node not found", code: "node_not_found" });
   }
@@ -3476,8 +3393,8 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
 
 app.get("/api/context", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  const servers = await queuedReadServers();
-  const nodes = await queuedReadNodes();
+  const servers = await listManagedServers();
+  const nodes = await readNodes();
   const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes)));
   const publicNodeList = await publicNodes(nodes);
   return {
@@ -3494,9 +3411,7 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
   if (!key) {
     throw new Error("Modrinth API key is required");
   }
-  await updateSettings((settings) => {
-    settings.modrinthApiKey = key;
-  });
+  settingsRepository.setModrinthApiKey(key);
   logInfo({ action: "configure_modrinth", status: "succeeded" }, "Modrinth API configuration updated");
   return { ok: true, modrinthApiConfigured: true };
 });
@@ -3557,7 +3472,7 @@ app.post<{
   await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await queuedReadServers(), nodeId);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   request.body.dockerPorts = dockerPorts;
   request.body.queryPort = String(queryPort);
@@ -3603,7 +3518,7 @@ app.put<{
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
   const nextDisplayName = request.body.displayName?.trim() || server.displayName;
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
     throw new Error("A managed server with this display name already exists");
   }
@@ -3653,24 +3568,19 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
       filename: runtimeProfile.jarArtifact.filename || refreshed.jarArtifact.filename
     }
   };
-  let updatedServer: ManagedServer | undefined;
-  await updateServers((servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === server.id);
-    if (index === -1) throw new Error("Server not found");
-    servers[index] = {
-      ...servers[index],
-      minecraftVersion: nextProfile.minecraftVersion,
-      loaderVersion: nextProfile.loaderVersion,
-      serverJar: nextProfile.jarArtifact.filename,
-      runtimeProfile: nextProfile,
-      updatedAt: new Date().toISOString()
-    };
-    updatedServer = servers[index];
-  });
+  const updatedServer: ManagedServer = {
+    ...server,
+    minecraftVersion: nextProfile.minecraftVersion,
+    loaderVersion: nextProfile.loaderVersion,
+    serverJar: nextProfile.jarArtifact.filename,
+    runtimeProfile: nextProfile,
+    updatedAt: new Date().toISOString()
+  };
+  serversRepository.replaceMetadata(updatedServer);
   return {
     serverId: server.id,
     runtimeProfile: nextProfile,
-    server: updatedServer ? await runtimeForServer(updatedServer).publicServer(updatedServer) : undefined,
+    server: await runtimeForServer(updatedServer).publicServer(updatedServer),
     warnings: []
   };
 });
@@ -3728,21 +3638,11 @@ app.post<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let createdSchedule: ScheduledExecution | null = null;
-  let serverLog: Record<string, unknown> = {};
-  await updateServers((servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (index === -1) {
-      throw new Error("Server not found");
-    }
-    const schedule = scheduleFromBody(request.body);
-    servers[index].schedules = [...(servers[index].schedules ?? []), schedule];
-    servers[index].updatedAt = new Date().toISOString();
-    createdSchedule = schedule;
-    serverLog = serverLogFields(servers[index]);
-  });
-  logInfo({ ...serverLog, scheduleId: createdSchedule!.id, enabled: createdSchedule!.enabled, action: "create_schedule" }, "Schedule created");
-  return createdSchedule!;
+  const server = await getServer(request.params.id);
+  const createdSchedule = scheduleFromBody(request.body);
+  serversRepository.createSchedule(server.id, createdSchedule, createdSchedule.updatedAt);
+  logInfo({ ...serverLogFields(server), scheduleId: createdSchedule.id, enabled: createdSchedule.enabled, action: "create_schedule" }, "Schedule created");
+  return createdSchedule;
 });
 
 app.put<{
@@ -3750,43 +3650,22 @@ app.put<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let updatedSchedule: ScheduledExecution | null = null;
-  let serverLog: Record<string, unknown> = {};
-  await updateServers((servers) => {
-    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (serverIndex === -1) {
-      throw new Error("Server not found");
-    }
-    const scheduleId = validateScheduleId(request.params.scheduleId);
-    const schedules = servers[serverIndex].schedules ?? [];
-    const scheduleIndex = schedules.findIndex((candidate) => candidate.id === scheduleId);
-    if (scheduleIndex === -1) {
-      throw new Error("Schedule not found");
-    }
-    schedules[scheduleIndex] = scheduleFromBody(request.body, schedules[scheduleIndex]);
-    servers[serverIndex].schedules = schedules;
-    servers[serverIndex].updatedAt = new Date().toISOString();
-    updatedSchedule = schedules[scheduleIndex];
-    serverLog = serverLogFields(servers[serverIndex]);
-  });
-  logInfo({ ...serverLog, scheduleId: updatedSchedule!.id, enabled: updatedSchedule!.enabled, action: "update_schedule" }, "Schedule updated");
-  return updatedSchedule!;
+  const server = await getServer(request.params.id);
+  const scheduleId = validateScheduleId(request.params.scheduleId);
+  const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
+  if (!existing) throw new Error("Schedule not found");
+  const updatedSchedule = scheduleFromBody(request.body, existing);
+  serversRepository.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt);
+  logInfo({ ...serverLogFields(server), scheduleId: updatedSchedule.id, enabled: updatedSchedule.enabled, action: "update_schedule" }, "Schedule updated");
+  return updatedSchedule;
 });
 
 app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let serverLog: Record<string, unknown> = {};
+  const server = await getServer(request.params.id);
   const scheduleId = validateScheduleId(request.params.scheduleId);
-  await updateServers((servers) => {
-    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (serverIndex === -1) {
-      throw new Error("Server not found");
-    }
-    servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== scheduleId);
-    servers[serverIndex].updatedAt = new Date().toISOString();
-    serverLog = serverLogFields(servers[serverIndex]);
-  });
-  logInfo({ ...serverLog, scheduleId, action: "delete_schedule" }, "Schedule deleted");
+  serversRepository.deleteSchedule(server.id, scheduleId, new Date().toISOString());
+  logInfo({ ...serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
 });
 
@@ -5556,36 +5435,24 @@ runtimeRegistry = new NodeRuntimeRegistry(
   localRuntime,
   (nodeId) => new RemoteNodeRuntime(
     nodeId,
-    async (id) => (await queuedReadNodes()).find((node) => node.id === id),
+    async (id) => (await readNodes()).find((node) => node.id === id),
     panelNodeConnections,
     publicServer,
     async (server) => {
-      await updateServers((servers) => {
-        if (servers.some((candidate) => candidate.id === server.id)) {
-          throw new Error("A managed server with this id already exists");
-        }
-        servers.push(server);
-      });
+      serversRepository.create(server);
     },
     async (server) => {
-      await updateServers((servers) => {
-        const index = servers.findIndex((candidate) => candidate.id === server.id);
-        if (index === -1) throw new Error("Server not found");
-        servers[index] = server;
-      });
+      serversRepository.replaceMetadata(server);
     },
     async (serverId) => {
-      await updateServers((servers) => {
-        const index = servers.findIndex((candidate) => candidate.id === serverId);
-        if (index !== -1) servers.splice(index, 1);
-      });
+      serversRepository.delete(serverId);
     }
   )
 );
 resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
-  readServers: queuedReadServers,
+  readServers: listManagedServers,
   runtimeForServer,
   historyDir: join(config.configDir, "history")
 });

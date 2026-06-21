@@ -81,43 +81,93 @@ export class NodesRepository {
     return this.storage.connection.prepare<[], NodeRow>("SELECT * FROM nodes ORDER BY created_at, id").all().map(nodeFromRow);
   }
 
+  create(node: ManagedNode) {
+    this.storage.transaction((database) => {
+      const normalized = normalizeNode(node);
+      if (this.findById(normalized.id)) throw new Error(`Node ${normalized.id} already exists`);
+      this.save(database, normalized);
+    });
+  }
+
+  updateById(id: string, updater: (node: ManagedNode) => ManagedNode): ManagedNode {
+    return this.storage.transaction((database) => {
+      const current = this.findById(id);
+      if (!current) this.notFound(id);
+      const updated = normalizeNode(updater(current));
+      if (updated.id !== id) throw new Error("Node id cannot be changed");
+      this.save(database, updated);
+      return updated;
+    });
+  }
+
+  deleteWithServers(id: string, deleteServers: boolean) {
+    return this.storage.transaction((database) => {
+      const node = this.findById(id);
+      if (!node) this.notFound(id);
+      if (node.isInternal) throw new Error("Internal node cannot be deleted");
+      const serverCount = database.prepare<[string], { count: number }>(
+        "SELECT COUNT(*) AS count FROM servers WHERE node_id = ?"
+      ).get(id)?.count ?? 0;
+      if (serverCount > 0 && !deleteServers) throw new Error("Cannot delete a node while servers are assigned to it");
+      if (deleteServers) database.prepare("DELETE FROM servers WHERE node_id = ?").run(id);
+      database.prepare("DELETE FROM nodes WHERE id = ?").run(id);
+      return { node, deletedServers: deleteServers ? serverCount : 0 };
+    });
+  }
+
   update(updater: (nodes: ManagedNode[]) => void) {
     this.storage.transaction((database) => {
       const nodes = this.list();
       updater(nodes);
       const normalized = nodes.map(normalizeNode);
       const existingIds = new Set(database.prepare<[], { id: string }>("SELECT id FROM nodes").all().map((row) => row.id));
-      const upsert = database.prepare(`
-        INSERT INTO nodes (
-          id, name, type, status, is_internal, created_at, updated_at, last_seen_at,
-          connected_at, agent_version, protocol_version, capabilities_json, docker_status,
-          data_path_status, total_memory, compatibility, secret_hash, join_token_hash,
-          join_token_expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name=excluded.name, type=excluded.type, status=excluded.status,
-          is_internal=excluded.is_internal, created_at=excluded.created_at,
-          updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at,
-          connected_at=excluded.connected_at, agent_version=excluded.agent_version,
-          protocol_version=excluded.protocol_version, capabilities_json=excluded.capabilities_json,
-          docker_status=excluded.docker_status, data_path_status=excluded.data_path_status,
-          total_memory=excluded.total_memory, compatibility=excluded.compatibility,
-          secret_hash=excluded.secret_hash, join_token_hash=excluded.join_token_hash,
-          join_token_expires_at=excluded.join_token_expires_at
-      `);
       for (const node of normalized) {
-        upsert.run(
-          node.id, node.name, node.type, node.status, node.isInternal ? 1 : 0,
-          node.createdAt, node.updatedAt, node.lastSeenAt ?? null, node.connectedAt ?? null,
-          node.agentVersion ?? null, node.protocolVersion ?? null,
-          node.capabilities ? JSON.stringify(node.capabilities) : null, node.dockerStatus ?? null,
-          node.dataPathStatus ?? null, node.totalMemory ?? null, node.compatibility ?? null,
-          node.secretHash ?? null, node.joinTokenHash ?? null, node.joinTokenExpiresAt ?? null
-        );
+        this.save(database, node);
         existingIds.delete(node.id);
       }
       const remove = database.prepare("DELETE FROM nodes WHERE id = ?");
       for (const id of existingIds) remove.run(id);
     });
   }
+
+  private findById(id: string) {
+    const row = this.storage.connection.prepare<[string], NodeRow>("SELECT * FROM nodes WHERE id = ?").get(id);
+    return row ? nodeFromRow(row) : undefined;
+  }
+
+  private save(database: Database.Database, node: ManagedNode) {
+    database.prepare(`
+      INSERT INTO nodes (
+        id, name, type, status, is_internal, created_at, updated_at, last_seen_at,
+        connected_at, agent_version, protocol_version, capabilities_json, docker_status,
+        data_path_status, total_memory, compatibility, secret_hash, join_token_hash,
+        join_token_expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, type=excluded.type, status=excluded.status,
+        is_internal=excluded.is_internal, created_at=excluded.created_at,
+        updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at,
+        connected_at=excluded.connected_at, agent_version=excluded.agent_version,
+        protocol_version=excluded.protocol_version, capabilities_json=excluded.capabilities_json,
+        docker_status=excluded.docker_status, data_path_status=excluded.data_path_status,
+        total_memory=excluded.total_memory, compatibility=excluded.compatibility,
+        secret_hash=excluded.secret_hash, join_token_hash=excluded.join_token_hash,
+        join_token_expires_at=excluded.join_token_expires_at
+    `).run(
+      node.id, node.name, node.type, node.status, node.isInternal ? 1 : 0,
+      node.createdAt, node.updatedAt, node.lastSeenAt ?? null, node.connectedAt ?? null,
+      node.agentVersion ?? null, node.protocolVersion ?? null,
+      node.capabilities ? JSON.stringify(node.capabilities) : null, node.dockerStatus ?? null,
+      node.dataPathStatus ?? null, node.totalMemory ?? null, node.compatibility ?? null,
+      node.secretHash ?? null, node.joinTokenHash ?? null, node.joinTokenExpiresAt ?? null
+    );
+  }
+
+  private notFound(id: string): never {
+    const error = new Error(`Node ${id} not found`) as Error & { statusCode?: number; code?: string };
+    error.statusCode = 404;
+    error.code = "node_not_found";
+    throw error;
+  }
 }
+import type Database from "better-sqlite3";

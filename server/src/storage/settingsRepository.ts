@@ -11,15 +11,11 @@ export class SettingsRepository {
     return { modrinthApiKey: row?.modrinth_api_key?.trim() || undefined };
   }
 
-  update(updater: (settings: AppSettings) => void) {
-    this.storage.transaction((database) => {
-      const settings = this.get();
-      updater(settings);
-      const modrinthApiKey = settings.modrinthApiKey?.trim() || null;
-      database.prepare(`
-        INSERT INTO app_settings (id, modrinth_api_key) VALUES (1, ?)
-        ON CONFLICT(id) DO UPDATE SET modrinth_api_key = excluded.modrinth_api_key
-      `).run(modrinthApiKey);
-    });
+  setModrinthApiKey(value: string) {
+    const modrinthApiKey = value.trim();
+    this.storage.connection.prepare(`
+      INSERT INTO app_settings (id, modrinth_api_key) VALUES (1, ?)
+      ON CONFLICT(id) DO UPDATE SET modrinth_api_key = excluded.modrinth_api_key
+    `).run(modrinthApiKey || null);
   }
 }

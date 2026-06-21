@@ -104,16 +104,6 @@ function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecu
   };
 }
 
-function baseServerValue(server: ManagedServer) {
-  const { managedPorts: _ports, schedules: _schedules, ...base } = server;
-  return base;
-}
-
-function scheduleValue(schedule: ScheduledExecution) {
-  const { recentRuns: _runs, nextRunAt: _nextRunAt, ...value } = schedule;
-  return value;
-}
-
 function equal(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -176,26 +166,89 @@ export class ServersRepository {
     }));
   }
 
-  saveAll(values: ManagedServer[]) {
+  create(value: ManagedServer) {
     this.storage.transaction((database) => {
-      const current = new Map(this.list().map((server) => [server.id, server]));
-      const servers = values.map(this.normalize);
-      const desiredIds = new Set(servers.map((server) => server.id));
-      const remove = database.prepare("DELETE FROM servers WHERE id = ?");
-      for (const id of current.keys()) {
-        if (!desiredIds.has(id)) {
-          remove.run(id);
-          current.delete(id);
-        }
+      const server = this.normalize(value);
+      if (database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) {
+        throw new Error("A managed server with this id already exists");
       }
-      for (const server of servers) {
-        const previous = current.get(server.id);
-        if (!previous || !equal(baseServerValue(previous), baseServerValue(server))) this.upsertServer(database, server);
-        if (!previous || !equal(previous.managedPorts ?? [], server.managedPorts ?? [])) this.syncPorts(database, server);
-        this.syncSchedules(database, server, previous);
-        current.delete(server.id);
-      }
+      this.upsertServer(database, server);
+      this.syncPorts(database, server);
+      this.syncSchedules(database, server);
     });
+  }
+
+  replaceMetadata(value: ManagedServer) {
+    this.storage.transaction((database) => {
+      const server = this.normalize(value);
+      if (!database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) throw new Error("Server not found");
+      this.upsertServer(database, server);
+      this.syncPorts(database, server);
+    });
+  }
+
+  delete(id: string) {
+    return this.storage.connection.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
+  }
+
+  createSchedule(serverId: string, schedule: ScheduledExecution, serverUpdatedAt: string) {
+    this.storage.transaction((database) => {
+      this.writeSchedule(database, serverId, schedule, false);
+      database.prepare("UPDATE servers SET updated_at = ? WHERE id = ?").run(serverUpdatedAt, serverId);
+    });
+  }
+
+  updateSchedule(serverId: string, schedule: ScheduledExecution, serverUpdatedAt: string) {
+    this.storage.transaction((database) => {
+      this.writeSchedule(database, serverId, schedule, true);
+      database.prepare("UPDATE servers SET updated_at = ? WHERE id = ?").run(serverUpdatedAt, serverId);
+    });
+  }
+
+  deleteSchedule(serverId: string, scheduleId: string, serverUpdatedAt: string) {
+    this.storage.transaction((database) => {
+      database.prepare("DELETE FROM schedules WHERE server_id = ? AND id = ?").run(serverId, scheduleId);
+      database.prepare("UPDATE servers SET updated_at = ? WHERE id = ?").run(serverUpdatedAt, serverId);
+    });
+  }
+
+  recordScheduledRun(serverId: string, scheduleId: string, run: ScheduledRun) {
+    this.storage.transaction((database) => {
+      const updated = database.prepare(`
+        UPDATE schedules SET last_run_at = ?, last_status = ?, last_message = ?, updated_at = ?
+        WHERE server_id = ? AND id = ?
+      `).run(run.ranAt, run.status, run.message ?? null, run.ranAt, serverId, scheduleId);
+      if (updated.changes === 0) return;
+      database.prepare(`
+        INSERT INTO scheduled_runs (id, server_id, schedule_id, schedule_name, status, message, ran_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(run.id, serverId, scheduleId, run.scheduleName, run.status, run.message ?? null, run.ranAt);
+      database.prepare(`
+        DELETE FROM scheduled_runs
+        WHERE server_id = ? AND schedule_id = ? AND id NOT IN (
+          SELECT id FROM scheduled_runs WHERE server_id = ? AND schedule_id = ?
+          ORDER BY ran_at DESC, id DESC LIMIT 25
+        )
+      `).run(serverId, scheduleId, serverId, scheduleId);
+    });
+  }
+
+  private writeSchedule(database: Database.Database, serverId: string, schedule: ScheduledExecution, update: boolean) {
+    const statement = update
+      ? database.prepare(`
+        UPDATE schedules SET name=?, cron=?, commands_json=?, only_when_no_players=?, enabled=?,
+          created_at=?, updated_at=? WHERE server_id=? AND id=?
+      `)
+      : database.prepare(`
+        INSERT INTO schedules (
+          name, cron, commands_json, only_when_no_players, enabled, created_at, updated_at, server_id, id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+    const result = statement.run(
+      schedule.name, schedule.cron, JSON.stringify(schedule.commands), schedule.onlyWhenNoPlayers ? 1 : 0,
+      schedule.enabled ? 1 : 0, schedule.createdAt, schedule.updatedAt, serverId, schedule.id
+    );
+    if (update && result.changes === 0) throw new Error("Schedule not found");
   }
 
   private upsertServer(database: Database.Database, server: ManagedServer) {
@@ -243,8 +296,7 @@ export class ServersRepository {
     }
   }
 
-  private syncSchedules(database: Database.Database, server: ManagedServer, previous?: ManagedServer) {
-    const previousSchedules = new Map((previous?.schedules ?? []).map((schedule) => [schedule.id, schedule]));
+  private syncSchedules(database: Database.Database, server: ManagedServer) {
     const upsert = database.prepare(`
       INSERT INTO schedules (
         server_id, id, name, cron, commands_json, only_when_no_players, enabled,
@@ -258,22 +310,14 @@ export class ServersRepository {
         last_message=excluded.last_message
     `);
     for (const schedule of server.schedules ?? []) {
-      const oldSchedule = previousSchedules.get(schedule.id);
-      if (!oldSchedule || !equal(scheduleValue(oldSchedule), scheduleValue(schedule))) {
-        upsert.run(
-          server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.commands),
-          schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
-          schedule.updatedAt, schedule.lastRunAt ?? null, schedule.lastStatus ?? null,
-          schedule.lastMessage ?? null
-        );
-      }
-      if (!oldSchedule || !equal(oldSchedule.recentRuns ?? [], schedule.recentRuns ?? [])) {
-        this.syncRuns(database, server.id, schedule);
-      }
-      previousSchedules.delete(schedule.id);
+      upsert.run(
+        server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.commands),
+        schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
+        schedule.updatedAt, schedule.lastRunAt ?? null, schedule.lastStatus ?? null,
+        schedule.lastMessage ?? null
+      );
+      this.syncRuns(database, server.id, schedule);
     }
-    const remove = database.prepare("DELETE FROM schedules WHERE server_id = ? AND id = ?");
-    for (const id of previousSchedules.keys()) remove.run(server.id, id);
   }
 
   private syncRuns(database: Database.Database, serverId: string, schedule: ScheduledExecution) {

@@ -1,5 +1,5 @@
 import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
-import type { ServerAccess, StoredUser } from "../types.js";
+import type { ServerAccess, Session, StoredUser } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./jsonFile.js";
 import type { StorageDatabase } from "./database.js";
 
@@ -87,41 +87,93 @@ export class UsersRepository {
     `).all().map(userFromRow);
   }
 
-  update(updater: (users: StoredUser[]) => void) {
+  createFirst(user: StoredUser, session: Session) {
     this.storage.transaction((database) => {
-      const users = this.list();
-      updater(users);
-      const normalized = users.map(normalizeStoredUser);
-      if (normalized.length > 0 && !normalized.some(isFullAccessUser)) {
-        badUserRequest("At least one full-access admin user is required");
+      if (database.prepare("SELECT 1 FROM users LIMIT 1").get()) {
+        const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
+        error.statusCode = 403;
+        throw error;
       }
+      this.save(database, user, false);
+      this.assertHasAdmin();
+      database.prepare("INSERT INTO sessions (id, user_id, created_at) VALUES (?, ?, ?)")
+        .run(session.id, session.userId, session.createdAt);
+    });
+  }
 
-      const existingIds = new Set(database.prepare<[], { id: string }>("SELECT id FROM users").all().map((row) => row.id));
-      const upsert = database.prepare(`
+  create(user: StoredUser) {
+    this.storage.transaction((database) => {
+      this.save(database, user, false);
+      this.assertHasAdmin();
+    });
+  }
+
+  updateById(id: string, updater: (user: StoredUser) => StoredUser): StoredUser {
+    return this.storage.transaction((database) => {
+      const current = this.findById(id);
+      if (!current) this.notFound();
+      const updated = normalizeStoredUser(updater(current));
+      if (updated.id !== id) badUserRequest("User id cannot be changed");
+      this.save(database, updated, true);
+      this.assertHasAdmin();
+      return updated;
+    });
+  }
+
+  delete(id: string): StoredUser {
+    return this.storage.transaction((database) => {
+      const user = this.findById(id);
+      if (!user) this.notFound();
+      if (isFullAccessUser(user) && this.list().filter(isFullAccessUser).length <= 1) {
+        badUserRequest("At least one admin user is required");
+      }
+      database.prepare("DELETE FROM users WHERE id = ?").run(id);
+      return user;
+    });
+  }
+
+  private findById(id: string) {
+    const row = this.storage.connection.prepare<[string], UserRow>(`
+      SELECT id, username, password_hash, salt, role_preset, permissions_json,
+             server_access_json, created_at, updated_at FROM users WHERE id = ?
+    `).get(id);
+    return row ? userFromRow(row) : undefined;
+  }
+
+  private save(database: Database.Database, value: StoredUser, update: boolean) {
+    const user = normalizeStoredUser(value);
+    const duplicate = database.prepare<[string, string], { id: string }>(
+      "SELECT id FROM users WHERE username = ? COLLATE NOCASE AND id != ?"
+    ).get(user.username, user.id);
+    if (duplicate) badUserRequest("A user with that username already exists");
+    const statement = update
+      ? database.prepare(`
+        UPDATE users SET username = ?, password_hash = ?, salt = ?, role_preset = ?,
+          permissions_json = ?, server_access_json = ?, created_at = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      : database.prepare(`
         INSERT INTO users (
           id, username, password_hash, salt, role_preset, permissions_json,
           server_access_json, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          username = excluded.username,
-          password_hash = excluded.password_hash,
-          salt = excluded.salt,
-          role_preset = excluded.role_preset,
-          permissions_json = excluded.permissions_json,
-          server_access_json = excluded.server_access_json,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
       `);
-      for (const user of normalized) {
-        upsert.run(
-          user.id, user.username, user.passwordHash, user.salt, user.rolePreset,
-          JSON.stringify(user.permissions), user.serverAccess ? JSON.stringify(user.serverAccess) : null,
-          user.createdAt, user.updatedAt
-        );
-        existingIds.delete(user.id);
-      }
-      const remove = database.prepare("DELETE FROM users WHERE id = ?");
-      for (const id of existingIds) remove.run(id);
-    });
+    const fields = [
+      user.username, user.passwordHash, user.salt, user.rolePreset, JSON.stringify(user.permissions),
+      user.serverAccess ? JSON.stringify(user.serverAccess) : null, user.createdAt, user.updatedAt
+    ];
+    if (update) statement.run(...fields, user.id);
+    else statement.run(user.id, ...fields);
+  }
+
+  private assertHasAdmin() {
+    if (!this.list().some(isFullAccessUser)) badUserRequest("At least one admin user is required");
+  }
+
+  private notFound(): never {
+    const error = new Error("User not found") as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
   }
 }
+import type Database from "better-sqlite3";

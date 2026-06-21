@@ -30,9 +30,10 @@ async function createRepositories() {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"
   };
-  nodes.update((records) => records.push(node));
+  nodes.create(node);
   return {
     storage,
+    nodes,
     servers: new ServersRepository(storage, (value) => value as ManagedServer)
   };
 }
@@ -115,7 +116,7 @@ describe("ServersRepository", () => {
     const server = managedServer();
     expect(servers.list()).toEqual([]);
 
-    servers.saveAll([server]);
+    servers.create(server);
     expect(servers.list()).toEqual([server]);
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM managed_ports").get()).toEqual({ count: 2 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM schedules").get()).toEqual({ count: 1 });
@@ -132,8 +133,11 @@ describe("ServersRepository", () => {
     }, ...updated.schedules![0].recentRuns!];
     updated.schedules![0].lastRunAt = "2026-01-03T00:00:00.000Z";
     updated.schedules![0].lastStatus = "skipped";
+    updated.schedules![0].lastMessage = "Skipped run";
     updated.schedules![0].updatedAt = "2026-01-03T00:00:00.000Z";
-    servers.saveAll([updated]);
+    updated.schedules![0].recentRuns![0].message = "Skipped run";
+    servers.replaceMetadata(updated);
+    servers.recordScheduledRun(updated.id, updated.schedules![0].id, updated.schedules![0].recentRuns![0]);
 
     expect(servers.list()).toEqual([updated]);
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
@@ -142,20 +146,61 @@ describe("ServersRepository", () => {
   it("enforces per-node port uniqueness transactionally", async () => {
     const { servers } = await createRepositories();
     const first = managedServer();
-    servers.saveAll([first]);
+    servers.create(first);
 
-    expect(() => servers.saveAll([first, managedServer("second-id")])).toThrow(/UNIQUE constraint failed/);
+    expect(() => servers.create(managedServer("second-id"))).toThrow(/UNIQUE constraint failed/);
     expect(servers.list()).toEqual([first]);
+  });
+
+  it("records schedule runs without overwriting a concurrent schedule edit", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+    const edited = {
+      ...server.schedules![0],
+      name: "Renamed schedule",
+      cron: "30 * * * *",
+      updatedAt: "2026-01-04T00:00:00.000Z"
+    };
+    servers.updateSchedule(server.id, edited, edited.updatedAt);
+
+    servers.recordScheduledRun(server.id, edited.id, {
+      id: "concurrent-run",
+      scheduleId: edited.id,
+      scheduleName: "Backup notice",
+      status: "success",
+      message: "Sent 1 command",
+      ranAt: "2026-01-04T00:01:00.000Z"
+    });
+
+    const schedule = servers.list()[0].schedules![0];
+    expect(schedule.name).toBe("Renamed schedule");
+    expect(schedule.cron).toBe("30 * * * *");
+    expect(schedule.lastRunAt).toBe("2026-01-04T00:01:00.000Z");
+    expect(schedule.recentRuns?.[0].id).toBe("concurrent-run");
   });
 
   it("cascades dependent ports, schedules, and runs when deleting a server", async () => {
     const { storage, servers } = await createRepositories();
-    servers.saveAll([managedServer()]);
-    servers.saveAll([]);
+    servers.create(managedServer());
+    servers.delete("server-id");
 
     expect(servers.list()).toEqual([]);
     for (const table of ["managed_ports", "schedules", "scheduled_runs"]) {
       expect(storage.connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
     }
+  });
+
+  it("deletes a node and its servers in one transaction only when forced", async () => {
+    const { nodes, servers } = await createRepositories();
+    servers.create(managedServer());
+
+    expect(() => nodes.deleteWithServers("node-id", false)).toThrow("Cannot delete a node while servers are assigned to it");
+    expect(nodes.list()).toHaveLength(1);
+    expect(servers.list()).toHaveLength(1);
+
+    expect(nodes.deleteWithServers("node-id", true).deletedServers).toBe(1);
+    expect(nodes.list()).toEqual([]);
+    expect(servers.list()).toEqual([]);
   });
 });
