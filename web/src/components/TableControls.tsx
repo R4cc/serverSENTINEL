@@ -10,17 +10,18 @@ export function SortHeaderButton<TData, TValue>({
 }) {
   const sorted = header.column.getIsSorted();
   const canSort = header.column.getCanSort();
-  const label = sorted === "asc" ? " asc" : sorted === "desc" ? " desc" : "";
+  const indicator = sorted === "asc" ? "↑" : sorted === "desc" ? "↓" : "↕";
 
   return (
     <button
       type="button"
+      className="uiSortHeaderButton"
       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
       disabled={!canSort}
       aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
     >
       {children}
-      {label}
+      {canSort && <span className="uiSortIndicator" aria-hidden="true">{indicator}</span>}
     </button>
   );
 }

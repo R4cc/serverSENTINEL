@@ -1,3 +1,5 @@
+import { Button } from "./UiPrimitives";
+
 export function InlineState({
   tone = "info",
   title,
@@ -21,9 +23,9 @@ export function InlineState({
         <span>{message}</span>
       </div>
       {onAction && actionLabel && (
-        <button type="button" className="secondaryButton" onClick={onAction} disabled={busy}>
+        <Button variant="secondary" compact onClick={onAction} disabled={busy}>
           {busy ? "Working..." : actionLabel}
-        </button>
+        </Button>
       )}
     </div>
   );

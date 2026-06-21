@@ -4,7 +4,7 @@ import { fileIconKind } from '../utils/files';
 export function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" | "nodes" }) {
   if (name === "nodes") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="12" cy="6" r="2.5" />
         <circle cx="6" cy="17" r="2.5" />
         <circle cx="18" cy="17" r="2.5" />
@@ -16,7 +16,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "overview") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="4" y="5" width="16" height="4" rx="1.5" />
         <rect x="4" y="10" width="16" height="4" rx="1.5" />
         <rect x="4" y="15" width="16" height="4" rx="1.5" />
@@ -28,7 +28,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "console") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M4 5h16v14H4z" />
         <path d="m8 10 3 2-3 2" />
         <path d="M13 15h4" />
@@ -37,7 +37,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "files") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3 7h7l2 2h9v10H3z" />
         <path d="M3 7V5h7l2 2" />
       </svg>
@@ -45,7 +45,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "mods") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M8 3h8v4h4v10h-4v4H8v-4H4V7h4z" />
         <path d="M10 10h4" />
         <path d="M10 14h4" />
@@ -54,7 +54,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "schedule") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="4" y="5" width="16" height="15" rx="1.5" />
         <path d="M8 3v4" />
         <path d="M16 3v4" />
@@ -65,7 +65,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   }
   if (name === "properties") {
     return (
-      <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M6 4h12v16H6z" />
         <path d="M9 8h6" />
         <path d="M9 12h6" />
@@ -74,7 +74,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
     );
   }
   return (
-    <svg className="sideIcon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
       <path d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.5 1a8 8 0 0 0-2.6-1.5L14 2.3h-4l-.4 2.7A8 8 0 0 0 7 6.5l-2.5-1-2 3.5 2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.5-1a8 8 0 0 0 2.6 1.5l.4 2.7h4l.4-2.7A8 8 0 0 0 17 17.5l2.5 1 2-3.5-2.1-1.5Z" />
     </svg>
@@ -83,7 +83,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
 
 export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" }) {
   return (
-    <svg className="buttonIcon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
       {name === "chevronRight" && <path d="m9 5 7 7-7 7" />}
       {name === "chevronUp" && <path d="m5 15 7-7 7 7" />}
@@ -194,7 +194,7 @@ export function FileTypeIcon({ entry }: { entry: FileEntry }) {
   const kind = fileIconKind(entry);
   return (
     <span className={`fileTypeIcon ${kind}`} aria-hidden="true">
-      <svg viewBox="0 0 24 24">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {kind === "folder" && (
           <>
             <path d="M3 7.5h6l2 2h10v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
