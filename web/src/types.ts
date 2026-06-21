@@ -324,6 +324,18 @@ export type FilePreview = {
   modifiedAt?: string;
 };
 
+export type FileEditLease = {
+  leaseId: string;
+  serverId: string;
+  path: string;
+  userId: string;
+  displayName: string;
+  acquiredAt: string;
+  refreshedAt: string;
+  expiresAt: string;
+  fileRevision: string;
+};
+
 export type ReleaseChannel = "release" | "beta" | "alpha";
 
 export type ModCompatibility = {

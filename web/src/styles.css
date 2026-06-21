@@ -7611,6 +7611,16 @@ button:disabled,
   background: var(--sentinel-accent-soft);
 }
 
+.fileLeaseNotice {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border, #d6a84b);
+  border-radius: 8px;
+  background: color-mix(in srgb, #d6a84b 12%, transparent);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
 .fileCodeEditor {
   min-height: 0;
   height: 100%;

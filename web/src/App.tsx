@@ -11,7 +11,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -108,6 +108,11 @@ export default function App() {
   const [selectedPath, setSelectedPath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
+  const [fileRevision, setFileRevision] = useState("");
+  const [fileEditLease, setFileEditLease] = useState<FileEditLease | null>(null);
+  const [fileEditMode, setFileEditMode] = useState(false);
+  const [fileLeaseBusy, setFileLeaseBusy] = useState(false);
+  const [fileLeaseMessage, setFileLeaseMessage] = useState("");
   const [dirty, setDirty] = useState(false);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
@@ -190,6 +195,7 @@ export default function App() {
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
   const staleSessionSuppressUntilRef = useRef(0);
+  const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (demoMode && serverId === demoServerId) {
@@ -404,7 +410,7 @@ export default function App() {
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
-  const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager && !fileRuntimeLocked);
+  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && !fileRuntimeLocked);
   const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileRuntimeLocked && !fileOperationBusy);
   const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && canManager && !fileRuntimeLocked && !fileOperationBusy);
   const canRenameSelectedItem = Boolean(selectedEntry && canManager && !fileRuntimeLocked && !fileOperationBusy);
@@ -489,6 +495,52 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+
+  useEffect(() => {
+    fileEditLeaseRef.current = fileEditLease;
+  }, [fileEditLease]);
+
+  useEffect(() => {
+    if (!fileEditLease || !fileEditMode || activeServerIsDemo) return;
+    const heartbeat = async () => {
+      try {
+        const result = await api<{ lease: FileEditLease }>(
+          `/api/servers/${encodeURIComponent(fileEditLease.serverId)}/file/lease/${encodeURIComponent(fileEditLease.leaseId)}/heartbeat`,
+          { method: "POST" }
+        );
+        setFileEditLease(result.lease);
+      } catch (error) {
+        const message = error instanceof ApiError && error.code === "file_edit_lease_lost"
+          ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
+          : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
+        releaseFileLease(fileEditLease);
+        setFileEditMode(false);
+        setFileEditLease(null);
+        setFileLeaseMessage(message);
+        notify("error", message);
+      }
+    };
+    const interval = window.setInterval(() => void heartbeat(), 20_000);
+    return () => window.clearInterval(interval);
+  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo]);
+
+  useEffect(() => {
+    const releaseOnUnload = () => {
+      const lease = fileEditLeaseRef.current;
+      if (!lease) return;
+      void fetch(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
+        method: "DELETE",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
+        keepalive: true
+      });
+    };
+    window.addEventListener("beforeunload", releaseOnUnload);
+    return () => {
+      window.removeEventListener("beforeunload", releaseOnUnload);
+      releaseOnUnload();
+    };
+  }, []);
 
   useEffect(() => {
     if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
@@ -1838,10 +1890,23 @@ export default function App() {
     }
   }
 
+  function releaseFileLease(lease = fileEditLease) {
+    if (!lease || activeServerIsDemo) return;
+    void api(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
+      method: "DELETE"
+    }).catch(() => undefined);
+  }
+
   function resetEditorState() {
+    releaseFileLease();
     setSelectedPath("");
     setEditorText("");
     setSavedEditorText("");
+    setFileRevision("");
+    setFileEditLease(null);
+    setFileEditMode(false);
+    setFileLeaseBusy(false);
+    setFileLeaseMessage("");
     setDirty(false);
     setFileReadError("");
     setFileOpenFailed(false);
@@ -1930,10 +1995,10 @@ export default function App() {
   async function openFile(path: string, discardConfirmed = false) {
     if (isProvisioning) return;
     if (!activeServer) return;
-    if (dockerOperationalLock || !canManager) {
+    if (dockerOperationalLock) {
       const message = dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-        : "Manager permission is required to edit files.";
+        : "Server files are unavailable.";
       setNotice(message);
       notify("warning", message);
       return;
@@ -1956,10 +2021,15 @@ export default function App() {
       notify("warning", message);
       return;
     }
+    if (fileEditLease && selectedPath !== path) releaseFileLease(fileEditLease);
     setSelectedPath(path);
     setEditorText("");
     setSavedEditorText("");
     setDirty(false);
+    setFileRevision("");
+    setFileEditLease(null);
+    setFileEditMode(false);
+    setFileLeaseMessage("");
     setFileReadError("");
     setFileOpenFailed(false);
     setFileOpening(true);
@@ -1970,17 +2040,19 @@ export default function App() {
       setSelectedPath(path);
       setEditorText(content);
       setSavedEditorText(content);
+      setFileRevision("demo");
       setDirty(false);
       setFileOpening(false);
       return;
     }
     try {
-      const file = await api<{ path: string; content: string }>(
+      const file = await api<{ path: string; content: string; revision: string }>(
         `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
       );
       setSelectedPath(file.path);
       setEditorText(file.content);
       setSavedEditorText(file.content);
+      setFileRevision(file.revision);
       setDirty(false);
       setSelectedFilePaths([file.path]);
     } catch (error) {
@@ -1991,6 +2063,54 @@ export default function App() {
       notify("error", message);
     } finally {
       setFileOpening(false);
+    }
+  }
+
+  function leaseConflictMessage(error: unknown) {
+    if (!(error instanceof ApiError) || error.code !== "file_edit_lease_conflict") {
+      return errorMessage(error, "Could not acquire an edit lease for this file.");
+    }
+    try {
+      const parsed = JSON.parse(error.details ?? "{}") as { lease?: FileEditLease };
+      if (parsed.lease) {
+        return `${parsed.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(parsed.lease.refreshedAt)}).`;
+      }
+    } catch {
+      // Fall back to the API message.
+    }
+    return error.message;
+  }
+
+  async function enterFileEditMode() {
+    if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
+    if (!canManager) {
+      const message = "Edit permission is required to modify this file.";
+      setFileLeaseMessage(message);
+      notify("warning", message);
+      return;
+    }
+    if (activeServerIsDemo) {
+      setFileEditMode(true);
+      setFileLeaseMessage("");
+      return;
+    }
+    setFileLeaseBusy(true);
+    setFileLeaseMessage("");
+    try {
+      const result = await api<{ lease: FileEditLease }>(`/api/servers/${activeServer.id}/file/lease`, {
+        method: "POST",
+        body: JSON.stringify({ path: selectedPath, revision: fileRevision })
+      });
+      setFileEditLease(result.lease);
+      setFileEditMode(true);
+    } catch (error) {
+      const message = error instanceof ApiError && error.code === "file_revision_conflict"
+        ? "This file changed since it was opened. Reload it before entering edit mode."
+        : leaseConflictMessage(error);
+      setFileLeaseMessage(message);
+      notify("warning", message);
+    } finally {
+      setFileLeaseBusy(false);
     }
   }
 
@@ -2274,6 +2394,7 @@ export default function App() {
     if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
     if (!selectedPath || !dirty) return;
+    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
     if (fileSaving) return;
     setFileSaving(true);
     setNotice("");
@@ -2306,18 +2427,35 @@ export default function App() {
       return;
     }
     try {
-      await api(`/api/servers/${activeServer.id}/file`, {
+      const result = await api<{ revision: string }>(`/api/servers/${activeServer.id}/file`, {
         method: "PUT",
-        body: JSON.stringify({ path: selectedPath, content: editorText })
+        body: JSON.stringify({
+          path: selectedPath,
+          content: editorText,
+          leaseId: fileEditLease?.leaseId,
+          revision: fileRevision
+        })
       });
       setSavedEditorText(editorText);
+      setFileRevision(result.revision);
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
       closeEditor();
     } catch (error) {
-      const message = errorMessage(error, "Could not save the file. Review the path and try again.");
+      const conflict = error instanceof ApiError && (error.code === "file_revision_conflict" || error.code === "file_edit_lease_lost");
+      const message = error instanceof ApiError && error.code === "file_revision_conflict"
+        ? "The file changed outside this editor. Your changes were not saved. Reload the file before editing again."
+        : error instanceof ApiError && error.code === "file_edit_lease_lost"
+          ? "Your edit lease expired or was lost. Your changes were not saved. Reload the file before editing again."
+          : errorMessage(error, "Could not save the file. Review the path and try again.");
+      if (conflict) {
+        releaseFileLease();
+        setFileEditLease(null);
+        setFileEditMode(false);
+        setFileLeaseMessage(message);
+      }
       setFileReadError(message);
       setFileOpenFailed(false);
       setNotice(message);
@@ -3280,9 +3418,9 @@ export default function App() {
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <Button variant="secondary" compact onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : fileActionBlockedReason || "Edit selected file"}>
+                        <Button variant="secondary" compact onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || "Open selected file read-only"}>
                           <AppIcon name="edit" />
-                          Edit
+                          Open
                         </Button>
                         <Button variant="secondary" compact onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
                           <AppIcon name="download" />
@@ -3433,8 +3571,12 @@ export default function App() {
                   fileOpenFailed={fileOpenFailed}
                   fileReadError={fileReadError}
                   fileSaving={fileSaving}
-                  editorDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
-                  saveDisabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+                  editing={fileEditMode}
+                  editBusy={fileLeaseBusy}
+                  editMessage={fileLeaseMessage}
+                  editDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
                   discardRequestOpen={Boolean(discardEditorRequest)}
                   onTextChange={(nextText) => {
                     setEditorText(nextText);
@@ -3443,6 +3585,7 @@ export default function App() {
                   onRequestClose={requestCloseEditor}
                   onCancel={cancelFileEdit}
                   onSave={saveFile}
+                  onEnterEdit={enterFileEditMode}
                   onRetryOpen={() => {
                     if (selectedPath) void openFile(selectedPath, true);
                   }}

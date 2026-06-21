@@ -152,6 +152,28 @@ const migrations: readonly Migration[] = [
         CREATE INDEX scheduled_runs_schedule_idx ON scheduled_runs(server_id, schedule_id, ran_at DESC);
       `);
     }
+  },
+  {
+    version: 4,
+    name: "file-edit-leases",
+    up(database) {
+      database.exec(`
+        CREATE TABLE file_edit_leases (
+          lease_id TEXT PRIMARY KEY,
+          server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+          path TEXT NOT NULL,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+          display_name TEXT NOT NULL,
+          acquired_at INTEGER NOT NULL,
+          refreshed_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          file_revision TEXT NOT NULL,
+          UNIQUE (server_id, path)
+        );
+        CREATE INDEX file_edit_leases_expiry_idx ON file_edit_leases(expires_at);
+      `);
+    }
   }
 ];
 

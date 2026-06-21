@@ -137,6 +137,19 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
+export type FileEditLease = {
+  leaseId: string;
+  serverId: string;
+  path: string;
+  userId: string;
+  sessionId: string;
+  displayName: string;
+  acquiredAt: string;
+  refreshedAt: string;
+  expiresAt: string;
+  fileRevision: string;
+};
+
 export type LoaderType = "fabric";
 export type ServerJarProviderId = "mcjars";
 export type JavaMajorVersion = 17 | 21 | 25;

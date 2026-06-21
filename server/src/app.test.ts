@@ -14,7 +14,9 @@ import {
   allocateQueryPort,
   sessionExpired,
   sessionMaxAgeSeconds,
-  validateJoinTokenTtlMinutes
+  validateJoinTokenTtlMinutes,
+  fileContentRevision,
+  assertFileRevision
 } from "./app.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -35,6 +37,15 @@ function testRuntimeProfile() {
     resolvedAt: new Date().toISOString()
   };
 }
+
+describe("file revisions", () => {
+  it("detects content changes before saving", () => {
+    const acquired = fileContentRevision("original");
+    expect(() => assertFileRevision(acquired, acquired, fileContentRevision("changed")))
+      .toThrow("The file changed after editing began");
+    expect(() => assertFileRevision(acquired, acquired, acquired)).not.toThrow();
+  });
+});
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {

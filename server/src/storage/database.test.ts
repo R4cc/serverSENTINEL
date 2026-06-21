@@ -44,7 +44,8 @@ describe("SQLite storage", () => {
       .toEqual([
         { version: 1, name: "sqlite-foundation" },
         { version: 2, name: "users-nodes-settings-sessions" },
-        { version: 3, name: "managed-servers-schedules" }
+        { version: 3, name: "managed-servers-schedules" },
+        { version: 4, name: "file-edit-leases" }
       ]);
   });
 

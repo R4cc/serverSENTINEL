@@ -70,6 +70,7 @@ import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
 import { SessionsRepository } from "./storage/sessionsRepository.js";
 import { ServersRepository } from "./storage/serversRepository.js";
+import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
 import {
   badRequest,
   forbidden,
@@ -238,6 +239,7 @@ let nodesRepository: NodesRepository;
 let settingsRepository: SettingsRepository;
 let sessionsRepository: SessionsRepository;
 let serversRepository: ServersRepository;
+let fileEditLeasesRepository: FileEditLeasesRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -662,6 +664,45 @@ async function readNodes() {
     nodesRepository.update((stored) => stored.splice(0, stored.length, ...normalized));
   }
   return normalized;
+}
+
+function fileLeaseOwner(request: { headers: { cookie?: string } }, user: StoredUser) {
+  const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
+  if (!sessionId) {
+    const error = new Error("Authentication required") as Error & { statusCode?: number };
+    error.statusCode = 401;
+    throw error;
+  }
+  return { userId: user.id, sessionId, displayName: user.username };
+}
+
+export function fileContentRevision(content: string) {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function fileRevisionConflict(): never {
+  const error = new Error("The file changed after editing began. Reload it before making more changes.") as Error & {
+    statusCode?: number;
+    code?: string;
+  };
+  error.statusCode = 409;
+  error.code = "file_revision_conflict";
+  throw error;
+}
+
+export function assertFileRevision(requested: string | undefined, acquired: string, current: string) {
+  if (!requested || requested !== acquired || current !== acquired) fileRevisionConflict();
+}
+
+async function readFileWithRevision(runtime: NodeRuntime, server: ManagedServer, target: string) {
+  const result = await runtime.readFile(server, target) as { path?: string; content?: string; modifiedAt?: string };
+  if (typeof result.content !== "string") throw new Error("File content is unavailable");
+  return { ...result, content: result.content, revision: fileContentRevision(result.content) };
+}
+
+function publicFileEditLease(lease: import("./types.js").FileEditLease) {
+  const { sessionId: _sessionId, ...publicLease } = lease;
+  return publicLease;
 }
 
 async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
@@ -2934,6 +2975,7 @@ nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
 sessionsRepository = new SessionsRepository(storageDatabase);
 serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
+fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
 configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
   storageDatabase.close();
@@ -3764,15 +3806,62 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, "files.view");
-  return runtime.readFile(server, target);
+  return readFileWithRevision(runtime, server, target);
 });
 
-app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>("/api/servers/:id/file/lease", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
-  await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
-  return runtime.writeFile(server, target, request.body.content);
+  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  const file = await readFileWithRevision(runtime, server, target);
+  if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
+  const path = runtime.publicPath(server, target);
+  const lease = fileEditLeasesRepository.acquire({
+    serverId: server.id,
+    path,
+    fileRevision: file.revision,
+    owner: fileLeaseOwner(request, user)
+  });
+  return { lease: publicFileEditLease(lease) };
+});
+
+app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lease/:leaseId/heartbeat", async (request) => {
+  const user = await requireRequestPermission(request);
+  const lease = fileEditLeasesRepository.heartbeat(request.params.leaseId, fileLeaseOwner(request, user));
+  if (lease.serverId !== request.params.id) {
+    const error = new Error("The edit lease does not belong to this server") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "file_edit_lease_lost";
+    throw error;
+  }
+  return { lease: publicFileEditLease(lease) };
+});
+
+app.delete<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lease/:leaseId", async (request) => {
+  const user = await requireRequestPermission(request);
+  return { ok: fileEditLeasesRepository.release(request.params.leaseId, fileLeaseOwner(request, user)) };
+});
+
+app.put<{ Params: { id: string }; Body: { path?: string; content?: string; leaseId?: string; revision?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (!request.body.leaseId) {
+    const error = new Error("A valid file edit lease is required") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "file_edit_lease_lost";
+    throw error;
+  }
+  const path = runtime.publicPath(server, target);
+  const owner = fileLeaseOwner(request, user);
+  const lease = fileEditLeasesRepository.requireOwned(request.body.leaseId, server.id, path, owner);
+  const current = await readFileWithRevision(runtime, server, target);
+  assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
+  const result = await runtime.writeFile(server, target, request.body.content) as Record<string, unknown>;
+  fileEditLeasesRepository.release(lease.leaseId, owner);
+  return { ...result, revision: fileContentRevision(request.body.content ?? "") };
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
