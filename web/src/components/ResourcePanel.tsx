@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
 import { parseMaxMemoryGb } from '../utils/format';
+import { Button, PanelHeader } from './UiPrimitives';
 
 export function formatUptime(startedAt?: string, running?: boolean) {
   if (!running || !startedAt || /^\d{2}:\d{2}:\d{2}$/.test(startedAt)) return "Unknown";
@@ -197,22 +198,23 @@ export function ResourcePanel({
       : statsUnavailableLabel;
   return (
     <section className="panel resourcePanel">
-      <div className="panelHeader">
-        <h2>Resource Usage</h2>
-        <div className="resourceScopeControl" role="group" aria-label="Resource graph time range">
+      <PanelHeader
+        title="Resource Usage"
+        actions={<div className="resourceScopeControl" role="group" aria-label="Resource graph time range">
           {resourceGraphScopes.map((scope) => (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              compact
               key={scope.label}
               className={graphScope === scope.label ? "active" : ""}
               onClick={() => setGraphScope(scope.label)}
               aria-pressed={graphScope === scope.label}
             >
               {scope.label}
-            </button>
+            </Button>
           ))}
-        </div>
-      </div>
+        </div>}
+      />
       <div className="resourceRows">
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">

@@ -7354,15 +7354,6 @@ details.compatibilityBadge p {
   text-transform: uppercase;
 }
 
-.secondaryButton {
-  background: var(--surface);
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-}
-
 .scheduleTableCard,
 .scheduledRunsCard {
   display: flex;
@@ -7402,28 +7393,21 @@ details.compatibilityBadge p {
 
 .scheduleCardHeader h2 {
   margin: 0 0 var(--space-1);
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: none;
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
 }
 
 .scheduleCardHeader p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
 }
 
 .scheduleAddButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
   background: var(--accent);
   border-color: var(--accent);
   color: var(--swiss-white);
-  white-space: nowrap;
 }
 
 .scheduleTableFrame {
@@ -12899,4 +12883,267 @@ details.compatibilityBadge p {
 .fileTypeIcon svg {
   width: 22px;
   height: 22px;
+}
+
+/* Core application adoption ------------------------------------------------ */
+
+.overviewSummary .summaryTile {
+  min-height: 104px;
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.035);
+}
+
+.overviewSummary .summaryTile::before {
+  width: 3px;
+}
+
+.summaryTile > span,
+.activityItem > span,
+.resourceMetricLabel > span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.summaryTile > strong,
+.activityItem > strong,
+.resourceMetricLabel > strong {
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.3;
+}
+
+.summaryTile > .uiStatusBadge {
+  align-self: center;
+  justify-self: start;
+}
+
+.activityGrid,
+.resourceRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.eventRow {
+  min-height: 40px;
+}
+
+.eventRow strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.eventRow small,
+.resourceMeta,
+.scheduleTableFooter,
+.scheduledRunTime {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.eventHideButton.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.eventHideButton.uiButton:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.resourceScopeControl .uiButton {
+  min-width: 40px;
+  min-height: 30px;
+  height: 30px;
+  padding-inline: var(--space-2);
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-muted);
+}
+
+.resourceScopeControl .uiButton.active {
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton,
+.uiButton.quickActionButton {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  box-shadow: none;
+}
+
+.uiButton.runtimeControlButton.start {
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 80%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
+}
+
+.uiButton.runtimeControlButton.stop {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.restart,
+.uiButton.quickActionButton {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.uiButton.runtimeControlButton.restart:hover:not(:disabled),
+.uiButton.quickActionButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton:disabled,
+.uiButton.quickActionButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.fileTableHead .uiSortHeaderButton,
+.scheduleTableHeader .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-2);
+}
+
+.fileNameCell {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+.fileStatus {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-weight: 700;
+  letter-spacing: var(--tracking-badge);
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.scheduleTableHeader {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.scheduleNameCell strong,
+.scheduledRunItem strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+.scheduleNameCell small,
+.scheduleCell small,
+.scheduledRunItem small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+}
+
+.scheduleStatusText.uiStatusBadge {
+  margin-top: var(--space-1);
+}
+
+.scheduleRowActions .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.scheduleRowActions .uiButton--critical {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.scheduleRowActions .uiButton--critical:hover:not(:disabled) {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.scheduleNoRows.uiEmptyState,
+.scheduledRunsEmpty.uiEmptyState,
+.eventEmpty.uiEmptyState {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 66%, var(--surface));
+}
+
+.settingsGroupHeader .uiPanelHeaderCopy,
+.settingsRow > div {
+  min-width: 0;
+}
+
+.settingsRow strong,
+.permissionRow > span,
+.usersTable td {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+}
+
+.settingsRow > div > strong,
+.userNameCell strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.authPanel .uiButton,
+.keyForm .uiButton,
+.usersTable .uiButton {
+  min-height: var(--control-height);
+}
+
+.usersTable .uiButton--compact {
+  min-height: var(--control-height-compact);
+}
+
+.systemBanner,
+.notice,
+.permissionWarning {
+  border-radius: var(--radius-md);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
 }

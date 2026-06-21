@@ -32,6 +32,7 @@ import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { SortHeaderButton } from "./components/TableControls";
+import { Button, PanelHeader } from "./components/UiPrimitives";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -3091,8 +3092,8 @@ export default function App() {
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
                   onClick={() => setActivePage("console")}
                   title="Open console"
@@ -3102,10 +3103,11 @@ export default function App() {
                     <line x1="12" y1="19" x2="20" y2="19" />
                   </svg>
                   <span>Console</span>
-                </button>
+                </Button>
                 <div className="overflowMenuContainer">
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    iconOnly
                     className="iconButton overflowButton"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3119,7 +3121,7 @@ export default function App() {
                       <circle cx="12" cy="12" r="1.5" fill="currentColor" />
                       <circle cx="12" cy="19" r="1.5" fill="currentColor" />
                     </svg>
-                  </button>
+                  </Button>
                   {overflowOpen && (
                     <div className="overflowDropdown" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -3203,14 +3205,14 @@ export default function App() {
             {activePage === "console" && (
               <section className="tabPage">
                 <section className="panel consolePanel">
-                  <div className="panelHeader">
-                    <h2>Console</h2>
-                    <div className="consoleHeaderActions">
-                      <button type="button" onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
+                  <PanelHeader
+                    title="Console"
+                    actions={<div className="consoleHeaderActions">
+                      <Button variant="secondary" compact onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
                         Download log
-                      </button>
-                    </div>
-                  </div>
+                      </Button>
+                    </div>}
+                  />
                   {consoleLoading && (
                     <InlineState tone="loading" title="Loading console" message="Loading recent server log output." />
                   )}
@@ -3245,15 +3247,15 @@ export default function App() {
                   <section className="panel filesPanel">
                     <div className="fileNavBar">
                       <div className="fileNavButtons">
-                        <button type="button" className="iconOnlyButton" onClick={navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
+                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
                           <AppIcon name="chevronLeft" />
-                        </button>
-                        <button type="button" className="iconOnlyButton" onClick={navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
+                        </Button>
+                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
                           <AppIcon name="chevronRight" />
-                        </button>
-                        <button type="button" className="iconOnlyButton" onClick={() => void navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
+                        </Button>
+                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
                           <AppIcon name="home" />
-                        </button>
+                        </Button>
                       </div>
                       <div className="fileBreadcrumbs" aria-label="Current folder">
                         {fileBreadcrumbs.map((crumb) => (
@@ -3264,44 +3266,44 @@ export default function App() {
                       </div>
                       <div className="fileToolbar">
                         <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <button type="button" className="secondaryButton compactButton" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Upload a file to this folder"}>
+                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Upload a file to this folder"}>
                           <AppIcon name="fileUp" />
                           Upload
-                        </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Create a folder here"}>
+                        </Button>
+                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Create a folder here"}>
                           <AppIcon name="folderPlus" />
                           New folder
-                        </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
+                        </Button>
+                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
                           <AppIcon name="refresh" />
                           {filesLoading ? "Refreshing" : "Refresh"}
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <button type="button" className="secondaryButton compactButton" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : fileActionBlockedReason || "Edit selected file"}>
+                        <Button variant="secondary" compact onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : fileActionBlockedReason || "Edit selected file"}>
                           <AppIcon name="edit" />
                           Edit
-                        </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
+                        </Button>
+                        <Button variant="secondary" compact onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
                           <AppIcon name="download" />
                           Download
-                        </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
+                        </Button>
+                        <Button variant="secondary" compact onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
                           <AppIcon name="copy" />
                           Duplicate
-                        </button>
-                        <button type="button" className="secondaryButton compactButton" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
+                        </Button>
+                        <Button variant="secondary" compact onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
                           <AppIcon name="rename" />
                           Rename
-                        </button>
-                        <button type="button" className="dangerButton compactButton" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
+                        </Button>
+                        <Button variant="critical" compact onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
                           <AppIcon name="trash" />
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </div>
 

@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
+import { Button, StatusBadge } from './UiPrimitives';
 import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_GROUPS,
@@ -93,7 +94,7 @@ export function AuthPanel({
                 />
               </label>
             )}
-            <button type="submit" disabled={busy}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</button>
+            <Button type="submit" disabled={busy}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
           </fieldset>
         </form>
       </section>
@@ -150,7 +151,7 @@ export function UserManagement({
               </td>
               <td data-label="Role">
                 <div className="roleCell">
-                  <span className={`roleBadge ${displayedRolePreset(user)}`}>{rolePresetLabel(displayedRolePreset(user))}</span>
+                  <StatusBadge className={`roleBadge ${displayedRolePreset(user)}`}>{rolePresetLabel(displayedRolePreset(user))}</StatusBadge>
                   <span className="roleInfoWrap">
                     <button
                       type="button"
@@ -168,17 +169,18 @@ export function UserManagement({
               </td>
               <td data-label="Actions">
                 <div className="userActions">
-                  <button type="button" className="secondaryButton" onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset password</button>
-                  <button type="button" className="secondaryButton" onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</button>
-                  <button
-                    type="button"
+                  <Button variant="secondary" compact onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset password</Button>
+                  <Button variant="secondary" compact onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</Button>
+                  <Button
+                    variant="ghost"
+                    compact
                     className="dangerTextButton"
                     onClick={() => onDelete(user)}
                     disabled={busy || user.id === currentUserId || !canManageUsers}
                     title={user.id === currentUserId ? "You cannot delete your current user" : !canManageUsers ? "Manage users permission is required" : "Delete user"}
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -283,8 +285,9 @@ function UserPermissionModal({
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="user-modal-title">{user ? "Edit user" : "New user"}</h2>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              iconOnly
               className="iconButton modalCloseButton"
               onClick={onClose}
               disabled={busy}
@@ -292,7 +295,7 @@ function UserPermissionModal({
               title={busy ? "User changes are still saving" : "Close user dialog"}
             >
               <AppIcon name="x" />
-            </button>
+            </Button>
           </div>
 
           <fieldset disabled={busy} className="userModalBody">
@@ -373,10 +376,10 @@ function UserPermissionModal({
           </fieldset>
 
           <div className="userModalFooter">
-            <button type="button" className="secondaryButton" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</button>
-            <button disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"}>
+            <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
+            <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"}>
               {busy ? "Saving..." : user ? "Save changes" : "Create user"}
-            </button>
+            </Button>
           </div>
         </form>
       </section>
@@ -401,8 +404,9 @@ function ResetPasswordModal({
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="reset-password-title">Reset password</h2>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              iconOnly
               className="iconButton modalCloseButton"
               onClick={onClose}
               disabled={busy}
@@ -410,7 +414,7 @@ function ResetPasswordModal({
               title={busy ? "Password reset is still saving" : "Close reset password dialog"}
             >
               <AppIcon name="x" />
-            </button>
+            </Button>
           </div>
           <fieldset disabled={busy} className="userModalBody">
             <div className="userModalFields">
@@ -429,8 +433,8 @@ function ResetPasswordModal({
             </div>
           </fieldset>
           <div className="userModalFooter">
-            <button type="button" className="secondaryButton" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</button>
-            <button disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"}>{busy ? "Saving..." : "Reset password"}</button>
+            <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</Button>
+            <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"}>{busy ? "Saving..." : "Reset password"}</Button>
           </div>
         </form>
       </section>

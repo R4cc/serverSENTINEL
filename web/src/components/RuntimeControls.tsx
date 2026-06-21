@@ -1,4 +1,5 @@
 import type { ServerStatus } from '../types';
+import { Button } from './UiPrimitives';
 
 export function ControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
   if (action === "start") {
@@ -55,9 +56,9 @@ export function RuntimeControls({
           ? "Start the server before restarting it."
           : baseDisabledReason;
         return (
-          <button
+          <Button
             key={action}
-            type="button"
+            variant={action === "stop" ? "critical" : action === "restart" ? "secondary" : "primary"}
             className={`runtimeControlButton ${action}`}
             onClick={() => onAction(action)}
             disabled={actionDisabled}
@@ -66,7 +67,7 @@ export function RuntimeControls({
           >
             {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <ControlIcon action={action} />}
             <span>{actionLabel(action)}</span>
-          </button>
+          </Button>
         );
       })}
     </div>

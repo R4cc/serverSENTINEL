@@ -10,6 +10,7 @@ import type { ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
+import { Button, EmptyState, PanelHeader, StatusBadge } from '../components/UiPrimitives';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 
@@ -141,13 +142,11 @@ export function SchedulePage({
   return (
     <section className="tabPage schedulePage scheduleManagementPage">
       <section className="panel scheduleTableCard">
-        <div className="scheduleCardHeader">
-          <div>
-            <h2>Schedules</h2>
-            <p>Manage automated console commands for this server.</p>
-          </div>
-          <button
-            type="button"
+        <PanelHeader
+          className="scheduleCardHeader"
+          title="Schedules"
+          description="Manage automated console commands for this server."
+          actions={<Button
             className="scheduleAddButton"
             onClick={() => setFormMode({ type: "create" })}
             disabled={disabled}
@@ -155,8 +154,8 @@ export function SchedulePage({
           >
             <AppIcon name="plus" />
             <span>Add schedule</span>
-          </button>
-        </div>
+          </Button>}
+        />
 
         {disabled && disabledReason && !saveRunning && (
           <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
@@ -203,7 +202,7 @@ export function SchedulePage({
                   {schedule.lastRunAt ? (
                     <>
                       <span>{formatScheduleTime(schedule.lastRunAt)}</span>
-                      <small className={`scheduleStatusText ${statusTone(schedule.lastStatus)}`}>{statusLabel(schedule.lastStatus)}</small>
+                      <StatusBadge tone={statusBadgeTone(schedule.lastStatus)} className={`scheduleStatusText ${statusTone(schedule.lastStatus)}`}>{statusLabel(schedule.lastStatus)}</StatusBadge>
                     </>
                   ) : (
                     <>
@@ -240,16 +239,13 @@ export function SchedulePage({
                   </label>
                 </div>
                 <div className="scheduleRowActions" data-label="Actions">
-                  <button type="button" className="secondaryButton" onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</button>
-                  <button type="button" className="dangerButton" onClick={() => onDelete(schedule)} disabled={disabled}>Delete</button>
+                  <Button variant="secondary" compact onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</Button>
+                  <Button variant="critical" compact onClick={() => onDelete(schedule)} disabled={disabled}>Delete</Button>
                 </div>
               </article>
               );
             }) : (
-              <div className="scheduleNoRows">
-                <strong>No schedules added</strong>
-                <span>Use Add schedule to create an automated console command.</span>
-              </div>
+              <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create an automated console command." />
             )}
           </div>
         </div>
@@ -260,12 +256,7 @@ export function SchedulePage({
       </section>
 
       <aside className="panel scheduledRunsCard">
-        <div className="scheduleCardHeader compact">
-          <div>
-            <h2>Scheduled Runs</h2>
-            <p>Most recent scheduled executions.</p>
-          </div>
-        </div>
+        <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description="Most recent scheduled executions." />
         {recentRuns.length ? (
           <div ref={runsFeedRef} className="scheduledRunsFeed">
             {recentRuns.map((run) => (
@@ -283,10 +274,7 @@ export function SchedulePage({
             ))}
           </div>
         ) : (
-          <div className="emptyState compactEmpty scheduledRunsEmpty">
-            <h2>No runs yet</h2>
-            <p>Recent scheduled executions will appear here after schedules run.</p>
-          </div>
+          <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
         )}
       </aside>
 
@@ -298,9 +286,9 @@ export function SchedulePage({
             <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
               <div className="userModalHeader">
                 <h2 id="schedule-modal-title">{modalTitle}</h2>
-                <button type="button" className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
+                <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
                   <AppIcon name="x" />
-                </button>
+                </Button>
               </div>
               <fieldset disabled={disabled} className="userModalBody scheduleEditBody">
                 {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
@@ -321,17 +309,17 @@ export function SchedulePage({
                       <div key={id} className="commandInputRow">
                         <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
                         {index > 0 && (
-                          <button type="button" className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
+                          <Button variant="ghost" iconOnly className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
                             <AppIcon name="x" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     ))}
                   </div>
-                  <button type="button" className="secondaryButton scheduleCommandAdd" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
                     <AppIcon name="plus" />
                     <span>Additional command</span>
-                  </button>
+                  </Button>
                 </div>
                 <div className="scheduleEditOptions">
                   <label className="scheduleOptionToggle">
@@ -345,8 +333,8 @@ export function SchedulePage({
                 </div>
               </fieldset>
               <div className="userModalFooter">
-                <button type="button" className="secondaryButton" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</button>
-                <button disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</button>
+                <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
+                <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
               </div>
             </form>
           </section>
@@ -407,6 +395,11 @@ function statusTone(status?: string) {
   if (normalized === "failed") return "failed";
   if (normalized === "skipped") return "skipped";
   return "unknown";
+}
+
+function statusBadgeTone(status?: string): "success" | "danger" | "warning" | "neutral" {
+  const tone = statusTone(status);
+  return tone === "success" ? "success" : tone === "failed" ? "danger" : tone === "skipped" ? "warning" : "neutral";
 }
 
 function formatScheduleTime(value: string) {

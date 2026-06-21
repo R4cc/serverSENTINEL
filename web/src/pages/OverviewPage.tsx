@@ -3,6 +3,7 @@ import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '.
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
 import { AppIcon } from '../components/FileTypeIcon';
+import { Button, EmptyState, PanelHeader, StatusBadge } from '../components/UiPrimitives';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -26,6 +27,11 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   if (status.docker.running) return "running";
   if (status.docker.state === "dead") return "danger";
   return "stopped";
+}
+
+function summaryBadgeTone(status: ServerStatus | null, dockerSocketMounted: boolean): "success" | "danger" | "neutral" {
+  const tone = summaryTone(status, dockerSocketMounted);
+  return tone === "running" ? "success" : tone === "danger" ? "danger" : tone === "stopped" ? "neutral" : "neutral";
 }
 
 export function OverviewSummary({
@@ -53,7 +59,7 @@ export function OverviewSummary({
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
         <span>Status</span>
-        <strong>{state}</strong>
+        <StatusBadge tone={summaryBadgeTone(status, dockerSocketMounted)}>{state}</StatusBadge>
       </div>
       <div className="summaryTile">
         <span>Minecraft</span>
@@ -94,9 +100,7 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
   ];
   return (
     <section className="panel activityPanel">
-      <div className="panelHeader">
-        <h2>Server Activity &amp; Health</h2>
-      </div>
+      <PanelHeader title="Server Activity & Health" />
       <div className="activityGrid">
         {items.map(([label, value]) => (
           <div className="activityItem" key={label}>
@@ -172,22 +176,23 @@ export function RecentEventsPanel({
 
   return (
     <section className="panel eventsPanel">
-      <div className="panelHeader">
-        <h2>Recent Events</h2>
-        {hiddenSignatures.length > 0 && (
-          <button type="button" className="textLinkButton compact" onClick={() => setHiddenSignatures([])}>
+      <PanelHeader
+        title="Recent Events"
+        actions={hiddenSignatures.length > 0 && (
+          <Button variant="ghost" compact className="textLinkButton" onClick={() => setHiddenSignatures([])}>
             Reset hidden events
-          </button>
+          </Button>
         )}
-      </div>
+      />
       <div className="eventList">
         {displayEvents.length ? displayEvents.map((event) => (
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
             <small>{formatEventTimestamp(event.timestamp)}</small>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              iconOnly
               className="eventHideButton"
               onClick={() => setConfirmHide({ signature: event.signature, text: event.text })}
               aria-label="Hide events of this type"
@@ -198,22 +203,24 @@ export function RecentEventsPanel({
                 <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
                 <line x1="2" y1="2" x2="22" y2="22" />
               </svg>
-            </button>
+            </Button>
           </div>
         )) : (
-          <div className="eventEmpty">
-            <strong>{hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}</strong>
-            {(hasHiddenEvents || eventsStatus === "unavailable") && (
-              <span>
+          <EmptyState
+            compact
+            className="eventEmpty"
+            title={hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}
+            message={(hasHiddenEvents || eventsStatus === "unavailable") ? (
+              <>
                 {hasHiddenEvents
                   ? "Reset hidden events to show them again."
                   : "Open the console to inspect raw logs, or try again after the server writes new output."}
-              </span>
-            )}
-          </div>
+              </>
+            ) : undefined}
+          />
         )}
       </div>
-      <button type="button" className="textLinkButton eventLogButton" onClick={onOpenConsole}>View full log</button>
+      <Button variant="ghost" compact className="textLinkButton eventLogButton" onClick={onOpenConsole}>View full log</Button>
 
       {confirmHide && (
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
@@ -222,9 +229,9 @@ export function RecentEventsPanel({
           <section className="modalPanel confirmModalPanel" role="dialog" aria-modal="true" aria-labelledby="confirm-hide-title">
             <header className="modalHeader">
               <h2 id="confirm-hide-title">Hide Event Type</h2>
-              <button type="button" className="iconButton modalCloseButton" onClick={() => setConfirmHide(null)} aria-label="Close dialog" title="Close dialog">
+              <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setConfirmHide(null)} aria-label="Close dialog" title="Close dialog">
                 <AppIcon name="x" />
-              </button>
+              </Button>
             </header>
             <div className="modalBody confirmContent">
               <p>Hide all recent events matching this type?</p>
@@ -233,11 +240,11 @@ export function RecentEventsPanel({
               </blockquote>
             </div>
             <footer className="modalFooter">
-              <button type="button" className="secondaryButton" onClick={() => setConfirmHide(null)}>Cancel</button>
-              <button type="button" className="dangerButton" onClick={() => {
+              <Button variant="secondary" onClick={() => setConfirmHide(null)}>Cancel</Button>
+              <Button variant="critical" onClick={() => {
                 hideEvent(confirmHide.signature);
                 setConfirmHide(null);
-              }}>Hide Events</button>
+              }}>Hide Events</Button>
             </footer>
           </section>
         </div>

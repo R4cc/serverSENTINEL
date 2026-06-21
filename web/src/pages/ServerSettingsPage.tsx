@@ -4,6 +4,7 @@ import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion }
 import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, javaMajorVersionForMinecraft, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
+import { Button } from '../components/UiPrimitives';
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from '../utils/validation';
 
 type PortBindingRow = {
@@ -287,22 +288,23 @@ function AdditionalPortBindingsEditor({
               placeholder="24454/udp"
               aria-label="Additional container port and protocol"
             />
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              iconOnly
               className="iconDangerButton portBindingRemoveButton"
               onClick={() => removeBinding(binding.id)}
               aria-label="Remove port binding"
               title="Remove port binding"
             >
               <AppIcon name="trash" />
-            </button>
+            </Button>
           </div>
         ))}
       </div>
-      <button type="button" className="secondaryButton portBindingAddButton" onClick={addBinding}>
+      <Button variant="secondary" compact className="portBindingAddButton" onClick={addBinding}>
         <AppIcon name="plus" />
         <span>Add port binding</span>
-      </button>
+      </Button>
       <span className="fieldHint">Use host port on the left and container port/protocol on the right, for example 24454 : 24454/udp.</span>
     </div>
   );
@@ -547,7 +549,7 @@ export function ServerEditForm({
         <summary>Additional port bindings</summary>
         <AdditionalPortBindingsEditor key={server.id} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
       </details>
-      <button disabled={!serverPortValid || !queryPortValid || portConflict}>Save server settings</button>
+      <Button type="submit" disabled={!serverPortValid || !queryPortValid || portConflict}>Save server settings</Button>
       </fieldset>
     </form>
   );
@@ -589,7 +591,7 @@ export function DeleteServerPanel({
           <input name="deleteFiles" type="checkbox" />
           Also delete this server's files from disk
         </label>
-        <button className="dangerButton" disabled={!deleteConfirmed}>Delete Server</button>
+        <Button type="submit" variant="critical" disabled={!deleteConfirmed}>Delete Server</Button>
         </fieldset>
       </form>
     </section>
@@ -927,8 +929,9 @@ export function ManagedServerForm({
                       );
                     })}
                   </select>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    iconOnly
                     className="iconButton nodeRefreshInlineButton"
                     onClick={() => void refreshNodeStatus()}
                     disabled={provisioning || refreshingNodes || !onRefreshNodes}
@@ -936,7 +939,7 @@ export function ManagedServerForm({
                     title={refreshingNodes ? "Refreshing node list" : "Refresh node list"}
                   >
                     <AppIcon name="refresh" />
-                  </button>
+                  </Button>
                 </div>
                 {placementBlocked && nodes.length > 0 && (
                   <p className="fieldError">{placementBlockedReason} If none are ready, open Nodes to see what needs attention.</p>

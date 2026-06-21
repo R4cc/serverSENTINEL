@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Button, StatusBadge } from './UiPrimitives';
 
 export function ModrinthKeyForm({
   onSubmit,
@@ -24,10 +25,10 @@ export function ModrinthKeyForm({
     return (
       <div className="keyForm keyFormConfigured">
         <div className="secretPreview" aria-label="Stored Modrinth API key">
-          <span className="settingsStatus ready">Configured</span>
+          <StatusBadge tone="success" className="settingsStatus ready">Configured</StatusBadge>
           <code aria-hidden="true">**** **** **** ****</code>
         </div>
-        <button type="button" className="secondaryButton" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</button>
+        <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</Button>
       </div>
     );
   }
@@ -46,8 +47,8 @@ export function ModrinthKeyForm({
         />
       </label>
       <div className="keyFormActions">
-        {configured && <button type="button" className="secondaryButton" onClick={() => setEditing(false)}>Cancel</button>}
-        <button>{configured ? "Save replacement" : "Save key"}</button>
+        {configured && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
+        <Button type="submit">{configured ? "Save replacement" : "Save key"}</Button>
       </div>
       </fieldset>
     </form>

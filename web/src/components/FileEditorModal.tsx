@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { AppIcon } from "./FileTypeIcon";
 import { InlineState } from "./InlineState";
+import { Button } from "./UiPrimitives";
 import { parentPath } from "../utils/files";
 
 type FileEditorModalProps = {
@@ -135,9 +136,9 @@ export function FileEditorModal({
                 <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
                 <p>{editorFolderPath || "/"}</p>
               </div>
-              <button type="button" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
+              <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
                 <AppIcon name="x" />
-              </button>
+              </Button>
             </header>
             <div className="fileEditorBody">
               <div className="fileEditorMetaRow">
@@ -183,10 +184,10 @@ export function FileEditorModal({
               </div>
             </div>
             <footer className="fileEditorFooter">
-              <button type="button" className="secondaryButton" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</button>
-              <button type="button" onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
+              <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
+              <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
                 {fileSaving ? "Saving" : "Save"}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>
@@ -199,16 +200,16 @@ export function FileEditorModal({
           <section className="modalPanel discardEditorModal" role="dialog" aria-modal="true" aria-labelledby="discard-editor-title">
             <header className="modalHeader">
               <h2 id="discard-editor-title">Discard unsaved changes?</h2>
-              <button type="button" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
+              <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
                 <AppIcon name="x" />
-              </button>
+              </Button>
             </header>
             <div className="modalBody">
               <p>Discard this editor session and lose the unsaved file changes?</p>
             </div>
             <footer className="modalFooter discardEditorActions">
-              <button type="button" className="secondaryButton" onClick={onKeepEditing}>Keep Editing</button>
-              <button type="button" className="dangerButton" onClick={onDiscardChanges}>Discard Changes</button>
+              <Button variant="secondary" onClick={onKeepEditing}>Keep Editing</Button>
+              <Button variant="critical" onClick={onDiscardChanges}>Discard Changes</Button>
             </footer>
           </section>
         </div>
