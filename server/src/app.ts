@@ -69,6 +69,7 @@ import { normalizeStoredUser, UsersRepository, validateUsername } from "./storag
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
 import { SessionsRepository } from "./storage/sessionsRepository.js";
+import { ServersRepository } from "./storage/serversRepository.js";
 import {
   badRequest,
   forbidden,
@@ -143,7 +144,6 @@ const localNodeId = "local";
 const appVersion = process.env.npm_package_version ?? "0.7.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
-const serversFile = join(config.configDir, "servers.json");
 const versionMetadataFilename = ".serversentinel-version.json";
 
 const serversQueue = new AsyncQueue();
@@ -238,6 +238,7 @@ let usersRepository: UsersRepository;
 let nodesRepository: NodesRepository;
 let settingsRepository: SettingsRepository;
 let sessionsRepository: SessionsRepository;
+let serversRepository: ServersRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -956,18 +957,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
 }
 
 async function readServers() {
-  const [servers, nodes] = await Promise.all([
-    readJsonFile(serversFile, [], (value) => asArray(value, "servers.json").map(normalizeManagedServer)),
-    readNodes()
-  ]);
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const validServers = servers.filter((server) => nodeIds.has(server.nodeId));
-  if (validServers.length !== servers.length) {
-    const removedServers = servers.filter((server) => !nodeIds.has(server.nodeId));
-    console.warn(`Purged ${removedServers.length} managed server record${removedServers.length === 1 ? "" : "s"} referencing unknown node ids.`);
-    await writeJsonFile(serversFile, validServers);
-  }
-  return validServers;
+  return serversRepository.list();
 }
 
 async function writeServers(servers: ManagedServer[]) {
@@ -979,7 +969,7 @@ async function writeServers(servers: ManagedServer[]) {
       throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
     }
   }
-  await writeJsonFile(serversFile, normalized);
+  serversRepository.saveAll(normalized);
 }
 
 function queuedReadServers() {
@@ -3005,6 +2995,7 @@ usersRepository = new UsersRepository(storageDatabase);
 nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
 sessionsRepository = new SessionsRepository(storageDatabase);
+serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
 configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
   storageDatabase.close();

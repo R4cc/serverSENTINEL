@@ -1,0 +1,161 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import type { ManagedNode, ManagedServer } from "../types.js";
+import { openStorageDatabase, type StorageDatabase } from "./database.js";
+import { NodesRepository } from "./nodesRepository.js";
+import { ServersRepository } from "./serversRepository.js";
+
+const temporaryDirectories: string[] = [];
+const openDatabases: StorageDatabase[] = [];
+
+afterEach(async () => {
+  for (const database of openDatabases.splice(0)) database.close();
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+async function createRepositories() {
+  const root = await mkdtemp(join(tmpdir(), "serversentinel-servers-repository-"));
+  temporaryDirectories.push(root);
+  const storage = openStorageDatabase(join(root, "state.sqlite"));
+  openDatabases.push(storage);
+  const nodes = new NodesRepository(storage);
+  const node: ManagedNode = {
+    id: "node-id",
+    name: "Node",
+    type: "remote",
+    status: "online",
+    isInternal: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  };
+  nodes.update((records) => records.push(node));
+  return {
+    storage,
+    servers: new ServersRepository(storage, (value) => value as ManagedServer)
+  };
+}
+
+function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
+  return {
+    id,
+    nodeId: "node-id",
+    displayName: `Server ${id}`,
+    serverDir: `/data/servers/${id}`,
+    minecraftVersion: "1.21.1",
+    loaderVersion: "0.16.0",
+    serverJar: "fabric-server-launch.jar",
+    runtimeProfile: {
+      minecraftVersion: "1.21.1",
+      loader: "fabric",
+      loaderVersion: "0.16.0",
+      javaMajorVersion: 21,
+      jarProvider: "mcjars",
+      jarArtifact: { filename: "fabric-server-launch.jar" },
+      compatibilityStatus: "compatible",
+      resolvedAt: "2026-01-01T00:00:00.000Z"
+    },
+    dockerPorts: `${externalPort}:25565/tcp;25575:25575/udp`,
+    managedPorts: [
+      {
+        id: "minecraft-tcp",
+        name: "Minecraft",
+        type: "minecraft",
+        protocol: "tcp",
+        internalPort: 25_565,
+        externalPort,
+        required: true,
+        removable: false,
+        advanced: false
+      },
+      {
+        id: "query-udp",
+        name: "Query",
+        type: "query",
+        protocol: "udp",
+        internalPort: 25_575,
+        externalPort: 25_575,
+        required: true,
+        removable: false,
+        advanced: true
+      }
+    ],
+    javaArgs: "-Xms2G -Xmx4G",
+    schedules: [{
+      id: "schedule-id",
+      name: "Backup notice",
+      cron: "0 * * * *",
+      commands: ["say Backup starting"],
+      onlyWhenNoPlayers: false,
+      enabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-02T00:00:00.000Z",
+      lastRunAt: "2026-01-02T00:00:00.000Z",
+      lastStatus: "success",
+      lastMessage: "Sent 1 command",
+      recentRuns: [{
+        id: "run-id",
+        scheduleId: "schedule-id",
+        scheduleName: "Backup notice",
+        status: "success",
+        message: "Sent 1 command",
+        ranAt: "2026-01-02T00:00:00.000Z"
+      }]
+    }],
+    serverType: "fabric",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  };
+}
+
+describe("ServersRepository", () => {
+  it("stores server, port, schedule, and run state in normalized tables", async () => {
+    const { storage, servers } = await createRepositories();
+    const server = managedServer();
+    expect(servers.list()).toEqual([]);
+
+    servers.saveAll([server]);
+    expect(servers.list()).toEqual([server]);
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM managed_ports").get()).toEqual({ count: 2 });
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM schedules").get()).toEqual({ count: 1 });
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 1 });
+
+    const updated = structuredClone(server);
+    updated.javaArgs = "-Xms4G -Xmx4G";
+    updated.schedules![0].recentRuns = [{
+      id: "new-run-id",
+      scheduleId: "schedule-id",
+      scheduleName: "Backup notice",
+      status: "skipped",
+      ranAt: "2026-01-03T00:00:00.000Z"
+    }, ...updated.schedules![0].recentRuns!];
+    updated.schedules![0].lastRunAt = "2026-01-03T00:00:00.000Z";
+    updated.schedules![0].lastStatus = "skipped";
+    updated.schedules![0].updatedAt = "2026-01-03T00:00:00.000Z";
+    servers.saveAll([updated]);
+
+    expect(servers.list()).toEqual([updated]);
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
+  });
+
+  it("enforces per-node port uniqueness transactionally", async () => {
+    const { servers } = await createRepositories();
+    const first = managedServer();
+    servers.saveAll([first]);
+
+    expect(() => servers.saveAll([first, managedServer("second-id")])).toThrow(/UNIQUE constraint failed/);
+    expect(servers.list()).toEqual([first]);
+  });
+
+  it("cascades dependent ports, schedules, and runs when deleting a server", async () => {
+    const { storage, servers } = await createRepositories();
+    servers.saveAll([managedServer()]);
+    servers.saveAll([]);
+
+    expect(servers.list()).toEqual([]);
+    for (const table of ["managed_ports", "schedules", "scheduled_runs"]) {
+      expect(storage.connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
+    }
+  });
+});

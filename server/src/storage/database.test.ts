@@ -43,7 +43,8 @@ describe("SQLite storage", () => {
     expect(second.connection.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all())
       .toEqual([
         { version: 1, name: "sqlite-foundation" },
-        { version: 2, name: "users-nodes-settings-sessions" }
+        { version: 2, name: "users-nodes-settings-sessions" },
+        { version: 3, name: "managed-servers-schedules" }
       ]);
   });
 

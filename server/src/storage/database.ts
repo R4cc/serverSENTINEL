@@ -76,6 +76,82 @@ const migrations: readonly Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 3,
+    name: "managed-servers-schedules",
+    up(database) {
+      database.exec(`
+        CREATE TABLE servers (
+          id TEXT PRIMARY KEY,
+          node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE RESTRICT,
+          display_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+          server_dir TEXT NOT NULL,
+          storage_name TEXT,
+          minecraft_version TEXT,
+          loader_version TEXT,
+          installer_version TEXT,
+          server_jar TEXT,
+          runtime_profile_json TEXT NOT NULL,
+          docker_container TEXT,
+          docker_image TEXT,
+          docker_mount_source TEXT,
+          docker_working_dir TEXT,
+          docker_ports TEXT,
+          java_args TEXT,
+          server_type TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX servers_node_id_idx ON servers(node_id);
+
+        CREATE TABLE managed_ports (
+          server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+          node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE RESTRICT,
+          id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          protocol TEXT NOT NULL,
+          internal_port INTEGER NOT NULL,
+          external_port INTEGER NOT NULL,
+          required INTEGER NOT NULL,
+          removable INTEGER NOT NULL,
+          advanced INTEGER NOT NULL,
+          PRIMARY KEY (server_id, id),
+          UNIQUE (node_id, external_port, protocol)
+        );
+        CREATE INDEX managed_ports_server_id_idx ON managed_ports(server_id);
+
+        CREATE TABLE schedules (
+          server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+          id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          cron TEXT NOT NULL,
+          commands_json TEXT NOT NULL,
+          only_when_no_players INTEGER NOT NULL,
+          enabled INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_run_at TEXT,
+          last_status TEXT,
+          last_message TEXT,
+          PRIMARY KEY (server_id, id)
+        );
+        CREATE INDEX schedules_enabled_idx ON schedules(enabled);
+
+        CREATE TABLE scheduled_runs (
+          id TEXT PRIMARY KEY,
+          server_id TEXT NOT NULL,
+          schedule_id TEXT NOT NULL,
+          schedule_name TEXT NOT NULL,
+          status TEXT NOT NULL,
+          message TEXT,
+          ran_at TEXT NOT NULL,
+          FOREIGN KEY (server_id, schedule_id) REFERENCES schedules(server_id, id) ON DELETE CASCADE
+        );
+        CREATE INDEX scheduled_runs_schedule_idx ON scheduled_runs(server_id, schedule_id, ran_at DESC);
+      `);
+    }
   }
 ];
 
