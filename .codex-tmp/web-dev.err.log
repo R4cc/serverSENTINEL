@@ -1,0 +1,15 @@
+[2m13:22:37[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/session[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+[2m13:22:37[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/session[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+npm error Lifecycle script `dev` failed with error:
+npm error code 4294967295
+npm error path C:\Users\Admin\Documents\git\serverSENTINEL\web
+npm error workspace @serversentinel/web@0.7.0
+npm error location C:\Users\Admin\Documents\git\serverSENTINEL\web
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c vite --host 0.0.0.0 --host 127.0.0.1

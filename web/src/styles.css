@@ -12347,9 +12347,9 @@ details.compatibilityBadge p {
 .modsDrawerBody { flex: 1; overflow: auto; padding: 22px 24px; }
 .modsDrawerFooter { display: flex; flex-wrap: wrap; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--border); }
 .modsDrawerFooter > button:first-child { flex: 1; }
-.modsAddSearch { display: flex; gap: 8px; }
-.modsAddSearch label { flex: 1; min-width: 0; }
-.modsSearchActivity { min-width: 130px; align-self: center; color: var(--text-muted); font-size: .72rem; text-align: right; }
+.modsAddSearch { display: grid; gap: 6px; }
+.modsAddSearch label { width: 100%; min-width: 0; }
+.modsSearchActivity { min-height: 1em; color: var(--text-muted); font-size: .72rem; text-align: right; }
 .modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
 .modsSafeSearchNote svg { width: 15px; color: #159267; }
 .modsSearchResults { display: grid; gap: 9px; }
@@ -12434,8 +12434,7 @@ details.compatibilityBadge p {
   .modsWorkspaceRow > div:nth-of-type(1) { grid-column: 1; }
   .modsWorkspaceRow > div:nth-of-type(4) { grid-column: 2; }
   .modsWorkspaceDetailsButton { grid-column: 3; }
-  .modsAddSearch { flex-direction: column; }
-  .modsSearchActivity { min-width: 0; text-align: left; }
+  .modsSearchActivity { text-align: left; }
   .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
   .modsResultCard > button { grid-column: 1 / -1; }
   .modsRecommendedVersion, .modsReviewLine { align-items: stretch; flex-direction: column; }
