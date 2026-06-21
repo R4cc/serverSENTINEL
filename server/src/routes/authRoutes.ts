@@ -11,14 +11,17 @@ type UserPermissionData = {
 type AuthRoutesContext = {
   authRateLimit: RouteShorthandOptions;
   destructiveRateLimit: RouteShorthandOptions;
-  sessions: Map<string, Session>;
+  sessions: {
+    create(session: Session): void;
+    delete(id: string): void;
+  };
   sessionCookieName: string;
   sessionMaxAgeSeconds: number;
   parseCookies(cookieHeader?: string): Map<string, string>;
   sessionCookie(sessionId: string, maxAgeSeconds: number, secure?: boolean): string;
   currentUserFromCookie(cookieHeader?: string): Promise<StoredUser | null>;
   queuedReadUsers(): Promise<StoredUser[]>;
-  updateUsers(updater: (users: StoredUser[]) => Promise<void> | void): Promise<void>;
+  updateUsers(updater: (users: StoredUser[]) => void): Promise<void>;
   requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission): Promise<StoredUser>;
   validateUsername(username?: string): string;
   validatePassword(password?: string): string;
@@ -65,7 +68,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       users.push(user);
     });
     const sessionId = randomBytes(32).toString("base64url");
-    context.sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
+    context.sessions.create({ id: sessionId, userId: user.id, createdAt: now });
     const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
@@ -89,7 +92,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     }
     const sessionId = randomBytes(32).toString("base64url");
     const now = new Date().toISOString();
-    context.sessions.set(sessionId, { id: sessionId, userId: user.id, createdAt: now });
+    context.sessions.create({ id: sessionId, userId: user.id, createdAt: now });
     const isSecure = request.protocol === "https" || request.headers["x-forwarded-proto"] === "https";
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
@@ -200,11 +203,6 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       deletedUser = user;
     });
 
-    for (const [sessionId, session] of context.sessions) {
-      if (session.userId === request.params.id) {
-        context.sessions.delete(sessionId);
-      }
-    }
     context.logInfo({ userId: deletedUser!.id, username: deletedUser!.username, action: "delete_user" }, "User deleted");
     return { ok: true };
   });

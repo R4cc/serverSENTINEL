@@ -41,7 +41,10 @@ describe("SQLite storage", () => {
     const second = openStorageDatabase(path);
     openDatabases.push(second);
     expect(second.connection.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all())
-      .toEqual([{ version: 1, name: "sqlite-foundation" }]);
+      .toEqual([
+        { version: 1, name: "sqlite-foundation" },
+        { version: 2, name: "users-nodes-settings-sessions" }
+      ]);
   });
 
   it("rolls back explicit transactions when an operation fails", async () => {

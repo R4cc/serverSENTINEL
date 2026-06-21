@@ -31,7 +31,7 @@ import {
   unknownCompatibility,
   versionChannel
 } from "./modrinth/compatibility.js";
-import { modrinthFetch } from "./modrinth/modrinthClient.js";
+import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
@@ -55,7 +55,6 @@ import { queryMinecraftServer } from "./minecraftQuery.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
-  isFullAccessUser,
   normalizePermissions,
   permissionsForRolePreset,
   requirePermission as requireUserPermission,
@@ -64,9 +63,12 @@ import {
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
-import { modrinthApiKey, updateSettings } from "./storage/settingsStore.js";
 import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
 import { openStorageDatabase } from "./storage/database.js";
+import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
+import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
+import { SettingsRepository } from "./storage/settingsRepository.js";
+import { SessionsRepository } from "./storage/sessionsRepository.js";
 import {
   badRequest,
   forbidden,
@@ -98,6 +100,7 @@ import type {
   DockerExecCreate,
   DockerExecInspect,
   DockerState,
+  AppSettings,
   InstalledModMetadata,
   ManagedNode,
   ManagedServer,
@@ -141,13 +144,9 @@ const appVersion = process.env.npm_package_version ?? "0.7.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const serversFile = join(config.configDir, "servers.json");
-const nodesFile = join(config.configDir, "nodes.json");
-const usersFile = join(config.configDir, "users.json");
 const versionMetadataFilename = ".serversentinel-version.json";
 
 const serversQueue = new AsyncQueue();
-const nodesQueue = new AsyncQueue();
-const usersQueue = new AsyncQueue();
 export const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 export const minNodeJoinTokenTtlMinutes = 5;
 export const maxNodeJoinTokenTtlMinutes = 1440;
@@ -235,7 +234,10 @@ type Client = {
 
 const provisionJobs = new Map<string, ProvisionJob>();
 const activeProvisionPortReservations = new Map<string, ProvisionPortReservation>();
-const sessions = new Map<string, Session>();
+let usersRepository: UsersRepository;
+let nodesRepository: NodesRepository;
+let settingsRepository: SettingsRepository;
+let sessionsRepository: SessionsRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -374,31 +376,6 @@ function normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined {
   return rolePreset === undefined ? undefined : rolePresetFromUnknown(rolePreset);
 }
 
-function normalizeStoredUser(value: unknown): StoredUser {
-  const user = asObject(value, "stored user");
-  const permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
-  const inferredPreset = inferRolePreset(permissions);
-  const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
-  const effectivePreset = rolePreset === "custom" || inferRolePreset(permissions) === rolePreset ? rolePreset : "custom";
-  const rawServerAccess = user.serverAccess === undefined ? undefined : asObject(user.serverAccess, "user.serverAccess");
-  const serverAccess = rawServerAccess?.mode === "selected"
-    ? { mode: "selected" as const, serverIds: asArray(rawServerAccess.serverIds, "user.serverAccess.serverIds").map((id) => requiredString(id, "user.serverAccess.serverIds[]")) }
-    : rawServerAccess?.mode === "all"
-      ? { mode: "all" as const, serverIds: [] }
-      : undefined;
-  return {
-    id: requiredString(user.id, "user.id"),
-    username: validateUsername(optionalString(user.username, "user.username")),
-    passwordHash: requiredString(user.passwordHash, "user.passwordHash"),
-    salt: requiredString(user.salt, "user.salt"),
-    rolePreset: effectivePreset,
-    permissions,
-    serverAccess,
-    createdAt: requiredString(user.createdAt, "user.createdAt"),
-    updatedAt: requiredString(user.updatedAt, "user.updatedAt")
-  };
-}
-
 function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser) {
   if (input.permissions !== undefined) {
     const permissions = normalizePermissions(input.permissions);
@@ -429,16 +406,6 @@ function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: un
     permissions,
     rolePreset: inferRolePreset(permissions)
   };
-}
-
-function validateUsername(username?: string) {
-  const value = username?.trim();
-  if (!value || value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_.-]+$/.test(value)) {
-    const error = new Error("Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  return value;
 }
 
 function validatePassword(password?: string) {
@@ -525,27 +492,23 @@ function nodeNotFound(nodeId: string): never {
 }
 
 async function readUsers() {
-  return readJsonFile(usersFile, [], (value) => asArray(value, "users.json").map(normalizeStoredUser));
-}
-
-async function writeUsers(users: StoredUser[]) {
-  const normalized = users.map(normalizeStoredUser);
-  if (normalized.length > 0 && !normalized.some(isFullAccessUser)) {
-    badRequest("At least one full-access admin user is required");
-  }
-  await writeJsonFile(usersFile, normalized);
+  return usersRepository.list();
 }
 
 function queuedReadUsers() {
-  return usersQueue.enqueue(() => readUsers());
+  return readUsers();
 }
 
-async function updateUsers(updater: (users: StoredUser[]) => Promise<void> | void) {
-  return usersQueue.enqueue(async () => {
-    const users = await readUsers();
-    await updater(users);
-    await writeUsers(users);
-  });
+async function updateUsers(updater: (users: StoredUser[]) => void) {
+  usersRepository.update(updater);
+}
+
+async function updateSettings(updater: (settings: AppSettings) => void) {
+  settingsRepository.update(updater);
+}
+
+async function modrinthApiKey() {
+  return settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
 }
 
 function parseCookies(cookieHeader?: string) {
@@ -570,10 +533,10 @@ export function sessionExpired(session: Pick<Session, "createdAt">, now = Date.n
 async function currentUserFromCookie(cookieHeader?: string) {
   const sessionId = parseCookies(cookieHeader).get(sessionCookieName);
   if (!sessionId) return null;
-  const session = sessions.get(sessionId);
+  const session = sessionsRepository.find(sessionId);
   if (!session) return null;
   if (sessionExpired(session)) {
-    sessions.delete(sessionId);
+    sessionsRepository.delete(sessionId);
     return null;
   }
   const users = await queuedReadUsers();
@@ -634,43 +597,6 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
 
 function optionalNodeTotalMemory(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-function normalizeNode(value: unknown): ManagedNode {
-  const node = asObject(value, "managed node");
-  const type = node.type;
-  if (type !== "local" && type !== "remote") {
-    throw new Error("managed node type must be local or remote");
-  }
-  const status = node.status;
-  if (status !== "online" && status !== "offline" && status !== "unknown") {
-    throw new Error("managed node status must be online, offline, or unknown");
-  }
-  const totalMemory = optionalNodeTotalMemory(node.totalMemory);
-  if (node.totalMemory !== undefined && totalMemory === undefined) {
-    throw new Error("node.totalMemory must be a positive number");
-  }
-  return {
-    id: requiredString(node.id, "node.id"),
-    name: requiredString(node.name, "node.name"),
-    type,
-    status,
-    isInternal: requireStrictBoolean(node.isInternal, "node.isInternal"),
-    createdAt: requiredString(node.createdAt, "node.createdAt"),
-    updatedAt: requiredString(node.updatedAt, "node.updatedAt"),
-    lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt"),
-    connectedAt: optionalString(node.connectedAt, "node.connectedAt"),
-    agentVersion: optionalString(node.agentVersion, "node.agentVersion"),
-    protocolVersion: optionalString(node.protocolVersion, "node.protocolVersion"),
-    capabilities: node.capabilities === undefined ? undefined : asArray(node.capabilities, "node.capabilities").map((capability) => requiredString(capability, "node.capabilities[]")),
-    dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
-    dataPathStatus: optionalString(node.dataPathStatus, "node.dataPathStatus"),
-    totalMemory,
-    compatibility: node.compatibility === "compatible" || node.compatibility === "incompatible" || node.compatibility === "unknown" ? node.compatibility : undefined,
-    secretHash: optionalString(node.secretHash, "node.secretHash"),
-    joinTokenHash: optionalString(node.joinTokenHash, "node.joinTokenHash"),
-    joinTokenExpiresAt: optionalString(node.joinTokenExpiresAt, "node.joinTokenExpiresAt")
-  };
 }
 
 function ensureDefaultInternalNode(nodes: ManagedNode[]) {
@@ -741,31 +667,27 @@ export function validateJoinTokenTtlMinutes(ttlMinutesInput?: unknown): number {
 }
 
 async function readNodes() {
-  const nodes = await readJsonFile(nodesFile, config.runtimeMode === "all-in-one" ? [defaultInternalNode()] : [], (value) => asArray(value, "nodes.json").map(normalizeNode));
+  const nodes = nodesRepository.list();
   const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
-  if (config.runtimeMode === "all-in-one" && ensureDefaultInternalNode(normalized)) {
-    await writeJsonFile(nodesFile, normalized);
-  } else if (config.runtimeMode === "panel" && normalized.length !== nodes.length) {
-    await writeJsonFile(nodesFile, normalized);
+  const changed = config.runtimeMode === "all-in-one" ? ensureDefaultInternalNode(normalized) : normalized.length !== nodes.length;
+  if (changed) {
+    nodesRepository.update((stored) => stored.splice(0, stored.length, ...normalized));
   }
   return normalized;
 }
 
-async function writeNodes(nodes: ManagedNode[]) {
-  const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
-  if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
-  await writeJsonFile(nodesFile, normalized);
-}
-
 function queuedReadNodes() {
-  return nodesQueue.enqueue(() => readNodes());
+  return readNodes();
 }
 
-async function updateNodes(updater: (nodes: ManagedNode[]) => Promise<void> | void) {
-  return nodesQueue.enqueue(async () => {
-    const nodes = await readNodes();
-    await updater(nodes);
-    await writeNodes(nodes);
+async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
+  nodesRepository.update((stored) => {
+    const nodes = stored.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(nodes);
+    updater(nodes);
+    const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
+    stored.splice(0, stored.length, ...normalized);
   });
 }
 
@@ -3079,6 +3001,11 @@ const app = Fastify({
   bodyLimit: 180 * 1024 * 1024
 });
 const storageDatabase = openStorageDatabase();
+usersRepository = new UsersRepository(storageDatabase);
+nodesRepository = new NodesRepository(storageDatabase);
+settingsRepository = new SettingsRepository(storageDatabase);
+sessionsRepository = new SessionsRepository(storageDatabase);
+configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
   storageDatabase.close();
 });
@@ -3142,7 +3069,7 @@ app.addHook("onRequest", async (request, reply) => {
 registerAuthRoutes(app, {
   authRateLimit,
   destructiveRateLimit,
-  sessions,
+  sessions: sessionsRepository,
   sessionCookieName,
   sessionMaxAgeSeconds,
   parseCookies,

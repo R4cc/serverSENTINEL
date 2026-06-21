@@ -1,8 +1,13 @@
 import { fetch } from "undici";
-import { modrinthApiKey } from "../storage/settingsStore.js";
+
+let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
+
+export function configureModrinthApiKeyProvider(provider: () => Promise<string>) {
+  apiKeyProvider = provider;
+}
 
 export async function modrinthFetch(url: string) {
-  const apiKey = await modrinthApiKey();
+  const apiKey = await apiKeyProvider();
   const headers: Record<string, string> = {
     "User-Agent": "ServerSentinel/0.7.0 (managed Fabric server panel)"
   };
