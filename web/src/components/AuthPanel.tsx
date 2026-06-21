@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Button, StatusBadge } from './UiPrimitives';
+import { Button, EmptyState, StatusBadge } from './UiPrimitives';
 import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_GROUPS,
@@ -153,14 +153,15 @@ export function UserManagement({
                 <div className="roleCell">
                   <StatusBadge className={`roleBadge ${displayedRolePreset(user)}`}>{rolePresetLabel(displayedRolePreset(user))}</StatusBadge>
                   <span className="roleInfoWrap">
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      iconOnly
                       className="roleInfoButton"
                       aria-label={`${rolePresetLabel(displayedRolePreset(user))} preset details`}
                       aria-describedby={`role-tip-${user.id}`}
                     >
                       i
-                    </button>
+                    </Button>
                     <span id={`role-tip-${user.id}`} role="tooltip" className="roleTooltip">
                       Roles are presets. Actual access is controlled by permissions.
                     </span>
@@ -188,10 +189,7 @@ export function UserManagement({
           {users.length === 0 && (
             <tr>
               <td colSpan={3}>
-                <div className="emptyInline noBorder">
-                  <strong>No users yet</strong>
-                  <span>Create a user to give someone access to this ServerSentinel panel.</span>
-                </div>
+                <EmptyState compact className="emptyInline noBorder" title="No users yet" message="Create a user to give someone access to this ServerSentinel panel." />
               </td>
             </tr>
           )}

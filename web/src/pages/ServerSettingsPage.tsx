@@ -1040,8 +1040,7 @@ export function ManagedServerForm({
           {activeWizardStep === 1 ? (
             <>
               <span className="modInstallFooterSpacer" />
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setWizardError("");
                   setActiveWizardStep(2);
@@ -1051,44 +1050,44 @@ export function ManagedServerForm({
               >
                 <span>Next: Runtime</span>
                 <AppIcon name="chevronRight" />
-              </button>
+              </Button>
             </>
           ) : activeWizardStep === 2 ? (
             <>
-              <button type="button" className="secondaryButton" onClick={() => {
+              <Button variant="secondary" onClick={() => {
                 setWizardError("");
                 setActiveWizardStep(1);
               }}>
                 <AppIcon name="chevronLeft" />
                 <span>Back: Placement & Identity</span>
-              </button>
+              </Button>
               <span className="modInstallFooterSpacer" />
-              <button type="button" onClick={() => {
+              <Button onClick={() => {
                 setWizardError("");
                 setActiveWizardStep(3);
               }} disabled={!runtimeCompatible}>
                 <span>Next: Resources & Network</span>
                 <AppIcon name="chevronRight" />
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button type="button" className="secondaryButton" onClick={() => {
+              <Button variant="secondary" onClick={() => {
                 setWizardError("");
                 setActiveWizardStep(activeWizardStep === 3 ? 2 : 3);
               }}>
                 <AppIcon name="chevronLeft" />
                 <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
-              </button>
+              </Button>
               <span className="modInstallFooterSpacer" />
-              <button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
+              <Button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
                 setWizardError("");
                 setActiveWizardStep(4);
               } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning} title={activeWizardStep === 3 && !resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined}>
                 {activeWizardStep === 4 && <AppIcon name="server" />}
                 <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
                 {activeWizardStep === 3 && <AppIcon name="chevronRight" />}
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -1802,24 +1801,25 @@ function AdditionalPortBindingsPanel({
                   placeholder="Web UI"
                   maxLength={80}
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  iconOnly
                   className="iconDangerButton additionalPortRemoveButton"
                   onClick={() => onRemove(binding.id)}
                   aria-label="Remove port binding"
                   title="Remove port binding"
                 >
                   <AppIcon name="trash" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
           {bindings.length === 0 && <div className="additionalPortsEmpty">No additional ports have been added.</div>}
           {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs unique, valid host and container ports that do not reuse the server port, Query port, or another port on this node.</span>}
-          <button type="button" className="secondaryButton addPortBindingButton" onClick={onAdd}>
+          <Button variant="secondary" className="addPortBindingButton" onClick={onAdd}>
             <AppIcon name="plus" />
             <span>Add port binding</span>
-          </button>
+          </Button>
           <p className="fieldHint">Use a host port that is not already assigned to the server port, Query port, or another binding.</p>
           <input
             type="hidden"
@@ -1928,10 +1928,10 @@ function ReviewSummaryCard({
     <section className="reviewSummaryCard" aria-labelledby={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <div className="reviewSummaryHeader">
         <strong id={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>{title}</strong>
-        <button type="button" className="reviewEditButton" onClick={onEdit}>
+        <Button variant="ghost" compact className="reviewEditButton" onClick={onEdit}>
           <AppIcon name="edit" />
           <span>Edit</span>
-        </button>
+        </Button>
       </div>
       <div className="reviewSummaryGrid">{children}</div>
     </section>

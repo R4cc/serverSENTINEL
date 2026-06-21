@@ -32,7 +32,7 @@ import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { SortHeaderButton } from "./components/TableControls";
-import { Button, PanelHeader } from "./components/UiPrimitives";
+import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -2611,9 +2611,9 @@ export default function App() {
               <h1>ServerSentinel</h1>
             </div>
           </div>
-          <button className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
+          <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
             <SidebarToggleIcon collapsed={sidebarCollapsed} />
-          </button>
+          </Button>
         </div>
         <nav className="sideNav">
           <button className={activePage === "nodes" ? "active" : ""} onClick={() => openSidebarPage("nodes")} onDoubleClick={() => resetActiveSidebarPage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
@@ -2665,13 +2665,13 @@ export default function App() {
               </svg>
             </span>
             <span className="accountName">{demoMode ? "Demo" : authSession.user?.username}</span>
-            <button type="button" className="accountLogoutButton" onClick={logout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
+            <Button variant="ghost" iconOnly className="accountLogoutButton" onClick={logout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M10 5H5v14h5" />
                 <path d="M14 8l4 4-4 4" />
                 <path d="M8 12h10" />
               </svg>
-            </button>
+            </Button>
           </div>
         </nav>
       </aside>
@@ -2683,8 +2683,8 @@ export default function App() {
             {currentPageDescription && <p>{currentPageDescription}</p>}
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</button>}
-            {activePage === "create" && <button onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</button>}
+            {activePage === "servers" && <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</Button>}
+            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
           </div>
         </header>
 
@@ -2765,12 +2765,13 @@ export default function App() {
                 })}
               </section>
             ) : (
-              <div className="emptyState">
-                <h2>No managed servers yet</h2>
-                {panelOnlyMode && usableContextNodes.length === 0 ? (
-                  <>
-                    <p>No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers.</p>
-                    <button
+              <EmptyState
+                title="No managed servers yet"
+                message={panelOnlyMode && usableContextNodes.length === 0
+                  ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
+                  : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel."}
+                action={panelOnlyMode && usableContextNodes.length === 0 ? (
+                    <Button
                       onClick={() => {
                         setActivePage("nodes");
                         setAddNodeResult(null);
@@ -2781,15 +2782,11 @@ export default function App() {
                       title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                     >
                       Add node
-                    </button>
-                  </>
+                    </Button>
                 ) : (
-                  <>
-                    <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                    <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</button>
-                  </>
+                    <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
                 )}
-              </div>
+              />
             )}
           </section>
         )}
@@ -2815,10 +2812,10 @@ export default function App() {
                     </details>
                   )}
                 </div>
-                <button type="button" onClick={() => {
+                <Button variant="secondary" compact onClick={() => {
                   setProvisioningError("");
                   setProvisioningErrorDetails("");
-                }}>Clear error</button>
+                }}>Clear error</Button>
               </section>
             )}
             <ManagedServerForm
@@ -2883,14 +2880,14 @@ export default function App() {
                 <div>
                   <strong>Version</strong>
                 </div>
-                <span className="settingsStatus">v{appVersion}</span>
+                <StatusBadge className="settingsStatus">v{appVersion}</StatusBadge>
               </div>
               {demoMode && (
                 <div className="settingsRow">
                   <div>
                     <strong>Demo mode</strong>
                   </div>
-                  <button type="button" className="secondaryButton" onClick={logout} disabled={isProvisioning}>Exit demo mode</button>
+                  <Button variant="secondary" onClick={logout} disabled={isProvisioning}>Exit demo mode</Button>
                 </div>
               )}
             </section>
@@ -2917,7 +2914,7 @@ export default function App() {
                   <div>
                     <h2>Users</h2>
                   </div>
-                  <button type="button" onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</button>
+                  <Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>
                 </div>
                 {usersLoading && (
                   <InlineState tone="loading" title="Loading users" message="Loading user accounts and access settings." />
@@ -2960,9 +2957,9 @@ export default function App() {
                 <div>
                   <strong>Docker socket</strong>
                 </div>
-                <span className={`settingsStatus ${panelOnlyMode ? "" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
+                <StatusBadge className={`settingsStatus ${panelOnlyMode ? "" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
                   {panelOnlyMode ? "Unsupported" : (demoMode ? "Demo override" : effectiveAppState.dockerSocketMounted ? "Connected" : "Not mounted")}
-                </span>
+                </StatusBadge>
               </div>
             </section>
           </section>
@@ -3019,12 +3016,13 @@ export default function App() {
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
-          <section className="emptyState">
-            <h2>Welcome to ServerSentinel</h2>
-            {panelOnlyMode && usableContextNodes.length === 0 ? (
-              <>
-                <p>No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers.</p>
-                <button
+          <EmptyState
+            title="Welcome to ServerSentinel"
+            message={panelOnlyMode && usableContextNodes.length === 0
+              ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
+              : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel."}
+            action={panelOnlyMode && usableContextNodes.length === 0 ? (
+                <Button
                   onClick={() => {
                     setActivePage("nodes");
                     setAddNodeResult(null);
@@ -3035,23 +3033,19 @@ export default function App() {
                   title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
                 >
                   Add node
-                </button>
-              </>
+                </Button>
             ) : (
-              <>
-                <p>No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.</p>
-                <button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</button>
-              </>
+                <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
             )}
-          </section>
+          />
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
-          <section className="emptyState">
-            <h2>No server selected</h2>
-            <p>A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings.</p>
-            <button onClick={() => setActivePage("servers")}>Open servers</button>
-          </section>
+          <EmptyState
+            title="No server selected"
+            message="A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings."
+            action={<Button onClick={() => setActivePage("servers")}>Open servers</Button>}
+          />
         )}
 
         {isServerWorkspacePage(activePage) && activeServer && (
@@ -3070,9 +3064,9 @@ export default function App() {
                     <strong>{activeServer.displayName}</strong>
                   </div>
                   <div className="serverStripMetaRow">
-                    <span className={`runtimeBadge ${runtimeTone(activeStatus, activeServerDockerSocketMounted)}`}>
+                    <StatusBadge className={`runtimeBadge ${runtimeTone(activeStatus, activeServerDockerSocketMounted)}`}>
                       {runtimeLabel(activeStatus, activeServerDockerSocketMounted)}
-                    </span>
+                    </StatusBadge>
                     <small className="serverStripMeta">
                       Fabric {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}
                     </small>
@@ -3124,8 +3118,9 @@ export default function App() {
                   </Button>
                   {overflowOpen && (
                     <div className="overflowDropdown" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        compact
                         onClick={() => {
                           refreshStatus();
                           setOverflowOpen(false);
@@ -3134,9 +3129,10 @@ export default function App() {
                         title={isProvisioning ? provisioningNavigationReason : "Refresh server status"}
                       >
                         Refresh status
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        compact
                         onClick={() => {
                           downloadConsoleLogs();
                           setOverflowOpen(false);
@@ -3145,7 +3141,7 @@ export default function App() {
                         title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}
                       >
                         Download log
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
