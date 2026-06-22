@@ -105,4 +105,30 @@ describe("SQLite repositories", () => {
 
     expect(settings.get()).toEqual({ modrinthApiKey: "modrinth-secret" });
   });
+
+  it("stores SQL metacharacters as data without executing them", async () => {
+    const storage = await createStorage();
+    const users = new UsersRepository(storage);
+    const nodes = new NodesRepository(storage);
+    const settings = new SettingsRepository(storage);
+    const payload = "Robert'); DROP TABLE users;--";
+    const user = storedUser({ id: payload, passwordHash: payload, salt: payload });
+
+    users.createFirst(user, { id: payload, userId: payload, createdAt: payload });
+    nodes.create({
+      id: payload,
+      name: payload,
+      type: "remote",
+      status: "offline",
+      isInternal: false,
+      createdAt: payload,
+      updatedAt: payload
+    });
+    settings.setModrinthApiKey(payload);
+
+    expect(users.list()[0]).toMatchObject({ id: payload, passwordHash: payload, salt: payload });
+    expect(nodes.list()[0].name).toBe(payload);
+    expect(settings.get().modrinthApiKey).toBe(payload);
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM users").get()).toEqual({ count: 1 });
+  });
 });

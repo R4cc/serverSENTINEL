@@ -3,8 +3,6 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { config } from "../config.js";
 
-const busyTimeoutMs = 5_000;
-
 type Migration = {
   version: number;
   name: string;
@@ -257,7 +255,7 @@ export class StorageDatabase {
     try {
       this.connection.pragma("foreign_keys = ON");
       this.connection.pragma("journal_mode = WAL");
-      this.connection.pragma(`busy_timeout = ${busyTimeoutMs}`);
+      this.connection.pragma("busy_timeout = 5000");
       initializeSchema(this.connection);
     } catch (error) {
       this.connection.close();
