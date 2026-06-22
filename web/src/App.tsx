@@ -3418,25 +3418,25 @@ export default function App() {
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <Button variant="secondary" compact onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || "Open selected file read-only"}>
+                        <Button variant="secondary" compact aria-label="Open selected file" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || "Open selected file read-only"}>
                           <AppIcon name="edit" />
-                          Open
+                          <span className="selectionActionLabel">Open</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
+                        <Button variant="secondary" compact aria-label="Download selected file" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
                           <AppIcon name="download" />
-                          Download
+                          <span className="selectionActionLabel">Download</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
+                        <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
                           <AppIcon name="copy" />
-                          Duplicate
+                          <span className="selectionActionLabel">Duplicate</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
+                        <Button variant="secondary" compact aria-label="Rename selected item" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
                           <AppIcon name="rename" />
-                          Rename
+                          <span className="selectionActionLabel">Rename</span>
                         </Button>
-                        <Button variant="critical" compact onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
+                        <Button variant="critical" compact aria-label="Delete selected items" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
                           <AppIcon name="trash" />
-                          Delete
+                          <span className="selectionActionLabel">Delete</span>
                         </Button>
                       </div>
                     </div>

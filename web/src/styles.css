@@ -566,6 +566,8 @@ button .buttonIcon {
   visibility: visible;
   transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
   overflow: hidden;
+  line-height: 1.4;
+  padding-block: 1px;
   white-space: nowrap;
   display: inline-block;
   vertical-align: middle;
@@ -9415,10 +9417,27 @@ textarea,
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   align-items: center;
+  container-type: inline-size;
 }
 
 .filesPage .selectionActions {
   justify-content: flex-end;
+}
+
+@container (max-width: 960px) {
+  .filesPage .selectionActions {
+    flex-wrap: nowrap;
+  }
+
+  .filesPage .selectionActions .uiButton {
+    width: var(--control-height-compact);
+    min-width: var(--control-height-compact);
+    padding-inline: 0;
+  }
+
+  .filesPage .selectionActionLabel {
+    display: none;
+  }
 }
 
 .filesPage .fileTable {
