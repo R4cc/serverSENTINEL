@@ -218,11 +218,6 @@ function wizardJavaArgs(minimumHeapGb: number, maximumHeapGb: number, currentArg
   return [`-Xms${minimumHeapGb}G`, `-Xmx${maximumHeapGb}G`, withoutMemory].filter(Boolean).join(" ");
 }
 
-function createDockerContainerName(displayName: string) {
-  const slug = displayName.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug ? `serversentinel-${slug}`.slice(0, 128) : "";
-}
-
 function nodeDisplayName(node: ContextNode | undefined) {
   if (!node) return "No node selected";
   return node.isInternal ? "Internal Node" : node.name;
@@ -622,7 +617,6 @@ export function ManagedServerForm({
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [dockerContainer, setDockerContainer] = useState("");
-  const [dockerContainerCustomized, setDockerContainerCustomized] = useState(false);
   const [dockerImage, setDockerImage] = useState("");
   const [dockerImageCustomized, setDockerImageCustomized] = useState(false);
   const [serverJar, setServerJar] = useState("fabric-server-launch.jar");
@@ -733,12 +727,6 @@ export function ManagedServerForm({
   }, [minecraftOptions, minecraftVersion]);
 
   useEffect(() => {
-    if (!dockerContainerCustomized) {
-      setDockerContainer(createDockerContainerName(displayName));
-    }
-  }, [displayName, dockerContainerCustomized]);
-
-  useEffect(() => {
     if (!selectedNode) return;
     const nextServerPort = serverPortCustomized
       ? serverPort
@@ -821,7 +809,6 @@ export function ManagedServerForm({
   }
 
   function updateDockerContainer(value: string) {
-    setDockerContainerCustomized(Boolean(value.trim()));
     setDockerContainer(value);
   }
 
@@ -1563,11 +1550,11 @@ function ResourcesNetworkWizardStep({
 
               <label className="advancedResourceField" htmlFor="create-docker-container">
                 <span>Docker container name</span>
-                <small>Generated from the display name. Edit it to override.</small>
+                <small>Leave blank to generate a stable name from the server ID.</small>
                 <input
                   id="create-docker-container"
                   type="text"
-                  placeholder="survival-mc"
+                  placeholder="Auto-generated"
                   value={dockerContainer}
                   onChange={(event) => onDockerContainerChange(event.target.value)}
                   pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"

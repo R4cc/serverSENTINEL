@@ -118,7 +118,8 @@ export function serverConfigValidation(form: FormData, existingNames: string[], 
   }
   const jarError = validateRuntimeJarFilename(trimFormValue(form, "serverJar"));
   if (jarError) errors.push({ field: "serverJar", message: jarError });
-  const containerError = validateDockerContainerName(trimFormValue(form, "dockerContainer"));
+  const dockerContainer = trimFormValue(form, "dockerContainer");
+  const containerError = dockerContainer ? validateDockerContainerName(dockerContainer) : null;
   if (containerError) errors.push({ field: "dockerContainer", message: containerError });
   const portsError = validateDockerPorts(trimFormValue(form, "dockerPorts"));
   if (portsError) errors.push({ field: "dockerPorts", message: portsError });

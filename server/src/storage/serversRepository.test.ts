@@ -8,6 +8,7 @@ import { NodesRepository } from "./nodesRepository.js";
 import { ServersRepository } from "./serversRepository.js";
 import { ResourceStatsRepository } from "./resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./modPreferencesRepository.js";
+import { defaultServerContainerName, serverStorageName } from "./serverIdentity.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -46,6 +47,7 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
     nodeId: "node-id",
     displayName: `Server ${id}`,
     serverDir: `/data/servers/${id}`,
+    storageName: serverStorageName(id),
     minecraftVersion: "1.21.1",
     loaderVersion: "0.16.0",
     serverJar: "fabric-server-launch.jar",
@@ -59,6 +61,7 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
       compatibilityStatus: "compatible",
       resolvedAt: "2026-01-01T00:00:00.000Z"
     },
+    dockerContainer: defaultServerContainerName(id),
     dockerPorts: `${externalPort}:25565/tcp;25575:25575/udp`,
     managedPorts: [
       {
@@ -180,6 +183,41 @@ describe("ServersRepository", () => {
     expect(schedule.cron).toBe("30 * * * *");
     expect(schedule.lastRunAt).toBe("2026-01-04T00:01:00.000Z");
     expect(schedule.recentRuns?.[0].id).toBe("concurrent-run");
+  });
+
+  it("renames display names without changing immutable identity or dependent state", async () => {
+    const { storage, servers } = await createRepositories();
+    const original = managedServer("00000000-0000-4000-8000-000000000001");
+    servers.create(original);
+    new ResourceStatsRepository(storage).append(original.id, {
+      available: true,
+      running: true,
+      cpuPercent: 1,
+      memoryUsageBytes: 2,
+      memoryLimitBytes: 3,
+      readAt: "2026-01-01T00:00:00.000Z",
+      sampledAt: 1
+    }, 0);
+    const modPreferences = new ModPreferencesRepository(storage);
+    modPreferences.replaceAll(original.id, { "fabric-api.jar": { channel: "release" } });
+
+    const renamed = {
+      ...original,
+      displayName: "Renamed Survival",
+      updatedAt: "2026-01-05T00:00:00.000Z"
+    };
+    servers.replaceMetadata(renamed);
+
+    expect(servers.list()).toEqual([renamed]);
+    expect(servers.list()[0]).toMatchObject({
+      id: original.id,
+      serverDir: original.serverDir,
+      storageName: original.storageName,
+      dockerContainer: original.dockerContainer
+    });
+    expect(servers.list()[0].schedules?.[0].id).toBe(original.schedules![0].id);
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM resource_stats WHERE server_id = ?").get(original.id)).toEqual({ count: 1 });
+    expect(modPreferences.list(original.id)).toEqual({ "fabric-api.jar": { channel: "release" } });
   });
 
   it("cascades dependent ports, schedules, and runs when deleting a server", async () => {

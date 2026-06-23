@@ -20,6 +20,7 @@ import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
+import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
 type NodeUpdateRequest = {
@@ -112,10 +113,6 @@ function panelWebSocketUrl() {
   return url.toString();
 }
 
-function slugify(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "") || randomUUID();
-}
-
 function safeName(value: unknown) {
   const raw = typeof value === "string" ? value : "";
   const name = basename(raw).trim();
@@ -172,12 +169,8 @@ function assertJarBuffer(buffer: Buffer) {
   }
 }
 
-function defaultContainerName(displayName: string) {
-  return `serversentinel-${slugify(displayName)}`;
-}
-
 function containerName(server: ManagedServer) {
-  return validateDockerContainerName(server.dockerContainer?.trim() || defaultContainerName(server.displayName));
+  return validateDockerContainerName(server.dockerContainer?.trim() || defaultServerContainerName(server.id));
 }
 
 function runtimeConfigHash(server: ManagedServer) {
@@ -377,7 +370,8 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   if (!isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
-  const storageName = slugify(displayName);
+  const id = newServerId();
+  const storageName = serverStorageName(id);
   const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || resolvedRuntime.jarArtifact.filename);
   const runtimeProfile: ServerRuntimeProfile = {
     ...resolvedRuntime,
@@ -389,14 +383,14 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   const queryPort = queryPortFromInput(input);
   const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`, queryPort);
   parseDockerPorts(dockerPorts);
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
   const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const server: ManagedServer = {
-    id: randomUUID(),
+    id,
     nodeId: input.nodeId || "",
     displayName,
-    serverDir: resolve(serversRoot, storageName),
+    serverDir: serverDirectory(serversRoot, id),
     storageName,
     minecraftVersion: runtimeProfile.minecraftVersion,
     loaderVersion: runtimeProfile.loaderVersion,
@@ -466,7 +460,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   if (serverPort && !isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultContainerName(server.displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultServerContainerName(server.id));
   const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(runtimeProfile.minecraftVersion));
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });

@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -66,6 +66,7 @@ import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { openStorageDatabase } from "./storage/database.js";
 import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
+import { defaultServerContainerName, isInsideServersDirectory, newServerId, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
@@ -860,7 +861,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     serverType: server.serverType,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
-    directoryLabel: server.storageName || server.displayName,
+    directoryLabel: server.storageName || server.id,
     hasDockerContainer: Boolean(server.dockerContainer),
     nodeName: node?.name,
     runtimeProfile: runtimeProfileForServer(server),
@@ -952,11 +953,10 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   )));
   const id = validateServerId(server.id);
   const nodeId = requiredString(server.nodeId, "server.nodeId");
-  const serversDir = resolve(config.serversDir);
   const serverDir = nodeId === localNodeId
     ? resolve(requiredString(server.serverDir, "server.serverDir"))
     : resolve(requiredString(server.serverDir, "server.serverDir"));
-  if (nodeId === localNodeId && serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
+  if (nodeId === localNodeId && !isInsideServersDirectory(config.serversDir, serverDir)) {
     throw new Error("managed server serverDir must be inside the canonical data root servers directory");
   }
   return {
@@ -1003,15 +1003,6 @@ export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
   return removed;
 }
 
-function slugify(input: string) {
-  const slug = input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || randomUUID();
-}
-
-function defaultContainerName(displayName: string) {
-  return `serversentinel-${slugify(displayName)}`;
-}
-
 function defaultDockerImageForMinecraftVersion(version?: string) {
   const [major, minor, patch] = (version ?? "").split(".").map((part) => Number(part));
   if (Number.isFinite(major) && major >= 26) {
@@ -1036,9 +1027,8 @@ async function getServer(serverId?: string) {
 }
 
 function ensureManagedServerDirectory(server: ManagedServer) {
-  const serversDir = resolve(config.serversDir);
   const serverDir = resolve(server.serverDir);
-  if (serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
+  if (!isInsideServersDirectory(config.serversDir, serverDir)) {
     throw new Error("Server files can only be deleted when the directory is inside the managed servers directory");
   }
   return serverDir;
@@ -1482,7 +1472,7 @@ function dockerContainerName(server: ManagedServer) {
   if (server.dockerContainer?.trim()) {
     return validateDockerContainerName(server.dockerContainer);
   }
-  return defaultContainerName(server.displayName);
+  return validateDockerContainerName(defaultServerContainerName(server.id));
 }
 
 function dockerControlConfigured(server: ManagedServer) {
@@ -2501,16 +2491,14 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
 
   report?.(15, "Reserving server storage");
   await mkdir(config.serversDir, { recursive: true });
-  const storageBase = slugify(displayName);
-  let storageName = storageBase;
-  let counter = 2;
-  while (existsSync(resolve(config.serversDir, storageName))) {
-    storageName = `${storageBase}-${counter}`;
-    counter += 1;
+  const id = newServerId();
+  const storageName = serverStorageName(id);
+  const resolvedServerDir = serverDirectory(config.serversDir, id);
+  if (existsSync(resolvedServerDir)) {
+    throw new Error("Generated server id already has a storage directory");
   }
 
   report?.(25, "Resolving Fabric versions");
-  const resolvedServerDir = resolve(config.serversDir, storageName);
   const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
     minecraftVersion,
     loaderVersion: input.loaderVersion?.trim() || "latest",
@@ -2527,13 +2515,13 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const existingServers = await listManagedServers();
   const { serverPort, dockerPorts, queryPort, managedPorts } = normalizeCreateServerPorts(input, existingServers, localNodeId, { ignoreJobId: jobId });
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfileForRecord.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
 
   const now = new Date().toISOString();
   const server: ManagedServer = {
-    id: randomUUID(),
+    id,
     nodeId: localNodeId,
     displayName,
     serverDir: resolvedServerDir,
@@ -2804,7 +2792,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     if (serverPort && !isValidServerPort(serverPort)) {
       throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
     }
-    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
+    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultServerContainerName(current.id));
     const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
     const requestedDockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
     const currentQueryPort = current.managedPorts?.find((port) => port.type === "query")?.externalPort;

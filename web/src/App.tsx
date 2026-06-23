@@ -1447,7 +1447,6 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           displayName: form.get("displayName"),
-          serverDir: form.get("serverDir"),
           minecraftVersion: form.get("minecraftVersion"),
           loaderVersion: form.get("loaderVersion"),
           installerVersion: form.get("installerVersion"),

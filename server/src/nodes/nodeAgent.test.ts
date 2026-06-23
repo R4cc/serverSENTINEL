@@ -65,6 +65,21 @@ afterEach(async () => {
 });
 
 describe("remote node create and Docker command safety", () => {
+  it("creates immutable server identity independent of display name", () => {
+    const { server } = hooks.createdServerRecord({
+      nodeId: "node-id",
+      displayName: "My Survival Server",
+      minecraftVersion: "1.21.4",
+      acceptEula: true
+    }, testRuntimeProfile());
+
+    expect(server.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(server.storageName).toBe(server.id);
+    expect(server.serverDir).toBe(join(tempRoot, "servers", server.id));
+    expect(server.dockerContainer).toBe(`serversentinel-${server.id}`);
+    expect(server.displayName).toBe("My Survival Server");
+  });
+
   it("validates Java args while building the remote create server record", () => {
     expect(() => hooks.createdServerRecord({
       displayName: "Unsafe",

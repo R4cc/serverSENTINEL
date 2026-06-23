@@ -142,6 +142,8 @@ Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes
 
 Back up the whole data root. The simplest reliable file-copy backup is to stop ServerSentinel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
 
+Managed servers and nodes use immutable backend-generated IDs. Local managed server files live under `servers/<serverId>/`; renaming a server changes only its display label, not its ID, directory, schedules, mods, logs, jobs, or Docker container name. Leave the Docker container field blank during creation to let ServerSentinel generate a stable container name from the server ID.
+
 The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside ServerSentinel after edit mode began.
 
 Recommended host folder:
