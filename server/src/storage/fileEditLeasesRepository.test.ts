@@ -45,8 +45,10 @@ describe("FileEditLeasesRepository", () => {
     const repository = await createRepository();
     const lease = repository.acquire({ serverId: "server", path: "/server.properties", fileRevision: "rev-1", owner: alice }, 1_000);
     expect(lease.displayName).toBe("Alice");
+    expect(repository.requireOwned(lease.leaseId, "server", "/server.properties", alice, 2_000).leaseId).toBe(lease.leaseId);
     expect(() => repository.acquire({ serverId: "server", path: "/server.properties", fileRevision: "rev-1", owner: bob }, 2_000))
       .toThrow("Alice is already editing this file");
+    expect(() => repository.requireOwned(lease.leaseId, "server", "/server.properties", bob, 2_001)).toThrow("no longer owned");
 
     const recovered = repository.acquire({ serverId: "server", path: "/server.properties", fileRevision: "rev-2", owner: bob }, 1_000 + fileEditLeaseTimeoutMs);
     expect(recovered.displayName).toBe("Bob");
@@ -60,5 +62,25 @@ describe("FileEditLeasesRepository", () => {
     expect(() => repository.requireOwned(lease.leaseId, "server", "/ops.json", bob, 20_001)).toThrow("no longer owned");
     expect(repository.release(lease.leaseId, alice)).toBe(true);
     expect(() => repository.requireOwned(lease.leaseId, "server", "/ops.json", alice, 20_002)).toThrow("expired");
+  });
+
+  it("rejects unnormalized lock paths", async () => {
+    const repository = await createRepository();
+
+    expect(() => repository.acquire({ serverId: "server", path: "ops.json", fileRevision: "rev", owner: alice })).toThrow("absolute");
+    expect(() => repository.acquire({ serverId: "server", path: "/config/../ops.json", fileRevision: "rev", owner: alice })).toThrow("normalized");
+    expect(() => repository.acquire({ serverId: "server", path: "/ops.json/", fileRevision: "rev", owner: alice })).toThrow("trailing slash");
+  });
+
+  it("force releases a lease only for the matching immutable server id", async () => {
+    const repository = await createRepository();
+    const lease = repository.acquire({ serverId: "server", path: "/ops.json", fileRevision: "rev", owner: alice }, 10_000);
+
+    expect(repository.forceRelease(lease.leaseId, "other-server", 10_001)).toBe(false);
+    expect(() => repository.acquire({ serverId: "server", path: "/ops.json", fileRevision: "rev", owner: bob }, 10_002)).toThrow("Alice is already editing this file");
+
+    expect(repository.forceRelease(lease.leaseId, "server", 10_003)).toBe(true);
+    const next = repository.acquire({ serverId: "server", path: "/ops.json", fileRevision: "rev", owner: bob }, 10_004);
+    expect(next.displayName).toBe("Bob");
   });
 });

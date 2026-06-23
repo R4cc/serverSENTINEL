@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
 import http from "node:http";
@@ -122,9 +122,11 @@ function safeName(value: unknown) {
 }
 
 function safeRelative(value: unknown) {
-  const raw = typeof value === "string" ? value.replaceAll("\\", "/") : ".";
-  if (raw.includes("\0") || raw.startsWith("/") || raw.split("/").includes("..")) throw new Error("Invalid relative path");
-  return raw === "" ? "." : raw;
+  const raw = typeof value === "string" ? value : ".";
+  if (raw.includes("\0") || raw.includes("\\") || /[\r\n]/.test(raw) || raw.startsWith("/") || raw.split("/").includes("..")) throw new Error("Invalid relative path");
+  if (raw === "" || raw === ".") return ".";
+  if (raw.split("/").some((segment) => !segment || segment === ".")) throw new Error("Invalid relative path");
+  return raw;
 }
 
 async function serverRoot(server: ManagedServer) {
@@ -974,7 +976,7 @@ async function modsList(server: ManagedServer, options: { forceRefresh?: boolean
           compatibility: { status: "unknown", compatible: false, reason: "Remote mod metadata sync pending" }
         };
         try {
-          const target = await inside(server, join("mods", filename));
+          const target = await inside(server, posix.join("mods", filename));
           const hash = createHash("sha1").update(await readFile(target)).digest("hex");
           const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
           const version = await versionResponse.json() as ModrinthVersion;
@@ -1017,7 +1019,7 @@ async function modUpload(server: ManagedServer, filename: unknown, contentBase64
   assertJarBuffer(content);
   await mkdir(await inside(server, "mods", false), { recursive: true });
   await inside(server, "mods");
-  return writeRelativeFile(server, join("mods", name), content);
+  return writeRelativeFile(server, posix.join("mods", name), content);
 }
 
 async function modInstall(server: ManagedServer, input: unknown) {
@@ -1204,18 +1206,18 @@ async function handleCommand(command: string, payload: any) {
   if (command === "mods.enableDisable") {
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     const enabled = requireStrictBoolean(payload?.enabled, "enabled");
-    const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, join("mods", filename)))
+    const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, posix.join("mods", filename)))
       ? `${filename}.disabled`
       : filename;
-    const source = await inside(server, join("mods", sourceName));
+    const source = await inside(server, posix.join("mods", sourceName));
     const targetName = enabled ? sourceName.replace(/\.jar\.disabled$/, ".jar") : sourceName.endsWith(".jar.disabled") ? sourceName : `${sourceName}.disabled`;
-    const target = await writableInside(server, join("mods", safeInstalledModFilename(targetName)));
+    const target = await writableInside(server, posix.join("mods", safeInstalledModFilename(targetName)));
     if (source !== target) await rename(source, target);
     return { ok: true, filename: basename(target), enabled };
   }
   if (command === "mods.remove") {
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
-    await rm(await inside(server, join("mods", filename)), { force: true });
+    await rm(await inside(server, posix.join("mods", filename)), { force: true });
     return { ok: true, filename };
   }
   throw new Error(`Unsupported node command ${command}`);

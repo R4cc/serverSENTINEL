@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FileEditLease } from "../types.js";
+import { normalizePublicFilePath } from "../core.js";
 import type { StorageDatabase } from "./database.js";
 
 export const fileEditLeaseTimeoutMs = 60_000;
@@ -59,7 +60,8 @@ export class FileEditLeasesRepository {
   acquire(input: { serverId: string; path: string; fileRevision: string; owner: LeaseOwner }, now = Date.now()) {
     return this.storage.transaction((database) => {
       this.removeExpired(now);
-      const existing = this.findByPath(input.serverId, input.path);
+      const path = normalizePublicFilePath(input.path);
+      const existing = this.findByPath(input.serverId, path);
       if (existing) {
         throw new FileLeaseError(
           `${existing.displayName || "Another user"} is already editing this file`,
@@ -75,7 +77,7 @@ export class FileEditLeasesRepository {
           acquired_at, refreshed_at, expires_at, file_revision
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        leaseId, input.serverId, input.path, input.owner.userId, input.owner.sessionId,
+        leaseId, input.serverId, path, input.owner.userId, input.owner.sessionId,
         input.owner.displayName, now, now, expiresAt, input.fileRevision
       );
       return this.findById(leaseId)!;
@@ -96,9 +98,10 @@ export class FileEditLeasesRepository {
   requireOwned(leaseId: string, serverId: string, path: string, owner: LeaseOwner, now = Date.now()) {
     return this.storage.transaction(() => {
       this.removeExpired(now);
+      const normalizedPath = normalizePublicFilePath(path);
       const lease = this.findById(leaseId);
       this.assertOwner(lease, owner);
-      if (lease.serverId !== serverId || lease.path !== path) {
+      if (lease.serverId !== serverId || lease.path !== normalizedPath) {
         throw new FileLeaseError("The edit lease does not belong to this file", "file_edit_lease_lost");
       }
       return lease;
@@ -111,6 +114,13 @@ export class FileEditLeasesRepository {
       if (!lease) return false;
       this.assertOwner(lease, owner);
       return database.prepare("DELETE FROM file_edit_leases WHERE lease_id = ?").run(leaseId).changes > 0;
+    });
+  }
+
+  forceRelease(leaseId: string, serverId: string, now = Date.now()) {
+    return this.storage.transaction((database) => {
+      this.removeExpired(now);
+      return database.prepare("DELETE FROM file_edit_leases WHERE lease_id = ? AND server_id = ?").run(leaseId, serverId).changes > 0;
     });
   }
 

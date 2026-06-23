@@ -5,7 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -135,6 +135,7 @@ import {
   ensureWritableInsideServer,
   ensureWritableResolvedInsideServer,
   nextCronRun,
+  normalizePublicFilePath,
   parseDockerPorts,
   safeInstalledModFilename,
   safeModFilename,
@@ -708,6 +709,15 @@ async function readFileWithRevision(runtime: NodeRuntime, server: ManagedServer,
 function publicFileEditLease(lease: import("./types.js").FileEditLease) {
   const { sessionId: _sessionId, ...publicLease } = lease;
   return publicLease;
+}
+
+async function fileEditLockPath(runtime: NodeRuntime, server: ManagedServer, target: string) {
+  if (server.nodeId === localNodeId) {
+    const [root, realTarget] = await Promise.all([realpath(server.serverDir), realpath(target)]);
+    const relativePath = relative(root, realTarget).replaceAll("\\", "/");
+    return normalizePublicFilePath(relativePath ? `/${relativePath}` : "/");
+  }
+  return normalizePublicFilePath(runtime.publicPath(server, target));
 }
 
 async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
@@ -3810,7 +3820,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   const file = await readFileWithRevision(runtime, server, target);
   if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
-  const path = runtime.publicPath(server, target);
+  const path = await fileEditLockPath(runtime, server, target);
   const lease = fileEditLeasesRepository.acquire({
     serverId: server.id,
     path,
@@ -3832,7 +3842,11 @@ app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lea
   return { lease: publicFileEditLease(lease) };
 });
 
-app.delete<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lease/:leaseId", async (request) => {
+app.delete<{ Params: { id: string; leaseId: string }; Querystring: { force?: string } }>("/api/servers/:id/file/lease/:leaseId", async (request) => {
+  if (request.query.force === "true") {
+    await requireRequestPermission(request, "users.manage");
+    return { ok: fileEditLeasesRepository.forceRelease(request.params.leaseId, request.params.id) };
+  }
   const user = await requireRequestPermission(request);
   return { ok: fileEditLeasesRepository.release(request.params.leaseId, fileLeaseOwner(request, user)) };
 });
@@ -3848,7 +3862,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
     error.code = "file_edit_lease_lost";
     throw error;
   }
-  const path = runtime.publicPath(server, target);
+  const path = await fileEditLockPath(runtime, server, target);
   const owner = fileLeaseOwner(request, user);
   const lease = fileEditLeasesRepository.requireOwned(request.body.leaseId, server.id, path, owner);
   const current = await readFileWithRevision(runtime, server, target);

@@ -18,10 +18,15 @@ type UpdateServerRecordFn = (server: ManagedServer) => Promise<void>;
 type DeleteServerRecordFn = (serverId: string) => Promise<void>;
 
 function normalizeRemotePath(path: string) {
-  const value = (path || ".").replaceAll("\\", "/");
-  if (value.includes("\0")) throw new Error("Path contains invalid characters");
-  if (value.startsWith("/")) return value.replace(/^\/+/, "") || ".";
-  return value || ".";
+  const value = path || ".";
+  if (value.includes("\0") || value.includes("\\") || /[\r\n]/.test(value)) throw new Error("Path contains invalid characters");
+  const trimmed = value.startsWith("/") ? value.replace(/^\/+/, "") : value;
+  if (!trimmed || trimmed === ".") return ".";
+  const segments = trimmed.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new Error("Path must be normalized");
+  }
+  return segments.join("/");
 }
 
 function publicRemotePath(path: string) {
