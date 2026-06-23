@@ -517,24 +517,46 @@ export type SafeBatchUpdateResult = {
   counts: { requested: number; updated: number; skipped: number; failed: number };
 };
 
-export type ProvisionJob = {
+export type OperationRecord = {
   id: string;
-  status: "running" | "succeeded" | "failed";
+  type:
+    | "server.create"
+    | "server.start"
+    | "server.stop"
+    | "server.restart"
+    | "mod.upload"
+    | "mod.install"
+    | "mod.update"
+    | "mod.remove"
+    | "mod.toggle"
+    | "mod.batchUpdate"
+    | "schedule.run"
+    | "backup.create"
+    | "backup.restore"
+    | "import.run"
+    | "export.run";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  serverId?: string;
+  nodeId?: string;
+  createdBy?: string;
   progress: number;
-  task: string;
-  server?: ManagedServer;
-  error?: string;
-  errorDetails?: string;
+  task?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorMessage?: string;
+  result?: unknown;
+  logSummary?: string;
 };
 
 export type GeneralJob = {
   id: string;
   type: "provision" | "mod-install" | "mod-upload";
-  status: "running" | "succeeded" | "failed";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   title: string;
   subject?: string;
   progress: number;
-  task: string;
+  task?: string;
   error?: string;
   errorDetails?: string;
   dismissible: boolean;

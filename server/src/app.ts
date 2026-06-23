@@ -75,6 +75,7 @@ import { ServersRepository } from "./storage/serversRepository.js";
 import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
+import { OperationsRepository } from "./storage/operationsRepository.js";
 import {
   badRequest,
   forbidden,
@@ -90,7 +91,7 @@ import {
   validateModrinthProjectId,
   validateModrinthVersionId,
   validateNodeName,
-  validateProvisionJobId,
+  validateOperationId,
   validateRuntimeJarFilename,
   validateScheduleId,
   validateServerId
@@ -114,6 +115,9 @@ import type {
   ModPreference,
   ModrinthProject,
   ModrinthVersion,
+  OperationRecord,
+  OperationStatus,
+  OperationType,
   Permission,
   PublicNode,
   PublicServer,
@@ -208,18 +212,6 @@ type VersionMetadata = {
   updatedAt?: string;
 };
 
-type ProvisionJob = {
-  id: string;
-  status: "running" | "succeeded" | "failed";
-  progress: number;
-  task: string;
-  server?: PublicServer;
-  error?: string;
-  errorDetails?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type DockerHostPortBinding = {
   port: string;
   protocol: string;
@@ -237,7 +229,6 @@ type Client = {
   readyState: number;
 };
 
-const provisionJobs = new Map<string, ProvisionJob>();
 const activeProvisionPortReservations = new Map<string, ProvisionPortReservation>();
 let usersRepository: UsersRepository;
 let nodesRepository: NodesRepository;
@@ -246,6 +237,7 @@ let sessionsRepository: SessionsRepository;
 let serversRepository: ServersRepository;
 let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
+let operationsRepository: OperationsRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -2575,17 +2567,59 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   }
 }
 
-function updateProvisionJob(id: string, patch: Partial<ProvisionJob>) {
-  const current = provisionJobs.get(id);
-  if (!current) return;
-  provisionJobs.set(id, {
-    ...current,
-    ...patch,
-    updatedAt: new Date().toISOString()
-  });
+function operationErrorMessage(error: unknown, fallback = "Operation failed") {
+  return error instanceof Error ? error.message : fallback;
 }
 
-async function startProvisionJob(input: CreateServerInput) {
+function optionalOperationStatus(value: unknown): OperationStatus | undefined {
+  if (value === undefined) return undefined;
+  if (value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "cancelled") {
+    return value;
+  }
+  throw new Error("Operation status must be queued, running, succeeded, failed, or cancelled");
+}
+
+async function recordOperation<T>(
+  input: {
+    type: OperationType;
+    serverId?: string;
+    nodeId?: string;
+    createdBy?: string;
+    task: string;
+    runningTask?: string;
+    successTask?: string;
+    serverIdFromResult?: (value: T) => string | undefined;
+    result?: (value: T) => unknown;
+  },
+  action: (operation: OperationRecord) => Promise<T>
+) {
+  const operation = operationsRepository.create({
+    type: input.type,
+    serverId: input.serverId,
+    nodeId: input.nodeId,
+    createdBy: input.createdBy,
+    task: input.task
+  });
+  operationsRepository.start(operation.id, { progress: 5, task: input.runningTask ?? input.task });
+  try {
+    const result = await action(operation);
+    operationsRepository.succeed(operation.id, {
+      serverId: input.serverIdFromResult?.(result),
+      progress: 100,
+      task: input.successTask ?? "Operation complete",
+      result: input.result ? input.result(result) : result
+    });
+    return result;
+  } catch (error) {
+    operationsRepository.fail(operation.id, operationErrorMessage(error), {
+      task: "Operation failed",
+      logSummary: detailedErrorMessage(error)
+    });
+    throw error;
+  }
+}
+
+async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
   const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
@@ -2594,47 +2628,41 @@ async function startProvisionJob(input: CreateServerInput) {
   await assertNodePortsAvailable(nodeId, dockerPorts);
   input.dockerPorts = dockerPorts;
   input.queryPort = String(queryPort);
-  const id = randomUUID();
-  const now = new Date().toISOString();
-  activeProvisionPortReservations.set(id, {
+  const operation = operationsRepository.create({
+    type: "server.create",
+    nodeId,
+    createdBy,
+    progress: 0,
+    task: "Queued server setup"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Queued server setup" });
+  activeProvisionPortReservations.set(operation.id, {
     nodeId,
     dockerPorts,
     displayName: input.displayName?.trim() || "unnamed server"
   });
-  provisionJobs.set(id, {
-    id,
-    status: "running",
-    progress: 0,
-    task: "Queued server setup",
-    createdAt: now,
-    updatedAt: now
-  });
-  logInfo({ jobId: id, serverName: input.displayName?.trim() }, "Provisioning job started");
+  logInfo({ operationId: operation.id, serverName: input.displayName?.trim() }, "Provisioning operation started");
 
   void runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, (progress, task) => {
-    updateProvisionJob(id, { progress, task });
-  }, id).then(async (server) => {
-    updateProvisionJob(id, {
-      status: "succeeded",
+    operationsRepository.update(operation.id, { progress, task });
+  }, operation.id).then(async (server) => {
+    operationsRepository.succeed(operation.id, {
+      serverId: server.id,
       progress: 100,
       task: "Server setup complete",
-      server: await runtimeForServer(server).publicServer(server)
+      result: { server: await runtimeForServer(server).publicServer(server) }
     });
-    setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).catch((error: unknown) => {
-    logError({ jobId: id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning job failed");
-    updateProvisionJob(id, {
-      status: "failed",
-      error: error instanceof Error ? error.message : "Server setup failed",
-      errorDetails: detailedErrorMessage(error),
-      task: "Server setup failed"
+    logError({ operationId: operation.id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning operation failed");
+    operationsRepository.fail(operation.id, operationErrorMessage(error, "Server setup failed"), {
+      task: "Server setup failed",
+      logSummary: detailedErrorMessage(error)
     });
-    setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).finally(() => {
-    activeProvisionPortReservations.delete(id);
+    activeProvisionPortReservations.delete(operation.id);
   });
 
-  return provisionJobs.get(id)!;
+  return operationsRepository.find(operation.id)!;
 }
 
 function scheduleFromBody(body: {
@@ -2723,6 +2751,14 @@ async function tickSchedules() {
       runningSchedules.add(key);
       try {
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
+        const operation = operationsRepository.create({
+          type: "schedule.run",
+          serverId: server.id,
+          nodeId: server.nodeId,
+          task: `Running schedule ${schedule.name}`,
+          progress: 0
+        });
+        operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
         const result = await runScheduledExecution(server, schedule);
         const ranAt = new Date().toISOString();
         const run: ScheduledRun = {
@@ -2734,6 +2770,19 @@ async function tickSchedules() {
           ranAt
         };
         serversRepository.recordScheduledRun(server.id, schedule.id, run);
+        if (result.status === "failed") {
+          operationsRepository.fail(operation.id, result.message, {
+            progress: 100,
+            task: "Schedule run failed",
+            result: { scheduleId: schedule.id, run }
+          });
+        } else {
+          operationsRepository.succeed(operation.id, {
+            progress: 100,
+            task: result.status === "skipped" ? "Schedule run skipped" : "Schedule run complete",
+            result: { scheduleId: schedule.id, run }
+          });
+        }
       } finally {
         runningSchedules.delete(key);
       }
@@ -2972,6 +3021,7 @@ const app = Fastify({
   disableRequestLogging: true,
   bodyLimit: 180 * 1024 * 1024
 });
+appLogger = app.log;
 const storageDatabase = openStorageDatabase();
 usersRepository = new UsersRepository(storageDatabase);
 nodesRepository = new NodesRepository(storageDatabase);
@@ -2980,11 +3030,15 @@ sessionsRepository = new SessionsRepository(storageDatabase);
 serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
 fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
 modPreferencesRepository = new ModPreferencesRepository(storageDatabase);
+operationsRepository = new OperationsRepository(storageDatabase);
+const recoveredOperations = operationsRepository.failIncompleteOnStartup();
+if (recoveredOperations > 0) {
+  logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
+}
 configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
   storageDatabase.close();
 });
-appLogger = app.log;
 await app.register(helmet, {
   contentSecurityPolicy: {
     useDefaults: false,
@@ -3512,37 +3566,70 @@ app.post<{ Body: { minecraftVersion?: string; loaderVersion?: string; preferStab
   return { runtimeProfile, warnings: [] };
 });
 
+app.get<{ Querystring: { serverId?: string; status?: string; limit?: string } }>("/api/operations", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const status = optionalOperationStatus(request.query.status);
+  const parsedLimit = request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined;
+  const serverId = request.query.serverId ? validateServerId(request.query.serverId) : undefined;
+  if (serverId) await getServer(serverId);
+  return {
+    operations: operationsRepository.list({
+      serverId,
+      status,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
+    })
+  };
+});
+
+app.get<{ Params: { id: string } }>("/api/operations/:id", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  const operation = operationsRepository.find(validateOperationId(request.params.id));
+  if (!operation) {
+    return reply.code(404).send({ error: "Operation not found" });
+  }
+  if (operation.serverId) await getServer(operation.serverId);
+  return operation;
+});
+
+app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", destructiveRateLimit, async (request, reply) => {
+  await requireRequestPermission(request, "servers.editSettings");
+  const operation = operationsRepository.cancel(validateOperationId(request.params.id), "Operation cancelled by user");
+  if (!operation) {
+    return reply.code(404).send({ error: "Operation not found" });
+  }
+  return operation;
+});
+
 app.post<{
   Body: CreateServerInput;
 }>("/api/servers", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.create");
+  const user = await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   request.body.dockerPorts = dockerPorts;
   request.body.queryPort = String(queryPort);
-  const server = await runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId });
+  const server = await recordOperation({
+    type: "server.create",
+    nodeId,
+    createdBy: user.id,
+    task: "Creating server",
+    runningTask: "Creating server",
+    successTask: "Server setup complete",
+    serverIdFromResult: (createdServer: ManagedServer) => createdServer.id,
+    result: (createdServer: ManagedServer) => ({ serverId: createdServer.id })
+  }, (operation) => runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId }, undefined, operation.id));
   logInfo(serverLogFields(server), "Managed server created");
   return runtimeForServer(server).publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.create");
+  const user = await requireRequestPermission(request, "servers.create");
   if (!request.body.nodeId && config.runtimeMode === "panel") {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const job = await startProvisionJob(request.body);
-  return job;
-});
-
-app.get<{ Params: { id: string } }>("/api/provision/:id", async (request, reply) => {
-  await requireRequestPermission(request, "servers.create");
-  const job = provisionJobs.get(validateProvisionJobId(request.params.id));
-  if (!job) {
-    return reply.code(404).send({ error: "Provisioning job not found" });
-  }
-  return job;
+  return startProvisionOperation(request.body, user.id);
 });
 
 app.put<{
@@ -3650,21 +3737,42 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "start");
+  return recordOperation({
+    type: "server.start",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Starting server",
+    successTask: "Server started"
+  }, () => runtimeForServer(server).lifecycle(server, "start"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "stop");
+  return recordOperation({
+    type: "server.stop",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Stopping server",
+    successTask: "Server stopped"
+  }, () => runtimeForServer(server).lifecycle(server, "stop"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "restart");
+  return recordOperation({
+    type: "server.restart",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Restarting server",
+    successTask: "Server restarted"
+  }, () => runtimeForServer(server).lifecycle(server, "restart"));
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
@@ -5053,22 +5161,43 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.enableDisable");
+  const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled);
+  return recordOperation({
+    type: "mod.toggle",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mod state",
+    successTask: "Mod state updated"
+  }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled));
 });
 
 
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.remove");
+  const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).removeMod(server, request.query.filename);
+  return recordOperation({
+    type: "mod.remove",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Removing mod",
+    successTask: "Mod removed"
+  }, () => runtimeForServer(server).removeMod(server, request.query.filename));
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.upload");
+  const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64);
+  return recordOperation({
+    type: "mod.upload",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Uploading mod",
+    successTask: "Mod uploaded"
+  }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64));
 });
 
 type ModrinthInstallVersionStatus =
@@ -5335,36 +5464,52 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 });
 
 app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChannel } }>("/api/modrinth/update", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
+  const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  return updateModrinthMod(server, request.body);
+  return recordOperation({
+    type: "mod.update",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mod",
+    successTask: "Mod updated"
+  }, () => updateModrinthMod(server, request.body));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
+  const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  await ensureServerStoppedForModChanges(server);
-  const channel = optionalReleaseChannel(request.body.channel);
-  const filenames = request.body.filenames === undefined
-    ? undefined
-    : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
-  if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
-  const startedAt = Date.now();
-  const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
-  const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
-  for (const skipped of result.skipped) {
-    logInfo({ ...serverLogFields(server), filename: skipped.filename, reason: skipped.reason, action: "update_mod_safe_batch_item", status: "skipped" }, "Safe batch mod update skipped item");
-  }
-  logInfo({
-    ...serverLogFields(server),
-    action: "update_mod_safe_batch",
-    status: result.failed.length ? "partial" : "succeeded",
-    updatedCount: result.counts.updated,
-    skippedCount: result.counts.skipped,
-    failedCount: result.counts.failed,
-    durationMs: durationSince(startedAt)
-  }, "Safe batch mod update completed");
-  return result;
+  return recordOperation({
+    type: "mod.batchUpdate",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mods",
+    successTask: "Mod update batch complete"
+  }, async () => {
+    await ensureServerStoppedForModChanges(server);
+    const channel = optionalReleaseChannel(request.body.channel);
+    const filenames = request.body.filenames === undefined
+      ? undefined
+      : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
+    if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
+    const startedAt = Date.now();
+    const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
+    const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
+    for (const skipped of result.skipped) {
+      logInfo({ ...serverLogFields(server), filename: skipped.filename, reason: skipped.reason, action: "update_mod_safe_batch_item", status: "skipped" }, "Safe batch mod update skipped item");
+    }
+    logInfo({
+      ...serverLogFields(server),
+      action: "update_mod_safe_batch",
+      status: result.failed.length ? "partial" : "succeeded",
+      updatedCount: result.counts.updated,
+      skippedCount: result.counts.skipped,
+      failedCount: result.counts.failed,
+      durationMs: durationSince(startedAt)
+    }, "Safe batch mod update completed");
+    return result;
+  });
 });
 
 function isSelectedModrinthVersionMissing(error: unknown) {
@@ -5477,9 +5622,16 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
 }
 
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.install");
+  const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
-  return installModWithRemoteVersionFallback(server, request.body);
+  return recordOperation({
+    type: "mod.install",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Installing mod",
+    successTask: "Mod installed"
+  }, () => installModWithRemoteVersionFallback(server, request.body));
 });
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({

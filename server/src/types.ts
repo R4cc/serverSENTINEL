@@ -30,6 +30,42 @@ export type Permission =
   | "users.view"
   | "users.manage";
 
+export type OperationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export type OperationType =
+  | "server.create"
+  | "server.start"
+  | "server.stop"
+  | "server.restart"
+  | "mod.upload"
+  | "mod.install"
+  | "mod.update"
+  | "mod.remove"
+  | "mod.toggle"
+  | "mod.batchUpdate"
+  | "schedule.run"
+  | "backup.create"
+  | "backup.restore"
+  | "import.run"
+  | "export.run";
+
+export type OperationRecord = {
+  id: string;
+  type: OperationType;
+  status: OperationStatus;
+  serverId?: string;
+  nodeId?: string;
+  createdBy?: string;
+  progress: number;
+  task?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorMessage?: string;
+  result?: unknown;
+  logSummary?: string;
+};
+
 export type ServerAccess = {
   mode: "all" | "selected";
   serverIds: string[];

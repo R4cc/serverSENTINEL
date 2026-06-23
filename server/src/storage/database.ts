@@ -202,6 +202,33 @@ const migrations: readonly Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 7,
+    name: "operations",
+    up(database) {
+      database.exec(`
+        CREATE TABLE operations (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          status TEXT NOT NULL,
+          server_id TEXT,
+          node_id TEXT,
+          created_by TEXT,
+          progress INTEGER NOT NULL DEFAULT 0,
+          task TEXT,
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          finished_at TEXT,
+          error_message TEXT,
+          result_json TEXT,
+          log_summary TEXT
+        );
+        CREATE INDEX operations_created_at_idx ON operations(created_at DESC);
+        CREATE INDEX operations_server_id_idx ON operations(server_id, created_at DESC);
+        CREATE INDEX operations_status_idx ON operations(status, created_at DESC);
+      `);
+    }
   }
 ];
 

@@ -11,7 +11,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -225,8 +225,8 @@ export default function App() {
   }, [triggerOverviewRefresh]);
 
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
-  const isProvisioning = activeJobs.some((job) => job.type === "provision" && job.status === "running");
-  const currentProvisionJob = activeJobs.find((job) => job.type === "provision");
+  const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
+  const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
   const {
     effectiveAppState,
@@ -930,23 +930,24 @@ export default function App() {
 
     activeJobs.forEach((job) => {
       activeJobToastIdsRef.current.add(job.id);
-      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${job.status === "running" ? ` (${Math.round(job.progress)}%)` : ""}`;
+      const inProgress = job.status === "queued" || job.status === "running";
+      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${inProgress ? ` (${Math.round(job.progress)}%)` : ""}`;
       const options = {
         id: job.id,
         description,
         dismissible: job.dismissible,
         closeButton: job.dismissible,
-        duration: job.status === "running" || !job.dismissible ? Infinity : 7000,
+        duration: inProgress || !job.dismissible ? Infinity : 7000,
         onDismiss: () => {
           if (job.dismissible) setActiveJobs((current) => current.filter((candidate) => candidate.id !== job.id));
         }
       };
 
-      if (job.status === "running") {
+      if (inProgress) {
         toast.loading(job.title, options);
         return;
       }
-      if (job.status === "failed") {
+      if (job.status === "failed" || job.status === "cancelled") {
         toast.error(job.title, options);
         return;
       }
@@ -1387,23 +1388,37 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  async function waitForProvisionJob(jobId: string) {
+  function serverFromOperation(operation: OperationRecord) {
+    const result = operation.result;
+    if (result && typeof result === "object" && "server" in result) {
+      return (result as { server?: ManagedServer }).server;
+    }
+    return undefined;
+  }
+
+  function operationToProvisionActiveJob(operation: OperationRecord): Partial<GeneralJob> {
+    return {
+      id: operation.id,
+      status: operation.status,
+      progress: operation.progress,
+      task: operation.task || "Server setup is running.",
+      error: operation.errorMessage,
+      errorDetails: operation.logSummary,
+      dismissible: operation.status !== "queued" && operation.status !== "running"
+    };
+  }
+
+  async function waitForProvisionOperation(operationId: string) {
     for (;;) {
-      const job = await api<ProvisionJob>(`/api/provision/${jobId}`);
-      setActiveJobs((current) => current.map((j) => j.id === "local" || j.id === jobId ? {
+      const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
+      setActiveJobs((current) => current.map((j) => j.id === "local" || j.id === operationId ? {
         ...j,
-        id: job.id,
-        status: job.status,
-        progress: job.progress,
-        task: job.task,
-        error: job.error,
-        errorDetails: job.errorDetails,
-        dismissible: job.status !== "running"
+        ...operationToProvisionActiveJob(operation)
       } : j));
-      if (job.status === "succeeded") return job;
-      if (job.status === "failed") {
-        const error = new Error(job.error || "Server setup failed") as Error & { details?: string };
-        error.details = job.errorDetails;
+      if (operation.status === "succeeded") return operation;
+      if (operation.status === "failed" || operation.status === "cancelled") {
+        const error = new Error(operation.errorMessage || "Server setup failed") as Error & { details?: string };
+        error.details = operation.logSummary;
         throw error;
       }
       await new Promise((resolve) => window.setTimeout(resolve, provisionJobPollMs));
@@ -1443,7 +1458,7 @@ export default function App() {
     };
     setActiveJobs((current) => [...current, initialJob]);
     try {
-      const job = await api<ProvisionJob>("/api/servers/provision", {
+      const operation = await api<OperationRecord>("/api/servers/provision", {
         method: "POST",
         body: JSON.stringify({
           displayName: form.get("displayName"),
@@ -1464,16 +1479,10 @@ export default function App() {
       });
       setActiveJobs((current) => current.map((j) => j.id === "local" ? {
         ...j,
-        id: job.id,
-        status: job.status,
-        progress: job.progress,
-        task: job.task,
-        error: job.error,
-        errorDetails: job.errorDetails,
-        dismissible: job.status !== "running"
+        ...operationToProvisionActiveJob(operation)
       } : j));
-      const completed = await waitForProvisionJob(job.id);
-      const server = completed.server;
+      const completed = await waitForProvisionOperation(operation.id);
+      const server = serverFromOperation(completed);
       if (!server) {
         throw new Error("Server setup completed without returning server details");
       }
@@ -1486,7 +1495,7 @@ export default function App() {
       await refreshConsoleLogs(server.id);
       notify("success", `Created ${server.displayName}`);
       window.setTimeout(() => {
-        setActiveJobs((current) => current.filter((j) => j.id !== job.id));
+        setActiveJobs((current) => current.filter((j) => j.id !== operation.id));
       }, 1200);
     } catch (error) {
       const message = (error as Error).message;
@@ -2930,11 +2939,11 @@ export default function App() {
 
         {activePage === "create" && (
           <section className="createServerPanel">
-            {currentProvisionJob && currentProvisionJob.status === "running" && (
+            {currentProvisionOperation && (currentProvisionOperation.status === "queued" || currentProvisionOperation.status === "running") && (
               <InlineState
                 tone="loading"
                 title="Creating server"
-                message={`${currentProvisionJob.task || "Server setup is running."} Progress: ${Math.round(currentProvisionJob.progress)}%.`}
+                message={`${currentProvisionOperation.task || "Server setup is running."} Progress: ${Math.round(currentProvisionOperation.progress)}%.`}
               />
             )}
             {provisioningError && (

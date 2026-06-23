@@ -47,7 +47,8 @@ describe("SQLite storage", () => {
         { version: 3, name: "managed-servers-schedules" },
         { version: 4, name: "file-edit-leases" },
         { version: 5, name: "resource-stats-history" },
-        { version: 6, name: "mod-preferences" }
+        { version: 6, name: "mod-preferences" },
+        { version: 7, name: "operations" }
       ]);
   });
 
