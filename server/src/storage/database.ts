@@ -267,6 +267,18 @@ export class StorageDatabase {
     return this.connection.transaction(() => operation(this.connection)).immediate();
   }
 
+  metadata(key: string) {
+    const row = this.connection.prepare<[string], { value: string }>("SELECT value FROM storage_metadata WHERE key = ?").get(key);
+    return row?.value;
+  }
+
+  setMetadata(key: string, value: string) {
+    this.connection.prepare(`
+      INSERT INTO storage_metadata (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(key, value);
+  }
+
   close() {
     if (this.connection.open) {
       this.connection.close();

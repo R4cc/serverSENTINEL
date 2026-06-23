@@ -18,8 +18,10 @@ import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersio
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
+import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
+import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
 
-type NodeConfig = { nodeId: string; nodeSecret: string };
+type NodeIdentity = { nodeId: string; nodeSecret: string };
 type NodeUpdateRequest = {
   image?: string;
 };
@@ -56,8 +58,8 @@ type CreateInput = {
 };
 type UpdateInput = Omit<CreateInput, "nodeId" | "acceptEula">;
 
-const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
-const nodeUpdateDir = join(config.nodeDataDir, "node", "updates");
+const nodeIdentityMetadataKey = "node.identity";
+const nodeUpdateDir = config.paths.nodeUpdatesDir;
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
@@ -77,13 +79,28 @@ function detailedErrorMessage(error: unknown) {
   return String(error);
 }
 
-async function readNodeConfig() {
-  try { return JSON.parse(await readFile(nodeConfigPath, "utf8")) as NodeConfig; } catch { return null; }
+let nodeStorageDatabase: StorageDatabase | undefined;
+
+function nodeStorage() {
+  nodeStorageDatabase ??= openStorageDatabase();
+  return nodeStorageDatabase;
 }
 
-async function writeNodeConfig(nodeConfig: NodeConfig) {
-  await mkdir(dirname(nodeConfigPath), { recursive: true });
-  await writeFile(nodeConfigPath, `${JSON.stringify(nodeConfig, null, 2)}\n`, "utf8");
+function parseNodeIdentity(value: string): NodeIdentity {
+  const parsed = JSON.parse(value) as Partial<NodeIdentity>;
+  if (typeof parsed.nodeId !== "string" || typeof parsed.nodeSecret !== "string") {
+    throw new Error("Stored node identity is invalid");
+  }
+  return { nodeId: parsed.nodeId, nodeSecret: parsed.nodeSecret };
+}
+
+async function readNodeIdentity() {
+  const value = nodeStorage().metadata(nodeIdentityMetadataKey);
+  return value === undefined ? null : parseNodeIdentity(value);
+}
+
+async function writeNodeIdentity(nodeIdentity: NodeIdentity) {
+  nodeStorage().setMetadata(nodeIdentityMetadataKey, JSON.stringify(nodeIdentity));
 }
 
 function panelWebSocketUrl() {
@@ -1217,13 +1234,14 @@ export const __nodeAgentTestHooks = {
 };
 
 export async function startNodeAgent() {
-  await mkdir(config.nodeDataDir, { recursive: true });
-  let persisted = await readNodeConfig();
+  initializeRuntimeDataRoot(config.paths);
+  nodeStorageDatabase = openStorageDatabase();
+  let persisted = await readNodeIdentity();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`ServerSentinel node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
   const connect = async () => {
-    persisted = await readNodeConfig();
+    persisted = await readNodeIdentity();
     const target = panelWebSocketUrl();
     console.info(`Connecting node agent to ${target}`);
     const socket = new WebSocket(target);
@@ -1259,7 +1277,7 @@ export async function startNodeAgent() {
           return;
         }
         if (message.nodeSecret) {
-          await writeNodeConfig({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
+          await writeNodeIdentity({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
           console.info(`Node registration accepted. Persisted node id ${message.nodeId}.`);
         } else {
           console.info(`Node session accepted for ${message.nodeId}.`);

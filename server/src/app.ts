@@ -65,6 +65,7 @@ import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { openStorageDatabase } from "./storage/database.js";
+import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
@@ -956,7 +957,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     ? resolve(requiredString(server.serverDir, "server.serverDir"))
     : resolve(requiredString(server.serverDir, "server.serverDir"));
   if (nodeId === localNodeId && serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
-    throw new Error("managed server serverDir must be inside SERVERSENTINEL_SERVERS_DIR");
+    throw new Error("managed server serverDir must be inside the canonical data root servers directory");
   }
   return {
     id,
@@ -2958,6 +2959,7 @@ async function localServerLogs(server: ManagedServer) {
 }
 
 export async function startServer() {
+initializeRuntimeDataRoot(config.paths);
 const app = Fastify({
   logger: {
     level: config.logLevel,
@@ -5594,8 +5596,13 @@ const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = dockerAvailable();
 app.log.info({
   appVersion,
-  configDir: config.configDir,
+  dataDir: config.dataDir,
+  databasePath: config.databasePath,
   managedServersDir: config.serversDir,
+  backupsDir: config.backupsDir,
+  importsDir: config.importsDir,
+  exportsDir: config.exportsDir,
+  tmpDir: config.tmpDir,
   nodeCount: startupNodes.length,
   dockerSocketMounted,
   modrinthApiConfigured: modrinthConfigured,

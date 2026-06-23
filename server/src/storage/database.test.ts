@@ -61,4 +61,16 @@ describe("SQLite storage", () => {
     })).toThrow("stop");
     expect(storage.connection.prepare("SELECT * FROM storage_metadata").all()).toEqual([]);
   });
+
+  it("stores runtime metadata in SQLite", async () => {
+    const storage = openStorageDatabase(await temporaryDatabasePath());
+    openDatabases.push(storage);
+
+    expect(storage.metadata("node.identity")).toBeUndefined();
+
+    storage.setMetadata("node.identity", JSON.stringify({ nodeId: "node-1", nodeSecret: "secret" }));
+    storage.setMetadata("node.identity", JSON.stringify({ nodeId: "node-1", nodeSecret: "rotated" }));
+
+    expect(storage.metadata("node.identity")).toBe(JSON.stringify({ nodeId: "node-1", nodeSecret: "rotated" }));
+  });
 });

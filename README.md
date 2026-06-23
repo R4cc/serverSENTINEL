@@ -118,35 +118,39 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Protect API keys, node join tokens, node secrets, user passwords, and Docker socket access.
 - Docker socket access is powerful. A container with access to `/var/run/docker.sock` can control Docker on the host.
 - File manager and console access are powerful administrative features. Give those permissions only to users you trust.
-- Keep backups of your config and server folders before upgrading or testing major changes.
+- Keep backups of your ServerSentinel data root before upgrading or testing major changes.
 
 ## Storage
 
-ServerSentinel 0.8.0 stores panel state in a local SQLite database. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, and file edit leases are stored there. No external database service is required.
+ServerSentinel 0.8.0 uses storage model v2. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
 
-The default database path is:
+The default runtime data root is `/data`:
 
 ```text
-/config/serversentinel.sqlite
+/data
+  serversentinel.sqlite
+  servers/
+  backups/
+  imports/
+  exports/
+  tmp/
 ```
 
-Set `SERVERSENTINEL_DATABASE_PATH` to override it. Relative values are resolved from the process working directory, so an absolute path is recommended. The parent directory is created automatically.
+Set `SERVERSENTINEL_DATA_DIR` to use a different data root. ServerSentinel derives every application storage path from that root and creates the required directories on startup.
 
-Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, and settings JSON files are not read, imported, or migrated. A fresh database starts with empty panel state and prompts for initial setup.
+Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, settings JSON files, and old `/config` database locations are not read, imported, or migrated. A fresh data root starts with empty panel state and prompts for initial setup.
 
-Back up the SQLite database together with your Minecraft server folders. The simplest reliable file-copy backup is to stop the panel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present), then restart it. Files inside managed Minecraft server directories remain separate from the panel database and need their own backups.
+Back up the whole data root. The simplest reliable file-copy backup is to stop ServerSentinel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
 
 The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside ServerSentinel after edit mode began.
 
-Recommended host folders:
+Recommended host folder:
 
 ```text
-/opt/serversentinel/config
-/opt/serversentinel/servers
 /opt/serversentinel/data
 ```
 
-Use `config` for the panel SQLite database, `servers` for all-in-one managed server files, and `data` for node-managed server files.
+Use it as the single persistent ServerSentinel data root.
 
 ## Deployment
 
@@ -163,7 +167,7 @@ The panel listens on port `8080` inside the container.
 Use this for a simple single-host setup.
 
 ```bash
-sudo mkdir -p /opt/serversentinel/config /opt/serversentinel/servers
+sudo mkdir -p /opt/serversentinel/data/servers
 
 docker run -d \
   --name serversentinel \
@@ -171,12 +175,10 @@ docker run -d \
   -p 8080:8080 \
   -e SS_MODE=all-in-one \
   -e PORT=8080 \
-  -e SERVERSENTINEL_CONFIG_DIR=/config \
-  -e SERVERSENTINEL_SERVERS_DIR=/data/servers \
+  -e SERVERSENTINEL_DATA_DIR=/data \
   -e SERVERSENTINEL_SERVERS_DOCKER_VOLUME= \
   -e MODRINTH_API_KEY= \
-  -v /opt/serversentinel/config:/config \
-  -v /opt/serversentinel/servers:/data/servers \
+  -v /opt/serversentinel/data:/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   nl2109/serversentinel:latest
 ```
@@ -200,13 +202,11 @@ services:
     environment:
       SS_MODE: all-in-one
       PORT: 8080
-      SERVERSENTINEL_CONFIG_DIR: /config
-      SERVERSENTINEL_SERVERS_DIR: /data/servers
+      SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: ""
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
     volumes:
-      - /opt/serversentinel/config:/config
-      - /opt/serversentinel/servers:/data/servers
+      - /opt/serversentinel/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
 ```
 
@@ -221,7 +221,7 @@ docker compose up -d
 Use this when one or more separate node agents will manage Docker hosts. This mode does not need the Docker socket mounted into the panel container.
 
 ```bash
-sudo mkdir -p /opt/serversentinel/config
+sudo mkdir -p /opt/serversentinel/data
 
 docker run -d \
   --name serversentinel-panel \
@@ -229,8 +229,8 @@ docker run -d \
   -p 8080:8080 \
   -e SS_MODE=panel \
   -e PORT=8080 \
-  -e SERVERSENTINEL_CONFIG_DIR=/config \
-  -v /opt/serversentinel/config:/config \
+  -e SERVERSENTINEL_DATA_DIR=/data \
+  -v /opt/serversentinel/data:/data \
   nl2109/serversentinel:latest
 ```
 
@@ -247,9 +247,9 @@ services:
     environment:
       SS_MODE: panel
       PORT: 8080
-      SERVERSENTINEL_CONFIG_DIR: /config
+      SERVERSENTINEL_DATA_DIR: /data
     volumes:
-      - /opt/serversentinel/config:/config
+      - /opt/serversentinel/data:/data
 ```
 
 ### Node Agent With Docker Run
@@ -268,8 +268,8 @@ docker run -d \
   -e SS_PANEL_URL=http://panel-host:8080 \
   -e SS_NODE_NAME=mc-node-01 \
   -e SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
-  -e SS_NODE_DATA_DIR=/data \
-  -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
+  -e SERVERSENTINEL_DATA_DIR=/data \
+  -e SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/serversentinel/data:/data \
   nl2109/serversentinel:latest
@@ -290,8 +290,8 @@ services:
       SS_PANEL_URL: http://panel-host:8080
       SS_NODE_NAME: mc-node-01
       SS_JOIN_TOKEN: PASTE_JOIN_TOKEN_FROM_PANEL
-      SS_NODE_DATA_DIR: /data
-      SS_NODE_DOCKER_DATA_DIR: /opt/serversentinel/data
+      SERVERSENTINEL_DATA_DIR: /data
+      SERVERSENTINEL_DOCKER_DATA_DIR: /opt/serversentinel/data
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/serversentinel/data:/data
@@ -304,9 +304,7 @@ Common panel variables:
 ```env
 SS_MODE=all-in-one
 PORT=8080
-SERVERSENTINEL_CONFIG_DIR=/config
-SERVERSENTINEL_DATABASE_PATH=/config/serversentinel.sqlite
-SERVERSENTINEL_SERVERS_DIR=/data/servers
+SERVERSENTINEL_DATA_DIR=/data
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
 SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
 MODRINTH_API_KEY=
@@ -322,13 +320,13 @@ SS_MODE=node
 SS_PANEL_URL=http://panel-host:8080
 SS_NODE_NAME=mc-node-01
 SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL
-SS_NODE_DATA_DIR=/data
-SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
+SERVERSENTINEL_DATA_DIR=/data
+SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
 ```
 
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
 
-`SERVERSENTINEL_DATABASE_PATH` overrides the panel SQLite file location. Keep it on persistent local storage and include it in backups. It is only used by panel and all-in-one modes.
+`SERVERSENTINEL_DATA_DIR` is the only application storage root. Keep it on persistent local storage and include it in backups. The SQLite database is always `serversentinel.sqlite` inside that root.
 
 `SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
 

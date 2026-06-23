@@ -218,12 +218,12 @@ describe("node install instructions", () => {
       joinToken: "join-token"
     });
 
-    expect(install.dockerCompose.environment.SS_NODE_DATA_DIR).toBe("/data");
-    expect(install.dockerCompose.environment.SS_NODE_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
+    expect(install.dockerCompose.environment.SERVERSENTINEL_DATA_DIR).toBe("/data");
+    expect(install.dockerCompose.environment.SERVERSENTINEL_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
     expect(install.dockerCompose.restart).toBe("unless-stopped");
     expect(install.dockerRun).toContain("--restart unless-stopped");
-    expect(install.dockerRun).toContain("-e SS_NODE_DATA_DIR='/data'");
-    expect(install.dockerRun).toContain("-e SS_NODE_DOCKER_DATA_DIR='/var/lib/serversentinel'");
+    expect(install.dockerRun).toContain("-e SERVERSENTINEL_DATA_DIR='/data'");
+    expect(install.dockerRun).toContain("-e SERVERSENTINEL_DOCKER_DATA_DIR='/var/lib/serversentinel'");
     expect(install.dockerRun).toContain("-v '/var/lib/serversentinel:/data'");
   });
 });

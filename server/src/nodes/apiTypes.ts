@@ -13,8 +13,8 @@ export type NodeInstallInstructions = {
     environment: {
       SS_MODE: "node";
       SS_PANEL_URL: string;
-      SS_NODE_DATA_DIR?: string;
-      SS_NODE_DOCKER_DATA_DIR?: string;
+      SERVERSENTINEL_DATA_DIR?: string;
+      SERVERSENTINEL_DOCKER_DATA_DIR?: string;
       SS_NODE_NAME?: string;
       SS_JOIN_TOKEN?: string;
     };

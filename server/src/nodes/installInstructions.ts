@@ -34,8 +34,8 @@ export function buildNodeInstallInstructions(input: {
   const environment: NodeInstallInstructions["dockerCompose"]["environment"] = {
     SS_MODE: "node",
     SS_PANEL_URL: panelUrl,
-    SS_NODE_DATA_DIR: containerTarget,
-    SS_NODE_DOCKER_DATA_DIR: hostSource
+    SERVERSENTINEL_DATA_DIR: containerTarget,
+    SERVERSENTINEL_DOCKER_DATA_DIR: hostSource
   };
   if (nodeName) {
     environment.SS_NODE_NAME = nodeName;
@@ -56,6 +56,6 @@ export function buildNodeInstallInstructions(input: {
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SS_NODE_DATA_DIR=${shellQuote(containerTarget)} -e SS_NODE_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${input.image}`
+    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SERVERSENTINEL_DATA_DIR=${shellQuote(containerTarget)} -e SERVERSENTINEL_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${input.image}`
   };
 }

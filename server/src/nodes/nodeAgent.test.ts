@@ -49,7 +49,7 @@ function testServer(storageName = "survival"): ManagedServer {
 
 async function loadHooks() {
   vi.resetModules();
-  process.env.SS_NODE_DATA_DIR = tempRoot;
+  process.env.SERVERSENTINEL_DATA_DIR = tempRoot;
   return (await import("./nodeAgent.js")).__nodeAgentTestHooks;
 }
 
@@ -59,7 +59,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  delete process.env.SS_NODE_DATA_DIR;
+  delete process.env.SERVERSENTINEL_DATA_DIR;
   vi.resetModules();
   await rm(tempRoot, { recursive: true, force: true });
 });
