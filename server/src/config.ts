@@ -50,6 +50,7 @@ export const config = {
   nodeDataDir: paths.dataDir,
   nodeDockerDataDir: nodeDockerDataDir || paths.dataDir,
   nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim(),
+  enableDemo: process.env.SERVERSENTINEL_ENABLE_DEMO === "true",
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
   mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
 };

@@ -3224,9 +3224,14 @@ registerAuthRoutes(app, {
   hashPassword,
   verifyPassword,
   publicUser,
+  demoEnabled: config.enableDemo,
   logInfo,
   logWarn
 });
+
+function isDemoModeRequest(request: { headers: Record<string, unknown> }) {
+  return config.enableDemo && request.headers["x-serversentinel-demo-mode"] === "true";
+}
 
 app.addHook("preHandler", async (request) => {
   if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
@@ -3235,7 +3240,7 @@ app.addHook("preHandler", async (request) => {
   if (request.raw.url.startsWith("/api/nodes/connect")) {
     return;
   }
-  const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
+  const demoMode = isDemoModeRequest(request);
   if (demoMode) {
     if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/fabric/"))) {
       return;
@@ -3248,7 +3253,7 @@ app.addHook("preHandler", async (request) => {
 });
 
 app.get("/api/app", async (request) => {
-  const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
+  const demoMode = isDemoModeRequest(request);
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
   const servers = await listManagedServers();
   const nodes = await readNodes();
@@ -3624,7 +3629,7 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
 });
 
 app.get("/api/fabric/versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   const game = await serverJarProvider.listMinecraftVersions();
@@ -3638,14 +3643,14 @@ app.get("/api/fabric/versions", async (request) => {
 });
 
 app.get("/api/runtime/fabric/minecraft-versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   return { versions: await serverJarProvider.listMinecraftVersions() };
 });
 
 app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   const minecraftVersion = request.query.minecraftVersion?.trim();

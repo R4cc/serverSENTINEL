@@ -1,6 +1,8 @@
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
+ARG VITE_ENABLE_DEMO=false
+ENV VITE_ENABLE_DEMO=${VITE_ENABLE_DEMO}
 
 COPY package*.json ./
 COPY server/package.json server/package.json

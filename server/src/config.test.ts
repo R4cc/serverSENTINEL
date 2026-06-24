@@ -42,4 +42,16 @@ describe("runtime role configuration", () => {
     expect(config.runtimeMode).toBe("panel");
     expect(config.panelUrl).toBeUndefined();
   });
+
+  it("keeps demo mode disabled unless explicitly enabled", async () => {
+    await expect(loadConfig({ SERVERSENTINEL_ENABLE_DEMO: undefined })).resolves.toMatchObject({
+      config: { enableDemo: false }
+    });
+    await expect(loadConfig({ SERVERSENTINEL_ENABLE_DEMO: "false" })).resolves.toMatchObject({
+      config: { enableDemo: false }
+    });
+    await expect(loadConfig({ SERVERSENTINEL_ENABLE_DEMO: "true" })).resolves.toMatchObject({
+      config: { enableDemo: true }
+    });
+  });
 });

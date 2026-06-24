@@ -1,3 +1,5 @@
+import { demoRequestHeaders } from "./app/appConfig";
+
 type ApiPayload = {
   error?: {
     code?: unknown;
@@ -36,11 +38,10 @@ export async function apiErrorFromResponse(response: Response, fallback?: string
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const demoMode = window.localStorage.getItem("serversentinel-demo-mode") === "true";
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
     ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
-    ...(demoMode ? { "X-ServerSentinel-Demo-Mode": "true" } : {}),
+    ...demoRequestHeaders(),
     ...(init?.headers as Record<string, string> | undefined)
   };
   let response: Response;

@@ -3,24 +3,21 @@ import { initialDemoFiles, initialDemoSchedules } from "../demo";
 import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 import type { InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
 import { readLocalePreference, readThemePreference } from "../utils/format";
-
-function readDemoMode() {
-  return window.localStorage.getItem("serversentinel-demo-mode") === "true";
-}
+import { demoModeEnabled, readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
-  const [demoMode, setDemoMode] = useState(() => readDemoMode());
+  const [demoMode, setDemoMode] = useState(() => readStoredDemoMode());
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
   const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [demoRunning, setDemoRunning] = useState(true);
-  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => initialDemoFiles);
-  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
-  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules);
+  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => demoModeEnabled ? initialDemoFiles : {});
+  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => demoModeEnabled ? modsForDemoFixture(readModsDemoFixture()) : []);
+  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => demoModeEnabled ? initialDemoSchedules : []);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-demo-mode", String(demoMode));
+    writeStoredDemoMode(demoMode);
   }, [demoMode]);
 
   useEffect(() => {

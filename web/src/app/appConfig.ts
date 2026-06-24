@@ -3,6 +3,8 @@ import type { ActivePage, AppState, ManagedNode } from "../types";
 export const appVersion = "0.8.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 export const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
+export const demoLocalStorageKey = "serversentinel-demo-mode";
+export const demoModeEnabled = import.meta.env.VITE_ENABLE_DEMO === "true";
 
 export const emptyApp: AppState = {
   servers: [],
@@ -31,4 +33,24 @@ export const emptyPanelContextNode: ManagedNode = {
 
 export function isServerWorkspacePage(page: ActivePage) {
   return serverWorkspacePages.includes(page);
+}
+
+export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = demoModeEnabled) {
+  if (!enabled) {
+    storage.removeItem(demoLocalStorageKey);
+    return false;
+  }
+  return storage.getItem(demoLocalStorageKey) === "true";
+}
+
+export function writeStoredDemoMode(value: boolean, storage: Storage = window.localStorage, enabled = demoModeEnabled) {
+  if (!enabled) {
+    storage.removeItem(demoLocalStorageKey);
+    return;
+  }
+  storage.setItem(demoLocalStorageKey, String(value));
+}
+
+export function demoRequestHeaders(storage: Storage = window.localStorage, enabled = demoModeEnabled): Record<string, string> {
+  return readStoredDemoMode(storage, enabled) ? { "X-ServerSentinel-Demo-Mode": "true" } : {};
 }

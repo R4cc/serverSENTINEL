@@ -17,7 +17,7 @@ import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resource
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState } from "./app/uiState";
@@ -1015,7 +1015,7 @@ export default function App() {
     if (staleSessionLogoutRef.current) return true;
     staleSessionLogoutRef.current = true;
     resetSessionRequestGuards();
-    window.localStorage.setItem("serversentinel-demo-mode", "false");
+    writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthNotice("Sign in again to continue.");
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
@@ -1061,7 +1061,7 @@ export default function App() {
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
     const setupRequired = authSession?.setupRequired ?? false;
-    const demoLogin = username === "demo" && password === "demo";
+    const demoLogin = demoModeEnabled && username === "demo" && password === "demo";
     setAuthNotice("");
     if (!demoLogin) {
       const errors = [
@@ -1087,8 +1087,12 @@ export default function App() {
       });
       loginSucceeded = true;
       resetSessionRequestGuards();
+      if (session.demo && !demoModeEnabled) {
+        setAuthNotice("Demo mode is not enabled in this build.");
+        return;
+      }
       if (session.demo) {
-        window.localStorage.setItem("serversentinel-demo-mode", "true");
+        writeStoredDemoMode(true);
         setAuthNotice("");
         setNotice("");
         setAppStateLoaded(false);
@@ -1120,7 +1124,7 @@ export default function App() {
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => null);
     resetSessionRequestGuards();
-    window.localStorage.setItem("serversentinel-demo-mode", "false");
+    writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
     setAppState(emptyApp);
@@ -2282,7 +2286,7 @@ export default function App() {
         const response = await fetch(`/api/servers/${activeServer.id}/file/download?path=${encodeURIComponent(entry.path)}`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
-            ...(demoMode ? { "X-ServerSentinel-Demo-Mode": "true" } : {})
+            ...(demoMode ? demoRequestHeaders() : {})
           },
           credentials: "same-origin"
         });

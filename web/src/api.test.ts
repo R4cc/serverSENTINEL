@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
+import { demoLocalStorageKey, demoRequestHeaders, readStoredDemoMode } from "./app/appConfig";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
@@ -10,12 +11,29 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockWindow() {
-  globalThis.window = {
-    localStorage: {
-      getItem: () => null
+function fakeStorage(initial: Record<string, string> = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      values.set(key, value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      values.delete(key);
+    }),
+    clear: vi.fn(() => values.clear()),
+    key: vi.fn((index: number) => [...values.keys()][index] ?? null),
+    get length() {
+      return values.size;
     }
+  } as unknown as Storage;
+}
+
+function mockWindow(storage = fakeStorage()) {
+  globalThis.window = {
+    localStorage: storage
   } as unknown as Window & typeof globalThis;
+  return storage;
 }
 
 function mockFetch(response: Response) {
@@ -67,5 +85,30 @@ describe("api error contract", () => {
       code: "REQUEST_FAILED",
       message: "Request failed with 400"
     });
+  });
+});
+
+describe("api demo mode headers", () => {
+  it("does not send demo headers and clears stale demo state when demo is disabled", async () => {
+    const storage = mockWindow(fakeStorage({ [demoLocalStorageKey]: "true" }));
+    mockFetch(Response.json({ ok: true }));
+
+    await api("/api/test");
+
+    expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/test", expect.objectContaining({
+      headers: expect.not.objectContaining({ "X-ServerSentinel-Demo-Mode": "true" })
+    }));
+  });
+
+  it("returns the demo header only when the build flag is enabled and stored demo state is active", () => {
+    const storage = fakeStorage({ [demoLocalStorageKey]: "true" });
+
+    expect(readStoredDemoMode(storage, false)).toBe(false);
+    expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
+    expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "true" }), true)).toEqual({
+      "X-ServerSentinel-Demo-Mode": "true"
+    });
+    expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "false" }), true)).toEqual({});
   });
 });

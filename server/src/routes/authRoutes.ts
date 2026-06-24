@@ -35,6 +35,7 @@ type AuthRoutesContext = {
   hashPassword(password: string): { salt: string; passwordHash: string };
   verifyPassword(password: string, user: StoredUser): boolean;
   publicUser(user: StoredUser): PublicUser;
+  demoEnabled: boolean;
   logInfo(fields: Record<string, unknown>, message: string): void;
   logWarn(fields: Record<string, unknown>, message: string): void;
 };
@@ -75,7 +76,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", context.authRateLimit, async (request, reply) => {
     const username = request.body.username?.trim() ?? "";
     const password = request.body.password ?? "";
-    if (username === "demo" && password === "demo") {
+    if (context.demoEnabled && username === "demo" && password === "demo") {
       context.logInfo({ username: "demo", action: "login_demo" }, "Demo login requested");
       return { authenticated: false, setupRequired: context.users.list().length === 0, demo: true, user: null };
     }
