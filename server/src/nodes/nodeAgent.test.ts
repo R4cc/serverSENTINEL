@@ -33,15 +33,11 @@ function testServer(storageName = "survival"): ManagedServer {
     displayName: "Survival",
     serverDir: join(tempRoot, "servers", storageName),
     storageName,
-    minecraftVersion: "1.21.4",
-    loaderVersion: "0.16.10",
-    serverJar: "fabric-server-launch.jar",
     runtimeProfile: testRuntimeProfile(),
     dockerContainer: "serversentinel-survival",
     dockerImage: "eclipse-temurin:21-jre",
     dockerPorts: "25565:25565/tcp,25566:25566/udp",
     javaArgs: "-Xms2G -Xmx4G",
-    serverType: "fabric",
     createdAt: "",
     updatedAt: ""
   };
@@ -69,7 +65,7 @@ describe("remote node create and Docker command safety", () => {
     const { server } = hooks.createdServerRecord({
       nodeId: "node-id",
       displayName: "My Survival Server",
-      minecraftVersion: "1.21.4",
+      runtime: { minecraftVersion: "1.21.4" },
       acceptEula: true
     }, testRuntimeProfile());
 
@@ -83,7 +79,7 @@ describe("remote node create and Docker command safety", () => {
   it("validates Java args while building the remote create server record", () => {
     expect(() => hooks.createdServerRecord({
       displayName: "Unsafe",
-      minecraftVersion: "1.21.4",
+      runtime: { minecraftVersion: "1.21.4" },
       acceptEula: true,
       javaArgs: "-Xmx4G; curl example.test"
     }, testRuntimeProfile())).toThrow("unsafe shell characters");

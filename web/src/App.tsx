@@ -1466,10 +1466,12 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           displayName: form.get("displayName"),
-          minecraftVersion: form.get("minecraftVersion"),
-          loaderVersion: form.get("loaderVersion"),
-          installerVersion: form.get("installerVersion"),
-          serverJar: form.get("serverJar"),
+          runtime: {
+            loader: "fabric",
+            minecraftVersion: form.get("minecraftVersion"),
+            loaderVersion: form.get("loaderVersion"),
+            serverJar: form.get("serverJar")
+          },
           dockerContainer: form.get("dockerContainer"),
           dockerImage: form.get("dockerImage"),
           dockerMountSource: form.get("dockerMountSource"),
@@ -1538,10 +1540,12 @@ export default function App() {
         method: "PUT",
         body: JSON.stringify({
           displayName: form.get("displayName"),
-          minecraftVersion: form.get("minecraftVersion"),
-          loaderVersion: form.get("loaderVersion"),
-          installerVersion: form.get("installerVersion"),
-          serverJar: form.get("serverJar"),
+          runtime: {
+            loader: "fabric",
+            minecraftVersion: form.get("minecraftVersion"),
+            loaderVersion: form.get("loaderVersion"),
+            serverJar: form.get("serverJar")
+          },
           dockerContainer: form.get("dockerContainer"),
           dockerImage: form.get("dockerImage"),
           dockerPorts: form.get("dockerPorts"),
@@ -3606,7 +3610,7 @@ export default function App() {
               <ModsPage
                 workspace={modsWorkspace}
                 serverContext={{
-                  minecraftVersion: activeServer.minecraftVersion || "Unknown",
+                  minecraftVersion: activeServer.runtimeProfile.minecraftVersion || "Unknown",
                   versionsUnknown: activeModVersionsUnknown,
                   contextMessage: activeModContext
                 }}

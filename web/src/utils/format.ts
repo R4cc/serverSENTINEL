@@ -140,11 +140,11 @@ function bestVersion(resolved: VersionResolution | undefined, profileVersion: st
 }
 
 export function minecraftVersionInfo(server: ManagedServer) {
-  return bestVersion(server.resolvedVersions?.minecraftVersion, server.minecraftVersion);
+  return bestVersion(server.resolvedVersions?.minecraftVersion, server.runtimeProfile.minecraftVersion);
 }
 
 export function fabricLoaderVersionInfo(server: ManagedServer) {
-  return bestVersion(server.resolvedVersions?.fabricLoaderVersion, server.loaderVersion);
+  return bestVersion(server.resolvedVersions?.fabricLoaderVersion, server.runtimeProfile.loaderVersion);
 }
 
 export function versionValue(version: VersionResolution | undefined) {

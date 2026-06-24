@@ -468,31 +468,22 @@ export function ServerEditForm({
       </label>
       <label>
         Minecraft version
-        <select name="minecraftVersion" defaultValue={server.minecraftVersion}>
+        <select name="minecraftVersion" defaultValue={server.runtimeProfile.minecraftVersion}>
           {versions.game.length ? versions.game.map((version) => (
             <option key={version.version} value={version.version}>{version.version}</option>
-          )) : <option value={server.minecraftVersion}>{server.minecraftVersion}</option>}
+          )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
         </select>
         <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
       </label>
       <label>
         Fabric loader version
-        <select name="loaderVersion" defaultValue={server.loaderVersion ?? ""}>
+        <select name="loaderVersion" defaultValue={server.runtimeProfile.loaderVersion ?? ""}>
           <option value="">Latest stable</option>
           {versions.loader.map((version) => (
             <option key={version.version} value={version.version}>{version.version}</option>
           ))}
         </select>
         <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
-      </label>
-      <label>
-        Fabric installer version
-        <select name="installerVersion" defaultValue={server.installerVersion ?? ""}>
-          <option value="">Latest stable</option>
-          {versions.installer.map((version) => (
-            <option key={version.version} value={version.version}>{version.version}</option>
-          ))}
-        </select>
       </label>
       <MemorySelector
         totalMemory={totalMemory}
@@ -525,7 +516,7 @@ export function ServerEditForm({
       </label>
       <label>
         Server jar filename
-        <input name="serverJar" defaultValue={server.serverJar || "fabric-server-launch.jar"} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
+        <input name="serverJar" defaultValue={server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar"} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
       </label>
       <label>
         Docker container name

@@ -8,10 +8,6 @@ type ServerRow = {
   display_name: string;
   server_dir: string;
   storage_name: string | null;
-  minecraft_version: string | null;
-  loader_version: string | null;
-  installer_version: string | null;
-  server_jar: string | null;
   runtime_profile_json: string;
   docker_container: string | null;
   docker_image: string | null;
@@ -19,7 +15,6 @@ type ServerRow = {
   docker_working_dir: string | null;
   docker_ports: string | null;
   java_args: string | null;
-  server_type: string;
   created_at: string;
   updated_at: string;
 };
@@ -147,10 +142,6 @@ export class ServersRepository {
       displayName: row.display_name,
       serverDir: row.server_dir,
       storageName: row.storage_name ?? undefined,
-      minecraftVersion: row.minecraft_version ?? undefined,
-      loaderVersion: row.loader_version ?? undefined,
-      installerVersion: row.installer_version ?? undefined,
-      serverJar: row.server_jar ?? undefined,
       runtimeProfile: JSON.parse(row.runtime_profile_json) as unknown,
       dockerContainer: row.docker_container ?? undefined,
       dockerImage: row.docker_image ?? undefined,
@@ -160,7 +151,6 @@ export class ServersRepository {
       managedPorts: portsByServer.get(row.id) ?? [],
       javaArgs: row.java_args ?? undefined,
       schedules: schedulesByServer.get(row.id) ?? [],
-      serverType: row.server_type,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }));
@@ -254,28 +244,24 @@ export class ServersRepository {
   private upsertServer(database: Database.Database, server: ManagedServer) {
     database.prepare(`
       INSERT INTO servers (
-        id, node_id, display_name, server_dir, storage_name, minecraft_version,
-        loader_version, installer_version, server_jar, runtime_profile_json,
+        id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
         docker_container, docker_image, docker_mount_source, docker_working_dir,
-        docker_ports, java_args, server_type, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        docker_ports, java_args, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         node_id=excluded.node_id, display_name=excluded.display_name,
         server_dir=excluded.server_dir, storage_name=excluded.storage_name,
-        minecraft_version=excluded.minecraft_version, loader_version=excluded.loader_version,
-        installer_version=excluded.installer_version, server_jar=excluded.server_jar,
         runtime_profile_json=excluded.runtime_profile_json,
         docker_container=excluded.docker_container, docker_image=excluded.docker_image,
         docker_mount_source=excluded.docker_mount_source,
         docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-        java_args=excluded.java_args, server_type=excluded.server_type,
+        java_args=excluded.java_args,
         created_at=excluded.created_at, updated_at=excluded.updated_at
     `).run(
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
-      server.minecraftVersion ?? null, server.loaderVersion ?? null, server.installerVersion ?? null,
-      server.serverJar ?? null, JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
+      JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,
-      server.dockerPorts ?? null, server.javaArgs ?? null, server.serverType, server.createdAt, server.updatedAt
+      server.dockerPorts ?? null, server.javaArgs ?? null, server.createdAt, server.updatedAt
     );
   }
 

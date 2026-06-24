@@ -202,10 +202,12 @@ type DockerInfo = {
 type CreateServerInput = {
   nodeId?: string;
   displayName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
+  runtime?: {
+    loader?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    serverJar?: string;
+  };
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
@@ -221,6 +223,20 @@ type VersionMetadata = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+function runtimeSelection(input: unknown) {
+  const runtime = asObject(input, "runtime");
+  const loader = optionalString(runtime.loader, "runtime.loader") || "fabric";
+  if (loader !== "fabric") {
+    throw new Error("Only Fabric runtime profiles are supported");
+  }
+  return {
+    loader,
+    minecraftVersion: optionalString(runtime.minecraftVersion, "runtime.minecraftVersion"),
+    loaderVersion: optionalString(runtime.loaderVersion, "runtime.loaderVersion"),
+    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
+  };
+}
 
 export type DockerHostPortBinding = {
   port: string;
@@ -796,9 +812,8 @@ function readZipEntry(buffer: Buffer, entryName: string) {
 }
 
 async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
-  if (!server.serverJar) return {};
   try {
-    const jarPath = await validateExistingInsideServer(server, server.serverJar);
+    const jarPath = await validateExistingInsideServer(server, runtimeTarget(server).serverJar);
     const jarStat = await stat(jarPath);
     if (!jarStat.isFile() || jarStat.size > 16 * 1024 * 1024) return {};
     const installProperties = readZipEntry(await readFile(jarPath), "install.properties");
@@ -861,16 +876,11 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     nodeId: server.nodeId,
     displayName: server.displayName,
     storageName: server.storageName,
-    minecraftVersion: server.minecraftVersion,
-    loaderVersion: server.loaderVersion,
-    installerVersion: server.installerVersion,
-    serverJar: server.serverJar,
     dockerContainer: server.dockerContainer,
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     schedules: (server.schedules ?? []).map(publicSchedule),
-    serverType: server.serverType,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     directoryLabel: server.storageName || server.id,
@@ -933,10 +943,6 @@ function safeNextCronRun(cron: string) {
 
 function normalizeManagedServer(value: unknown): ManagedServer {
   const server = asObject(value, "managed server");
-  const serverType = server.serverType;
-  if (serverType !== "fabric") {
-    throw new Error("managed server serverType must be fabric");
-  }
   const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const rawManagedPorts = Array.isArray(server.managedPorts) ? server.managedPorts : [];
@@ -977,10 +983,6 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     displayName: requiredString(server.displayName, "server.displayName"),
     serverDir,
     storageName: optionalString(server.storageName, "server.storageName"),
-    minecraftVersion: optionalString(server.minecraftVersion, "server.minecraftVersion"),
-    loaderVersion: optionalString(server.loaderVersion, "server.loaderVersion"),
-    installerVersion: optionalString(server.installerVersion, "server.installerVersion"),
-    serverJar: server.serverJar === undefined ? undefined : validateRuntimeJarFilename(server.serverJar),
     runtimeProfile: normalizeRuntimeProfile(server.runtimeProfile),
     dockerContainer: server.dockerContainer === undefined ? undefined : validateDockerContainerName(server.dockerContainer),
     dockerImage: server.dockerImage === undefined ? undefined : validateDockerImageName(server.dockerImage),
@@ -990,7 +992,6 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
-    serverType,
     createdAt: requiredString(server.createdAt, "server.createdAt"),
     updatedAt: requiredString(server.updatedAt, "server.updatedAt")
   };
@@ -1488,7 +1489,7 @@ function dockerContainerName(server: ManagedServer) {
 }
 
 function dockerControlConfigured(server: ManagedServer) {
-  return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
+  return Boolean(server.dockerContainer || (server.dockerMountSource && runtimeTarget(server).serverJar));
 }
 
 function serverDockerMountSource(server: ManagedServer) {
@@ -1708,10 +1709,10 @@ async function dockerStatus(server: ManagedServer) {
     return {
       configured: true,
       available: true,
-      controllable: Boolean(server.dockerMountSource && server.serverJar),
+      controllable: Boolean(server.dockerMountSource && runtimeTarget(server).serverJar),
       state: "unknown" as DockerState,
       container: dockerContainerName(server),
-      message: server.dockerMountSource && server.serverJar
+      message: server.dockerMountSource && runtimeTarget(server).serverJar
         ? "Managed container will be created on start"
         : "Configured container does not exist"
     };
@@ -2414,7 +2415,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   const profile = runtimeProfileForServer(server);
   const artifact = profile?.jarArtifact;
   const downloadUrl = artifact?.downloadUrl;
-  const filename = artifact?.filename ?? server.serverJar;
+  const filename = artifact?.filename;
   if (!profile || !filename) {
     throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   }
@@ -2490,7 +2491,8 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const startedAt = Date.now();
   report?.(5, "Validating server settings");
   const displayName = input.displayName?.trim();
-  const minecraftVersion = input.minecraftVersion?.trim();
+  const selectedRuntime = runtimeSelection(input.runtime);
+  const minecraftVersion = selectedRuntime.minecraftVersion;
   if (!displayName || displayName.length > 80 || !minecraftVersion) {
     throw new Error("Display name and Minecraft version are required");
   }
@@ -2513,10 +2515,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   report?.(25, "Resolving Fabric versions");
   const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
     minecraftVersion,
-    loaderVersion: input.loaderVersion?.trim() || "latest",
+    loaderVersion: selectedRuntime.loaderVersion || "latest",
     preferStable: true
   });
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || runtimeProfile.jarArtifact.filename);
+  const serverJar = selectedRuntime.serverJar || runtimeProfile.jarArtifact.filename;
   const runtimeProfileForRecord: ServerRuntimeProfile = {
     ...runtimeProfile,
     jarArtifact: {
@@ -2538,10 +2540,6 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     displayName,
     serverDir: resolvedServerDir,
     storageName,
-    minecraftVersion,
-    loaderVersion: runtimeProfileForRecord.loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile: runtimeProfileForRecord,
     dockerContainer,
     dockerImage,
@@ -2550,7 +2548,6 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     dockerPorts,
     managedPorts,
     javaArgs,
-    serverType: "fabric",
     createdAt: now,
     updatedAt: now
   };
@@ -2903,10 +2900,7 @@ async function tickSchedules() {
 async function localUpdateServer(serverId: string, input: unknown) {
   const body = input as {
     displayName?: string;
-    minecraftVersion?: string;
-    loaderVersion?: string;
-    installerVersion?: string;
-    serverJar?: string;
+    runtime?: CreateServerInput["runtime"];
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
@@ -2931,13 +2925,14 @@ async function localUpdateServer(serverId: string, input: unknown) {
       throw new Error("Stop the server before changing its configuration");
     }
     const currentRuntime = runtimeProfileForServer(current);
-    const minecraftVersion = body.minecraftVersion?.trim() || currentRuntime?.minecraftVersion || current.minecraftVersion;
+    const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
+    const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
     if (!minecraftVersion) {
       throw new Error("Minecraft version is required");
     }
-    const requestedLoaderVersion = body.loaderVersion?.trim() || currentRuntime?.loaderVersion || current.loaderVersion || "latest";
-    const serverJar = validateRuntimeJarFilename(body.serverJar?.trim() || currentRuntime?.jarArtifact.filename || current.serverJar || "fabric-server-launch.jar");
-    const shouldResolveRuntime = body.minecraftVersion !== undefined || body.loaderVersion !== undefined || !currentRuntime;
+    const requestedLoaderVersion = selectedRuntime?.loaderVersion || currentRuntime.loaderVersion || "latest";
+    const serverJar = selectedRuntime?.serverJar || currentRuntime.jarArtifact.filename || "fabric-server-launch.jar";
+    const shouldResolveRuntime = selectedRuntime?.minecraftVersion !== undefined || selectedRuntime?.loaderVersion !== undefined;
     const resolvedRuntime = shouldResolveRuntime
       ? await serverJarProvider.resolveFabricServerJar({
           minecraftVersion,
@@ -2955,7 +2950,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
         filename: serverJar
       }
     };
-    const loaderVersion = runtimeProfile.loaderVersion;
     const serverPort = body.serverPort?.trim();
     if (serverPort && !isValidServerPort(serverPort)) {
       throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
@@ -2983,23 +2977,19 @@ async function localUpdateServer(serverId: string, input: unknown) {
     }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
 
-    const jarChanged = current.minecraftVersion !== minecraftVersion
-      || current.loaderVersion !== loaderVersion
-      || current.serverJar !== serverJar
+    const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
+      || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
+      || currentRuntime.jarArtifact.filename !== serverJar
       || current.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
     const containerConfigChanged = current.dockerContainer !== dockerContainer
       || current.dockerImage !== dockerImage
       || current.dockerPorts !== dockerPorts
       || current.javaArgs !== javaArgs
-      || current.serverJar !== serverJar;
+      || currentRuntime.jarArtifact.filename !== serverJar;
 
     const updated: ManagedServer = {
       ...current,
       displayName: body.displayName?.trim() || current.displayName,
-      minecraftVersion,
-      loaderVersion,
-      installerVersion: undefined,
-      serverJar,
       runtimeProfile,
       dockerContainer,
       dockerImage,
@@ -3796,10 +3786,7 @@ app.put<{
   Params: { id: string };
   Body: {
     displayName?: string;
-    minecraftVersion?: string;
-    loaderVersion?: string;
-    installerVersion?: string;
-    serverJar?: string;
+    runtime?: CreateServerInput["runtime"];
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
@@ -3863,9 +3850,6 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
   };
   const updatedServer: ManagedServer = {
     ...server,
-    minecraftVersion: nextProfile.minecraftVersion,
-    loaderVersion: nextProfile.loaderVersion,
-    serverJar: nextProfile.jarArtifact.filename,
     runtimeProfile: nextProfile,
     updatedAt: new Date().toISOString()
   };

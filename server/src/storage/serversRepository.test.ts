@@ -48,9 +48,6 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
     displayName: `Server ${id}`,
     serverDir: `/data/servers/${id}`,
     storageName: serverStorageName(id),
-    minecraftVersion: "1.21.1",
-    loaderVersion: "0.16.0",
-    serverJar: "fabric-server-launch.jar",
     runtimeProfile: {
       minecraftVersion: "1.21.1",
       loader: "fabric",
@@ -109,7 +106,6 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
         ranAt: "2026-01-02T00:00:00.000Z"
       }]
     }],
-    serverType: "fabric",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"
   };

@@ -232,9 +232,9 @@ describe("node install instructions", () => {
 describe("node force delete cleanup", () => {
   it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
     const servers = [
-      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" }
+      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
+      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
+      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" }
     ] satisfies ManagedServer[];
 
     expect(removeServersForNode(servers, "deleted-node")).toBe(2);
@@ -251,7 +251,6 @@ describe("server port conflict detection", () => {
       serverDir: "/tmp/survival",
       dockerPorts: "25565:25565/tcp,25565:25565/udp",
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     },
@@ -262,7 +261,6 @@ describe("server port conflict detection", () => {
       serverDir: "/tmp/creative",
       dockerPorts: "25565:25565/tcp",
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     }
@@ -323,7 +321,6 @@ describe("server port conflict detection", () => {
         advanced: true
       }],
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     }], "node-a");

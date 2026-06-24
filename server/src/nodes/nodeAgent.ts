@@ -45,10 +45,12 @@ type DockerInfo = {
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
+  runtime?: {
+    loader?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    serverJar?: string;
+  };
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
@@ -360,13 +362,14 @@ async function downloadFabricJar(server: ManagedServer) {
     console.error(details);
     throw detailedError(new Error(`Fabric server download failed: ${res.status} ${res.statusText}`), details);
   }
-  const target = await writableInside(server, artifact.filename ?? server.serverJar ?? "fabric-server-launch.jar");
+  const target = await writableInside(server, artifact.filename);
   await writeFile(target, Buffer.from(await res.arrayBuffer()));
 }
 
 function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeProfile, now = new Date().toISOString()) {
   const displayName = input.displayName?.trim();
-  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  const selectedRuntime = runtimeSelection(input.runtime);
+  if (!displayName || displayName.length > 80 || !selectedRuntime.minecraftVersion) throw new Error("Display name and Minecraft version are required");
   if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
   const serverPort = input.serverPort?.trim() || "25565";
   if (!isValidServerPort(serverPort)) {
@@ -374,7 +377,7 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   }
   const id = newServerId();
   const storageName = serverStorageName(id);
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || resolvedRuntime.jarArtifact.filename);
+  const serverJar = selectedRuntime.serverJar || resolvedRuntime.jarArtifact.filename;
   const runtimeProfile: ServerRuntimeProfile = {
     ...resolvedRuntime,
     jarArtifact: {
@@ -394,17 +397,12 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
     displayName,
     serverDir: serverDirectory(serversRoot, id),
     storageName,
-    minecraftVersion: runtimeProfile.minecraftVersion,
-    loaderVersion: runtimeProfile.loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile,
     dockerContainer,
     dockerImage: dockerImageName,
     dockerPorts,
     managedPorts: [queryPortEntry(queryPort)],
     javaArgs,
-    serverType: "fabric",
     createdAt: now,
     updatedAt: now
   };
@@ -413,12 +411,13 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
 
 async function createServer(input: CreateInput) {
   const displayName = input.displayName?.trim();
-  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  const selectedRuntime = runtimeSelection(input.runtime);
+  if (!displayName || displayName.length > 80 || !selectedRuntime.minecraftVersion) throw new Error("Display name and Minecraft version are required");
   if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
   validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const resolvedRuntime = await defaultServerJarProvider.resolveFabricServerJar({
-    minecraftVersion: input.minecraftVersion?.trim() || "",
-    loaderVersion: input.loaderVersion?.trim() || "latest",
+    minecraftVersion: selectedRuntime.minecraftVersion,
+    loaderVersion: selectedRuntime.loaderVersion || "latest",
     preferStable: true
   });
   const { server, serverPort, queryPort } = createdServerRecord(input, resolvedRuntime);
@@ -443,11 +442,12 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   }
 
   const currentRuntime = runtimeProfileForServer(server);
-  const minecraftVersion = input.minecraftVersion?.trim() || currentRuntime?.minecraftVersion || server.minecraftVersion;
+  const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
+  const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
   if (!minecraftVersion) throw new Error("Minecraft version is required");
-  const requestedLoaderVersion = input.loaderVersion?.trim() || currentRuntime?.loaderVersion || server.loaderVersion || "latest";
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || currentRuntime?.jarArtifact.filename || server.serverJar || "fabric-server-launch.jar");
-  const resolvedRuntime = input.minecraftVersion !== undefined || input.loaderVersion !== undefined || !currentRuntime
+  const requestedLoaderVersion = selectedRuntime?.loaderVersion || currentRuntime.loaderVersion || "latest";
+  const serverJar = selectedRuntime?.serverJar || currentRuntime.jarArtifact.filename || "fabric-server-launch.jar";
+  const resolvedRuntime = selectedRuntime?.minecraftVersion !== undefined || selectedRuntime?.loaderVersion !== undefined
     ? await defaultServerJarProvider.resolveFabricServerJar({ minecraftVersion, loaderVersion: requestedLoaderVersion, preferStable: true })
     : currentRuntime;
   const runtimeProfile: ServerRuntimeProfile = {
@@ -457,7 +457,6 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
       filename: serverJar
     }
   };
-  const loaderVersion = runtimeProfile.loaderVersion;
   const serverPort = input.serverPort?.trim();
   if (serverPort && !isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
@@ -470,23 +469,19 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
 
-  const jarChanged = server.minecraftVersion !== minecraftVersion
-    || server.loaderVersion !== loaderVersion
-    || server.serverJar !== serverJar
+  const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
+    || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
+    || currentRuntime.jarArtifact.filename !== serverJar
     || server.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
   const containerConfigChanged = server.dockerContainer !== dockerContainer
     || server.dockerImage !== dockerImageName
     || server.dockerPorts !== dockerPorts
     || server.javaArgs !== javaArgs
-    || server.serverJar !== serverJar;
+    || currentRuntime.jarArtifact.filename !== serverJar;
 
   const updated: ManagedServer = {
     ...server,
     displayName: input.displayName?.trim() || server.displayName,
-    minecraftVersion: runtimeProfile.minecraftVersion,
-    loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile,
     dockerContainer,
     dockerImage: dockerImageName,
@@ -1224,6 +1219,18 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, filename };
   }
   throw new Error(`Unsupported node command ${command}`);
+}
+
+function runtimeSelection(input: unknown) {
+  const runtime = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
+  const loader = typeof runtime.loader === "string" && runtime.loader.trim() ? runtime.loader.trim() : "fabric";
+  if (loader !== "fabric") throw new Error("Only Fabric runtime profiles are supported");
+  const optional = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return {
+    minecraftVersion: optional(runtime.minecraftVersion),
+    loaderVersion: optional(runtime.loaderVersion),
+    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
+  };
 }
 
 export const __nodeAgentTestHooks = {

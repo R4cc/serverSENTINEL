@@ -57,9 +57,6 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
     displayName: "Survival",
     serverDir: join(tmpdir(), "source-survival"),
     storageName: "source-survival",
-    minecraftVersion: "1.21.1",
-    loaderVersion: "0.16.0",
-    serverJar: "fabric-server-launch.jar",
     runtimeProfile: {
       minecraftVersion: "1.21.1",
       loader: "fabric",
@@ -105,7 +102,6 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
         ranAt: "2026-01-02T04:00:00.000Z"
       }]
     }],
-    serverType: "fabric",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides

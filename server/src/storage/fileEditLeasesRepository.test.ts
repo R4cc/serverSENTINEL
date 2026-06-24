@@ -31,8 +31,8 @@ async function createRepository() {
     VALUES ('node', 'Node', 'remote', 'online', 0, 'now', 'now')
   `).run();
   storage.connection.prepare(`
-    INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, server_type, created_at, updated_at)
-    VALUES ('server', 'node', 'Server', '/server', '{}', 'fabric', 'now', 'now')
+    INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
+    VALUES ('server', 'node', 'Server', '/server', '{}', 'now', 'now')
   `).run();
   return new FileEditLeasesRepository(storage);
 }

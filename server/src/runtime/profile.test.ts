@@ -31,11 +31,7 @@ describe("runtime profile helpers", () => {
       nodeId: "local",
       displayName: "Survival",
       serverDir: "/tmp/survival",
-      minecraftVersion: "1.20.1",
-      loaderVersion: "0.15.11",
-      serverJar: "fabric-server-launch.jar",
       runtimeProfile,
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     } satisfies ManagedServer;

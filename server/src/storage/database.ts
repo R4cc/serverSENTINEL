@@ -86,10 +86,6 @@ const migrations: readonly Migration[] = [
           display_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
           server_dir TEXT NOT NULL,
           storage_name TEXT,
-          minecraft_version TEXT,
-          loader_version TEXT,
-          installer_version TEXT,
-          server_jar TEXT,
           runtime_profile_json TEXT NOT NULL,
           docker_container TEXT,
           docker_image TEXT,
@@ -97,7 +93,6 @@ const migrations: readonly Migration[] = [
           docker_working_dir TEXT,
           docker_ports TEXT,
           java_args TEXT,
-          server_type TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );

@@ -5,17 +5,12 @@ export type ManagedServer = {
   nodeName?: string;
   directoryLabel: string;
   storageName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   schedules?: ScheduledExecution[];
-  serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
   runtimeProfile: ServerRuntimeProfile;
