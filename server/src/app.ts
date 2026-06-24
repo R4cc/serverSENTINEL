@@ -85,6 +85,7 @@ import {
   validateImportArtifact,
   writeExportArtifact
 } from "./importExport.js";
+import { apiErrorResponse, errorStatusCode, publicApiError } from "./http/errors.js";
 import {
   badRequest,
   forbidden,
@@ -3203,6 +3204,8 @@ app.addHook("onRequest", async (request, reply) => {
   }
 });
 
+// WebSocket endpoints intentionally do not use the JSON API error envelope:
+// /api/nodes/connect is the node-agent handshake, and /ws/console streams terminal frames.
 registerAuthRoutes(app, {
   authRateLimit,
   destructiveRateLimit,
@@ -3491,7 +3494,7 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
   await requireRequestPermission(request, "servers.view");
   const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) {
-    return reply.code(404).send({ error: "Node not found", code: "node_not_found" });
+    return reply.code(404).send(apiErrorResponse("NODE_NOT_FOUND", "Node not found"));
   }
   return (await publicNodes([node]))[0];
 });
@@ -3693,7 +3696,7 @@ app.get<{ Params: { id: string } }>("/api/operations/:id", async (request, reply
   await requireRequestPermission(request, "servers.view");
   const operation = operationsRepository.find(validateOperationId(request.params.id));
   if (!operation) {
-    return reply.code(404).send({ error: "Operation not found" });
+    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
   }
   if (operation.serverId) await getServer(operation.serverId);
   return operation;
@@ -3703,7 +3706,7 @@ app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", destructiveRa
   await requireRequestPermission(request, "servers.editSettings");
   const operation = operationsRepository.cancel(validateOperationId(request.params.id), "Operation cancelled by user");
   if (!operation) {
-    return reply.code(404).send({ error: "Operation not found" });
+    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
   }
   return operation;
 });
@@ -3719,7 +3722,7 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
   await requireRequestPermission(request, "servers.view");
   const operation = operationsRepository.find(validateOperationId(request.params.operationId));
   if (!operation || operation.type !== "export.run") {
-    return reply.code(404).send({ error: "Export operation not found" });
+    return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export operation not found"));
   }
   if (operation.status !== "succeeded") {
     throw new Error("Export is not ready for download");
@@ -5302,7 +5305,7 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
   const icon = await runtimeForServer(server).modIcon(server, request.query.filename);
   if (!icon) {
     reply.code(404);
-    return { error: "Icon not found" };
+    return apiErrorResponse("ICON_NOT_FOUND", "Icon not found");
   }
   reply.header("Content-Type", icon.contentType);
   return reply.send(icon.stream);
@@ -5861,11 +5864,8 @@ await registerStaticFrontend(app);
 
 app.setErrorHandler((error, _request, reply) => {
   const expectedUserError = isExpectedUserError(error);
-  const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
+  const statusCode = errorStatusCode(error, reply, expectedUserError);
   const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorCode = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
-  const errorDetails = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : undefined;
-  const publicMessage = statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed";
   const fields = {
     ...routeLogFields(_request, statusCode),
     category: errorCategory(error, statusCode),
@@ -5878,13 +5878,7 @@ app.setErrorHandler((error, _request, reply) => {
   } else {
     app.log.warn(fields, "API request rejected");
   }
-  reply.code(statusCode).send({
-    error: publicMessage,
-    message: publicMessage,
-    code: errorCode,
-    errorDetails,
-    statusCode
-  });
+  reply.code(statusCode).send(publicApiError(error, statusCode));
 });
 
 function scheduleNextTick() {

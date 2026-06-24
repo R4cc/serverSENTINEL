@@ -9,7 +9,7 @@ import {
   type SortingState
 } from "@tanstack/react-table";
 import { Toaster, toast } from "sonner";
-import { ApiError, api } from "./api";
+import { ApiError, api, apiErrorFromResponse } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
@@ -510,7 +510,7 @@ export default function App() {
         );
         setFileEditLease(result.lease);
       } catch (error) {
-        const message = error instanceof ApiError && error.code === "file_edit_lease_lost"
+        const message = error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
           ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
           : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
         releaseFileLease(fileEditLease);
@@ -2075,16 +2075,12 @@ export default function App() {
   }
 
   function leaseConflictMessage(error: unknown) {
-    if (!(error instanceof ApiError) || error.code !== "file_edit_lease_conflict") {
+    if (!(error instanceof ApiError) || error.code !== "FILE_EDIT_LEASE_CONFLICT") {
       return errorMessage(error, "Could not acquire an edit lease for this file.");
     }
-    try {
-      const parsed = JSON.parse(error.details ?? "{}") as { lease?: FileEditLease };
-      if (parsed.lease) {
-        return `${parsed.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(parsed.lease.refreshedAt)}).`;
-      }
-    } catch {
-      // Fall back to the API message.
+    const details = error.details as { lease?: FileEditLease } | undefined;
+    if (details?.lease) {
+      return `${details.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(details.lease.refreshedAt)}).`;
     }
     return error.message;
   }
@@ -2112,7 +2108,7 @@ export default function App() {
       setFileEditLease(result.lease);
       setFileEditMode(true);
     } catch (error) {
-      const message = error instanceof ApiError && error.code === "file_revision_conflict"
+      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
         ? "This file changed since it was opened. Reload it before entering edit mode."
         : leaseConflictMessage(error);
       setFileLeaseMessage(message);
@@ -2291,8 +2287,7 @@ export default function App() {
           credentials: "same-origin"
         });
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.message ?? payload.error ?? `Request failed with ${response.status}`);
+          throw await apiErrorFromResponse(response);
         }
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
@@ -2452,10 +2447,10 @@ export default function App() {
       await loadFiles(activeServer.id, listing.path);
       closeEditor();
     } catch (error) {
-      const conflict = error instanceof ApiError && (error.code === "file_revision_conflict" || error.code === "file_edit_lease_lost");
-      const message = error instanceof ApiError && error.code === "file_revision_conflict"
+      const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
+      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
         ? "The file changed outside this editor. Your changes were not saved. Reload the file before editing again."
-        : error instanceof ApiError && error.code === "file_edit_lease_lost"
+        : error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
           ? "Your edit lease expired or was lost. Your changes were not saved. Reload the file before editing again."
           : errorMessage(error, "Could not save the file. Review the path and try again.");
       if (conflict) {
