@@ -77,6 +77,15 @@ import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
 import {
+  applyImportArtifact,
+  createExportArtifact,
+  exportArtifactFilename,
+  exportDownloadStream,
+  parseExportArtifactBase64,
+  validateImportArtifact,
+  writeExportArtifact
+} from "./importExport.js";
+import {
   badRequest,
   forbidden,
   optionalCompatibilityFilter,
@@ -2665,6 +2674,105 @@ async function startProvisionOperation(input: CreateServerInput, createdBy: stri
   return operationsRepository.find(operation.id)!;
 }
 
+function selectedExportServerIds(value: unknown) {
+  if (value === undefined) return undefined;
+  return asArray(value, "serverIds").map((id) => validateServerId(id));
+}
+
+function targetNodeIdFromBody(value: unknown) {
+  const targetNodeId = typeof value === "string" ? value.trim() : "";
+  if (!targetNodeId) {
+    throw new Error("targetNodeId is required");
+  }
+  return targetNodeId;
+}
+
+async function startExportOperation(input: { serverIds?: string[] }, createdBy: string) {
+  const operation = operationsRepository.create({
+    type: "export.run",
+    createdBy,
+    progress: 0,
+    task: "Queued export"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Preparing export" });
+  void (async () => {
+    try {
+      const artifact = await createExportArtifact({
+        appVersion,
+        settings: settingsRepository.get(),
+        nodes: await readNodes(),
+        servers: await listManagedServers(),
+        selectedServerIds: input.serverIds,
+        modPreferencesForServer: (serverId) => modPreferencesRepository.list(serverId),
+        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
+      });
+      const written = await writeExportArtifact(join(config.exportsDir, exportArtifactFilename(operation.id)), artifact);
+      operationsRepository.succeed(operation.id, {
+        progress: 100,
+        task: "Export ready",
+        result: {
+          artifact: {
+            filename: written.filename,
+            size: written.size,
+            sha256: written.sha256,
+            downloadUrl: `/api/exports/${operation.id}/download`
+          },
+          artifactPath: written.path,
+          serverCount: artifact.servers.length,
+          serverFileCount: artifact.manifest.content.serverFiles
+        }
+      });
+    } catch (error) {
+      logError({ operationId: operation.id, action: "export", status: "failed", ...errorLogFields(error) }, "Export operation failed");
+      operationsRepository.fail(operation.id, operationErrorMessage(error, "Export failed"), {
+        task: "Export failed",
+        logSummary: detailedErrorMessage(error)
+      });
+    }
+  })();
+  return operationsRepository.find(operation.id)!;
+}
+
+async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings?: boolean }, createdBy: string) {
+  const operation = operationsRepository.create({
+    type: "import.run",
+    nodeId: input.targetNodeId,
+    createdBy,
+    progress: 0,
+    task: "Queued import"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Validating import" });
+  void (async () => {
+    try {
+      const artifact = parseExportArtifactBase64(input.artifactBase64);
+      const result = await applyImportArtifact(artifact, {
+        targetNodeId: input.targetNodeId,
+        nodes: await readNodes(),
+        existingServers: await listManagedServers(),
+        serversDir: config.serversDir,
+        tmpDir: config.tmpDir,
+        serversRepository,
+        modPreferencesRepository,
+        settingsRepository,
+        importInstanceSettings: input.importInstanceSettings,
+        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
+      });
+      operationsRepository.succeed(operation.id, {
+        progress: 100,
+        task: "Import complete",
+        result
+      });
+    } catch (error) {
+      logError({ operationId: operation.id, action: "import", status: "failed", ...errorLogFields(error) }, "Import operation failed");
+      operationsRepository.fail(operation.id, operationErrorMessage(error, "Import failed"), {
+        task: "Import failed",
+        logSummary: detailedErrorMessage(error)
+      });
+    }
+  })();
+  return operationsRepository.find(operation.id)!;
+}
+
 function scheduleFromBody(body: {
   name?: string;
   cron?: string;
@@ -3598,6 +3706,54 @@ app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", destructiveRa
     return reply.code(404).send({ error: "Operation not found" });
   }
   return operation;
+});
+
+app.post<{ Body: { serverIds?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.view");
+  return startExportOperation({
+    serverIds: selectedExportServerIds(request.body.serverIds)
+  }, user.id);
+});
+
+app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  const operation = operationsRepository.find(validateOperationId(request.params.operationId));
+  if (!operation || operation.type !== "export.run") {
+    return reply.code(404).send({ error: "Export operation not found" });
+  }
+  if (operation.status !== "succeeded") {
+    throw new Error("Export is not ready for download");
+  }
+  const result = operation.result as { artifactPath?: string; artifact?: { filename?: string; size?: number } } | undefined;
+  const artifactPath = result?.artifactPath;
+  if (!artifactPath || !isInsideServersDirectory(config.exportsDir, artifactPath)) {
+    throw new Error("Export artifact is not available");
+  }
+  reply.header("content-type", "application/json");
+  reply.header("content-disposition", `attachment; filename="${result?.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
+  if (result?.artifact?.size) reply.header("content-length", String(result.artifact.size));
+  return reply.send(exportDownloadStream(artifactPath));
+});
+
+app.post<{ Body: { artifactBase64?: string; targetNodeId?: string } }>("/api/imports/validate", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "servers.create");
+  const artifact = parseExportArtifactBase64(request.body.artifactBase64 ?? "");
+  return validateImportArtifact(artifact, {
+    targetNodeId: typeof request.body.targetNodeId === "string" ? request.body.targetNodeId.trim() : undefined,
+    nodes: await readNodes(),
+    existingServers: await listManagedServers(),
+    serversDir: config.serversDir,
+    tmpDir: config.tmpDir
+  });
+});
+
+app.post<{ Body: { artifactBase64?: string; targetNodeId?: string; importInstanceSettings?: boolean } }>("/api/imports/apply", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.create");
+  return startImportOperation({
+    artifactBase64: request.body.artifactBase64 ?? "",
+    targetNodeId: targetNodeIdFromBody(request.body.targetNodeId),
+    importInstanceSettings: request.body.importInstanceSettings
+  }, user.id);
 });
 
 app.post<{
