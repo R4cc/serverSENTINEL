@@ -16,7 +16,7 @@ import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
-import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
+import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
@@ -1094,6 +1094,9 @@ async function modInstall(server: ManagedServer, input: unknown) {
 }
 
 async function handleCommand(command: string, payload: any) {
+  if (!isNodeCapability(command) || !nodeCapabilities.includes(command)) {
+    throw new Error(`Unsupported node command ${command}`);
+  }
   const server = payload?.server as ManagedServer | undefined;
   if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir, totalMemory: await detectedTotalMemory() };
   if (command === "node.update") return prepareNodeUpdate(payload);
@@ -1255,7 +1258,32 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", async () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.8.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: await detectedTotalMemory() };
+      const dockerStatus = dockerAvailable() ? "available" : "unavailable";
+      const dataPathStatus = existsSync(config.nodeDataDir) ? "ready" : "missing";
+      const hello: NodeHello = {
+        type: "hello",
+        nodeId: persisted?.nodeId ?? null,
+        nodeSecret: persisted?.nodeSecret,
+        joinToken: persisted ? undefined : config.joinToken,
+        nodeName: config.nodeName || "Remote Node",
+        agentVersion: process.env.npm_package_version ?? "0.8.0",
+        protocolVersion: nodeProtocolVersion,
+        capabilities: [...nodeCapabilities],
+        runtimeMode: "node",
+        dataRoot: {
+          root: config.nodeDataDir,
+          dockerRoot: config.nodeDockerDataDir,
+          status: dataPathStatus
+        },
+        docker: {
+          available: dockerStatus === "available",
+          status: dockerStatus
+        },
+        dockerStatus,
+        dataPathStatus,
+        totalMemory: await detectedTotalMemory(),
+        operations: nodeOperationContract
+      };
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
     });

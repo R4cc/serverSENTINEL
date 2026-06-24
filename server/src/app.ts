@@ -37,7 +37,7 @@ import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
+import { nodeAdvertisesCapability, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
@@ -3471,10 +3471,10 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
   if (assignedServers.length && !force) {
     throw new Error("Cannot delete a node while servers are assigned to it");
   }
-  let selfRemoval: { ok: boolean; message: string } = node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)
+  let selfRemoval: { ok: boolean; message: string } = nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)
     ? { ok: false, message: "Node container self-stop was not attempted." }
     : { ok: false, message: "Node is offline or does not support panel-triggered self-stop. Stop its container manually if it is still running." };
-  if (node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)) {
+  if (nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)) {
     try {
       const result = await panelNodeConnections.request(node, "node.remove", undefined, 10_000) as { message?: string };
       selfRemoval = { ok: true, message: result.message || "Node container will stop itself." };
@@ -3510,13 +3510,9 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
   ws.once("message", async (raw: Buffer) => {
     let hello: NodeHello;
     try {
-      hello = JSON.parse(raw.toString()) as NodeHello;
-    } catch {
-      reject("Invalid node hello");
-      return;
-    }
-    if (hello.type !== "hello") {
-      reject("Node hello is required");
+      hello = normalizeNodeHello(JSON.parse(raw.toString()));
+    } catch (error) {
+      reject(`Invalid node hello: ${(error as Error).message}`);
       return;
     }
     const now = new Date().toISOString();
@@ -3528,18 +3524,18 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
         if (!node || !verifyNodeSecret(hello.nodeSecret, node.secretHash)) return;
         acceptedNode = {
           ...node,
-          name: hello.nodeName?.trim() || node.name,
+          name: hello.nodeName,
           status: "online",
           updatedAt: now,
           lastSeenAt: now,
           connectedAt: now,
           agentVersion: hello.agentVersion,
           protocolVersion: hello.protocolVersion,
-          capabilities: hello.capabilities ?? [],
+          capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible"
+          compatibility: "compatible"
         };
         nodes[nodes.indexOf(node)] = acceptedNode;
         return;
@@ -3552,7 +3548,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
         issuedSecret = newNodeSecret();
         acceptedNode = {
           ...node,
-          name: hello.nodeName?.trim() || node.name,
+          name: hello.nodeName,
           type: "remote",
           status: "online",
           isInternal: false,
@@ -3561,11 +3557,11 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           connectedAt: now,
           agentVersion: hello.agentVersion,
           protocolVersion: hello.protocolVersion,
-          capabilities: hello.capabilities ?? [],
+          capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible",
+          compatibility: "compatible",
           secretHash: hashNodeSecret(issuedSecret),
           joinTokenHash: undefined,
           joinTokenExpiresAt: undefined
@@ -3585,7 +3581,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
       nodeSecret: issuedSecret,
       protocolVersion: nodeProtocolVersion,
       accepted: true,
-      compatibility: acceptedNode.compatibility === "compatible" ? "compatible" : "incompatible"
+      compatibility: "compatible"
     };
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);
@@ -5897,7 +5893,7 @@ scheduleNextTick();
 const startupUsers = await readUsers().catch(() => []);
 const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
-const dockerSocketMounted = dockerAvailable();
+const dockerSocketMounted = config.runtimeMode === "panel" ? false : dockerAvailable();
 app.log.info({
   appVersion,
   dataDir: config.dataDir,
@@ -5914,7 +5910,7 @@ app.log.info({
   logLevel: config.logLevel,
   port: config.port
 }, "ServerSentinel startup configuration");
-if (!dockerSocketMounted) {
+if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
   app.log.warn({ dockerSocket: config.dockerSocket }, "Docker socket is not mounted; runtime management is unavailable");
 }
 

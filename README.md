@@ -221,6 +221,7 @@ docker compose up -d
 ### Panel-Only With Docker Run
 
 Use this when one or more separate node agents will manage Docker hosts. This mode does not need the Docker socket mounted into the panel container.
+Panel-only mode does not manage local Minecraft runtime containers; all server lifecycle, file, and mod operations are delegated to connected protocol v2 nodes.
 
 ```bash
 sudo mkdir -p /opt/serversentinel/data
@@ -256,7 +257,7 @@ services:
 
 ### Node Agent With Docker Run
 
-In normal use, create a node from the panel's Add Node flow and use the generated command. The command includes a join token and the panel URL.
+In normal use, create a node from the panel's Add Node flow and use the generated command. The command includes a protocol v2 join token, the panel URL, and the host/container data-root mapping required by sibling Minecraft containers.
 
 Template:
 
@@ -266,18 +267,18 @@ sudo mkdir -p /opt/serversentinel/data
 docker run -d \
   --name serversentinel-node \
   --restart unless-stopped \
-  -e SS_MODE=node \
-  -e SS_PANEL_URL=http://panel-host:8080 \
-  -e SS_NODE_NAME=mc-node-01 \
-  -e SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
-  -e SERVERSENTINEL_DATA_DIR=/data \
-  -e SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /opt/serversentinel/data:/data \
+  --env SS_MODE=node \
+  --env SS_PANEL_URL=http://panel-host:8080 \
+  --env SS_NODE_NAME=mc-node-01 \
+  --env SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
+  --env SERVERSENTINEL_DATA_DIR=/data \
+  --env SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
+  --volume /var/run/docker.sock:/var/run/docker.sock \
+  --volume /opt/serversentinel/data:/data \
   nl2109/serversentinel:latest
 ```
 
-The node does not publish a web port. It connects outbound to the panel.
+The node does not publish a web port. It connects outbound to the panel, advertises protocol `2.0`, and is rejected if required handshake fields or capabilities are missing.
 
 ### Node Agent With Docker Compose
 
@@ -325,6 +326,8 @@ SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL
 SERVERSENTINEL_DATA_DIR=/data
 SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
 ```
+
+`SS_MODE=node` fails fast unless `SS_PANEL_URL` and `SERVERSENTINEL_DOCKER_DATA_DIR` are set. `SERVERSENTINEL_DATA_DIR` is the path inside the node container. `SERVERSENTINEL_DOCKER_DATA_DIR` is the matching host-side path that Minecraft sibling containers mount.
 
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
 

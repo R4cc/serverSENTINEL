@@ -2,7 +2,7 @@ import { basename, dirname } from "node:path";
 import { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
-import { protocolCompatible } from "./protocol.js";
+import { assertNodeSupports } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 
@@ -198,12 +198,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
       send({ type: "unavailable", message: `Node ${node.name} is offline` });
       return;
     }
-    if (!protocolCompatible(node.protocolVersion)) {
-      send({ type: "unavailable", message: `Node ${node.name} uses unsupported protocol ${node.protocolVersion ?? "unknown"}` });
-      return;
-    }
-    if (!node.capabilities?.includes("server.console.stream")) {
-      send({ type: "unavailable", message: "Remote node does not support live console streaming. Update the node agent." });
+    try {
+      assertNodeSupports(node, "server.console.stream");
+    } catch (error) {
+      send({ type: "unavailable", message: (error as Error).message });
       return;
     }
 

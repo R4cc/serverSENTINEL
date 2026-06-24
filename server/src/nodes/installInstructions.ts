@@ -1,5 +1,6 @@
 import type { NodeInstallInstructions } from "./apiTypes.js";
 import { shellQuote } from "../docker/shell.js";
+import { nodeProtocolVersion } from "./protocol.js";
 
 export function nodeDataMount(hostPath?: string) {
   const value = hostPath?.trim() || "/var/lib/serversentinel";
@@ -45,6 +46,7 @@ export function buildNodeInstallInstructions(input: {
   }
   return {
     image: input.image,
+    protocolVersion: nodeProtocolVersion,
     panelUrl,
     joinToken: input.joinToken,
     tokenRequired: !input.joinToken,
@@ -56,6 +58,6 @@ export function buildNodeInstallInstructions(input: {
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped -e SS_MODE=node -e SS_PANEL_URL=${shellQuote(panelUrl)} -e SERVERSENTINEL_DATA_DIR=${shellQuote(containerTarget)} -e SERVERSENTINEL_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` -e SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` -e SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} -v ${shellQuote(dockerSocketMount)} -v ${shellQuote(dataMount)} ${input.image}`
+    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped --env SS_MODE=node --env SS_PANEL_URL=${shellQuote(panelUrl)} --env SERVERSENTINEL_DATA_DIR=${shellQuote(containerTarget)} --env SERVERSENTINEL_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` --env SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` --env SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} --volume ${shellQuote(dockerSocketMount)} --volume ${shellQuote(dataMount)} ${input.image}`
   };
 }
