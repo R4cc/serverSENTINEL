@@ -441,6 +441,7 @@ export function ServerEditForm({
   statusLabel = "Unknown",
   statusTone = "neutral",
   nodeName = "Unknown node",
+  disabledReason = "",
   disabled = false
 }: {
   server: ManagedServer;
@@ -451,6 +452,7 @@ export function ServerEditForm({
   statusLabel?: string;
   statusTone?: string;
   nodeName?: string;
+  disabledReason?: string;
   disabled?: boolean;
 }) {
   const initialJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
@@ -723,6 +725,7 @@ export function ServerEditForm({
         <section className="propertiesSideCard propertiesActionsCard">
           <h2>Actions</h2>
           <p>Apply your changes to the server configuration.</p>
+          {disabled && disabledReason && <p className="propertiesLockNote">{disabledReason}</p>}
           <Button type="submit" form={formId} disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
             Save changes
           </Button>

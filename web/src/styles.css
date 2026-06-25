@@ -2209,6 +2209,47 @@ button .buttonIcon {
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
 }
 
+.serverPropertiesForm fieldset:disabled input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.serverPropertiesForm fieldset:disabled select,
+.serverPropertiesForm fieldset:disabled textarea {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
+  color: var(--text-muted);
+  border-color: var(--border-row);
+  opacity: 1;
+}
+
+.serverPropertiesForm fieldset:disabled select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23707070' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+}
+
+.themeDark .serverPropertiesForm fieldset:disabled select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23929baa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+.serverPropertiesForm fieldset:disabled .memoryRangeInput {
+  opacity: 0;
+}
+
+.serverPropertiesForm fieldset:disabled .memoryRangeTrack {
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 var(--xms-percent),
+      color-mix(in srgb, var(--accent) 70%, var(--border-muted)) var(--xms-percent) var(--xmx-percent),
+      transparent var(--xmx-percent) 100%
+    ),
+    var(--border-muted);
+}
+
+.serverPropertiesForm fieldset:disabled .memoryValueBubble {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 56%, var(--surface-raised));
+  color: var(--accent-strong);
+}
+
 .propertiesDisclosure {
   margin-top: 0;
 }
@@ -2341,6 +2382,15 @@ button .buttonIcon {
 .propertiesActionsCard .uiButton {
   width: 100%;
   justify-content: center;
+}
+
+.propertiesLockNote {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 11%, var(--surface-raised));
+  color: var(--text);
+  font-weight: var(--weight-strong);
 }
 
 @media (max-width: 1180px) {

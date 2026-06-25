@@ -278,6 +278,17 @@ export default function App() {
             : "";
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
+  const serverSettingsLockedReason = isProvisioning
+    ? "Server setup is still running."
+    : dockerOperationalLock
+      ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
+      : !canManager
+        ? "Manager permission is required."
+        : activeStatus?.docker.running
+          ? "Stop the server before editing configuration."
+          : serverSettingsSaving
+            ? "Server settings are saving."
+            : "";
   const modServerRunning = Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
@@ -3652,6 +3663,7 @@ export default function App() {
                   totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
                   onSubmit={updateServer}
                   disabled={serverSettingsLocked || serverSettingsSaving}
+                  disabledReason={serverSettingsLockedReason}
                   statusLabel={serverCommandStatusLabel}
                   statusTone={serverCommandTone}
                   nodeName={activeNode.name}
