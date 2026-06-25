@@ -4,9 +4,10 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml } from "@codemirror/lang-yaml";
-import { defaultHighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { tags } from "@lezer/highlight";
 import { properties } from "@codemirror/legacy-modes/mode/properties";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
@@ -30,6 +31,36 @@ type EditorLanguageKind =
   | "properties"
   | "shell"
   | "plain";
+
+const serverSentinelHighlightStyle = HighlightStyle.define([
+  { tag: tags.comment, color: "var(--editor-comment)" },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: "var(--editor-keyword)" },
+  { tag: [tags.propertyName, tags.variableName, tags.definition(tags.variableName), tags.attributeName], color: "var(--editor-property)" },
+  { tag: [tags.string, tags.special(tags.string)], color: "var(--editor-string)" },
+  { tag: [tags.number, tags.bool, tags.null], color: "var(--editor-constant)" },
+  { tag: [tags.operator, tags.punctuation, tags.separator], color: "var(--editor-punctuation)" },
+  { tag: [tags.heading, tags.strong], color: "var(--editor-heading)", fontWeight: "700" },
+  { tag: tags.link, color: "var(--editor-link)", textDecoration: "underline" }
+]);
+
+const lockedEditorInteraction = EditorView.domEventHandlers({
+  pointerdown(event) {
+    event.preventDefault();
+    return true;
+  },
+  mousedown(event) {
+    event.preventDefault();
+    return true;
+  },
+  click(event) {
+    event.preventDefault();
+    return true;
+  },
+  dblclick(event) {
+    event.preventDefault();
+    return true;
+  }
+});
 
 const serverSentinelEditorTheme = EditorView.theme({
   "&": {
@@ -91,7 +122,27 @@ const serverSentinelEditorTheme = EditorView.theme({
     cursor: "pointer"
   },
   "&.cm-editor[aria-readonly='true']": {
-    backgroundColor: "var(--surface-muted)"
+    backgroundColor: "var(--surface-muted)",
+    cursor: "not-allowed"
+  },
+  "&.cm-editor[aria-readonly='true'] .cm-scroller, &.cm-editor[aria-readonly='true'] .cm-content, &.cm-editor[aria-readonly='true'] .cm-line, &.cm-editor[aria-readonly='true'] .cm-gutters": {
+    cursor: "not-allowed"
+  },
+  "&.cm-editor[aria-readonly='true'] .cm-content": {
+    caretColor: "transparent"
+  },
+  "&.cm-editor[aria-readonly='true'].cm-focused": {
+    outline: "1px solid var(--border-panel)"
+  },
+  "&.cm-editor[aria-readonly='true'] .cm-activeLine": {
+    backgroundColor: "transparent"
+  },
+  "&.cm-editor[aria-readonly='true'] .cm-activeLineGutter": {
+    backgroundColor: "var(--surface-muted)",
+    color: "var(--text-soft)"
+  },
+  "&.cm-editor[aria-readonly='true'] .cm-selectionBackground, &.cm-editor[aria-readonly='true'].cm-focused .cm-selectionBackground": {
+    backgroundColor: "transparent"
   }
 });
 
@@ -156,7 +207,7 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const extensions = useMemo<Extension[]>(
     () => [
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      syntaxHighlighting(serverSentinelHighlightStyle, { fallback: true }),
       editorLanguage(selectedPath),
       keymap.of([
         {
@@ -167,9 +218,10 @@ export default function CodeEditor({
             return true;
           }
         }
-      ])
+      ]),
+      ...(disabled ? [lockedEditorInteraction] : [])
     ],
-    [onSave, saveDisabled, selectedPath]
+    [disabled, onSave, saveDisabled, selectedPath]
   );
 
   return (
@@ -178,15 +230,15 @@ export default function CodeEditor({
       basicSetup={{
         lineNumbers: true,
         foldGutter: true,
-        highlightActiveLine: true,
-        highlightActiveLineGutter: true,
-        bracketMatching: true,
-        closeBrackets: true,
-        history: true,
-        drawSelection: true,
-        dropCursor: true,
+        highlightActiveLine: !disabled,
+        highlightActiveLineGutter: !disabled,
+        bracketMatching: !disabled,
+        closeBrackets: !disabled,
+        history: !disabled,
+        drawSelection: !disabled,
+        dropCursor: !disabled,
         highlightSpecialChars: true,
-        rectangularSelection: true,
+        rectangularSelection: !disabled,
         syntaxHighlighting: false
       }}
       className={`fileCodeEditor${disabled ? " fileCodeEditor-disabled" : ""}`}

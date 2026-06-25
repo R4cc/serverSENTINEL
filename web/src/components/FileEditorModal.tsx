@@ -155,6 +155,7 @@ export function FileEditorModal({
             <div className="fileEditorBody">
               <div className="fileEditorMetaRow">
                 <span>{editing ? "Exclusive edit lease" : "Read only"}</span>
+                {!editing && !editDisabled && <span className="editRequiredHint">Click Edit file to make changes</span>}
                 <span>{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
               </div>

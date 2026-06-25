@@ -26,6 +26,14 @@
   --accent: var(--sentinel-accent);
   --terminal-bg: #101318;
   --terminal-text: #f2f2f2;
+  --editor-comment: #8b5a00;
+  --editor-keyword: #22368f;
+  --editor-property: #214f9b;
+  --editor-string: #2c7a66;
+  --editor-constant: #7a4f16;
+  --editor-punctuation: #4a4a4a;
+  --editor-heading: #111827;
+  --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
   --border-strong: 1px;
@@ -370,6 +378,14 @@ code {
   --sentinel-danger: #f1aaa6;
   --terminal-bg: #1d2027;
   --terminal-text: #dfe3eb;
+  --editor-comment: #c08a45;
+  --editor-keyword: #aebcff;
+  --editor-property: #8fb4ff;
+  --editor-string: #8dd6c3;
+  --editor-constant: #f6c177;
+  --editor-punctuation: #c5cad6;
+  --editor-heading: #f0f3f9;
+  --editor-link: #b7c4ff;
   --overlay: rgb(0 0 0 / 0.62);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
   background:
@@ -7899,6 +7915,12 @@ button:disabled,
   background: var(--sentinel-accent-soft);
 }
 
+.fileEditorMetaRow span.editRequiredHint {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--accent-strong);
+}
+
 .fileLeaseNotice {
   margin: 0 16px 12px;
   padding: 10px 12px;
@@ -7921,6 +7943,15 @@ button:disabled,
 .fileCodeEditor-disabled {
   background: var(--surface-muted);
   color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.fileCodeEditor-disabled .cm-editor,
+.fileCodeEditor-disabled .cm-scroller,
+.fileCodeEditor-disabled .cm-content,
+.fileCodeEditor-disabled .cm-line,
+.fileCodeEditor-disabled .cm-gutters {
+  cursor: not-allowed;
 }
 
 .fileEditorMainArea {
