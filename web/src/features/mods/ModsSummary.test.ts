@@ -21,13 +21,16 @@ describe("Mods summary", () => {
   it("uses calm copy when everything is current", () => {
     const current = mod();
     const items = buildModsSummary([current], createDemoUpdatePlan("demo", [current]));
-    expect(items[1]).toMatchObject({ value: "Up to date", detail: "No updates available" });
-    expect(items[2]).toMatchObject({ value: "All clear", detail: "No action needed" });
+    expect(items[1]).toMatchObject({ label: "Updates", value: "Up to date" });
+    expect(items[2]).toMatchObject({ label: "Needs attention", value: "All clear" });
+    expect(items[1]).not.toHaveProperty("detail");
+    expect(items[2]).not.toHaveProperty("detail");
   });
 
   it("counts unknown manual mods as needing attention", () => {
     const manual = mod({ filename: "manual.jar", modrinth: undefined, compatibility: undefined, versionInfo: null });
     const items = buildModsSummary([manual], createDemoUpdatePlan("demo", [manual]));
-    expect(items[2]).toMatchObject({ value: 1, detail: "Review recommended" });
+    expect(items[2]).toMatchObject({ label: "Needs attention", value: 1 });
+    expect(items[2]).not.toHaveProperty("detail");
   });
 });

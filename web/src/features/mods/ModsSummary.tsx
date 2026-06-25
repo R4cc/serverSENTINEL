@@ -17,9 +17,9 @@ export function buildModsSummary(mods: InstalledMod[], updatePlan?: ModUpdatePla
     : health.filter((item) => item.needsAttention).length;
 
   return [
-    { label: "Total mods", value: mods.length, detail: `${enabled} enabled · ${mods.length - enabled} disabled`, tone: "blue" },
-    { label: "Updates", value: updates || "Up to date", detail: reviewUpdates ? `${safeUpdates} safe · ${reviewUpdates} need review` : safeUpdates === 1 ? "1 safe update" : safeUpdates ? `${safeUpdates} safe updates` : "No updates available", tone: "orange" },
-    { label: "Needs attention", value: attention || "All clear", detail: attention ? "Review recommended" : "No action needed", tone: "purple" }
+    { label: "Total mods", value: mods.length, tone: "blue" },
+    { label: "Updates", value: updates || "Up to date", tone: "orange" },
+    { label: "Needs attention", value: attention || "All clear", tone: "purple" }
   ];
 }
 
@@ -34,7 +34,6 @@ export function ModsSummary({ mods, updatePlan }: Props) {
           <div>
             <small>{item.label}</small>
             <strong>{item.value}</strong>
-            <span>{item.detail}</span>
           </div>
         </article>
       ))}
