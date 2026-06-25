@@ -262,10 +262,6 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     nodeName: "Internal Node",
     directoryLabel: "/demo/survival",
     storageName: "Browser demo",
-    minecraftVersion: "1.21.4",
-    loaderVersion: "0.16.10",
-    installerVersion: "1.0.1",
-    serverJar: "fabric-server-launch.jar",
     runtimeProfile: {
       minecraftVersion: "1.21.4",
       loader: "fabric",
@@ -284,7 +280,6 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     dockerPorts: "25565:25565/tcp",
     javaArgs: "-Xms2G -Xmx4G",
     schedules,
-    serverType: "fabric",
     hasDockerContainer: true,
     resolvedVersions: {
       minecraftVersion: {

@@ -5,17 +5,12 @@ export type ManagedServer = {
   nodeName?: string;
   directoryLabel: string;
   storageName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   schedules?: ScheduledExecution[];
-  serverType: "fabric";
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;
   runtimeProfile: ServerRuntimeProfile;
@@ -101,8 +96,8 @@ export type NodeInstallInstructions = {
     environment: {
       SS_MODE: "node";
       SS_PANEL_URL: string;
-      SS_NODE_DATA_DIR?: string;
-      SS_NODE_DOCKER_DATA_DIR?: string;
+      SERVERSENTINEL_DATA_DIR?: string;
+      SERVERSENTINEL_DOCKER_DATA_DIR?: string;
       SS_NODE_NAME?: string;
       SS_JOIN_TOKEN?: string;
     };
@@ -324,6 +319,18 @@ export type FilePreview = {
   modifiedAt?: string;
 };
 
+export type FileEditLease = {
+  leaseId: string;
+  serverId: string;
+  path: string;
+  userId: string;
+  displayName: string;
+  acquiredAt: string;
+  refreshedAt: string;
+  expiresAt: string;
+  fileRevision: string;
+};
+
 export type ReleaseChannel = "release" | "beta" | "alpha";
 
 export type ModCompatibility = {
@@ -505,24 +512,46 @@ export type SafeBatchUpdateResult = {
   counts: { requested: number; updated: number; skipped: number; failed: number };
 };
 
-export type ProvisionJob = {
+export type OperationRecord = {
   id: string;
-  status: "running" | "succeeded" | "failed";
+  type:
+    | "server.create"
+    | "server.start"
+    | "server.stop"
+    | "server.restart"
+    | "mod.upload"
+    | "mod.install"
+    | "mod.update"
+    | "mod.remove"
+    | "mod.toggle"
+    | "mod.batchUpdate"
+    | "schedule.run"
+    | "backup.create"
+    | "backup.restore"
+    | "import.run"
+    | "export.run";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  serverId?: string;
+  nodeId?: string;
+  createdBy?: string;
   progress: number;
-  task: string;
-  server?: ManagedServer;
-  error?: string;
-  errorDetails?: string;
+  task?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorMessage?: string;
+  result?: unknown;
+  logSummary?: string;
 };
 
 export type GeneralJob = {
   id: string;
   type: "provision" | "mod-install" | "mod-upload";
-  status: "running" | "succeeded" | "failed";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   title: string;
   subject?: string;
   progress: number;
-  task: string;
+  task?: string;
   error?: string;
   errorDetails?: string;
   dismissible: boolean;

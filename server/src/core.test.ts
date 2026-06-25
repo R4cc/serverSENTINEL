@@ -7,6 +7,7 @@ import {
   ensureInsideServer,
   ensureWritableInsideServer,
   nextCronRun,
+  normalizePublicFilePath,
   parseDockerPorts,
   safeInstalledModFilename,
   validateExistingInsideServer,
@@ -16,6 +17,16 @@ import {
 const server = { serverDir: resolve("test-fixtures/server") };
 
 describe("path safety", () => {
+  it("normalizes public file lock paths strictly", () => {
+    expect(normalizePublicFilePath("/server.properties")).toBe("/server.properties");
+    expect(normalizePublicFilePath("/mods/fabric-api.jar")).toBe("/mods/fabric-api.jar");
+    expect(() => normalizePublicFilePath("mods/fabric-api.jar")).toThrow("absolute");
+    expect(() => normalizePublicFilePath("/mods/../server.properties")).toThrow("normalized");
+    expect(() => normalizePublicFilePath("/mods//fabric-api.jar")).toThrow("normalized");
+    expect(() => normalizePublicFilePath("/mods/fabric-api.jar/")).toThrow("trailing slash");
+    expect(() => normalizePublicFilePath("/mods\\fabric-api.jar")).toThrow("invalid");
+  });
+
   it("accepts normal relative paths", () => {
     expect(ensureInsideServer(server, "mods/fabric-api.jar")).toBe(resolve(server.serverDir, "mods/fabric-api.jar"));
   });

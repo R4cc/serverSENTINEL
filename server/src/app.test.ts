@@ -14,7 +14,9 @@ import {
   allocateQueryPort,
   sessionExpired,
   sessionMaxAgeSeconds,
-  validateJoinTokenTtlMinutes
+  validateJoinTokenTtlMinutes,
+  fileContentRevision,
+  assertFileRevision
 } from "./app.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -35,6 +37,15 @@ function testRuntimeProfile() {
     resolvedAt: new Date().toISOString()
   };
 }
+
+describe("file revisions", () => {
+  it("detects content changes before saving", () => {
+    const acquired = fileContentRevision("original");
+    expect(() => assertFileRevision(acquired, acquired, fileContentRevision("changed")))
+      .toThrow("The file changed after editing began");
+    expect(() => assertFileRevision(acquired, acquired, acquired)).not.toThrow();
+  });
+});
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
@@ -207,22 +218,23 @@ describe("node install instructions", () => {
       joinToken: "join-token"
     });
 
-    expect(install.dockerCompose.environment.SS_NODE_DATA_DIR).toBe("/data");
-    expect(install.dockerCompose.environment.SS_NODE_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
+    expect(install.protocolVersion).toBe("2.0");
+    expect(install.dockerCompose.environment.SERVERSENTINEL_DATA_DIR).toBe("/data");
+    expect(install.dockerCompose.environment.SERVERSENTINEL_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
     expect(install.dockerCompose.restart).toBe("unless-stopped");
     expect(install.dockerRun).toContain("--restart unless-stopped");
-    expect(install.dockerRun).toContain("-e SS_NODE_DATA_DIR='/data'");
-    expect(install.dockerRun).toContain("-e SS_NODE_DOCKER_DATA_DIR='/var/lib/serversentinel'");
-    expect(install.dockerRun).toContain("-v '/var/lib/serversentinel:/data'");
+    expect(install.dockerRun).toContain("--env SERVERSENTINEL_DATA_DIR='/data'");
+    expect(install.dockerRun).toContain("--env SERVERSENTINEL_DOCKER_DATA_DIR='/var/lib/serversentinel'");
+    expect(install.dockerRun).toContain("--volume '/var/lib/serversentinel:/data'");
   });
 });
 
 describe("node force delete cleanup", () => {
   it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
     const servers = [
-      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" },
-      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), serverType: "fabric", createdAt: "", updatedAt: "" }
+      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
+      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
+      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" }
     ] satisfies ManagedServer[];
 
     expect(removeServersForNode(servers, "deleted-node")).toBe(2);
@@ -239,7 +251,6 @@ describe("server port conflict detection", () => {
       serverDir: "/tmp/survival",
       dockerPorts: "25565:25565/tcp,25565:25565/udp",
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     },
@@ -250,7 +261,6 @@ describe("server port conflict detection", () => {
       serverDir: "/tmp/creative",
       dockerPorts: "25565:25565/tcp",
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     }
@@ -311,7 +321,6 @@ describe("server port conflict detection", () => {
         advanced: true
       }],
       runtimeProfile: testRuntimeProfile(),
-      serverType: "fabric",
       createdAt: "",
       updatedAt: ""
     }], "node-a");

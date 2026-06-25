@@ -123,7 +123,7 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
   };
 }
 
-export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile" | "minecraftVersion" | "loaderVersion" | "serverJar">) {
+export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile">) {
   const profile = runtimeProfileForServer(server);
   return {
     profile,

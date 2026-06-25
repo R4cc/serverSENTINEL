@@ -40,7 +40,7 @@ export type ModsWorkspaceInputs = {
 export type ModsWorkspaceController = ReturnType<typeof useModsWorkspace>;
 
 function demoInstallVersions(server: ManagedServer | undefined, mod: ModrinthHit, channel: ReleaseChannel): ModrinthInstallVersionsResponse {
-  const minecraftVersion = server?.minecraftVersion || "1.21.1";
+  const minecraftVersion = server?.runtimeProfile.minecraftVersion || "1.21.1";
   const now = new Date().toISOString();
   return {
     project: {

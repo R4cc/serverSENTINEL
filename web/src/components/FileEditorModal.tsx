@@ -12,6 +12,10 @@ type FileEditorModalProps = {
   fileOpenFailed: boolean;
   fileReadError: string;
   fileSaving: boolean;
+  editing: boolean;
+  editBusy: boolean;
+  editMessage: string;
+  editDisabled: boolean;
   editorDisabled: boolean;
   saveDisabled: boolean;
   discardRequestOpen: boolean;
@@ -19,6 +23,7 @@ type FileEditorModalProps = {
   onRequestClose: () => void;
   onCancel: () => void;
   onSave: () => void;
+  onEnterEdit: () => void;
   onRetryOpen: () => void;
   onKeepEditing: () => void;
   onDiscardChanges: () => void;
@@ -70,6 +75,10 @@ export function FileEditorModal({
   fileOpenFailed,
   fileReadError,
   fileSaving,
+  editing,
+  editBusy,
+  editMessage,
+  editDisabled,
   editorDisabled,
   saveDisabled,
   discardRequestOpen,
@@ -77,6 +86,7 @@ export function FileEditorModal({
   onRequestClose,
   onCancel,
   onSave,
+  onEnterEdit,
   onRetryOpen,
   onKeepEditing,
   onDiscardChanges
@@ -91,6 +101,8 @@ export function FileEditorModal({
     ? "File save is already in progress."
     : fileOpenFailed
       ? "Retry opening the file before saving."
+      : !editing
+        ? "Enter edit mode before saving."
       : editorDisabled
         ? "This file is read-only."
         : !dirty
@@ -142,10 +154,11 @@ export function FileEditorModal({
             </header>
             <div className="fileEditorBody">
               <div className="fileEditorMetaRow">
-                <span>{editorDisabled ? "Read only" : "Editable"}</span>
+                <span>{editing ? "Exclusive edit lease" : "Read only"}</span>
                 <span>{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
               </div>
+              {editMessage && <div className="fileLeaseNotice" role="status">{editMessage}</div>}
               <div className="fileEditorMainArea">
                 {fileOpening ? (
                   <div className="fileEditorStateFill">
@@ -185,9 +198,15 @@ export function FileEditorModal({
             </div>
             <footer className="fileEditorFooter">
               <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
-              <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
-                {fileSaving ? "Saving" : "Save"}
-              </Button>
+              {editing ? (
+                <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
+                  {fileSaving ? "Saving" : "Save"}
+                </Button>
+              ) : (
+                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? "Edit permission is required." : "Acquire an exclusive edit lease"}>
+                  {editBusy ? "Requesting edit access" : "Edit file"}
+                </Button>
+              )}
             </footer>
           </section>
         </div>

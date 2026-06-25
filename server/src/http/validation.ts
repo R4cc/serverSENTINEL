@@ -50,9 +50,9 @@ export function validateScheduleId(id: unknown) {
   return id;
 }
 
-export function validateProvisionJobId(id: unknown) {
+export function validateOperationId(id: unknown) {
   if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid provisioning job id is required");
+    badRequest("A valid operation id is required");
   }
   return id;
 }

@@ -8,15 +8,14 @@ services:
       - "${PORT:-8080}:8080"
     environment:
       SS_MODE: ${SS_MODE:-all-in-one}
-      SERVERSENTINEL_CONFIG_DIR: /config
-      SERVERSENTINEL_SERVERS_DIR: /data/servers
+      SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
       SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest}
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
       PORT: 8080
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
-      - serversentinel-config:/config
+      - serversentinel-data:/data
       - minecraft-servers:/data/servers
       # Optional but powerful: enables ServerSentinel to create/start/stop
       # separate Minecraft runtime containers using Docker.
@@ -25,6 +24,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  serversentinel-config:
+  serversentinel-data:
   minecraft-servers:
     name: serversentinel-minecraft-servers

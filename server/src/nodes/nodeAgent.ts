@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
 import http from "node:http";
@@ -16,10 +16,13 @@ import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
-import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
+import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
+import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
+import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
+import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
 
-type NodeConfig = { nodeId: string; nodeSecret: string };
+type NodeIdentity = { nodeId: string; nodeSecret: string };
 type NodeUpdateRequest = {
   image?: string;
 };
@@ -42,10 +45,12 @@ type DockerInfo = {
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
+  runtime?: {
+    loader?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    serverJar?: string;
+  };
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
@@ -56,8 +61,8 @@ type CreateInput = {
 };
 type UpdateInput = Omit<CreateInput, "nodeId" | "acceptEula">;
 
-const nodeConfigPath = join(config.nodeDataDir, "node", "config.json");
-const nodeUpdateDir = join(config.nodeDataDir, "node", "updates");
+const nodeIdentityMetadataKey = "node.identity";
+const nodeUpdateDir = config.paths.nodeUpdatesDir;
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
@@ -77,13 +82,28 @@ function detailedErrorMessage(error: unknown) {
   return String(error);
 }
 
-async function readNodeConfig() {
-  try { return JSON.parse(await readFile(nodeConfigPath, "utf8")) as NodeConfig; } catch { return null; }
+let nodeStorageDatabase: StorageDatabase | undefined;
+
+function nodeStorage() {
+  nodeStorageDatabase ??= openStorageDatabase();
+  return nodeStorageDatabase;
 }
 
-async function writeNodeConfig(nodeConfig: NodeConfig) {
-  await mkdir(dirname(nodeConfigPath), { recursive: true });
-  await writeFile(nodeConfigPath, `${JSON.stringify(nodeConfig, null, 2)}\n`, "utf8");
+function parseNodeIdentity(value: string): NodeIdentity {
+  const parsed = JSON.parse(value) as Partial<NodeIdentity>;
+  if (typeof parsed.nodeId !== "string" || typeof parsed.nodeSecret !== "string") {
+    throw new Error("Stored node identity is invalid");
+  }
+  return { nodeId: parsed.nodeId, nodeSecret: parsed.nodeSecret };
+}
+
+async function readNodeIdentity() {
+  const value = nodeStorage().metadata(nodeIdentityMetadataKey);
+  return value === undefined ? null : parseNodeIdentity(value);
+}
+
+async function writeNodeIdentity(nodeIdentity: NodeIdentity) {
+  nodeStorage().setMetadata(nodeIdentityMetadataKey, JSON.stringify(nodeIdentity));
 }
 
 function panelWebSocketUrl() {
@@ -95,10 +115,6 @@ function panelWebSocketUrl() {
   return url.toString();
 }
 
-function slugify(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "") || randomUUID();
-}
-
 function safeName(value: unknown) {
   const raw = typeof value === "string" ? value : "";
   const name = basename(raw).trim();
@@ -108,9 +124,11 @@ function safeName(value: unknown) {
 }
 
 function safeRelative(value: unknown) {
-  const raw = typeof value === "string" ? value.replaceAll("\\", "/") : ".";
-  if (raw.includes("\0") || raw.startsWith("/") || raw.split("/").includes("..")) throw new Error("Invalid relative path");
-  return raw === "" ? "." : raw;
+  const raw = typeof value === "string" ? value : ".";
+  if (raw.includes("\0") || raw.includes("\\") || /[\r\n]/.test(raw) || raw.startsWith("/") || raw.split("/").includes("..")) throw new Error("Invalid relative path");
+  if (raw === "" || raw === ".") return ".";
+  if (raw.split("/").some((segment) => !segment || segment === ".")) throw new Error("Invalid relative path");
+  return raw;
 }
 
 async function serverRoot(server: ManagedServer) {
@@ -155,12 +173,8 @@ function assertJarBuffer(buffer: Buffer) {
   }
 }
 
-function defaultContainerName(displayName: string) {
-  return `serversentinel-${slugify(displayName)}`;
-}
-
 function containerName(server: ManagedServer) {
-  return validateDockerContainerName(server.dockerContainer?.trim() || defaultContainerName(server.displayName));
+  return validateDockerContainerName(server.dockerContainer?.trim() || defaultServerContainerName(server.id));
 }
 
 function runtimeConfigHash(server: ManagedServer) {
@@ -340,7 +354,7 @@ async function downloadFabricJar(server: ManagedServer) {
   if (!artifact?.downloadUrl) throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   if (!artifact.downloadUrl.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS Fabric server jar");
   const res = await fetch(artifact.downloadUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.7.0 (node Fabric runtime downloader)" }
+    headers: { "User-Agent": "ServerSentinel/0.8.0 (node Fabric runtime downloader)" }
   });
   if (!res.ok || !res.body) {
     const body = !res.ok ? await res.text().catch(() => "") : "";
@@ -348,20 +362,22 @@ async function downloadFabricJar(server: ManagedServer) {
     console.error(details);
     throw detailedError(new Error(`Fabric server download failed: ${res.status} ${res.statusText}`), details);
   }
-  const target = await writableInside(server, artifact.filename ?? server.serverJar ?? "fabric-server-launch.jar");
+  const target = await writableInside(server, artifact.filename);
   await writeFile(target, Buffer.from(await res.arrayBuffer()));
 }
 
 function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeProfile, now = new Date().toISOString()) {
   const displayName = input.displayName?.trim();
-  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  const selectedRuntime = runtimeSelection(input.runtime);
+  if (!displayName || displayName.length > 80 || !selectedRuntime.minecraftVersion) throw new Error("Display name and Minecraft version are required");
   if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
   const serverPort = input.serverPort?.trim() || "25565";
   if (!isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
-  const storageName = slugify(displayName);
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || resolvedRuntime.jarArtifact.filename);
+  const id = newServerId();
+  const storageName = serverStorageName(id);
+  const serverJar = selectedRuntime.serverJar || resolvedRuntime.jarArtifact.filename;
   const runtimeProfile: ServerRuntimeProfile = {
     ...resolvedRuntime,
     jarArtifact: {
@@ -372,26 +388,21 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   const queryPort = queryPortFromInput(input);
   const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`, queryPort);
   parseDockerPorts(dockerPorts);
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
   const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const server: ManagedServer = {
-    id: randomUUID(),
+    id,
     nodeId: input.nodeId || "",
     displayName,
-    serverDir: resolve(serversRoot, storageName),
+    serverDir: serverDirectory(serversRoot, id),
     storageName,
-    minecraftVersion: runtimeProfile.minecraftVersion,
-    loaderVersion: runtimeProfile.loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile,
     dockerContainer,
     dockerImage: dockerImageName,
     dockerPorts,
     managedPorts: [queryPortEntry(queryPort)],
     javaArgs,
-    serverType: "fabric",
     createdAt: now,
     updatedAt: now
   };
@@ -400,12 +411,13 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
 
 async function createServer(input: CreateInput) {
   const displayName = input.displayName?.trim();
-  if (!displayName || displayName.length > 80 || !input.minecraftVersion) throw new Error("Display name and Minecraft version are required");
+  const selectedRuntime = runtimeSelection(input.runtime);
+  if (!displayName || displayName.length > 80 || !selectedRuntime.minecraftVersion) throw new Error("Display name and Minecraft version are required");
   if (input.acceptEula !== true) throw new Error("Minecraft EULA acceptance is required");
   validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const resolvedRuntime = await defaultServerJarProvider.resolveFabricServerJar({
-    minecraftVersion: input.minecraftVersion?.trim() || "",
-    loaderVersion: input.loaderVersion?.trim() || "latest",
+    minecraftVersion: selectedRuntime.minecraftVersion,
+    loaderVersion: selectedRuntime.loaderVersion || "latest",
     preferStable: true
   });
   const { server, serverPort, queryPort } = createdServerRecord(input, resolvedRuntime);
@@ -430,11 +442,12 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   }
 
   const currentRuntime = runtimeProfileForServer(server);
-  const minecraftVersion = input.minecraftVersion?.trim() || currentRuntime?.minecraftVersion || server.minecraftVersion;
+  const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
+  const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
   if (!minecraftVersion) throw new Error("Minecraft version is required");
-  const requestedLoaderVersion = input.loaderVersion?.trim() || currentRuntime?.loaderVersion || server.loaderVersion || "latest";
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || currentRuntime?.jarArtifact.filename || server.serverJar || "fabric-server-launch.jar");
-  const resolvedRuntime = input.minecraftVersion !== undefined || input.loaderVersion !== undefined || !currentRuntime
+  const requestedLoaderVersion = selectedRuntime?.loaderVersion || currentRuntime.loaderVersion || "latest";
+  const serverJar = selectedRuntime?.serverJar || currentRuntime.jarArtifact.filename || "fabric-server-launch.jar";
+  const resolvedRuntime = selectedRuntime?.minecraftVersion !== undefined || selectedRuntime?.loaderVersion !== undefined
     ? await defaultServerJarProvider.resolveFabricServerJar({ minecraftVersion, loaderVersion: requestedLoaderVersion, preferStable: true })
     : currentRuntime;
   const runtimeProfile: ServerRuntimeProfile = {
@@ -444,12 +457,11 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
       filename: serverJar
     }
   };
-  const loaderVersion = runtimeProfile.loaderVersion;
   const serverPort = input.serverPort?.trim();
   if (serverPort && !isValidServerPort(serverPort)) {
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultContainerName(server.displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultServerContainerName(server.id));
   const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(runtimeProfile.minecraftVersion));
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });
@@ -457,23 +469,19 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
 
-  const jarChanged = server.minecraftVersion !== minecraftVersion
-    || server.loaderVersion !== loaderVersion
-    || server.serverJar !== serverJar
+  const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
+    || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
+    || currentRuntime.jarArtifact.filename !== serverJar
     || server.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
   const containerConfigChanged = server.dockerContainer !== dockerContainer
     || server.dockerImage !== dockerImageName
     || server.dockerPorts !== dockerPorts
     || server.javaArgs !== javaArgs
-    || server.serverJar !== serverJar;
+    || currentRuntime.jarArtifact.filename !== serverJar;
 
   const updated: ManagedServer = {
     ...server,
     displayName: input.displayName?.trim() || server.displayName,
-    minecraftVersion: runtimeProfile.minecraftVersion,
-    loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile,
     dockerContainer,
     dockerImage: dockerImageName,
@@ -963,7 +971,7 @@ async function modsList(server: ManagedServer, options: { forceRefresh?: boolean
           compatibility: { status: "unknown", compatible: false, reason: "Remote mod metadata sync pending" }
         };
         try {
-          const target = await inside(server, join("mods", filename));
+          const target = await inside(server, posix.join("mods", filename));
           const hash = createHash("sha1").update(await readFile(target)).digest("hex");
           const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
           const version = await versionResponse.json() as ModrinthVersion;
@@ -1006,7 +1014,7 @@ async function modUpload(server: ManagedServer, filename: unknown, contentBase64
   assertJarBuffer(content);
   await mkdir(await inside(server, "mods", false), { recursive: true });
   await inside(server, "mods");
-  return writeRelativeFile(server, join("mods", name), content);
+  return writeRelativeFile(server, posix.join("mods", name), content);
 }
 
 async function modInstall(server: ManagedServer, input: unknown) {
@@ -1081,6 +1089,9 @@ async function modInstall(server: ManagedServer, input: unknown) {
 }
 
 async function handleCommand(command: string, payload: any) {
+  if (!isNodeCapability(command) || !nodeCapabilities.includes(command)) {
+    throw new Error(`Unsupported node command ${command}`);
+  }
   const server = payload?.server as ManagedServer | undefined;
   if (command === "node.health") return { ok: true, dockerAvailable: dockerAvailable(), dataPath: config.nodeDataDir, totalMemory: await detectedTotalMemory() };
   if (command === "node.update") return prepareNodeUpdate(payload);
@@ -1193,21 +1204,33 @@ async function handleCommand(command: string, payload: any) {
   if (command === "mods.enableDisable") {
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     const enabled = requireStrictBoolean(payload?.enabled, "enabled");
-    const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, join("mods", filename)))
+    const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, posix.join("mods", filename)))
       ? `${filename}.disabled`
       : filename;
-    const source = await inside(server, join("mods", sourceName));
+    const source = await inside(server, posix.join("mods", sourceName));
     const targetName = enabled ? sourceName.replace(/\.jar\.disabled$/, ".jar") : sourceName.endsWith(".jar.disabled") ? sourceName : `${sourceName}.disabled`;
-    const target = await writableInside(server, join("mods", safeInstalledModFilename(targetName)));
+    const target = await writableInside(server, posix.join("mods", safeInstalledModFilename(targetName)));
     if (source !== target) await rename(source, target);
     return { ok: true, filename: basename(target), enabled };
   }
   if (command === "mods.remove") {
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
-    await rm(await inside(server, join("mods", filename)), { force: true });
+    await rm(await inside(server, posix.join("mods", filename)), { force: true });
     return { ok: true, filename };
   }
   throw new Error(`Unsupported node command ${command}`);
+}
+
+function runtimeSelection(input: unknown) {
+  const runtime = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
+  const loader = typeof runtime.loader === "string" && runtime.loader.trim() ? runtime.loader.trim() : "fabric";
+  if (loader !== "fabric") throw new Error("Only Fabric runtime profiles are supported");
+  const optional = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return {
+    minecraftVersion: optional(runtime.minecraftVersion),
+    loaderVersion: optional(runtime.loaderVersion),
+    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
+  };
 }
 
 export const __nodeAgentTestHooks = {
@@ -1217,13 +1240,14 @@ export const __nodeAgentTestHooks = {
 };
 
 export async function startNodeAgent() {
-  await mkdir(config.nodeDataDir, { recursive: true });
-  let persisted = await readNodeConfig();
+  initializeRuntimeDataRoot(config.paths);
+  nodeStorageDatabase = openStorageDatabase();
+  let persisted = await readNodeIdentity();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`ServerSentinel node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
   const connect = async () => {
-    persisted = await readNodeConfig();
+    persisted = await readNodeIdentity();
     const target = panelWebSocketUrl();
     console.info(`Connecting node agent to ${target}`);
     const socket = new WebSocket(target);
@@ -1241,7 +1265,32 @@ export async function startNodeAgent() {
       setTimeout(() => void connect(), reconnectDelayMs);
     };
     socket.on("open", async () => {
-      const hello: NodeHello = { type: "hello", nodeId: persisted?.nodeId, nodeSecret: persisted?.nodeSecret, joinToken: persisted ? undefined : config.joinToken, nodeName: config.nodeName || "Remote Node", agentVersion: process.env.npm_package_version ?? "0.7.0", protocolVersion: nodeProtocolVersion, capabilities: [...nodeCapabilities], dockerStatus: dockerAvailable() ? "available" : "unavailable", dataPathStatus: existsSync(config.nodeDataDir) ? "ready" : "missing", totalMemory: await detectedTotalMemory() };
+      const dockerStatus = dockerAvailable() ? "available" : "unavailable";
+      const dataPathStatus = existsSync(config.nodeDataDir) ? "ready" : "missing";
+      const hello: NodeHello = {
+        type: "hello",
+        nodeId: persisted?.nodeId ?? null,
+        nodeSecret: persisted?.nodeSecret,
+        joinToken: persisted ? undefined : config.joinToken,
+        nodeName: config.nodeName || "Remote Node",
+        agentVersion: process.env.npm_package_version ?? "0.8.0",
+        protocolVersion: nodeProtocolVersion,
+        capabilities: [...nodeCapabilities],
+        runtimeMode: "node",
+        dataRoot: {
+          root: config.nodeDataDir,
+          dockerRoot: config.nodeDockerDataDir,
+          status: dataPathStatus
+        },
+        docker: {
+          available: dockerStatus === "available",
+          status: dockerStatus
+        },
+        dockerStatus,
+        dataPathStatus,
+        totalMemory: await detectedTotalMemory(),
+        operations: nodeOperationContract
+      };
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
     });
@@ -1259,7 +1308,7 @@ export async function startNodeAgent() {
           return;
         }
         if (message.nodeSecret) {
-          await writeNodeConfig({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
+          await writeNodeIdentity({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });
           console.info(`Node registration accepted. Persisted node id ${message.nodeId}.`);
         } else {
           console.info(`Node session accepted for ${message.nodeId}.`);

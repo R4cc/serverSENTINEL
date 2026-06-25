@@ -30,6 +30,42 @@ export type Permission =
   | "users.view"
   | "users.manage";
 
+export type OperationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export type OperationType =
+  | "server.create"
+  | "server.start"
+  | "server.stop"
+  | "server.restart"
+  | "mod.upload"
+  | "mod.install"
+  | "mod.update"
+  | "mod.remove"
+  | "mod.toggle"
+  | "mod.batchUpdate"
+  | "schedule.run"
+  | "backup.create"
+  | "backup.restore"
+  | "import.run"
+  | "export.run";
+
+export type OperationRecord = {
+  id: string;
+  type: OperationType;
+  status: OperationStatus;
+  serverId?: string;
+  nodeId?: string;
+  createdBy?: string;
+  progress: number;
+  task?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorMessage?: string;
+  result?: unknown;
+  logSummary?: string;
+};
+
 export type ServerAccess = {
   mode: "all" | "selected";
   serverIds: string[];
@@ -137,6 +173,19 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
+export type FileEditLease = {
+  leaseId: string;
+  serverId: string;
+  path: string;
+  userId: string;
+  sessionId: string;
+  displayName: string;
+  acquiredAt: string;
+  refreshedAt: string;
+  expiresAt: string;
+  fileRevision: string;
+};
+
 export type LoaderType = "fabric";
 export type ServerJarProviderId = "mcjars";
 export type JavaMajorVersion = 17 | 21 | 25;
@@ -196,10 +245,6 @@ export type ManagedServer = {
   displayName: string;
   serverDir: string;
   storageName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
   runtimeProfile: ServerRuntimeProfile;
   dockerContainer?: string;
   dockerImage?: string;
@@ -209,7 +254,6 @@ export type ManagedServer = {
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   schedules?: ScheduledExecution[];
-  serverType: "fabric";
   createdAt: string;
   updatedAt: string;
 };

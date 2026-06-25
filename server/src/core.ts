@@ -95,6 +95,24 @@ export async function ensureWritableResolvedInsideServer(server: ServerPathScope
   return ensureWritableTargetInsideServer(server, target);
 }
 
+export function normalizePublicFilePath(path: string) {
+  if (typeof path !== "string" || path.includes("\0") || path.includes("\\") || /[\r\n]/.test(path)) {
+    throw new Error("File path contains invalid characters");
+  }
+  if (!path.startsWith("/")) {
+    throw new Error("File path must be absolute");
+  }
+  if (path === "/") return "/";
+  if (path.endsWith("/")) {
+    throw new Error("File path must not have a trailing slash");
+  }
+  const segments = path.slice(1).split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new Error("File path must be normalized");
+  }
+  return `/${segments.join("/")}`;
+}
+
 export function safeModFilename(name: string) {
   return basename(name).replace(/[^a-zA-Z0-9._ -]/g, "_");
 }

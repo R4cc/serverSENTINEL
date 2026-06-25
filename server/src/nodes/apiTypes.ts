@@ -2,6 +2,7 @@ import type { PublicNode } from "../types.js";
 
 export type NodeInstallInstructions = {
   image: string;
+  protocolVersion: string;
   panelUrl: string;
   joinToken?: string;
   tokenRequired: boolean;
@@ -13,8 +14,8 @@ export type NodeInstallInstructions = {
     environment: {
       SS_MODE: "node";
       SS_PANEL_URL: string;
-      SS_NODE_DATA_DIR?: string;
-      SS_NODE_DOCKER_DATA_DIR?: string;
+      SERVERSENTINEL_DATA_DIR: string;
+      SERVERSENTINEL_DOCKER_DATA_DIR: string;
       SS_NODE_NAME?: string;
       SS_JOIN_TOKEN?: string;
     };

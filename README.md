@@ -101,7 +101,7 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Live console output
 - Console command input
 - File manager
-- Browser file editor with line numbers and syntax highlighting for common config files
+- Browser file editor with read-only viewing, exclusive edit leases, revision checks, line numbers, and syntax highlighting
 - Modrinth search and install flow
 - Mod upload and management
 - Schedules
@@ -118,21 +118,41 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Protect API keys, node join tokens, node secrets, user passwords, and Docker socket access.
 - Docker socket access is powerful. A container with access to `/var/run/docker.sock` can control Docker on the host.
 - File manager and console access are powerful administrative features. Give those permissions only to users you trust.
-- Keep backups of your config and server folders before upgrading or testing major changes.
+- Keep backups of your ServerSentinel data root before upgrading or testing major changes.
 
 ## Storage
 
-serverSENTINEL stores configuration as JSON files on disk and does not require an external database.
+ServerSentinel 0.8.0 uses storage model v2. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
 
-Recommended host folders:
+The default runtime data root is `/data`:
 
 ```text
-/opt/serversentinel/config
-/opt/serversentinel/servers
+/data
+  serversentinel.sqlite
+  servers/
+  backups/
+  imports/
+  exports/
+  tmp/
+```
+
+Set `SERVERSENTINEL_DATA_DIR` to use a different data root. ServerSentinel derives every application storage path from that root and creates the required directories on startup.
+
+Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, settings JSON files, and old `/config` database locations are not read, imported, or migrated. A fresh data root starts with empty panel state and prompts for initial setup.
+
+Back up the whole data root. The simplest reliable file-copy backup is to stop ServerSentinel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
+
+Managed servers and nodes use immutable backend-generated IDs. Local managed server files live under `servers/<serverId>/`; renaming a server changes only its display label, not its ID, directory, schedules, mods, logs, jobs, or Docker container name. Leave the Docker container field blank during creation to let ServerSentinel generate a stable container name from the server ID.
+
+The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside ServerSentinel after edit mode began.
+
+Recommended host folder:
+
+```text
 /opt/serversentinel/data
 ```
 
-Use `config` for panel settings and users, `servers` for all-in-one managed server files, and `data` for node-managed server files.
+Use it as the single persistent ServerSentinel data root.
 
 ## Deployment
 
@@ -149,7 +169,7 @@ The panel listens on port `8080` inside the container.
 Use this for a simple single-host setup.
 
 ```bash
-sudo mkdir -p /opt/serversentinel/config /opt/serversentinel/servers
+sudo mkdir -p /opt/serversentinel/data/servers
 
 docker run -d \
   --name serversentinel \
@@ -157,12 +177,10 @@ docker run -d \
   -p 8080:8080 \
   -e SS_MODE=all-in-one \
   -e PORT=8080 \
-  -e SERVERSENTINEL_CONFIG_DIR=/config \
-  -e SERVERSENTINEL_SERVERS_DIR=/data/servers \
+  -e SERVERSENTINEL_DATA_DIR=/data \
   -e SERVERSENTINEL_SERVERS_DOCKER_VOLUME= \
   -e MODRINTH_API_KEY= \
-  -v /opt/serversentinel/config:/config \
-  -v /opt/serversentinel/servers:/data/servers \
+  -v /opt/serversentinel/data:/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   nl2109/serversentinel:latest
 ```
@@ -186,13 +204,11 @@ services:
     environment:
       SS_MODE: all-in-one
       PORT: 8080
-      SERVERSENTINEL_CONFIG_DIR: /config
-      SERVERSENTINEL_SERVERS_DIR: /data/servers
+      SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: ""
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
     volumes:
-      - /opt/serversentinel/config:/config
-      - /opt/serversentinel/servers:/data/servers
+      - /opt/serversentinel/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
 ```
 
@@ -205,9 +221,10 @@ docker compose up -d
 ### Panel-Only With Docker Run
 
 Use this when one or more separate node agents will manage Docker hosts. This mode does not need the Docker socket mounted into the panel container.
+Panel-only mode does not manage local Minecraft runtime containers; all server lifecycle, file, and mod operations are delegated to connected protocol v2 nodes.
 
 ```bash
-sudo mkdir -p /opt/serversentinel/config
+sudo mkdir -p /opt/serversentinel/data
 
 docker run -d \
   --name serversentinel-panel \
@@ -215,8 +232,8 @@ docker run -d \
   -p 8080:8080 \
   -e SS_MODE=panel \
   -e PORT=8080 \
-  -e SERVERSENTINEL_CONFIG_DIR=/config \
-  -v /opt/serversentinel/config:/config \
+  -e SERVERSENTINEL_DATA_DIR=/data \
+  -v /opt/serversentinel/data:/data \
   nl2109/serversentinel:latest
 ```
 
@@ -233,14 +250,14 @@ services:
     environment:
       SS_MODE: panel
       PORT: 8080
-      SERVERSENTINEL_CONFIG_DIR: /config
+      SERVERSENTINEL_DATA_DIR: /data
     volumes:
-      - /opt/serversentinel/config:/config
+      - /opt/serversentinel/data:/data
 ```
 
 ### Node Agent With Docker Run
 
-In normal use, create a node from the panel's Add Node flow and use the generated command. The command includes a join token and the panel URL.
+In normal use, create a node from the panel's Add Node flow and use the generated command. The command includes a protocol v2 join token, the panel URL, and the host/container data-root mapping required by sibling Minecraft containers.
 
 Template:
 
@@ -250,18 +267,18 @@ sudo mkdir -p /opt/serversentinel/data
 docker run -d \
   --name serversentinel-node \
   --restart unless-stopped \
-  -e SS_MODE=node \
-  -e SS_PANEL_URL=http://panel-host:8080 \
-  -e SS_NODE_NAME=mc-node-01 \
-  -e SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
-  -e SS_NODE_DATA_DIR=/data \
-  -e SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /opt/serversentinel/data:/data \
+  --env SS_MODE=node \
+  --env SS_PANEL_URL=http://panel-host:8080 \
+  --env SS_NODE_NAME=mc-node-01 \
+  --env SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL \
+  --env SERVERSENTINEL_DATA_DIR=/data \
+  --env SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
+  --volume /var/run/docker.sock:/var/run/docker.sock \
+  --volume /opt/serversentinel/data:/data \
   nl2109/serversentinel:latest
 ```
 
-The node does not publish a web port. It connects outbound to the panel.
+The node does not publish a web port. It connects outbound to the panel, advertises protocol `2.0`, and is rejected if required handshake fields or capabilities are missing.
 
 ### Node Agent With Docker Compose
 
@@ -276,8 +293,8 @@ services:
       SS_PANEL_URL: http://panel-host:8080
       SS_NODE_NAME: mc-node-01
       SS_JOIN_TOKEN: PASTE_JOIN_TOKEN_FROM_PANEL
-      SS_NODE_DATA_DIR: /data
-      SS_NODE_DOCKER_DATA_DIR: /opt/serversentinel/data
+      SERVERSENTINEL_DATA_DIR: /data
+      SERVERSENTINEL_DOCKER_DATA_DIR: /opt/serversentinel/data
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/serversentinel/data:/data
@@ -290,10 +307,10 @@ Common panel variables:
 ```env
 SS_MODE=all-in-one
 PORT=8080
-SERVERSENTINEL_CONFIG_DIR=/config
-SERVERSENTINEL_SERVERS_DIR=/data/servers
+SERVERSENTINEL_DATA_DIR=/data
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
 SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
+SERVERSENTINEL_ENABLE_DEMO=false
 MODRINTH_API_KEY=
 MCJARS_BASE_URL=https://mcjars.app
 MCJARS_API_KEY=
@@ -307,15 +324,21 @@ SS_MODE=node
 SS_PANEL_URL=http://panel-host:8080
 SS_NODE_NAME=mc-node-01
 SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL
-SS_NODE_DATA_DIR=/data
-SS_NODE_DOCKER_DATA_DIR=/opt/serversentinel/data
+SERVERSENTINEL_DATA_DIR=/data
+SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
 ```
 
+`SS_MODE=node` fails fast unless `SS_PANEL_URL` and `SERVERSENTINEL_DOCKER_DATA_DIR` are set. `SERVERSENTINEL_DATA_DIR` is the path inside the node container. `SERVERSENTINEL_DOCKER_DATA_DIR` is the matching host-side path that Minecraft sibling containers mount.
+
 `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
+
+`SERVERSENTINEL_DATA_DIR` is the only application storage root. Keep it on persistent local storage and include it in backups. The SQLite database is always `serversentinel.sqlite` inside that root.
 
 `SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
 
 `MCJARS_BASE_URL` controls the Fabric server jar/version provider used when resolving runtime profiles for new servers. `MCJARS_API_KEY` is optional; the public MCJars API does not currently require it, but private or future deployments can provide one and ServerSentinel will send it as a bearer token.
+
+Demo mode is disabled by default. To build and run a deliberate demo/test instance, build the frontend with `VITE_ENABLE_DEMO=true` and run the backend with `SERVERSENTINEL_ENABLE_DEMO=true`. When either flag is missing, saved browser demo state is ignored, demo headers are not sent, and demo login is unavailable.
 
 Join tokens generated by the panel are short-lived bootstrap secrets. Rotate the token from the Nodes page if a generated command is exposed, expires, or is no longer needed.
 
@@ -344,6 +367,8 @@ npm run dev:web
 
 The Vite dev server proxies `/api` and `/ws` to the backend on port `8080`.
 
+For local demo work, start the backend with `SERVERSENTINEL_ENABLE_DEMO=true` and the frontend with `VITE_ENABLE_DEMO=true`.
+
 Build all workspaces:
 
 ```bash
@@ -367,6 +392,8 @@ Build the Docker image locally:
 ```bash
 docker build -t nl2109/serversentinel:latest -f docker/Dockerfile .
 ```
+
+To build a demo-enabled image, add `--build-arg VITE_ENABLE_DEMO=true` and run the container with `SERVERSENTINEL_ENABLE_DEMO=true`.
 
 ## Current Limitations
 

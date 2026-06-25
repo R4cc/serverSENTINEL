@@ -9,15 +9,15 @@ import {
   type SortingState
 } from "@tanstack/react-table";
 import { Toaster, toast } from "sonner";
-import { ApiError, api } from "./api";
+import { ApiError, api, apiErrorFromResponse } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, PermissionKey, ProvisionJob, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState } from "./app/uiState";
@@ -108,6 +108,11 @@ export default function App() {
   const [selectedPath, setSelectedPath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
+  const [fileRevision, setFileRevision] = useState("");
+  const [fileEditLease, setFileEditLease] = useState<FileEditLease | null>(null);
+  const [fileEditMode, setFileEditMode] = useState(false);
+  const [fileLeaseBusy, setFileLeaseBusy] = useState(false);
+  const [fileLeaseMessage, setFileLeaseMessage] = useState("");
   const [dirty, setDirty] = useState(false);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
@@ -190,6 +195,7 @@ export default function App() {
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
   const staleSessionSuppressUntilRef = useRef(0);
+  const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (demoMode && serverId === demoServerId) {
@@ -219,8 +225,8 @@ export default function App() {
   }, [triggerOverviewRefresh]);
 
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
-  const isProvisioning = activeJobs.some((job) => job.type === "provision" && job.status === "running");
-  const currentProvisionJob = activeJobs.find((job) => job.type === "provision");
+  const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
+  const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
   const {
     effectiveAppState,
@@ -404,7 +410,7 @@ export default function App() {
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
-  const canEditSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && canManager && !fileRuntimeLocked);
+  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && !fileRuntimeLocked);
   const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileRuntimeLocked && !fileOperationBusy);
   const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && canManager && !fileRuntimeLocked && !fileOperationBusy);
   const canRenameSelectedItem = Boolean(selectedEntry && canManager && !fileRuntimeLocked && !fileOperationBusy);
@@ -489,6 +495,52 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+
+  useEffect(() => {
+    fileEditLeaseRef.current = fileEditLease;
+  }, [fileEditLease]);
+
+  useEffect(() => {
+    if (!fileEditLease || !fileEditMode || activeServerIsDemo) return;
+    const heartbeat = async () => {
+      try {
+        const result = await api<{ lease: FileEditLease }>(
+          `/api/servers/${encodeURIComponent(fileEditLease.serverId)}/file/lease/${encodeURIComponent(fileEditLease.leaseId)}/heartbeat`,
+          { method: "POST" }
+        );
+        setFileEditLease(result.lease);
+      } catch (error) {
+        const message = error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
+          ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
+          : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
+        releaseFileLease(fileEditLease);
+        setFileEditMode(false);
+        setFileEditLease(null);
+        setFileLeaseMessage(message);
+        notify("error", message);
+      }
+    };
+    const interval = window.setInterval(() => void heartbeat(), 20_000);
+    return () => window.clearInterval(interval);
+  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo]);
+
+  useEffect(() => {
+    const releaseOnUnload = () => {
+      const lease = fileEditLeaseRef.current;
+      if (!lease) return;
+      void fetch(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
+        method: "DELETE",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
+        keepalive: true
+      });
+    };
+    window.addEventListener("beforeunload", releaseOnUnload);
+    return () => {
+      window.removeEventListener("beforeunload", releaseOnUnload);
+      releaseOnUnload();
+    };
+  }, []);
 
   useEffect(() => {
     if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
@@ -878,23 +930,24 @@ export default function App() {
 
     activeJobs.forEach((job) => {
       activeJobToastIdsRef.current.add(job.id);
-      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${job.status === "running" ? ` (${Math.round(job.progress)}%)` : ""}`;
+      const inProgress = job.status === "queued" || job.status === "running";
+      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${inProgress ? ` (${Math.round(job.progress)}%)` : ""}`;
       const options = {
         id: job.id,
         description,
         dismissible: job.dismissible,
         closeButton: job.dismissible,
-        duration: job.status === "running" || !job.dismissible ? Infinity : 7000,
+        duration: inProgress || !job.dismissible ? Infinity : 7000,
         onDismiss: () => {
           if (job.dismissible) setActiveJobs((current) => current.filter((candidate) => candidate.id !== job.id));
         }
       };
 
-      if (job.status === "running") {
+      if (inProgress) {
         toast.loading(job.title, options);
         return;
       }
-      if (job.status === "failed") {
+      if (job.status === "failed" || job.status === "cancelled") {
         toast.error(job.title, options);
         return;
       }
@@ -962,7 +1015,7 @@ export default function App() {
     if (staleSessionLogoutRef.current) return true;
     staleSessionLogoutRef.current = true;
     resetSessionRequestGuards();
-    window.localStorage.setItem("serversentinel-demo-mode", "false");
+    writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthNotice("Sign in again to continue.");
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
@@ -1008,7 +1061,7 @@ export default function App() {
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
     const setupRequired = authSession?.setupRequired ?? false;
-    const demoLogin = username === "demo" && password === "demo";
+    const demoLogin = demoModeEnabled && username === "demo" && password === "demo";
     setAuthNotice("");
     if (!demoLogin) {
       const errors = [
@@ -1034,8 +1087,12 @@ export default function App() {
       });
       loginSucceeded = true;
       resetSessionRequestGuards();
+      if (session.demo && !demoModeEnabled) {
+        setAuthNotice("Demo mode is not enabled in this build.");
+        return;
+      }
       if (session.demo) {
-        window.localStorage.setItem("serversentinel-demo-mode", "true");
+        writeStoredDemoMode(true);
         setAuthNotice("");
         setNotice("");
         setAppStateLoaded(false);
@@ -1067,7 +1124,7 @@ export default function App() {
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => null);
     resetSessionRequestGuards();
-    window.localStorage.setItem("serversentinel-demo-mode", "false");
+    writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthSession({ authenticated: false, setupRequired: false, user: null });
     setAppState(emptyApp);
@@ -1335,23 +1392,37 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  async function waitForProvisionJob(jobId: string) {
+  function serverFromOperation(operation: OperationRecord) {
+    const result = operation.result;
+    if (result && typeof result === "object" && "server" in result) {
+      return (result as { server?: ManagedServer }).server;
+    }
+    return undefined;
+  }
+
+  function operationToProvisionActiveJob(operation: OperationRecord): Partial<GeneralJob> {
+    return {
+      id: operation.id,
+      status: operation.status,
+      progress: operation.progress,
+      task: operation.task || "Server setup is running.",
+      error: operation.errorMessage,
+      errorDetails: operation.logSummary,
+      dismissible: operation.status !== "queued" && operation.status !== "running"
+    };
+  }
+
+  async function waitForProvisionOperation(operationId: string) {
     for (;;) {
-      const job = await api<ProvisionJob>(`/api/provision/${jobId}`);
-      setActiveJobs((current) => current.map((j) => j.id === "local" || j.id === jobId ? {
+      const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
+      setActiveJobs((current) => current.map((j) => j.id === "local" || j.id === operationId ? {
         ...j,
-        id: job.id,
-        status: job.status,
-        progress: job.progress,
-        task: job.task,
-        error: job.error,
-        errorDetails: job.errorDetails,
-        dismissible: job.status !== "running"
+        ...operationToProvisionActiveJob(operation)
       } : j));
-      if (job.status === "succeeded") return job;
-      if (job.status === "failed") {
-        const error = new Error(job.error || "Server setup failed") as Error & { details?: string };
-        error.details = job.errorDetails;
+      if (operation.status === "succeeded") return operation;
+      if (operation.status === "failed" || operation.status === "cancelled") {
+        const error = new Error(operation.errorMessage || "Server setup failed") as Error & { details?: string };
+        error.details = operation.logSummary;
         throw error;
       }
       await new Promise((resolve) => window.setTimeout(resolve, provisionJobPollMs));
@@ -1391,15 +1462,16 @@ export default function App() {
     };
     setActiveJobs((current) => [...current, initialJob]);
     try {
-      const job = await api<ProvisionJob>("/api/servers/provision", {
+      const operation = await api<OperationRecord>("/api/servers/provision", {
         method: "POST",
         body: JSON.stringify({
           displayName: form.get("displayName"),
-          serverDir: form.get("serverDir"),
-          minecraftVersion: form.get("minecraftVersion"),
-          loaderVersion: form.get("loaderVersion"),
-          installerVersion: form.get("installerVersion"),
-          serverJar: form.get("serverJar"),
+          runtime: {
+            loader: "fabric",
+            minecraftVersion: form.get("minecraftVersion"),
+            loaderVersion: form.get("loaderVersion"),
+            serverJar: form.get("serverJar")
+          },
           dockerContainer: form.get("dockerContainer"),
           dockerImage: form.get("dockerImage"),
           dockerMountSource: form.get("dockerMountSource"),
@@ -1413,16 +1485,10 @@ export default function App() {
       });
       setActiveJobs((current) => current.map((j) => j.id === "local" ? {
         ...j,
-        id: job.id,
-        status: job.status,
-        progress: job.progress,
-        task: job.task,
-        error: job.error,
-        errorDetails: job.errorDetails,
-        dismissible: job.status !== "running"
+        ...operationToProvisionActiveJob(operation)
       } : j));
-      const completed = await waitForProvisionJob(job.id);
-      const server = completed.server;
+      const completed = await waitForProvisionOperation(operation.id);
+      const server = serverFromOperation(completed);
       if (!server) {
         throw new Error("Server setup completed without returning server details");
       }
@@ -1435,7 +1501,7 @@ export default function App() {
       await refreshConsoleLogs(server.id);
       notify("success", `Created ${server.displayName}`);
       window.setTimeout(() => {
-        setActiveJobs((current) => current.filter((j) => j.id !== job.id));
+        setActiveJobs((current) => current.filter((j) => j.id !== operation.id));
       }, 1200);
     } catch (error) {
       const message = (error as Error).message;
@@ -1474,10 +1540,12 @@ export default function App() {
         method: "PUT",
         body: JSON.stringify({
           displayName: form.get("displayName"),
-          minecraftVersion: form.get("minecraftVersion"),
-          loaderVersion: form.get("loaderVersion"),
-          installerVersion: form.get("installerVersion"),
-          serverJar: form.get("serverJar"),
+          runtime: {
+            loader: "fabric",
+            minecraftVersion: form.get("minecraftVersion"),
+            loaderVersion: form.get("loaderVersion"),
+            serverJar: form.get("serverJar")
+          },
           dockerContainer: form.get("dockerContainer"),
           dockerImage: form.get("dockerImage"),
           dockerPorts: form.get("dockerPorts"),
@@ -1838,10 +1906,23 @@ export default function App() {
     }
   }
 
+  function releaseFileLease(lease = fileEditLease) {
+    if (!lease || activeServerIsDemo) return;
+    void api(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
+      method: "DELETE"
+    }).catch(() => undefined);
+  }
+
   function resetEditorState() {
+    releaseFileLease();
     setSelectedPath("");
     setEditorText("");
     setSavedEditorText("");
+    setFileRevision("");
+    setFileEditLease(null);
+    setFileEditMode(false);
+    setFileLeaseBusy(false);
+    setFileLeaseMessage("");
     setDirty(false);
     setFileReadError("");
     setFileOpenFailed(false);
@@ -1930,10 +2011,10 @@ export default function App() {
   async function openFile(path: string, discardConfirmed = false) {
     if (isProvisioning) return;
     if (!activeServer) return;
-    if (dockerOperationalLock || !canManager) {
+    if (dockerOperationalLock) {
       const message = dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-        : "Manager permission is required to edit files.";
+        : "Server files are unavailable.";
       setNotice(message);
       notify("warning", message);
       return;
@@ -1956,10 +2037,15 @@ export default function App() {
       notify("warning", message);
       return;
     }
+    if (fileEditLease && selectedPath !== path) releaseFileLease(fileEditLease);
     setSelectedPath(path);
     setEditorText("");
     setSavedEditorText("");
     setDirty(false);
+    setFileRevision("");
+    setFileEditLease(null);
+    setFileEditMode(false);
+    setFileLeaseMessage("");
     setFileReadError("");
     setFileOpenFailed(false);
     setFileOpening(true);
@@ -1970,17 +2056,19 @@ export default function App() {
       setSelectedPath(path);
       setEditorText(content);
       setSavedEditorText(content);
+      setFileRevision("demo");
       setDirty(false);
       setFileOpening(false);
       return;
     }
     try {
-      const file = await api<{ path: string; content: string }>(
+      const file = await api<{ path: string; content: string; revision: string }>(
         `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
       );
       setSelectedPath(file.path);
       setEditorText(file.content);
       setSavedEditorText(file.content);
+      setFileRevision(file.revision);
       setDirty(false);
       setSelectedFilePaths([file.path]);
     } catch (error) {
@@ -1991,6 +2079,50 @@ export default function App() {
       notify("error", message);
     } finally {
       setFileOpening(false);
+    }
+  }
+
+  function leaseConflictMessage(error: unknown) {
+    if (!(error instanceof ApiError) || error.code !== "FILE_EDIT_LEASE_CONFLICT") {
+      return errorMessage(error, "Could not acquire an edit lease for this file.");
+    }
+    const details = error.details as { lease?: FileEditLease } | undefined;
+    if (details?.lease) {
+      return `${details.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(details.lease.refreshedAt)}).`;
+    }
+    return error.message;
+  }
+
+  async function enterFileEditMode() {
+    if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
+    if (!canManager) {
+      const message = "Edit permission is required to modify this file.";
+      setFileLeaseMessage(message);
+      notify("warning", message);
+      return;
+    }
+    if (activeServerIsDemo) {
+      setFileEditMode(true);
+      setFileLeaseMessage("");
+      return;
+    }
+    setFileLeaseBusy(true);
+    setFileLeaseMessage("");
+    try {
+      const result = await api<{ lease: FileEditLease }>(`/api/servers/${activeServer.id}/file/lease`, {
+        method: "POST",
+        body: JSON.stringify({ path: selectedPath, revision: fileRevision })
+      });
+      setFileEditLease(result.lease);
+      setFileEditMode(true);
+    } catch (error) {
+      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
+        ? "This file changed since it was opened. Reload it before entering edit mode."
+        : leaseConflictMessage(error);
+      setFileLeaseMessage(message);
+      notify("warning", message);
+    } finally {
+      setFileLeaseBusy(false);
     }
   }
 
@@ -2158,13 +2290,12 @@ export default function App() {
         const response = await fetch(`/api/servers/${activeServer.id}/file/download?path=${encodeURIComponent(entry.path)}`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
-            ...(demoMode ? { "X-ServerSentinel-Demo-Mode": "true" } : {})
+            ...(demoMode ? demoRequestHeaders() : {})
           },
           credentials: "same-origin"
         });
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.message ?? payload.error ?? `Request failed with ${response.status}`);
+          throw await apiErrorFromResponse(response);
         }
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
@@ -2274,6 +2405,7 @@ export default function App() {
     if (isProvisioning || dockerOperationalLock || !canManager) return;
     if (!activeServer) return;
     if (!selectedPath || !dirty) return;
+    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
     if (fileSaving) return;
     setFileSaving(true);
     setNotice("");
@@ -2306,18 +2438,35 @@ export default function App() {
       return;
     }
     try {
-      await api(`/api/servers/${activeServer.id}/file`, {
+      const result = await api<{ revision: string }>(`/api/servers/${activeServer.id}/file`, {
         method: "PUT",
-        body: JSON.stringify({ path: selectedPath, content: editorText })
+        body: JSON.stringify({
+          path: selectedPath,
+          content: editorText,
+          leaseId: fileEditLease?.leaseId,
+          revision: fileRevision
+        })
       });
       setSavedEditorText(editorText);
+      setFileRevision(result.revision);
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
       closeEditor();
     } catch (error) {
-      const message = errorMessage(error, "Could not save the file. Review the path and try again.");
+      const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
+      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
+        ? "The file changed outside this editor. Your changes were not saved. Reload the file before editing again."
+        : error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
+          ? "Your edit lease expired or was lost. Your changes were not saved. Reload the file before editing again."
+          : errorMessage(error, "Could not save the file. Review the path and try again.");
+      if (conflict) {
+        releaseFileLease();
+        setFileEditLease(null);
+        setFileEditMode(false);
+        setFileLeaseMessage(message);
+      }
       setFileReadError(message);
       setFileOpenFailed(false);
       setNotice(message);
@@ -2793,11 +2942,11 @@ export default function App() {
 
         {activePage === "create" && (
           <section className="createServerPanel">
-            {currentProvisionJob && currentProvisionJob.status === "running" && (
+            {currentProvisionOperation && (currentProvisionOperation.status === "queued" || currentProvisionOperation.status === "running") && (
               <InlineState
                 tone="loading"
                 title="Creating server"
-                message={`${currentProvisionJob.task || "Server setup is running."} Progress: ${Math.round(currentProvisionJob.progress)}%.`}
+                message={`${currentProvisionOperation.task || "Server setup is running."} Progress: ${Math.round(currentProvisionOperation.progress)}%.`}
               />
             )}
             {provisioningError && (
@@ -3280,25 +3429,25 @@ export default function App() {
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <Button variant="secondary" compact onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canEditSelectedFile} title={!selectedEntry ? "Select one editable file" : selectedEntry.type !== "file" ? "Folders cannot be edited" : !isEditableFile(selectedEntry) ? "Only small text files can be edited" : fileActionBlockedReason || "Edit selected file"}>
+                        <Button variant="secondary" compact aria-label="Open selected file" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || "Open selected file read-only"}>
                           <AppIcon name="edit" />
-                          Edit
+                          <span className="selectionActionLabel">Open</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
+                        <Button variant="secondary" compact aria-label="Download selected file" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
                           <AppIcon name="download" />
-                          Download
+                          <span className="selectionActionLabel">Download</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
+                        <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
                           <AppIcon name="copy" />
-                          Duplicate
+                          <span className="selectionActionLabel">Duplicate</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
+                        <Button variant="secondary" compact aria-label="Rename selected item" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
                           <AppIcon name="rename" />
-                          Rename
+                          <span className="selectionActionLabel">Rename</span>
                         </Button>
-                        <Button variant="critical" compact onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
+                        <Button variant="critical" compact aria-label="Delete selected items" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
                           <AppIcon name="trash" />
-                          Delete
+                          <span className="selectionActionLabel">Delete</span>
                         </Button>
                       </div>
                     </div>
@@ -3433,8 +3582,12 @@ export default function App() {
                   fileOpenFailed={fileOpenFailed}
                   fileReadError={fileReadError}
                   fileSaving={fileSaving}
-                  editorDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
-                  saveDisabled={fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+                  editing={fileEditMode}
+                  editBusy={fileLeaseBusy}
+                  editMessage={fileLeaseMessage}
+                  editDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
+                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
                   discardRequestOpen={Boolean(discardEditorRequest)}
                   onTextChange={(nextText) => {
                     setEditorText(nextText);
@@ -3443,6 +3596,7 @@ export default function App() {
                   onRequestClose={requestCloseEditor}
                   onCancel={cancelFileEdit}
                   onSave={saveFile}
+                  onEnterEdit={enterFileEditMode}
                   onRetryOpen={() => {
                     if (selectedPath) void openFile(selectedPath, true);
                   }}
@@ -3456,7 +3610,7 @@ export default function App() {
               <ModsPage
                 workspace={modsWorkspace}
                 serverContext={{
-                  minecraftVersion: activeServer.minecraftVersion || "Unknown",
+                  minecraftVersion: activeServer.runtimeProfile.minecraftVersion || "Unknown",
                   versionsUnknown: activeModVersionsUnknown,
                   contextMessage: activeModContext
                 }}

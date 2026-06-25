@@ -5,9 +5,9 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -31,13 +31,13 @@ import {
   unknownCompatibility,
   versionChannel
 } from "./modrinth/compatibility.js";
-import { modrinthFetch } from "./modrinth/modrinthClient.js";
+import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeProtocolVersion, protocolCompatible } from "./nodes/protocol.js";
+import { nodeAdvertisesCapability, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
@@ -55,7 +55,6 @@ import { queryMinecraftServer } from "./minecraftQuery.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
-  isFullAccessUser,
   normalizePermissions,
   permissionsForRolePreset,
   requirePermission as requireUserPermission,
@@ -64,8 +63,29 @@ import {
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
-import { modrinthApiKey, updateSettings } from "./storage/settingsStore.js";
-import { asArray, asObject, optionalString, readJsonFile, requiredString, writeJsonFile } from "./storage/jsonFile.js";
+import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
+import { openStorageDatabase } from "./storage/database.js";
+import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
+import { defaultServerContainerName, isInsideServersDirectory, newServerId, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
+import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
+import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
+import { SettingsRepository } from "./storage/settingsRepository.js";
+import { SessionsRepository } from "./storage/sessionsRepository.js";
+import { ServersRepository } from "./storage/serversRepository.js";
+import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
+import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
+import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
+import { OperationsRepository } from "./storage/operationsRepository.js";
+import {
+  applyImportArtifact,
+  createExportArtifact,
+  exportArtifactFilename,
+  exportDownloadStream,
+  parseExportArtifactBase64,
+  validateImportArtifact,
+  writeExportArtifact
+} from "./importExport.js";
+import { apiErrorResponse, errorStatusCode, publicApiError } from "./http/errors.js";
 import {
   badRequest,
   forbidden,
@@ -81,7 +101,7 @@ import {
   validateModrinthProjectId,
   validateModrinthVersionId,
   validateNodeName,
-  validateProvisionJobId,
+  validateOperationId,
   validateRuntimeJarFilename,
   validateScheduleId,
   validateServerId
@@ -105,6 +125,9 @@ import type {
   ModPreference,
   ModrinthProject,
   ModrinthVersion,
+  OperationRecord,
+  OperationStatus,
+  OperationType,
   Permission,
   PublicNode,
   PublicServer,
@@ -126,6 +149,7 @@ import {
   ensureWritableInsideServer,
   ensureWritableResolvedInsideServer,
   nextCronRun,
+  normalizePublicFilePath,
   parseDockerPorts,
   safeInstalledModFilename,
   safeModFilename,
@@ -136,17 +160,12 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.7.0";
+const appVersion = process.env.npm_package_version ?? "0.8.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
-const serversFile = join(config.configDir, "servers.json");
-const nodesFile = join(config.configDir, "nodes.json");
-const usersFile = join(config.configDir, "users.json");
 const versionMetadataFilename = ".serversentinel-version.json";
 
-const serversQueue = new AsyncQueue();
-const nodesQueue = new AsyncQueue();
-const usersQueue = new AsyncQueue();
+const serverSideEffectsQueue = new AsyncQueue();
 export const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 export const minNodeJoinTokenTtlMinutes = 5;
 export const maxNodeJoinTokenTtlMinutes = 1440;
@@ -183,10 +202,12 @@ type DockerInfo = {
 type CreateServerInput = {
   nodeId?: string;
   displayName?: string;
-  minecraftVersion?: string;
-  loaderVersion?: string;
-  installerVersion?: string;
-  serverJar?: string;
+  runtime?: {
+    loader?: string;
+    minecraftVersion?: string;
+    loaderVersion?: string;
+    serverJar?: string;
+  };
   dockerContainer?: string;
   dockerImage?: string;
   dockerPorts?: string;
@@ -203,17 +224,19 @@ type VersionMetadata = {
   updatedAt?: string;
 };
 
-type ProvisionJob = {
-  id: string;
-  status: "running" | "succeeded" | "failed";
-  progress: number;
-  task: string;
-  server?: PublicServer;
-  error?: string;
-  errorDetails?: string;
-  createdAt: string;
-  updatedAt: string;
-};
+function runtimeSelection(input: unknown) {
+  const runtime = asObject(input, "runtime");
+  const loader = optionalString(runtime.loader, "runtime.loader") || "fabric";
+  if (loader !== "fabric") {
+    throw new Error("Only Fabric runtime profiles are supported");
+  }
+  return {
+    loader,
+    minecraftVersion: optionalString(runtime.minecraftVersion, "runtime.minecraftVersion"),
+    loaderVersion: optionalString(runtime.loaderVersion, "runtime.loaderVersion"),
+    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
+  };
+}
 
 export type DockerHostPortBinding = {
   port: string;
@@ -232,9 +255,15 @@ type Client = {
   readyState: number;
 };
 
-const provisionJobs = new Map<string, ProvisionJob>();
 const activeProvisionPortReservations = new Map<string, ProvisionPortReservation>();
-const sessions = new Map<string, Session>();
+let usersRepository: UsersRepository;
+let nodesRepository: NodesRepository;
+let settingsRepository: SettingsRepository;
+let sessionsRepository: SessionsRepository;
+let serversRepository: ServersRepository;
+let fileEditLeasesRepository: FileEditLeasesRepository;
+let modPreferencesRepository: ModPreferencesRepository;
+let operationsRepository: OperationsRepository;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -373,31 +402,6 @@ function normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined {
   return rolePreset === undefined ? undefined : rolePresetFromUnknown(rolePreset);
 }
 
-function normalizeStoredUser(value: unknown): StoredUser {
-  const user = asObject(value, "stored user");
-  const permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
-  const inferredPreset = inferRolePreset(permissions);
-  const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
-  const effectivePreset = rolePreset === "custom" || inferRolePreset(permissions) === rolePreset ? rolePreset : "custom";
-  const rawServerAccess = user.serverAccess === undefined ? undefined : asObject(user.serverAccess, "user.serverAccess");
-  const serverAccess = rawServerAccess?.mode === "selected"
-    ? { mode: "selected" as const, serverIds: asArray(rawServerAccess.serverIds, "user.serverAccess.serverIds").map((id) => requiredString(id, "user.serverAccess.serverIds[]")) }
-    : rawServerAccess?.mode === "all"
-      ? { mode: "all" as const, serverIds: [] }
-      : undefined;
-  return {
-    id: requiredString(user.id, "user.id"),
-    username: validateUsername(optionalString(user.username, "user.username")),
-    passwordHash: requiredString(user.passwordHash, "user.passwordHash"),
-    salt: requiredString(user.salt, "user.salt"),
-    rolePreset: effectivePreset,
-    permissions,
-    serverAccess,
-    createdAt: requiredString(user.createdAt, "user.createdAt"),
-    updatedAt: requiredString(user.updatedAt, "user.updatedAt")
-  };
-}
-
 function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser) {
   if (input.permissions !== undefined) {
     const permissions = normalizePermissions(input.permissions);
@@ -428,16 +432,6 @@ function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: un
     permissions,
     rolePreset: inferRolePreset(permissions)
   };
-}
-
-function validateUsername(username?: string) {
-  const value = username?.trim();
-  if (!value || value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_.-]+$/.test(value)) {
-    const error = new Error("Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
-  }
-  return value;
 }
 
 function validatePassword(password?: string) {
@@ -524,27 +518,11 @@ function nodeNotFound(nodeId: string): never {
 }
 
 async function readUsers() {
-  return readJsonFile(usersFile, [], (value) => asArray(value, "users.json").map(normalizeStoredUser));
+  return usersRepository.list();
 }
 
-async function writeUsers(users: StoredUser[]) {
-  const normalized = users.map(normalizeStoredUser);
-  if (normalized.length > 0 && !normalized.some(isFullAccessUser)) {
-    badRequest("At least one full-access admin user is required");
-  }
-  await writeJsonFile(usersFile, normalized);
-}
-
-function queuedReadUsers() {
-  return usersQueue.enqueue(() => readUsers());
-}
-
-async function updateUsers(updater: (users: StoredUser[]) => Promise<void> | void) {
-  return usersQueue.enqueue(async () => {
-    const users = await readUsers();
-    await updater(users);
-    await writeUsers(users);
-  });
+async function modrinthApiKey() {
+  return settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
 }
 
 function parseCookies(cookieHeader?: string) {
@@ -569,13 +547,13 @@ export function sessionExpired(session: Pick<Session, "createdAt">, now = Date.n
 async function currentUserFromCookie(cookieHeader?: string) {
   const sessionId = parseCookies(cookieHeader).get(sessionCookieName);
   if (!sessionId) return null;
-  const session = sessions.get(sessionId);
+  const session = sessionsRepository.find(sessionId);
   if (!session) return null;
   if (sessionExpired(session)) {
-    sessions.delete(sessionId);
+    sessionsRepository.delete(sessionId);
     return null;
   }
-  const users = await queuedReadUsers();
+  const users = await readUsers();
   return users.find((user) => user.id === session.userId) ?? null;
 }
 
@@ -633,43 +611,6 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
 
 function optionalNodeTotalMemory(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-function normalizeNode(value: unknown): ManagedNode {
-  const node = asObject(value, "managed node");
-  const type = node.type;
-  if (type !== "local" && type !== "remote") {
-    throw new Error("managed node type must be local or remote");
-  }
-  const status = node.status;
-  if (status !== "online" && status !== "offline" && status !== "unknown") {
-    throw new Error("managed node status must be online, offline, or unknown");
-  }
-  const totalMemory = optionalNodeTotalMemory(node.totalMemory);
-  if (node.totalMemory !== undefined && totalMemory === undefined) {
-    throw new Error("node.totalMemory must be a positive number");
-  }
-  return {
-    id: requiredString(node.id, "node.id"),
-    name: requiredString(node.name, "node.name"),
-    type,
-    status,
-    isInternal: requireStrictBoolean(node.isInternal, "node.isInternal"),
-    createdAt: requiredString(node.createdAt, "node.createdAt"),
-    updatedAt: requiredString(node.updatedAt, "node.updatedAt"),
-    lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt"),
-    connectedAt: optionalString(node.connectedAt, "node.connectedAt"),
-    agentVersion: optionalString(node.agentVersion, "node.agentVersion"),
-    protocolVersion: optionalString(node.protocolVersion, "node.protocolVersion"),
-    capabilities: node.capabilities === undefined ? undefined : asArray(node.capabilities, "node.capabilities").map((capability) => requiredString(capability, "node.capabilities[]")),
-    dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
-    dataPathStatus: optionalString(node.dataPathStatus, "node.dataPathStatus"),
-    totalMemory,
-    compatibility: node.compatibility === "compatible" || node.compatibility === "incompatible" || node.compatibility === "unknown" ? node.compatibility : undefined,
-    secretHash: optionalString(node.secretHash, "node.secretHash"),
-    joinTokenHash: optionalString(node.joinTokenHash, "node.joinTokenHash"),
-    joinTokenExpiresAt: optionalString(node.joinTokenExpiresAt, "node.joinTokenExpiresAt")
-  };
 }
 
 function ensureDefaultInternalNode(nodes: ManagedNode[]) {
@@ -740,31 +681,71 @@ export function validateJoinTokenTtlMinutes(ttlMinutesInput?: unknown): number {
 }
 
 async function readNodes() {
-  const nodes = await readJsonFile(nodesFile, config.runtimeMode === "all-in-one" ? [defaultInternalNode()] : [], (value) => asArray(value, "nodes.json").map(normalizeNode));
+  const nodes = nodesRepository.list();
   const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
-  if (config.runtimeMode === "all-in-one" && ensureDefaultInternalNode(normalized)) {
-    await writeJsonFile(nodesFile, normalized);
-  } else if (config.runtimeMode === "panel" && normalized.length !== nodes.length) {
-    await writeJsonFile(nodesFile, normalized);
+  const changed = config.runtimeMode === "all-in-one" ? ensureDefaultInternalNode(normalized) : normalized.length !== nodes.length;
+  if (changed) {
+    nodesRepository.update((stored) => stored.splice(0, stored.length, ...normalized));
   }
   return normalized;
 }
 
-async function writeNodes(nodes: ManagedNode[]) {
-  const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
-  if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
-  await writeJsonFile(nodesFile, normalized);
+function fileLeaseOwner(request: { headers: { cookie?: string } }, user: StoredUser) {
+  const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
+  if (!sessionId) {
+    const error = new Error("Authentication required") as Error & { statusCode?: number };
+    error.statusCode = 401;
+    throw error;
+  }
+  return { userId: user.id, sessionId, displayName: user.username };
 }
 
-function queuedReadNodes() {
-  return nodesQueue.enqueue(() => readNodes());
+export function fileContentRevision(content: string) {
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
-async function updateNodes(updater: (nodes: ManagedNode[]) => Promise<void> | void) {
-  return nodesQueue.enqueue(async () => {
-    const nodes = await readNodes();
-    await updater(nodes);
-    await writeNodes(nodes);
+function fileRevisionConflict(): never {
+  const error = new Error("The file changed after editing began. Reload it before making more changes.") as Error & {
+    statusCode?: number;
+    code?: string;
+  };
+  error.statusCode = 409;
+  error.code = "file_revision_conflict";
+  throw error;
+}
+
+export function assertFileRevision(requested: string | undefined, acquired: string, current: string) {
+  if (!requested || requested !== acquired || current !== acquired) fileRevisionConflict();
+}
+
+async function readFileWithRevision(runtime: NodeRuntime, server: ManagedServer, target: string) {
+  const result = await runtime.readFile(server, target) as { path?: string; content?: string; modifiedAt?: string };
+  if (typeof result.content !== "string") throw new Error("File content is unavailable");
+  return { ...result, content: result.content, revision: fileContentRevision(result.content) };
+}
+
+function publicFileEditLease(lease: import("./types.js").FileEditLease) {
+  const { sessionId: _sessionId, ...publicLease } = lease;
+  return publicLease;
+}
+
+async function fileEditLockPath(runtime: NodeRuntime, server: ManagedServer, target: string) {
+  if (server.nodeId === localNodeId) {
+    const [root, realTarget] = await Promise.all([realpath(server.serverDir), realpath(target)]);
+    const relativePath = relative(root, realTarget).replaceAll("\\", "/");
+    return normalizePublicFilePath(relativePath ? `/${relativePath}` : "/");
+  }
+  return normalizePublicFilePath(runtime.publicPath(server, target));
+}
+
+async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
+  nodesRepository.update((stored) => {
+    const nodes = stored.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(nodes);
+    updater(nodes);
+    const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
+    stored.splice(0, stored.length, ...normalized);
   });
 }
 
@@ -831,9 +812,8 @@ function readZipEntry(buffer: Buffer, entryName: string) {
 }
 
 async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
-  if (!server.serverJar) return {};
   try {
-    const jarPath = await validateExistingInsideServer(server, server.serverJar);
+    const jarPath = await validateExistingInsideServer(server, runtimeTarget(server).serverJar);
     const jarStat = await stat(jarPath);
     if (!jarStat.isFile() || jarStat.size > 16 * 1024 * 1024) return {};
     const installProperties = readZipEntry(await readFile(jarPath), "install.properties");
@@ -889,26 +869,21 @@ async function resolveServerVersions(server: ManagedServer): Promise<ResolvedSer
 }
 
 async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer> {
-  const availableNodes = nodes ?? await queuedReadNodes();
+  const availableNodes = nodes ?? await readNodes();
   const node = findServerNode(server, availableNodes);
   return {
     id: server.id,
     nodeId: server.nodeId,
     displayName: server.displayName,
     storageName: server.storageName,
-    minecraftVersion: server.minecraftVersion,
-    loaderVersion: server.loaderVersion,
-    installerVersion: server.installerVersion,
-    serverJar: server.serverJar,
     dockerContainer: server.dockerContainer,
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     schedules: (server.schedules ?? []).map(publicSchedule),
-    serverType: server.serverType,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
-    directoryLabel: server.storageName || server.displayName,
+    directoryLabel: server.storageName || server.id,
     hasDockerContainer: Boolean(server.dockerContainer),
     nodeName: node?.name,
     runtimeProfile: runtimeProfileForServer(server),
@@ -968,10 +943,6 @@ function safeNextCronRun(cron: string) {
 
 function normalizeManagedServer(value: unknown): ManagedServer {
   const server = asObject(value, "managed server");
-  const serverType = server.serverType;
-  if (serverType !== "fabric") {
-    throw new Error("managed server serverType must be fabric");
-  }
   const dockerPorts = optionalString(server.dockerPorts, "server.dockerPorts");
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const rawManagedPorts = Array.isArray(server.managedPorts) ? server.managedPorts : [];
@@ -1000,12 +971,11 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   )));
   const id = validateServerId(server.id);
   const nodeId = requiredString(server.nodeId, "server.nodeId");
-  const serversDir = resolve(config.serversDir);
   const serverDir = nodeId === localNodeId
     ? resolve(requiredString(server.serverDir, "server.serverDir"))
     : resolve(requiredString(server.serverDir, "server.serverDir"));
-  if (nodeId === localNodeId && serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
-    throw new Error("managed server serverDir must be inside SERVERSENTINEL_SERVERS_DIR");
+  if (nodeId === localNodeId && !isInsideServersDirectory(config.serversDir, serverDir)) {
+    throw new Error("managed server serverDir must be inside the canonical data root servers directory");
   }
   return {
     id,
@@ -1013,10 +983,6 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     displayName: requiredString(server.displayName, "server.displayName"),
     serverDir,
     storageName: optionalString(server.storageName, "server.storageName"),
-    minecraftVersion: optionalString(server.minecraftVersion, "server.minecraftVersion"),
-    loaderVersion: optionalString(server.loaderVersion, "server.loaderVersion"),
-    installerVersion: optionalString(server.installerVersion, "server.installerVersion"),
-    serverJar: server.serverJar === undefined ? undefined : validateRuntimeJarFilename(server.serverJar),
     runtimeProfile: normalizeRuntimeProfile(server.runtimeProfile),
     dockerContainer: server.dockerContainer === undefined ? undefined : validateDockerContainerName(server.dockerContainer),
     dockerImage: server.dockerImage === undefined ? undefined : validateDockerImageName(server.dockerImage),
@@ -1026,41 +992,17 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
-    serverType,
     createdAt: requiredString(server.createdAt, "server.createdAt"),
     updatedAt: requiredString(server.updatedAt, "server.updatedAt")
   };
 }
 
 async function readServers() {
-  const [servers, nodes] = await Promise.all([
-    readJsonFile(serversFile, [], (value) => asArray(value, "servers.json").map(normalizeManagedServer)),
-    readNodes()
-  ]);
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const validServers = servers.filter((server) => nodeIds.has(server.nodeId));
-  if (validServers.length !== servers.length) {
-    const removedServers = servers.filter((server) => !nodeIds.has(server.nodeId));
-    console.warn(`Purged ${removedServers.length} managed server record${removedServers.length === 1 ? "" : "s"} referencing unknown node ids.`);
-    await writeJsonFile(serversFile, validServers);
-  }
-  return validServers;
+  return serversRepository.list();
 }
 
-async function writeServers(servers: ManagedServer[]) {
-  const nodes = await readNodes();
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const normalized = servers.map(normalizeManagedServer);
-  for (const server of normalized) {
-    if (!nodeIds.has(server.nodeId)) {
-      throw new Error(`Managed server ${server.displayName} references unknown node ${server.nodeId}`);
-    }
-  }
-  await writeJsonFile(serversFile, normalized);
-}
-
-function queuedReadServers() {
-  return serversQueue.enqueue(() => readServers());
+function listManagedServers() {
+  return readServers();
 }
 
 export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
@@ -1072,23 +1014,6 @@ export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
     }
   }
   return removed;
-}
-
-async function updateServers(updater: (servers: ManagedServer[]) => Promise<void> | void) {
-  return serversQueue.enqueue(async () => {
-    const servers = await readServers();
-    await updater(servers);
-    await writeServers(servers);
-  });
-}
-
-function slugify(input: string) {
-  const slug = input.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || randomUUID();
-}
-
-function defaultContainerName(displayName: string) {
-  return `serversentinel-${slugify(displayName)}`;
 }
 
 function defaultDockerImageForMinecraftVersion(version?: string) {
@@ -1106,7 +1031,7 @@ async function getServer(serverId?: string) {
   if (serverId !== undefined) {
     validateServerId(serverId);
   }
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
   if (!server) {
     throw new Error("No managed server instance is registered");
@@ -1115,9 +1040,8 @@ async function getServer(serverId?: string) {
 }
 
 function ensureManagedServerDirectory(server: ManagedServer) {
-  const serversDir = resolve(config.serversDir);
   const serverDir = resolve(server.serverDir);
-  if (serverDir !== serversDir && !serverDir.startsWith(serversDir + sep)) {
+  if (!isInsideServersDirectory(config.serversDir, serverDir)) {
     throw new Error("Server files can only be deleted when the directory is inside the managed servers directory");
   }
   return serverDir;
@@ -1234,7 +1158,7 @@ function iconExtension(iconUrl: string, contentType: string | null) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1273,7 +1197,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
   const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.7.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) {
     const error = new Error("Icon not found") as Error & { statusCode?: number };
@@ -1531,7 +1455,7 @@ function findProvisionPortConflict(nodeId: string, dockerPorts: string, ignoreJo
 }
 
 async function assertNodePortsAvailable(nodeId: string, dockerPorts: string, options: { ignoreServerId?: string; ignoreJobId?: string } = {}) {
-  const existingConflict = findExistingServerPortConflict(await queuedReadServers(), nodeId, dockerPorts, options.ignoreServerId);
+  const existingConflict = findExistingServerPortConflict(await listManagedServers(), nodeId, dockerPorts, options.ignoreServerId);
   if (existingConflict) {
     throw new Error(portConflictMessage(existingConflict.port, existingConflict.ownerName));
   }
@@ -1561,11 +1485,11 @@ function dockerContainerName(server: ManagedServer) {
   if (server.dockerContainer?.trim()) {
     return validateDockerContainerName(server.dockerContainer);
   }
-  return defaultContainerName(server.displayName);
+  return validateDockerContainerName(defaultServerContainerName(server.id));
 }
 
 function dockerControlConfigured(server: ManagedServer) {
-  return Boolean(server.dockerContainer || (server.dockerMountSource && server.serverJar));
+  return Boolean(server.dockerContainer || (server.dockerMountSource && runtimeTarget(server).serverJar));
 }
 
 function serverDockerMountSource(server: ManagedServer) {
@@ -1785,10 +1709,10 @@ async function dockerStatus(server: ManagedServer) {
     return {
       configured: true,
       available: true,
-      controllable: Boolean(server.dockerMountSource && server.serverJar),
+      controllable: Boolean(server.dockerMountSource && runtimeTarget(server).serverJar),
       state: "unknown" as DockerState,
       container: dockerContainerName(server),
-      message: server.dockerMountSource && server.serverJar
+      message: server.dockerMountSource && runtimeTarget(server).serverJar
         ? "Managed container will be created on start"
         : "Configured container does not exist"
     };
@@ -2491,7 +2415,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   const profile = runtimeProfileForServer(server);
   const artifact = profile?.jarArtifact;
   const downloadUrl = artifact?.downloadUrl;
-  const filename = artifact?.filename ?? server.serverJar;
+  const filename = artifact?.filename;
   if (!profile || !filename) {
     throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   }
@@ -2507,7 +2431,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.7.0 (Fabric runtime downloader)"
+      "User-Agent": "ServerSentinel/0.8.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -2567,35 +2491,34 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   const startedAt = Date.now();
   report?.(5, "Validating server settings");
   const displayName = input.displayName?.trim();
-  const minecraftVersion = input.minecraftVersion?.trim();
+  const selectedRuntime = runtimeSelection(input.runtime);
+  const minecraftVersion = selectedRuntime.minecraftVersion;
   if (!displayName || displayName.length > 80 || !minecraftVersion) {
     throw new Error("Display name and Minecraft version are required");
   }
   if (input.acceptEula !== true) {
     throw new Error("You must confirm Minecraft EULA acceptance to create a runnable server");
   }
-  if ((await queuedReadServers()).some((server) => server.displayName.toLowerCase() === displayName.toLowerCase())) {
+  if ((await listManagedServers()).some((server) => server.displayName.toLowerCase() === displayName.toLowerCase())) {
     throw new Error("A managed server with this display name already exists");
   }
 
   report?.(15, "Reserving server storage");
   await mkdir(config.serversDir, { recursive: true });
-  const storageBase = slugify(displayName);
-  let storageName = storageBase;
-  let counter = 2;
-  while (existsSync(resolve(config.serversDir, storageName))) {
-    storageName = `${storageBase}-${counter}`;
-    counter += 1;
+  const id = newServerId();
+  const storageName = serverStorageName(id);
+  const resolvedServerDir = serverDirectory(config.serversDir, id);
+  if (existsSync(resolvedServerDir)) {
+    throw new Error("Generated server id already has a storage directory");
   }
 
   report?.(25, "Resolving Fabric versions");
-  const resolvedServerDir = resolve(config.serversDir, storageName);
   const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
     minecraftVersion,
-    loaderVersion: input.loaderVersion?.trim() || "latest",
+    loaderVersion: selectedRuntime.loaderVersion || "latest",
     preferStable: true
   });
-  const serverJar = validateRuntimeJarFilename(input.serverJar?.trim() || runtimeProfile.jarArtifact.filename);
+  const serverJar = selectedRuntime.serverJar || runtimeProfile.jarArtifact.filename;
   const runtimeProfileForRecord: ServerRuntimeProfile = {
     ...runtimeProfile,
     jarArtifact: {
@@ -2603,24 +2526,20 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
       filename: serverJar
     }
   };
-  const existingServers = await queuedReadServers();
+  const existingServers = await listManagedServers();
   const { serverPort, dockerPorts, queryPort, managedPorts } = normalizeCreateServerPorts(input, existingServers, localNodeId, { ignoreJobId: jobId });
   await assertNodePortsAvailable(localNodeId, dockerPorts, { ignoreJobId: jobId });
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultContainerName(displayName));
+  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfileForRecord.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
 
   const now = new Date().toISOString();
   const server: ManagedServer = {
-    id: randomUUID(),
+    id,
     nodeId: localNodeId,
     displayName,
     serverDir: resolvedServerDir,
     storageName,
-    minecraftVersion,
-    loaderVersion: runtimeProfileForRecord.loaderVersion,
-    installerVersion: undefined,
-    serverJar,
     runtimeProfile: runtimeProfileForRecord,
     dockerContainer,
     dockerImage,
@@ -2629,7 +2548,6 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     dockerPorts,
     managedPorts,
     javaArgs,
-    serverType: "fabric",
     createdAt: now,
     updatedAt: now
   };
@@ -2646,9 +2564,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     }
 
     report?.(92, "Saving server registration");
-    await updateServers((servers) => {
-      servers.push(server);
-    });
+    serversRepository.create(server);
     report?.(100, "Server setup complete");
     logInfo({ ...serverLogFields(server), jobId, durationMs: durationSince(startedAt), status: "succeeded" }, "Provisioning succeeded");
     return server;
@@ -2658,66 +2574,201 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   }
 }
 
-function updateProvisionJob(id: string, patch: Partial<ProvisionJob>) {
-  const current = provisionJobs.get(id);
-  if (!current) return;
-  provisionJobs.set(id, {
-    ...current,
-    ...patch,
-    updatedAt: new Date().toISOString()
-  });
+function operationErrorMessage(error: unknown, fallback = "Operation failed") {
+  return error instanceof Error ? error.message : fallback;
 }
 
-async function startProvisionJob(input: CreateServerInput) {
+function optionalOperationStatus(value: unknown): OperationStatus | undefined {
+  if (value === undefined) return undefined;
+  if (value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "cancelled") {
+    return value;
+  }
+  throw new Error("Operation status must be queued, running, succeeded, failed, or cancelled");
+}
+
+async function recordOperation<T>(
+  input: {
+    type: OperationType;
+    serverId?: string;
+    nodeId?: string;
+    createdBy?: string;
+    task: string;
+    runningTask?: string;
+    successTask?: string;
+    serverIdFromResult?: (value: T) => string | undefined;
+    result?: (value: T) => unknown;
+  },
+  action: (operation: OperationRecord) => Promise<T>
+) {
+  const operation = operationsRepository.create({
+    type: input.type,
+    serverId: input.serverId,
+    nodeId: input.nodeId,
+    createdBy: input.createdBy,
+    task: input.task
+  });
+  operationsRepository.start(operation.id, { progress: 5, task: input.runningTask ?? input.task });
+  try {
+    const result = await action(operation);
+    operationsRepository.succeed(operation.id, {
+      serverId: input.serverIdFromResult?.(result),
+      progress: 100,
+      task: input.successTask ?? "Operation complete",
+      result: input.result ? input.result(result) : result
+    });
+    return result;
+  } catch (error) {
+    operationsRepository.fail(operation.id, operationErrorMessage(error), {
+      task: "Operation failed",
+      logSummary: detailedErrorMessage(error)
+    });
+    throw error;
+  }
+}
+
+async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
   const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await queuedReadServers(), nodeId);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   input.dockerPorts = dockerPorts;
   input.queryPort = String(queryPort);
-  const id = randomUUID();
-  const now = new Date().toISOString();
-  activeProvisionPortReservations.set(id, {
+  const operation = operationsRepository.create({
+    type: "server.create",
+    nodeId,
+    createdBy,
+    progress: 0,
+    task: "Queued server setup"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Queued server setup" });
+  activeProvisionPortReservations.set(operation.id, {
     nodeId,
     dockerPorts,
     displayName: input.displayName?.trim() || "unnamed server"
   });
-  provisionJobs.set(id, {
-    id,
-    status: "running",
-    progress: 0,
-    task: "Queued server setup",
-    createdAt: now,
-    updatedAt: now
-  });
-  logInfo({ jobId: id, serverName: input.displayName?.trim() }, "Provisioning job started");
+  logInfo({ operationId: operation.id, serverName: input.displayName?.trim() }, "Provisioning operation started");
 
   void runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, (progress, task) => {
-    updateProvisionJob(id, { progress, task });
-  }, id).then(async (server) => {
-    updateProvisionJob(id, {
-      status: "succeeded",
+    operationsRepository.update(operation.id, { progress, task });
+  }, operation.id).then(async (server) => {
+    operationsRepository.succeed(operation.id, {
+      serverId: server.id,
       progress: 100,
       task: "Server setup complete",
-      server: await runtimeForServer(server).publicServer(server)
+      result: { server: await runtimeForServer(server).publicServer(server) }
     });
-    setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).catch((error: unknown) => {
-    logError({ jobId: id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning job failed");
-    updateProvisionJob(id, {
-      status: "failed",
-      error: error instanceof Error ? error.message : "Server setup failed",
-      errorDetails: detailedErrorMessage(error),
-      task: "Server setup failed"
+    logError({ operationId: operation.id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning operation failed");
+    operationsRepository.fail(operation.id, operationErrorMessage(error, "Server setup failed"), {
+      task: "Server setup failed",
+      logSummary: detailedErrorMessage(error)
     });
-    setTimeout(() => provisionJobs.delete(id), 10 * 60 * 1000).unref();
   }).finally(() => {
-    activeProvisionPortReservations.delete(id);
+    activeProvisionPortReservations.delete(operation.id);
   });
 
-  return provisionJobs.get(id)!;
+  return operationsRepository.find(operation.id)!;
+}
+
+function selectedExportServerIds(value: unknown) {
+  if (value === undefined) return undefined;
+  return asArray(value, "serverIds").map((id) => validateServerId(id));
+}
+
+function targetNodeIdFromBody(value: unknown) {
+  const targetNodeId = typeof value === "string" ? value.trim() : "";
+  if (!targetNodeId) {
+    throw new Error("targetNodeId is required");
+  }
+  return targetNodeId;
+}
+
+async function startExportOperation(input: { serverIds?: string[] }, createdBy: string) {
+  const operation = operationsRepository.create({
+    type: "export.run",
+    createdBy,
+    progress: 0,
+    task: "Queued export"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Preparing export" });
+  void (async () => {
+    try {
+      const artifact = await createExportArtifact({
+        appVersion,
+        settings: settingsRepository.get(),
+        nodes: await readNodes(),
+        servers: await listManagedServers(),
+        selectedServerIds: input.serverIds,
+        modPreferencesForServer: (serverId) => modPreferencesRepository.list(serverId),
+        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
+      });
+      const written = await writeExportArtifact(join(config.exportsDir, exportArtifactFilename(operation.id)), artifact);
+      operationsRepository.succeed(operation.id, {
+        progress: 100,
+        task: "Export ready",
+        result: {
+          artifact: {
+            filename: written.filename,
+            size: written.size,
+            sha256: written.sha256,
+            downloadUrl: `/api/exports/${operation.id}/download`
+          },
+          artifactPath: written.path,
+          serverCount: artifact.servers.length,
+          serverFileCount: artifact.manifest.content.serverFiles
+        }
+      });
+    } catch (error) {
+      logError({ operationId: operation.id, action: "export", status: "failed", ...errorLogFields(error) }, "Export operation failed");
+      operationsRepository.fail(operation.id, operationErrorMessage(error, "Export failed"), {
+        task: "Export failed",
+        logSummary: detailedErrorMessage(error)
+      });
+    }
+  })();
+  return operationsRepository.find(operation.id)!;
+}
+
+async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings?: boolean }, createdBy: string) {
+  const operation = operationsRepository.create({
+    type: "import.run",
+    nodeId: input.targetNodeId,
+    createdBy,
+    progress: 0,
+    task: "Queued import"
+  });
+  operationsRepository.start(operation.id, { progress: 0, task: "Validating import" });
+  void (async () => {
+    try {
+      const artifact = parseExportArtifactBase64(input.artifactBase64);
+      const result = await applyImportArtifact(artifact, {
+        targetNodeId: input.targetNodeId,
+        nodes: await readNodes(),
+        existingServers: await listManagedServers(),
+        serversDir: config.serversDir,
+        tmpDir: config.tmpDir,
+        serversRepository,
+        modPreferencesRepository,
+        settingsRepository,
+        importInstanceSettings: input.importInstanceSettings,
+        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
+      });
+      operationsRepository.succeed(operation.id, {
+        progress: 100,
+        task: "Import complete",
+        result
+      });
+    } catch (error) {
+      logError({ operationId: operation.id, action: "import", status: "failed", ...errorLogFields(error) }, "Import operation failed");
+      operationsRepository.fail(operation.id, operationErrorMessage(error, "Import failed"), {
+        task: "Import failed",
+        logSummary: detailedErrorMessage(error)
+      });
+    }
+  })();
+  return operationsRepository.find(operation.id)!;
 }
 
 function scheduleFromBody(body: {
@@ -2790,9 +2841,7 @@ const runningSchedules = new Set<string>();
 async function tickSchedules() {
   const now = new Date();
   const runKey = now.toISOString().slice(0, 16);
-  const servers = await queuedReadServers();
-  let changed = false;
-
+  const servers = await listManagedServers();
   for (const server of servers) {
     for (const schedule of server.schedules ?? []) {
       if (!schedule.enabled) continue;
@@ -2808,6 +2857,14 @@ async function tickSchedules() {
       runningSchedules.add(key);
       try {
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
+        const operation = operationsRepository.create({
+          type: "schedule.run",
+          serverId: server.id,
+          nodeId: server.nodeId,
+          task: `Running schedule ${schedule.name}`,
+          progress: 0
+        });
+        operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
         const result = await runScheduledExecution(server, schedule);
         const ranAt = new Date().toISOString();
         const run: ScheduledRun = {
@@ -2818,45 +2875,32 @@ async function tickSchedules() {
           message: result.message,
           ranAt
         };
-        schedule.lastRunAt = ranAt;
-        schedule.lastStatus = result.status;
-        schedule.lastMessage = result.message;
-        schedule.recentRuns = [run, ...(schedule.recentRuns ?? [])].slice(0, 25);
-        schedule.updatedAt = ranAt;
-        changed = true;
+        serversRepository.recordScheduledRun(server.id, schedule.id, run);
+        if (result.status === "failed") {
+          operationsRepository.fail(operation.id, result.message, {
+            progress: 100,
+            task: "Schedule run failed",
+            result: { scheduleId: schedule.id, run }
+          });
+        } else {
+          operationsRepository.succeed(operation.id, {
+            progress: 100,
+            task: result.status === "skipped" ? "Schedule run skipped" : "Schedule run complete",
+            result: { scheduleId: schedule.id, run }
+          });
+        }
       } finally {
         runningSchedules.delete(key);
       }
     }
   }
 
-  if (changed) {
-    await updateServers((currentServers) => {
-      for (const server of servers) {
-        const currentServer = currentServers.find((s) => s.id === server.id);
-        if (!currentServer) continue;
-        for (const schedule of server.schedules ?? []) {
-          const currentSchedule = currentServer.schedules?.find((sch) => sch.id === schedule.id);
-          if (currentSchedule) {
-            currentSchedule.lastRunAt = schedule.lastRunAt;
-            currentSchedule.lastStatus = schedule.lastStatus;
-            currentSchedule.lastMessage = schedule.lastMessage;
-            currentSchedule.recentRuns = schedule.recentRuns;
-            currentSchedule.updatedAt = schedule.updatedAt;
-          }
-        }
-      }
-    });
-  }
 }
 
 async function localUpdateServer(serverId: string, input: unknown) {
   const body = input as {
     displayName?: string;
-    minecraftVersion?: string;
-    loaderVersion?: string;
-    installerVersion?: string;
-    serverJar?: string;
+    runtime?: CreateServerInput["runtime"];
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
@@ -2865,7 +2909,8 @@ async function localUpdateServer(serverId: string, input: unknown) {
     serverPort?: string;
   };
   let updatedServer: ManagedServer | null = null;
-  await updateServers(async (servers) => {
+  await serverSideEffectsQueue.enqueue(async () => {
+    const servers = await readServers();
     const index = servers.findIndex((candidate) => candidate.id === serverId);
     if (index === -1) {
       throw new Error("Server not found");
@@ -2880,13 +2925,14 @@ async function localUpdateServer(serverId: string, input: unknown) {
       throw new Error("Stop the server before changing its configuration");
     }
     const currentRuntime = runtimeProfileForServer(current);
-    const minecraftVersion = body.minecraftVersion?.trim() || currentRuntime?.minecraftVersion || current.minecraftVersion;
+    const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
+    const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
     if (!minecraftVersion) {
       throw new Error("Minecraft version is required");
     }
-    const requestedLoaderVersion = body.loaderVersion?.trim() || currentRuntime?.loaderVersion || current.loaderVersion || "latest";
-    const serverJar = validateRuntimeJarFilename(body.serverJar?.trim() || currentRuntime?.jarArtifact.filename || current.serverJar || "fabric-server-launch.jar");
-    const shouldResolveRuntime = body.minecraftVersion !== undefined || body.loaderVersion !== undefined || !currentRuntime;
+    const requestedLoaderVersion = selectedRuntime?.loaderVersion || currentRuntime.loaderVersion || "latest";
+    const serverJar = selectedRuntime?.serverJar || currentRuntime.jarArtifact.filename || "fabric-server-launch.jar";
+    const shouldResolveRuntime = selectedRuntime?.minecraftVersion !== undefined || selectedRuntime?.loaderVersion !== undefined;
     const resolvedRuntime = shouldResolveRuntime
       ? await serverJarProvider.resolveFabricServerJar({
           minecraftVersion,
@@ -2904,12 +2950,11 @@ async function localUpdateServer(serverId: string, input: unknown) {
         filename: serverJar
       }
     };
-    const loaderVersion = runtimeProfile.loaderVersion;
     const serverPort = body.serverPort?.trim();
     if (serverPort && !isValidServerPort(serverPort)) {
       throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
     }
-    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultContainerName(current.displayName));
+    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultServerContainerName(current.id));
     const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
     const requestedDockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
     const currentQueryPort = current.managedPorts?.find((port) => port.type === "query")?.externalPort;
@@ -2932,23 +2977,19 @@ async function localUpdateServer(serverId: string, input: unknown) {
     }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
 
-    const jarChanged = current.minecraftVersion !== minecraftVersion
-      || current.loaderVersion !== loaderVersion
-      || current.serverJar !== serverJar
+    const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
+      || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
+      || currentRuntime.jarArtifact.filename !== serverJar
       || current.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
     const containerConfigChanged = current.dockerContainer !== dockerContainer
       || current.dockerImage !== dockerImage
       || current.dockerPorts !== dockerPorts
       || current.javaArgs !== javaArgs
-      || current.serverJar !== serverJar;
+      || currentRuntime.jarArtifact.filename !== serverJar;
 
     const updated: ManagedServer = {
       ...current,
       displayName: body.displayName?.trim() || current.displayName,
-      minecraftVersion,
-      loaderVersion,
-      installerVersion: undefined,
-      serverJar,
       runtimeProfile,
       dockerContainer,
       dockerImage,
@@ -2974,7 +3015,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
       });
     }
 
-    servers[index] = updated;
+    serversRepository.replaceMetadata(updated);
     updatedServer = updated;
   });
   return updatedServer!;
@@ -2986,7 +3027,8 @@ async function localDeleteServer(server: ManagedServer, input: unknown) {
   let deletedFiles = false;
   let serverFields: Record<string, unknown> = {};
 
-  await updateServers(async (servers) => {
+  await serverSideEffectsQueue.enqueue(async () => {
+    const servers = await readServers();
     const index = servers.findIndex((candidate) => candidate.id === server.id);
     if (index === -1) {
       throw new Error("Server not found");
@@ -3010,7 +3052,7 @@ async function localDeleteServer(server: ManagedServer, input: unknown) {
       deletedFiles = true;
     }
 
-    servers.splice(index, 1);
+    serversRepository.delete(current.id);
   });
 
   logInfo({ ...serverFields, deletedFiles, deletedContainer, action: "delete_server" }, "Managed server deleted");
@@ -3063,6 +3105,7 @@ async function localServerLogs(server: ManagedServer) {
 }
 
 export async function startServer() {
+initializeRuntimeDataRoot(config.paths);
 const app = Fastify({
   logger: {
     level: config.logLevel,
@@ -3078,6 +3121,23 @@ const app = Fastify({
   bodyLimit: 180 * 1024 * 1024
 });
 appLogger = app.log;
+const storageDatabase = openStorageDatabase();
+usersRepository = new UsersRepository(storageDatabase);
+nodesRepository = new NodesRepository(storageDatabase);
+settingsRepository = new SettingsRepository(storageDatabase);
+sessionsRepository = new SessionsRepository(storageDatabase);
+serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
+fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
+modPreferencesRepository = new ModPreferencesRepository(storageDatabase);
+operationsRepository = new OperationsRepository(storageDatabase);
+const recoveredOperations = operationsRepository.failIncompleteOnStartup();
+if (recoveredOperations > 0) {
+  logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
+}
+configureModrinthApiKeyProvider(modrinthApiKey);
+app.addHook("onClose", async () => {
+  storageDatabase.close();
+});
 await app.register(helmet, {
   contentSecurityPolicy: {
     useDefaults: false,
@@ -3134,17 +3194,18 @@ app.addHook("onRequest", async (request, reply) => {
   }
 });
 
+// WebSocket endpoints intentionally do not use the JSON API error envelope:
+// /api/nodes/connect is the node-agent handshake, and /ws/console streams terminal frames.
 registerAuthRoutes(app, {
   authRateLimit,
   destructiveRateLimit,
-  sessions,
+  sessions: sessionsRepository,
+  users: usersRepository,
   sessionCookieName,
   sessionMaxAgeSeconds,
   parseCookies,
   sessionCookie,
   currentUserFromCookie,
-  queuedReadUsers,
-  updateUsers,
   requireRequestPermission,
   validateUsername,
   validatePassword,
@@ -3153,9 +3214,14 @@ registerAuthRoutes(app, {
   hashPassword,
   verifyPassword,
   publicUser,
+  demoEnabled: config.enableDemo,
   logInfo,
   logWarn
 });
+
+function isDemoModeRequest(request: { headers: Record<string, unknown> }) {
+  return config.enableDemo && request.headers["x-serversentinel-demo-mode"] === "true";
+}
 
 app.addHook("preHandler", async (request) => {
   if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
@@ -3164,7 +3230,7 @@ app.addHook("preHandler", async (request) => {
   if (request.raw.url.startsWith("/api/nodes/connect")) {
     return;
   }
-  const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
+  const demoMode = isDemoModeRequest(request);
   if (demoMode) {
     if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/fabric/"))) {
       return;
@@ -3177,10 +3243,10 @@ app.addHook("preHandler", async (request) => {
 });
 
 app.get("/api/app", async (request) => {
-  const demoMode = request.headers["x-serversentinel-demo-mode"] === "true";
+  const demoMode = isDemoModeRequest(request);
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
-  const servers = await queuedReadServers();
-  const nodes = await queuedReadNodes();
+  const servers = await listManagedServers();
+  const nodes = await readNodes();
   const totalMemory = await detectedTotalMemory();
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
@@ -3195,7 +3261,7 @@ app.get("/api/app", async (request) => {
 
 app.get("/api/nodes", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  return { nodes: await publicNodes(await queuedReadNodes()) };
+  return { nodes: await publicNodes(await readNodes()) };
 });
 
 app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
@@ -3219,9 +3285,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
   };
-  await updateNodes((nodes) => {
-    nodes.push(node);
-  });
+  nodesRepository.create(node);
   return {
     node: publicNode(node),
     joinToken: token.joinToken,
@@ -3250,9 +3314,7 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
   };
-  await updateNodes((nodes) => {
-    nodes.push(node);
-  });
+  nodesRepository.create(node);
   return {
     node: publicNode(node),
     joinToken: token.joinToken,
@@ -3266,23 +3328,22 @@ app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMou
   const token = createJoinToken(request.body.tokenTtlMinutes);
   const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
   const dataMount = optionalNodeDataMount(request.body.dataMount);
-  let updatedNode: ManagedNode | undefined;
-  await updateNodes((nodes) => {
-    const node = nodes.find((candidate) => candidate.id === request.params.nodeId);
-    if (!node) nodeNotFound(request.params.nodeId);
+  const updatedNode = nodesRepository.updateById(request.params.nodeId, (node) => {
     if (node.isInternal) {
       throw new Error("Internal node tokens cannot be rotated");
     }
-    node.joinTokenHash = hashNodeSecret(token.joinToken);
-    node.joinTokenExpiresAt = token.expiresAt;
-    node.updatedAt = new Date().toISOString();
-    updatedNode = node;
+    return {
+      ...node,
+      joinTokenHash: hashNodeSecret(token.joinToken),
+      joinTokenExpiresAt: token.expiresAt,
+      updatedAt: new Date().toISOString()
+    };
   });
   return {
-    node: publicNode(updatedNode!),
+    node: publicNode(updatedNode),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode!.name })
+    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode.name })
   };
 });
 
@@ -3290,7 +3351,7 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   await requireRequestPermission(request, "servers.view");
   const panelUrl = optionalNodePanelUrl(request.query.panelUrl);
   const dataMount = optionalNodeDataMount(request.query.dataMount);
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   return {
     node: publicNode(node),
@@ -3301,7 +3362,7 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
 app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:nodeId/update", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
   const body = request.body ?? {};
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     throw new Error("Internal node cannot be updated from the Nodes page.");
@@ -3349,7 +3410,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
 
 app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     if (!dockerAvailable()) {
@@ -3394,21 +3455,21 @@ app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructi
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "users.manage");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   if (node.isInternal) {
     throw new Error("Internal node cannot be deleted");
   }
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   const assignedServers = servers.filter((server) => server.nodeId === request.params.nodeId);
   const force = request.query.force === "true";
   if (assignedServers.length && !force) {
     throw new Error("Cannot delete a node while servers are assigned to it");
   }
-  let selfRemoval: { ok: boolean; message: string } = node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)
+  let selfRemoval: { ok: boolean; message: string } = nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)
     ? { ok: false, message: "Node container self-stop was not attempted." }
     : { ok: false, message: "Node is offline or does not support panel-triggered self-stop. Stop its container manually if it is still running." };
-  if (node.capabilities?.includes("node.remove") && panelNodeConnections.isConnected(node.id)) {
+  if (nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)) {
     try {
       const result = await panelNodeConnections.request(node, "node.remove", undefined, 10_000) as { message?: string };
       selfRemoval = { ok: true, message: result.message || "Node container will stop itself." };
@@ -3419,31 +3480,16 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
       };
     }
   }
-  let deletedServers = 0;
-  if (force && assignedServers.length) {
-    await updateServers((currentServers) => {
-      deletedServers = removeServersForNode(currentServers, request.params.nodeId);
-    });
-  }
-  let deleted = false;
-  await updateNodes((nodes) => {
-    const index = nodes.findIndex((candidate) => candidate.id === request.params.nodeId);
-    if (index === -1) nodeNotFound(request.params.nodeId);
-    if (nodes[index].isInternal) {
-      throw new Error("Internal node cannot be deleted");
-    }
-    nodes.splice(index, 1);
-    deleted = true;
-  });
+  const { deletedServers } = nodesRepository.deleteWithServers(request.params.nodeId, force);
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: deleted, deletedServers, selfRemoval };
+  return { ok: true, deletedServers, selfRemoval };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {
   await requireRequestPermission(request, "servers.view");
-  const node = (await queuedReadNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) {
-    return reply.code(404).send({ error: "Node not found", code: "node_not_found" });
+    return reply.code(404).send(apiErrorResponse("NODE_NOT_FOUND", "Node not found"));
   }
   return (await publicNodes([node]))[0];
 });
@@ -3459,13 +3505,9 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
   ws.once("message", async (raw: Buffer) => {
     let hello: NodeHello;
     try {
-      hello = JSON.parse(raw.toString()) as NodeHello;
-    } catch {
-      reject("Invalid node hello");
-      return;
-    }
-    if (hello.type !== "hello") {
-      reject("Node hello is required");
+      hello = normalizeNodeHello(JSON.parse(raw.toString()));
+    } catch (error) {
+      reject(`Invalid node hello: ${(error as Error).message}`);
       return;
     }
     const now = new Date().toISOString();
@@ -3477,18 +3519,18 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
         if (!node || !verifyNodeSecret(hello.nodeSecret, node.secretHash)) return;
         acceptedNode = {
           ...node,
-          name: hello.nodeName?.trim() || node.name,
+          name: hello.nodeName,
           status: "online",
           updatedAt: now,
           lastSeenAt: now,
           connectedAt: now,
           agentVersion: hello.agentVersion,
           protocolVersion: hello.protocolVersion,
-          capabilities: hello.capabilities ?? [],
+          capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible"
+          compatibility: "compatible"
         };
         nodes[nodes.indexOf(node)] = acceptedNode;
         return;
@@ -3501,7 +3543,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
         issuedSecret = newNodeSecret();
         acceptedNode = {
           ...node,
-          name: hello.nodeName?.trim() || node.name,
+          name: hello.nodeName,
           type: "remote",
           status: "online",
           isInternal: false,
@@ -3510,11 +3552,11 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           connectedAt: now,
           agentVersion: hello.agentVersion,
           protocolVersion: hello.protocolVersion,
-          capabilities: hello.capabilities ?? [],
+          capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: protocolCompatible(hello.protocolVersion) ? "compatible" : "incompatible",
+          compatibility: "compatible",
           secretHash: hashNodeSecret(issuedSecret),
           joinTokenHash: undefined,
           joinTokenExpiresAt: undefined
@@ -3534,7 +3576,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
       nodeSecret: issuedSecret,
       protocolVersion: nodeProtocolVersion,
       accepted: true,
-      compatibility: acceptedNode.compatibility === "compatible" ? "compatible" : "incompatible"
+      compatibility: "compatible"
     };
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);
@@ -3553,8 +3595,8 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
 
 app.get("/api/context", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  const servers = await queuedReadServers();
-  const nodes = await queuedReadNodes();
+  const servers = await listManagedServers();
+  const nodes = await readNodes();
   const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes)));
   const publicNodeList = await publicNodes(nodes);
   return {
@@ -3571,15 +3613,13 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
   if (!key) {
     throw new Error("Modrinth API key is required");
   }
-  await updateSettings((settings) => {
-    settings.modrinthApiKey = key;
-  });
+  settingsRepository.setModrinthApiKey(key);
   logInfo({ action: "configure_modrinth", status: "succeeded" }, "Modrinth API configuration updated");
   return { ok: true, modrinthApiConfigured: true };
 });
 
 app.get("/api/fabric/versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   const game = await serverJarProvider.listMinecraftVersions();
@@ -3593,14 +3633,14 @@ app.get("/api/fabric/versions", async (request) => {
 });
 
 app.get("/api/runtime/fabric/minecraft-versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   return { versions: await serverJarProvider.listMinecraftVersions() };
 });
 
 app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
-  if (request.headers["x-serversentinel-demo-mode"] !== "true") {
+  if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
   const minecraftVersion = request.query.minecraftVersion?.trim();
@@ -3628,47 +3668,125 @@ app.post<{ Body: { minecraftVersion?: string; loaderVersion?: string; preferStab
   return { runtimeProfile, warnings: [] };
 });
 
+app.get<{ Querystring: { serverId?: string; status?: string; limit?: string } }>("/api/operations", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const status = optionalOperationStatus(request.query.status);
+  const parsedLimit = request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined;
+  const serverId = request.query.serverId ? validateServerId(request.query.serverId) : undefined;
+  if (serverId) await getServer(serverId);
+  return {
+    operations: operationsRepository.list({
+      serverId,
+      status,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
+    })
+  };
+});
+
+app.get<{ Params: { id: string } }>("/api/operations/:id", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  const operation = operationsRepository.find(validateOperationId(request.params.id));
+  if (!operation) {
+    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
+  }
+  if (operation.serverId) await getServer(operation.serverId);
+  return operation;
+});
+
+app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", destructiveRateLimit, async (request, reply) => {
+  await requireRequestPermission(request, "servers.editSettings");
+  const operation = operationsRepository.cancel(validateOperationId(request.params.id), "Operation cancelled by user");
+  if (!operation) {
+    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
+  }
+  return operation;
+});
+
+app.post<{ Body: { serverIds?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.view");
+  return startExportOperation({
+    serverIds: selectedExportServerIds(request.body.serverIds)
+  }, user.id);
+});
+
+app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  const operation = operationsRepository.find(validateOperationId(request.params.operationId));
+  if (!operation || operation.type !== "export.run") {
+    return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export operation not found"));
+  }
+  if (operation.status !== "succeeded") {
+    throw new Error("Export is not ready for download");
+  }
+  const result = operation.result as { artifactPath?: string; artifact?: { filename?: string; size?: number } } | undefined;
+  const artifactPath = result?.artifactPath;
+  if (!artifactPath || !isInsideServersDirectory(config.exportsDir, artifactPath)) {
+    throw new Error("Export artifact is not available");
+  }
+  reply.header("content-type", "application/json");
+  reply.header("content-disposition", `attachment; filename="${result?.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
+  if (result?.artifact?.size) reply.header("content-length", String(result.artifact.size));
+  return reply.send(exportDownloadStream(artifactPath));
+});
+
+app.post<{ Body: { artifactBase64?: string; targetNodeId?: string } }>("/api/imports/validate", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "servers.create");
+  const artifact = parseExportArtifactBase64(request.body.artifactBase64 ?? "");
+  return validateImportArtifact(artifact, {
+    targetNodeId: typeof request.body.targetNodeId === "string" ? request.body.targetNodeId.trim() : undefined,
+    nodes: await readNodes(),
+    existingServers: await listManagedServers(),
+    serversDir: config.serversDir,
+    tmpDir: config.tmpDir
+  });
+});
+
+app.post<{ Body: { artifactBase64?: string; targetNodeId?: string; importInstanceSettings?: boolean } }>("/api/imports/apply", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.create");
+  return startImportOperation({
+    artifactBase64: request.body.artifactBase64 ?? "",
+    targetNodeId: targetNodeIdFromBody(request.body.targetNodeId),
+    importInstanceSettings: request.body.importInstanceSettings
+  }, user.id);
+});
+
 app.post<{
   Body: CreateServerInput;
 }>("/api/servers", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.create");
+  const user = await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await queuedReadServers(), nodeId);
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   request.body.dockerPorts = dockerPorts;
   request.body.queryPort = String(queryPort);
-  const server = await runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId });
+  const server = await recordOperation({
+    type: "server.create",
+    nodeId,
+    createdBy: user.id,
+    task: "Creating server",
+    runningTask: "Creating server",
+    successTask: "Server setup complete",
+    serverIdFromResult: (createdServer: ManagedServer) => createdServer.id,
+    result: (createdServer: ManagedServer) => ({ serverId: createdServer.id })
+  }, (operation) => runtimeForNodeId(nodeId).createServer({ ...request.body, nodeId }, undefined, operation.id));
   logInfo(serverLogFields(server), "Managed server created");
   return runtimeForServer(server).publicServer(server);
 });
 
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.create");
+  const user = await requireRequestPermission(request, "servers.create");
   if (!request.body.nodeId && config.runtimeMode === "panel") {
     throw new Error("nodeId is required when ServerSentinel runs in panel mode");
   }
-  const job = await startProvisionJob(request.body);
-  return job;
-});
-
-app.get<{ Params: { id: string } }>("/api/provision/:id", async (request, reply) => {
-  await requireRequestPermission(request, "servers.create");
-  const job = provisionJobs.get(validateProvisionJobId(request.params.id));
-  if (!job) {
-    return reply.code(404).send({ error: "Provisioning job not found" });
-  }
-  return job;
+  return startProvisionOperation(request.body, user.id);
 });
 
 app.put<{
   Params: { id: string };
   Body: {
     displayName?: string;
-    minecraftVersion?: string;
-    loaderVersion?: string;
-    installerVersion?: string;
-    serverJar?: string;
+    runtime?: CreateServerInput["runtime"];
     dockerContainer?: string;
     dockerImage?: string;
     dockerPorts?: string;
@@ -3680,7 +3798,7 @@ app.put<{
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
   const nextDisplayName = request.body.displayName?.trim() || server.displayName;
-  const servers = await queuedReadServers();
+  const servers = await listManagedServers();
   if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
     throw new Error("A managed server with this display name already exists");
   }
@@ -3730,24 +3848,16 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
       filename: runtimeProfile.jarArtifact.filename || refreshed.jarArtifact.filename
     }
   };
-  let updatedServer: ManagedServer | undefined;
-  await updateServers((servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === server.id);
-    if (index === -1) throw new Error("Server not found");
-    servers[index] = {
-      ...servers[index],
-      minecraftVersion: nextProfile.minecraftVersion,
-      loaderVersion: nextProfile.loaderVersion,
-      serverJar: nextProfile.jarArtifact.filename,
-      runtimeProfile: nextProfile,
-      updatedAt: new Date().toISOString()
-    };
-    updatedServer = servers[index];
-  });
+  const updatedServer: ManagedServer = {
+    ...server,
+    runtimeProfile: nextProfile,
+    updatedAt: new Date().toISOString()
+  };
+  serversRepository.replaceMetadata(updatedServer);
   return {
     serverId: server.id,
     runtimeProfile: nextProfile,
-    server: updatedServer ? await runtimeForServer(updatedServer).publicServer(updatedServer) : undefined,
+    server: await runtimeForServer(updatedServer).publicServer(updatedServer),
     warnings: []
   };
 });
@@ -3771,21 +3881,42 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "start");
+  return recordOperation({
+    type: "server.start",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Starting server",
+    successTask: "Server started"
+  }, () => runtimeForServer(server).lifecycle(server, "start"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "stop");
+  return recordOperation({
+    type: "server.stop",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Stopping server",
+    successTask: "Server stopped"
+  }, () => runtimeForServer(server).lifecycle(server, "stop"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
-  await requireRequestPermission(request, "servers.control");
+  const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).lifecycle(server, "restart");
+  return recordOperation({
+    type: "server.restart",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Restarting server",
+    successTask: "Server restarted"
+  }, () => runtimeForServer(server).lifecycle(server, "restart"));
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
@@ -3805,21 +3936,11 @@ app.post<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let createdSchedule: ScheduledExecution | null = null;
-  let serverLog: Record<string, unknown> = {};
-  await updateServers((servers) => {
-    const index = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (index === -1) {
-      throw new Error("Server not found");
-    }
-    const schedule = scheduleFromBody(request.body);
-    servers[index].schedules = [...(servers[index].schedules ?? []), schedule];
-    servers[index].updatedAt = new Date().toISOString();
-    createdSchedule = schedule;
-    serverLog = serverLogFields(servers[index]);
-  });
-  logInfo({ ...serverLog, scheduleId: createdSchedule!.id, enabled: createdSchedule!.enabled, action: "create_schedule" }, "Schedule created");
-  return createdSchedule!;
+  const server = await getServer(request.params.id);
+  const createdSchedule = scheduleFromBody(request.body);
+  serversRepository.createSchedule(server.id, createdSchedule, createdSchedule.updatedAt);
+  logInfo({ ...serverLogFields(server), scheduleId: createdSchedule.id, enabled: createdSchedule.enabled, action: "create_schedule" }, "Schedule created");
+  return createdSchedule;
 });
 
 app.put<{
@@ -3827,43 +3948,22 @@ app.put<{
   Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let updatedSchedule: ScheduledExecution | null = null;
-  let serverLog: Record<string, unknown> = {};
-  await updateServers((servers) => {
-    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (serverIndex === -1) {
-      throw new Error("Server not found");
-    }
-    const scheduleId = validateScheduleId(request.params.scheduleId);
-    const schedules = servers[serverIndex].schedules ?? [];
-    const scheduleIndex = schedules.findIndex((candidate) => candidate.id === scheduleId);
-    if (scheduleIndex === -1) {
-      throw new Error("Schedule not found");
-    }
-    schedules[scheduleIndex] = scheduleFromBody(request.body, schedules[scheduleIndex]);
-    servers[serverIndex].schedules = schedules;
-    servers[serverIndex].updatedAt = new Date().toISOString();
-    updatedSchedule = schedules[scheduleIndex];
-    serverLog = serverLogFields(servers[serverIndex]);
-  });
-  logInfo({ ...serverLog, scheduleId: updatedSchedule!.id, enabled: updatedSchedule!.enabled, action: "update_schedule" }, "Schedule updated");
-  return updatedSchedule!;
+  const server = await getServer(request.params.id);
+  const scheduleId = validateScheduleId(request.params.scheduleId);
+  const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
+  if (!existing) throw new Error("Schedule not found");
+  const updatedSchedule = scheduleFromBody(request.body, existing);
+  serversRepository.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt);
+  logInfo({ ...serverLogFields(server), scheduleId: updatedSchedule.id, enabled: updatedSchedule.enabled, action: "update_schedule" }, "Schedule updated");
+  return updatedSchedule;
 });
 
 app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
-  let serverLog: Record<string, unknown> = {};
+  const server = await getServer(request.params.id);
   const scheduleId = validateScheduleId(request.params.scheduleId);
-  await updateServers((servers) => {
-    const serverIndex = servers.findIndex((candidate) => candidate.id === request.params.id);
-    if (serverIndex === -1) {
-      throw new Error("Server not found");
-    }
-    servers[serverIndex].schedules = (servers[serverIndex].schedules ?? []).filter((schedule) => schedule.id !== scheduleId);
-    servers[serverIndex].updatedAt = new Date().toISOString();
-    serverLog = serverLogFields(servers[serverIndex]);
-  });
-  logInfo({ ...serverLog, scheduleId, action: "delete_schedule" }, "Schedule deleted");
+  serversRepository.deleteSchedule(server.id, scheduleId, new Date().toISOString());
+  logInfo({ ...serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
 });
 
@@ -3962,15 +4062,66 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, "files.view");
-  return runtime.readFile(server, target);
+  return readFileWithRevision(runtime, server, target);
 });
 
-app.put<{ Params: { id: string }; Body: { path?: string; content?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>("/api/servers/:id/file/lease", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
-  await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
-  return runtime.writeFile(server, target, request.body.content);
+  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  const file = await readFileWithRevision(runtime, server, target);
+  if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
+  const path = await fileEditLockPath(runtime, server, target);
+  const lease = fileEditLeasesRepository.acquire({
+    serverId: server.id,
+    path,
+    fileRevision: file.revision,
+    owner: fileLeaseOwner(request, user)
+  });
+  return { lease: publicFileEditLease(lease) };
+});
+
+app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lease/:leaseId/heartbeat", async (request) => {
+  const user = await requireRequestPermission(request);
+  const lease = fileEditLeasesRepository.heartbeat(request.params.leaseId, fileLeaseOwner(request, user));
+  if (lease.serverId !== request.params.id) {
+    const error = new Error("The edit lease does not belong to this server") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "file_edit_lease_lost";
+    throw error;
+  }
+  return { lease: publicFileEditLease(lease) };
+});
+
+app.delete<{ Params: { id: string; leaseId: string }; Querystring: { force?: string } }>("/api/servers/:id/file/lease/:leaseId", async (request) => {
+  if (request.query.force === "true") {
+    await requireRequestPermission(request, "users.manage");
+    return { ok: fileEditLeasesRepository.forceRelease(request.params.leaseId, request.params.id) };
+  }
+  const user = await requireRequestPermission(request);
+  return { ok: fileEditLeasesRepository.release(request.params.leaseId, fileLeaseOwner(request, user)) };
+});
+
+app.put<{ Params: { id: string }; Body: { path?: string; content?: string; leaseId?: string; revision?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (!request.body.leaseId) {
+    const error = new Error("A valid file edit lease is required") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "file_edit_lease_lost";
+    throw error;
+  }
+  const path = await fileEditLockPath(runtime, server, target);
+  const owner = fileLeaseOwner(request, user);
+  const lease = fileEditLeasesRepository.requireOwned(request.body.leaseId, server.id, path, owner);
+  const current = await readFileWithRevision(runtime, server, target);
+  assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
+  const result = await runtime.writeFile(server, target, request.body.content) as Record<string, unknown>;
+  fileEditLeasesRepository.release(lease.leaseId, owner);
+  return { ...result, revision: fileContentRevision(request.body.content ?? "") };
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
@@ -4232,20 +4383,11 @@ async function localDeleteFile(server: ManagedServer, target: string, recursive:
 
 
 async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
-  let path: string;
-  try {
-    path = await validateExistingInsideServer(server, "mods/.serversentinel-mods.json");
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-    return {};
-  }
-  if (!existsSync(path)) return {};
-  return normalizeModPreferences(JSON.parse(await readFile(path, "utf8")) as unknown);
+  return normalizeModPreferences(modPreferencesRepository.list(server.id));
 }
 
 async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
-  const path = await ensureWritableInsideServer(server, "mods/.serversentinel-mods.json");
-  await writeJsonFile(path, normalizeModPreferences(data));
+  modPreferencesRepository.replaceAll(server.id, normalizeModPreferences(data));
 }
 
 function normalizeModPreferences(value: unknown): Record<string, ModPreference> {
@@ -5148,7 +5290,7 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
   const icon = await runtimeForServer(server).modIcon(server, request.query.filename);
   if (!icon) {
     reply.code(404);
-    return { error: "Icon not found" };
+    return apiErrorResponse("ICON_NOT_FOUND", "Icon not found");
   }
   reply.header("Content-Type", icon.contentType);
   return reply.send(icon.stream);
@@ -5163,22 +5305,43 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
 });
 
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.enableDisable");
+  const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled);
+  return recordOperation({
+    type: "mod.toggle",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mod state",
+    successTask: "Mod state updated"
+  }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled));
 });
 
 
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.remove");
+  const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).removeMod(server, request.query.filename);
+  return recordOperation({
+    type: "mod.remove",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Removing mod",
+    successTask: "Mod removed"
+  }, () => runtimeForServer(server).removeMod(server, request.query.filename));
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.upload");
+  const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64);
+  return recordOperation({
+    type: "mod.upload",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Uploading mod",
+    successTask: "Mod uploaded"
+  }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64));
 });
 
 type ModrinthInstallVersionStatus =
@@ -5445,36 +5608,52 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 });
 
 app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChannel } }>("/api/modrinth/update", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
+  const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  return updateModrinthMod(server, request.body);
+  return recordOperation({
+    type: "mod.update",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mod",
+    successTask: "Mod updated"
+  }, () => updateModrinthMod(server, request.body));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.update");
+  const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  await ensureServerStoppedForModChanges(server);
-  const channel = optionalReleaseChannel(request.body.channel);
-  const filenames = request.body.filenames === undefined
-    ? undefined
-    : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
-  if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
-  const startedAt = Date.now();
-  const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
-  const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
-  for (const skipped of result.skipped) {
-    logInfo({ ...serverLogFields(server), filename: skipped.filename, reason: skipped.reason, action: "update_mod_safe_batch_item", status: "skipped" }, "Safe batch mod update skipped item");
-  }
-  logInfo({
-    ...serverLogFields(server),
-    action: "update_mod_safe_batch",
-    status: result.failed.length ? "partial" : "succeeded",
-    updatedCount: result.counts.updated,
-    skippedCount: result.counts.skipped,
-    failedCount: result.counts.failed,
-    durationMs: durationSince(startedAt)
-  }, "Safe batch mod update completed");
-  return result;
+  return recordOperation({
+    type: "mod.batchUpdate",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Updating mods",
+    successTask: "Mod update batch complete"
+  }, async () => {
+    await ensureServerStoppedForModChanges(server);
+    const channel = optionalReleaseChannel(request.body.channel);
+    const filenames = request.body.filenames === undefined
+      ? undefined
+      : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
+    if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
+    const startedAt = Date.now();
+    const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
+    const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
+    for (const skipped of result.skipped) {
+      logInfo({ ...serverLogFields(server), filename: skipped.filename, reason: skipped.reason, action: "update_mod_safe_batch_item", status: "skipped" }, "Safe batch mod update skipped item");
+    }
+    logInfo({
+      ...serverLogFields(server),
+      action: "update_mod_safe_batch",
+      status: result.failed.length ? "partial" : "succeeded",
+      updatedCount: result.counts.updated,
+      skippedCount: result.counts.skipped,
+      failedCount: result.counts.failed,
+      durationMs: durationSince(startedAt)
+    }, "Safe batch mod update completed");
+    return result;
+  });
 });
 
 function isSelectedModrinthVersionMissing(error: unknown) {
@@ -5587,9 +5766,16 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
 }
 
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
-  await requireRequestPermission(request, "mods.install");
+  const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
-  return installModWithRemoteVersionFallback(server, request.body);
+  return recordOperation({
+    type: "mod.install",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Installing mod",
+    successTask: "Mod installed"
+  }, () => installModWithRemoteVersionFallback(server, request.body));
 });
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({
@@ -5633,38 +5819,26 @@ runtimeRegistry = new NodeRuntimeRegistry(
   localRuntime,
   (nodeId) => new RemoteNodeRuntime(
     nodeId,
-    async (id) => (await queuedReadNodes()).find((node) => node.id === id),
+    async (id) => (await readNodes()).find((node) => node.id === id),
     panelNodeConnections,
     publicServer,
     async (server) => {
-      await updateServers((servers) => {
-        if (servers.some((candidate) => candidate.id === server.id)) {
-          throw new Error("A managed server with this id already exists");
-        }
-        servers.push(server);
-      });
+      serversRepository.create(server);
     },
     async (server) => {
-      await updateServers((servers) => {
-        const index = servers.findIndex((candidate) => candidate.id === server.id);
-        if (index === -1) throw new Error("Server not found");
-        servers[index] = server;
-      });
+      serversRepository.replaceMetadata(server);
     },
     async (serverId) => {
-      await updateServers((servers) => {
-        const index = servers.findIndex((candidate) => candidate.id === serverId);
-        if (index !== -1) servers.splice(index, 1);
-      });
+      serversRepository.delete(serverId);
     }
   )
 );
 resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
-  readServers: queuedReadServers,
+  readServers: listManagedServers,
   runtimeForServer,
-  historyDir: join(config.configDir, "history")
+  statsRepository: new ResourceStatsRepository(storageDatabase)
 });
 resourceStatsCollector.start();
 app.addHook("onClose", async () => {
@@ -5675,11 +5849,8 @@ await registerStaticFrontend(app);
 
 app.setErrorHandler((error, _request, reply) => {
   const expectedUserError = isExpectedUserError(error);
-  const statusCode = error instanceof Error && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : expectedUserError ? 400 : 500;
+  const statusCode = errorStatusCode(error, reply, expectedUserError);
   const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorCode = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
-  const errorDetails = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : undefined;
-  const publicMessage = statusCode >= 500 ? "Internal server error" : error instanceof Error ? error.message : "Request failed";
   const fields = {
     ...routeLogFields(_request, statusCode),
     category: errorCategory(error, statusCode),
@@ -5692,13 +5863,7 @@ app.setErrorHandler((error, _request, reply) => {
   } else {
     app.log.warn(fields, "API request rejected");
   }
-  reply.code(statusCode).send({
-    error: publicMessage,
-    message: publicMessage,
-    code: errorCode,
-    errorDetails,
-    statusCode
-  });
+  reply.code(statusCode).send(publicApiError(error, statusCode));
 });
 
 function scheduleNextTick() {
@@ -5717,11 +5882,16 @@ scheduleNextTick();
 const startupUsers = await readUsers().catch(() => []);
 const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
-const dockerSocketMounted = dockerAvailable();
+const dockerSocketMounted = config.runtimeMode === "panel" ? false : dockerAvailable();
 app.log.info({
   appVersion,
-  configDir: config.configDir,
+  dataDir: config.dataDir,
+  databasePath: config.databasePath,
   managedServersDir: config.serversDir,
+  backupsDir: config.backupsDir,
+  importsDir: config.importsDir,
+  exportsDir: config.exportsDir,
+  tmpDir: config.tmpDir,
   nodeCount: startupNodes.length,
   dockerSocketMounted,
   modrinthApiConfigured: modrinthConfigured,
@@ -5729,7 +5899,7 @@ app.log.info({
   logLevel: config.logLevel,
   port: config.port
 }, "ServerSentinel startup configuration");
-if (!dockerSocketMounted) {
+if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
   app.log.warn({ dockerSocket: config.dockerSocket }, "Docker socket is not mounted; runtime management is unavailable");
 }
 

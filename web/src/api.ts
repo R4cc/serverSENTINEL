@@ -1,16 +1,19 @@
+import { demoRequestHeaders } from "./app/appConfig";
+
 type ApiPayload = {
-  error?: unknown;
-  message?: unknown;
-  code?: unknown;
-  errorDetails?: unknown;
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+  };
 };
 
 export class ApiError extends Error {
   status: number;
   code?: string;
-  details?: string;
+  details: unknown;
 
-  constructor(message: string, status: number, code?: string, details?: string) {
+  constructor(message: string, status: number, code?: string, details: unknown = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -19,20 +22,26 @@ export class ApiError extends Error {
   }
 }
 
-function payloadMessage(payload: ApiPayload, fallback: string) {
-  return typeof payload.message === "string"
-    ? payload.message
-    : typeof payload.error === "string"
-      ? payload.error
-      : fallback;
+function payloadError(payload: ApiPayload) {
+  return payload && typeof payload.error === "object" && payload.error !== null ? payload.error : undefined;
+}
+
+export async function apiErrorFromResponse(response: Response, fallback?: string) {
+  const payload = await response.json().catch(() => ({})) as ApiPayload;
+  const error = payloadError(payload);
+  const message = typeof error?.message === "string"
+    ? error.message
+    : fallback ?? (response.status === 401 ? "Authentication required. Sign in again to continue." : `Request failed with ${response.status}`);
+  const code = typeof error?.code === "string" ? error.code : "REQUEST_FAILED";
+  const details = error?.details ?? {};
+  return new ApiError(message, response.status, code, details);
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const demoMode = window.localStorage.getItem("serversentinel-demo-mode") === "true";
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
     ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
-    ...(demoMode ? { "X-ServerSentinel-Demo-Mode": "true" } : {}),
+    ...demoRequestHeaders(),
     ...(init?.headers as Record<string, string> | undefined)
   };
   let response: Response;
@@ -48,10 +57,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error("Could not reach the ServerSentinel backend. Check that the panel is running and try again.");
   }
-  const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = payloadMessage(payload, response.status === 401 ? "Authentication required. Sign in again to continue." : `Request failed with ${response.status}`);
-    throw new ApiError(message, response.status, typeof payload.code === "string" ? payload.code : undefined, typeof payload.errorDetails === "string" ? payload.errorDetails : undefined);
+    throw await apiErrorFromResponse(response);
   }
+  const payload = await response.json().catch(() => ({}));
   return payload as T;
 }

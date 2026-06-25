@@ -33,15 +33,11 @@ function testServer(storageName = "survival"): ManagedServer {
     displayName: "Survival",
     serverDir: join(tempRoot, "servers", storageName),
     storageName,
-    minecraftVersion: "1.21.4",
-    loaderVersion: "0.16.10",
-    serverJar: "fabric-server-launch.jar",
     runtimeProfile: testRuntimeProfile(),
     dockerContainer: "serversentinel-survival",
     dockerImage: "eclipse-temurin:21-jre",
     dockerPorts: "25565:25565/tcp,25566:25566/udp",
     javaArgs: "-Xms2G -Xmx4G",
-    serverType: "fabric",
     createdAt: "",
     updatedAt: ""
   };
@@ -49,7 +45,7 @@ function testServer(storageName = "survival"): ManagedServer {
 
 async function loadHooks() {
   vi.resetModules();
-  process.env.SS_NODE_DATA_DIR = tempRoot;
+  process.env.SERVERSENTINEL_DATA_DIR = tempRoot;
   return (await import("./nodeAgent.js")).__nodeAgentTestHooks;
 }
 
@@ -59,16 +55,31 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  delete process.env.SS_NODE_DATA_DIR;
+  delete process.env.SERVERSENTINEL_DATA_DIR;
   vi.resetModules();
   await rm(tempRoot, { recursive: true, force: true });
 });
 
 describe("remote node create and Docker command safety", () => {
+  it("creates immutable server identity independent of display name", () => {
+    const { server } = hooks.createdServerRecord({
+      nodeId: "node-id",
+      displayName: "My Survival Server",
+      runtime: { minecraftVersion: "1.21.4" },
+      acceptEula: true
+    }, testRuntimeProfile());
+
+    expect(server.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(server.storageName).toBe(server.id);
+    expect(server.serverDir).toBe(join(tempRoot, "servers", server.id));
+    expect(server.dockerContainer).toBe(`serversentinel-${server.id}`);
+    expect(server.displayName).toBe("My Survival Server");
+  });
+
   it("validates Java args while building the remote create server record", () => {
     expect(() => hooks.createdServerRecord({
       displayName: "Unsafe",
-      minecraftVersion: "1.21.4",
+      runtime: { minecraftVersion: "1.21.4" },
       acceptEula: true,
       javaArgs: "-Xmx4G; curl example.test"
     }, testRuntimeProfile())).toThrow("unsafe shell characters");
