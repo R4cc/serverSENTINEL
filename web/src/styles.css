@@ -9568,7 +9568,7 @@ textarea,
   min-height: 56px;
   padding: var(--space-3) var(--space-4);
   display: grid;
-  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 420px) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: center;
   border-top: 1px solid rgb(0 0 0 / 0.08);
@@ -9584,24 +9584,31 @@ textarea,
 }
 
 .settingsRow select,
-.settingsRow .settingsStatus,
 .settingsRow > button {
   justify-self: start;
-  max-width: 420px;
+  width: 100%;
+  max-width: none;
+}
+
+.settingsRow .settingsStatus {
+  justify-self: start;
 }
 
 .settingsRow .keyForm {
-  justify-self: end;
-  width: min(420px, 100%);
+  justify-self: stretch;
+  width: 100%;
 }
 
 .keyFormConfigured {
-  align-items: flex-end;
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
 }
 
 @media (min-width: 1101px) {
   .keyFormConfigured {
-    align-items: center;
+    align-items: stretch;
   }
 }
 
