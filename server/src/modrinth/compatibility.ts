@@ -292,8 +292,7 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
   if (cached && (options.forceRefresh || cached.expiresAt <= Date.now())) projectVersionsCache.delete(cacheKey);
   const pending = projectVersionsRequestCache.get(cacheKey);
-  if (!options.forceRefresh && pending) return pending;
-  if (options.forceRefresh) projectVersionsRequestCache.delete(cacheKey);
+  if (pending) return pending;
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
   url.searchParams.set("include_changelog", "false");
   if (filters?.loader) {

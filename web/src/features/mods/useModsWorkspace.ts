@@ -31,6 +31,25 @@ function shouldRetryModrinthError(error: unknown) {
   return true;
 }
 
+function mergeStableModMetadata(previous: InstalledMod[], incoming: InstalledMod[]) {
+  const previousByFilename = new Map(previous.map((mod) => [mod.filename, mod]));
+  return incoming.map((mod) => {
+    const existing = previousByFilename.get(mod.filename);
+    if (!existing) return mod;
+    const incomingCompatibilityUnknown = !mod.compatibility || mod.compatibility.status === "unknown";
+    const existingCompatibilityKnown = existing.compatibility && existing.compatibility.status !== "unknown";
+    return {
+      ...mod,
+      displayName: mod.displayName || existing.displayName,
+      description: mod.description || existing.description,
+      iconUrl: mod.iconUrl || existing.iconUrl,
+      modrinth: mod.modrinth || existing.modrinth,
+      versionInfo: mod.versionInfo || existing.versionInfo,
+      compatibility: incomingCompatibilityUnknown && existingCompatibilityKnown ? existing.compatibility : mod.compatibility
+    };
+  });
+}
+
 export type ModsWorkspaceInputs = {
   activeServer?: ManagedServer;
   activePage: ActivePage;
@@ -162,6 +181,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const activeServerIdRef = useRef("");
   const loadMoreInFlightRef = useRef(false);
+  const refreshUpdatesInFlightRef = useRef(false);
   const toggleQueueRef = useRef<Record<string, { targetEnabled: boolean; inFlightEnabled: boolean | null }>>({});
 
   useEffect(() => {
@@ -201,7 +221,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
       if (activeServerIdRef.current === serverId) {
-        setInstalledMods(result.mods);
+        setInstalledMods((current) => mergeStableModMetadata(current, result.mods));
         setModsError("");
       }
     } catch (error) {
@@ -252,10 +272,16 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function refreshUpdates(forceRefresh = true, notifyOnError = forceRefresh) {
-    await Promise.all([
-      loadInstalledMods(activeServer?.id, { forceRefresh, notifyOnError }),
-      loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError })
-    ]);
+    if (refreshUpdatesInFlightRef.current) return;
+    refreshUpdatesInFlightRef.current = true;
+    try {
+      await Promise.all([
+        loadInstalledMods(activeServer?.id, { forceRefresh, notifyOnError }),
+        loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError })
+      ]);
+    } finally {
+      refreshUpdatesInFlightRef.current = false;
+    }
   }
 
   async function retrySidebarRequest<T>(request: () => Promise<T>, signal?: AbortSignal) {
