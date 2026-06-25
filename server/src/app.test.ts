@@ -19,7 +19,7 @@ import {
   assertFileRevision
 } from "./app.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
-import { parseMinecraftQueryResponse } from "./minecraftQuery.js";
+import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedServer } from "./types.js";
 
 function testRuntimeProfile() {
@@ -136,6 +136,20 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
 });
 
 describe("Minecraft Query metrics parsing", () => {
+  it("parses the challenge token from a Minecraft Query handshake response", () => {
+    const sessionId = Buffer.from([1, 2, 3, 4]);
+    const packet = Buffer.concat([Buffer.from([9]), sessionId, Buffer.from("123456\0", "utf8")]);
+
+    expect(parseMinecraftQueryChallenge(packet, sessionId)).toBe(123456);
+  });
+
+  it("rejects challenge responses for a different session", () => {
+    const sessionId = Buffer.from([1, 2, 3, 4]);
+    const packet = Buffer.concat([Buffer.from([9, 4, 3, 2, 1]), Buffer.from("123456\0", "utf8")]);
+
+    expect(() => parseMinecraftQueryChallenge(packet, sessionId)).toThrow("Invalid Minecraft Query challenge response");
+  });
+
   it("parses player counts and player names from a full query response", () => {
     const sessionId = Buffer.from([1, 2, 3, 4]);
     const payload = Buffer.concat([

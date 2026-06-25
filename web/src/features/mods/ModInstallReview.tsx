@@ -16,6 +16,7 @@ type Props = {
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
   onChannelChange: (channel: ReleaseChannel) => void;
+  onRetry: () => void;
   onSelect: (version: ModrinthInstallVersion) => void;
   onToggleAdvanced: () => void;
   onAcknowledge: (checked: boolean) => void;
@@ -24,7 +25,7 @@ type Props = {
   onInstall: () => void;
 };
 
-export function ModInstallReview({ state, selected, requiredDependencies, canContinue, formatDate, onClose, onChannelChange, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
+export function ModInstallReview({ state, selected, requiredDependencies, canContinue, formatDate, onClose, onChannelChange, onRetry, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
   const title = state.data?.project.title || state.mod.title;
   const versions = state.data?.compatibleVersions || [];
   const otherVersions = state.data?.otherVersions || [];
@@ -44,7 +45,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           <div><strong>{title}</strong><span>For {state.data?.target.loader || "Fabric"} {state.data?.target.minecraftVersion || ""}</span></div>
         </div>
         {state.loading && <ModInstallVersionSkeleton />}
-        {!state.loading && state.error && <InlineState tone="error" title="Versions unavailable" message={state.error} />}
+        {!state.loading && state.error && <InlineState tone="error" title="Versions unavailable" message={state.error} actionLabel="Refresh" onAction={onRetry} busy={state.loading} />}
         {!state.loading && state.data && state.step === 1 && (
           <>
             <section className="modsRecommendedVersion">

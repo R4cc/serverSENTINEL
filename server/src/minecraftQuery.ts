@@ -64,6 +64,17 @@ export function parseMinecraftQueryResponse(packet: Buffer, expectedSessionId?: 
   };
 }
 
+export function parseMinecraftQueryChallenge(packet: Buffer, expectedSessionId: Buffer) {
+  if (packet.length < 6 || packet[0] !== 9 || !packet.subarray(1, 5).equals(expectedSessionId)) {
+    throw new Error("Invalid Minecraft Query challenge response");
+  }
+  const token = readNullTerminated(packet, 5).value.trim();
+  if (!/^-?\d+$/.test(token)) {
+    throw new Error("Invalid Minecraft Query challenge token");
+  }
+  return Number(token);
+}
+
 function receiveOnce(socket: dgram.Socket, timeoutMs: number) {
   return new Promise<Buffer>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -92,7 +103,12 @@ export async function queryMinecraftServer(host: string, port: number, timeoutMs
   const socket = dgram.createSocket("udp4");
   const sessionId = randomBytes(4);
   try {
-    const packet = Buffer.concat([Buffer.from([0xfe, 0xfd, 0x00]), sessionId, Buffer.alloc(4)]);
+    const handshake = Buffer.concat([Buffer.from([0xfe, 0xfd, 0x09]), sessionId]);
+    await new Promise<void>((resolve, reject) => socket.send(handshake, port, host, (error) => error ? reject(error) : resolve()));
+    const challenge = parseMinecraftQueryChallenge(await receiveOnce(socket, timeoutMs), sessionId);
+    const challengeBytes = Buffer.alloc(4);
+    challengeBytes.writeInt32BE(challenge);
+    const packet = Buffer.concat([Buffer.from([0xfe, 0xfd, 0x00]), sessionId, challengeBytes, Buffer.alloc(4)]);
     await new Promise<void>((resolve, reject) => socket.send(packet, port, host, (error) => error ? reject(error) : resolve()));
     const response = await receiveOnce(socket, timeoutMs);
     return parseMinecraftQueryResponse(response, sessionId);

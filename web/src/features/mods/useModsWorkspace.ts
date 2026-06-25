@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import { demoSearchResults, demoServerId } from "../../demo";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import type { ModInstallModalState } from "../../app/uiState";
@@ -11,8 +11,25 @@ import { createDemoUpdatePlan } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
 const modSearchDebounceMs = 650;
+const modrinthRetryDelayMs = 1500;
 
 type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
+
+function waitForRetry(signal?: AbortSignal) {
+  if (signal?.aborted) return Promise.reject(new DOMException("The request was cancelled.", "AbortError"));
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(resolve, modrinthRetryDelayMs);
+    signal?.addEventListener("abort", () => {
+      window.clearTimeout(timeout);
+      reject(new DOMException("The request was cancelled.", "AbortError"));
+    }, { once: true });
+  });
+}
+
+function shouldRetryModrinthError(error: unknown) {
+  if (error instanceof ApiError) return error.status === 429 || error.status >= 500;
+  return true;
+}
 
 export type ModsWorkspaceInputs = {
   activeServer?: ManagedServer;
@@ -172,7 +189,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     return true;
   }
 
-  async function loadInstalledMods(serverId = activeServer?.id, options: { forceRefresh?: boolean } = {}) {
+  async function loadInstalledMods(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return;
     setModsLoading(true);
     setModsError("");
@@ -191,14 +208,16 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
       setModsError(message);
-      setNotice(message);
-      notify("error", message);
+      if (options.notifyOnError) {
+        setNotice(message);
+        notify("error", message);
+      }
     } finally {
       if (activeServerIdRef.current === serverId) setModsLoading(false);
     }
   }
 
-  async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean } = {}) {
+  async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return null;
     setUpdatePlanLoading(true);
     setUpdatePlanError("");
@@ -225,18 +244,28 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (handleStaleSession(error)) return null;
       const message = errorMessage(error, "Could not build the mod update plan.");
       setUpdatePlanError(message);
-      notify("error", message);
+      if (options.notifyOnError) notify("error", message);
       return null;
     } finally {
       if (activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
     }
   }
 
-  async function refreshUpdates(forceRefresh = true) {
+  async function refreshUpdates(forceRefresh = true, notifyOnError = forceRefresh) {
     await Promise.all([
-      loadInstalledMods(activeServer?.id, { forceRefresh }),
-      loadUpdatePlan(activeServer?.id, { forceRefresh })
+      loadInstalledMods(activeServer?.id, { forceRefresh, notifyOnError }),
+      loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError })
     ]);
+  }
+
+  async function retrySidebarRequest<T>(request: () => Promise<T>, signal?: AbortSignal) {
+    try {
+      return await request();
+    } catch (error) {
+      if (handleStaleSession(error) || !shouldRetryModrinthError(error)) throw error;
+      await waitForRetry(signal);
+      return request();
+    }
   }
 
   function resetPageState() {
@@ -315,6 +344,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (!trimmedQuery) return;
     setSearchResults([]);
     setSearchTotal(0);
+    setSearchError("");
     if (activeServerIsDemo) {
       setSearching(true);
       const timeout = window.setTimeout(() => {
@@ -334,9 +364,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     let cancelled = false;
     const abortController = new AbortController();
     setSearching(true);
-    void api<{ hits: ModrinthHit[]; total_hits: number }>(
-      `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`,
-      { signal: abortController.signal }
+    void retrySidebarRequest(
+      () => api<{ hits: ModrinthHit[]; total_hits: number }>(
+        `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`,
+        { signal: abortController.signal }
+      ),
+      abortController.signal
     ).then((result) => {
       if (!cancelled) {
         setSearchResults(result.hits);
@@ -344,10 +377,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
     }).catch((error) => {
       if (cancelled || abortController.signal.aborted) return;
+      if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
       setSearchError(message);
-      setNotice(message);
-      notify("error", message);
     }).finally(() => { if (!cancelled) setSearching(false); });
     return () => { cancelled = true; abortController.abort(); };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo]);
@@ -369,10 +401,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return;
     }
     try {
-      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(`/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&offset=${offset}&limit=20`);
+      const result = await retrySidebarRequest(() => api<{ hits: ModrinthHit[]; total_hits: number }>(`/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&offset=${offset}&limit=20`));
       setSearchResults((current) => [...current, ...result.hits]);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not load more search results."));
+      if (handleStaleSession(error)) return;
+      setSearchError(errorMessage(error, "Could not load more search results."));
     } finally {
       loadMoreInFlightRef.current = false;
       setLoadingMore(false);
@@ -396,7 +429,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         ? demoFixtureFailureMessage(demoFixture, "versions")
           ? Promise.reject(new Error(demoFixtureFailureMessage(demoFixture, "versions")))
           : demoInstallVersions(activeServer, mod, nextChannel)
-        : api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`);
+        : retrySidebarRequest(() => api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`));
       let resolvedChannel = channel;
       let data = await fetchVersions(resolvedChannel);
       while (options.useFallbackChannel && !hasInstallVersions(data)) {
@@ -407,9 +440,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
       setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel: resolvedChannel, loading: false, installing: false, error: "", data, selectedVersionId: preferredInstallVersionId(data), acknowledgeMinecraftMismatch: false } : current);
     } catch (error) {
+      if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load Modrinth versions for this project.");
       setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel, loading: false, installing: false, error: message, data: null, selectedVersionId: "" } : current);
-      notify("error", message);
     }
   }
 
@@ -729,6 +762,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
+      retrySearch: () => setSearchRequestVersion((current) => current + 1),
       loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
       closeInstall: () => setInstallState(null),

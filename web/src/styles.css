@@ -10020,6 +10020,8 @@ textarea,
 .modsSearchActivity { min-height: 1em; color: var(--text-muted); font-size: .72rem; text-align: right; }
 .modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
 .modsSafeSearchNote svg { width: 15px; color: #159267; }
+.modsDrawerBody > .inlineState { align-items: flex-start; margin: 0 0 16px; padding: 13px 14px; }
+.modsDrawerBody > .inlineState .uiButton { flex: 0 0 auto; }
 .modsSearchResults { display: grid; gap: 9px; }
 .modsResultCard { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 94px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .modsResultContent { min-width: 0; }
@@ -10067,8 +10069,10 @@ textarea,
 .modsVersionList button:hover:not(:disabled), .modsVersionList button.selected { transform: none; color: inherit; background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .modsVersionList button span:first-child { display: grid; gap: 2px; }
 .modsVersionList small { color: var(--text-muted); }
-.modsRiskAcknowledgement { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 32%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
-.modsRiskAcknowledgement > span { display: grid; gap: 3px; font-size: .8rem; }
+.modsRiskAcknowledgement { display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 32%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
+.modsRiskAcknowledgement input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; }
+.modsRiskAcknowledgement > span { display: block; flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.45; }
+.modsRiskAcknowledgement > span strong { margin-right: 4px; color: var(--text); }
 .modsReviewSection { margin-top: 18px; }
 .modsReviewSection h3 { margin: 0 0 8px; font-size: .88rem; }
 .modsReviewLine { display: flex; justify-content: space-between; gap: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 9px; }

@@ -31,6 +31,7 @@ type Props = {
   onClose: () => void;
   onQueryChange: (value: string) => void;
   onChoose: (mod: ModrinthHit) => void;
+  onRetrySearch: () => void;
   onInstallClose: () => void;
   onChannelChange: (mod: ModrinthHit, channel: ReleaseChannel) => void;
   onSelectVersion: (version: ModrinthInstallVersion) => void;
@@ -43,7 +44,7 @@ type Props = {
 
 export function AddModsWorkflow(props: Props) {
   if (props.installState) {
-    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.requiredDependencies} canContinue={props.canContinue} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
+    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.requiredDependencies} canContinue={props.canContinue} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
   }
 
   const installedIds = new Set(props.installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
@@ -61,7 +62,7 @@ export function AddModsWorkflow(props: Props) {
         <div className="modsSafeSearchNote"><AppIcon name="shield" /><span>Compatible Fabric server mods appear first.</span></div>
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
-        {props.error && <InlineState tone="error" title="Search failed" message={props.error} />}
+        {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
         {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and ServerSentinel will recommend the safest release." />}
         {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && <EmptyState compact className="modsWorkspaceEmpty" title="No matching mods" message="Try a shorter or different search." />}
         <div className="modsSearchResults" aria-busy={props.searching}>
