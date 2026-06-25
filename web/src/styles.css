@@ -24,7 +24,7 @@
   --border-panel: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
   --border-row: color-mix(in srgb, var(--border) 12%, var(--surface) 88%);
   --accent: var(--sentinel-accent);
-  --terminal-bg: #000000;
+  --terminal-bg: #101318;
   --terminal-text: #f2f2f2;
   --overlay: rgb(0 0 0 / 0.48);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
@@ -368,7 +368,7 @@ code {
   --sentinel-success: #8dd6c3;
   --sentinel-warning: #f6c177;
   --sentinel-danger: #f1aaa6;
-  --terminal-bg: #17191e;
+  --terminal-bg: #1d2027;
   --terminal-text: #dfe3eb;
   --overlay: rgb(0 0 0 / 0.62);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
@@ -5287,7 +5287,7 @@ button .buttonIcon {
   background: var(--terminal-bg);
   color: var(--terminal-text);
   font-family: var(--font-mono);
-  padding: 6px 8px 10px;
+  padding: 0;
 }
 
 .minecraftTerminalShell {
@@ -5297,7 +5297,7 @@ button .buttonIcon {
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  border-radius: calc(var(--radius-md) - 4px);
+  border-radius: inherit;
   background: var(--terminal-bg);
 }
 
@@ -5310,11 +5310,28 @@ button .buttonIcon {
 
 .minecraftTerminal .xterm {
   height: 100%;
-  padding: 0;
+  padding: 8px 10px;
+  background: var(--terminal-bg);
+}
+
+.minecraftTerminal .xterm-screen,
+.minecraftTerminal .xterm-viewport {
+  background: var(--terminal-bg) !important;
 }
 
 .minecraftTerminal .xterm-viewport {
   scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--terminal-text) 28%, var(--terminal-bg)) var(--terminal-bg);
+}
+
+.minecraftTerminal .xterm-viewport::-webkit-scrollbar-corner,
+.minecraftTerminal .xterm-viewport::-webkit-scrollbar-track {
+  background: var(--terminal-bg);
+}
+
+.minecraftTerminal .xterm-viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--terminal-text) 28%, var(--terminal-bg));
+  border-radius: 999px;
 }
 
 .minecraftTerminalStatus {

@@ -67,12 +67,7 @@ export function MinecraftTerminal({
       lineHeight: 1.35,
       scrollback: 5000,
       tabStopWidth: 2,
-      theme: {
-        background: cssVar(styles, "--terminal-bg", "#000000"),
-        foreground: cssVar(styles, "--terminal-text", "#f2f2f2"),
-        cursor: cssVar(styles, "--sentinel-accent-muted", "#70d0ff"),
-        selectionBackground: "rgba(112, 208, 255, 0.28)"
-      }
+      theme: terminalTheme(styles)
     });
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
@@ -111,6 +106,13 @@ export function MinecraftTerminal({
       terminal.dispose();
     };
   }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const terminal = terminalRef.current;
+    if (!container || !terminal) return;
+    terminal.options.theme = terminalTheme(window.getComputedStyle(container));
+  });
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -262,6 +264,15 @@ export function MinecraftTerminal({
 
 function cssVar(styles: CSSStyleDeclaration, name: string, fallback: string) {
   return styles.getPropertyValue(name).trim() || fallback;
+}
+
+function terminalTheme(styles: CSSStyleDeclaration) {
+  return {
+    background: cssVar(styles, "--terminal-bg", "#17191e"),
+    foreground: cssVar(styles, "--terminal-text", "#dfe3eb"),
+    cursor: cssVar(styles, "--sentinel-accent-muted", "#70d0ff"),
+    selectionBackground: "rgba(112, 208, 255, 0.28)"
+  };
 }
 
 function diffEntries(previousEntries: string[], nextEntries: string[]) {
