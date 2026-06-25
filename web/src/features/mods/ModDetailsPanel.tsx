@@ -32,6 +32,13 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
         ? "Update blocked"
         : health.label;
   const statusDescription = hasPlannedUpdate ? updatePlanEntry?.reason : health.shortDescription;
+  const reasonTone = health.tone === "ready"
+    ? "ready"
+    : health.tone === "not-recommended"
+      ? "not-recommended"
+      : health.tone === "review" || health.tone === "update"
+        ? "review"
+        : "unknown";
 
   useEffect(() => {
     setReviewingUpdate(false);
@@ -49,6 +56,10 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
       </div>
       <div className="modsDrawerBody">
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
+        <section className={`modsHealthReasonBanner ${reasonTone}`} aria-label="Compatibility reason">
+          <strong>{health.label}</strong>
+          <span>{health.detailDescription}</span>
+        </section>
         <dl className="modsDetailsFacts">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
           {hasPlannedUpdate && updatePlanEntry?.targetVersion && <div><dt>Available version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}

@@ -10041,6 +10041,15 @@ textarea,
 .modsDetailsTitle h2 { margin: 0 0 6px; }
 .modsDetailsTitle h2 + span { color: var(--text-muted); font-size: .76rem; }
 .modsDetailsDescription { margin: 0 0 20px; color: var(--text-muted); line-height: 1.55; }
+.modsHealthReasonBanner { display: grid; gap: 4px; margin: 0 0 16px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.modsHealthReasonBanner strong { font-size: .86rem; }
+.modsHealthReasonBanner span { color: var(--text-muted); font-size: .82rem; line-height: 1.45; }
+.modsHealthReasonBanner.ready { border-color: color-mix(in srgb, #159267 32%, var(--border)); background: color-mix(in srgb, #159267 8%, var(--panel)); }
+.modsHealthReasonBanner.ready strong { color: #12805b; }
+.modsHealthReasonBanner.review { border-color: color-mix(in srgb, #e98a15 34%, var(--border)); background: color-mix(in srgb, #e98a15 8%, var(--panel)); }
+.modsHealthReasonBanner.review strong { color: #b96305; }
+.modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, #d14343 34%, var(--border)); background: color-mix(in srgb, #d14343 8%, var(--panel)); }
+.modsHealthReasonBanner.not-recommended strong { color: #c23636; }
 .modsDetailsFacts { display: grid; gap: 0; margin: 0; }
 .modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .modsDetailsFacts dt { color: var(--text-muted); font-size: .78rem; font-weight: var(--weight-strong); }
