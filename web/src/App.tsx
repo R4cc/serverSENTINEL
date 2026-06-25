@@ -3646,20 +3646,22 @@ export default function App() {
 
             {activePage === "properties" && (
               <section className="tabPage settingsPage">
-                <section className="panel">
-                  <h2>Server Properties</h2>
-                  <ServerEditForm
-                    server={activeServer}
-                    versions={fabricVersions}
-                    totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
-                    onSubmit={updateServer}
-                    disabled={serverSettingsLocked || serverSettingsSaving}
-                  />
-                </section>
-                <DeleteServerPanel
+                <ServerEditForm
                   server={activeServer}
-                  onSubmit={deleteServer}
+                  versions={fabricVersions}
+                  totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
+                  onSubmit={updateServer}
                   disabled={serverSettingsLocked || serverSettingsSaving}
+                  statusLabel={serverCommandStatusLabel}
+                  statusTone={serverCommandTone}
+                  nodeName={activeNode.name}
+                  dangerZone={
+                    <DeleteServerPanel
+                      server={activeServer}
+                      onSubmit={deleteServer}
+                      disabled={serverSettingsLocked || serverSettingsSaving}
+                    />
+                  }
                 />
               </section>
             )}

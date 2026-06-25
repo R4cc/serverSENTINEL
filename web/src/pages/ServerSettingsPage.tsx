@@ -437,107 +437,301 @@ export function ServerEditForm({
   versions,
   totalMemory,
   onSubmit,
+  dangerZone,
+  statusLabel = "Unknown",
+  statusTone = "neutral",
+  nodeName = "Unknown node",
   disabled = false
 }: {
   server: ManagedServer;
   versions: FabricVersions;
   totalMemory: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  dangerZone?: ReactNode;
+  statusLabel?: string;
+  statusTone?: string;
+  nodeName?: string;
   disabled?: boolean;
 }) {
-  const [javaArgs, setJavaArgs] = useState(server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs)));
+  const initialJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
+  const initialMemory = parseJavaMemoryArgs(initialJavaArgs);
+  const initialMaximumHeapGb = parseMaxMemoryGb(initialJavaArgs);
+  const initialMinimumHeapGb = initialMemory.xmsGb ?? initialMaximumHeapGb;
+  const memoryBounds = useMemo(() => memoryBoundsForNode(totalMemory), [totalMemory]);
+  const formId = `server-settings-form-${server.id}`;
+  const [displayName, setDisplayName] = useState(server.displayName);
+  const [minecraftVersion, setMinecraftVersion] = useState(server.runtimeProfile.minecraftVersion);
+  const [loaderVersion, setLoaderVersion] = useState(server.runtimeProfile.loaderVersion ?? "");
+  const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
+  const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar");
+  const [dockerContainer, setDockerContainer] = useState(server.dockerContainer || "");
+  const [minimumHeapGb, setMinimumHeapGb] = useState(() => clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max));
+  const [maximumHeapGb, setMaximumHeapGb] = useState(() => clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max));
+  const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(
+    clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max),
+    clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max),
+    initialJavaArgs
+  ));
   const [serverPort, setServerPort] = useState(() => serverPortForServer(server));
   const [queryPort, setQueryPort] = useState(() => queryPortForServer(server));
+  const [resetVersion, setResetVersion] = useState(0);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
   const serverPortValid = isValidServerPort(serverPort);
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
+  const memoryWarning = maximumHeapGb > memoryBounds.max * 0.8;
+  const statusClass = statusTone === "running" ? "running" : statusTone === "starting" ? "starting" : statusTone === "stopped" || statusTone === "exited" ? "exited" : "neutral";
+  const currentMinecraftVersionListed = versions.game.some((version) => version.version === minecraftVersion);
+  const currentLoaderVersionListed = !loaderVersion || versions.loader.some((version) => version.version === loaderVersion);
+
+  useEffect(() => {
+    resetFormState();
+  }, [server.id]);
 
   useEffect(() => {
     setServerPort(serverPortForServer(server));
     setQueryPort(queryPortForServer(server));
   }, [server.id, server.dockerPorts, server.managedPorts]);
 
+  useEffect(() => {
+    setMinimumHeapGb((current) => Math.min(clampNumber(current, memoryBounds.min, memoryBounds.max), maximumHeapGb));
+    setMaximumHeapGb((current) => Math.max(clampNumber(current, memoryBounds.min, memoryBounds.max), minimumHeapGb));
+  }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
+
+  function resetFormState() {
+    const nextJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
+    const nextMemory = parseJavaMemoryArgs(nextJavaArgs);
+    const nextMaximum = clampNumber(nextMemory.xmxGb ?? parseMaxMemoryGb(nextJavaArgs), memoryBounds.min, memoryBounds.max);
+    const nextMinimum = clampNumber(nextMemory.xmsGb ?? nextMaximum, memoryBounds.min, nextMaximum);
+    setDisplayName(server.displayName);
+    setMinecraftVersion(server.runtimeProfile.minecraftVersion);
+    setLoaderVersion(server.runtimeProfile.loaderVersion ?? "");
+    setDockerImage(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
+    setServerJar(server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar");
+    setDockerContainer(server.dockerContainer || "");
+    setMinimumHeapGb(nextMinimum);
+    setMaximumHeapGb(nextMaximum);
+    setJavaArgs(wizardJavaArgs(nextMinimum, nextMaximum, nextJavaArgs));
+    setServerPort(serverPortForServer(server));
+    setQueryPort(queryPortForServer(server));
+    setResetVersion((current) => current + 1);
+  }
+
+  function updateMinimumHeap(value: number) {
+    const next = clampNumber(Math.round(value), memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb));
+    setMinimumHeapGb(next);
+    setJavaArgs((current) => wizardJavaArgs(next, maximumHeapGb, current));
+  }
+
+  function updateMaximumHeap(value: number) {
+    const next = clampNumber(Math.round(value), Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max);
+    setMaximumHeapGb(next);
+    setJavaArgs((current) => wizardJavaArgs(minimumHeapGb, next, current));
+  }
+
+  function updateJavaArgs(value: string) {
+    setJavaArgs(value);
+    const memory = parseJavaMemoryArgs(value);
+    if (memory.xmsGb !== null) {
+      setMinimumHeapGb(clampNumber(memory.xmsGb, memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb)));
+    }
+    if (memory.xmxGb !== null) {
+      setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max));
+    }
+  }
+
   return (
-    <form onSubmit={onSubmit} className="appForm">
-      <fieldset disabled={disabled}>
-      <label>
-        Display name
-        <input name="displayName" defaultValue={server.displayName} required maxLength={80} />
-      </label>
-      <label>
-        Minecraft version
-        <select name="minecraftVersion" defaultValue={server.runtimeProfile.minecraftVersion}>
-          {versions.game.length ? versions.game.map((version) => (
-            <option key={version.version} value={version.version}>{version.version}</option>
-          )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
-        </select>
-        <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
-      </label>
-      <label>
-        Fabric loader version
-        <select name="loaderVersion" defaultValue={server.runtimeProfile.loaderVersion ?? ""}>
-          <option value="">Latest stable</option>
-          {versions.loader.map((version) => (
-            <option key={version.version} value={version.version}>{version.version}</option>
-          ))}
-        </select>
-        <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
-      </label>
-      <MemorySelector
-        totalMemory={totalMemory}
-        initialMemoryGb={parseMaxMemoryGb(javaArgs)}
-        javaArgs={javaArgs}
-        onJavaArgsChange={setJavaArgs}
-      />
-      <details className="advanced">
-        <summary>Advanced Java arguments</summary>
-        <label>
-          Java arguments
-          <textarea
-            className="javaArgsInput"
-            name="javaArgs"
-            value={javaArgs}
-            onChange={(event) => setJavaArgs(event.target.value)}
-            rows={4}
-            spellCheck={false}
-          />
-        </label>
-        <p className="fieldHint">If -Xms and -Xmx differ, the memory slider adjusts -Xmx only and keeps your custom -Xms value.</p>
-      </details>
-      <label>
-        Docker runtime image
-        <select name="dockerImage" defaultValue={server.dockerImage || "eclipse-temurin:21-jre"}>
-          <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
-          <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
-          <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
-        </select>
-      </label>
-      <label>
-        Server jar filename
-        <input name="serverJar" defaultValue={server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar"} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
-      </label>
-      <label>
-        Docker container name
-        <input name="dockerContainer" defaultValue={server.dockerContainer || ""} pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
-      </label>
-      <MinecraftPortsSection
-        serverPort={serverPort}
-        queryPort={queryPort}
-        onServerPortChange={setServerPort}
-        onQueryPortChange={setQueryPort}
-        serverPortValid={serverPortValid}
-        queryPortValid={queryPortValid}
-        portConflict={portConflict}
-      />
-      <details className="advanced">
-        <summary>Additional port bindings</summary>
-        <AdditionalPortBindingsEditor key={server.id} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
-      </details>
-      <Button type="submit" disabled={!serverPortValid || !queryPortValid || portConflict}>Save server settings</Button>
-      </fieldset>
-    </form>
+    <div className="serverPropertiesWorkspace">
+      <form id={formId} onSubmit={onSubmit} className="serverPropertiesForm">
+        <fieldset disabled={disabled}>
+          <section className="propertiesSettingsCard" aria-labelledby="properties-general-title">
+            <div className="propertiesCardHeader">
+              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
+              <div>
+                <h2 id="properties-general-title">General</h2>
+                <p>Basic information and versions for this server.</p>
+              </div>
+            </div>
+            <div className="propertiesFieldGrid three">
+              <label>
+                Display name
+                <input name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
+              </label>
+              <label>
+                Minecraft version
+                <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
+                  {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
+                  {versions.game.length ? versions.game.map((version) => (
+                    <option key={version.version} value={version.version}>{version.version}</option>
+                  )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
+                </select>
+                <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
+              </label>
+              <label>
+                Fabric loader version
+                <select name="loaderVersion" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
+                  <option value="">Latest stable</option>
+                  {loaderVersion && !currentLoaderVersionListed && <option value={loaderVersion}>{loaderVersion}</option>}
+                  {versions.loader.map((version) => (
+                    <option key={version.version} value={version.version}>{version.version}</option>
+                  ))}
+                </select>
+                <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
+              </label>
+            </div>
+          </section>
+
+          <section className="propertiesSettingsCard" aria-labelledby="properties-runtime-title">
+            <div className="propertiesCardHeader">
+              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
+              <div>
+                <h2 id="properties-runtime-title">Runtime & Resources</h2>
+                <p>Configure how your server runs and uses system resources.</p>
+              </div>
+            </div>
+            <section className="resourceStepSection propertiesMemorySection" aria-labelledby="properties-memory-title">
+              <div className="resourceSectionIntro">
+                <h4 id="properties-memory-title">Minecraft memory</h4>
+                <p>Adjust the minimum and maximum heap memory available to the server.</p>
+              </div>
+              <div className="memoryRangeLayout">
+                <MemoryRangeControl
+                  bounds={memoryBounds}
+                  minimumHeapGb={minimumHeapGb}
+                  maximumHeapGb={maximumHeapGb}
+                  onMinimumHeapChange={updateMinimumHeap}
+                  onMaximumHeapChange={updateMaximumHeap}
+                />
+                <div className="memoryNumberFields">
+                  <MemoryNumberInput
+                    id="edit-minimum-heap"
+                    label="Minimum heap (Xms)"
+                    value={minimumHeapGb}
+                    min={memoryBounds.min}
+                    max={maximumHeapGb}
+                    onChange={updateMinimumHeap}
+                  />
+                  <span className="memoryHeapDivider" aria-hidden="true">/</span>
+                  <MemoryNumberInput
+                    id="edit-maximum-heap"
+                    label="Maximum heap (Xmx)"
+                    value={maximumHeapGb}
+                    min={minimumHeapGb}
+                    max={memoryBounds.max}
+                    onChange={updateMaximumHeap}
+                  />
+                </div>
+              </div>
+              <div className="memoryRangeMeta">
+                <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
+                <span>Total available: {memoryBounds.max} GB</span>
+              </div>
+              {memoryWarning && <span className="fieldError">Leave some RAM for the host. Using nearly all memory may cause instability.</span>}
+              <input type="hidden" name="javaArgs" value={javaArgs} />
+            </section>
+            <div className="propertiesFieldGrid two">
+              <label>
+                Docker runtime image
+                <select name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)}>
+                  <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
+                  <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
+                  <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
+                </select>
+              </label>
+              <label>
+                Server jar filename
+                <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
+              </label>
+              <label className="propertiesFieldWide">
+                Docker container name
+                <input name="dockerContainer" value={dockerContainer} onChange={(event) => setDockerContainer(event.target.value)} pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$" title="Use letters, numbers, dots, dashes, and underscores." />
+              </label>
+            </div>
+            <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
+              <summary>
+                <span>
+                  <strong>Advanced Java arguments</strong>
+                  <small>Customize launch flags while preserving the heap sliders above.</small>
+                </span>
+              </summary>
+              <div className="advancedResourceBody">
+                <label className="advancedResourceField" htmlFor="edit-java-args">
+                  <span>Java arguments</span>
+                  <textarea
+                    id="edit-java-args"
+                    className="javaArgsInput"
+                    value={javaArgs}
+                    onChange={(event) => updateJavaArgs(event.target.value)}
+                    rows={4}
+                    spellCheck={false}
+                  />
+                  <small>If -Xms and -Xmx differ, the two-point slider preserves that split.</small>
+                </label>
+              </div>
+            </details>
+          </section>
+
+          <section className="propertiesSettingsCard" aria-labelledby="properties-network-title">
+            <div className="propertiesCardHeader">
+              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
+              <div>
+                <h2 id="properties-network-title">Network</h2>
+                <p>Configure the network ports for this server.</p>
+              </div>
+            </div>
+            <MinecraftPortsSection
+              serverPort={serverPort}
+              queryPort={queryPort}
+              onServerPortChange={setServerPort}
+              onQueryPortChange={setQueryPort}
+              serverPortValid={serverPortValid}
+              queryPortValid={queryPortValid}
+              portConflict={portConflict}
+            />
+            <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
+              <summary>
+                <span>
+                  <strong>Additional port bindings</strong>
+                  <small>Expose extra TCP or UDP ports for mods and integrations.</small>
+                </span>
+              </summary>
+              <div className="advancedResourceBody">
+                <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
+              </div>
+            </details>
+          </section>
+        </fieldset>
+      </form>
+
+      <aside className="serverPropertiesSidebar">
+        <section className="propertiesSideCard">
+          <h2>Server summary</h2>
+          <dl className="propertiesSummaryList">
+            <div><dt>Server name</dt><dd>{displayName || server.displayName}</dd></div>
+            <div><dt>Status</dt><dd><span className={`summaryStatusDot ${statusClass}`} aria-hidden="true" />{statusLabel}</dd></div>
+            <div><dt>Node</dt><dd>{nodeName}</dd></div>
+            <div><dt>Runtime profile</dt><dd>{minecraftVersion || "Unknown"}</dd></div>
+            <div><dt>Loader</dt><dd>Fabric {loaderVersion || "latest stable"}</dd></div>
+          </dl>
+          <div className="propertiesInfoNote">
+            <span aria-hidden="true">i</span>
+            <p>Some changes may require a server restart to take effect.</p>
+          </div>
+        </section>
+        {dangerZone}
+        <section className="propertiesSideCard propertiesActionsCard">
+          <h2>Actions</h2>
+          <p>Apply your changes to the server configuration.</p>
+          <Button type="submit" form={formId} disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
+            Save changes
+          </Button>
+          <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
+            Discard changes
+          </Button>
+        </section>
+      </aside>
+    </div>
   );
 }
 
@@ -558,9 +752,9 @@ export function DeleteServerPanel({
   }, [server.id]);
 
   return (
-    <section className="panel dangerPanel">
-      <h2>Delete Server</h2>
-      <p className="muted">This removes the server from ServerSentinel. File deletion is optional and cannot be undone.</p>
+    <section className="propertiesSideCard dangerPanel">
+      <h2>Danger zone</h2>
+      <p className="muted">Deleting a server is permanent and cannot be undone.</p>
       <form onSubmit={onSubmit} className="appForm">
         <fieldset disabled={disabled}>
         <label>
@@ -577,7 +771,7 @@ export function DeleteServerPanel({
           <input name="deleteFiles" type="checkbox" />
           Also delete this server's files from disk
         </label>
-        <Button type="submit" variant="critical" disabled={!deleteConfirmed}>Delete Server</Button>
+        <Button type="submit" variant="critical" disabled={!deleteConfirmed}>Delete server</Button>
         </fieldset>
       </form>
     </section>
