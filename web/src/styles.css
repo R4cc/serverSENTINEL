@@ -10800,6 +10800,243 @@ textarea,
   line-height: 1.45;
 }
 
+/* Compact contextual server command header */
+.activeServerStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+}
+
+.themeDark .activeServerStrip {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--surface-muted));
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.22);
+}
+
+.activeServerStrip .serverStripLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripIcon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.activeServerStrip .server-icon-cube {
+  width: 18px;
+  height: 18px;
+}
+
+.activeServerStrip .serverStripInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverCommandStatusDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-soft);
+}
+
+.serverCommandStatusDot.running,
+.serverCommandStatusDot.starting {
+  background: var(--sentinel-success);
+}
+
+.serverCommandStatusDot.stopped,
+.serverCommandStatusDot.exited {
+  background: var(--sentinel-warning);
+}
+
+.serverCommandStatusDot.neutral {
+  background: var(--text-soft);
+}
+
+.activeServerStrip .runtimeBadge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.activeServerStrip .runtimeBadge.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text));
+}
+
+.activeServerStrip .runtimeBadge.stopped,
+.activeServerStrip .runtimeBadge.exited {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
+}
+
+.activeServerStrip .serverStripMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.activeServerStrip .serverStripMeta,
+.activeServerStrip .serverStripSeparator {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+}
+
+.activeServerStrip .serverStripRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.activeServerStrip .runtimeControlsCompact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton,
+.activeServerStrip .uiButton.quickActionButton {
+  min-height: 40px;
+  height: 40px;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.start {
+  min-width: 112px;
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.stop {
+  min-width: 112px;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart,
+.activeServerStrip .uiButton.quickActionButton {
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.activeServerStrip .quickActionButton.consoleLink.active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.activeServerStrip .overflowButton {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 980px) {
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .activeServerStrip {
+    padding: var(--space-3);
+  }
+
+  .activeServerStrip .serverStripLeft {
+    align-items: flex-start;
+  }
+
+  .activeServerStrip .serverStripRight,
+  .activeServerStrip .runtimeControlsCompact {
+    width: 100%;
+  }
+
+  .activeServerStrip .uiButton.runtimeControlButton,
+  .activeServerStrip .uiButton.quickActionButton {
+    flex: 1 1 140px;
+  }
+
+  .activeServerStrip .overflowMenuContainer {
+    margin-left: auto;
+  }
+}
+
 /* Mods and Nodes adoption -------------------------------------------------- */
 
 .modsLockBanner,

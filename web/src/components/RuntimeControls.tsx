@@ -30,7 +30,8 @@ export function RuntimeControls({
   controlAvailableFallback = false,
   disabledReason,
   busyAction,
-  onAction
+  onAction,
+  className = ""
 }: {
   status: ServerStatus | null;
   isProvisioning: boolean;
@@ -38,6 +39,7 @@ export function RuntimeControls({
   disabledReason?: string;
   busyAction: "start" | "stop" | "restart" | null;
   onAction: (action: "start" | "stop" | "restart") => void;
+  className?: string;
 }) {
   const controlAvailable = status?.controlAvailable ?? controlAvailableFallback;
   const disabled = isProvisioning || Boolean(busyAction) || !controlAvailable;
@@ -49,7 +51,7 @@ export function RuntimeControls({
   const actionLabel = (action: "start" | "stop" | "restart") => `${action[0].toUpperCase()}${action.slice(1)}`;
 
   return (
-    <div className="runtimeControls" aria-label="Container controls">
+    <div className={`runtimeControls ${className}`.trim()} aria-label="Container controls">
       {([mainAction, "restart"] as const).map((action) => {
         const actionDisabled = disabled || (action === "restart" && !isRunning);
         const actionReason = action === "restart" && !isRunning

@@ -13,7 +13,7 @@ import { ApiError, api, apiErrorFromResponse } from "./api";
 import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeLabel, runtimeTone, versionValue } from "./utils/format";
+import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
@@ -257,6 +257,14 @@ export default function App() {
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
+  const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
+  const serverCommandStatusLabel = serverCommandTone === "running"
+    ? "Running"
+    : serverCommandTone === "starting"
+      ? "Starting"
+      : serverCommandTone === "stopped" || serverCommandTone === "exited"
+        ? "Offline"
+        : "Unavailable";
   const runtimeControlsDisabledReason = authOperationalLock
     ? "Sign in before using runtime controls."
     : !canBasic
@@ -3196,18 +3204,23 @@ export default function App() {
                 </div>
                 <div className="serverStripInfo">
                   <div className="serverStripTitleRow">
+                    <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
                     <strong>{activeServer.displayName}</strong>
+                    <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
+                      {serverCommandStatusLabel}
+                    </StatusBadge>
                   </div>
                   <div className="serverStripMetaRow">
-                    <StatusBadge className={`runtimeBadge ${runtimeTone(activeStatus, activeServerDockerSocketMounted)}`}>
-                      {runtimeLabel(activeStatus, activeServerDockerSocketMounted)}
-                    </StatusBadge>
                     <small className="serverStripMeta">
-                      Fabric {activeMinecraftVersion === "Unknown" ? "version unknown" : activeMinecraftVersion}
-                    </small>
-                    <small className="serverStripMeta nodeStripMeta">
-                      <span className={`nodeStatusDot ${activeNode.status}`} aria-hidden="true" />
                       {activeNode.name}
+                    </small>
+                    <span aria-hidden="true" className="serverStripSeparator">·</span>
+                    <small className="serverStripMeta">
+                      Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
+                    </small>
+                    <span aria-hidden="true" className="serverStripSeparator">·</span>
+                    <small className="serverStripMeta">
+                      MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
                     </small>
                   </div>
                 </div>
@@ -3220,6 +3233,7 @@ export default function App() {
                   disabledReason={runtimeControlsDisabledReason}
                   busyAction={runtimeAction}
                   onAction={runContainerAction}
+                  className="runtimeControlsCompact"
                 />
                 <Button
                   variant="secondary"
