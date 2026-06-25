@@ -190,7 +190,6 @@ export default function App() {
   const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
-  const overviewLoadToastRunningRef = useRef(false);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
@@ -957,31 +956,18 @@ export default function App() {
 
   useEffect(() => {
     const toastId = "overview-load";
-    if (activePage !== "overview" || !activeServer || activeNodeRuntimeBlocked || overviewError) {
-      overviewLoadToastRunningRef.current = false;
+    if (activePage !== "overview" || !activeServer || activeNodeRuntimeBlocked || !overviewError) {
       toast.dismiss(toastId);
       return;
     }
-    if (overviewLoading) {
-      overviewLoadToastRunningRef.current = true;
-      toast.loading("Loading overview", {
-        id: toastId,
-        description: "Loading server activity, health, and recent events.",
-        dismissible: false,
-        duration: Infinity
-      });
-      return;
-    }
-    if (!overviewLoadToastRunningRef.current) return;
-    overviewLoadToastRunningRef.current = false;
-    toast.success("Overview updated", {
+    toast.error("Overview update failed", {
       id: toastId,
-      description: "Server activity, health, and recent events are up to date.",
-      duration: 3000,
+      description: overviewError,
+      duration: 7000,
       closeButton: true,
       dismissible: true
     });
-  }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError, overviewLoading]);
+  }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError]);
 
   function notify(type: "success" | "error" | "info" | "warning", text: string) {
     const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
