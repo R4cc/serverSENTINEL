@@ -437,9 +437,7 @@ async function createServer(input: CreateInput) {
 
 async function updateServer(server: ManagedServer, input: UpdateInput) {
   const status = await runtimeStatus(server);
-  if ((status as { docker?: { running?: boolean } }).docker?.running) {
-    throw new Error("Stop the server before changing its configuration");
-  }
+  const running = (status as { docker?: { running?: boolean } }).docker?.running === true;
 
   const currentRuntime = runtimeProfileForServer(server);
   const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
@@ -478,6 +476,9 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     || server.dockerPorts !== dockerPorts
     || server.javaArgs !== javaArgs
     || currentRuntime.jarArtifact.filename !== serverJar;
+  if (running && server.dockerContainer !== dockerContainer) {
+    throw new Error("Stop the server before changing its Docker container name");
+  }
 
   const updated: ManagedServer = {
     ...server,
@@ -510,7 +511,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
       "query.port": String(queryPort)
     }), "utf8");
   }
-  if (containerConfigChanged && dockerAvailable()) {
+  if (containerConfigChanged && dockerAvailable() && !running) {
     await removeManagedContainer(server);
     await ensureContainer(updated);
   }
@@ -1118,7 +1119,7 @@ async function handleCommand(command: string, payload: any) {
   }
   if (command === "server.start") { await ensureContainer(server); await dockerRequest("POST", `/containers/${name}/start`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.stop") { await dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304]); return runtimeStatus(server); }
-  if (command === "server.restart") { await dockerRequest("POST", `/containers/${name}/restart?t=10`, 204); return runtimeStatus(server); }
+  if (command === "server.restart") { await ensureContainer(server); await dockerRequest("POST", `/containers/${name}/restart?t=10`, 204); return runtimeStatus(server); }
   if (command === "server.stats") {
     const status = await runtimeStatus(server) as any;
     if (!status.docker.running) return { available: true, running: false, cpuPercent: 0, memoryUsageBytes: 0, memoryLimitBytes: 0, networkRxBytes: 0, networkTxBytes: 0, sampledAt: new Date().toISOString() };

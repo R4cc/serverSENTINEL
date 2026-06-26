@@ -2454,13 +2454,6 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), filename, size: downloaded.size, durationMs: durationSince(startedAt) }, "Fabric server launcher downloaded");
 }
 
-async function ensureServerStoppedForModChanges(server: ManagedServer) {
-  const status = await dockerStatus(server);
-  if (status.running) {
-    throw new Error("Stop the server before changing mods");
-  }
-}
-
 async function createServerFiles(
   server: ManagedServer,
   acceptEula: boolean,
@@ -2958,9 +2951,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
       throw new Error("A managed server with this display name already exists");
     }
     const status = await dockerStatus(current);
-    if (status.running) {
-      throw new Error("Stop the server before changing its configuration");
-    }
     const currentRuntime = runtimeProfileForServer(current);
     const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
     const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
@@ -3023,6 +3013,9 @@ async function localUpdateServer(serverId: string, input: unknown) {
       || current.dockerPorts !== dockerPorts
       || current.javaArgs !== javaArgs
       || currentRuntime.jarArtifact.filename !== serverJar;
+    if (status.running && current.dockerContainer !== dockerContainer) {
+      throw new Error("Stop the server before changing its Docker container name");
+    }
 
     const updated: ManagedServer = {
       ...current,
@@ -3039,7 +3032,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     if (jarChanged) {
       await downloadFabricServerJar(updated);
     }
-    if (containerConfigChanged && dockerAvailable()) {
+    if (containerConfigChanged && dockerAvailable() && !status.running) {
       await removeManagedDockerContainer(current);
       await ensureDockerContainer(updated);
     }
@@ -4783,7 +4776,6 @@ async function localModIcon(server: ManagedServer, filenameInput: unknown) {
 }
 
 async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
-  await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const enabled = requireStrictBoolean(enabledInput, "enabled");
   const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join("mods", filename)))
@@ -4814,7 +4806,6 @@ async function localToggleMod(server: ManagedServer, filenameInput: unknown, ena
 }
 
 async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
-  await ensureServerStoppedForModChanges(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const target = await validateExistingInsideServer(server, join("mods", filename));
   await rm(target, { force: true });
@@ -4832,7 +4823,6 @@ async function localUploadMod(server: ManagedServer, filenameInput: unknown, con
   const startedAt = Date.now();
   let filename: string | undefined;
   try {
-    await ensureServerStoppedForModChanges(server);
     filename = safeModFilename(safeInstalledModFilename(filenameInput as string | undefined));
     logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, "Manual mod upload started");
     const contentBase64 = validateBase64Content(contentBase64Input);
@@ -5139,7 +5129,6 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
   const projectId = install.projectId;
   const forceIncompatible = install.forceIncompatible;
   try {
-    await ensureServerStoppedForModChanges(server);
     const targetRuntime = runtimeTarget(server);
     if (!projectId || !targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
       throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
@@ -5700,7 +5689,6 @@ app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseCha
     successTask: "Mod update batch complete",
     restartEffect: (result) => ((result as SafeBatchUpdateResult).counts?.updated ?? 0) > 0 ? "mark" : undefined
   }, async () => {
-    await ensureServerStoppedForModChanges(server);
     const channel = optionalReleaseChannel(request.body.channel);
     const filenames = request.body.filenames === undefined
       ? undefined

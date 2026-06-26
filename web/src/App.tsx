@@ -293,36 +293,30 @@ export default function App() {
             ? "Server setup is still running."
             : "";
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager || Boolean(activeStatus?.docker.running);
+  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager;
+  const deleteServerLocked = serverSettingsLocked || Boolean(activeStatus?.docker.running);
   const serverSettingsLockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
       : !canManager
         ? "Manager permission is required."
-        : activeStatus?.docker.running
-          ? "Stop the server before editing configuration."
-          : serverSettingsSaving
-            ? "Server settings are saving."
-            : "";
+        : serverSettingsSaving
+          ? "Server settings are saving."
+          : "";
   const modServerRunning = Boolean(activeStatus?.docker.running);
   const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
-  const modServerRunningReason = "Stop the server before adding, removing, updating, or uploading mods.";
-  const addModFromModrinthDisabled = modServerRunning || isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured;
-  const uploadModDisabled = modServerRunning || modsLocked;
-  const addModFromModrinthDisabledReason = modServerRunning
-    ? modServerRunningReason
-    : isProvisioning
+  const addModFromModrinthDisabled = isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured;
+  const uploadModDisabled = modsLocked;
+  const addModFromModrinthDisabledReason = isProvisioning
       ? "Server setup is still running."
       : !canManager
         ? "Server management permission is required."
         : !effectiveAppState.modrinthApiConfigured
           ? "Add a Modrinth API key in Settings before searching for mods."
           : "Search Modrinth for compatible Fabric mods.";
-  const uploadModDisabledReason = modServerRunning
-    ? modServerRunningReason
-    : isProvisioning
+  const uploadModDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
@@ -3652,9 +3646,9 @@ export default function App() {
                 }}
                 access={{
                   serverRunning: modServerRunning,
-                  changesAllowed: !modsLocked && !modServerRunning,
-                  locked: modsLocked || modServerRunning,
-                  toggleLocked: modToggleLocked || modServerRunning,
+                  changesAllowed: !modsLocked,
+                  locked: modsLocked,
+                  toggleLocked: modToggleLocked,
                   canStopServer: canBasic && !dockerOperationalLock,
                   stoppingServer: runtimeAction === "stop",
                   modrinthConfigured: effectiveAppState.modrinthApiConfigured,
@@ -3689,6 +3683,7 @@ export default function App() {
                   onSubmit={updateServer}
                   disabled={serverSettingsLocked || serverSettingsSaving}
                   disabledReason={serverSettingsLockedReason}
+                  containerNameLocked={Boolean(activeStatus?.docker.running)}
                   statusLabel={serverCommandStatusLabel}
                   statusTone={serverCommandTone}
                   nodeName={activeNode.name}
@@ -3696,7 +3691,7 @@ export default function App() {
                     <DeleteServerPanel
                       server={activeServer}
                       onSubmit={deleteServer}
-                      disabled={serverSettingsLocked || serverSettingsSaving}
+                      disabled={deleteServerLocked || serverSettingsSaving}
                     />
                   }
                 />

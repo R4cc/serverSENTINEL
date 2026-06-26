@@ -155,7 +155,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const {
     activeServer, activePage, activeServerIsDemo, activeServerUsesInternalNode, activeNodeRuntimeBlocked,
     activeNodeBlockMessage, demoMode, demoInstalledMods, setDemoInstalledMods, modrinthConfigured,
-    isProvisioning, serverRunning, canManage, modsLocked, toggleLocked, notify, setNotice,
+    isProvisioning, canManage, modsLocked, toggleLocked, notify, setNotice,
     setActiveJobs, handleStaleSession, refreshFiles, onRestartRequiredChange
   } = inputs;
   const demoFixture = readModsDemoFixture();
@@ -203,12 +203,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       || (installState?.showOtherVersions && getInstallVersionHealth(selectedVersion).requiresAcknowledgement && installState.acknowledgeMinecraftMismatch)
     )
   );
-
-  function warnIfServerRunning() {
-    if (!serverRunning) return false;
-    notify("error", "Stop the server before adding, removing, updating, or uploading mods.");
-    return true;
-  }
 
   async function loadInstalledMods(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return;
@@ -474,7 +468,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   function openInstallReview(mod: ModrinthHit) {
-    if (warnIfServerRunning()) return;
     const channel: ReleaseChannel = "release";
     setInstallState({ mod, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
     void loadInstallVersions(mod, channel, { useFallbackChannel: true });
@@ -499,7 +492,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
-    if (warnIfServerRunning()) { event.target.value = ""; return; }
     if (modsLocked || !canManage || !activeServer) return;
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -546,7 +538,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function installSelectedMod() {
-    if (warnIfServerRunning() || modsLocked || !canManage || !activeServer || !installState?.data || !selectedVersion?.selectable) return;
+    if (modsLocked || !canManage || !activeServer || !installState?.data || !selectedVersion?.selectable) return;
     const projectId = installState.mod.project_id;
     const title = installState.data.project.title || installState.mod.title;
     const forceIncompatible = !selectedVersion.compatible;
@@ -611,7 +603,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function updateMod(mod: InstalledMod) {
-    if (warnIfServerRunning() || modsLocked || !canManage || !activeServer || !mod.modrinth) return;
+    if (modsLocked || !canManage || !activeServer || !mod.modrinth) return;
     setNotice("");
     const title = mod.displayName;
     const oldFilename = mod.filename;
@@ -656,7 +648,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function updateAllSafe() {
-    if (warnIfServerRunning() || modsLocked || !canManage || !activeServer || batchUpdateRunning) return;
+    if (modsLocked || !canManage || !activeServer || batchUpdateRunning) return;
     const plan = updatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
     const safeEntries = plan?.updates.filter((entry) => entry.status === "safe_update" && entry.safeBatchEligible) ?? [];
     if (!safeEntries.length) {
@@ -765,7 +757,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function removeMod(mod: InstalledMod) {
-    if (warnIfServerRunning() || modsLocked || !canManage || !activeServer) return;
+    if (modsLocked || !canManage || !activeServer) return;
     setNotice("");
     if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder.`)) return;
     if (activeServerIsDemo) {
@@ -791,7 +783,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     refs: { sentinelRef },
     actions: {
       setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
-      openAdd: () => { if (!warnIfServerRunning()) { setDetailsModKey(""); setAddOpen(true); } },
+      openAdd: () => { setDetailsModKey(""); setAddOpen(true); },
       closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
