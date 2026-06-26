@@ -48,7 +48,8 @@ describe("SQLite storage", () => {
         { version: 4, name: "file-edit-leases" },
         { version: 5, name: "resource-stats-history" },
         { version: 6, name: "mod-preferences" },
-        { version: 7, name: "operations" }
+        { version: 7, name: "operations" },
+        { version: 8, name: "server-restart-required" }
       ]);
   });
 

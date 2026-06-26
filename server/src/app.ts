@@ -32,7 +32,7 @@ import {
   versionChannel
 } from "./modrinth/compatibility.js";
 import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
-import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
+import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan, type SafeBatchUpdateResult } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -880,6 +880,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
+    restartRequiredSince: server.restartRequiredSince,
     schedules: (server.schedules ?? []).map(publicSchedule),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
@@ -991,6 +992,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerPorts,
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
+    restartRequiredSince: optionalString(server.restartRequiredSince, "server.restartRequiredSince"),
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
     createdAt: requiredString(server.createdAt, "server.createdAt"),
     updatedAt: requiredString(server.updatedAt, "server.updatedAt")
@@ -2597,6 +2599,8 @@ async function recordOperation<T>(
     successTask?: string;
     serverIdFromResult?: (value: T) => string | undefined;
     result?: (value: T) => unknown;
+    markRestartRequiredOnSuccess?: boolean | ((value: T) => boolean);
+    clearRestartRequiredOnSuccess?: boolean;
   },
   action: (operation: OperationRecord) => Promise<T>
 ) {
@@ -2610,8 +2614,19 @@ async function recordOperation<T>(
   operationsRepository.start(operation.id, { progress: 5, task: input.runningTask ?? input.task });
   try {
     const result = await action(operation);
+    const resultServerId = input.serverIdFromResult?.(result);
+    const affectedServerId = resultServerId ?? input.serverId;
+    const shouldMarkRestartRequired = typeof input.markRestartRequiredOnSuccess === "function"
+      ? input.markRestartRequiredOnSuccess(result)
+      : input.markRestartRequiredOnSuccess;
+    if (affectedServerId && shouldMarkRestartRequired) {
+      serversRepository.markRestartRequired(affectedServerId);
+    }
+    if (affectedServerId && input.clearRestartRequiredOnSuccess) {
+      serversRepository.clearRestartRequired(affectedServerId);
+    }
     operationsRepository.succeed(operation.id, {
-      serverId: input.serverIdFromResult?.(result),
+      serverId: resultServerId,
       progress: 100,
       task: input.successTask ?? "Operation complete",
       result: input.result ? input.result(result) : result
@@ -2624,6 +2639,23 @@ async function recordOperation<T>(
     });
     throw error;
   }
+}
+
+function markServerRestartRequired(serverId: string) {
+  serversRepository.markRestartRequired(serverId);
+}
+
+function isRestartSensitivePath(server: ManagedServer, runtime: NodeRuntime, absolutePath: string) {
+  return runtime.isServerSettingsFile(server, absolutePath) || runtime.isModsPath(server, absolutePath);
+}
+
+function serverSettingsRestartRequired(before: ManagedServer, after: ManagedServer) {
+  return JSON.stringify(runtimeProfileForServer(before)) !== JSON.stringify(runtimeProfileForServer(after))
+    || before.dockerContainer !== after.dockerContainer
+    || before.dockerImage !== after.dockerImage
+    || before.dockerPorts !== after.dockerPorts
+    || JSON.stringify(before.managedPorts ?? []) !== JSON.stringify(after.managedPorts ?? [])
+    || before.javaArgs !== after.javaArgs;
 }
 
 async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
@@ -3817,6 +3849,10 @@ app.put<{
     await assertNodePortsAvailable(server.nodeId, dockerPorts, { ignoreServerId: server.id });
   }
   const updatedServer = await runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) });
+  if (serverSettingsRestartRequired(server, updatedServer)) {
+    markServerRestartRequired(updatedServer.id);
+    return runtimeForServer(updatedServer).publicServer(await getServer(updatedServer.id));
+  }
   return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 
@@ -3889,7 +3925,8 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Starting server",
-    successTask: "Server started"
+    successTask: "Server started",
+    clearRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).lifecycle(server, "start"));
 });
 
@@ -3902,7 +3939,8 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Stopping server",
-    successTask: "Server stopped"
+    successTask: "Server stopped",
+    clearRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).lifecycle(server, "stop"));
 });
 
@@ -3915,7 +3953,8 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Restarting server",
-    successTask: "Server restarted"
+    successTask: "Server restarted",
+    clearRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).lifecycle(server, "restart"));
 });
 
@@ -4121,6 +4160,9 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
   const result = await runtime.writeFile(server, target, request.body.content) as Record<string, unknown>;
   fileEditLeasesRepository.release(lease.leaseId, owner);
+  if (isRestartSensitivePath(server, runtime, target)) {
+    markServerRestartRequired(server.id);
+  }
   return { ...result, revision: fileContentRevision(request.body.content ?? "") };
 });
 
@@ -4145,7 +4187,11 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
   const filename = safeFileManagerName(request.body.filename);
   const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
   await requireFilePathPermission(request, server, parent, uploadPermission);
-  return runtime.uploadFile(server, parent, filename, request.body.contentBase64);
+  const result = await runtime.uploadFile(server, parent, filename, request.body.contentBase64);
+  if (uploadPermission === "mods.upload") {
+    markServerRestartRequired(server.id);
+  }
+  return result;
 });
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -4158,7 +4204,11 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const targetName = safeFileManagerName(request.body.name);
   const target = await runtime.resolveWritableResolvedPath(server, join(dirname(source), targetName));
   await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, target));
-  return runtime.renameFile(server, source, targetName);
+  const result = await runtime.renameFile(server, source, targetName);
+  if (isRestartSensitivePath(server, runtime, source) || isRestartSensitivePath(server, runtime, target)) {
+    markServerRestartRequired(server.id);
+  }
+  return result;
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
@@ -4166,7 +4216,11 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
   await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
-  return runtime.duplicateFile(server, source, request.body.name);
+  const result = await runtime.duplicateFile(server, source, request.body.name);
+  if (runtime.isModsPath(server, source)) {
+    markServerRestartRequired(server.id);
+  }
+  return result;
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -4174,7 +4228,11 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
-  return runtime.deleteFile(server, target, request.query.recursive);
+  const result = await runtime.deleteFile(server, target, request.query.recursive);
+  if (isRestartSensitivePath(server, runtime, target)) {
+    markServerRestartRequired(server.id);
+  }
+  return result;
 });
 
 
@@ -5313,7 +5371,8 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mod state",
-    successTask: "Mod state updated"
+    successTask: "Mod state updated",
+    markRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled));
 });
 
@@ -5327,7 +5386,8 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Removing mod",
-    successTask: "Mod removed"
+    successTask: "Mod removed",
+    markRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).removeMod(server, request.query.filename));
 });
 
@@ -5340,7 +5400,8 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Uploading mod",
-    successTask: "Mod uploaded"
+    successTask: "Mod uploaded",
+    markRestartRequiredOnSuccess: true
   }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64));
 });
 
@@ -5616,7 +5677,8 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mod",
-    successTask: "Mod updated"
+    successTask: "Mod updated",
+    markRestartRequiredOnSuccess: (result) => !((result as { upToDate?: unknown })?.upToDate === true)
   }, () => updateModrinthMod(server, request.body));
 });
 
@@ -5629,7 +5691,8 @@ app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseCha
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mods",
-    successTask: "Mod update batch complete"
+    successTask: "Mod update batch complete",
+    markRestartRequiredOnSuccess: (result) => ((result as SafeBatchUpdateResult).counts?.updated ?? 0) > 0
   }, async () => {
     await ensureServerStoppedForModChanges(server);
     const channel = optionalReleaseChannel(request.body.channel);
@@ -5774,7 +5837,8 @@ app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; ch
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Installing mod",
-    successTask: "Mod installed"
+    successTask: "Mod installed",
+    markRestartRequiredOnSuccess: true
   }, () => installModWithRemoteVersionFallback(server, request.body));
 });
 

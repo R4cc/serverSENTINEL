@@ -11238,6 +11238,44 @@ textarea,
   white-space: nowrap;
 }
 
+.serverListTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.serverListTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restartRequiredIndicator {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, #2f80ed 44%, var(--border-row));
+  border-radius: 999px;
+  background: color-mix(in srgb, #2f80ed 12%, var(--surface-raised));
+  color: #2f80ed;
+}
+
+.restartRequiredIndicator .buttonIcon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.3;
+}
+
+.serverListItem.active .restartRequiredIndicator {
+  border-color: color-mix(in srgb, #2f80ed 54%, var(--sentinel-accent-strong));
+  background: color-mix(in srgb, #2f80ed 18%, var(--surface));
+  color: #2f80ed;
+}
+
 .serverCommandStatusDot {
   width: 8px;
   height: 8px;

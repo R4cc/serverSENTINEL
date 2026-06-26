@@ -253,6 +253,7 @@ export type ManagedServer = {
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
+  restartRequiredSince?: string;
   schedules?: ScheduledExecution[];
   createdAt: string;
   updatedAt: string;

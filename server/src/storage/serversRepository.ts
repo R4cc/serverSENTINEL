@@ -15,6 +15,7 @@ type ServerRow = {
   docker_working_dir: string | null;
   docker_ports: string | null;
   java_args: string | null;
+  restart_required_since: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -150,6 +151,7 @@ export class ServersRepository {
       dockerPorts: row.docker_ports ?? undefined,
       managedPorts: portsByServer.get(row.id) ?? [],
       javaArgs: row.java_args ?? undefined,
+      restartRequiredSince: row.restart_required_since ?? undefined,
       schedules: schedulesByServer.get(row.id) ?? [],
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -171,7 +173,11 @@ export class ServersRepository {
   replaceMetadata(value: ManagedServer) {
     this.storage.transaction((database) => {
       const server = this.normalize(value);
-      if (!database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) throw new Error("Server not found");
+      const existing = database.prepare<[string], Pick<ServerRow, "restart_required_since">>("SELECT restart_required_since FROM servers WHERE id = ?").get(server.id);
+      if (!existing) throw new Error("Server not found");
+      if (server.restartRequiredSince === undefined && existing.restart_required_since) {
+        server.restartRequiredSince = existing.restart_required_since;
+      }
       this.upsertServer(database, server);
       this.syncPorts(database, server);
     });
@@ -179,6 +185,22 @@ export class ServersRepository {
 
   delete(id: string) {
     return this.storage.connection.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
+  }
+
+  markRestartRequired(serverId: string, now = new Date().toISOString()) {
+    this.storage.connection.prepare(`
+      UPDATE servers
+      SET restart_required_since = COALESCE(restart_required_since, ?), updated_at = ?
+      WHERE id = ?
+    `).run(now, now, serverId);
+  }
+
+  clearRestartRequired(serverId: string, now = new Date().toISOString()) {
+    this.storage.connection.prepare(`
+      UPDATE servers
+      SET restart_required_since = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(now, serverId);
   }
 
   createSchedule(serverId: string, schedule: ScheduledExecution, serverUpdatedAt: string) {
@@ -246,8 +268,8 @@ export class ServersRepository {
       INSERT INTO servers (
         id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
         docker_container, docker_image, docker_mount_source, docker_working_dir,
-        docker_ports, java_args, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        docker_ports, java_args, restart_required_since, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         node_id=excluded.node_id, display_name=excluded.display_name,
         server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -255,13 +277,13 @@ export class ServersRepository {
         docker_container=excluded.docker_container, docker_image=excluded.docker_image,
         docker_mount_source=excluded.docker_mount_source,
         docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-        java_args=excluded.java_args,
+        java_args=excluded.java_args, restart_required_since=excluded.restart_required_since,
         created_at=excluded.created_at, updated_at=excluded.updated_at
     `).run(
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,
-      server.dockerPorts ?? null, server.javaArgs ?? null, server.createdAt, server.updatedAt
+      server.dockerPorts ?? null, server.javaArgs ?? null, server.restartRequiredSince ?? null, server.createdAt, server.updatedAt
     );
   }
 

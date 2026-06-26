@@ -224,6 +224,15 @@ const migrations: readonly Migration[] = [
         CREATE INDEX operations_status_idx ON operations(status, created_at DESC);
       `);
     }
+  },
+  {
+    version: 8,
+    name: "server-restart-required",
+    up(database) {
+      database.exec(`
+        ALTER TABLE servers ADD COLUMN restart_required_since TEXT
+      `);
+    }
   }
 ];
 

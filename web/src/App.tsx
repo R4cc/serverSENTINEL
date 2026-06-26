@@ -337,7 +337,8 @@ export default function App() {
     setNotice,
     setActiveJobs,
     handleStaleSession,
-    refreshFiles: loadFiles
+    refreshFiles: loadFiles,
+    onRestartRequiredChange: () => refreshApp({ silent: true })
   });
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
@@ -1783,6 +1784,7 @@ export default function App() {
         return;
       }
       await api(`/api/servers/${activeServer.id}/${action}`, { method: "POST" });
+      await refreshApp({ silent: true });
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
       await refreshConsoleLogs(activeServer.id);
@@ -2458,6 +2460,9 @@ export default function App() {
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
+      if (selectedPath === "/server.properties") {
+        await refreshApp({ silent: true });
+      }
       closeEditor();
     } catch (error) {
       const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
@@ -2911,7 +2916,14 @@ export default function App() {
                         setActivePage("overview");
                       }}
                     >
-                      <strong>{server.displayName}</strong>
+                      <span className="serverListTitleRow">
+                        <strong>{server.displayName}</strong>
+                        {server.restartRequiredSince && (
+                          <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
+                            <AppIcon name="hourglass" />
+                          </span>
+                        )}
+                      </span>
                       <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - Fabric</span>
                       {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
                     </button>
@@ -3217,6 +3229,11 @@ export default function App() {
                   <div className="serverStripTitleRow">
                     <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
                     <strong>{activeServer.displayName}</strong>
+                    {activeServer.restartRequiredSince && (
+                      <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
+                        <AppIcon name="hourglass" />
+                      </span>
+                    )}
                     <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                       {serverCommandStatusLabel}
                     </StatusBadge>
