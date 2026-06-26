@@ -88,6 +88,14 @@ function AppToaster({ darkMode }: { darkMode: boolean }) {
   );
 }
 
+function RestartRequiredBadge() {
+  return (
+    <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
+      <AppIcon name="hourglass" />
+    </span>
+  );
+}
+
 export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
@@ -223,6 +231,14 @@ export default function App() {
     triggerOverviewRefreshRef.current = triggerOverviewRefresh;
   }, [triggerOverviewRefresh]);
 
+  function markServerRestartRequired(serverId: string, since = new Date().toISOString()) {
+    const apply = (server: ManagedServer) => (
+      server.id === serverId && !server.restartRequiredSince ? { ...server, restartRequiredSince: since } : server
+    );
+    setAppState((current) => ({ ...current, servers: current.servers.map(apply) }));
+    setStatus((current) => current?.server.id === serverId ? { ...current, server: apply(current.server) } : current);
+  }
+
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
@@ -338,7 +354,7 @@ export default function App() {
     setActiveJobs,
     handleStaleSession,
     refreshFiles: loadFiles,
-    onRestartRequiredChange: () => refreshApp({ silent: true })
+    onRestartRequiredChange: markServerRestartRequired
   });
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
@@ -2461,7 +2477,7 @@ export default function App() {
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
       if (selectedPath === "/server.properties") {
-        await refreshApp({ silent: true });
+        markServerRestartRequired(activeServer.id);
       }
       closeEditor();
     } catch (error) {
@@ -2918,11 +2934,7 @@ export default function App() {
                     >
                       <span className="serverListTitleRow">
                         <strong>{server.displayName}</strong>
-                        {server.restartRequiredSince && (
-                          <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
-                            <AppIcon name="hourglass" />
-                          </span>
-                        )}
+                        {server.restartRequiredSince && <RestartRequiredBadge />}
                       </span>
                       <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - Fabric</span>
                       {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
@@ -3229,11 +3241,7 @@ export default function App() {
                   <div className="serverStripTitleRow">
                     <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
                     <strong>{activeServer.displayName}</strong>
-                    {activeServer.restartRequiredSince && (
-                      <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
-                        <AppIcon name="hourglass" />
-                      </span>
-                    )}
+                    {activeServer.restartRequiredSince && <RestartRequiredBadge />}
                     <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                       {serverCommandStatusLabel}
                     </StatusBadge>

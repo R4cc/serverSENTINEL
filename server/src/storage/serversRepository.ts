@@ -173,12 +173,8 @@ export class ServersRepository {
   replaceMetadata(value: ManagedServer) {
     this.storage.transaction((database) => {
       const server = this.normalize(value);
-      const existing = database.prepare<[string], Pick<ServerRow, "restart_required_since">>("SELECT restart_required_since FROM servers WHERE id = ?").get(server.id);
-      if (!existing) throw new Error("Server not found");
-      if (server.restartRequiredSince === undefined && existing.restart_required_since) {
-        server.restartRequiredSince = existing.restart_required_since;
-      }
-      this.upsertServer(database, server);
+      if (!database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) throw new Error("Server not found");
+      this.upsertServer(database, server, { preserveRestartRequired: true });
       this.syncPorts(database, server);
     });
   }
@@ -188,19 +184,19 @@ export class ServersRepository {
   }
 
   markRestartRequired(serverId: string, now = new Date().toISOString()) {
-    this.storage.connection.prepare(`
+    return this.storage.connection.prepare(`
       UPDATE servers
-      SET restart_required_since = COALESCE(restart_required_since, ?), updated_at = ?
-      WHERE id = ?
-    `).run(now, now, serverId);
+      SET restart_required_since = ?, updated_at = ?
+      WHERE id = ? AND restart_required_since IS NULL
+    `).run(now, now, serverId).changes > 0;
   }
 
   clearRestartRequired(serverId: string, now = new Date().toISOString()) {
-    this.storage.connection.prepare(`
+    return this.storage.connection.prepare(`
       UPDATE servers
       SET restart_required_since = NULL, updated_at = ?
-      WHERE id = ?
-    `).run(now, serverId);
+      WHERE id = ? AND restart_required_since IS NOT NULL
+    `).run(now, serverId).changes > 0;
   }
 
   createSchedule(serverId: string, schedule: ScheduledExecution, serverUpdatedAt: string) {
@@ -263,23 +259,41 @@ export class ServersRepository {
     if (update && result.changes === 0) throw new Error("Schedule not found");
   }
 
-  private upsertServer(database: Database.Database, server: ManagedServer) {
-    database.prepare(`
-      INSERT INTO servers (
-        id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
-        docker_container, docker_image, docker_mount_source, docker_working_dir,
-        docker_ports, java_args, restart_required_since, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        node_id=excluded.node_id, display_name=excluded.display_name,
-        server_dir=excluded.server_dir, storage_name=excluded.storage_name,
-        runtime_profile_json=excluded.runtime_profile_json,
-        docker_container=excluded.docker_container, docker_image=excluded.docker_image,
-        docker_mount_source=excluded.docker_mount_source,
-        docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-        java_args=excluded.java_args, restart_required_since=excluded.restart_required_since,
-        created_at=excluded.created_at, updated_at=excluded.updated_at
-    `).run(
+  private upsertServer(database: Database.Database, server: ManagedServer, options: { preserveRestartRequired?: boolean } = {}) {
+    const statement = options.preserveRestartRequired
+      ? database.prepare(`
+        INSERT INTO servers (
+          id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
+          docker_container, docker_image, docker_mount_source, docker_working_dir,
+          docker_ports, java_args, restart_required_since, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          node_id=excluded.node_id, display_name=excluded.display_name,
+          server_dir=excluded.server_dir, storage_name=excluded.storage_name,
+          runtime_profile_json=excluded.runtime_profile_json,
+          docker_container=excluded.docker_container, docker_image=excluded.docker_image,
+          docker_mount_source=excluded.docker_mount_source,
+          docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
+          java_args=excluded.java_args, restart_required_since=servers.restart_required_since,
+          created_at=excluded.created_at, updated_at=excluded.updated_at
+      `)
+      : database.prepare(`
+        INSERT INTO servers (
+          id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
+          docker_container, docker_image, docker_mount_source, docker_working_dir,
+          docker_ports, java_args, restart_required_since, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          node_id=excluded.node_id, display_name=excluded.display_name,
+          server_dir=excluded.server_dir, storage_name=excluded.storage_name,
+          runtime_profile_json=excluded.runtime_profile_json,
+          docker_container=excluded.docker_container, docker_image=excluded.docker_image,
+          docker_mount_source=excluded.docker_mount_source,
+          docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
+          java_args=excluded.java_args, restart_required_since=excluded.restart_required_since,
+          created_at=excluded.created_at, updated_at=excluded.updated_at
+      `);
+    statement.run(
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,

@@ -181,6 +181,31 @@ describe("ServersRepository", () => {
     expect(schedule.recentRuns?.[0].id).toBe("concurrent-run");
   });
 
+  it("marks, preserves, and clears restart-required state idempotently", async () => {
+    const { storage, servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+
+    expect(servers.markRestartRequired(server.id, "2026-01-02T00:00:00.000Z")).toBe(true);
+    expect(servers.markRestartRequired(server.id, "2026-01-03T00:00:00.000Z")).toBe(false);
+
+    const marked = servers.list()[0];
+    expect(marked.restartRequiredSince).toBe("2026-01-02T00:00:00.000Z");
+    expect(marked.updatedAt).toBe("2026-01-02T00:00:00.000Z");
+
+    servers.replaceMetadata({ ...marked, displayName: "Renamed", updatedAt: "2026-01-04T00:00:00.000Z" });
+    expect(servers.list()[0]).toMatchObject({
+      displayName: "Renamed",
+      restartRequiredSince: "2026-01-02T00:00:00.000Z",
+      updatedAt: "2026-01-04T00:00:00.000Z"
+    });
+
+    expect(servers.clearRestartRequired(server.id, "2026-01-05T00:00:00.000Z")).toBe(true);
+    expect(servers.clearRestartRequired(server.id, "2026-01-06T00:00:00.000Z")).toBe(false);
+    expect(servers.list()[0].restartRequiredSince).toBeUndefined();
+    expect(storage.connection.prepare("SELECT updated_at FROM servers WHERE id = ?").get(server.id)).toEqual({ updated_at: "2026-01-05T00:00:00.000Z" });
+  });
+
   it("renames display names without changing immutable identity or dependent state", async () => {
     const { storage, servers } = await createRepositories();
     const original = managedServer("00000000-0000-4000-8000-000000000001");

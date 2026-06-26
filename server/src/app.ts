@@ -2588,6 +2588,8 @@ function optionalOperationStatus(value: unknown): OperationStatus | undefined {
   throw new Error("Operation status must be queued, running, succeeded, failed, or cancelled");
 }
 
+type RestartEffect = "mark" | "clear";
+
 async function recordOperation<T>(
   input: {
     type: OperationType;
@@ -2599,8 +2601,7 @@ async function recordOperation<T>(
     successTask?: string;
     serverIdFromResult?: (value: T) => string | undefined;
     result?: (value: T) => unknown;
-    markRestartRequiredOnSuccess?: boolean | ((value: T) => boolean);
-    clearRestartRequiredOnSuccess?: boolean;
+    restartEffect?: RestartEffect | ((value: T) => RestartEffect | undefined);
   },
   action: (operation: OperationRecord) => Promise<T>
 ) {
@@ -2616,13 +2617,11 @@ async function recordOperation<T>(
     const result = await action(operation);
     const resultServerId = input.serverIdFromResult?.(result);
     const affectedServerId = resultServerId ?? input.serverId;
-    const shouldMarkRestartRequired = typeof input.markRestartRequiredOnSuccess === "function"
-      ? input.markRestartRequiredOnSuccess(result)
-      : input.markRestartRequiredOnSuccess;
-    if (affectedServerId && shouldMarkRestartRequired) {
+    const restartEffect = typeof input.restartEffect === "function" ? input.restartEffect(result) : input.restartEffect;
+    if (affectedServerId && restartEffect === "mark") {
       serversRepository.markRestartRequired(affectedServerId);
     }
-    if (affectedServerId && input.clearRestartRequiredOnSuccess) {
+    if (affectedServerId && restartEffect === "clear") {
       serversRepository.clearRestartRequired(affectedServerId);
     }
     operationsRepository.succeed(operation.id, {
@@ -2656,6 +2655,12 @@ function serverSettingsRestartRequired(before: ManagedServer, after: ManagedServ
     || before.dockerPorts !== after.dockerPorts
     || JSON.stringify(before.managedPorts ?? []) !== JSON.stringify(after.managedPorts ?? [])
     || before.javaArgs !== after.javaArgs;
+}
+
+function runtimeResultRunning(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const result = value as { running?: unknown; docker?: { running?: unknown } };
+  return result.running === true || result.docker?.running === true;
 }
 
 async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
@@ -3919,6 +3924,8 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const wasRunning = ((await runtime.serverStatus(server).catch(() => null)) as { docker?: { running?: boolean } } | null)?.docker?.running === true;
   return recordOperation({
     type: "server.start",
     serverId: server.id,
@@ -3926,8 +3933,8 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
     createdBy: user.id,
     task: "Starting server",
     successTask: "Server started",
-    clearRestartRequiredOnSuccess: true
-  }, () => runtimeForServer(server).lifecycle(server, "start"));
+    restartEffect: (status) => !wasRunning && runtimeResultRunning(status) ? "clear" : undefined
+  }, () => runtime.lifecycle(server, "start"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
@@ -3939,8 +3946,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Stopping server",
-    successTask: "Server stopped",
-    clearRestartRequiredOnSuccess: true
+    successTask: "Server stopped"
   }, () => runtimeForServer(server).lifecycle(server, "stop"));
 });
 
@@ -3954,7 +3960,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     createdBy: user.id,
     task: "Restarting server",
     successTask: "Server restarted",
-    clearRestartRequiredOnSuccess: true
+    restartEffect: "clear"
   }, () => runtimeForServer(server).lifecycle(server, "restart"));
 });
 
@@ -5372,7 +5378,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
     createdBy: user.id,
     task: "Updating mod state",
     successTask: "Mod state updated",
-    markRestartRequiredOnSuccess: true
+    restartEffect: "mark"
   }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled));
 });
 
@@ -5387,7 +5393,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
     createdBy: user.id,
     task: "Removing mod",
     successTask: "Mod removed",
-    markRestartRequiredOnSuccess: true
+    restartEffect: "mark"
   }, () => runtimeForServer(server).removeMod(server, request.query.filename));
 });
 
@@ -5401,7 +5407,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     createdBy: user.id,
     task: "Uploading mod",
     successTask: "Mod uploaded",
-    markRestartRequiredOnSuccess: true
+    restartEffect: "mark"
   }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64));
 });
 
@@ -5678,7 +5684,7 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
     createdBy: user.id,
     task: "Updating mod",
     successTask: "Mod updated",
-    markRestartRequiredOnSuccess: (result) => !((result as { upToDate?: unknown })?.upToDate === true)
+    restartEffect: (result) => ((result as { upToDate?: unknown })?.upToDate === true ? undefined : "mark")
   }, () => updateModrinthMod(server, request.body));
 });
 
@@ -5692,7 +5698,7 @@ app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseCha
     createdBy: user.id,
     task: "Updating mods",
     successTask: "Mod update batch complete",
-    markRestartRequiredOnSuccess: (result) => ((result as SafeBatchUpdateResult).counts?.updated ?? 0) > 0
+    restartEffect: (result) => ((result as SafeBatchUpdateResult).counts?.updated ?? 0) > 0 ? "mark" : undefined
   }, async () => {
     await ensureServerStoppedForModChanges(server);
     const channel = optionalReleaseChannel(request.body.channel);
@@ -5838,7 +5844,7 @@ app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; ch
     createdBy: user.id,
     task: "Installing mod",
     successTask: "Mod installed",
-    markRestartRequiredOnSuccess: true
+    restartEffect: "mark"
   }, () => installModWithRemoteVersionFallback(server, request.body));
 });
 

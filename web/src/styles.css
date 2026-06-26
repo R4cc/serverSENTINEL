@@ -11253,15 +11253,16 @@ textarea,
 }
 
 .restartRequiredIndicator {
+  --restart-required-blue: #2f80ed;
   width: 24px;
   height: 24px;
   min-width: 24px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, #2f80ed 44%, var(--border-row));
+  border: 1px solid color-mix(in srgb, var(--restart-required-blue) 44%, var(--border-row));
   border-radius: 999px;
-  background: color-mix(in srgb, #2f80ed 12%, var(--surface-raised));
-  color: #2f80ed;
+  background: color-mix(in srgb, var(--restart-required-blue) 12%, var(--surface-raised));
+  color: var(--restart-required-blue);
 }
 
 .restartRequiredIndicator .buttonIcon {
@@ -11271,9 +11272,9 @@ textarea,
 }
 
 .serverListItem.active .restartRequiredIndicator {
-  border-color: color-mix(in srgb, #2f80ed 54%, var(--sentinel-accent-strong));
-  background: color-mix(in srgb, #2f80ed 18%, var(--surface));
-  color: #2f80ed;
+  border-color: color-mix(in srgb, var(--restart-required-blue) 54%, var(--sentinel-accent-strong));
+  background: color-mix(in srgb, var(--restart-required-blue) 18%, var(--surface));
+  color: var(--restart-required-blue);
 }
 
 .serverCommandStatusDot {
