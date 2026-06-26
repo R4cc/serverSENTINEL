@@ -1,7 +1,7 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
-import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, javaMajorVersionForMinecraft, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, replaceMemoryArgs, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
+import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, javaMajorVersionForMinecraft, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';
 import { isNodeRuntimeUsable, nodeBlockReason } from '../utils/nodes';
 import { AppIcon } from '../components/FileTypeIcon';
 import { Button } from '../components/UiPrimitives';
@@ -362,73 +362,6 @@ function MinecraftPortsSection({
       {!queryPortValid && <span className="fieldError">Use a Query port from {minServerPort} to {maxServerPort}.</span>}
       {portConflict && <span className="fieldError">Server port and Query port must be different.</span>}
     </section>
-  );
-}
-
-export function MemorySelector({
-  totalMemory,
-  initialMemoryGb = 4,
-  javaArgs,
-  onJavaArgsChange
-}: {
-  totalMemory: number;
-  initialMemoryGb?: number;
-  javaArgs: string;
-  onJavaArgsChange: (value: string) => void;
-}) {
-  const totalRamGb = totalMemoryGb(totalMemory);
-  const memoryInfo = parseJavaMemoryArgs(javaArgs);
-  const sliderMode: "linked" | "maximum" = memoryInfo.xmsGb !== null && memoryInfo.xmxGb !== null && memoryInfo.xmsGb !== memoryInfo.xmxGb ? "maximum" : "linked";
-  const parsedMemoryGb = memoryInfo.xmxGb ?? initialMemoryGb;
-  const [memoryGb, setMemoryGb] = useState(() => Math.min(Math.max(1, parsedMemoryGb), totalRamGb));
-
-  useEffect(() => {
-    setMemoryGb(Math.min(Math.max(1, parsedMemoryGb), totalRamGb));
-  }, [parsedMemoryGb, totalRamGb]);
-
-  function updateMemory(value: number) {
-    if (!Number.isFinite(value)) return;
-    const nextMemoryGb = Math.min(Math.max(1, Math.round(value)), totalRamGb);
-    setMemoryGb(nextMemoryGb);
-    onJavaArgsChange(replaceMemoryArgs(javaArgs, nextMemoryGb, { updateInitialHeap: sliderMode === "linked" }));
-  }
-
-  return (
-    <div className="memorySelector">
-      <div className="memorySelectorHeader">
-        <label htmlFor="memoryGb">Minecraft memory</label>
-        <span className="totalRamLabel">{sliderMode === "linked" ? "Initial and maximum heap linked" : "Adjusting maximum heap"}</span>
-      </div>
-      <div className="memorySelectorControls">
-        <input
-          id="memoryGb"
-          type="range"
-          min="1"
-          max={totalRamGb}
-          value={memoryGb}
-          onChange={(event) => updateMemory(Number(event.target.value))}
-          className="memorySlider"
-        />
-        <div className="memoryInputWrap">
-          <input
-            type="number"
-            min="1"
-            max={totalRamGb}
-            value={memoryGb}
-            onChange={(event) => updateMemory(Number(event.target.value))}
-            className="memoryNumberInput"
-          />
-          <span className="unit">GB</span>
-        </div>
-      </div>
-      <p className="safelyAllocateTip">
-        {memoryGb > totalRamGb * 0.8 ? (
-          <span className="warn">Leave some RAM for the host. Using nearly all memory may cause instability.</span>
-        ) : (
-          <span className="ok">{sliderMode === "linked" ? `Writes -Xms${memoryGb}G and -Xmx${memoryGb}G.` : `Advanced args use a custom -Xms value, so the slider changes -Xmx${memoryGb}G only.`}</span>
-        )}
-      </p>
-    </div>
   );
 }
 

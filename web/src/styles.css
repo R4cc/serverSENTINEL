@@ -7325,82 +7325,6 @@ button .buttonIcon {
   }
 }
 
-/* Memory Selector Styles */
-.memorySelector {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-  margin-bottom: var(--space-2);
-}
-
-.memorySelectorHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.totalRamLabel {
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  color: var(--text-muted);
-}
-
-.memorySelectorControls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.memorySlider {
-  flex: 1;
-  height: 8px;
-  background: var(--surface-muted);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  outline: none;
-  cursor: pointer;
-  accent-color: var(--accent);
-}
-
-.memoryInputWrap {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  width: 100px;
-  min-width: 100px;
-  position: relative;
-}
-
-.memoryNumberInput {
-  width: 100%;
-  padding-right: 32px !important;
-  text-align: right;
-}
-
-.memoryInputWrap .unit {
-  position: absolute;
-  right: 12px;
-  font-size: 12px;
-  font-weight: var(--weight-heading);
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.safelyAllocateTip {
-  margin: 0;
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  letter-spacing: var(--tracking-label);
-}
-
-.safelyAllocateTip .warn {
-  color: var(--sentinel-danger);
-}
-
-.safelyAllocateTip .ok {
-  color: var(--sentinel-success);
-}
-
 .fieldError {
   color: var(--sentinel-danger);
   font-size: 12px;
@@ -9262,7 +9186,6 @@ textarea,
 .fileDetailsTitle > div > span,
 .fileDetailsContent dd,
 .resourceMetricLabel small,
-.resourceMeta,
 .eventRow small {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
@@ -9483,11 +9406,9 @@ textarea,
 }
 
 .workspaceActions,
-.pageActions,
 .buttonRow,
 .selectionActions,
 .nodeCardActions,
-.modInstallActions,
 .modInstallFooter,
 .modalFooter,
 .userModalFooter,
@@ -9681,8 +9602,7 @@ textarea,
 
 .eventRow,
 .nodeServerRow,
-.fileTableRow,
-.userRow {
+.fileTableRow {
   min-height: 0;
 }
 
@@ -9698,7 +9618,6 @@ textarea,
 .consolePanel,
 .filesPage,
 .schedulePage,
-.propertiesPage,
 .createServerPanel {
   min-width: 0;
 }
@@ -9831,8 +9750,7 @@ textarea,
   padding: var(--space-4);
 }
 
-.fileDetailsContent dl,
-.detailGrid {
+.fileDetailsContent dl {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
   gap: var(--space-2) var(--space-3);
@@ -10033,15 +9951,12 @@ textarea,
 
 .appForm,
 .userModalForm,
-.nodeModalForm,
 .keyForm {
   gap: var(--space-3);
 }
 
 .appForm fieldset,
-.userModalFields,
-.nodeFormGrid,
-.formGrid {
+.userModalFields {
   display: grid;
   gap: var(--space-3);
 }
@@ -10972,7 +10887,6 @@ textarea,
 }
 
 .eventRow small,
-.resourceMeta,
 .scheduleTableFooter,
 .scheduledRunTime {
   color: var(--text-muted);

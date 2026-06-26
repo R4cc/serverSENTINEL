@@ -204,27 +204,41 @@ export default function App() {
   const staleSessionSuppressUntilRef = useRef(0);
   const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
-  const triggerOverviewRefresh = useCallback((serverId: string) => {
+  const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
     if (demoMode && serverId === demoServerId) {
       setOverviewData(demoOverviewData(demoRunning));
+      setOverviewError("");
+      setOverviewLoading(false);
       return;
     }
+    if (options.showLoading) setOverviewLoading(true);
+    setOverviewError("");
+    try {
+      const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
+      setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
+      if (activeServerIdRef.current === serverId) {
+        setOverviewData(data);
+        setOverviewError("");
+      }
+    } catch (error) {
+      if (handleStaleSession(error)) return;
+      if (activeServerIdRef.current === serverId) {
+        setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
+      }
+    } finally {
+      if (activeServerIdRef.current === serverId) setOverviewLoading(false);
+    }
+  }, [demoMode, demoRunning]);
+
+  const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (overviewRefreshTimeoutRef.current !== null) {
       window.clearTimeout(overviewRefreshTimeoutRef.current);
     }
     overviewRefreshTimeoutRef.current = window.setTimeout(async () => {
       overviewRefreshTimeoutRef.current = null;
-      try {
-        const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
-        setOverviewData(data);
-        setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
-        setOverviewError("");
-      } catch (error) {
-        if (handleStaleSession(error)) return;
-        setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
-      }
+      await refreshOverviewData(serverId);
     }, 500);
-  }, [demoMode, demoRunning]);
+  }, [refreshOverviewData]);
 
   const triggerOverviewRefreshRef = useRef(triggerOverviewRefresh);
   useEffect(() => {
@@ -339,7 +353,6 @@ export default function App() {
     setDemoInstalledMods,
     modrinthConfigured: effectiveAppState.modrinthApiConfigured,
     isProvisioning,
-    serverRunning: modServerRunning,
     canManage: canManager,
     modsLocked,
     toggleLocked: modToggleLocked,
@@ -913,6 +926,8 @@ export default function App() {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "overview") return;
     if (demoMode && activeServer.id === demoServerId) {
       setOverviewData(demoOverviewData(demoRunning));
+      setOverviewError("");
+      setOverviewLoading(false);
       return;
     }
     const serverId = activeServer.id;
@@ -923,22 +938,9 @@ export default function App() {
     async function loadOverviewData() {
       if (inFlight || document.hidden) return;
       inFlight = true;
-      try {
-        const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
-        if (!cancelled) {
-          setOverviewData(data);
-          setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
-          setOverviewError("");
-        }
-      } catch (error) {
-        if (handleStaleSession(error)) return;
-        if (!cancelled) {
-          setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
-        }
-      } finally {
-        inFlight = false;
-        if (!cancelled) setOverviewLoading(false);
-      }
+      await refreshOverviewData(serverId);
+      inFlight = false;
+      if (cancelled) setOverviewLoading(false);
     }
     void loadOverviewData();
     const interval = window.setInterval(() => void loadOverviewData(), 30_000);
@@ -946,7 +948,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning, refreshOverviewData]);
 
   useEffect(() => {
     const currentIds = new Set(activeJobs.map((job) => job.id));
@@ -2704,6 +2706,47 @@ export default function App() {
           ? "Add an online, compatible node before creating a server."
           : "Server creation is unavailable right now."
         : provisioningNavigationReason;
+  const noManagedServersMessage = panelOnlyMode && usableContextNodes.length === 0
+    ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
+    : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.";
+  const addNodeDisabledReason = demoMode
+    ? "Exit demo mode before adding real nodes."
+    : isProvisioning
+      ? provisioningNavigationReason
+      : nodeBusyId
+        ? "A node action is already in progress."
+        : !canManageUsers
+          ? "Manage users permission is required."
+          : "Add a remote node";
+
+  function openAddNodeFromEmptyState() {
+    setActivePage("nodes");
+    setAddNodeResult(null);
+    setNodeInstallMethod("run");
+    if (canManageUsers) setAddNodeOpen(true);
+  }
+
+  function renderNoManagedServersEmptyState(title: string) {
+    const needsNodeFirst = panelOnlyMode && usableContextNodes.length === 0;
+    return (
+      <EmptyState
+        title={title}
+        message={noManagedServersMessage}
+        action={needsNodeFirst ? (
+          <Button
+            onClick={openAddNodeFromEmptyState}
+            disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+            title={addNodeDisabledReason}
+          >
+            Add node
+          </Button>
+        ) : (
+          <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
+        )}
+      />
+    );
+  }
+
   const pageTitles: Record<ActivePage, string> = {
     servers: "Servers",
     create: "Create new managed server",
@@ -2937,28 +2980,7 @@ export default function App() {
                 })}
               </section>
             ) : (
-              <EmptyState
-                title="No managed servers yet"
-                message={panelOnlyMode && usableContextNodes.length === 0
-                  ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
-                  : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel."}
-                action={panelOnlyMode && usableContextNodes.length === 0 ? (
-                    <Button
-                      onClick={() => {
-                        setActivePage("nodes");
-                        setAddNodeResult(null);
-                        setNodeInstallMethod("run");
-                        if (canManageUsers) setAddNodeOpen(true);
-                      }}
-                      disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
-                      title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
-                    >
-                      Add node
-                    </Button>
-                ) : (
-                    <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
-                )}
-              />
+              renderNoManagedServersEmptyState("No managed servers yet")
             )}
           </section>
         )}
@@ -3188,28 +3210,7 @@ export default function App() {
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
-          <EmptyState
-            title="Welcome to ServerSentinel"
-            message={panelOnlyMode && usableContextNodes.length === 0
-              ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
-              : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel."}
-            action={panelOnlyMode && usableContextNodes.length === 0 ? (
-                <Button
-                  onClick={() => {
-                    setActivePage("nodes");
-                    setAddNodeResult(null);
-                    setNodeInstallMethod("run");
-                    if (canManageUsers) setAddNodeOpen(true);
-                  }}
-                  disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
-                  title={demoMode ? "Exit demo mode before adding real nodes." : isProvisioning ? provisioningNavigationReason : nodeBusyId ? "A node action is already in progress." : !canManageUsers ? "Manage users permission is required." : "Add a remote node"}
-                >
-                  Add node
-                </Button>
-            ) : (
-                <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
-            )}
-          />
+          renderNoManagedServersEmptyState("Welcome to ServerSentinel")
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
@@ -3346,12 +3347,7 @@ export default function App() {
                     message={`${overviewError} Previously loaded activity is still shown when available.`}
                     actionLabel="Retry"
                     onAction={() => {
-                      setOverviewError("");
-                      setOverviewLoading(true);
-                      void api<ServerOverviewData>(`/api/servers/${activeServer.id}/events`)
-                        .then((data) => setOverviewData(data))
-                        .catch((error) => setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved.")))
-                        .finally(() => setOverviewLoading(false));
+                      void refreshOverviewData(activeServer.id, { showLoading: true });
                     }}
                     busy={overviewLoading}
                   />

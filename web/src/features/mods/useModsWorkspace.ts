@@ -62,7 +62,6 @@ export type ModsWorkspaceInputs = {
   setDemoInstalledMods: Dispatch<SetStateAction<InstalledMod[]>>;
   modrinthConfigured: boolean;
   isProvisioning: boolean;
-  serverRunning: boolean;
   canManage: boolean;
   modsLocked: boolean;
   toggleLocked: boolean;
@@ -277,6 +276,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } finally {
       refreshUpdatesInFlightRef.current = false;
     }
+  }
+
+  async function refreshModsWorkspace(serverId: string, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
+    await Promise.all([
+      loadInstalledMods(serverId, options),
+      loadUpdatePlan(serverId, options),
+      refreshFiles(serverId, "/mods")
+    ]);
   }
 
   async function retrySidebarRequest<T>(request: () => Promise<T>, signal?: AbortSignal) {
@@ -522,8 +529,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       void onRestartRequiredChange?.(activeServer.id);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]);
-        await refreshFiles(activeServer.id, "/mods");
+        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
@@ -585,8 +591,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setInstallState(null);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]);
-        await refreshFiles(activeServer.id, "/mods");
+        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
         removeJob(jobId);
         notify("success", requiredCount ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`);
@@ -634,7 +639,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
-        await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
+        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true });
       } catch (error) {
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
@@ -694,7 +699,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         if (result.counts.updated > 0) void onRestartRequiredChange?.(activeServer.id);
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
-      await Promise.all([loadInstalledMods(activeServer.id, { forceRefresh: true }), loadUpdatePlan(activeServer.id, { forceRefresh: true }), refreshFiles(activeServer.id, "/mods")]);
+      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
       const feedback = safeBatchUpdateFeedback(result);
       const issueDetails = [
         ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
@@ -769,7 +774,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, { method: "DELETE" });
       void onRestartRequiredChange?.(activeServer.id);
       notify("success", `Removed ${mod.displayName}`); setDetailsModKey("");
-      await Promise.all([loadInstalledMods(activeServer.id), loadUpdatePlan(activeServer.id, { forceRefresh: true })]); await refreshFiles(activeServer.id, "/mods");
+      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
     } catch (error) {
       const message = errorMessage(error, "Could not remove the mod.");
       setNotice(message); notify("error", message);
