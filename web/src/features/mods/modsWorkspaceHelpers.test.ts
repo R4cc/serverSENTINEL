@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse } from "../../types";
-import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
+import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse } from "../../types";
+import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 
 function response(): ModrinthInstallVersionsResponse {
   return {
@@ -64,5 +64,31 @@ describe("Mods workspace helpers", () => {
     const base = { id: "first", status: "compatible" } as never;
     const recommended = { id: "recommended", status: "recommended" } as never;
     expect(preferredInstallVersionId({ ...response(), compatibleVersions: [base, recommended] })).toBe("recommended");
+  });
+
+  it("builds compatible search requests by default and all-results requests for the risky toggle", () => {
+    expect(buildModrinthSearchPath({ query: "fabric api", serverId: "server-1", showIncompatibleResults: false })).toBe("/api/modrinth/search?query=fabric+api&serverId=server-1&channel=release&compatibility=compatible");
+    expect(buildModrinthSearchPath({ query: "api", serverId: "server-1", showIncompatibleResults: true })).toBe("/api/modrinth/search?query=api&serverId=server-1&channel=release&compatibility=all");
+    expect(buildModrinthSearchPath({ query: "api", serverId: "server-1", showIncompatibleResults: true, offset: 20, limit: 20 })).toContain("offset=20&limit=20");
+  });
+
+  it("uses an offset-free all-results request when the compatibility toggle refreshes search", () => {
+    expect(buildModrinthSearchPath({ query: "api", serverId: "server-1", showIncompatibleResults: true })).not.toContain("offset=");
+  });
+
+  it("hides non-compatible demo search results until risky matches are enabled", () => {
+    const results = [
+      { project_id: "safe", title: "Safe", description: "", downloads: 1, compatibility: { compatible: true } },
+      { project_id: "old", title: "Old", description: "", downloads: 1, compatibility: { compatible: false } },
+      { project_id: "unknown", title: "Unknown", description: "", downloads: 1, compatibility: { compatible: false, status: "unknown" } }
+    ] as ModrinthHit[];
+    expect(filterDemoSearchResults(results, false).map((mod) => mod.project_id)).toEqual(["safe"]);
+    expect(filterDemoSearchResults(results, true).map((mod) => mod.project_id)).toEqual(["safe", "old", "unknown"]);
+  });
+
+  it("sends explicit override flags only for selected versions that need them", () => {
+    expect(selectedInstallFlags({ compatible: true, requiresMinecraftAcknowledgement: false } as ModrinthInstallVersion)).toEqual({ forceIncompatible: false, overrideMinecraftVersion: false });
+    expect(selectedInstallFlags({ compatible: false, requiresMinecraftAcknowledgement: true } as ModrinthInstallVersion)).toEqual({ forceIncompatible: true, overrideMinecraftVersion: true });
+    expect(selectedInstallFlags({ compatible: false, requiresMinecraftAcknowledgement: false } as ModrinthInstallVersion)).toEqual({ forceIncompatible: true, overrideMinecraftVersion: false });
   });
 });

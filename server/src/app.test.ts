@@ -18,7 +18,7 @@ import {
   fileContentRevision,
   assertFileRevision
 } from "./app.js";
-import { optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
+import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedServer } from "./types.js";
 
@@ -204,6 +204,9 @@ describe("security validation helpers", () => {
     expect(() => optionalNodeDataMount("/srv/data\nSS_JOIN_TOKEN=bad")).toThrow("single-line");
     expect(optionalReleaseChannel("beta")).toBe("beta");
     expect(() => optionalReleaseChannel("nightly")).toThrow("Release channel");
+    expect(optionalCompatibilityFilter("compatible")).toBe("compatible");
+    expect(optionalCompatibilityFilter("all")).toBe("all");
+    expect(() => optionalCompatibilityFilter("unsafe")).toThrow("Compatibility filter");
   });
 
   it("bounds node join token expiry to deliberate short-lived values", () => {

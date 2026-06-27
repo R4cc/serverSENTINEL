@@ -6,7 +6,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
-import { fallbackReleaseChannel, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
+import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
@@ -129,7 +129,7 @@ function demoInstallVersions(server: ManagedServer | undefined, mod: ModrinthHit
   };
 }
 
-function demoSearchPage(query: string) {
+function demoSearchPage(query: string, showIncompatibleResults: boolean) {
   const value = query.toLowerCase();
   const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
   const extraMods: ModrinthHit[] = [];
@@ -147,7 +147,7 @@ function demoSearchPage(query: string) {
       });
     }
   }
-  return [...baseFiltered, ...extraMods];
+  return filterDemoSearchResults([...baseFiltered, ...extraMods], showIncompatibleResults);
 }
 
 export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
@@ -167,6 +167,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [showIncompatibleResults, setShowIncompatibleResults] = useState(false);
   const [searchRequestVersion, setSearchRequestVersion] = useState(0);
   const [searchResults, setSearchResults] = useState<ModrinthHit[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
@@ -300,6 +301,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setAddOpen(false);
     setQuery("");
     setDebouncedQuery("");
+    setShowIncompatibleResults(false);
     setSearchRequestVersion((current) => current + 1);
     setSearchResults([]);
     setSearchTotal(0);
@@ -342,7 +344,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }, [activeServerIsDemo, demoInstalledMods]);
 
   useEffect(() => {
-    if (activePage === "mods") resetPageState();
+    resetPageState();
   }, [activePage]);
 
   useEffect(() => {
@@ -366,6 +368,18 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     return () => window.clearTimeout(timeout);
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query]);
 
+  function updateShowIncompatibleResults(value: boolean) {
+    setShowIncompatibleResults(value);
+    setSearchResults([]);
+    setSearchTotal(0);
+    setSearchError("");
+    setLoadingMore(false);
+    loadMoreInFlightRef.current = false;
+    setInstallState(null);
+    if (query.trim()) setSearching(true);
+    setSearchRequestVersion((current) => current + 1);
+  }
+
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || !addOpen || !modrinthConfigured) return;
     const trimmedQuery = debouncedQuery.trim();
@@ -373,6 +387,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearchResults([]);
     setSearchTotal(0);
     setSearchError("");
+    setLoadingMore(false);
+    loadMoreInFlightRef.current = false;
     if (activeServerIsDemo) {
       setSearching(true);
       const timeout = window.setTimeout(() => {
@@ -382,7 +398,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           setSearching(false);
           return;
         }
-        const results = demoSearchPage(trimmedQuery);
+        const results = demoSearchPage(trimmedQuery, showIncompatibleResults);
         setSearchResults(results.slice(0, 20));
         setSearchTotal(results.length);
         setSearching(false);
@@ -394,7 +410,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearching(true);
     void retrySidebarRequest(
       () => api<{ hits: ModrinthHit[]; total_hits: number }>(
-        `/api/modrinth/search?query=${encodeURIComponent(trimmedQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release`,
+        buildModrinthSearchPath({ query: trimmedQuery, serverId: activeServer.id, showIncompatibleResults }),
         { signal: abortController.signal }
       ),
       abortController.signal
@@ -410,7 +426,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setSearchError(message);
     }).finally(() => { if (!cancelled) setSearching(false); });
     return () => { cancelled = true; abortController.abort(); };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo, showIncompatibleResults]);
 
   async function loadMoreMods() {
     if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer) return;
@@ -421,7 +437,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     const searchQuery = query.trim();
     if (activeServerIsDemo) {
       window.setTimeout(() => {
-        const results = demoSearchPage(searchQuery);
+        const results = demoSearchPage(searchQuery, showIncompatibleResults);
         setSearchResults((current) => [...current, ...results.slice(offset, offset + 20)]);
         loadMoreInFlightRef.current = false;
         setLoadingMore(false);
@@ -429,7 +445,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return;
     }
     try {
-      const result = await retrySidebarRequest(() => api<{ hits: ModrinthHit[]; total_hits: number }>(`/api/modrinth/search?query=${encodeURIComponent(searchQuery)}&serverId=${encodeURIComponent(activeServer.id)}&channel=release&offset=${offset}&limit=20`));
+      const result = await retrySidebarRequest(() => api<{ hits: ModrinthHit[]; total_hits: number }>(buildModrinthSearchPath({ query: searchQuery, serverId: activeServer.id, showIncompatibleResults, offset, limit: 20 })));
       setSearchResults((current) => [...current, ...result.hits]);
     } catch (error) {
       if (handleStaleSession(error)) return;
@@ -447,7 +463,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }, { rootMargin: "200px" });
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [searchResults.length, searchTotal, loadingMore, searching, query]);
+  }, [searchResults.length, searchTotal, loadingMore, searching, query, showIncompatibleResults]);
 
   async function loadInstallVersions(mod: ModrinthHit, channel: ReleaseChannel, options: { useFallbackChannel?: boolean } = {}) {
     if (!activeServer) return;
@@ -547,8 +563,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (modsLocked || !canManage || !activeServer || !installState?.data || !selectedVersion?.selectable) return;
     const projectId = installState.mod.project_id;
     const title = installState.data.project.title || installState.mod.title;
-    const forceIncompatible = !selectedVersion.compatible;
-    const overrideMinecraftVersion = selectedVersion.requiresMinecraftAcknowledgement;
+    const { forceIncompatible, overrideMinecraftVersion } = selectedInstallFlags(selectedVersion);
     if (getInstallVersionHealth(selectedVersion).requiresAcknowledgement && !installState.acknowledgeMinecraftMismatch) return;
     setNotice("");
     setInstallState((current) => current ? { ...current, installing: true, error: "" } : current);
@@ -783,16 +798,17 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   return {
     data: { installedMods, searchResults, searchTotal, updatePlan },
-    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
+    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
     derived: { selectedVersion, pendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {
       setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
       openAdd: () => { setDetailsModKey(""); setAddOpen(true); },
-      closeAdd: () => { setInstallState(null); setQuery(""); setSearchResults([]); setAddOpen(false); },
+      closeAdd: () => { setInstallState(null); setQuery(""); setDebouncedQuery(""); setShowIncompatibleResults(false); setSearchResults([]); setSearchTotal(0); setSearchError(""); setLoadingMore(false); loadMoreInFlightRef.current = false; setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
       retrySearch: () => setSearchRequestVersion((current) => current + 1),
+      setShowIncompatibleResults: updateShowIncompatibleResults,
       loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
       closeInstall: () => setInstallState(null),

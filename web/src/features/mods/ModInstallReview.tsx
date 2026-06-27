@@ -32,6 +32,13 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
   const icon = modIconSource(state.data?.project.iconUrl || state.mod.icon_url);
   const selectedHealth = selected ? getInstallVersionHealth(selected) : null;
   const recommendedVersion = versions.find((version) => getInstallVersionHealth(version).safeToRunDirectly);
+  const selectedIncompatible = Boolean(selected && !selected.compatible);
+  const selectedRiskDetail = selected && selectedIncompatible
+    ? `${selected.reason} This version is not marked compatible with the server Minecraft version (${state.data?.target.minecraftVersion || "unknown"}).`
+    : selectedHealth?.detailDescription;
+  const installButtonLabel = selectedHealth?.requiresAcknowledgement
+    ? selectedIncompatible ? "Install incompatible mod" : "Install anyway"
+    : requiredDependencies.length > 0 ? "Install mod and dependencies" : "Install mod";
 
   return (
     <div className="modsInstallReview">
@@ -71,21 +78,25 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
               {selected && <Button onClick={onContinue} disabled={!canContinue}>Review selected version</Button>}
             </details>
             {selectedHealth?.requiresAcknowledgement && (
-              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>I understand ServerSentinel cannot verify this version as safe for this server.</span></label>
+              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " ServerSentinel cannot verify this version as safe for this server."} I understand the risk.</span></label>
             )}
           </>
         )}
         {!state.loading && state.data && state.step === 2 && selected && (
           <>
             <section className="modsReviewSection"><h3>What will be installed</h3><div className="modsReviewLine"><strong>{title}</strong><span>{selected.versionNumber}</span></div></section>
-            <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>Fabric · Minecraft {state.data.target.minecraftVersion}</span></div></section>
+            <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>Fabric - Minecraft {state.data.target.minecraftVersion}</span></div></section>
             {requiredDependencies.length > 0 && <details className="modsDependencySummary" open><summary>Also installs {requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
-            {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedHealth.detailDescription}</span></div>}
+            {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedRiskDetail}</span></div>}
             <details className="modsAdvancedOptions"><summary>Installation details</summary><dl className="modsDetailsFacts"><div><dt>Release channel</dt><dd>{selected.releaseChannel}</dd></div><div><dt>Published</dt><dd>{selected.publishedAt ? formatDate(selected.publishedAt) : "Unknown"}</dd></div><div><dt>Filename</dt><dd>{selected.file?.filename || "Unknown"}</dd></div></dl></details>
           </>
         )}
       </div>
-      {state.step === 2 && <div className="modsDrawerFooter"><Button onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing…" : requiredDependencies.length > 0 ? "Install mod and dependencies" : "Install mod"}</Button></div>}
+      {state.step === 2 && (
+        <div className="modsDrawerFooter">
+          <Button onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing..." : installButtonLabel}</Button>
+        </div>
+      )}
     </div>
   );
 }

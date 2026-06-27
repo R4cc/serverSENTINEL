@@ -10309,6 +10309,12 @@ textarea,
 .modsSearchActivity { min-height: 1em; color: var(--text-muted); font-size: .72rem; text-align: right; }
 .modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
 .modsSafeSearchNote svg { width: 15px; color: #159267; }
+.modsSafeSearchNote.warning svg { color: #e98a15; }
+.modsCompatibilityToggle { display: flex; align-items: flex-start; gap: 9px; margin: -8px 0 18px; color: var(--text-muted); font-size: .78rem; }
+.modsCompatibilityToggle input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
+.modsCompatibilityToggle span { display: grid; gap: 2px; min-width: 0; }
+.modsCompatibilityToggle strong { color: var(--text); font-size: .8rem; }
+.modsCompatibilityToggle small { color: var(--text-muted); font-size: .75rem; line-height: 1.35; }
 .modsDrawerBody > .inlineState { align-items: flex-start; margin: 0 0 16px; padding: 13px 14px; }
 .modsDrawerBody > .inlineState .uiButton { flex: 0 0 auto; }
 .modsSearchResults { display: grid; gap: 9px; }
@@ -10317,6 +10323,7 @@ textarea,
 .modsResultContent > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; color: var(--text-muted); font-size: .82rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .modsResultContent small { color: var(--text-muted); font-size: .72rem; }
+.modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: #b96305; font-size: .74rem; line-height: 1.35; }
 .modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--background); background-size: 220% 100%; animation: skeleton 1.4s infinite; }
 .modsSearchSentinel { height: 1px; }
 .modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
@@ -11524,6 +11531,10 @@ textarea,
 
 .modsSafeSearchNote .buttonIcon {
   color: var(--sentinel-success);
+}
+
+.modsSafeSearchNote.warning .buttonIcon {
+  color: #e98a15;
 }
 
 .modsWorkspaceRow {

@@ -20,6 +20,8 @@ type Props = {
   configured: boolean;
   versionsUnknown: boolean;
   contextMessage: string;
+  minecraftVersion: string;
+  showIncompatibleResults: boolean;
   locked: boolean;
   sentinelRef: RefObject<HTMLDivElement | null>;
   installState: ModInstallModalState | null;
@@ -30,6 +32,7 @@ type Props = {
   formatNumber: (value: number) => string;
   onClose: () => void;
   onQueryChange: (value: string) => void;
+  onShowIncompatibleResultsChange: (value: boolean) => void;
   onChoose: (mod: ModrinthHit) => void;
   onRetrySearch: () => void;
   onInstallClose: () => void;
@@ -59,22 +62,40 @@ export function AddModsWorkflow(props: Props) {
           <label><AppIcon name="search" /><span className="srOnly">Search</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search by mod name…" disabled={!props.configured || props.versionsUnknown} /></label>
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
         </div>
-        <div className="modsSafeSearchNote"><AppIcon name="shield" /><span>Compatible Fabric server mods appear first.</span></div>
+        <div className={`modsSafeSearchNote ${props.showIncompatibleResults ? "warning" : ""}`}>
+          <AppIcon name="shield" />
+          <span>{props.showIncompatibleResults ? "Incompatible mods may fail to load or crash the server. Install only if you know the mod works anyway." : "Showing compatible Fabric server mods for this server."}</span>
+        </div>
+        <label className="modsCompatibilityToggle">
+          <input type="checkbox" checked={props.showIncompatibleResults} onChange={(event) => props.onShowIncompatibleResultsChange(event.target.checked)} disabled={!props.configured || props.versionsUnknown} />
+          <span><strong>Show incompatible mods</strong><small>Includes mods that are not marked compatible with this server version.</small></span>
+        </label>
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
         {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and ServerSentinel will recommend the safest release." />}
-        {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && <EmptyState compact className="modsWorkspaceEmpty" title="No matching mods" message="Try a shorter or different search." />}
+        {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && (
+          <EmptyState
+            compact
+            className="modsWorkspaceEmpty"
+            title={props.showIncompatibleResults ? "No matching mods found" : "No compatible mods found"}
+            message={props.showIncompatibleResults ? "Try a shorter or different search." : "Try a different search, or show incompatible mods if you want to review risky matches."}
+          />
+        )}
         <div className="modsSearchResults" aria-busy={props.searching}>
           {props.searching && Array.from({ length: 4 }, (_, index) => <div key={index} className="modsResultCard isSkeleton" aria-hidden="true" />)}
           {!props.searching && props.results.map((mod) => {
             const health = getSearchResultHealth(mod);
             const installed = installedIds.has(mod.project_id);
             const icon = modIconSource(mod.icon_url);
+            const riskNote = props.showIncompatibleResults && !health.safeToRunDirectly
+              ? mod.compatibility?.reason || `Not marked compatible with Minecraft ${props.minecraftVersion}.`
+              : "";
             return (
               <article key={mod.project_id} className="modsResultCard">
                 {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">MOD</span>}
                 <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
+                {riskNote && <span className="modsResultRiskNote">{riskNote}</span>}
                 <Button variant={health.safeToRunDirectly ? "primary" : "secondary"} compact onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</Button>
               </article>
             );

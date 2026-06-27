@@ -1,8 +1,9 @@
-import type { InstalledMod, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
+import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import { validateJarFilename } from "../../utils/validation";
 
 export type ModUploadCandidate = Pick<File, "name" | "size">;
 export type ModUploadSelection = { kind: "cancelled" } | { kind: "error"; message: string } | { kind: "ready"; file: ModUploadCandidate };
+export type ModSearchCompatibilityFilter = "compatible" | "all";
 
 export function filterInstalledMods(mods: InstalledMod[], query: string) {
   const normalized = query.trim().toLowerCase();
@@ -22,6 +23,39 @@ export function validateModUploadSelection(file: ModUploadCandidate | undefined,
 
 export function uploadedManualMod(file: ModUploadCandidate, modifiedAt = new Date().toISOString()): InstalledMod {
   return { filename: file.name, displayName: file.name.replace(/\.jar$/i, "").replace(/[-_]/g, " "), enabled: true, size: file.size, modifiedAt };
+}
+
+export function modSearchCompatibilityFilter(showIncompatibleResults: boolean): ModSearchCompatibilityFilter {
+  return showIncompatibleResults ? "all" : "compatible";
+}
+
+export function buildModrinthSearchPath(input: {
+  query: string;
+  serverId: string;
+  showIncompatibleResults: boolean;
+  offset?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams({
+    query: input.query,
+    serverId: input.serverId,
+    channel: "release",
+    compatibility: modSearchCompatibilityFilter(input.showIncompatibleResults)
+  });
+  if (input.offset !== undefined) params.set("offset", String(input.offset));
+  if (input.limit !== undefined) params.set("limit", String(input.limit));
+  return `/api/modrinth/search?${params.toString()}`;
+}
+
+export function filterDemoSearchResults(results: ModrinthHit[], showIncompatibleResults: boolean) {
+  return showIncompatibleResults ? results : results.filter((mod) => mod.compatibility?.compatible === true);
+}
+
+export function selectedInstallFlags(version: ModrinthInstallVersion) {
+  return {
+    forceIncompatible: !version.compatible,
+    overrideMinecraftVersion: version.requiresMinecraftAcknowledgement
+  };
 }
 
 export function safeBatchUpdateFeedback(result: SafeBatchUpdateResult) {
