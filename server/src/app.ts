@@ -1173,7 +1173,7 @@ function iconContentType(filename: string) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
+    headers: { "User-Agent": "serverSENTINEL/0.8.0 (Fabric mod manager)" }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1252,7 +1252,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(normalizedUrl, {
-      headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
+      headers: { "User-Agent": "serverSENTINEL/0.8.0 (Fabric mod manager)" }
     });
   } catch {
     const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
@@ -1597,7 +1597,7 @@ async function removeManagedDockerContainer(server: ManagedServer) {
     return false;
   }
   if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
-    throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by ServerSentinel; refusing to delete it`);
+    throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
   }
   await removeDockerContainer(server);
   return true;
@@ -1676,7 +1676,7 @@ async function ensureDockerContainer(server: ManagedServer) {
   if (existing) {
     if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
-      throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by ServerSentinel; refusing to control it`);
+      throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
     }
     if (dockerContainerMountValid(server, existing) && existing.Config?.Labels?.["serversentinel.config-hash"] === expectedConfigHash) {
       return;
@@ -1695,7 +1695,7 @@ async function ensureDockerContainer(server: ManagedServer) {
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts || "25565:25565/tcp");
   const javaArgs = validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G");
   const quotedServerJar = shellQuote(runtime.serverJar);
-  const command = `test -f ${quotedServerJar} || { echo "ServerSentinel could not find ${runtime.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
+  const command = `test -f ${quotedServerJar} || { echo "serverSENTINEL could not find ${runtime.serverJar} in $(pwd)" >&2; ls -la >&2; exit 66; }; exec java ${javaArgs} -jar ${quotedServerJar} nogui`;
   const workingDir = serverDockerWorkingDir(server);
   const bindTarget = serverDockerBindTarget(server);
 
@@ -1789,7 +1789,7 @@ async function dockerStatus(server: ManagedServer) {
     container: dockerContainerName(server),
     name: details.Name?.replace(/^\//, ""),
     message: !managed
-      ? "A same-named Docker container exists but is not managed by ServerSentinel"
+      ? "A same-named Docker container exists but is not managed by serverSENTINEL"
       : !mountValid
         ? "Managed container has an incompatible server volume mount"
         : undefined
@@ -1809,7 +1809,7 @@ async function dockerAction(server: ManagedServer, action: "start" | "stop" | "r
     } else {
       const existing = await inspectDockerContainer(server);
       if (existing?.Config?.Labels?.["serversentinel.managed"] !== "true") {
-        throw new Error(`Container ${dockerContainerName(server)} is not managed by ServerSentinel; refusing to control it`);
+        throw new Error(`Container ${dockerContainerName(server)} is not managed by serverSENTINEL; refusing to control it`);
       }
     }
     await dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
@@ -2492,7 +2492,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "ServerSentinel/0.8.0 (Fabric runtime downloader)"
+      "User-Agent": "serverSENTINEL/0.8.0 (Fabric runtime downloader)"
     }
   });
   if (!response.ok || !response.body) {
@@ -2533,7 +2533,7 @@ async function createServerFiles(
     "enable-query": "true",
     "query.port": String(queryPort)
   });
-  await writeFile(ensureInsideServer(server, "eula.txt"), `# Managed by ServerSentinel\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`, "utf8");
+  await writeFile(ensureInsideServer(server, "eula.txt"), `# Managed by serverSENTINEL\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`, "utf8");
   await writeVersionMetadataFile(server);
   await writeFile(ensureInsideServer(server, "logs/latest.log"), "", { flag: "a" });
 }
@@ -2718,7 +2718,7 @@ function runtimeResultRunning(value: unknown) {
 async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
   const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) {
-    throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+    throw new Error("nodeId is required when serverSENTINEL runs in panel mode");
   }
   const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
@@ -3844,7 +3844,7 @@ app.post<{
 }>("/api/servers", provisionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
-  if (!nodeId) throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+  if (!nodeId) throw new Error("nodeId is required when serverSENTINEL runs in panel mode");
   const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await listManagedServers(), nodeId);
   await assertNodePortsAvailable(nodeId, dockerPorts);
   request.body.dockerPorts = dockerPorts;
@@ -3866,7 +3866,7 @@ app.post<{
 app.post<{ Body: CreateServerInput }>("/api/servers/provision", provisionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.create");
   if (!request.body.nodeId && config.runtimeMode === "panel") {
-    throw new Error("nodeId is required when ServerSentinel runs in panel mode");
+    throw new Error("nodeId is required when serverSENTINEL runs in panel mode");
   }
   return startProvisionOperation(request.body, user.id);
 });
@@ -4599,7 +4599,7 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
       compatible: false,
       reason: metadata.incompatibilityReason
         ? `This mod was force installed: ${metadata.incompatibilityReason}`
-        : "This mod was force installed even though ServerSentinel could not confirm compatibility.",
+        : "This mod was force installed even though serverSENTINEL could not confirm compatibility.",
       serverSide,
       clientSide
     };
@@ -6014,11 +6014,11 @@ app.log.info({
   authEnabled: startupUsers.length > 0,
   logLevel: config.logLevel,
   port: config.port
-}, "ServerSentinel startup configuration");
+}, "serverSENTINEL startup configuration");
 if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
   app.log.warn({ dockerSocket: config.dockerSocket }, "Docker socket is not mounted; runtime management is unavailable");
 }
 
 await app.listen({ host: "0.0.0.0", port: config.port });
-app.log.info({ port: config.port }, "ServerSentinel web panel listening");
+app.log.info({ port: config.port }, "serverSENTINEL web panel listening");
 }

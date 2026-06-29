@@ -67,7 +67,7 @@ export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVe
   }
   if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
   if (minor >= 18) return 17;
-  throw new RuntimeResolutionError("unsupported_minecraft_version", "ServerSentinel currently supports Minecraft 1.18 and newer for Fabric servers");
+  throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for Fabric servers");
 }
 
 export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {

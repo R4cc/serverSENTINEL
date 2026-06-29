@@ -55,7 +55,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("The request was cancelled.");
     }
-    throw new Error("Could not reach the ServerSentinel backend. Check that the panel is running and try again.");
+    throw new Error("Could not reach the serverSENTINEL backend. Check that the panel is running and try again.");
   }
   if (!response.ok) {
     throw await apiErrorFromResponse(response);

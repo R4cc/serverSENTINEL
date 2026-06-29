@@ -118,11 +118,11 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Protect API keys, node join tokens, node secrets, user passwords, and Docker socket access.
 - Docker socket access is powerful. A container with access to `/var/run/docker.sock` can control Docker on the host.
 - File manager and console access are powerful administrative features. Give those permissions only to users you trust.
-- Keep backups of your ServerSentinel data root before upgrading or testing major changes.
+- Keep backups of your serverSENTINEL data root before upgrading or testing major changes.
 
 ## Storage
 
-ServerSentinel 0.8.0 uses storage model v2. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
+serverSENTINEL 0.8.0 uses storage model v2. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
 
 The default runtime data root is `/data`:
 
@@ -136,15 +136,15 @@ The default runtime data root is `/data`:
   tmp/
 ```
 
-Set `SERVERSENTINEL_DATA_DIR` to use a different data root. ServerSentinel derives every application storage path from that root and creates the required directories on startup.
+Set `SERVERSENTINEL_DATA_DIR` to use a different data root. serverSENTINEL derives every application storage path from that root and creates the required directories on startup.
 
 Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, settings JSON files, and old `/config` database locations are not read, imported, or migrated. A fresh data root starts with empty panel state and prompts for initial setup.
 
-Back up the whole data root. The simplest reliable file-copy backup is to stop ServerSentinel, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
+Back up the whole data root. The simplest reliable file-copy backup is to stop serverSENTINEL, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
 
-Managed servers and nodes use immutable backend-generated IDs. Local managed server files live under `servers/<serverId>/`; renaming a server changes only its display label, not its ID, directory, schedules, mods, logs, jobs, or Docker container name. Leave the Docker container field blank during creation to let ServerSentinel generate a stable container name from the server ID.
+Managed servers and nodes use immutable backend-generated IDs. Local managed server files live under `servers/<serverId>/`; renaming a server changes only its display label, not its ID, directory, schedules, mods, logs, jobs, or Docker container name. Leave the Docker container field blank during creation to let serverSENTINEL generate a stable container name from the server ID.
 
-The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside ServerSentinel after edit mode began.
+The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside serverSENTINEL after edit mode began.
 
 Recommended host folder:
 
@@ -152,7 +152,7 @@ Recommended host folder:
 /opt/serversentinel/data
 ```
 
-Use it as the single persistent ServerSentinel data root.
+Use it as the single persistent serverSENTINEL data root.
 
 ## Deployment
 
@@ -336,7 +336,7 @@ SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
 
 `SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
 
-`MCJARS_BASE_URL` controls the Fabric server jar/version provider used when resolving runtime profiles for new servers. `MCJARS_API_KEY` is optional; the public MCJars API does not currently require it, but private or future deployments can provide one and ServerSentinel will send it as a bearer token.
+`MCJARS_BASE_URL` controls the Fabric server jar/version provider used when resolving runtime profiles for new servers. `MCJARS_API_KEY` is optional; the public MCJars API does not currently require it, but private or future deployments can provide one and serverSENTINEL will send it as a bearer token.
 
 Demo mode is disabled by default. To build and run a deliberate demo/test instance, build the frontend with `VITE_ENABLE_DEMO=true` and run the backend with `SERVERSENTINEL_ENABLE_DEMO=true`. When either flag is missing, saved browser demo state is ignored, demo headers are not sent, and demo login is unavailable.
 

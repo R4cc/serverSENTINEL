@@ -55,7 +55,7 @@ export function stableErrorCode(error: unknown, statusCode: number) {
   if (/file changed|revision/i.test(message)) return "FILE_REVISION_CONFLICT";
   if (/lease/i.test(message)) return "FILE_EDIT_LEASE_LOST";
   if (/port .*already|already used.*port|query port/i.test(message)) return "PORT_CONFLICT";
-  if (/container .*exists|container .*managed by ServerSentinel/i.test(message)) return "CONTAINER_CONFLICT";
+  if (/container .*exists|container .*managed by serversentinel/i.test(message)) return "CONTAINER_CONFLICT";
   if (/already exists|duplicate/i.test(message)) return "CONFLICT";
   if (/not found|not available|could not be found|no managed server/i.test(message)) return "NOT_FOUND";
   if (/unsafe path|escapes|outside|path .*invalid|invalid relative path/i.test(message)) return "UNSAFE_PATH";

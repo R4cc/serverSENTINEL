@@ -1731,7 +1731,7 @@ export default function App() {
       return;
     }
     const assignedMessage = node.servers.length
-      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. If the node is online and supports self-stop, ServerSentinel will ask its container to stop. Remote server files are not deleted.`
+      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. If the node is online and supports self-stop, serverSENTINEL will ask its container to stop. Remote server files are not deleted.`
       : "";
     if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
     setNodeBusyId(node.id);
@@ -2707,7 +2707,7 @@ export default function App() {
           : "Server creation is unavailable right now."
         : provisioningNavigationReason;
   const noManagedServersMessage = panelOnlyMode && usableContextNodes.length === 0
-    ? "No node is connected yet. Add a node first so ServerSentinel has a host where it can create Minecraft servers."
+    ? "No node is connected yet. Add a node first so serverSENTINEL has a host where it can create Minecraft servers."
     : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.";
   const addNodeDisabledReason = demoMode
     ? "Exit demo mode before adding real nodes."
@@ -2820,7 +2820,7 @@ export default function App() {
           <div className="brandLockup">
             <img className="brandLogo" src="/logo.png" alt="" />
             <div>
-              <h1>ServerSentinel</h1>
+              <h1>serverSENTINEL</h1>
             </div>
           </div>
           <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
@@ -2941,7 +2941,7 @@ export default function App() {
           <InlineState
             tone="error"
             title="Could not load application state"
-            message={`${appLoadError} Check that the ServerSentinel backend is reachable, then try again.`}
+            message={`${appLoadError} Check that the serverSENTINEL backend is reachable, then try again.`}
             actionLabel="Retry"
             onAction={() => void refreshApp()}
             busy={appRefreshing}
@@ -3210,7 +3210,7 @@ export default function App() {
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
-          renderNoManagedServersEmptyState("Welcome to ServerSentinel")
+          renderNoManagedServersEmptyState("Welcome to serverSENTINEL")
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (

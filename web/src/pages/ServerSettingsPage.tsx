@@ -355,7 +355,7 @@ function MinecraftPortsSection({
             aria-invalid={!queryPortValid || portConflict}
             required
           />
-          <span className="fieldHint">UDP port used by ServerSentinel for quiet player metrics.</span>
+          <span className="fieldHint">UDP port used by serverSENTINEL for quiet player metrics.</span>
         </label>
       </div>
       {!serverPortValid && <span className="fieldError">Use a server port from {minServerPort} to {maxServerPort}.</span>}
@@ -1564,7 +1564,7 @@ function ResourcesNetworkWizardStep({
               id="create-query-port"
               name="queryPort"
               label="Query port"
-            helper="Used by ServerSentinel for player metrics."
+            helper="Used by serverSENTINEL for player metrics."
             protocol="UDP"
             value={queryPort}
               invalid={!queryPortValid || portConflict || queryPortInUse}
@@ -2025,7 +2025,7 @@ function ReviewCreateWizardStep({
           <strong id="review-summary-title">Summary</strong>
           <div className="reviewInfoCallout">
             <span className="reviewInfoIcon" aria-hidden="true">i</span>
-            <p>Once the server is created, ServerSentinel will download the required files, start the container, and launch your Minecraft server. This process may take a few minutes.</p>
+            <p>Once the server is created, serverSENTINEL will download the required files, start the container, and launch your Minecraft server. This process may take a few minutes.</p>
           </div>
         </section>
       </div>

@@ -236,7 +236,7 @@ export const demoSearchResults: ModrinthHit[] = [
 
 export const initialDemoFiles: Record<string, string> = {
   "/server.properties": [
-    "motd=ServerSentinel Demo",
+    "motd=serverSENTINEL Demo",
     "max-players=20",
     "view-distance=10",
     "simulation-distance=8",

@@ -32,7 +32,7 @@ export function AuthPanel({
         <div className="brandLockup">
           <img className="brandLogo" src="/logo.png" alt="" />
           <div>
-            <h1>ServerSentinel</h1>
+            <h1>serverSENTINEL</h1>
             <p>{setupRequired ? "Create the first admin account" : "Sign in to manage servers"}</p>
           </div>
         </div>
@@ -40,7 +40,7 @@ export function AuthPanel({
         {setupRequired && (
           <div className="authSetupBanner">
             <strong>First-run setup.</strong>
-            <span>Create this admin account first. After sign-in, ServerSentinel will show Docker, node, server, and Modrinth setup actions as needed.</span>
+            <span>Create this admin account first. After sign-in, serverSENTINEL will show Docker, node, server, and Modrinth setup actions as needed.</span>
           </div>
         )}
         <form
@@ -189,7 +189,7 @@ export function UserManagement({
           {users.length === 0 && (
             <tr>
               <td colSpan={3}>
-                <EmptyState compact className="emptyInline noBorder" title="No users yet" message="Create a user to give someone access to this ServerSentinel panel." />
+                <EmptyState compact className="emptyInline noBorder" title="No users yet" message="Create a user to give someone access to this serverSENTINEL panel." />
               </td>
             </tr>
           )}

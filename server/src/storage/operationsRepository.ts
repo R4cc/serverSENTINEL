@@ -236,7 +236,7 @@ export class OperationsRepository {
     return this.find(id);
   }
 
-  failIncompleteOnStartup(message = "Operation did not complete before ServerSentinel restarted", now = new Date().toISOString()) {
+  failIncompleteOnStartup(message = "Operation did not complete before serverSENTINEL restarted", now = new Date().toISOString()) {
     return this.storage.connection.prepare(`
       UPDATE operations
       SET status = 'failed',

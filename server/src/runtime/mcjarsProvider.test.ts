@@ -114,7 +114,7 @@ describe("MCJars runtime provider", () => {
 
     await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4" })).rejects.toMatchObject({
       code: "provider_unavailable",
-      message: "ServerSentinel could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again."
+      message: "serverSENTINEL could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again."
     });
   });
 });

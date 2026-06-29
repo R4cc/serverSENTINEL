@@ -316,7 +316,7 @@ function minecraftContainerCommand(server: ManagedServer) {
   return [
     "sh",
     "-c",
-    "server_jar=$1; shift; if [ ! -f \"$server_jar\" ]; then printf '%s\\n' \"ServerSentinel could not find $server_jar in $(pwd)\" >&2; ls -la >&2; exit 66; fi; exec java \"$@\" -jar \"$server_jar\" nogui",
+    "server_jar=$1; shift; if [ ! -f \"$server_jar\" ]; then printf '%s\\n' \"serverSENTINEL could not find $server_jar in $(pwd)\" >&2; ls -la >&2; exit 66; fi; exec java \"$@\" -jar \"$server_jar\" nogui",
     "serversentinel-entrypoint",
     serverJar,
     ...javaArgsToArgv(server.javaArgs ?? "-Xms2G -Xmx4G")
@@ -327,7 +327,7 @@ async function removeManagedContainer(server: ManagedServer) {
   const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
   if (!details) return false;
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
-    throw new Error(`Container ${containerName(server)} exists but is not managed by ServerSentinel; refusing to delete it`);
+    throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
   }
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(containerName(server))}?force=1`, [204, 404]);
   return true;
@@ -340,7 +340,7 @@ async function ensureContainer(server: ManagedServer) {
     return;
   }
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
-    throw new Error(`Container ${containerName(server)} exists but is not managed by ServerSentinel; refusing to control it`);
+    throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
   if (details.Config?.Labels?.["serversentinel.config-hash"] !== runtimeConfigHash(server)) {
     await removeManagedContainer(server);
@@ -354,7 +354,7 @@ async function downloadFabricJar(server: ManagedServer) {
   if (!artifact?.downloadUrl) throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   if (!artifact.downloadUrl.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS Fabric server jar");
   const res = await fetch(artifact.downloadUrl, {
-    headers: { "User-Agent": "ServerSentinel/0.8.0 (node Fabric runtime downloader)" }
+    headers: { "User-Agent": "serverSENTINEL/0.8.0 (node Fabric runtime downloader)" }
   });
   if (!res.ok || !res.body) {
     const body = !res.ok ? await res.text().catch(() => "") : "";
@@ -1245,7 +1245,7 @@ export async function startNodeAgent() {
   nodeStorageDatabase = openStorageDatabase();
   let persisted = await readNodeIdentity();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
-  console.info(`ServerSentinel node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
+  console.info(`serverSENTINEL node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
   const connect = async () => {
     persisted = await readNodeIdentity();

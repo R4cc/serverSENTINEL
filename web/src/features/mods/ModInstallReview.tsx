@@ -79,7 +79,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
               {selected && <Button onClick={onContinue} disabled={!canContinue}>Review selected version</Button>}
             </details>
             {selectedHealth?.requiresAcknowledgement && (
-              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " ServerSentinel cannot verify this version as safe for this server."} I understand the risk.</span></label>
+              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " serverSENTINEL cannot verify this version as safe for this server."} I understand the risk.</span></label>
             )}
           </>
         )}

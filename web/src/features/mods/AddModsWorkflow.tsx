@@ -74,7 +74,7 @@ export function AddModsWorkflow(props: Props) {
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
-        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and ServerSentinel will recommend the safest release." />}
+        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and serverSENTINEL will recommend the safest release." />}
         {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && (
           <EmptyState
             compact

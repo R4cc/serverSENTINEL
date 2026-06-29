@@ -614,7 +614,7 @@ export function NodesPage({
           <EmptyState
             className="nodesEmptyState"
             title="No nodes yet"
-            message="No host is connected yet. Add a node so ServerSentinel has a place to run Minecraft servers."
+            message="No host is connected yet. Add a node so serverSENTINEL has a place to run Minecraft servers."
             action={<Button onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</Button>}
           />
         )}

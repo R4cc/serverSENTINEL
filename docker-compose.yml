@@ -17,7 +17,7 @@ services:
     volumes:
       - serversentinel-data:/data
       - minecraft-servers:/data/servers
-      # Optional but powerful: enables ServerSentinel to create/start/stop
+      # Optional but powerful: enables serverSENTINEL to create/start/stop
       # separate Minecraft runtime containers using Docker.
       # Only mount this in trusted environments.
       # - /var/run/docker.sock:/var/run/docker.sock

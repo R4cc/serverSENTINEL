@@ -97,7 +97,7 @@ describe("api demo mode headers", () => {
 
     expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/test", expect.objectContaining({
-      headers: expect.not.objectContaining({ "X-ServerSentinel-Demo-Mode": "true" })
+      headers: expect.not.objectContaining({ "X-serverSENTINEL-Demo-Mode": "true" })
     }));
   });
 
@@ -107,7 +107,7 @@ describe("api demo mode headers", () => {
     expect(readStoredDemoMode(storage, false)).toBe(false);
     expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
     expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "true" }), true)).toEqual({
-      "X-ServerSentinel-Demo-Mode": "true"
+      "X-serverSENTINEL-Demo-Mode": "true"
     });
     expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "false" }), true)).toEqual({});
   });

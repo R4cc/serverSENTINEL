@@ -52,5 +52,5 @@ export function writeStoredDemoMode(value: boolean, storage: Storage = window.lo
 }
 
 export function demoRequestHeaders(storage: Storage = window.localStorage, enabled = demoModeEnabled): Record<string, string> {
-  return readStoredDemoMode(storage, enabled) ? { "X-ServerSentinel-Demo-Mode": "true" } : {};
+  return readStoredDemoMode(storage, enabled) ? { "X-serverSENTINEL-Demo-Mode": "true" } : {};
 }

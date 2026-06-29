@@ -39,7 +39,7 @@ function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMet
       kind: "unknown",
       shortDescription: "Compatibility is unknown.",
       detailDescription: hasManagedMetadata
-        ? "ServerSentinel could not load enough compatibility metadata for this mod."
+        ? "serverSENTINEL could not load enough compatibility metadata for this mod."
         : "This manually uploaded mod has no verified Modrinth compatibility metadata."
     };
   }
@@ -62,7 +62,7 @@ function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMet
     return {
       kind: "review",
       shortDescription: "Compatibility needs review.",
-      detailDescription: compatibility.reason || "ServerSentinel cannot fully verify server-side support for this mod."
+      detailDescription: compatibility.reason || "serverSENTINEL cannot fully verify server-side support for this mod."
     };
   }
 
@@ -77,7 +77,7 @@ function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMet
   return {
     kind: hasManagedMetadata ? "review" : "unknown",
     shortDescription: hasManagedMetadata ? "Compatibility needs review." : "Compatibility is unknown.",
-    detailDescription: compatibility.reason || "ServerSentinel cannot verify this mod’s compatibility."
+    detailDescription: compatibility.reason || "serverSENTINEL cannot verify this mod’s compatibility."
   };
 }
 
