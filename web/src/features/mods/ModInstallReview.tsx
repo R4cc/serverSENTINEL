@@ -6,6 +6,7 @@ import { Button } from "../../components/UiPrimitives";
 import { ModInstallVersionSkeleton } from "../../components/ModInstallVersionSkeleton";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
+import { ModIconImage } from "./ModIconImage";
 import { ModStatusBadge } from "./ModStatusBadge";
 
 type Props = {
@@ -48,7 +49,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
       </div>
       <div className="modsDrawerBody">
         <div className="modsReviewHero">
-          {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">MOD</span>}
+          <ModIconImage src={icon} fallback="MOD" />
           <div><strong>{title}</strong><span>For {state.data?.target.loader || "Fabric"} {state.data?.target.minecraftVersion || ""}</span></div>
         </div>
         {state.loading && <ModInstallVersionSkeleton />}

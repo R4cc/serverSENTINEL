@@ -6,6 +6,7 @@ import { InlineState } from "../../components/InlineState";
 import { Button, EmptyState } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
+import { ModIconImage } from "./ModIconImage";
 import { ModInstallReview } from "./ModInstallReview";
 import { ModStatusBadge } from "./ModStatusBadge";
 
@@ -93,7 +94,7 @@ export function AddModsWorkflow(props: Props) {
               : "";
             return (
               <article key={mod.project_id} className="modsResultCard">
-                {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">MOD</span>}
+                <ModIconImage src={icon} fallback="MOD" />
                 <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
                 {riskNote && <span className="modsResultRiskNote">{riskNote}</span>}
                 <Button variant={health.safeToRunDirectly ? "primary" : "secondary"} compact onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</Button>

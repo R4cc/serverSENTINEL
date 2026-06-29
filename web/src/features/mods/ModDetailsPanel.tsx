@@ -5,6 +5,7 @@ import { Button } from "../../components/UiPrimitives";
 import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
+import { ModIconImage } from "./ModIconImage";
 
 type Props = {
   mod: InstalledMod;
@@ -49,7 +50,7 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
     <aside className="modsDetailsDrawer" role="dialog" aria-modal="true" aria-labelledby="mod-details-title">
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
-          {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
+          <ModIconImage src={icon} fallback="JAR" />
           <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
         </div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label="Close mod details"><AppIcon name="x" /></Button>

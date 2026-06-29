@@ -4,6 +4,7 @@ import { Button, EmptyState } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { updatePlanEntryForMod } from "./modUpdatePlan";
+import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 import { ModStatusBadge } from "./ModStatusBadge";
 
@@ -56,7 +57,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
               }}
             >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} aria-label={`Open details for ${mod.displayName}`}>
-                {icon ? <img src={icon} alt="" /> : <span className="modsWorkspaceFallback">JAR</span>}
+                <ModIconImage src={icon} fallback="JAR" />
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
               </button>
               <div><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div>

@@ -163,6 +163,7 @@ const localNodeId = "local";
 const appVersion = process.env.npm_package_version ?? "0.8.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
+const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 const versionMetadataFilename = ".serversentinel-version.json";
 
 const serverSideEffectsQueue = new AsyncQueue();
@@ -1130,7 +1131,11 @@ async function modIconUrl(server: ManagedServer, filename: string) {
   }
   const key = modIconKey(filename);
   const icon = (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`));
-  return icon ? `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}` : undefined;
+  if (!icon) return undefined;
+  const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
+  const iconStat = await stat(iconPath);
+  const version = Math.trunc(iconStat.mtimeMs).toString(36);
+  return `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}&v=${encodeURIComponent(version)}`;
 }
 
 async function deleteModIcon(server: ManagedServer, filename: string) {
@@ -1155,6 +1160,14 @@ function iconExtension(iconUrl: string, contentType: string | null) {
   if (contentType?.includes("png")) return ".png";
   const extension = extname(new URL(iconUrl).pathname).toLowerCase();
   return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension) ? extension : ".png";
+}
+
+function iconContentType(filename: string) {
+  const extension = extname(filename).toLowerCase();
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".gif") return "image/gif";
+  return "image/png";
 }
 
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
@@ -1187,6 +1200,40 @@ function modrinthIconProxyUrl(iconUrl?: string | null) {
   return `/api/modrinth/icon?url=${encodeURIComponent(parsed.toString())}`;
 }
 
+function modrinthIconNotFound(): never {
+  const error = new Error("Icon not found") as Error & { statusCode?: number };
+  error.statusCode = 404;
+  throw error;
+}
+
+async function readCachedModrinthIcon(url: string, options: { allowStale?: boolean } = {}) {
+  const cacheDir = join(config.dataDir, "modrinth-icon-cache");
+  const key = createHash("sha256").update(url).digest("hex");
+  let entries: string[];
+  try {
+    entries = await readdir(cacheDir);
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    return null;
+  }
+  const entry = entries.find((candidate) => candidate.startsWith(`${key}.`));
+  if (!entry) return null;
+  const path = join(cacheDir, entry);
+  const entryStat = await stat(path);
+  if (!options.allowStale && Date.now() - entryStat.mtimeMs > modrinthIconCacheMaxAgeMs) return null;
+  return { bytes: await readFile(path), contentType: iconContentType(entry) };
+}
+
+async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUrl: string, contentType: string) {
+  const cacheDir = join(config.dataDir, "modrinth-icon-cache");
+  await mkdir(cacheDir, { recursive: true });
+  const key = createHash("sha256").update(url).digest("hex");
+  const extension = iconExtension(iconUrl, contentType);
+  const previous = await readdir(cacheDir);
+  await Promise.all(previous.filter((entry) => entry.startsWith(`${key}.`)).map((entry) => rm(join(cacheDir, entry), { force: true })));
+  await writeFile(join(cacheDir, `${key}${extension}`), bytes);
+}
+
 async function fetchModrinthIcon(iconUrl: unknown) {
   const url = typeof iconUrl === "string" ? iconUrl : "";
   let parsed: URL;
@@ -1198,13 +1245,24 @@ async function fetchModrinthIcon(iconUrl: unknown) {
   if (parsed.protocol !== "https:" || (parsed.hostname !== "cdn.modrinth.com" && !parsed.hostname.endsWith(".modrinth.com"))) {
     badRequest("Only Modrinth icon URLs can be proxied");
   }
-  const response = await fetch(parsed.toString(), {
-    headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
-  });
+  const normalizedUrl = parsed.toString();
+  const cached = await readCachedModrinthIcon(normalizedUrl);
+  if (cached) return cached;
+
+  let response: Awaited<ReturnType<typeof fetch>>;
+  try {
+    response = await fetch(normalizedUrl, {
+      headers: { "User-Agent": "ServerSentinel/0.8.0 (Fabric mod manager)" }
+    });
+  } catch {
+    const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
+    if (stale) return stale;
+    modrinthIconNotFound();
+  }
   if (!response.ok || !response.body) {
-    const error = new Error("Icon not found") as Error & { statusCode?: number };
-    error.statusCode = 404;
-    throw error;
+    const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
+    if (stale) return stale;
+    modrinthIconNotFound();
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > 1024 * 1024) {
@@ -1218,6 +1276,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
       : contentType.includes("png")
         ? "image/png"
         : "image/png";
+  await writeCachedModrinthIcon(normalizedUrl, bytes, normalizedUrl, safeContentType);
   return { bytes, contentType: safeContentType };
 }
 
@@ -4769,10 +4828,8 @@ async function localModIcon(server: ManagedServer, filenameInput: unknown) {
   const key = modIconKey(filename);
   const icon = existsSync(iconsDir) ? (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`)) : undefined;
   if (!icon) return null;
-  const extension = extname(icon).toLowerCase();
-  const contentType = extension === ".webp" ? "image/webp" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "image/png";
   const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
-  return { contentType, stream: createReadStream(iconPath) };
+  return { contentType: iconContentType(icon), stream: createReadStream(iconPath) };
 }
 
 async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
@@ -5337,7 +5394,7 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?
   return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel: optionalReleaseChannel(request.query.channel) });
 });
 
-app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
+app.get<{ Params: { id: string }; Querystring: { filename?: string; v?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   const icon = await runtimeForServer(server).modIcon(server, request.query.filename);
@@ -5346,6 +5403,7 @@ app.get<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/se
     return apiErrorResponse("ICON_NOT_FOUND", "Icon not found");
   }
   reply.header("Content-Type", icon.contentType);
+  reply.header("Cache-Control", "public, max-age=604800, immutable");
   return reply.send(icon.stream);
 });
 
@@ -5353,7 +5411,7 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
   await requireRequestPermission(request, "mods.view");
   const icon = await fetchModrinthIcon(request.query.url);
   reply.header("Content-Type", icon.contentType);
-  reply.header("Cache-Control", "public, max-age=3600");
+  reply.header("Cache-Control", "public, max-age=86400");
   return reply.send(icon.bytes);
 });
 
