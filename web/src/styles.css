@@ -10236,13 +10236,13 @@ textarea,
 }
 /* Cohesive Mods workspace */
 .modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
-.modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--panel)); }
+.modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--surface-raised)); }
 .modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
 .modsLockBanner > div { flex: 1; }
 .modsLockBanner strong, .modsLockBanner p { display: block; }
 .modsLockBanner p { margin: 2px 0 0; font-size: .82rem; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
+.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-raised); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
 .modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
 .modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, #e98a15 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #e98a15 7%, transparent); }
 .modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, #8b5cf6 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #8b5cf6 7%, transparent); }
@@ -10254,12 +10254,12 @@ textarea,
 .modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
-.modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-raised); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
 .modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
 .modsWorkspaceListHeader h3 { margin: 0; font-size: 1rem; }
 .modsWorkspaceListHeader > div span { color: var(--text-muted); font-size: .78rem; }
-.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); }
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
@@ -10269,12 +10269,12 @@ textarea,
 .modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; color: var(--text-muted); background: var(--surface-muted); font-size: .72rem; font-weight: var(--weight-strong); }
 .modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
-.modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
+.modsWorkspaceRow:hover { background: color-mix(in srgb, var(--accent) 3%, var(--surface-raised)); }
 .modsWorkspaceRow.isDisabled { opacity: .62; }
 .modsWorkspaceIdentity { display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
 .modsWorkspaceIdentity:hover:not(:disabled) { transform: none; background: none; color: inherit; }
 .modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
-.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--background); font-size: .66rem; font-weight: var(--weight-heading); }
+.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }
 .modsWorkspaceIdentity > span:last-child { display: grid; min-width: 0; gap: 3px; text-align: left; }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
@@ -10282,7 +10282,7 @@ textarea,
 .modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
 .modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
 .modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
-.modsStatusChip.unknown { border-color: var(--border); background: var(--background); }
+.modsStatusChip.unknown { border-color: var(--border); background: var(--surface); }
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate button { padding: 5px 0; border: 0; background: transparent; box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: transparent; }
@@ -10324,28 +10324,28 @@ textarea,
 .modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; color: var(--text-muted); font-size: .82rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .modsResultContent small { color: var(--text-muted); font-size: .72rem; }
 .modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: #b96305; font-size: .74rem; line-height: 1.35; }
-.modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--background); background-size: 220% 100%; animation: skeleton 1.4s infinite; }
+.modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--surface); background-size: 220% 100%; animation: skeleton 1.4s infinite; }
 .modsSearchSentinel { height: 1px; }
 .modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
 .modsDetailsTitle h2 { margin: 0 0 6px; }
 .modsDetailsTitle h2 + span { color: var(--text-muted); font-size: .76rem; }
 .modsDetailsDescription { margin: 0 0 20px; color: var(--text-muted); line-height: 1.55; }
-.modsHealthReasonBanner { display: grid; gap: 4px; margin: 0 0 16px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.modsHealthReasonBanner { display: grid; gap: 4px; margin: 0 0 16px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .modsHealthReasonBanner strong { font-size: .86rem; }
 .modsHealthReasonBanner span { color: var(--text-muted); font-size: .82rem; line-height: 1.45; }
-.modsHealthReasonBanner.ready { border-color: color-mix(in srgb, #159267 32%, var(--border)); background: color-mix(in srgb, #159267 8%, var(--panel)); }
+.modsHealthReasonBanner.ready { border-color: color-mix(in srgb, #159267 32%, var(--border)); background: color-mix(in srgb, #159267 8%, var(--surface-raised)); }
 .modsHealthReasonBanner.ready strong { color: #12805b; }
-.modsHealthReasonBanner.review { border-color: color-mix(in srgb, #e98a15 34%, var(--border)); background: color-mix(in srgb, #e98a15 8%, var(--panel)); }
+.modsHealthReasonBanner.review { border-color: color-mix(in srgb, #e98a15 34%, var(--border)); background: color-mix(in srgb, #e98a15 8%, var(--surface-raised)); }
 .modsHealthReasonBanner.review strong { color: #b96305; }
-.modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, #d14343 34%, var(--border)); background: color-mix(in srgb, #d14343 8%, var(--panel)); }
+.modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, #d14343 34%, var(--border)); background: color-mix(in srgb, #d14343 8%, var(--surface-raised)); }
 .modsHealthReasonBanner.not-recommended strong { color: #c23636; }
 .modsDetailsFacts { display: grid; gap: 0; margin: 0; }
 .modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .modsDetailsFacts dt { color: var(--text-muted); font-size: .78rem; font-weight: var(--weight-strong); }
 .modsDetailsFacts dd { overflow-wrap: anywhere; margin: 0; font-size: .82rem; }
-.modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); border-radius: 11px; background: var(--background); }
-.modsCompatibilityCard.ready { border-color: color-mix(in srgb, #159267 28%, var(--border)); background: color-mix(in srgb, #159267 6%, var(--panel)); }
-.modsCompatibilityCard.update { border-color: color-mix(in srgb, #e98a15 28%, var(--border)); background: color-mix(in srgb, #e98a15 6%, var(--panel)); }
+.modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
+.modsCompatibilityCard.ready { border-color: color-mix(in srgb, #159267 28%, var(--border)); background: color-mix(in srgb, #159267 6%, var(--surface-raised)); }
+.modsCompatibilityCard.update { border-color: color-mix(in srgb, #e98a15 28%, var(--border)); background: color-mix(in srgb, #e98a15 6%, var(--surface-raised)); }
 .modsCompatibilityCard.review { border-color: color-mix(in srgb, #8b5cf6 28%, var(--border)); }
 .modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, #d14343 28%, var(--border)); }
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
@@ -10359,7 +10359,7 @@ textarea,
 .modsReviewHero { padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .modsReviewHero > div { display: grid; gap: 3px; }
 .modsReviewHero span { color: var(--text-muted); font-size: .8rem; }
-.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, #159267 30%, var(--border)); border-radius: 12px; background: color-mix(in srgb, #159267 6%, var(--panel)); }
+.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, #159267 30%, var(--border)); border-radius: 12px; background: color-mix(in srgb, #159267 6%, var(--surface-raised)); }
 .modsRecommendedVersion > div { display: grid; gap: 3px; }
 .modsRecommendedVersion small, .modsRecommendedVersion span { color: var(--text-muted); font-size: .76rem; }
 .modsRecommendedVersion strong { font-size: 1.08rem; }
@@ -10386,7 +10386,7 @@ textarea,
 .modsDependencySummary > div { padding: 8px 0 0 18px; font-size: .82rem; }
 .modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
 .modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
-.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, #8b5cf6 30%, var(--border)); border-radius: 11px; background: color-mix(in srgb, #8b5cf6 6%, var(--panel)); }
+.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, #8b5cf6 30%, var(--border)); border-radius: 11px; background: color-mix(in srgb, #8b5cf6 6%, var(--surface-raised)); }
 .modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsUpdateReview .modsRiskAcknowledgement { margin-top: 4px; }
 .modsUpdateReviewActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }

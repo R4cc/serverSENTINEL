@@ -6,14 +6,19 @@ export function configureModrinthApiKeyProvider(provider: () => Promise<string>)
   apiKeyProvider = provider;
 }
 
-export async function modrinthFetch(url: string) {
-  const apiKey = await apiKeyProvider();
+export function modrinthRequestHeaders(url: string, apiKey: string) {
   const headers: Record<string, string> = {
     "User-Agent": "serverSENTINEL/0.8.0 (managed Fabric server panel)"
   };
-  if (apiKey) {
+  if (apiKey && isModrinthApiUrl(url)) {
     headers.Authorization = apiKey;
   }
+  return headers;
+}
+
+export async function modrinthFetch(url: string) {
+  const apiKey = await apiKeyProvider();
+  const headers = modrinthRequestHeaders(url, apiKey);
   const retryDelays = [0, 200, 600];
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt]) await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
@@ -30,4 +35,12 @@ export async function modrinthFetch(url: string) {
     }
   }
   throw new Error("Modrinth request failed after retries");
+}
+
+function isModrinthApiUrl(url: string) {
+  try {
+    return new URL(url).hostname === "api.modrinth.com";
+  } catch {
+    return false;
+  }
 }

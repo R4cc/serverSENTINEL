@@ -311,9 +311,12 @@ SERVERSENTINEL_DATA_DIR=/data
 SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
 SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
 SERVERSENTINEL_ENABLE_DEMO=false
+VITE_ENABLE_DEMO=false
+VITE_SERVERSENTINEL_API_TARGET=http://localhost:8080
 MODRINTH_API_KEY=
 MCJARS_BASE_URL=https://mcjars.app
 MCJARS_API_KEY=
+DOCKER_SOCKET=/var/run/docker.sock
 LOG_LEVEL=info
 ```
 
@@ -335,6 +338,8 @@ SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
 `SERVERSENTINEL_DATA_DIR` is the only application storage root. Keep it on persistent local storage and include it in backups. The SQLite database is always `serversentinel.sqlite` inside that root.
 
 `SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
+
+`DOCKER_SOCKET` defaults to `/var/run/docker.sock` and only needs to be changed for nonstandard Docker socket locations. `VITE_SERVERSENTINEL_API_TARGET` controls the Vite dev-server proxy target for local frontend development.
 
 `MCJARS_BASE_URL` controls the Fabric server jar/version provider used when resolving runtime profiles for new servers. `MCJARS_API_KEY` is optional; the public MCJars API does not currently require it, but private or future deployments can provide one and serverSENTINEL will send it as a bearer token.
 

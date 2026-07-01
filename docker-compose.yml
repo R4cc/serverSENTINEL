@@ -11,7 +11,11 @@ services:
       SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
       SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest}
+      SERVERSENTINEL_ENABLE_DEMO: ${SERVERSENTINEL_ENABLE_DEMO:-false}
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
+      MCJARS_BASE_URL: ${MCJARS_BASE_URL:-https://mcjars.app}
+      MCJARS_API_KEY: ${MCJARS_API_KEY:-}
+      DOCKER_SOCKET: ${DOCKER_SOCKET:-/var/run/docker.sock}
       PORT: 8080
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:

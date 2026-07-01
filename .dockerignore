@@ -1,5 +1,11 @@
-node_modules
-dist
-.git
+node_modules/
+dist/
+.git/
+.codex-tmp/
+.local-*/
+.tmp*/
 .env
+.env.*
+!.env.example
 npm-debug.log*
+Dockerfile.local

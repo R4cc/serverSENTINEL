@@ -7,7 +7,6 @@ type Props = {
 };
 
 export function buildModsSummary(mods: InstalledMod[], updatePlan?: ModUpdatePlan | null) {
-  const enabled = mods.filter((mod) => mod.enabled).length;
   const health = mods.map(getInstalledModHealth);
   const safeUpdates = updatePlan?.counts.safeUpdates ?? health.filter((item) => item.hasSafeUpdate).length;
   const reviewUpdates = updatePlan?.counts.reviewUpdates ?? health.filter((item) => item.hasReviewUpdate).length;
