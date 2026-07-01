@@ -35,7 +35,7 @@ export function runtimeDataPaths(dataDirInput?: string): RuntimeDataPaths {
 }
 
 export function initializeRuntimeDataRoot(paths: RuntimeDataPaths) {
-  for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir]) {
+  for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
     mkdirSync(directory, { recursive: true });
   }
 }

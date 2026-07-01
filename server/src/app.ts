@@ -526,12 +526,16 @@ async function modrinthApiKey() {
   return settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
 }
 
-function parseCookies(cookieHeader?: string) {
+export function parseCookies(cookieHeader?: string) {
   const cookies = new Map<string, string>();
   for (const part of (cookieHeader ?? "").split(";")) {
     const [rawName, ...rawValue] = part.trim().split("=");
     if (!rawName || rawValue.length === 0) continue;
-    cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
+    try {
+      cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
+    } catch {
+      // Ignore malformed cookie values; callers will treat missing sessions as unauthenticated.
+    }
   }
   return cookies;
 }
@@ -3268,7 +3272,7 @@ app.addHook("onRequest", async (request, reply) => {
     assertSameOriginRequest(request);
     return;
   }
-  if (request.raw.url?.startsWith("/api/nodes/connect")) {
+  if (request.raw.url?.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }
   if (request.url.startsWith("/api/")) {
@@ -3316,7 +3320,7 @@ app.addHook("preHandler", async (request) => {
   if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
     return;
   }
-  if (request.raw.url.startsWith("/api/nodes/connect")) {
+  if (request.raw.url.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }
   const demoMode = isDemoModeRequest(request);

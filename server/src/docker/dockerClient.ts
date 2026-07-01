@@ -20,6 +20,15 @@ export function dockerErrorMessage(body: string, statusCode?: number) {
   return `Docker API returned ${statusCode ?? "an error"}`;
 }
 
+export function dockerJsonBody<T>(body: string): T {
+  if (!body) return {} as T;
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error("Docker API returned malformed JSON");
+  }
+}
+
 export async function dockerRequest<T>(
   method: "GET" | "POST" | "DELETE",
   path: string,
@@ -47,7 +56,11 @@ export async function dockerRequest<T>(
             rejectRequest(new Error(dockerErrorMessage(body, response.statusCode)));
             return;
           }
-          resolveRequest(body ? (JSON.parse(body) as T) : ({} as T));
+          try {
+            resolveRequest(dockerJsonBody<T>(body));
+          } catch (error) {
+            rejectRequest(error);
+          }
         });
       }
     );
@@ -127,7 +140,11 @@ export async function dockerJsonRequest<T>(
             rejectRequest(new Error(dockerErrorMessage(responseBody, response.statusCode)));
             return;
           }
-          resolveRequest(responseBody ? (JSON.parse(responseBody) as T) : ({} as T));
+          try {
+            resolveRequest(dockerJsonBody<T>(responseBody));
+          } catch (error) {
+            rejectRequest(error);
+          }
         });
       }
     );

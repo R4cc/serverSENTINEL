@@ -35,7 +35,7 @@ describe("runtime data paths", () => {
 
     initializeRuntimeDataRoot(paths);
 
-    for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir]) {
+    for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
       expect(existsSync(directory)).toBe(true);
     }
   });

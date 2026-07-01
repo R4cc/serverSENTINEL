@@ -52,8 +52,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   });
 
   app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", context.authRateLimit, async (request, reply) => {
-    const username = context.validateUsername(request.body.username);
-    const password = context.validatePassword(request.body.password);
+    const body = request.body ?? {};
+    const username = context.validateUsername(body.username);
+    const password = context.validatePassword(body.password);
     const now = new Date().toISOString();
     const passwordData = context.hashPassword(password);
     const user: StoredUser = {
@@ -74,8 +75,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   });
 
   app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", context.authRateLimit, async (request, reply) => {
-    const username = request.body.username?.trim() ?? "";
-    const password = request.body.password ?? "";
+    const body = request.body ?? {};
+    const username = body.username?.trim() ?? "";
+    const password = body.password ?? "";
     if (context.demoEnabled && username === "demo" && password === "demo") {
       context.logInfo({ username: "demo", action: "login_demo" }, "Demo login requested");
       return { authenticated: false, setupRequired: context.users.list().length === 0, demo: true, user: null };
@@ -114,12 +116,13 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
 
   app.post<{ Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", context.destructiveRateLimit, async (request) => {
     await context.requireRequestPermission(request, "users.manage");
-    const username = context.validateUsername(request.body.username);
-    const password = context.validatePassword(request.body.password);
-    const rolePreset = context.normalizeRolePreset(request.body.rolePreset);
+    const body = request.body ?? {};
+    const username = context.validateUsername(body.username);
+    const password = context.validatePassword(body.password);
+    const rolePreset = context.normalizeRolePreset(body.rolePreset);
     const permissionData = context.buildUserPermissions({
       rolePreset,
-      permissions: request.body.permissions
+      permissions: body.permissions
     });
     const now = new Date().toISOString();
     const createdUser: StoredUser = {
@@ -134,14 +137,15 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
 
   app.put<{ Params: { id: string }; Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", context.destructiveRateLimit, async (request) => {
     await context.requireRequestPermission(request, "users.manage");
+    const body = request.body ?? {};
     const updatedUser = context.users.updateById(request.params.id, (current) => {
-      const username = request.body.username === undefined ? current.username : context.validateUsername(request.body.username);
-      const rolePreset = context.normalizeRolePreset(request.body.rolePreset);
+      const username = body.username === undefined ? current.username : context.validateUsername(body.username);
+      const rolePreset = context.normalizeRolePreset(body.rolePreset);
       const permissionData = context.buildUserPermissions({
         rolePreset,
-        permissions: request.body.permissions
+        permissions: body.permissions
       }, current);
-      const password = request.body.password?.trim() ? context.validatePassword(request.body.password) : undefined;
+      const password = body.password?.trim() ? context.validatePassword(body.password) : undefined;
       return {
         ...current,
         username,

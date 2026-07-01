@@ -6,6 +6,7 @@ import {
   validateJavaArgs,
   validateModrinthProjectId,
   nodeInstallInstructions,
+  parseCookies,
   removeServersForNode,
   validateRuntimeJarFilename,
   dockerHostPortBindings,
@@ -171,6 +172,12 @@ describe("Minecraft Query metrics parsing", () => {
 });
 
 describe("security validation helpers", () => {
+  it("ignores malformed cookie values instead of throwing", () => {
+    expect(parseCookies("valid=abc%20123; broken=%; another=ok").get("valid")).toBe("abc 123");
+    expect(parseCookies("valid=abc%20123; broken=%; another=ok").get("broken")).toBeUndefined();
+    expect(parseCookies("valid=abc%20123; broken=%; another=ok").get("another")).toBe("ok");
+  });
+
   it("requires true booleans instead of truthy strings", () => {
     expect(requireStrictBoolean(true, "forceIncompatible")).toBe(true);
     expect(requireStrictBoolean(false, "forceIncompatible")).toBe(false);
@@ -193,6 +200,7 @@ describe("security validation helpers", () => {
   it("requires runtime server jar names to stay local jar filenames", () => {
     expect(validateRuntimeJarFilename("fabric-server-launch.jar")).toBe("fabric-server-launch.jar");
     expect(() => validateRuntimeJarFilename("../fabric-server-launch.jar")).toThrow("local .jar filename");
+    expect(() => validateRuntimeJarFilename("..\\fabric-server-launch.jar")).toThrow("local .jar filename");
     expect(() => validateRuntimeJarFilename("server.txt")).toThrow("local .jar filename");
   });
 

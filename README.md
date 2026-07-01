@@ -375,7 +375,7 @@ Build all workspaces:
 npm run build
 ```
 
-Run server tests:
+Run all workspace tests:
 
 ```bash
 npm test

@@ -141,11 +141,18 @@ export class OperationsRepository {
           started_at = COALESCE(started_at, ?),
           server_id = COALESCE(?, server_id),
           node_id = COALESCE(?, node_id),
-          progress = ?,
+          progress = COALESCE(?, progress),
           task = COALESCE(?, task),
           error_message = NULL
       WHERE id = ? AND status IN ('queued', 'running')
-    `).run(now, patch.serverId ?? null, patch.nodeId ?? null, clampProgress(patch.progress ?? 0), patch.task ?? null, id);
+    `).run(
+      now,
+      patch.serverId ?? null,
+      patch.nodeId ?? null,
+      patch.progress === undefined ? null : clampProgress(patch.progress),
+      patch.task ?? null,
+      id
+    );
     return this.find(id);
   }
 

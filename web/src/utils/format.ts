@@ -167,13 +167,21 @@ export function versionSourceLabel(source: VersionSource) {
 }
 
 export function readThemePreference(): ThemePreference {
-  const saved = window.localStorage.getItem("serversentinel-theme");
-  return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
+  try {
+    const saved = window.localStorage.getItem("serversentinel-theme");
+    return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
+  } catch {
+    return "light";
+  }
 }
 
 export function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {
-  const saved = window.localStorage.getItem(key);
-  return saved === "en-US" || saved === "en-GB" || saved === "de-DE" || saved === "fr-FR" || saved === "ja-JP" || saved === "user"
-    ? saved
-    : "user";
+  try {
+    const saved = window.localStorage.getItem(key);
+    return saved === "en-US" || saved === "en-GB" || saved === "de-DE" || saved === "fr-FR" || saved === "ja-JP" || saved === "user"
+      ? saved
+      : "user";
+  } catch {
+    return "user";
+  }
 }

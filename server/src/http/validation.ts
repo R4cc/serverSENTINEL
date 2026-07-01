@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type { ReleaseChannel } from "../types.js";
 
 export function badRequest(message: string): never {
@@ -110,7 +109,7 @@ export function validateModrinthVersionId(versionId: unknown) {
 
 export function validateRuntimeJarFilename(filename: unknown) {
   const value = typeof filename === "string" ? filename.trim() : "";
-  if (!value || basename(value) !== value || !value.endsWith(".jar")) {
+  if (!value || value.includes("/") || value.includes("\\") || value.includes("..") || !value.endsWith(".jar")) {
     badRequest("Server jar filename must be a local .jar filename");
   }
   return value;

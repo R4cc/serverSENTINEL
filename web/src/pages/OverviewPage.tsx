@@ -167,7 +167,11 @@ export function RecentEventsPanel({
   const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
 
   useEffect(() => {
-    window.localStorage.setItem(hiddenRecentEventsKey, JSON.stringify(hiddenSignatures));
+    try {
+      window.localStorage.setItem(hiddenRecentEventsKey, JSON.stringify(hiddenSignatures));
+    } catch {
+      // Ignore unavailable browser storage; hidden events remain hidden for this session.
+    }
   }, [hiddenSignatures]);
 
   function hideEvent(signature: string) {

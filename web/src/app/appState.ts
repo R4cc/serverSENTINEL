@@ -5,6 +5,14 @@ import type { InstalledMod, LocalePreference, ScheduledExecution, ThemePreferenc
 import { readLocalePreference, readThemePreference } from "../utils/format";
 import { demoModeEnabled, readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 
+function writePreference(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore unavailable browser storage; in-memory preferences still apply.
+  }
+}
+
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readStoredDemoMode());
@@ -30,15 +38,15 @@ export function usePreferencesState() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-theme", themePreference);
+    writePreference("serversentinel-theme", themePreference);
   }, [themePreference]);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-date-locale", dateLocalePreference);
+    writePreference("serversentinel-date-locale", dateLocalePreference);
   }, [dateLocalePreference]);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-number-locale", numberLocalePreference);
+    writePreference("serversentinel-number-locale", numberLocalePreference);
   }, [numberLocalePreference]);
 
   return {

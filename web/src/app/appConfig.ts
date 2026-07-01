@@ -37,18 +37,30 @@ export function isServerWorkspacePage(page: ActivePage) {
 
 export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = demoModeEnabled) {
   if (!enabled) {
-    storage.removeItem(demoLocalStorageKey);
+    try {
+      storage.removeItem(demoLocalStorageKey);
+    } catch {
+      // Ignore unavailable browser storage; demo mode should remain off.
+    }
     return false;
   }
-  return storage.getItem(demoLocalStorageKey) === "true";
+  try {
+    return storage.getItem(demoLocalStorageKey) === "true";
+  } catch {
+    return false;
+  }
 }
 
 export function writeStoredDemoMode(value: boolean, storage: Storage = window.localStorage, enabled = demoModeEnabled) {
-  if (!enabled) {
-    storage.removeItem(demoLocalStorageKey);
-    return;
+  try {
+    if (!enabled) {
+      storage.removeItem(demoLocalStorageKey);
+      return;
+    }
+    storage.setItem(demoLocalStorageKey, String(value));
+  } catch {
+    // Ignore unavailable browser storage; in-memory state still reflects the toggle.
   }
-  storage.setItem(demoLocalStorageKey, String(value));
 }
 
 export function demoRequestHeaders(storage: Storage = window.localStorage, enabled = demoModeEnabled): Record<string, string> {

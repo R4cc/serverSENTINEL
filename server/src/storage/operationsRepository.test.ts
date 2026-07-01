@@ -72,6 +72,19 @@ describe("OperationsRepository", () => {
     });
   });
 
+  it("keeps existing progress when starting without a progress patch", async () => {
+    const operations = await createRepository();
+    const created = operations.create({ type: "server.restart", progress: 35 });
+
+    const started = operations.start(created.id, { task: "Restarting" });
+
+    expect(started).toMatchObject({
+      status: "running",
+      progress: 35,
+      task: "Restarting"
+    });
+  });
+
   it("supports cancellation for queued or running operations", async () => {
     const operations = await createRepository();
     const created = operations.create({ type: "backup.create", serverId: "server-id" });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
-import { demoLocalStorageKey, demoRequestHeaders, readStoredDemoMode } from "./app/appConfig";
+import { demoLocalStorageKey, demoRequestHeaders, readStoredDemoMode, writeStoredDemoMode } from "./app/appConfig";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
@@ -110,5 +110,18 @@ describe("api demo mode headers", () => {
       "X-serverSENTINEL-Demo-Mode": "true"
     });
     expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "false" }), true)).toEqual({});
+  });
+
+  it("keeps demo mode off when browser storage is unavailable", () => {
+    const storage = {
+      getItem: vi.fn(() => { throw new Error("blocked"); }),
+      setItem: vi.fn(() => { throw new Error("blocked"); }),
+      removeItem: vi.fn(() => { throw new Error("blocked"); })
+    } as unknown as Storage;
+
+    expect(readStoredDemoMode(storage, true)).toBe(false);
+    expect(readStoredDemoMode(storage, false)).toBe(false);
+    expect(() => writeStoredDemoMode(true, storage, true)).not.toThrow();
+    expect(() => writeStoredDemoMode(false, storage, false)).not.toThrow();
   });
 });
