@@ -2127,7 +2127,10 @@ function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
 }
 
 function cleanPlayerName(value: string) {
-  return value.trim().replace(/^"|"$/g, "");
+  return value
+    .trim()
+    .replace(/^"|"$/g, "")
+    .replace(/\s+\(\/?[^)]+:\d+\)$/g, "");
 }
 
 function cleanModName(value: string) {
@@ -2189,7 +2192,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     return eventFromParsedLine({
       eventType: "player_joined",
       severity: "success",
-      message: `Player joined: ${player}`,
+      message: `${player} joined`,
       timestamp,
       source,
       index,
@@ -2203,7 +2206,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     return eventFromParsedLine({
       eventType: "player_left",
       severity: "info",
-      message: `Player left: ${player}`,
+      message: `${player} left`,
       timestamp,
       source,
       index,
@@ -2217,7 +2220,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     return eventFromParsedLine({
       eventType: "player_left",
       severity: "warning",
-      message: `Player disconnected: ${player}`,
+      message: `${player} left`,
       timestamp,
       source,
       index,
@@ -2231,7 +2234,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     return eventFromParsedLine({
       eventType: "player_left",
       severity: "warning",
-      message: `Player disconnected: ${player}`,
+      message: `${player} left`,
       timestamp,
       source,
       index,
@@ -2297,6 +2300,28 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
   return null;
 }
 
+function eventTimestampSecond(timestamp?: string) {
+  if (!timestamp) return "";
+  if (/^\d{2}:\d{2}:\d{2}$/.test(timestamp)) return timestamp;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return date.toISOString().slice(0, 19);
+}
+
+export function compactRecentEvents(events: ServerEvent[], limit: number) {
+  const seen = new Set<string>();
+  const compacted: ServerEvent[] = [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const key = `${event.eventType}:${event.signature}:${eventTimestampSecond(event.timestamp)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compacted.push(event);
+    if (compacted.length >= limit) break;
+  }
+  return compacted;
+}
+
 async function serverOverviewData(server: ManagedServer) {
   const dockerConfigured = dockerControlConfigured(server);
   const [fileLog, dockerLog, properties, eula, dockerInspect] = await Promise.allSettled([
@@ -2313,9 +2338,7 @@ async function serverOverviewData(server: ManagedServer) {
   const parsedEvents = logSources
     .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index)).filter((event): event is ServerEvent => Boolean(event)));
   const reversedEvents = [...parsedEvents].reverse();
-  const events = parsedEvents
-    .slice(-10)
-    .reverse();
+  const events = compactRecentEvents(parsedEvents, 10);
   const props = properties.status === "fulfilled" ? parseProperties(properties.value) : {};
   const eulaAccepted = eula.status === "fulfilled"
     ? /^eula\s*=\s*true\s*$/im.test(eula.value)

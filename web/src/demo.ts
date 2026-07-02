@@ -354,9 +354,9 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
       maxPlayers: 20
     },
     events: [
-      demoEvent({ id: "demo-join-steve", eventType: "player_joined", type: "success", severity: "success", text: "Player joined: Steve", message: "Player joined: Steve", timestamp: "13:46:00", signature: "player_joined:steve", source: "logs/latest.log" }),
-      demoEvent({ id: "demo-join-alex", eventType: "player_joined", type: "success", severity: "success", text: "Player joined: Alex", message: "Player joined: Alex", timestamp: "13:43:00", signature: "player_joined:alex", source: "logs/latest.log" }),
-      demoEvent({ id: "demo-left-sam", eventType: "player_left", type: "info", severity: "info", text: "Player left: Sam", message: "Player left: Sam", timestamp: "13:40:00", signature: "player_left:sam", source: "logs/latest.log" }),
+      demoEvent({ id: "demo-join-steve", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: "13:46:00", signature: "player_joined:steve", source: "logs/latest.log" }),
+      demoEvent({ id: "demo-join-alex", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: "13:43:00", signature: "player_joined:alex", source: "logs/latest.log" }),
+      demoEvent({ id: "demo-left-sam", eventType: "player_left", type: "info", severity: "info", text: "Sam left", message: "Sam left", timestamp: "13:40:00", signature: "player_left:sam", source: "logs/latest.log" }),
       demoEvent({ id: "demo-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: "11:32:00", signature: "server_started", source: "logs/latest.log" })
     ]
   };

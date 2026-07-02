@@ -51,6 +51,35 @@ function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
   return normalized ? `${eventType}:${normalized}` : eventType;
 }
 
+function cleanPlayerName(value: string) {
+  return value
+    .trim()
+    .replace(/^"|"$/g, "")
+    .replace(/\s+\(\/?[^)]+:\d+\)$/g, "");
+}
+
+function eventTimestampSecond(timestamp?: string) {
+  if (!timestamp) return "";
+  if (/^\d{2}:\d{2}:\d{2}$/.test(timestamp)) return timestamp;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return date.toISOString().slice(0, 19);
+}
+
+function compactRecentEvents(events: ServerEvent[], limit: number) {
+  const seen = new Set<string>();
+  const compacted: ServerEvent[] = [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const key = `${event.eventType}:${event.signature}:${eventTimestampSecond(event.timestamp)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compacted.push(event);
+    if (compacted.length >= limit) break;
+  }
+  return compacted;
+}
+
 function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index: number): ServerEvent | null {
   const stripped = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!stripped) return null;
@@ -78,9 +107,9 @@ function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index:
   const crash = /Encountered an unexpected exception|Minecraft Crash Report|server crashed|The game crashed/i.test(message);
   const eventType = playerJoin ? "player_joined" : playerLeft ? "player_left" : start ? "server_started" : stop ? "server_stopped" : crash ? "server_crashed" : null;
   if (!eventType) return null;
-  const subject = playerJoin?.[1] ?? playerLeft?.[1];
-  const text = eventType === "player_joined" ? `Player joined: ${subject?.trim()}`
-    : eventType === "player_left" ? `Player left: ${subject?.trim()}`
+  const subject = playerJoin || playerLeft ? cleanPlayerName((playerJoin?.[1] ?? playerLeft?.[1])!) : undefined;
+  const text = eventType === "player_joined" ? `${subject?.trim()} joined`
+    : eventType === "player_left" ? `${subject?.trim()} left`
     : eventType === "server_started" ? "Server started"
     : eventType === "server_stopped" ? "Server stopped"
     : "Server crashed";
@@ -274,7 +303,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null)
     };
     return {
-      events: parsedEvents.slice(-10).reverse(),
+      events: compactRecentEvents(parsedEvents, 10),
       eventsStatus: logsResult.status === "fulfilled" ? "ok" : "unavailable",
       activity,
       logSources: logText ? [{ source, text: logText }] : []

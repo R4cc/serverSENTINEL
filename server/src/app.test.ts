@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compactRecentEvents,
   parseLogEvent,
   requireStrictBoolean,
   validateDockerContainerName,
@@ -21,7 +22,7 @@ import {
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
-import type { ManagedServer } from "./types.js";
+import type { ManagedServer, ServerEvent } from "./types.js";
 
 function testRuntimeProfile() {
   return {
@@ -55,7 +56,7 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event).not.toBeNull();
     expect(event!.timestamp).toBe("12:34:56");
     expect(event!.type).toBe("success");
-    expect(event!.text).toBe("Player joined: Antigravity");
+    expect(event!.text).toBe("Antigravity joined");
     expect(event!.eventType).toBe("player_joined");
     expect(event!.signature).toBe("player_joined:antigravity");
   });
@@ -66,7 +67,7 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event).not.toBeNull();
     expect(event!.timestamp).toBe(new Date("2026-05-29T12:34:56").toISOString());
     expect(event!.type).toBe("info");
-    expect(event!.text).toBe("Player left: Antigravity");
+    expect(event!.text).toBe("Antigravity left");
     expect(event!.eventType).toBe("player_left");
   });
 
@@ -77,6 +78,24 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event!.text).toBe("Server started");
     expect(event!.type).toBe("success");
     expect(event!.signature).toBe("server_started");
+  });
+
+  it("removes socket addresses from player disconnect events", () => {
+    const line = "[21:40:51] [Server thread/INFO]: MCArchive (/62.210.101.98:15415) lost connection: Disconnected";
+    const event = parseLogEvent(line, "logs/latest.log", 4);
+    expect(event).not.toBeNull();
+    expect(event!.text).toBe("MCArchive left");
+    expect(event!.signature).toBe("player_left:mcarchive");
+  });
+
+  it("compacts duplicate same-second recent events", () => {
+    const events = [
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "logs/latest.log", 1),
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 2),
+      parseLogEvent("[14:15:02] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 3)
+    ].filter((event): event is ServerEvent => Boolean(event));
+    const compacted = compactRecentEvents(events, 10);
+    expect(compacted.map((event) => event.timestamp)).toEqual(["14:15:02", "14:15:01"]);
   });
 
   it("correctly identifies server stopped events from shutdown lines", () => {
