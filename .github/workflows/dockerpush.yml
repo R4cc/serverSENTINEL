@@ -52,6 +52,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64
+          build-args: |
+            SS_BUILD_ID=${{ github.sha }}
           push: false
 
       - name: Build and push
@@ -63,3 +65,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            SS_BUILD_ID=${{ github.sha }}

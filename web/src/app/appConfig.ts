@@ -9,6 +9,7 @@ export const demoModeEnabled = import.meta.env.VITE_ENABLE_DEMO === "true";
 export const emptyApp: AppState = {
   servers: [],
   nodes: [],
+  appVersion,
   runtimeMode: "all-in-one",
   modrinthApiConfigured: false,
   dockerSocketMounted: false,

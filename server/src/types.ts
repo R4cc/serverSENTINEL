@@ -224,6 +224,7 @@ export type ManagedNode = {
   lastSeenAt?: string;
   connectedAt?: string;
   agentVersion?: string;
+  buildId?: string;
   protocolVersion?: string;
   capabilities?: string[];
   dockerStatus?: string;

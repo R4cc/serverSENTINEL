@@ -70,6 +70,7 @@ export type ManagedNode = {
   lastSeenAt?: string;
   connectedAt?: string;
   agentVersion?: string;
+  buildId?: string;
   protocolVersion?: string;
   dockerStatus?: string;
   dataPathStatus?: string;
@@ -169,6 +170,8 @@ export type ScheduledRun = {
 export type AppState = {
   servers: ManagedServer[];
   nodes?: ManagedNode[];
+  appVersion?: string;
+  buildId?: string;
   runtimeMode?: "all-in-one" | "panel" | "node";
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;

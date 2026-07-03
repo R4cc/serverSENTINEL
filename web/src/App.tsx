@@ -257,6 +257,8 @@ export default function App() {
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
+  const panelVersion = appState.appVersion ?? appVersion;
+  const panelBuildId = appState.buildId;
   const {
     effectiveAppState,
     panelOnlyMode,
@@ -1667,7 +1669,11 @@ export default function App() {
 
   async function updateNodeImage(node: ManagedNode) {
     if (node.isInternal || !canManageUsers) return;
-    const versionText = node.agentVersion ? ` from ${node.agentVersion} to ${appVersion}` : ` to ${appVersion}`;
+    const buildText = panelBuildId ? ` build ${panelBuildId.slice(0, 12)}` : "";
+    const sameVersion = node.agentVersion === panelVersion;
+    const versionText = sameVersion
+      ? ` to ${panelVersion}${buildText}`
+      : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
     if (!window.confirm(`Upgrade node "${node.name}"${versionText}?\n\nThe node may disconnect briefly while the container is recreated.`)) return;
     setNodeBusyId(node.id);
     try {
@@ -2866,7 +2872,7 @@ export default function App() {
             <SidebarIcon name="settings" />
             <span className="navLabel settingsNavLabel">
               <span>Settings</span>
-              <span className="settingsVersionText">v{appVersion}</span>
+              <span className="settingsVersionText">v{panelVersion}</span>
             </span>
           </button>
           <div className="accountChip">
@@ -3074,7 +3080,7 @@ export default function App() {
                 <div>
                   <strong>Version</strong>
                 </div>
-                <StatusBadge className="settingsStatus">v{appVersion}</StatusBadge>
+                <StatusBadge className="settingsStatus">v{panelVersion}</StatusBadge>
               </div>
               {demoMode && (
                 <div className="settingsRow">
@@ -3162,7 +3168,8 @@ export default function App() {
         {activePage === "nodes" && (
           <NodesPage
             nodes={contextNodes}
-            panelVersion={appVersion}
+            panelVersion={panelVersion}
+            panelBuildId={panelBuildId}
             canManageNodes={canManageUsers}
             busy={Boolean(nodeBusyId)}
             busyNodeId={nodeBusyId}

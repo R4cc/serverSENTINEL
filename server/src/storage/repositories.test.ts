@@ -85,15 +85,16 @@ describe("SQLite repositories", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       capabilities: ["node.update", "node.remove"],
+      buildId: "commit-sha",
       totalMemory: 8_589_934_592,
       compatibility: "compatible",
       secretHash: "secret"
     };
 
     nodes.create(node);
-    nodes.updateById(node.id, (current) => ({ ...current, status: "offline", agentVersion: "0.8.0" }));
+    nodes.updateById(node.id, (current) => ({ ...current, status: "offline", agentVersion: "0.8.0", buildId: "next-commit-sha" }));
 
-    expect(nodes.list()).toEqual([{ ...node, status: "offline", agentVersion: "0.8.0" }]);
+    expect(nodes.list()).toEqual([{ ...node, status: "offline", agentVersion: "0.8.0", buildId: "next-commit-sha" }]);
   });
 
   it("stores panel settings without creating JSON state", async () => {

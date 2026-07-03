@@ -1,0 +1,20 @@
+export const appVersion = process.env.npm_package_version ?? "0.8.0";
+
+function normalizeBuildId(value?: string) {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "unknown" || trimmed === "local") return undefined;
+  return trimmed;
+}
+
+export const appBuildId = normalizeBuildId(
+  process.env.SERVERSENTINEL_BUILD_ID
+    ?? process.env.SS_BUILD_ID
+    ?? process.env.GITHUB_SHA
+    ?? process.env.COMMIT_SHA
+    ?? process.env.SOURCE_COMMIT
+    ?? process.env.RAILWAY_GIT_COMMIT_SHA
+);
+
+export function shortBuildId(value?: string) {
+  return value ? value.slice(0, 12) : undefined;
+}

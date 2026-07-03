@@ -64,6 +64,7 @@ export type NodeHello = {
   joinToken?: string;
   nodeName: string;
   agentVersion: string;
+  buildId?: string;
   protocolVersion: string;
   capabilities: string[];
   runtimeMode: NodeRuntimeMode;
@@ -226,6 +227,7 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const nodeId = hello.nodeId === null ? null : optionalString(hello.nodeId, "nodeId") ?? null;
   const nodeName = requiredString(hello.nodeName, "nodeName");
   const agentVersion = requiredString(hello.agentVersion, "agentVersion");
+  const buildId = optionalString(hello.buildId, "buildId");
   const capabilities = requiredStringArray(hello.capabilities, "capabilities");
   const unsupportedCapabilities = capabilities.filter((capability) => !isNodeCapability(capability));
   if (unsupportedCapabilities.length) {
@@ -242,6 +244,7 @@ export function normalizeNodeHello(value: unknown): NodeHello {
     joinToken: optionalString(hello.joinToken, "joinToken"),
     nodeName,
     agentVersion,
+    buildId,
     protocolVersion,
     capabilities,
     runtimeMode: "node",

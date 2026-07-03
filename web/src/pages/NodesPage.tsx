@@ -38,6 +38,10 @@ function formatElapsedTime(milliseconds: number) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function shortBuildId(value?: string) {
+  return value ? value.slice(0, 12) : undefined;
+}
+
 function ServerRowIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -487,6 +491,7 @@ function AddNodeModal({
 export function NodesPage({
   nodes,
   panelVersion,
+  panelBuildId,
   canManageNodes,
   busy,
   busyNodeId,
@@ -522,6 +527,7 @@ export function NodesPage({
 }: {
   nodes: ContextNode[];
   panelVersion: string;
+  panelBuildId?: string;
   canManageNodes: boolean;
   busy: boolean;
   busyNodeId: string;
@@ -567,10 +573,22 @@ export function NodesPage({
     if (comparison === 1) return "newer";
     return "mismatch";
   };
-  const nodeUpdateAvailable = (node: ManagedNode) => nodeVersionState(node) === "older";
+  const nodeBuildUpdateAvailable = (node: ManagedNode) => (
+    !node.isInternal
+    && Boolean(panelBuildId)
+    && nodeVersionState(node) === "current"
+    && node.buildId !== panelBuildId
+  );
+  const nodeUpdateAvailable = (node: ManagedNode) => nodeVersionState(node) === "older" || nodeBuildUpdateAvailable(node);
   const nodePanelUpdateRequired = (node: ManagedNode) => nodeVersionState(node) === "newer";
   const nodeVersionMismatch = (node: ManagedNode) => nodeVersionState(node) === "mismatch";
   const nodeCanPanelUpdate = (node: ManagedNode) => node.status === "online";
+  const nodeUpdateTitle = (node: ManagedNode) => {
+    if (!nodeUpdateAvailable(node)) return "Node agent is already current";
+    if (!nodeCanPanelUpdate(node)) return "Bring the node online before updating";
+    if (nodeBuildUpdateAvailable(node)) return `Update node image to build ${shortBuildId(panelBuildId)}`;
+    return `Upgrade node agent to ${panelVersion}`;
+  };
 
   const sortedNodes = useMemo(() => {
     return [
@@ -651,9 +669,9 @@ export function NodesPage({
                       className="nodeUpgradeButton"
                       onClick={() => onUpdateNode(node)}
                       disabled={busyNodeId === node.id || !canManageNodes || !nodeCanPanelUpdate(node)}
-                      title={nodeCanPanelUpdate(node) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
+                      title={nodeUpdateTitle(node)}
                     >
-                      Upgrade
+                      {nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
                     </Button>
                   )}
                   <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
@@ -752,6 +770,10 @@ export function NodesPage({
                   <NodeDetailIcon name="agent" />
                   <div><dt>Agent</dt><dd>{selectedDetailsNode.agentVersion || "Unknown"}</dd></div>
                 </div>
+                <div className="nodeInfoCard">
+                  <NodeDetailIcon name="agent" />
+                  <div><dt>Build</dt><dd>{shortBuildId(selectedDetailsNode.buildId) || "Unknown"}</dd></div>
+                </div>
                 <div className="nodeInfoCard wide">
                   <NodeDetailIcon name="id" />
                   <div><dt>ID</dt><dd className="technicalValue">{selectedDetailsNode.id}</dd></div>
@@ -841,9 +863,9 @@ export function NodesPage({
                     compact
                     onClick={() => onUpdateNode(selectedDetailsNode)}
                     disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || !nodeUpdateAvailable(selectedDetailsNode) || !nodeCanPanelUpdate(selectedDetailsNode)}
-                    title={!nodeUpdateAvailable(selectedDetailsNode) ? "Node agent is already current" : nodeCanPanelUpdate(selectedDetailsNode) ? `Upgrade node agent to ${panelVersion}` : "Bring the node online before upgrading"}
+                    title={nodeUpdateTitle(selectedDetailsNode)}
                   >
-                    <AppIcon name="arrowUp" />Upgrade
+                    <AppIcon name="arrowUp" />{nodeBuildUpdateAvailable(selectedDetailsNode) ? "Update" : "Upgrade"}
                   </Button>
                   <Button variant="secondary" compact onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</Button>
                   <Button variant="secondary" compact onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</Button>

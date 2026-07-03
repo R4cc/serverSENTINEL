@@ -7,6 +7,7 @@ import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
+import { appBuildId, appVersion } from "../buildInfo.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
@@ -1263,7 +1264,8 @@ export async function startNodeAgent() {
         nodeSecret: persisted?.nodeSecret,
         joinToken: persisted ? undefined : config.joinToken,
         nodeName: config.nodeName || "Remote Node",
-        agentVersion: process.env.npm_package_version ?? "0.8.0",
+        agentVersion: appVersion,
+        buildId: appBuildId,
         protocolVersion: nodeProtocolVersion,
         capabilities: [...nodeCapabilities],
         runtimeMode: "node",

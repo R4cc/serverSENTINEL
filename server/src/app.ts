@@ -15,6 +15,7 @@ import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
+import { appBuildId, appVersion } from "./buildInfo.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
@@ -161,7 +162,6 @@ import {
 } from "./core.js";
 
 const localNodeId = "local";
-const appVersion = process.env.npm_package_version ?? "0.8.0";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
 const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
@@ -611,6 +611,8 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
     createdAt: now,
     updatedAt: now,
     lastSeenAt: now,
+    agentVersion: appVersion,
+    buildId: appBuildId,
     totalMemory: totalmem()
   };
 }
@@ -634,6 +636,8 @@ function ensureDefaultInternalNode(nodes: ManagedNode[]) {
     type: "local",
     status: "online",
     isInternal: true,
+    agentVersion: appVersion,
+    buildId: appBuildId,
     updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
     lastSeenAt: current.lastSeenAt ?? now,
     totalMemory: totalmem()
@@ -3356,6 +3360,8 @@ app.get("/api/app", async (request) => {
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
     nodes: await publicNodes(nodes, totalMemory),
+    appVersion,
+    buildId: appBuildId,
     runtimeMode: config.runtimeMode,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
@@ -3630,6 +3636,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           lastSeenAt: now,
           connectedAt: now,
           agentVersion: hello.agentVersion,
+          buildId: hello.buildId,
           protocolVersion: hello.protocolVersion,
           capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
@@ -3656,6 +3663,7 @@ app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
           lastSeenAt: now,
           connectedAt: now,
           agentVersion: hello.agentVersion,
+          buildId: hello.buildId,
           protocolVersion: hello.protocolVersion,
           capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
@@ -6017,6 +6025,7 @@ const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const dockerSocketMounted = config.runtimeMode === "panel" ? false : dockerAvailable();
 app.log.info({
   appVersion,
+  appBuildId,
   dataDir: config.dataDir,
   databasePath: config.databasePath,
   managedServersDir: config.serversDir,

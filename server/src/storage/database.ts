@@ -233,6 +233,15 @@ const migrations: readonly Migration[] = [
         ALTER TABLE servers ADD COLUMN restart_required_since TEXT
       `);
     }
+  },
+  {
+    version: 9,
+    name: "node-build-id",
+    up(database) {
+      database.exec(`
+        ALTER TABLE nodes ADD COLUMN build_id TEXT
+      `);
+    }
   }
 ];
 

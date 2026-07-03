@@ -15,6 +15,7 @@ function v2Hello(overrides: Record<string, unknown> = {}) {
     nodeSecret: "secret",
     nodeName: "Remote Node",
     agentVersion: "0.8.0",
+    buildId: "commit-sha",
     protocolVersion: nodeProtocolVersion,
     capabilities: [...nodeCapabilities],
     runtimeMode: "node",
@@ -54,6 +55,7 @@ describe("node protocol v2", () => {
   it("accepts a complete v2 hello for existing node sessions", () => {
     const hello = normalizeNodeHello(v2Hello());
     expect(hello.protocolVersion).toBe("2.0");
+    expect(hello.buildId).toBe("commit-sha");
     expect(hello.runtimeMode).toBe("node");
     expect(hello.operations.server).toContain("server.create");
     expect(hello.dataRoot.dockerRoot).toBe("/srv/serversentinel");

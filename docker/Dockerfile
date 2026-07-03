@@ -16,8 +16,10 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
+ARG SS_BUILD_ID
 ENV NODE_ENV=production
 ENV SS_MODE=all-in-one
+ENV SERVERSENTINEL_BUILD_ID=${SS_BUILD_ID}
 ENV SERVERSENTINEL_DATA_DIR=/data
 ENV SERVERSENTINEL_SERVERS_DOCKER_VOLUME=serversentinel-minecraft-servers
 ENV PORT=8080

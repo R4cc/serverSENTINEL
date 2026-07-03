@@ -13,6 +13,7 @@ type NodeRow = {
   last_seen_at: string | null;
   connected_at: string | null;
   agent_version: string | null;
+  build_id: string | null;
   protocol_version: string | null;
   capabilities_json: string | null;
   docker_status: string | null;
@@ -48,6 +49,7 @@ export function normalizeNode(value: unknown): ManagedNode {
     lastSeenAt: optionalString(node.lastSeenAt, "node.lastSeenAt"),
     connectedAt: optionalString(node.connectedAt, "node.connectedAt"),
     agentVersion: optionalString(node.agentVersion, "node.agentVersion"),
+    buildId: optionalString(node.buildId, "node.buildId"),
     protocolVersion: optionalString(node.protocolVersion, "node.protocolVersion"),
     capabilities: node.capabilities === undefined ? undefined : asArray(node.capabilities, "node.capabilities").map((item) => requiredString(item, "node.capabilities[]")),
     dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
@@ -65,6 +67,7 @@ function nodeFromRow(row: NodeRow) {
     id: row.id, name: row.name, type: row.type, status: row.status, isInternal: row.is_internal === 1,
     createdAt: row.created_at, updatedAt: row.updated_at, lastSeenAt: row.last_seen_at ?? undefined,
     connectedAt: row.connected_at ?? undefined, agentVersion: row.agent_version ?? undefined,
+    buildId: row.build_id ?? undefined,
     protocolVersion: row.protocol_version ?? undefined,
     capabilities: row.capabilities_json ? JSON.parse(row.capabilities_json) as unknown : undefined,
     dockerStatus: row.docker_status ?? undefined, dataPathStatus: row.data_path_status ?? undefined,
@@ -139,16 +142,17 @@ export class NodesRepository {
     database.prepare(`
       INSERT INTO nodes (
         id, name, type, status, is_internal, created_at, updated_at, last_seen_at,
-        connected_at, agent_version, protocol_version, capabilities_json, docker_status,
+        connected_at, agent_version, build_id, protocol_version, capabilities_json, docker_status,
         data_path_status, total_memory, compatibility, secret_hash, join_token_hash,
         join_token_expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name, type=excluded.type, status=excluded.status,
         is_internal=excluded.is_internal, created_at=excluded.created_at,
         updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at,
         connected_at=excluded.connected_at, agent_version=excluded.agent_version,
-        protocol_version=excluded.protocol_version, capabilities_json=excluded.capabilities_json,
+        build_id=excluded.build_id, protocol_version=excluded.protocol_version,
+        capabilities_json=excluded.capabilities_json,
         docker_status=excluded.docker_status, data_path_status=excluded.data_path_status,
         total_memory=excluded.total_memory, compatibility=excluded.compatibility,
         secret_hash=excluded.secret_hash, join_token_hash=excluded.join_token_hash,
@@ -156,7 +160,7 @@ export class NodesRepository {
     `).run(
       node.id, node.name, node.type, node.status, node.isInternal ? 1 : 0,
       node.createdAt, node.updatedAt, node.lastSeenAt ?? null, node.connectedAt ?? null,
-      node.agentVersion ?? null, node.protocolVersion ?? null,
+      node.agentVersion ?? null, node.buildId ?? null, node.protocolVersion ?? null,
       node.capabilities ? JSON.stringify(node.capabilities) : null, node.dockerStatus ?? null,
       node.dataPathStatus ?? null, node.totalMemory ?? null, node.compatibility ?? null,
       node.secretHash ?? null, node.joinTokenHash ?? null, node.joinTokenExpiresAt ?? null
