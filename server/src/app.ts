@@ -16,6 +16,7 @@ import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
+import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
 import {
   allowedForChannel,
@@ -1656,6 +1657,7 @@ function dockerRuntimeConfigHash(server: ManagedServer) {
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
+    tty: true,
     restartPolicy: "unless-stopped"
   })).digest("hex");
 }
@@ -1717,7 +1719,7 @@ async function ensureDockerContainer(server: ManagedServer) {
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        Tty: false,
+        Tty: true,
         ExposedPorts: exposedPorts,
         HostConfig: {
           Privileged: false,
@@ -1868,7 +1870,7 @@ async function dockerCommandInputCapability(server: ManagedServer, currentStatus
     };
   }
 
-  if (!details.Config?.OpenStdin || !details.Config.AttachStdin || details.Config.Tty) {
+  if (!details.Config?.OpenStdin || !details.Config.AttachStdin) {
     return {
       available: false,
       message: "Runtime container was not created with reliable stdin settings"
@@ -2448,20 +2450,6 @@ function streamLatestServerLog(server: ManagedServer, client: Client) {
   };
 }
 
-function stripDockerLogHeaders(buffer: Buffer) {
-  const chunks: Buffer[] = [];
-  let offset = 0;
-  while (offset + 8 <= buffer.length) {
-    const size = buffer.readUInt32BE(offset + 4);
-    const start = offset + 8;
-    const end = start + size;
-    if (end > buffer.length) break;
-    chunks.push(buffer.subarray(start, end));
-    offset = end;
-  }
-  return chunks.length ? Buffer.concat(chunks) : buffer;
-}
-
 function streamDockerLogs(server: ManagedServer, client: Client) {
   if (!dockerControlConfigured(server) || !dockerAvailable()) {
     logWarn({ ...serverLogFields(server), source: "docker" }, "Docker log stream unavailable");
@@ -2481,8 +2469,9 @@ function streamDockerLogs(server: ManagedServer, client: Client) {
         client.send(JSON.stringify({ type: "unavailable", message: `Docker logs returned ${response.statusCode}` }));
         return;
       }
+      const decoder = new DockerLogDecoder();
       response.on("data", (chunk: Buffer) => {
-        const text = stripDockerLogHeaders(chunk).toString("utf8");
+        const text = decoder.write(chunk).toString("utf8");
         if (text && client.readyState === 1) {
           client.send(JSON.stringify({ type: "log", source: "docker", text, at: new Date().toISOString() }));
         }

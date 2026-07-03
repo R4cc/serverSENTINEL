@@ -806,7 +806,7 @@ export default function App() {
         return;
       }
       if (message.type === "log") {
-        setLogs((current) => [...current.slice(-499), `[${message.source ?? "console"}] ${message.text ?? ""}`]);
+        setLogs((current) => [...current.slice(-499), message.text ?? ""]);
         if (message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
@@ -1378,7 +1378,7 @@ export default function App() {
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
-      const nextLogs = lines.map((line) => consoleLine(`[${result.source}] ${line}`));
+      const nextLogs = lines.map((line) => consoleLine(line));
       setLogs((current) => mergeConsoleLogTail(current, nextLogs));
     } catch (error) {
       if (handleStaleSession(error)) return;

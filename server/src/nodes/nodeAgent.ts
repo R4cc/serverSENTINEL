@@ -9,6 +9,7 @@ import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
+import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
@@ -183,7 +184,8 @@ function runtimeConfigHash(server: ManagedServer) {
     image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
-    javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G")
+    javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
+    tty: true
   })).digest("hex");
 }
 
@@ -303,7 +305,7 @@ async function createContainer(server: ManagedServer) {
     Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
-    Tty: false,
+    Tty: true,
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
     Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
@@ -545,20 +547,6 @@ async function runtimeStatus(server: ManagedServer) {
   };
 }
 
-function stripDockerLogHeaders(buffer: Buffer) {
-  const chunks: Buffer[] = [];
-  let offset = 0;
-  while (offset + 8 <= buffer.length) {
-    const size = buffer.readUInt32BE(offset + 4);
-    const start = offset + 8;
-    const end = start + size;
-    if (end > buffer.length) break;
-    chunks.push(buffer.subarray(start, end));
-    offset = end;
-  }
-  return chunks.length ? Buffer.concat(chunks) : buffer;
-}
-
 function sendStreamData(socket: WebSocket, id: string, event: NodeStreamDataMessage["event"]) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "streamData", id, event } satisfies NodeStreamDataMessage));
@@ -622,8 +610,9 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
         return;
       }
 
+      const decoder = new DockerLogDecoder();
       response.on("data", (chunk: Buffer) => {
-        const text = stripDockerLogHeaders(chunk).toString("utf8");
+        const text = decoder.write(chunk).toString("utf8");
         if (text) {
           sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
         }
