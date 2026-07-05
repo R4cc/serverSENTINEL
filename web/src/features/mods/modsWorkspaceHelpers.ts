@@ -76,7 +76,10 @@ export function installedModKey(mod: InstalledMod) {
 
 export function pendingRequiredDependencies(version: ModrinthInstallVersion | null, installedMods: InstalledMod[]) {
   const installedProjectIds = new Set(installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
-  return version?.dependencies.filter((dependency) => dependency.dependencyType === "required" && (!dependency.projectId || !installedProjectIds.has(dependency.projectId))) ?? [];
+  const installedVersionIds = new Set(installedMods.map((mod) => mod.modrinth?.versionId).filter(Boolean));
+  return version?.dependencies.filter((dependency) => dependency.dependencyType === "required"
+    && (!dependency.projectId || !installedProjectIds.has(dependency.projectId))
+    && (!dependency.versionId || !installedVersionIds.has(dependency.versionId))) ?? [];
 }
 
 export function preferredInstallVersionId(data: ModrinthInstallVersionsResponse) {

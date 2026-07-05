@@ -445,9 +445,9 @@ function validatePassword(password?: string) {
   return password;
 }
 
-function validateBase64Content(value: unknown) {
-  if (typeof value !== "string" || !value || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    badRequest("Uploaded mod content must be valid base64");
+export function validateBase64Content(value: unknown, allowEmpty = false, label = "Uploaded mod content") {
+  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
+    badRequest(`${label} must be valid base64`);
   }
   return value;
 }
@@ -4441,10 +4441,8 @@ async function localUploadFile(server: ManagedServer, parent: string, filenameIn
     throw new Error("Upload path is not a directory");
   }
   const filename = safeFileManagerName(filenameInput as string | undefined);
-  if (typeof contentBase64 !== "string") {
-    throw new Error("File content is required");
-  }
-  const content = Buffer.from(contentBase64, "base64");
+  const validContentBase64 = validateBase64Content(contentBase64, true, "Uploaded file content");
+  const content = Buffer.from(validContentBase64, "base64");
   if (content.length > fileUploadSizeLimit) {
     throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
   }

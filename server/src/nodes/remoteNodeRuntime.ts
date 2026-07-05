@@ -17,6 +17,11 @@ type PersistServerFn = (server: ManagedServer) => Promise<void>;
 type UpdateServerRecordFn = (server: ManagedServer) => Promise<void>;
 type DeleteServerRecordFn = (serverId: string) => Promise<void>;
 
+const defaultRemoteCommandTimeoutMs = 15_000;
+const provisioningCommandTimeoutMs = 10 * 60 * 1000;
+const transferCommandTimeoutMs = 2 * 60 * 1000;
+const modrinthCommandTimeoutMs = 5 * 60 * 1000;
+
 function normalizeRemotePath(path: string) {
   const value = path || ".";
   if (value.includes("\0") || value.includes("\\") || /[\r\n]/.test(value)) throw new Error("Path contains invalid characters");
@@ -165,20 +170,25 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.publicServerFn(server, nodes);
   }
 
-  async command(server: ManagedServer, command: Parameters<PanelNodeConnections["request"]>[1], payload?: unknown) {
+  async command(
+    server: ManagedServer,
+    command: Parameters<PanelNodeConnections["request"]>[1],
+    payload?: unknown,
+    timeoutMs = defaultRemoteCommandTimeoutMs
+  ) {
     const node = await this.lookupNode(server.nodeId);
     if (!node) throw new Error(`Node ${server.nodeId} not found`);
-    return this.connections.request(node, command, { server, ...(payload as Record<string, unknown> | undefined) });
+    return this.connections.request(node, command, { server, ...(payload as Record<string, unknown> | undefined) }, timeoutMs);
   }
 
   async createServer(input: unknown): Promise<ManagedServer> {
-    const result = await this.command({ id: "pending", nodeId: this.nodeId } as ManagedServer, "server.create", { input }) as ManagedServer;
+    const result = await this.command({ id: "pending", nodeId: this.nodeId } as ManagedServer, "server.create", { input }, provisioningCommandTimeoutMs) as ManagedServer;
     await this.persistServer(result);
     return result;
   }
 
   async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
-    const result = await this.command(server, "server.update", { input }) as ManagedServer;
+    const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
     await this.updateServerRecord(result);
     return result;
   }
@@ -349,7 +359,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
-    const result = await this.command(server, "files.download", { path: normalizeRemotePath(target) }) as { filename: string; size: number; contentBase64: string };
+    const result = await this.command(server, "files.download", { path: normalizeRemotePath(target) }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
     return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
   }
 
@@ -366,7 +376,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   uploadFile(server: ManagedServer, parent: string, filename: unknown, contentBase64: unknown) {
-    return this.command(server, "files.upload", { parent: normalizeRemotePath(parent), filename, contentBase64 });
+    return this.command(server, "files.upload", { parent: normalizeRemotePath(parent), filename, contentBase64 }, transferCommandTimeoutMs);
   }
 
   renameFile(server: ManagedServer, source: string, name: unknown) {
@@ -382,7 +392,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   listMods(server: ManagedServer, options?: { forceRefresh?: boolean }) {
-    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined);
+    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined, modrinthCommandTimeoutMs);
   }
 
   async modIcon(): Promise<ModIconResult | null> {
@@ -398,10 +408,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown) {
-    return this.command(server, "mods.upload", { filename, contentBase64 });
+    return this.command(server, "mods.upload", { filename, contentBase64 }, transferCommandTimeoutMs);
   }
 
   installMod(server: ManagedServer, input: unknown) {
-    return this.command(server, "mods.install", input);
+    return this.command(server, "mods.install", input, modrinthCommandTimeoutMs);
   }
 }

@@ -18,7 +18,8 @@ import {
   sessionMaxAgeSeconds,
   validateJoinTokenTtlMinutes,
   fileContentRevision,
-  assertFileRevision
+  assertFileRevision,
+  validateBase64Content
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -46,6 +47,15 @@ describe("file revisions", () => {
     expect(() => assertFileRevision(acquired, acquired, fileContentRevision("changed")))
       .toThrow("The file changed after editing began");
     expect(() => assertFileRevision(acquired, acquired, acquired)).not.toThrow();
+  });
+});
+
+describe("base64 upload validation", () => {
+  it("rejects malformed upload payloads before permissive Buffer decoding can alter them", () => {
+    expect(() => validateBase64Content("not base64!!!", true)).toThrow("valid base64");
+    expect(() => validateBase64Content("abcd=", true)).toThrow("valid base64");
+    expect(validateBase64Content("", true)).toBe("");
+    expect(validateBase64Content(Buffer.from("hello").toString("base64"), true)).toBe("aGVsbG8=");
   });
 });
 

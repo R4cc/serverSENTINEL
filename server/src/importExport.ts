@@ -197,7 +197,9 @@ export function parseExportArtifactBase64(contentBase64: string): ExportArtifact
   if (typeof contentBase64 !== "string" || !contentBase64.trim()) {
     throw new Error("Import artifact contentBase64 is required");
   }
-  const decoded = Buffer.from(contentBase64, "base64").toString("utf8");
+  const normalizedContent = contentBase64.trim();
+  assertBase64(normalizedContent, "Import artifact contentBase64");
+  const decoded = Buffer.from(normalizedContent, "base64").toString("utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(decoded);
@@ -220,6 +222,8 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
     rejectUnsupportedKeys(entry, ["server", "modPreferences", "files"], `servers[${serverIndex}]`);
     if (!isPlainObject(entry.server)) throw new Error(`Import servers[${serverIndex}].server is required`);
     if (!isPlainObject(entry.modPreferences)) throw new Error(`Import servers[${serverIndex}].modPreferences is required`);
+    assertImportServer(entry.server, `servers[${serverIndex}].server`);
+    assertImportModPreferences(entry.modPreferences, `servers[${serverIndex}].modPreferences`);
     if (!Array.isArray(entry.files)) throw new Error(`Import servers[${serverIndex}].files must be an array`);
     for (const [fileIndex, file] of entry.files.entries()) {
       if (!isPlainObject(file)) throw new Error(`Import servers[${serverIndex}].files[${fileIndex}] must be an object`);
@@ -235,6 +239,7 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
       if (typeof file.contentBase64 !== "string") {
         throw new Error(`Import file ${filePath} contentBase64 is required`);
       }
+      assertBase64(file.contentBase64, `Import file ${filePath} contentBase64`);
       const buffer = Buffer.from(file.contentBase64, "base64");
       if (buffer.length !== fileSize) throw new Error(`Import file ${filePath} size does not match content`);
       if (createHash("sha256").update(buffer).digest("hex") !== file.sha256) {
@@ -246,6 +251,184 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
     }
   }
   return value as ExportArtifact;
+}
+
+function assertImportServer(server: Record<string, unknown>, label: string) {
+  rejectUnsupportedKeys(server, [
+    "id",
+    "nodeId",
+    "displayName",
+    "serverDir",
+    "storageName",
+    "runtimeProfile",
+    "dockerContainer",
+    "dockerImage",
+    "dockerMountSource",
+    "dockerWorkingDir",
+    "dockerPorts",
+    "managedPorts",
+    "javaArgs",
+    "restartRequiredSince",
+    "schedules",
+    "createdAt",
+    "updatedAt"
+  ], label);
+  stringValue(server.id, `${label}.id`);
+  stringValue(server.nodeId, `${label}.nodeId`);
+  stringValue(server.displayName, `${label}.displayName`);
+  stringValue(server.serverDir, `${label}.serverDir`);
+  stringValue(server.createdAt, `${label}.createdAt`);
+  stringValue(server.updatedAt, `${label}.updatedAt`);
+  optionalStringValue(server.storageName, `${label}.storageName`);
+  optionalStringValue(server.dockerContainer, `${label}.dockerContainer`);
+  optionalStringValue(server.dockerImage, `${label}.dockerImage`);
+  optionalStringValue(server.dockerMountSource, `${label}.dockerMountSource`);
+  optionalStringValue(server.dockerWorkingDir, `${label}.dockerWorkingDir`);
+  optionalStringValue(server.javaArgs, `${label}.javaArgs`);
+  optionalStringValue(server.restartRequiredSince, `${label}.restartRequiredSince`);
+  const dockerPorts = optionalStringValue(server.dockerPorts, `${label}.dockerPorts`);
+  if (dockerPorts) parseDockerPorts(dockerPorts);
+  if (!isPlainObject(server.runtimeProfile)) throw new Error(`${label}.runtimeProfile must be a JSON object`);
+  assertRuntimeProfile(server.runtimeProfile, `${label}.runtimeProfile`);
+  if (server.managedPorts !== undefined) assertManagedPorts(server.managedPorts, `${label}.managedPorts`);
+  if (server.schedules !== undefined) assertSchedules(server.schedules, `${label}.schedules`);
+}
+
+function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
+  rejectUnsupportedKeys(profile, [
+    "minecraftVersion",
+    "loader",
+    "loaderVersion",
+    "javaMajorVersion",
+    "jarProvider",
+    "jarArtifact",
+    "compatibilityStatus",
+    "resolvedAt"
+  ], label);
+  stringValue(profile.minecraftVersion, `${label}.minecraftVersion`);
+  stringValue(profile.loader, `${label}.loader`);
+  stringValue(profile.loaderVersion, `${label}.loaderVersion`);
+  if (typeof profile.javaMajorVersion !== "number" || !Number.isInteger(profile.javaMajorVersion)) {
+    throw new Error(`${label}.javaMajorVersion must be an integer`);
+  }
+  stringValue(profile.jarProvider, `${label}.jarProvider`);
+  if (!isPlainObject(profile.jarArtifact)) throw new Error(`${label}.jarArtifact must be a JSON object`);
+  rejectUnsupportedKeys(profile.jarArtifact, ["id", "filename", "downloadUrl", "sha1", "sha256", "sizeBytes"], `${label}.jarArtifact`);
+  optionalStringValue(profile.jarArtifact.id, `${label}.jarArtifact.id`);
+  stringValue(profile.jarArtifact.filename, `${label}.jarArtifact.filename`);
+  optionalStringValue(profile.jarArtifact.downloadUrl, `${label}.jarArtifact.downloadUrl`);
+  optionalStringValue(profile.jarArtifact.sha1, `${label}.jarArtifact.sha1`);
+  optionalStringValue(profile.jarArtifact.sha256, `${label}.jarArtifact.sha256`);
+  if (profile.jarArtifact.sizeBytes !== undefined && (typeof profile.jarArtifact.sizeBytes !== "number" || !Number.isInteger(profile.jarArtifact.sizeBytes) || profile.jarArtifact.sizeBytes < 0)) {
+    throw new Error(`${label}.jarArtifact.sizeBytes must be a non-negative integer`);
+  }
+  stringValue(profile.compatibilityStatus, `${label}.compatibilityStatus`);
+  stringValue(profile.resolvedAt, `${label}.resolvedAt`);
+}
+
+function assertManagedPorts(value: unknown, label: string) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  for (const [index, port] of value.entries()) {
+    if (!isPlainObject(port)) throw new Error(`${label}[${index}] must be a JSON object`);
+    rejectUnsupportedKeys(port, ["id", "name", "type", "protocol", "internalPort", "externalPort", "required", "removable", "advanced"], `${label}[${index}]`);
+    stringValue(port.id, `${label}[${index}].id`);
+    stringValue(port.name, `${label}[${index}].name`);
+    stringValue(port.type, `${label}[${index}].type`);
+    const protocol = stringValue(port.protocol, `${label}[${index}].protocol`);
+    if (protocol !== "tcp" && protocol !== "udp") throw new Error(`${label}[${index}].protocol must be tcp or udp`);
+    assertPortNumber(port.internalPort, `${label}[${index}].internalPort`);
+    assertPortNumber(port.externalPort, `${label}[${index}].externalPort`);
+    booleanValue(port.required, `${label}[${index}].required`);
+    booleanValue(port.removable, `${label}[${index}].removable`);
+    booleanValue(port.advanced, `${label}[${index}].advanced`);
+  }
+}
+
+function assertSchedules(value: unknown, label: string) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  for (const [index, schedule] of value.entries()) {
+    if (!isPlainObject(schedule)) throw new Error(`${label}[${index}] must be a JSON object`);
+    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "commands", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
+    stringValue(schedule.id, `${label}[${index}].id`);
+    stringValue(schedule.name, `${label}[${index}].name`);
+    stringValue(schedule.cron, `${label}[${index}].cron`);
+    stringArray(schedule.commands, `${label}[${index}].commands`);
+    booleanValue(schedule.onlyWhenNoPlayers, `${label}[${index}].onlyWhenNoPlayers`);
+    booleanValue(schedule.enabled, `${label}[${index}].enabled`);
+    stringValue(schedule.createdAt, `${label}[${index}].createdAt`);
+    stringValue(schedule.updatedAt, `${label}[${index}].updatedAt`);
+    optionalStringValue(schedule.lastRunAt, `${label}[${index}].lastRunAt`);
+    optionalStringValue(schedule.lastStatus, `${label}[${index}].lastStatus`);
+    optionalStringValue(schedule.lastMessage, `${label}[${index}].lastMessage`);
+    optionalStringValue(schedule.nextRunAt, `${label}[${index}].nextRunAt`);
+    if (schedule.recentRuns !== undefined) assertScheduledRuns(schedule.recentRuns, `${label}[${index}].recentRuns`);
+  }
+}
+
+function assertScheduledRuns(value: unknown, label: string) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  for (const [index, run] of value.entries()) {
+    if (!isPlainObject(run)) throw new Error(`${label}[${index}] must be a JSON object`);
+    rejectUnsupportedKeys(run, ["id", "scheduleId", "scheduleName", "status", "message", "ranAt"], `${label}[${index}]`);
+    stringValue(run.id, `${label}[${index}].id`);
+    stringValue(run.scheduleId, `${label}[${index}].scheduleId`);
+    stringValue(run.scheduleName, `${label}[${index}].scheduleName`);
+    stringValue(run.status, `${label}[${index}].status`);
+    optionalStringValue(run.message, `${label}[${index}].message`);
+    stringValue(run.ranAt, `${label}[${index}].ranAt`);
+  }
+}
+
+function assertImportModPreferences(preferences: Record<string, unknown>, label: string) {
+  for (const [filename, preference] of Object.entries(preferences)) {
+    assertSafeModPreferenceFilename(filename, `${label}.${filename}`);
+    if (!isPlainObject(preference)) throw new Error(`${label}.${filename} must be a JSON object`);
+    rejectUnsupportedKeys(preference, ["channel", "modrinth"], `${label}.${filename}`);
+    assertReleaseChannel(preference.channel, `${label}.${filename}.channel`);
+    if (preference.modrinth !== undefined) assertInstalledModMetadata(preference.modrinth, `${label}.${filename}.modrinth`);
+  }
+}
+
+function assertInstalledModMetadata(value: unknown, label: string) {
+  if (!isPlainObject(value)) throw new Error(`${label} must be a JSON object`);
+  rejectUnsupportedKeys(value, [
+    "projectId",
+    "versionId",
+    "filename",
+    "versionNumber",
+    "versionType",
+    "gameVersions",
+    "loaders",
+    "hashes",
+    "installedAt",
+    "installedWithForceIncompatible",
+    "incompatibilityReason",
+    "overrideMinecraftVersion",
+    "overrideReason",
+    "clientSide",
+    "serverSide",
+    "forceIncompatible"
+  ], label);
+  stringValue(value.projectId, `${label}.projectId`);
+  stringValue(value.versionId, `${label}.versionId`);
+  assertSafeModPreferenceFilename(stringValue(value.filename, `${label}.filename`), `${label}.filename`);
+  stringValue(value.versionNumber, `${label}.versionNumber`);
+  if (value.versionType !== undefined) assertReleaseChannel(value.versionType, `${label}.versionType`);
+  stringArray(value.gameVersions, `${label}.gameVersions`);
+  stringArray(value.loaders, `${label}.loaders`);
+  if (value.hashes !== undefined) {
+    if (!isPlainObject(value.hashes) || Object.values(value.hashes).some((hash) => typeof hash !== "string")) {
+      throw new Error(`${label}.hashes must be a string map`);
+    }
+  }
+  stringValue(value.installedAt, `${label}.installedAt`);
+  booleanValue(value.installedWithForceIncompatible, `${label}.installedWithForceIncompatible`);
+  optionalStringValue(value.incompatibilityReason, `${label}.incompatibilityReason`);
+  optionalBooleanValue(value.overrideMinecraftVersion, `${label}.overrideMinecraftVersion`);
+  optionalStringValue(value.overrideReason, `${label}.overrideReason`);
+  optionalStringValue(value.clientSide, `${label}.clientSide`);
+  optionalStringValue(value.serverSide, `${label}.serverSide`);
+  optionalBooleanValue(value.forceIncompatible, `${label}.forceIncompatible`);
 }
 
 export function validateImportArtifact(artifact: ExportArtifact, context: ImportContext): ImportValidationResult {
@@ -561,7 +744,53 @@ function rejectUnsupportedKeys(value: Record<string, unknown>, allowed: string[]
   }
 }
 
+function assertBase64(value: string, label: string) {
+  if (!/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
+    throw new Error(`${label} must be valid base64`);
+  }
+}
+
 function stringValue(value: unknown, field: string) {
   if (typeof value !== "string" || !value) throw new Error(`${field} is required`);
   return value;
+}
+
+function optionalStringValue(value: unknown, field: string) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new Error(`${field} must be a string`);
+  return value;
+}
+
+function booleanValue(value: unknown, field: string) {
+  if (typeof value !== "boolean") throw new Error(`${field} must be a boolean`);
+  return value;
+}
+
+function optionalBooleanValue(value: unknown, field: string) {
+  if (value === undefined) return undefined;
+  return booleanValue(value, field);
+}
+
+function assertReleaseChannel(value: unknown, field: string) {
+  if (value !== "release" && value !== "beta" && value !== "alpha") {
+    throw new Error(`${field} must be release, beta, or alpha`);
+  }
+}
+
+function assertPortNumber(value: unknown, field: string) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`${field} must be a port from 1 to 65535`);
+  }
+}
+
+function stringArray(value: unknown, field: string) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} must be an array of strings`);
+  }
+}
+
+function assertSafeModPreferenceFilename(filename: string, field: string) {
+  if (!filename || filename.includes("/") || filename.includes("\\") || basename(filename) !== filename || (!filename.endsWith(".jar") && !filename.endsWith(".jar.disabled"))) {
+    throw new Error(`${field} must be a local .jar filename`);
+  }
 }

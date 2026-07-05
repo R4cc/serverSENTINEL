@@ -16,4 +16,11 @@ describe("server identity helpers", () => {
     expect(isInsideServersDirectory(root, join(root, "00000000-0000-4000-8000-000000000001"))).toBe(true);
     expect(isInsideServersDirectory(root, resolve("/data/servers-other/id"))).toBe(false);
   });
+
+  it("uses platform path case sensitivity when checking server directories", () => {
+    const root = resolve("C:/Data/Servers");
+    const target = resolve("c:/data/servers/00000000-0000-4000-8000-000000000001");
+
+    expect(isInsideServersDirectory(root, target)).toBe(process.platform === "win32");
+  });
 });

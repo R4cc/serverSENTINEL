@@ -1,6 +1,7 @@
 import { fetch } from "undici";
 
 let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
+const defaultModrinthTimeoutMs = 15_000;
 
 export function configureModrinthApiKeyProvider(provider: () => Promise<string>) {
   apiKeyProvider = provider;
@@ -16,13 +17,36 @@ export function modrinthRequestHeaders(url: string, apiKey: string) {
   return headers;
 }
 
-export async function modrinthFetch(url: string) {
+async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  timeout.unref?.();
+  try {
+    return await fetch(url, { headers, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Modrinth request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function modrinthFetch(url: string, options: { timeoutMs?: number } = {}) {
   const apiKey = await apiKeyProvider();
   const headers = modrinthRequestHeaders(url, apiKey);
+  const timeoutMs = options.timeoutMs ?? defaultModrinthTimeoutMs;
   const retryDelays = [0, 200, 600];
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt]) await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
-    const response = await fetch(url, { headers });
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetchWithTimeout(url, headers, timeoutMs);
+    } catch (error) {
+      if (attempt === retryDelays.length - 1) throw error;
+      continue;
+    }
     if (response.ok) return response;
     const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
     if (!retryable || attempt === retryDelays.length - 1) {

@@ -14,7 +14,7 @@ import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServe
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
-import { hasPermission, normalizePermissions } from "./utils/permissions";
+import { hasFileManagerPermission, hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
@@ -281,7 +281,14 @@ export default function App() {
   const permissionUser = appState.currentUser ?? authSession?.user ?? null;
   const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
   const canExpanded = activeServerIsDemo || hasPermission(permissionUser, "console.command");
-  const canManager = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings") || hasPermission(permissionUser, "files.edit") || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "schedules.manage");
+  const canEditServerSettings = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings");
+  const canDeleteServers = activeServerIsDemo || hasPermission(permissionUser, "servers.delete");
+  const canInstallMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install");
+  const canManageMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update");
+  const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
+  const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "view");
+  const canUploadToCurrentPath = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload");
+  const canEditSelectedPath = activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false);
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = hasPermission(permissionUser, "users.view");
@@ -309,25 +316,25 @@ export default function App() {
             ? "Server setup is still running."
             : "";
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canManager;
-  const deleteServerLocked = serverSettingsLocked || Boolean(activeStatus?.docker.running);
+  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canEditServerSettings;
+  const deleteServerLocked = isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running);
   const serverSettingsLockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
-      : !canManager
-        ? "Manager permission is required."
+      : !canEditServerSettings
+        ? "Edit server settings permission is required."
         : serverSettingsSaving
           ? "Server settings are saving."
           : "";
   const modServerRunning = Boolean(activeStatus?.docker.running);
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
-  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManager || !activeStatus || isAnyModJobRunning;
-  const addModFromModrinthDisabled = isProvisioning || !canManager || !effectiveAppState.modrinthApiConfigured;
+  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const addModFromModrinthDisabled = isProvisioning || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
   const uploadModDisabled = modsLocked;
   const addModFromModrinthDisabledReason = isProvisioning
       ? "Server setup is still running."
-      : !canManager
+      : !canInstallMods
         ? "Server management permission is required."
         : !effectiveAppState.modrinthApiConfigured
           ? "Add a Modrinth API key in Settings before searching for mods."
@@ -336,7 +343,7 @@ export default function App() {
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !canManager
+        : !canManageMods
           ? "Server management permission is required."
           : !activeStatus
             ? "Server status is still loading."
@@ -355,7 +362,7 @@ export default function App() {
     setDemoInstalledMods,
     modrinthConfigured: effectiveAppState.modrinthApiConfigured,
     isProvisioning,
-    canManage: canManager,
+    canManage: canManageMods,
     modsLocked,
     toggleLocked: modToggleLocked,
     notify,
@@ -369,8 +376,8 @@ export default function App() {
     ? "Schedule changes are still saving."
     : isProvisioning
       ? "Server setup is still running."
-      : !canExpanded
-        ? "Console command permission is required."
+      : !canManageSchedules
+        ? "Manage schedules permission is required."
         : dockerOperationalLock
           ? runtimeControlsDisabledReason || "Server runtime is unavailable."
           : "";
@@ -454,20 +461,18 @@ export default function App() {
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
-  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && !fileRuntimeLocked);
-  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && canManager && !fileRuntimeLocked && !fileOperationBusy);
-  const canRenameSelectedItem = Boolean(selectedEntry && canManager && !fileRuntimeLocked && !fileOperationBusy);
-  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && canManager && !fileRuntimeLocked && !fileOperationBusy);
+  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
+  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy);
   const fileActionBlockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
       : fileOperationBusy
         ? "A file operation is already running."
-        : !canManager
-          ? "Manager permission is required."
-          : "";
+        : "";
   const fileReadActionBlockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
@@ -1538,7 +1543,7 @@ export default function App() {
 
   async function updateServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || serverSettingsSaving || !canManager) return;
+    if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return;
     if (!activeServer) return;
     setNotice("");
     const formElement = event.currentTarget;
@@ -1863,6 +1868,12 @@ export default function App() {
 
   async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace") {
     if (isProvisioning) return false;
+    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
+      const message = "View files permission is required for this folder.";
+      setFilesError(message);
+      setNotice(message);
+      return false;
+    }
     const previousPath = listing.path;
     setFilesLoading(true);
     setFilesError("");
@@ -2004,6 +2015,12 @@ export default function App() {
   async function loadFilePreview(entry: FileEntry) {
     if (!activeServer) return;
     setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
+    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, entry.path, "view")) {
+      setFilePreview((current) => current.path === entry.path
+        ? { path: entry.path, loading: false, data: null, error: "View files permission is required to preview this file." }
+        : current);
+      return;
+    }
     if (activeServerIsDemo) {
       const content = demoFiles[entry.path] ?? "";
       if (!isPreviewableFile(entry)) {
@@ -2040,6 +2057,13 @@ export default function App() {
       const message = dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
         : "Server files are unavailable.";
+      setNotice(message);
+      notify("warning", message);
+      return;
+    }
+    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
+      const message = "View files permission is required to open this file.";
+      setFileReadError(message);
       setNotice(message);
       notify("warning", message);
       return;
@@ -2120,7 +2144,7 @@ export default function App() {
 
   async function enterFileEditMode() {
     if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
-    if (!canManager) {
+    if (!canEditSelectedPath) {
       const message = "Edit permission is required to modify this file.";
       setFileLeaseMessage(message);
       notify("warning", message);
@@ -2153,7 +2177,7 @@ export default function App() {
 
   async function deleteSelectedFiles() {
     if (!activeServer || selectedEntries.length === 0 || fileOperationBusy) return;
-    if (isProvisioning || dockerOperationalLock || !canManager) return;
+    if (isProvisioning || dockerOperationalLock || !canDeleteSelectedItems) return;
     const invalidPath = selectedEntries.map((entry) => validateSafePath(entry.path)).find(Boolean);
     if (invalidPath) {
       setNotice(invalidPath);
@@ -2227,7 +2251,7 @@ export default function App() {
 
   async function createFolder() {
     if (!activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canManager) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
     const name = window.prompt("New folder name");
     if (name === null) return;
     const nameError = fileNameValidation(name);
@@ -2261,7 +2285,7 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canManager) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);
@@ -2427,7 +2451,7 @@ export default function App() {
   }
 
   async function saveFile() {
-    if (isProvisioning || dockerOperationalLock || !canManager) return;
+    if (isProvisioning || dockerOperationalLock || !canEditSelectedPath) return;
     if (!activeServer) return;
     if (!selectedPath || !dirty) return;
     if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
@@ -2510,7 +2534,7 @@ export default function App() {
 
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return false;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
     setNotice("");
     setScheduleBusy(true);
     const formElement = event.currentTarget;
@@ -2574,7 +2598,7 @@ export default function App() {
   }
 
   async function updateSchedule(schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return false;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
     setScheduleBusy(true);
     const actionLabel = patch.enabled !== undefined && Object.keys(patch).length === 1
       ? patch.enabled ? "Schedule enabled" : "Schedule disabled"
@@ -2615,7 +2639,7 @@ export default function App() {
   }
 
   async function deleteSchedule(schedule: ScheduledExecution) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canExpanded || !activeServer) return;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return;
     if (!window.confirm(`Delete scheduled execution "${schedule.name}"?\n\nThis cannot be undone.`)) return;
     setScheduleBusy(true);
     if (activeServerIsDemo) {
@@ -2639,7 +2663,7 @@ export default function App() {
 
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || serverSettingsSaving || dockerOperationalLock || !canManager) return;
+    if (isProvisioning || serverSettingsSaving || dockerOperationalLock || !canDeleteServers) return;
     if (!activeServer) return;
     setNotice("");
     const form = new FormData(event.currentTarget);
@@ -3444,15 +3468,15 @@ export default function App() {
                       </div>
                       <div className="fileToolbar">
                         <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Upload a file to this folder"}>
+                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
                           <AppIcon name="fileUp" />
                           Upload
                         </Button>
-                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canManager || Boolean(fileOperationBusy)} title={fileActionBlockedReason || "Create a folder here"}>
+                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
                           <AppIcon name="folderPlus" />
                           New folder
                         </Button>
-                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading} title="Reload this folder">
+                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"}>
                           <AppIcon name="refresh" />
                           {filesLoading ? "Refreshing" : "Refresh"}
                         </Button>
@@ -3462,23 +3486,23 @@ export default function App() {
                     <div className="selectionActionBar" aria-label="File selection actions">
                       <span className="selectionSummary">{selectionSummary}</span>
                       <div className="selectionActions">
-                        <Button variant="secondary" compact aria-label="Open selected file" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || "Open selected file read-only"}>
+                        <Button variant="secondary" compact aria-label="Open selected file" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                           <AppIcon name="edit" />
                           <span className="selectionActionLabel">Open</span>
                         </Button>
-                        <Button variant="secondary" compact aria-label="Download selected file" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || "Download selected file"}>
+                        <Button variant="secondary" compact aria-label="Download selected file" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "download") && !activeServerIsDemo ? "Download files permission is required." : "Download selected file")}>
                           <AppIcon name="download" />
                           <span className="selectionActionLabel">Download</span>
                         </Button>
-                        <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || "Duplicate selected file"}>
+                        <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate") && !activeServerIsDemo ? "Upload files permission is required to duplicate here." : "Duplicate selected file")}>
                           <AppIcon name="copy" />
                           <span className="selectionActionLabel">Duplicate</span>
                         </Button>
-                        <Button variant="secondary" compact aria-label="Rename selected item" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || "Rename selected item"}>
+                        <Button variant="secondary" compact aria-label="Rename selected item" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "rename") && !activeServerIsDemo ? "Edit files permission is required to rename this item." : "Rename selected item")}>
                           <AppIcon name="rename" />
                           <span className="selectionActionLabel">Rename</span>
                         </Button>
-                        <Button variant="critical" compact aria-label="Delete selected items" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || "Delete selected items"}>
+                        <Button variant="critical" compact aria-label="Delete selected items" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "delete")) && !activeServerIsDemo ? "Delete files permission is required for every selected item." : "Delete selected items")}>
                           <AppIcon name="trash" />
                           <span className="selectionActionLabel">Delete</span>
                         </Button>
@@ -3618,9 +3642,9 @@ export default function App() {
                   editing={fileEditMode}
                   editBusy={fileLeaseBusy}
                   editMessage={fileLeaseMessage}
-                  editDisabled={isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
-                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || fileOpenFailed}
-                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canManager || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+                  editDisabled={isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
                   discardRequestOpen={Boolean(discardEditorRequest)}
                   onTextChange={(nextText) => {
                     setEditorText(nextText);
@@ -3672,7 +3696,7 @@ export default function App() {
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onUpdate={updateSchedule}
                 onDelete={deleteSchedule}
-                disabled={scheduleBusy || isProvisioning || !canExpanded || dockerOperationalLock}
+                disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
                 disabledReason={scheduleDisabledReason}
               />
             )}

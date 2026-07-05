@@ -1,12 +1,26 @@
 import type { InstalledMod, ModUpdatePlan, ModUpdatePlanEntry } from "../../types";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 
+function modFilenameIdentity(filename: string) {
+  return filename.replace(/\.disabled$/, "");
+}
+
 export function updatePlanEntryForMod(plan: ModUpdatePlan | null, mod: InstalledMod) {
-  return plan?.updates.find((entry) => entry.filename === mod.filename) ?? null;
+  const filename = modFilenameIdentity(mod.filename);
+  return plan?.updates.find((entry) => modFilenameIdentity(entry.filename) === filename || modFilenameIdentity(entry.currentFilename) === filename) ?? null;
 }
 
 export function canUpdateAllSafe(plan: ModUpdatePlan | null, changesAllowed: boolean, batchRunning: boolean) {
   return Boolean(plan && plan.counts.safeUpdates > 0 && changesAllowed && !batchRunning);
+}
+
+export function safeUpdateRequestGroups(plan: ModUpdatePlan | null) {
+  const groups = new Map<ModUpdatePlanEntry["channel"], string[]>();
+  for (const entry of plan?.updates ?? []) {
+    if (entry.status !== "safe_update" || !entry.safeBatchEligible) continue;
+    groups.set(entry.channel, [...(groups.get(entry.channel) ?? []), entry.filename]);
+  }
+  return [...groups].map(([channel, filenames]) => ({ channel, filenames }));
 }
 
 export function createDemoUpdatePlan(serverId: string, mods: InstalledMod[], generatedAt = new Date().toISOString()): ModUpdatePlan {
@@ -29,7 +43,7 @@ export function createDemoUpdatePlan(serverId: string, mods: InstalledMod[], gen
       currentFilename: mod.filename,
       targetVersion: mod.versionInfo?.latestVersion,
       targetFilename: mod.versionInfo?.latestFilename,
-      channel: mod.versionInfo?.latestChannel || mod.preferredChannel || "release",
+      channel: mod.preferredChannel || mod.versionInfo?.latestChannel || "release",
       status,
       reason: health.detailDescription,
       compatibility: mod.compatibility ? {

@@ -7,7 +7,7 @@ import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
 import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
-import { createDemoUpdatePlan } from "./modUpdatePlan";
+import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
 const modSearchDebounceMs = 650;
@@ -29,6 +29,20 @@ function waitForRetry(signal?: AbortSignal) {
 function shouldRetryModrinthError(error: unknown) {
   if (error instanceof ApiError) return error.status === 429 || error.status >= 500;
   return true;
+}
+
+function mergeSafeBatchUpdateResults(results: SafeBatchUpdateResult[]): SafeBatchUpdateResult {
+  return {
+    updated: results.flatMap((result) => result.updated),
+    skipped: results.flatMap((result) => result.skipped),
+    failed: results.flatMap((result) => result.failed),
+    counts: {
+      requested: results.reduce((total, result) => total + result.counts.requested, 0),
+      updated: results.reduce((total, result) => total + result.counts.updated, 0),
+      skipped: results.reduce((total, result) => total + result.counts.skipped, 0),
+      failed: results.reduce((total, result) => total + result.counts.failed, 0)
+    }
+  };
 }
 
 function mergeStableModMetadata(previous: InstalledMod[], incoming: InstalledMod[]) {
@@ -707,10 +721,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         };
       } else {
         patchJob(jobId, { progress: 35, task: "Applying safe updates" });
-        result = await api<SafeBatchUpdateResult>("/api/modrinth/update-safe", {
-          method: "POST",
-          body: JSON.stringify({ serverId: activeServer.id, filenames: safeEntries.map((entry) => entry.filename), channel: "release" })
-        });
+        const requests = safeUpdateRequestGroups(plan);
+        const results: SafeBatchUpdateResult[] = [];
+        for (const request of requests) {
+          results.push(await api<SafeBatchUpdateResult>("/api/modrinth/update-safe", {
+            method: "POST",
+            body: JSON.stringify({ serverId: activeServer.id, filenames: request.filenames, channel: request.channel })
+          }));
+        }
+        result = mergeSafeBatchUpdateResults(results);
         if (result.counts.updated > 0) void onRestartRequiredChange?.(activeServer.id);
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });

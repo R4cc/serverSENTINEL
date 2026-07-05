@@ -208,14 +208,22 @@ export function parseDockerPorts(ports?: string) {
   for (const rawPort of ports?.split(",") ?? []) {
     const port = rawPort.trim();
     if (!port) continue;
-    const [hostPort, containerPortWithProtocol] = port.includes(":") ? port.split(":", 2) : [port, port];
-    const [containerPortNumber, protocol = "tcp"] = containerPortWithProtocol.split("/", 2);
+    const portParts = port.split(":");
+    if (portParts.length > 2) {
+      throw new Error(`Invalid Docker port binding: ${port}`);
+    }
+    const [hostPort, containerPortWithProtocol] = portParts.length === 2 ? portParts : [port, port];
+    const protocolParts = containerPortWithProtocol.split("/");
+    if (protocolParts.length > 2) {
+      throw new Error(`Invalid Docker port binding: ${port}`);
+    }
+    const [containerPortNumber, protocol = "tcp"] = protocolParts;
     if (!isValidPort(hostPort) || !isValidPort(containerPortNumber) || (protocol !== "tcp" && protocol !== "udp")) {
       throw new Error(`Invalid Docker port binding: ${port}`);
     }
     const containerPort = `${containerPortNumber}/${protocol}`;
     exposedPorts[containerPort] = {};
-    portBindings[containerPort] = [{ HostPort: hostPort }];
+    portBindings[containerPort] = [...(portBindings[containerPort] ?? []), { HostPort: hostPort }];
   }
   return { exposedPorts, portBindings };
 }

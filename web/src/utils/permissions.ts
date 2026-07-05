@@ -199,6 +199,38 @@ export function hasPermission(user: PublicUser | null | undefined, permission: P
   return userPermissions(user).includes(permission);
 }
 
+export type FileManagerPermission = "view" | "download" | "edit" | "rename" | "upload" | "duplicate" | "delete";
+
+export function isModsPublicPath(path: string) {
+  const normalized = normalizePublicPath(path);
+  return normalized === "/mods" || normalized.startsWith("/mods/");
+}
+
+export function isServerPropertiesPath(path: string) {
+  return normalizePublicPath(path) === "/server.properties";
+}
+
+export function fileManagerPermissionForPath(path: string, action: FileManagerPermission): PermissionKey {
+  if (isModsPublicPath(path)) {
+    if (action === "view" || action === "download") return "mods.view";
+    if (action === "edit" || action === "rename") return "mods.enableDisable";
+    if (action === "upload" || action === "duplicate") return "mods.upload";
+    return "mods.remove";
+  }
+  if ((action === "edit" || action === "rename") && isServerPropertiesPath(path)) {
+    return "servers.editSettings";
+  }
+  if (action === "view") return "files.view";
+  if (action === "download") return "files.download";
+  if (action === "edit" || action === "rename") return "files.edit";
+  if (action === "upload" || action === "duplicate") return "files.upload";
+  return "files.delete";
+}
+
+export function hasFileManagerPermission(user: PublicUser | null | undefined, path: string, action: FileManagerPermission) {
+  return hasPermission(user, fileManagerPermissionForPath(path, action));
+}
+
 export function rolePresetLabel(rolePreset?: RolePreset) {
   switch (rolePreset) {
     case "viewer":
@@ -234,4 +266,10 @@ function samePermissions(a: readonly PermissionKey[], b: readonly PermissionKey[
   const normalizedA = normalizePermissions(a);
   const normalizedB = normalizePermissions(b);
   return normalizedA.length === normalizedB.length && normalizedA.every((permission, index) => permission === normalizedB[index]);
+}
+
+function normalizePublicPath(path: string) {
+  const value = path.trim();
+  if (!value) return "/";
+  return value.startsWith("/") ? value.replace(/\/+/g, "/") : `/${value.replace(/\/+/g, "/")}`;
 }

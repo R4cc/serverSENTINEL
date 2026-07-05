@@ -230,6 +230,7 @@ describe("export/import artifacts", () => {
     const valid = artifact();
     const encoded = Buffer.from(JSON.stringify(valid), "utf8").toString("base64");
     expect(parseExportArtifactBase64(encoded).servers[0].files[0].path).toBe("config/fabric-api.properties");
+    expect(() => parseExportArtifactBase64("!!!!")).toThrow("valid base64");
 
     const traversal = structuredClone(valid);
     traversal.servers[0].files[0].path = "../server.properties";
@@ -242,6 +243,24 @@ describe("export/import artifacts", () => {
     const world = structuredClone(valid);
     world.servers[0].files[0] = fileEntry("world/level.dat", "world");
     expect(() => assertExportArtifact(world)).toThrow(/excluded|supported configuration file/);
+  });
+
+  it("rejects malformed server and mod preference payloads before planning", () => {
+    const badServer = structuredClone(artifact());
+    (badServer.servers[0].server as unknown as { displayName: unknown }).displayName = 42;
+    expect(() => assertExportArtifact(badServer)).toThrow("displayName");
+
+    const badPorts = structuredClone(artifact());
+    badPorts.servers[0].server.dockerPorts = "25565:25565/tcp:ignored";
+    expect(() => assertExportArtifact(badPorts)).toThrow("Invalid Docker port binding");
+
+    const badPreference = structuredClone(artifact());
+    badPreference.servers[0].modPreferences["fabric-api.jar"].channel = "nightly" as "release";
+    expect(() => assertExportArtifact(badPreference)).toThrow("channel");
+
+    const badFilename = structuredClone(artifact());
+    badFilename.servers[0].modPreferences["../fabric-api.jar"] = badFilename.servers[0].modPreferences["fabric-api.jar"];
+    expect(() => assertExportArtifact(badFilename)).toThrow("local .jar filename");
   });
 
   it("reports missing node targets, container conflicts, and port conflicts without writing", async () => {

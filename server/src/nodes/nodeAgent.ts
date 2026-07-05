@@ -939,6 +939,8 @@ async function remoteLookupModrinthUpdate(server: ManagedServer, version: Modrin
     currentVersion: version.version_number,
     currentChannel: versionChannel(version.version_type),
     latestVersion: latest?.version_number,
+    latestVersionId: latest?.id,
+    latestFilename: modrinthJarFile(latest)?.filename,
     latestChannel: latest ? versionChannel(latest.version_type) : undefined,
     upToDate: Boolean(latest && version.version_number === latest.version_number)
   };

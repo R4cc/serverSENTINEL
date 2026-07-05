@@ -20,5 +20,7 @@ export function serverDirectory(serversDir: string, serverId: string) {
 export function isInsideServersDirectory(serversDir: string, serverDir: string) {
   const root = resolve(serversDir);
   const target = resolve(serverDir);
-  return target === root || target.startsWith(root + sep);
+  const comparableRoot = process.platform === "win32" ? root.toLowerCase() : root;
+  const comparableTarget = process.platform === "win32" ? target.toLowerCase() : target;
+  return comparableTarget === comparableRoot || comparableTarget.startsWith(comparableRoot + sep);
 }

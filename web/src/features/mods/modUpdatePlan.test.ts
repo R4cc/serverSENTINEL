@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstalledMod, ModUpdatePlan } from "../../types";
-import { canUpdateAllSafe, createDemoUpdatePlan, updatePlanEntryForMod } from "./modUpdatePlan";
+import { canUpdateAllSafe, createDemoUpdatePlan, safeUpdateRequestGroups, updatePlanEntryForMod } from "./modUpdatePlan";
 
 function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   return {
@@ -26,6 +26,36 @@ describe("frontend mod update plan helpers", () => {
     const installed = mod();
     const plan = createDemoUpdatePlan("demo", [installed]);
     expect(updatePlanEntryForMod(plan, installed)?.status).toBe("safe_update");
+  });
+
+  it("keeps plan entries matched when an installed jar is toggled disabled", () => {
+    const installed = mod({ filename: "example.jar" });
+    const plan = createDemoUpdatePlan("demo", [installed]);
+    expect(updatePlanEntryForMod(plan, { ...installed, filename: "example.jar.disabled", enabled: false })?.filename).toBe("example.jar");
+  });
+
+  it("keeps the user-selected update channel in demo plans", () => {
+    const plan = createDemoUpdatePlan("demo", [mod({
+      preferredChannel: "beta",
+      versionInfo: { currentVersion: "1", latestVersion: "2", latestChannel: "release", upToDate: false }
+    })]);
+    expect(plan.updates[0].channel).toBe("beta");
+  });
+
+  it("groups safe batch requests by planned channel", () => {
+    const release = mod({ filename: "release.jar", displayName: "Release" });
+    const beta = mod({ filename: "beta.jar", displayName: "Beta", preferredChannel: "beta" });
+    const review = mod({
+      filename: "review.jar",
+      displayName: "Review",
+      preferredChannel: "alpha",
+      compatibility: { status: "unknown", compatible: false, reason: "Server-side support unknown", serverSide: "unknown" }
+    });
+    const plan = createDemoUpdatePlan("demo", [release, beta, review]);
+    expect(safeUpdateRequestGroups(plan)).toEqual([
+      { channel: "release", filenames: ["release.jar"] },
+      { channel: "beta", filenames: ["beta.jar"] }
+    ]);
   });
 
   it("shows Update all safe only when changes are allowed", () => {

@@ -31,6 +31,17 @@ describe("Mods workspace helpers", () => {
     expect(pendingRequiredDependencies(version, installed).map((dependency) => dependency.projectId)).toEqual(["cloth-config"]);
   });
 
+  it("excludes required dependencies that match an installed version id", () => {
+    const version = {
+      dependencies: [
+        { versionId: "fabric-api-1.0.0", dependencyType: "required", title: "Fabric API" },
+        { versionId: "cloth-config-1.0.0", dependencyType: "required", title: "Cloth Config" }
+      ]
+    } as ModrinthInstallVersion;
+    const installed = [{ filename: "fabric-api.jar", modrinth: { versionId: "fabric-api-1.0.0" } }] as InstalledMod[];
+    expect(pendingRequiredDependencies(version, installed).map((dependency) => dependency.versionId)).toEqual(["cloth-config-1.0.0"]);
+  });
+
   it("covers upload cancellation, validation, duplicates, and successful manual metadata", () => {
     const installed = [{ filename: "existing.jar" }, { filename: "disabled.jar.disabled" }] as InstalledMod[];
     expect(validateModUploadSelection(undefined, installed)).toEqual({ kind: "cancelled" });

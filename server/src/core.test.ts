@@ -121,10 +121,21 @@ describe("Docker port parsing", () => {
     });
   });
 
+  it("preserves multiple host bindings for one container port", () => {
+    expect(parseDockerPorts("25565:25565/tcp,25566:25565/tcp")).toEqual({
+      exposedPorts: { "25565/tcp": {} },
+      portBindings: {
+        "25565/tcp": [{ HostPort: "25565" }, { HostPort: "25566" }]
+      }
+    });
+  });
+
   it("rejects malformed port bindings", () => {
     expect(() => parseDockerPorts("abc:25565/tcp")).toThrow("Invalid Docker port binding");
     expect(() => parseDockerPorts("25565:70000/tcp")).toThrow("Invalid Docker port binding");
     expect(() => parseDockerPorts("25565:25565/http")).toThrow("Invalid Docker port binding");
+    expect(() => parseDockerPorts("25565:25565/tcp:ignored")).toThrow("Invalid Docker port binding");
+    expect(() => parseDockerPorts("25565:25565/tcp/ignored")).toThrow("Invalid Docker port binding");
   });
 });
 

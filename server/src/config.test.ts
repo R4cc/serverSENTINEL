@@ -54,4 +54,13 @@ describe("runtime role configuration", () => {
       config: { enableDemo: true }
     });
   });
+
+  it("fails fast when PORT is not a usable HTTP port", async () => {
+    await expect(loadConfig({ PORT: "not-a-port" })).rejects.toThrow("PORT must be a whole number");
+    await expect(loadConfig({ PORT: "0" })).rejects.toThrow("PORT must be a whole number");
+    await expect(loadConfig({ PORT: "65536" })).rejects.toThrow("PORT must be a whole number");
+    await expect(loadConfig({ PORT: "8081" })).resolves.toMatchObject({
+      config: { port: 8081 }
+    });
+  });
 });

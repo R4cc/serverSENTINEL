@@ -18,6 +18,19 @@ const runtimeMode = process.env.SS_MODE?.trim() || "all-in-one";
 if (!["all-in-one", "panel", "node"].includes(runtimeMode)) {
   throw new Error("SS_MODE must be all-in-one, panel, or node");
 }
+
+function parseHttpPort(value: string | undefined) {
+  const raw = value?.trim() || "8080";
+  if (!/^\d+$/.test(raw)) {
+    throw new Error("PORT must be a whole number between 1 and 65535");
+  }
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("PORT must be a whole number between 1 and 65535");
+  }
+  return port;
+}
+
 const paths = runtimeDataPaths(process.env.SERVERSENTINEL_DATA_DIR);
 const panelUrl = process.env.SS_PANEL_URL?.trim();
 const nodeDockerDataDir = process.env.SERVERSENTINEL_DOCKER_DATA_DIR?.trim();
@@ -43,7 +56,7 @@ export const config = {
   serversDockerVolume: defaultServersDockerVolume(paths.dataDir),
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
   logLevel: process.env.LOG_LEVEL?.trim() || "info",
-  port: Number(process.env.PORT ?? "8080"),
+  port: parseHttpPort(process.env.PORT),
   panelUrl,
   joinToken: process.env.SS_JOIN_TOKEN?.trim(),
   nodeName: process.env.SS_NODE_NAME?.trim(),
