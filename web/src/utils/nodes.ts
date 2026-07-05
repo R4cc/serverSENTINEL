@@ -24,11 +24,11 @@ export function nodeDataPathLabel(node: ManagedNode) {
   return "Data path unknown";
 }
 
-export function isNodeCompatible(node: ManagedNode) {
+function isNodeCompatible(node: ManagedNode) {
   return node.compatibility !== "incompatible";
 }
 
-export function isNodeDockerUsable(node: ManagedNode) {
+function isNodeDockerUsable(node: ManagedNode) {
   return node.dockerStatus !== "unavailable";
 }
 

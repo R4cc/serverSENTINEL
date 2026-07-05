@@ -1,7 +1,7 @@
 import type { ServerStatus } from '../types';
 import { Button } from './UiPrimitives';
 
-export function ControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
+function ControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
   if (action === "start") {
     return (
       <svg className="buttonIcon controlGlyphSVG" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

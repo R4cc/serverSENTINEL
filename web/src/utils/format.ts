@@ -1,4 +1,4 @@
-import type { ManagedServer, ModCompatibility, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
+import type { ManagedServer, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
 
 export const defaultServerPort = 25565;
 
@@ -10,7 +10,7 @@ export const maxServerPort = 65000;
 
 export const resourcePollMs = 5_000;
 
-export const resourceHistoryWindowMs = 60 * 60 * 1000;
+const resourceHistoryWindowMs = 60 * 60 * 1000;
 
 export const resourceHistorySampleLimit = Math.ceil(resourceHistoryWindowMs / resourcePollMs) + 1;
 
@@ -18,24 +18,6 @@ export function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
-}
-
-export function compatibilityLabel(compatibility?: ModCompatibility) {
-  if (!compatibility) return "Unknown server support";
-  if (compatibility.serverSide === "unsupported") return "Client-only";
-  if (compatibility.serverSide === "unknown") return "Unknown server support";
-  if (compatibility.status === "unknown") return "Unknown server support";
-  if (compatibility.compatible) return "Compatible";
-  return "Incompatible";
-}
-
-export function compatibilityClass(compatibility?: ModCompatibility) {
-  if (!compatibility) return "unknown";
-  if (compatibility.serverSide === "unsupported") return "danger";
-  if (compatibility.serverSide === "unknown") return "unknown";
-  if (compatibility.status === "unknown") return "unknown";
-  if (compatibility.compatible) return "ok";
-  return "danger";
 }
 
 export function totalMemoryGb(totalMemory: number) {
@@ -79,17 +61,6 @@ export function javaMajorVersionForMinecraft(version: string): 17 | 21 | 25 {
 
 export function defaultDockerImageForMinecraftVersion(version?: string) {
   return `eclipse-temurin:${javaMajorVersionForMinecraft(version ?? "")}-jre`;
-}
-
-export function replaceMemoryArgs(javaArgs: string, memoryGb: number, options: { updateInitialHeap?: boolean } = {}) {
-  const memory = Math.max(1, Math.round(memoryGb));
-  const updateInitialHeap = options.updateInitialHeap ?? true;
-  const existingXms = javaArgs.match(/(^|\s)(-Xms\S+)/)?.[2] ?? "";
-  const xms = updateInitialHeap ? `-Xms${memory}G` : existingXms;
-  const xmx = `-Xmx${memory}G`;
-  const withoutXms = javaArgs.replace(/(^|\s)-Xms\S+/g, "").trim();
-  const withoutMemory = withoutXms.replace(/(^|\s)-Xmx\S+/g, "").trim();
-  return [xms, xmx, withoutMemory].filter(Boolean).join(" ");
 }
 
 export function isValidServerPort(port: string) {

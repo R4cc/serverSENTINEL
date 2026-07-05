@@ -1,6 +1,6 @@
 import { maxServerPort, minServerPort } from "./format";
 
-export type FieldValidationError = {
+type FieldValidationError = {
   field: string;
   message: string;
 };

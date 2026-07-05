@@ -100,9 +100,6 @@ export class McJarsProvider implements ServerJarProvider {
       );
     }
     const downloadUrl = this.fabricDownloadUrl(selected);
-    if (!downloadUrl.startsWith("https://")) {
-      throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
-    }
     const loaderVersion = stringValue(selected.projectVersionId ?? selected.name, "MCJars Fabric loader version");
     const javaMajorVersion = minecraftJavaMajorVersion(minecraftVersion);
     const artifactId = selected.uuid ?? (selected.id === undefined ? undefined : String(selected.id));

@@ -1,3 +1,4 @@
+import type Database from "better-sqlite3";
 import type { ManagedNode } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
 import type { StorageDatabase } from "./database.js";
@@ -174,4 +175,3 @@ export class NodesRepository {
     throw error;
   }
 }
-import type Database from "better-sqlite3";

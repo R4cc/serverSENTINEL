@@ -9,7 +9,6 @@ export type ModHealthKey =
   | "unknown";
 
 export type ModHealthTone = "ready" | "update" | "review" | "not-recommended" | "unknown";
-export type ModRecommendedAction = "none" | "update" | "review_update" | "review_mod" | "remove_or_disable";
 
 export type InstalledModHealth = {
   key: ModHealthKey;
@@ -20,7 +19,6 @@ export type InstalledModHealth = {
   needsAttention: boolean;
   hasSafeUpdate: boolean;
   hasReviewUpdate: boolean;
-  recommendedAction: ModRecommendedAction;
   primaryActionLabel?: string;
   safeToRunDirectly: boolean;
 };
@@ -117,8 +115,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       needsAttention: true,
       hasSafeUpdate: false,
       hasReviewUpdate: false,
-      recommendedAction: "remove_or_disable",
-      primaryActionLabel: mod.enabled ? "Disable or remove" : "Remove mod",
       safeToRunDirectly: false
     };
   }
@@ -133,7 +129,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       needsAttention: false,
       hasSafeUpdate: true,
       hasReviewUpdate: false,
-      recommendedAction: "update",
       primaryActionLabel: "Update",
       safeToRunDirectly: true
     };
@@ -149,7 +144,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       needsAttention: true,
       hasSafeUpdate: false,
       hasReviewUpdate: true,
-      recommendedAction: "review_update",
       primaryActionLabel: "Review update",
       safeToRunDirectly: false
     };
@@ -165,8 +159,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       needsAttention: true,
       hasSafeUpdate: false,
       hasReviewUpdate: false,
-      recommendedAction: "review_mod",
-      primaryActionLabel: "Review mod",
       safeToRunDirectly: false
     };
   }
@@ -181,8 +173,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       needsAttention: true,
       hasSafeUpdate: false,
       hasReviewUpdate: false,
-      recommendedAction: "review_mod",
-      primaryActionLabel: "Review details",
       safeToRunDirectly: false
     };
   }
@@ -196,7 +186,6 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
     needsAttention: false,
     hasSafeUpdate: false,
     hasReviewUpdate: false,
-    recommendedAction: "none",
     safeToRunDirectly: true
   };
 }

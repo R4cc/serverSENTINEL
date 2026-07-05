@@ -171,7 +171,7 @@ export class OperationsRepository {
       patch.nodeId ?? null,
       patch.progress === undefined ? null : clampProgress(patch.progress),
       patch.task ?? null,
-      patch.result === undefined ? null : resultJson(patch.result),
+      resultJson(patch.result),
       patch.logSummary ?? null,
       id
     );
@@ -224,7 +224,7 @@ export class OperationsRepository {
       patch.task ?? null,
       now,
       errorMessage,
-      patch.result === undefined ? null : resultJson(patch.result),
+      resultJson(patch.result),
       patch.logSummary ?? null,
       id
     );

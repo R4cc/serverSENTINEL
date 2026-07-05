@@ -44,7 +44,7 @@ describe("getInstalledModHealth", () => {
 
   it("offers a direct safe update for a compatible mod", () => {
     const health = getInstalledModHealth(managedMod({ versionInfo: { currentVersion: "1.0.0", latestVersion: "1.1.0", upToDate: false } }));
-    expect(health).toMatchObject({ key: "safe_update_available", hasSafeUpdate: true, recommendedAction: "update", safeToRunDirectly: true });
+    expect(health).toMatchObject({ key: "safe_update_available", hasSafeUpdate: true, primaryActionLabel: "Update", safeToRunDirectly: true });
   });
 
   it("does not treat missing update metadata as attention", () => {
@@ -57,7 +57,7 @@ describe("getInstalledModHealth", () => {
       compatibility: { ...compatible, status: "unknown", reason: "Server-side support unknown", serverSide: "unknown" },
       versionInfo: { currentVersion: "1.0.0", latestVersion: "1.1.0", upToDate: false }
     }));
-    expect(health).toMatchObject({ key: "review_update_available", hasReviewUpdate: true, recommendedAction: "review_update", safeToRunDirectly: false });
+    expect(health).toMatchObject({ key: "review_update_available", hasReviewUpdate: true, primaryActionLabel: "Review update", safeToRunDirectly: false });
   });
 
   it("marks unknown server-side support as needing review", () => {
@@ -66,12 +66,12 @@ describe("getInstalledModHealth", () => {
 
   it("marks an unidentified manual upload as unknown", () => {
     const mod = managedMod({ modrinth: undefined, compatibility: undefined, versionInfo: null });
-    expect(getInstalledModHealth(mod)).toMatchObject({ key: "unknown", recommendedAction: "review_mod" });
+    expect(getInstalledModHealth(mod)).toMatchObject({ key: "unknown", needsAttention: true });
   });
 
   it("marks client-only or server-unsupported mods as not recommended", () => {
     const health = getInstalledModHealth(managedMod({ compatibility: { ...compatible, compatible: false, status: "incompatible", reason: "Client-only mod", serverSide: "unsupported", clientSide: "required" } }));
-    expect(health).toMatchObject({ key: "not_recommended", recommendedAction: "remove_or_disable" });
+    expect(health).toMatchObject({ key: "not_recommended", needsAttention: true });
   });
 
   it("marks a Minecraft version mismatch as not recommended", () => {

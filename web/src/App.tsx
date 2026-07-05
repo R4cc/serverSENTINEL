@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { Toaster, toast } from "sonner";
 import { ApiError, api, apiErrorFromResponse } from "./api";
-import { demoListing, demoOverviewData, demoSearchResults, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
+import { demoListing, demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
@@ -21,7 +21,7 @@ import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, e
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import type { FilePreviewState } from "./app/uiState";
-import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, modIconSource, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
+import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";

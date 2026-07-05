@@ -1,3 +1,4 @@
+import type Database from "better-sqlite3";
 import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
 import type { ServerAccess, Session, StoredUser } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
@@ -48,7 +49,7 @@ export function normalizeStoredUser(value: unknown): StoredUser {
   const permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
   const inferredPreset = inferRolePreset(permissions);
   const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
-  const effectivePreset = rolePreset === "custom" || inferRolePreset(permissions) === rolePreset ? rolePreset : "custom";
+  const effectivePreset = rolePreset === "custom" || inferredPreset === rolePreset ? rolePreset : "custom";
   return {
     id: requiredString(user.id, "user.id"),
     username: validateUsername(optionalString(user.username, "user.username")),
@@ -176,4 +177,3 @@ export class UsersRepository {
     throw error;
   }
 }
-import type Database from "better-sqlite3";

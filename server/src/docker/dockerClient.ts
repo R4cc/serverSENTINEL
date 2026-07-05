@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import http from "node:http";
 import { config } from "../config.js";
 
+type DockerMethod = "GET" | "POST" | "DELETE";
+
 export function dockerAvailable() {
   return existsSync(config.dockerSocket);
 }
@@ -29,69 +31,40 @@ export function dockerJsonBody<T>(body: string): T {
   }
 }
 
-export async function dockerRequest<T>(
-  method: "GET" | "POST" | "DELETE",
-  path: string,
-  expectedStatus: number | number[] = [200, 204, 304]
-): Promise<T> {
-  if (!dockerAvailable()) {
-    throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
-  }
-
-  const okStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
-  return new Promise<T>((resolveRequest, rejectRequest) => {
-    const request = http.request(
-      {
-        socketPath: config.dockerSocket,
-        path,
-        method,
-        timeout: 15000
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(dockerErrorMessage(body, response.statusCode)));
-            return;
-          }
-          try {
-            resolveRequest(dockerJsonBody<T>(body));
-          } catch (error) {
-            rejectRequest(error);
-          }
-        });
-      }
-    );
-    request.on("timeout", () => {
-      request.destroy(new Error("Docker socket request timed out"));
-    });
-    request.on("error", rejectRequest);
-    request.end();
-  });
+function okStatuses(expectedStatus: number | number[]) {
+  return Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
 }
 
-export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000) {
+async function dockerSocketRequest(
+  method: DockerMethod,
+  path: string,
+  expectedStatus: number | number[],
+  options: { payload?: string; timeoutMs?: number } = {}
+) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
   }
 
-  const okStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+  const payload = options.payload;
+  const statuses = okStatuses(expectedStatus);
   return new Promise<Buffer>((resolveRequest, rejectRequest) => {
     const request = http.request(
       {
         socketPath: config.dockerSocket,
         path,
         method,
-        timeout: timeoutMs
+        timeout: options.timeoutMs ?? 15000,
+        headers: payload === undefined ? undefined : {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
+        }
       },
       (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk: Buffer) => chunks.push(chunk));
         response.on("end", () => {
           const body = Buffer.concat(chunks);
-          if (!okStatuses.includes(response.statusCode ?? 0)) {
+          if (!statuses.includes(response.statusCode ?? 0)) {
             rejectRequest(new Error(dockerErrorMessage(body.toString("utf8"), response.statusCode)));
             return;
           }
@@ -103,8 +76,21 @@ export async function dockerBufferRequest(method: "GET" | "POST", path: string, 
       request.destroy(new Error("Docker socket request timed out"));
     });
     request.on("error", rejectRequest);
+    if (payload !== undefined) request.write(payload);
     request.end();
   });
+}
+
+export async function dockerRequest<T>(
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  expectedStatus: number | number[] = [200, 204, 304]
+): Promise<T> {
+  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus)).toString("utf8"));
+}
+
+export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000) {
+  return dockerSocketRequest(method, path, expectedStatus, { timeoutMs });
 }
 
 export async function dockerJsonRequest<T>(
@@ -113,48 +99,8 @@ export async function dockerJsonRequest<T>(
   body: unknown,
   expectedStatus: number | number[] = [200, 201, 204, 304]
 ): Promise<T> {
-  if (!dockerAvailable()) {
-    throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
-  }
-
   const payload = JSON.stringify(body);
-  const okStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
-  return new Promise<T>((resolveRequest, rejectRequest) => {
-    const request = http.request(
-      {
-        socketPath: config.dockerSocket,
-        path,
-        method,
-        timeout: 15000,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(payload)
-        }
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const responseBody = Buffer.concat(chunks).toString("utf8");
-          if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(dockerErrorMessage(responseBody, response.statusCode)));
-            return;
-          }
-          try {
-            resolveRequest(dockerJsonBody<T>(responseBody));
-          } catch (error) {
-            rejectRequest(error);
-          }
-        });
-      }
-    );
-    request.on("timeout", () => {
-      request.destroy(new Error("Docker socket request timed out"));
-    });
-    request.on("error", rejectRequest);
-    request.write(payload);
-    request.end();
-  });
+  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { payload })).toString("utf8"));
 }
 
 export async function dockerJsonBufferRequest(
@@ -163,42 +109,6 @@ export async function dockerJsonBufferRequest(
   body: unknown,
   expectedStatus: number | number[] = 200
 ) {
-  if (!dockerAvailable()) {
-    throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
-  }
-
   const payload = JSON.stringify(body);
-  const okStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
-  return new Promise<Buffer>((resolveRequest, rejectRequest) => {
-    const request = http.request(
-      {
-        socketPath: config.dockerSocket,
-        path,
-        method,
-        timeout: 15000,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(payload)
-        }
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const bodyBuffer = Buffer.concat(chunks);
-          if (!okStatuses.includes(response.statusCode ?? 0)) {
-            rejectRequest(new Error(dockerErrorMessage(bodyBuffer.toString("utf8"), response.statusCode)));
-            return;
-          }
-          resolveRequest(bodyBuffer);
-        });
-      }
-    );
-    request.on("timeout", () => {
-      request.destroy(new Error("Docker socket request timed out"));
-    });
-    request.on("error", rejectRequest);
-    request.write(payload);
-    request.end();
-  });
+  return dockerSocketRequest(method, path, expectedStatus, { payload });
 }

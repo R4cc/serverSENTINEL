@@ -483,11 +483,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (!activeServer) return;
     setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null } : current);
     try {
-      const fetchVersions = async (nextChannel: ReleaseChannel) => activeServerIsDemo
-        ? demoFixtureFailureMessage(demoFixture, "versions")
-          ? Promise.reject(new Error(demoFixtureFailureMessage(demoFixture, "versions")))
-          : demoInstallVersions(activeServer, mod, nextChannel)
-        : retrySidebarRequest(() => api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`));
+      const fetchVersions = async (nextChannel: ReleaseChannel) => {
+        if (!activeServerIsDemo) {
+          return retrySidebarRequest(() => api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`));
+        }
+        const fixtureError = demoFixtureFailureMessage(demoFixture, "versions");
+        if (fixtureError) throw new Error(fixtureError);
+        return demoInstallVersions(activeServer, mod, nextChannel);
+      };
       let resolvedChannel = channel;
       let data = await fetchVersions(resolvedChannel);
       while (options.useFallbackChannel && !hasInstallVersions(data)) {

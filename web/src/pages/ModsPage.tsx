@@ -9,13 +9,13 @@ import { ModsSummary } from "../features/mods/ModsSummary";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
 
-export type ModsPageServerContext = {
+type ModsPageServerContext = {
   minecraftVersion: string;
   versionsUnknown: boolean;
   contextMessage: string;
 };
 
-export type ModsPageAccess = {
+type ModsPageAccess = {
   serverRunning: boolean;
   changesAllowed: boolean;
   locked: boolean;

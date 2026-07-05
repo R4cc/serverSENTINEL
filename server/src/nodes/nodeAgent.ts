@@ -1082,7 +1082,7 @@ async function modInstall(server: ManagedServer, input: unknown) {
 }
 
 async function handleCommand(command: string, payload: any) {
-  if (!isNodeCapability(command) || !nodeCapabilities.includes(command)) {
+  if (!isNodeCapability(command)) {
     throw new Error(`Unsupported node command ${command}`);
   }
   const server = payload?.server as ManagedServer | undefined;

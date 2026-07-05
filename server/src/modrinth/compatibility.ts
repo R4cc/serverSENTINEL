@@ -229,41 +229,16 @@ export function resolveCompatibilityFromVersions(
   const loaderAndGameVersions = loaderVersions.filter((version) => minecraftVersionsInclude(version.game_versions, options.minecraftVersion));
   const loaderGameJarVersions = loaderAndGameVersions.filter((version) => modrinthJarFile(version));
   const matchingVersion = loaderGameJarVersions.find((version) => allowedForChannel(version, options.channel));
-  const matchingFile = modrinthJarFile(matchingVersion);
 
   const serverSide = projectSides?.server_side;
-  const clientSide = projectSides?.client_side;
 
-  if (matchingVersion && matchingFile) {
+  if (matchingVersion) {
+    const matchingFile = modrinthJarFile(matchingVersion)!;
     if (serverSide === "unsupported") {
-      return {
-        status: "incompatible",
-        compatible: false,
-        reason: "Client-only mod; server-side support is unsupported",
-        serverSide,
-        clientSide,
-        matchedVersionId: matchingVersion.id,
-        matchedVersionNumber: matchingVersion.version_number,
-        matchedVersionType: versionChannel(matchingVersion.version_type),
-        matchedLoaders: matchingVersion.loaders,
-        matchedGameVersions: matchingVersion.game_versions,
-        file: matchingFile
-      };
+      return incompatible("incompatible", "Client-only mod; server-side support is unsupported", matchingVersion, projectSides);
     }
     if (serverSide === "unknown") {
-      return {
-        status: "unknown",
-        compatible: false,
-        reason: "Server-side support could not be verified",
-        serverSide,
-        clientSide,
-        matchedVersionId: matchingVersion.id,
-        matchedVersionNumber: matchingVersion.version_number,
-        matchedVersionType: versionChannel(matchingVersion.version_type),
-        matchedLoaders: matchingVersion.loaders,
-        matchedGameVersions: matchingVersion.game_versions,
-        file: matchingFile
-      };
+      return incompatible("unknown", "Server-side support could not be verified", matchingVersion, projectSides);
     }
     return compatibleResult(matchingVersion, matchingFile, projectSides);
   }
