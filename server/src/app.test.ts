@@ -19,7 +19,8 @@ import {
   validateJoinTokenTtlMinutes,
   fileContentRevision,
   assertFileRevision,
-  validateBase64Content
+  validateBase64Content,
+  mutableServerConfigurationBlockedReason
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -56,6 +57,29 @@ describe("base64 upload validation", () => {
     expect(() => validateBase64Content("abcd=", true)).toThrow("valid base64");
     expect(validateBase64Content("", true)).toBe("");
     expect(validateBase64Content(Buffer.from("hello").toString("base64"), true)).toBe("aGVsbG8=");
+  });
+});
+
+describe("mutable server configuration guard", () => {
+  const message = "Stop the server before changing mods or server properties.";
+
+  it("allows mod and property mutations only for stopped-like runtime states", () => {
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } })).toBe("");
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "created" } })).toBe("");
+    expect(mutableServerConfigurationBlockedReason({ docker: { configured: false, available: false, running: false, state: "unknown", message: "No Docker integration is configured" } })).toBe("");
+    expect(mutableServerConfigurationBlockedReason({ docker: { available: true, running: false, state: "unknown", message: "Container not found on remote node" } })).toBe("");
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: true, state: "running" } })).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "paused" } })).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "restarting" } })).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { available: false, running: false, state: "unknown", message: "Docker socket is not mounted" } })).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { available: true, running: false, state: "unknown" } })).toBe(message);
+  });
+
+  it("blocks mutations while lifecycle operations are queued or running", () => {
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } }, [{ type: "server.start" }])).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } }, [{ type: "server.stop" }])).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } }, [{ type: "server.restart" }])).toBe(message);
+    expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } }, [{ type: "mod.update" }])).toBe("");
   });
 });
 

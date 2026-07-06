@@ -70,6 +70,8 @@ const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
 const reconnectDelayMs = 5000;
+const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
+const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 
 function detailedError(error: Error, details: string) {
   (error as Error & { details?: string }).details = details;
@@ -440,6 +442,7 @@ async function createServer(input: CreateInput) {
 
 async function updateServer(server: ManagedServer, input: UpdateInput) {
   const status = await runtimeStatus(server);
+  await requireStoppedForMutableConfiguration(server);
   const running = (status as { docker?: { running?: boolean } }).docker?.running === true;
 
   const currentRuntime = runtimeProfileForServer(server);
@@ -479,10 +482,6 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     || server.dockerPorts !== dockerPorts
     || server.javaArgs !== javaArgs
     || currentRuntime.jarArtifact.filename !== serverJar;
-  if (running && server.dockerContainer !== dockerContainer) {
-    throw new Error("Stop the server before changing its Docker container name");
-  }
-
   const updated: ManagedServer = {
     ...server,
     displayName: input.displayName?.trim() || server.displayName,
@@ -546,6 +545,22 @@ async function runtimeStatus(server: ManagedServer) {
     commandInputAvailable: running,
     commandInputMessage: running ? "" : "Start the server before sending console commands."
   };
+}
+
+async function requireStoppedForMutableConfiguration(server: ManagedServer) {
+  const status = await runtimeStatus(server) as { docker?: { configured?: boolean; available?: boolean; running?: boolean; state?: string; message?: string } };
+  if (status.docker?.running) throw new Error(stoppedServerMutationMessage);
+  const state = status.docker?.state || "";
+  if (state === "unknown") {
+    if (status.docker?.configured === false || (status.docker?.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(status.docker?.message || ""))) return;
+    throw new Error(stoppedServerMutationMessage);
+  }
+  if (state && !stoppedLikeDockerStates.has(state)) throw new Error(stoppedServerMutationMessage);
+}
+
+function isMutableConfigurationPath(path: unknown) {
+  const normalized = safeRelative(path);
+  return normalized === "server.properties" || normalized === "mods" || normalized.startsWith("mods/");
 }
 
 function sendStreamData(socket: WebSocket, id: string, event: NodeStreamDataMessage["event"]) {
@@ -1094,7 +1109,10 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.create") return createServer(payload?.input as CreateInput);
   if (!server) throw new Error("server payload is required");
   const name = encodeURIComponent(containerName(server));
-  if (command === "server.update") return updateServer(server, payload?.input as UpdateInput);
+  if (command === "server.update") {
+    await requireStoppedForMutableConfiguration(server);
+    return updateServer(server, payload?.input as UpdateInput);
+  }
   if (command === "server.delete") {
     const status = await inspect(server).catch(() => null) as any;
     if (status?.State?.Running) throw new Error("Stop the server before deleting it");
@@ -1133,9 +1151,16 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.list") return fileList(server, payload?.path);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
-  if (command === "files.write") return writeEditableFile(server, payload?.path, payload?.content);
-  if (command === "files.upload") return uploadFile(server, payload?.parent, payload?.filename, payload?.contentBase64);
+  if (command === "files.write") {
+    if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
+    return writeEditableFile(server, payload?.path, payload?.content);
+  }
+  if (command === "files.upload") {
+    if (isMutableConfigurationPath(posix.join(safeRelative(payload?.parent), safeName(payload?.filename)))) await requireStoppedForMutableConfiguration(server);
+    return uploadFile(server, payload?.parent, payload?.filename, payload?.contentBase64);
+  }
   if (command === "files.mkdir") {
+    if (isMutableConfigurationPath(payload?.parent)) await requireStoppedForMutableConfiguration(server);
     const root = await serverRoot(server);
     const parent = await inside(server, payload?.parent);
     const parentStat = await stat(parent);
@@ -1148,6 +1173,9 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.rename") {
     const root = await serverRoot(server);
     const source = await inside(server, payload?.path);
+    if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(posix.dirname(safeRelative(payload?.path)), safeName(payload?.name)))) {
+      await requireStoppedForMutableConfiguration(server);
+    }
     if (resolve(source) === resolve(root)) throw new Error("Refusing to rename the server root directory");
     const target = await writableResolvedInside(server, join(dirname(source), safeName(payload?.name)));
     if (existsSync(target)) throw new Error("A file or folder with that name already exists");
@@ -1157,6 +1185,9 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.copy") {
     const root = await serverRoot(server);
     const source = await inside(server, payload?.path);
+    if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(safeRelative(payload?.parent), safeName(payload?.name)))) {
+      await requireStoppedForMutableConfiguration(server);
+    }
     const sourceStat = await stat(source);
     if (!sourceStat.isFile()) throw new Error("Only files can be duplicated from the browser file manager");
     const parent = await inside(server, payload?.parent);
@@ -1173,6 +1204,7 @@ async function handleCommand(command: string, payload: any) {
     }
     const root = await serverRoot(server);
     const target = await inside(server, payload?.path);
+    if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
     if (resolve(target) === resolve(root)) throw new Error("Refusing to delete the server root directory");
     const st = await stat(target);
     if (st.isDirectory()) {
@@ -1192,9 +1224,16 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true };
   }
   if (command === "mods.list") return modsList(server, { forceRefresh: payload?.forceRefresh === true });
-  if (command === "mods.upload") return modUpload(server, payload?.filename, payload?.contentBase64);
-  if (command === "mods.install") return modInstall(server, payload);
+  if (command === "mods.upload") {
+    await requireStoppedForMutableConfiguration(server);
+    return modUpload(server, payload?.filename, payload?.contentBase64);
+  }
+  if (command === "mods.install") {
+    await requireStoppedForMutableConfiguration(server);
+    return modInstall(server, payload);
+  }
   if (command === "mods.enableDisable") {
+    await requireStoppedForMutableConfiguration(server);
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     const enabled = requireStrictBoolean(payload?.enabled, "enabled");
     const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, posix.join("mods", filename)))
@@ -1207,6 +1246,7 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, filename: basename(target), enabled };
   }
   if (command === "mods.remove") {
+    await requireStoppedForMutableConfiguration(server);
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     await rm(await inside(server, posix.join("mods", filename)), { force: true });
     return { ok: true, filename };

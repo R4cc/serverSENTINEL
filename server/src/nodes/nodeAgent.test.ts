@@ -34,7 +34,6 @@ function testServer(storageName = "survival"): ManagedServer {
     serverDir: join(tempRoot, "servers", storageName),
     storageName,
     runtimeProfile: testRuntimeProfile(),
-    dockerContainer: "serversentinel-survival",
     dockerImage: "eclipse-temurin:21-jre",
     dockerPorts: "25565:25565/tcp,25566:25566/udp",
     javaArgs: "-Xms2G -Xmx4G",
@@ -99,6 +98,19 @@ describe("remote node create and Docker command safety", () => {
 });
 
 describe("remote node file operation safety", () => {
+  it("rejects copies into mutable configuration paths when runtime status is unavailable", async () => {
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    await mkdir(join(tempRoot, "servers", server.storageName!, "safe"), { recursive: true });
+    await writeFile(join(tempRoot, "servers", server.storageName!, "safe", "source.jar"), "source");
+
+    await expect(hooks.handleCommand("files.copy", {
+      server,
+      path: "safe/source.jar",
+      parent: "mods",
+      name: "fabric-api.jar"
+    })).rejects.toThrow("Stop the server before changing mods or server properties");
+  });
+
   it("rejects uploads through a symlinked parent directory", async () => {
     const server = testServer();
     const serverDir = join(tempRoot, "servers", server.storageName!);
@@ -176,6 +188,18 @@ describe("remote node file operation safety", () => {
 });
 
 describe("remote node mod upload safety", () => {
+  it("rejects mod uploads when runtime status is unavailable", async () => {
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });
+    const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
+    await expect(hooks.handleCommand("mods.upload", {
+      server,
+      filename: "fabric-api.jar",
+      contentBase64: jar.toString("base64")
+    })).rejects.toThrow("Stop the server before changing mods or server properties");
+  });
+
   it("rejects path-like mod upload names", async () => {
     const server = testServer();
     await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });

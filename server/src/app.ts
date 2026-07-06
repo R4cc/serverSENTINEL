@@ -2712,21 +2712,44 @@ async function recordOperation<T>(
   }
 }
 
-function markServerRestartRequired(serverId: string) {
-  serversRepository.markRestartRequired(serverId);
-}
-
 function isRestartSensitivePath(server: ManagedServer, runtime: NodeRuntime, absolutePath: string) {
   return runtime.isServerSettingsFile(server, absolutePath) || runtime.isModsPath(server, absolutePath);
 }
 
-function serverSettingsRestartRequired(before: ManagedServer, after: ManagedServer) {
-  return JSON.stringify(runtimeProfileForServer(before)) !== JSON.stringify(runtimeProfileForServer(after))
-    || before.dockerContainer !== after.dockerContainer
-    || before.dockerImage !== after.dockerImage
-    || before.dockerPorts !== after.dockerPorts
-    || JSON.stringify(before.managedPorts ?? []) !== JSON.stringify(after.managedPorts ?? [])
-    || before.javaArgs !== after.javaArgs;
+const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
+const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "server.stop", "server.restart"]);
+const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
+
+function blockingRuntimeOperations(serverId: string) {
+  return [
+    ...operationsRepository.list({ serverId, status: "queued", limit: 25 }),
+    ...operationsRepository.list({ serverId, status: "running", limit: 25 })
+  ].filter((operation) => blockingRuntimeOperationTypes.has(operation.type));
+}
+
+export function mutableServerConfigurationBlockedReason(status: unknown, operations: Array<{ type?: string }> = []) {
+  if (operations.some((operation) => blockingRuntimeOperationTypes.has(operation.type as OperationType))) {
+    return stoppedServerMutationMessage;
+  }
+  const docker = status && typeof status === "object" && "docker" in status
+    ? (status as { docker?: { configured?: unknown; available?: unknown; running?: unknown; state?: unknown; message?: unknown } }).docker
+    : status as { configured?: unknown; available?: unknown; running?: unknown; state?: unknown; message?: unknown } | undefined;
+  if (docker?.running === true) return stoppedServerMutationMessage;
+  const state = typeof docker?.state === "string" ? docker.state : "";
+  const message = typeof docker?.message === "string" ? docker.message : "";
+  if (state === "unknown") {
+    return docker?.configured === false || (docker?.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(message))
+      ? ""
+      : stoppedServerMutationMessage;
+  }
+  if (state && !stoppedLikeDockerStates.has(state)) return stoppedServerMutationMessage;
+  return "";
+}
+
+async function requireServerStoppedForMutableConfiguration(server: ManagedServer) {
+  const status = await runtimeForServer(server).serverStatus(server);
+  const reason = mutableServerConfigurationBlockedReason(status, blockingRuntimeOperations(server.id));
+  if (reason) throw new Error(reason);
 }
 
 function runtimeResultRunning(value: unknown) {
@@ -3030,6 +3053,9 @@ async function localUpdateServer(serverId: string, input: unknown) {
       throw new Error("A managed server with this display name already exists");
     }
     const status = await dockerStatus(current);
+    if (status.running) {
+      throw new Error(stoppedServerMutationMessage);
+    }
     const currentRuntime = runtimeProfileForServer(current);
     const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
     const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
@@ -3092,10 +3118,6 @@ async function localUpdateServer(serverId: string, input: unknown) {
       || current.dockerPorts !== dockerPorts
       || current.javaArgs !== javaArgs
       || currentRuntime.jarArtifact.filename !== serverJar;
-    if (status.running && current.dockerContainer !== dockerContainer) {
-      throw new Error("Stop the server before changing its Docker container name");
-    }
-
     const updated: ManagedServer = {
       ...current,
       displayName: body.displayName?.trim() || current.displayName,
@@ -3910,6 +3932,7 @@ app.put<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
+  await requireServerStoppedForMutableConfiguration(server);
   const nextDisplayName = request.body.displayName?.trim() || server.displayName;
   const servers = await listManagedServers();
   if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
@@ -3930,10 +3953,6 @@ app.put<{
     await assertNodePortsAvailable(server.nodeId, dockerPorts, { ignoreServerId: server.id });
   }
   const updatedServer = await runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) });
-  if (serverSettingsRestartRequired(server, updatedServer)) {
-    markServerRestartRequired(updatedServer.id);
-    return runtimeForServer(updatedServer).publicServer(await getServer(updatedServer.id));
-  }
   return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 
@@ -3951,6 +3970,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/runtime", async (request) 
 app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/:id/runtime/refresh", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
   const server = await getServer(request.params.id);
+  await requireServerStoppedForMutableConfiguration(server);
   const runtimeProfile = runtimeProfileForServer(server);
   const refreshed = await serverJarProvider.resolveFabricServerJar({
     minecraftVersion: runtimeProfile.minecraftVersion,
@@ -4191,6 +4211,9 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (isRestartSensitivePath(server, runtime, target)) {
+    await requireServerStoppedForMutableConfiguration(server);
+  }
   const file = await readFileWithRevision(runtime, server, target);
   if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
   const path = await fileEditLockPath(runtime, server, target);
@@ -4229,6 +4252,9 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (isRestartSensitivePath(server, runtime, target)) {
+    await requireServerStoppedForMutableConfiguration(server);
+  }
   if (!request.body.leaseId) {
     const error = new Error("A valid file edit lease is required") as Error & { statusCode?: number; code?: string };
     error.statusCode = 409;
@@ -4242,9 +4268,6 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
   const result = await runtime.writeFile(server, target, request.body.content) as Record<string, unknown>;
   fileEditLeasesRepository.release(lease.leaseId, owner);
-  if (isRestartSensitivePath(server, runtime, target)) {
-    markServerRestartRequired(server.id);
-  }
   return { ...result, revision: fileContentRevision(request.body.content ?? "") };
 });
 
@@ -4253,6 +4276,9 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
   await requireFilePathPermission(request, server, parent, "files.upload");
+  if (runtime.isModsPath(server, parent)) {
+    await requireServerStoppedForMutableConfiguration(server);
+  }
   return runtime.createFolder(server, parent, request.body.name);
 });
 
@@ -4267,12 +4293,12 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
     }
   }
   const filename = safeFileManagerName(request.body.filename);
-  const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && filename.endsWith(".jar") ? "mods.upload" : "files.upload";
+  const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && (filename.endsWith(".jar") || filename.endsWith(".jar.disabled")) ? "mods.upload" : "files.upload";
   await requireFilePathPermission(request, server, parent, uploadPermission);
-  const result = await runtime.uploadFile(server, parent, filename, request.body.contentBase64);
-  if (uploadPermission === "mods.upload") {
-    markServerRestartRequired(server.id);
+  if (runtime.isModsPath(server, join(parent, filename))) {
+    await requireServerStoppedForMutableConfiguration(server);
   }
+  const result = await runtime.uploadFile(server, parent, filename, request.body.contentBase64);
   return result;
 });
 
@@ -4286,10 +4312,10 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const targetName = safeFileManagerName(request.body.name);
   const target = await runtime.resolveWritableResolvedPath(server, join(dirname(source), targetName));
   await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, target));
-  const result = await runtime.renameFile(server, source, targetName);
   if (isRestartSensitivePath(server, runtime, source) || isRestartSensitivePath(server, runtime, target)) {
-    markServerRestartRequired(server.id);
+    await requireServerStoppedForMutableConfiguration(server);
   }
+  const result = await runtime.renameFile(server, source, targetName);
   return result;
 });
 
@@ -4298,10 +4324,10 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
   await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
-  const result = await runtime.duplicateFile(server, source, request.body.name);
-  if (runtime.isModsPath(server, source)) {
-    markServerRestartRequired(server.id);
+  if (runtime.isModsPath(server, source) || runtime.isServerSettingsFile(server, source)) {
+    await requireServerStoppedForMutableConfiguration(server);
   }
+  const result = await runtime.duplicateFile(server, source, request.body.name);
   return result;
 });
 
@@ -4310,10 +4336,10 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
-  const result = await runtime.deleteFile(server, target, request.query.recursive);
   if (isRestartSensitivePath(server, runtime, target)) {
-    markServerRestartRequired(server.id);
+    await requireServerStoppedForMutableConfiguration(server);
   }
+  const result = await runtime.deleteFile(server, target, request.query.recursive);
   return result;
 });
 
@@ -5440,14 +5466,14 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.toggle",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mod state",
-    successTask: "Mod state updated",
-    restartEffect: "mark"
+    successTask: "Mod state updated"
   }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled));
 });
 
@@ -5455,28 +5481,28 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.remove",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Removing mod",
-    successTask: "Mod removed",
-    restartEffect: "mark"
+    successTask: "Mod removed"
   }, () => runtimeForServer(server).removeMod(server, request.query.filename));
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.upload",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Uploading mod",
-    successTask: "Mod uploaded",
-    restartEffect: "mark"
+    successTask: "Mod uploaded"
   }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64));
 });
 
@@ -5746,28 +5772,28 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChannel } }>("/api/modrinth/update", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mod",
-    successTask: "Mod updated",
-    restartEffect: (result) => ((result as { upToDate?: unknown })?.upToDate === true ? undefined : "mark")
+    successTask: "Mod updated"
   }, () => updateModrinthMod(server, request.body));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.batchUpdate",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Updating mods",
-    successTask: "Mod update batch complete",
-    restartEffect: (result) => ((result as SafeBatchUpdateResult).counts?.updated ?? 0) > 0 ? "mark" : undefined
+    successTask: "Mod update batch complete"
   }, async () => {
     const channel = optionalReleaseChannel(request.body.channel);
     const filenames = request.body.filenames === undefined
@@ -5905,14 +5931,14 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
+  await requireServerStoppedForMutableConfiguration(server);
   return recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Installing mod",
-    successTask: "Mod installed",
-    restartEffect: "mark"
+    successTask: "Mod installed"
   }, () => installModWithRemoteVersionFallback(server, request.body));
 });
 

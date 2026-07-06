@@ -374,7 +374,6 @@ export function ServerEditForm({
   statusLabel = "Unknown",
   statusTone = "neutral",
   nodeName = "Unknown node",
-  containerNameLocked = false,
   disabledReason = "",
   disabled = false
 }: {
@@ -386,7 +385,6 @@ export function ServerEditForm({
   statusLabel?: string;
   statusTone?: string;
   nodeName?: string;
-  containerNameLocked?: boolean;
   disabledReason?: string;
   disabled?: boolean;
 }) {
@@ -587,10 +585,8 @@ export function ServerEditForm({
                   value={dockerContainer}
                   onChange={(event) => setDockerContainer(event.target.value)}
                   pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
-                  readOnly={containerNameLocked}
-                  title={containerNameLocked ? "Stop the server before changing the Docker container name." : "Use letters, numbers, dots, dashes, and underscores."}
+                  title="Use letters, numbers, dots, dashes, and underscores."
                 />
-                {containerNameLocked && <span className="fieldHint">Stop the server before renaming the Docker container.</span>}
               </label>
             </div>
             <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
@@ -661,7 +657,7 @@ export function ServerEditForm({
           </dl>
           <div className="propertiesInfoNote">
             <span aria-hidden="true">i</span>
-            <p>Some changes may require a server restart to take effect.</p>
+            <p>Server settings can be changed only while the server is stopped.</p>
           </div>
         </section>
         {dangerZone}

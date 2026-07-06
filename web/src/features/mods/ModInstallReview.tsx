@@ -14,6 +14,8 @@ type Props = {
   selected: ModrinthInstallVersion | null;
   requiredDependencies: ModrinthInstallVersion["dependencies"];
   canContinue: boolean;
+  locked?: boolean;
+  lockedReason?: string;
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
   onChannelChange: (channel: ReleaseChannel) => void;
@@ -26,7 +28,7 @@ type Props = {
   onInstall: () => void;
 };
 
-export function ModInstallReview({ state, selected, requiredDependencies, canContinue, formatDate, onClose, onChannelChange, onRetry, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
+export function ModInstallReview({ state, selected, requiredDependencies, canContinue, locked = false, lockedReason = "", formatDate, onClose, onChannelChange, onRetry, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
   const title = state.data?.project.title || state.mod.title;
   const versions = state.data?.compatibleVersions || [];
   const otherVersions = state.data?.otherVersions || [];
@@ -52,34 +54,35 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           <ModIconImage src={icon} fallback="MOD" />
           <div><strong>{title}</strong><span>For {state.data?.target.loader || "Fabric"} {state.data?.target.minecraftVersion || ""}</span></div>
         </div>
+        {locked && <InlineState tone="info" title="Stop the server to install mods" message={lockedReason || "Mod changes require the server to be stopped."} />}
         {state.loading && <ModInstallVersionSkeleton />}
         {!state.loading && state.error && <InlineState tone="error" title="Versions unavailable" message={state.error} actionLabel="Refresh" onAction={onRetry} busy={state.loading} />}
         {!state.loading && state.data && state.step === 1 && (
           <>
             <section className="modsRecommendedVersion">
               <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Compatible with this server" : "Open advanced options to review other versions"}</span></div>
-              {recommendedVersion && <Button onClick={() => { onSelect(recommendedVersion); onContinue(); }}>Review and install</Button>}
+              {recommendedVersion && <Button onClick={() => { onSelect(recommendedVersion); onContinue(); }} disabled={locked}>Review and install</Button>}
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
               <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
-                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant="ghost" compact className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)}>{channel}</Button>)}
+                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant="ghost" compact className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
               </div>
               <div className="modsVersionList">
                 {[...versions, ...otherVersions].map((version) => {
                   const health = getInstallVersionHealth(version);
                   return (
-                    <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={!version.selectable}>
+                    <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={locked || !version.selectable}>
                       <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>
                     </button>
                   );
                 })}
               </div>
-              {selected && <Button onClick={onContinue} disabled={!canContinue}>Review selected version</Button>}
+              {selected && <Button onClick={onContinue} disabled={locked || !canContinue}>Review selected version</Button>}
             </details>
             {selectedHealth?.requiresAcknowledgement && (
-              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " serverSENTINEL cannot verify this version as safe for this server."} I understand the risk.</span></label>
+              <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} disabled={locked} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " serverSENTINEL cannot verify this version as safe for this server."} I understand the risk.</span></label>
             )}
           </>
         )}
@@ -95,7 +98,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
       </div>
       {state.step === 2 && (
         <div className="modsDrawerFooter">
-          <Button onClick={onInstall} disabled={!canContinue || state.installing}>{state.installing ? "Installing..." : installButtonLabel}</Button>
+          <Button onClick={onInstall} disabled={locked || !canContinue || state.installing}>{state.installing ? "Installing..." : installButtonLabel}</Button>
         </div>
       )}
     </div>

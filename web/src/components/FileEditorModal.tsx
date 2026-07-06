@@ -16,6 +16,7 @@ type FileEditorModalProps = {
   editBusy: boolean;
   editMessage: string;
   editDisabled: boolean;
+  editDisabledReason?: string;
   editorDisabled: boolean;
   saveDisabled: boolean;
   discardRequestOpen: boolean;
@@ -79,6 +80,7 @@ export function FileEditorModal({
   editBusy,
   editMessage,
   editDisabled,
+  editDisabledReason = "",
   editorDisabled,
   saveDisabled,
   discardRequestOpen,
@@ -104,7 +106,7 @@ export function FileEditorModal({
       : !editing
         ? "Enter edit mode before saving."
       : editorDisabled
-        ? "This file is read-only."
+        ? editDisabledReason || "This file is read-only."
         : !dirty
           ? "There are no changes to save."
           : "";
@@ -156,6 +158,7 @@ export function FileEditorModal({
               <div className="fileEditorMetaRow">
                 <span>{editing ? "Exclusive edit lease" : "Read only"}</span>
                 {!editing && !editDisabled && <span className="editRequiredHint">Click Edit file to make changes</span>}
+                {!editing && editDisabled && editDisabledReason && <span className="editRequiredHint">{editDisabledReason}</span>}
                 <span>{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
               </div>
@@ -204,7 +207,7 @@ export function FileEditorModal({
                   {fileSaving ? "Saving" : "Save"}
                 </Button>
               ) : (
-                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? "Edit permission is required." : "Acquire an exclusive edit lease"}>
+                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"}>
                   {editBusy ? "Requesting edit access" : "Edit file"}
                 </Button>
               )}

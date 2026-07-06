@@ -48,7 +48,7 @@ type Props = {
 
 export function AddModsWorkflow(props: Props) {
   if (props.installState) {
-    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.requiredDependencies} canContinue={props.canContinue} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
+    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.requiredDependencies} canContinue={props.canContinue} locked={props.locked} lockedReason="Mod changes require the server to be stopped." formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
   }
 
   const installedIds = new Set(props.installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));

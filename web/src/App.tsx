@@ -14,7 +14,7 @@ import { demoListing, demoOverviewData, demoServer, demoServerId, demoStats, dem
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
 import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
-import { hasFileManagerPermission, hasPermission, normalizePermissions } from "./utils/permissions";
+import { hasFileManagerPermission, hasPermission, isModsPublicPath, isServerPropertiesPath, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
@@ -68,6 +68,7 @@ function mergeConsoleLogTail(current: string[], next: string[]) {
 
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
+const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 
 function AppToaster({ darkMode }: { darkMode: boolean }) {
@@ -85,14 +86,6 @@ function AppToaster({ darkMode }: { darkMode: boolean }) {
       }}
       visibleToasts={5}
     />
-  );
-}
-
-function RestartRequiredBadge() {
-  return (
-    <span className="restartRequiredIndicator" role="img" aria-label="Restart required" title="Restart required for pending server changes">
-      <AppIcon name="hourglass" />
-    </span>
   );
 }
 
@@ -245,14 +238,6 @@ export default function App() {
     triggerOverviewRefreshRef.current = triggerOverviewRefresh;
   }, [triggerOverviewRefresh]);
 
-  function markServerRestartRequired(serverId: string, since = new Date().toISOString()) {
-    const apply = (server: ManagedServer) => (
-      server.id === serverId && !server.restartRequiredSince ? { ...server, restartRequiredSince: since } : server
-    );
-    setAppState((current) => ({ ...current, servers: current.servers.map(apply) }));
-    setStatus((current) => current?.server.id === serverId ? { ...current, server: apply(current.server) } : current);
-  }
-
   const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
@@ -316,40 +301,59 @@ export default function App() {
             ? "Server setup is still running."
             : "";
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || !canEditServerSettings;
+  const activeDockerState = activeStatus?.docker.state;
+  const activeDockerUnknownStopped = activeDockerState === "unknown"
+    && (
+      activeStatus?.docker.configured === false
+      || (activeStatus?.docker.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(activeStatus.docker.message || ""))
+    );
+  const serverRequiresStoppedForMutableConfig = Boolean(
+    activeStatus && (
+      activeStatus.docker.running
+      || runtimeAction !== null
+      || (activeDockerState && !["created", "dead", "exited"].includes(activeDockerState) && !activeDockerUnknownStopped)
+    )
+  );
+  const serverSettingsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canEditServerSettings;
   const deleteServerLocked = isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running);
   const serverSettingsLockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
-      : !canEditServerSettings
-        ? "Edit server settings permission is required."
-        : serverSettingsSaving
-          ? "Server settings are saving."
-          : "";
-  const modServerRunning = Boolean(activeStatus?.docker.running);
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const modToggleLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const addModFromModrinthDisabled = isProvisioning || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
+      : serverRequiresStoppedForMutableConfig
+        ? stoppedServerMutationMessage
+        : !canEditServerSettings
+          ? "Edit server settings permission is required."
+          : serverSettingsSaving
+            ? "Server settings are saving."
+            : "";
+  const modServerRunning = serverRequiresStoppedForMutableConfig;
+  const modsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const modToggleLocked = modsLocked;
+  const addModFromModrinthDisabled = isProvisioning || serverRequiresStoppedForMutableConfig || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
   const uploadModDisabled = modsLocked;
   const addModFromModrinthDisabledReason = isProvisioning
       ? "Server setup is still running."
-      : !canInstallMods
-        ? "Server management permission is required."
-        : !effectiveAppState.modrinthApiConfigured
-          ? "Add a Modrinth API key in Settings before searching for mods."
-          : "Search Modrinth for compatible Fabric mods.";
+      : serverRequiresStoppedForMutableConfig
+        ? stoppedServerMutationMessage
+        : !canInstallMods
+          ? "Server management permission is required."
+          : !effectiveAppState.modrinthApiConfigured
+            ? "Add a Modrinth API key in Settings before searching for mods."
+            : "Search Modrinth for compatible Fabric mods.";
   const uploadModDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !canManageMods
-          ? "Server management permission is required."
-          : !activeStatus
-            ? "Server status is still loading."
-            : isAnyModJobRunning
-              ? "A mod operation is already running."
-              : "Upload a local Fabric mod file.";
+        : serverRequiresStoppedForMutableConfig
+          ? stoppedServerMutationMessage
+          : !canManageMods
+            ? "Server management permission is required."
+            : !activeStatus
+              ? "Server status is still loading."
+              : isAnyModJobRunning
+                ? "A mod operation is already running."
+                : "Upload a local Fabric mod file.";
   const modsWorkspace = useModsWorkspace({
     activeServer,
     activePage,
@@ -369,8 +373,7 @@ export default function App() {
     setNotice,
     setActiveJobs,
     handleStaleSession,
-    refreshFiles: loadFiles,
-    onRestartRequiredChange: markServerRestartRequired
+    refreshFiles: loadFiles
   });
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
@@ -400,6 +403,9 @@ export default function App() {
   }, [listing.entries, selectedFilePaths]);
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  const selectedTouchesMutableConfiguration = selectedEntries.some((entry) => isModsPublicPath(entry.path) || isServerPropertiesPath(entry.path));
+  const selectedEntryTouchesMutableConfiguration = Boolean(selectedEntry && (isModsPublicPath(selectedEntry.path) || isServerPropertiesPath(selectedEntry.path)));
+  const uploadTouchesMutableConfiguration = isModsPublicPath(listing.path);
   const fileRowSelection = useMemo<RowSelectionState>(() => (
     Object.fromEntries(selectedFilePaths.map((path) => [path, true]))
   ), [selectedFilePaths]);
@@ -463,13 +469,15 @@ export default function App() {
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
   const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
   const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy);
-  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
+  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedTouchesMutableConfiguration));
   const fileActionBlockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
+      : serverRequiresStoppedForMutableConfig && (uploadTouchesMutableConfiguration || selectedTouchesMutableConfiguration)
+        ? stoppedServerMutationMessage
       : fileOperationBusy
         ? "A file operation is already running."
         : "";
@@ -1545,6 +1553,11 @@ export default function App() {
     event.preventDefault();
     if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return;
     if (!activeServer) return;
+    if (serverRequiresStoppedForMutableConfig) {
+      setNotice(stoppedServerMutationMessage);
+      notify("warning", stoppedServerMutationMessage);
+      return;
+    }
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -2144,6 +2157,11 @@ export default function App() {
 
   async function enterFileEditMode() {
     if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
+    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
+      setFileLeaseMessage(stoppedServerMutationMessage);
+      notify("warning", stoppedServerMutationMessage);
+      return;
+    }
     if (!canEditSelectedPath) {
       const message = "Edit permission is required to modify this file.";
       setFileLeaseMessage(message);
@@ -2251,7 +2269,7 @@ export default function App() {
 
   async function createFolder() {
     if (!activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
     const name = window.prompt("New folder name");
     if (name === null) return;
     const nameError = fileNameValidation(name);
@@ -2285,7 +2303,7 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);
@@ -2454,6 +2472,11 @@ export default function App() {
     if (isProvisioning || dockerOperationalLock || !canEditSelectedPath) return;
     if (!activeServer) return;
     if (!selectedPath || !dirty) return;
+    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
+      setFileLeaseMessage(stoppedServerMutationMessage);
+      notify("warning", stoppedServerMutationMessage);
+      return;
+    }
     if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
     if (fileSaving) return;
     setFileSaving(true);
@@ -2502,9 +2525,6 @@ export default function App() {
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
-      if (selectedPath === "/server.properties") {
-        markServerRestartRequired(activeServer.id);
-      }
       closeEditor();
     } catch (error) {
       const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
@@ -3001,7 +3021,6 @@ export default function App() {
                     >
                       <span className="serverListTitleRow">
                         <strong>{server.displayName}</strong>
-                        {server.restartRequiredSince && <RestartRequiredBadge />}
                       </span>
                       <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - Fabric</span>
                       {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
@@ -3267,7 +3286,6 @@ export default function App() {
                   <div className="serverStripTitleRow">
                     <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
                     <strong>{activeServer.displayName}</strong>
-                    {activeServer.restartRequiredSince && <RestartRequiredBadge />}
                     <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                       {serverCommandStatusLabel}
                     </StatusBadge>
@@ -3468,11 +3486,11 @@ export default function App() {
                       </div>
                       <div className="fileToolbar">
                         <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
+                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
                           <AppIcon name="fileUp" />
                           Upload
                         </Button>
-                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
+                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
                           <AppIcon name="folderPlus" />
                           New folder
                         </Button>
@@ -3642,9 +3660,10 @@ export default function App() {
                   editing={fileEditMode}
                   editBusy={fileLeaseBusy}
                   editMessage={fileLeaseMessage}
-                  editDisabled={isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+                  editDisabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+                  editDisabledReason={serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath) ? stoppedServerMutationMessage : ""}
+                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
                   discardRequestOpen={Boolean(discardEditorRequest)}
                   onTextChange={(nextText) => {
                     setEditorText(nextText);
@@ -3710,7 +3729,6 @@ export default function App() {
                   onSubmit={updateServer}
                   disabled={serverSettingsLocked || serverSettingsSaving}
                   disabledReason={serverSettingsLockedReason}
-                  containerNameLocked={Boolean(activeStatus?.docker.running)}
                   statusLabel={serverCommandStatusLabel}
                   statusTone={serverCommandTone}
                   nodeName={activeNode.name}

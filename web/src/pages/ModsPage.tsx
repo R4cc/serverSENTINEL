@@ -52,7 +52,7 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
 
   return (
     <section className="tabPage modsWorkspacePage">
-      {access.serverRunning && <section className="modsLockBanner"><span><AppIcon name="hourglass" /></span><div><strong>Mod changes apply on restart.</strong><p>You can install, remove, update, enable, or disable mods while the server runs. The hourglass marks pending changes until the server starts again or restarts.</p></div>{access.canStopServer && <Button variant="secondary" onClick={onStopServer} disabled={access.stoppingServer}>{access.stoppingServer ? "Stopping…" : "Stop server"}</Button>}</section>}
+      {access.serverRunning && <section className="modsLockBanner"><span><AppIcon name="shield" /></span><div><strong>Stop the server to change mods.</strong><p>Installs, uploads, removals, updates, and enable or disable changes require the server to be stopped.</p></div>{access.canStopServer && <Button variant="secondary" onClick={onStopServer} disabled={access.stoppingServer}>{access.stoppingServer ? "Stopping..." : "Stop server"}</Button>}</section>}
       {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
       <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} />
       <div className="modsWorkspaceToolbar">

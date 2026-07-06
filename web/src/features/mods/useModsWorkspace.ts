@@ -84,7 +84,6 @@ export type ModsWorkspaceInputs = {
   setActiveJobs: Dispatch<SetStateAction<GeneralJob[]>>;
   handleStaleSession: (error: unknown) => boolean;
   refreshFiles: (serverId: string, path: string) => Promise<unknown>;
-  onRestartRequiredChange?: (serverId: string) => void | Promise<void>;
 };
 
 export type ModsWorkspaceController = ReturnType<typeof useModsWorkspace>;
@@ -169,7 +168,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     activeServer, activePage, activeServerIsDemo, activeServerUsesInternalNode, activeNodeRuntimeBlocked,
     activeNodeBlockMessage, demoMode, demoInstalledMods, setDemoInstalledMods, modrinthConfigured,
     isProvisioning, canManage, modsLocked, toggleLocked, notify, setNotice,
-    setActiveJobs, handleStaleSession, refreshFiles, onRestartRequiredChange
+    setActiveJobs, handleStaleSession, refreshFiles
   } = inputs;
   const demoFixture = readModsDemoFixture();
 
@@ -559,7 +558,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const content = bufferToBase64(await file.arrayBuffer());
       patchJob(jobId, { progress: 40, task: "Uploading jar" });
       await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: JSON.stringify({ filename: file.name, contentBase64: content }) });
-      void onRestartRequiredChange?.(activeServer.id);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
@@ -619,7 +617,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const result = await api<{ installed?: Array<{ filename: string; dependencyType: "root" | "required" }> }>("/api/modrinth/install", {
         method: "POST", body: JSON.stringify({ serverId: activeServer.id, projectId, versionId: selectedVersion.id, channel: installState.channel, forceIncompatible, overrideMinecraftVersion })
       });
-      void onRestartRequiredChange?.(activeServer.id);
       setInstallState(null);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
@@ -667,7 +664,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       patchJob(jobId, { progress: 30, task: "Downloading new version" });
       const result = await api<{ version: string; upToDate?: boolean }>("/api/modrinth/update", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: plannedChannel || mod.preferredChannel || "release" }) });
-      if (!result.upToDate) void onRestartRequiredChange?.(activeServer.id);
       notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
@@ -733,7 +729,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           }));
         }
         result = mergeSafeBatchUpdateResults(results);
-        if (result.counts.updated > 0) void onRestartRequiredChange?.(activeServer.id);
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
       await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
@@ -768,7 +763,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           const nextFilename = result.filename || currentFilename;
           setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
           currentFilename = nextFilename;
-          void onRestartRequiredChange?.(activeServer.id);
           void refreshFiles(activeServer.id, "/mods");
         } catch (error) {
           const message = `Failed to toggle mod ${displayName}: ${(error as Error).message}`;
@@ -809,7 +803,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     try {
       await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, { method: "DELETE" });
-      void onRestartRequiredChange?.(activeServer.id);
       notify("success", `Removed ${mod.displayName}`); setDetailsModKey("");
       await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
     } catch (error) {
