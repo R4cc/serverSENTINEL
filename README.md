@@ -20,7 +20,7 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     <td valign="top" width="50%">
       <p align="center"><strong>Console</strong></p>
       <a href="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" target="_blank">
-        <img src="https://github.com/user-attachments/assets/e9336787-809c-4adb-a817-767ce91f1335" alt="Console" style="max-width: 100%;" />
+        <img width="2586" height="1977" alt="Screenshot 2026-07-06 115234" src="https://github.com/user-attachments/assets/928a1022-7c9c-4c1b-aa4a-9d7fd011c484" style="max-width: 100%;"/>
       </a>
       <p align="center">Live output and command input.</p>
     </td>
