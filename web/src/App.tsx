@@ -3086,6 +3086,7 @@ export default function App() {
               <label className="settingsRow">
                 <div>
                   <strong>Theme</strong>
+                  <span>Choose the panel color mode.</span>
                 </div>
                 <select value={themePreference} onChange={(event) => setThemePreference(event.target.value as ThemePreference)}>
                   <option value="light">Light</option>
@@ -3096,6 +3097,7 @@ export default function App() {
               <label className="settingsRow">
                 <div>
                   <strong>Date format</strong>
+                  <span>Control how dates and times are displayed.</span>
                 </div>
                 <select value={dateLocalePreference} onChange={(event) => setDateLocalePreference(event.target.value as LocalePreference)}>
                   <option value="user">Use browser default</option>
@@ -3109,6 +3111,7 @@ export default function App() {
               <label className="settingsRow">
                 <div>
                   <strong>Number format</strong>
+                  <span>Control numeric formatting across metrics.</span>
                 </div>
                 <select value={numberLocalePreference} onChange={(event) => setNumberLocalePreference(event.target.value as LocalePreference)}>
                   <option value="user">Use browser default</option>
@@ -3122,15 +3125,17 @@ export default function App() {
               <div className="settingsRow readOnly">
                 <div>
                   <strong>Version</strong>
+                  <span>Current serverSENTINEL panel build.</span>
                 </div>
                 <StatusBadge className="settingsStatus">v{panelVersion}</StatusBadge>
               </div>
               {demoMode && (
                 <div className="settingsRow">
-                  <div>
-                    <strong>Demo mode</strong>
-                  </div>
-                  <Button variant="secondary" onClick={logout} disabled={isProvisioning}>Exit demo mode</Button>
+                <div>
+                  <strong>Demo mode</strong>
+                  <span>Leave the sample workspace and return to sign-in.</span>
+                </div>
+                <Button variant="secondary" onClick={logout} disabled={isProvisioning}>Exit demo mode</Button>
                 </div>
               )}
             </section>
@@ -3145,6 +3150,7 @@ export default function App() {
               <div className="settingsRow">
                 <div>
                   <strong>Modrinth API key</strong>
+                  <span>Enable mod search, compatibility checks, and installs.</span>
                 </div>
                 <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageIntegrations} />
               </div>
@@ -3156,6 +3162,7 @@ export default function App() {
                   <span>03</span>
                   <div>
                     <h2>Users</h2>
+                    <p>Manage panel accounts and permissions.</p>
                   </div>
                   <Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>
                 </div>
@@ -3199,6 +3206,7 @@ export default function App() {
               <div className="settingsRow readOnly">
                 <div>
                   <strong>Docker socket</strong>
+                  <span>Local container control availability.</span>
                 </div>
                 <StatusBadge className={`settingsStatus ${panelOnlyMode ? "" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
                   {panelOnlyMode ? "Unsupported" : (demoMode ? "Demo override" : effectiveAppState.dockerSocketMounted ? "Connected" : "Not mounted")}
@@ -3494,7 +3502,7 @@ export default function App() {
                           <AppIcon name="folderPlus" />
                           New folder
                         </Button>
-                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"}>
+                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"} reserveLabel={<><AppIcon name="refresh" />Refreshing</>}>
                           <AppIcon name="refresh" />
                           {filesLoading ? "Refreshing" : "Refresh"}
                         </Button>

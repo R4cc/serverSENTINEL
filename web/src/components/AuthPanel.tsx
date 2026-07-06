@@ -94,7 +94,7 @@ export function AuthPanel({
                 />
               </label>
             )}
-            <Button type="submit" disabled={busy}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
+            <Button type="submit" disabled={busy} reserveLabel={setupRequired ? "Create admin" : "Checking..."}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
           </fieldset>
         </form>
       </section>
@@ -375,7 +375,7 @@ function UserPermissionModal({
 
           <div className="userModalFooter">
             <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
-            <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"}>
+            <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
               {busy ? "Saving..." : user ? "Save changes" : "Create user"}
             </Button>
           </div>
@@ -432,7 +432,7 @@ function ResetPasswordModal({
           </fieldset>
           <div className="userModalFooter">
             <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</Button>
-            <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"}>{busy ? "Saving..." : "Reset password"}</Button>
+            <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving..." : "Reset password"}</Button>
           </div>
         </form>
       </section>

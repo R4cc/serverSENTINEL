@@ -467,7 +467,7 @@ function AddNodeModal({
                 <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
               </label>
               <div className="nodeModalFooter inline">
-                <Button type="submit">{busy ? "Creating..." : "Create pending node"}</Button>
+                <Button type="submit" reserveLabel="Create pending node">{busy ? "Creating..." : "Create pending node"}</Button>
                 <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
               </div>
             </fieldset>

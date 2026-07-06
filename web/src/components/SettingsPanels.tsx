@@ -25,10 +25,12 @@ export function ModrinthKeyForm({
     return (
       <div className="keyForm keyFormConfigured">
         <div className="secretPreview" aria-label="Stored Modrinth API key">
-          <StatusBadge tone="success" className="settingsStatus ready">Configured</StatusBadge>
           <code aria-hidden="true">**** **** **** ****</code>
+          <StatusBadge tone="success" className="settingsStatus ready">Configured</StatusBadge>
         </div>
-        <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</Button>
+        <div className="keyFormActions">
+          <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</Button>
+        </div>
       </div>
     );
   }
@@ -36,20 +38,20 @@ export function ModrinthKeyForm({
   return (
     <form onSubmit={submitKey} className="keyForm">
       <fieldset disabled={disabled}>
-      <label>
-        {configured ? "New Modrinth API key" : "Modrinth API key"}
-        <input
-          name="modrinthApiKey"
-          type="password"
-          autoComplete="off"
-          placeholder="Paste API key"
-          required
-        />
-      </label>
-      <div className="keyFormActions">
-        {configured && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
-        <Button type="submit">{configured ? "Save replacement" : "Save key"}</Button>
-      </div>
+        <label>
+          {configured ? "New Modrinth API key" : "Modrinth API key"}
+          <input
+            name="modrinthApiKey"
+            type="password"
+            autoComplete="off"
+            placeholder="Paste API key"
+            required
+          />
+        </label>
+        <div className="keyFormActions">
+          {configured && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
+          <Button type="submit">{configured ? "Save replacement" : "Save key"}</Button>
+        </div>
       </fieldset>
     </form>
   );

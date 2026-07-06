@@ -11,20 +11,32 @@ export function Button({
   variant = "primary",
   compact = false,
   iconOnly = false,
+  reserveLabel,
   className,
+  children,
   type = "button",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   compact?: boolean;
   iconOnly?: boolean;
+  reserveLabel?: ReactNode;
 }) {
+  const reserveContent = Boolean(reserveLabel) && !iconOnly;
+
   return (
     <button
       {...props}
       type={type}
-      className={classes("uiButton", `uiButton--${variant}`, compact && "uiButton--compact", iconOnly && "uiButton--icon", className)}
-    />
+      className={classes("uiButton", `uiButton--${variant}`, compact && "uiButton--compact", iconOnly && "uiButton--icon", reserveContent && "uiButton--reserved", className)}
+    >
+      {reserveContent ? (
+        <span className="uiButtonStableContent">
+          <span className="uiButtonReserveContent" aria-hidden="true">{reserveLabel}</span>
+          <span className="uiButtonVisibleContent">{children}</span>
+        </span>
+      ) : children}
+    </button>
   );
 }
 

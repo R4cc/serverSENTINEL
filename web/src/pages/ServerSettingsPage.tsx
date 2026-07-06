@@ -1197,7 +1197,7 @@ export function ManagedServerForm({
               <Button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
                 setWizardError("");
                 setActiveWizardStep(4);
-              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning} title={activeWizardStep === 3 && !resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined}>
+              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning} title={activeWizardStep === 3 && !resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined} reserveLabel={activeWizardStep === 3 ? <><span>Next: Review & Create</span><AppIcon name="chevronRight" /></> : <><AppIcon name="server" /><span>Create Server</span></>}>
                 {activeWizardStep === 4 && <AppIcon name="server" />}
                 <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
                 {activeWizardStep === 3 && <AppIcon name="chevronRight" />}

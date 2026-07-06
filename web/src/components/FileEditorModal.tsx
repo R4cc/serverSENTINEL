@@ -203,11 +203,11 @@ export function FileEditorModal({
             <footer className="fileEditorFooter">
               <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
               {editing ? (
-                <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"}>
+                <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
                   {fileSaving ? "Saving" : "Save"}
                 </Button>
               ) : (
-                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"}>
+                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"} reserveLabel="Requesting edit access">
                   {editBusy ? "Requesting edit access" : "Edit file"}
                 </Button>
               )}

@@ -2463,9 +2463,7 @@ button .buttonIcon {
 
 .settingsGroupHeader {
   grid-template-columns: 64px minmax(0, 1fr);
-  background:
-    linear-gradient(90deg, var(--accent) 0 8px, transparent 8px),
-    var(--surface-muted);
+  background: var(--surface-muted);
   border-bottom: var(--border-strong) solid var(--border);
 }
 
@@ -2587,15 +2585,18 @@ button .buttonIcon {
 }
 
 .nodeCard.online {
-  box-shadow: inset 5px 0 0 var(--sentinel-success);
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised));
 }
 
 .nodeCard.offline {
-  box-shadow: inset 5px 0 0 var(--sentinel-danger);
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 6%, var(--surface-raised));
 }
 
 .nodeCard.unknown {
-  box-shadow: inset 5px 0 0 var(--text-soft);
+  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--text-soft) 5%, var(--surface-raised));
 }
 
 .nodeCardHeader,
@@ -3593,7 +3594,13 @@ button .buttonIcon {
 
 .nodePlacementCard.selected {
   border-color: var(--accent);
-  box-shadow: inset 4px 0 0 var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.nodePlacementCard.selected strong {
+  font-weight: var(--weight-title);
 }
 
 .nodePlacementCard.disabled {
@@ -4954,43 +4961,44 @@ button .buttonIcon {
 
 
 .summaryTile {
-  min-height: 118px;
+  min-height: 72px;
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  padding: var(--space-3);
   display: grid;
-  grid-template-rows: auto minmax(30px, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
   gap: var(--space-2);
   position: relative;
   overflow: hidden;
 }
 
 .summaryTile::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--accent);
+  display: none;
 }
 
-.summaryTile.running::before,
-.summaryTile.state.running::before {
-  background: var(--sentinel-success);
+.summaryTile.running,
+.summaryTile.state.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
 }
 
-.summaryTile.stopped::before,
-.summaryTile.state.stopped::before {
-  background: var(--sentinel-danger);
+.summaryTile.stopped,
+.summaryTile.state.stopped {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
 }
 
-.summaryTile.danger::before,
-.summaryTile.state.danger::before {
-  background: var(--sentinel-danger);
+.summaryTile.danger,
+.summaryTile.state.danger {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
 }
 
-.summaryTile.neutral::before {
-  background: var(--text-muted);
+.summaryTile.neutral {
+  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--text-soft) 5%, var(--surface-raised));
 }
 
 .summaryTile span,
@@ -5008,7 +5016,7 @@ button .buttonIcon {
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-tight);
   overflow-wrap: anywhere;
-  align-self: center;
+  align-self: start;
 }
 
 .summaryTile small {
@@ -5661,9 +5669,13 @@ button .buttonIcon {
 }
 
 .fileTableRow.selected {
-  background:
-    linear-gradient(90deg, var(--accent) 0 5px, transparent 5px),
-    var(--sentinel-accent-soft);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.fileTableRow.selected .fileNameCell strong {
+  font-weight: var(--weight-title);
 }
 
 .fileTableRow:has(.fileNameCell:focus-visible) {
@@ -6765,19 +6777,23 @@ button .buttonIcon {
 }
 
 .scheduledRunItem.success {
-  border-left: 3px solid var(--sentinel-success);
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface));
 }
 
 .scheduledRunItem.failed {
-  border-left: 3px solid var(--sentinel-danger);
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
 }
 
 .scheduledRunItem.skipped {
-  border-left: 3px solid var(--sentinel-warning);
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
 }
 
 .scheduledRunItem.unknown {
-  border-left: 3px solid var(--border-strong);
+  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--text-soft) 5%, var(--surface));
 }
 
 .scheduledRunItem + .scheduledRunItem {
@@ -8004,7 +8020,7 @@ button:disabled,
 }
 
 .fileTableRow.selected {
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .fileTableRow > span {
@@ -8362,6 +8378,10 @@ button:disabled,
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+  box-shadow: none;
+}
+
+.sideNav button.active {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -8613,7 +8633,7 @@ textarea:hover:not(:disabled),
 }
 
 .summaryTile::before {
-  width: 3px;
+  display: none;
 }
 
 .resourceRows,
@@ -9587,12 +9607,12 @@ textarea,
 }
 
 .overviewSummary {
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .summaryTile {
-  min-height: 84px;
-  padding: var(--space-3);
+  min-height: 72px;
+  padding: 10px 12px;
   gap: var(--space-1);
 }
 
@@ -9853,7 +9873,7 @@ textarea,
   min-height: 56px;
   padding: var(--space-3) var(--space-4);
   display: grid;
-  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
   gap: var(--space-4);
   align-items: center;
   border-top: 1px solid rgb(0 0 0 / 0.08);
@@ -9870,9 +9890,9 @@ textarea,
 
 .settingsRow select,
 .settingsRow > button {
-  justify-self: start;
+  justify-self: stretch;
   width: 100%;
-  max-width: none;
+  max-width: 420px;
 }
 
 .settingsRow .settingsStatus {
@@ -9887,13 +9907,13 @@ textarea,
 .keyFormConfigured {
   align-items: stretch;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
 }
 
 @media (min-width: 1101px) {
   .keyFormConfigured {
-    align-items: stretch;
+    align-items: center;
   }
 }
 
@@ -10571,6 +10591,38 @@ textarea,
   font-size: var(--type-meta-size);
 }
 
+.uiButton--reserved {
+  justify-content: center;
+}
+
+.uiButtonStableContent {
+  display: grid;
+  grid-template-areas: "content";
+  align-items: center;
+  justify-items: center;
+  min-width: 0;
+}
+
+.uiButtonReserveContent,
+.uiButtonVisibleContent {
+  grid-area: content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.uiButtonReserveContent {
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.uiButtonVisibleContent {
+  max-width: 100%;
+}
+
 .uiButton--icon,
 .iconButton,
 .iconOnlyButton {
@@ -10841,15 +10893,18 @@ textarea,
 /* Core application adoption ------------------------------------------------ */
 
 .overviewSummary .summaryTile {
-  min-height: 104px;
+  min-height: 64px;
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
   box-shadow: 0 8px 22px rgb(0 0 0 / 0.035);
+  align-content: center;
+  justify-items: start;
+  gap: 6px;
 }
 
 .overviewSummary .summaryTile::before {
-  width: 3px;
+  display: none;
 }
 
 .summaryTile > span,
@@ -10862,6 +10917,10 @@ textarea,
   text-transform: uppercase;
 }
 
+.overviewSummary .summaryTile > span {
+  line-height: 1;
+}
+
 .summaryTile > strong,
 .activityItem > strong,
 .resourceMetricLabel > strong {
@@ -10872,8 +10931,18 @@ textarea,
   line-height: 1.3;
 }
 
-.summaryTile > .uiStatusBadge {
-  align-self: center;
+.overviewSummary .summaryTile > strong {
+  max-width: 100%;
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.overviewSummary .summaryTile > .uiStatusBadge {
+  align-self: start;
   justify-self: start;
 }
 
@@ -11077,6 +11146,238 @@ textarea,
 
 .usersTable .uiButton--compact {
   min-height: var(--control-height-compact);
+}
+
+/* Settings screen layout --------------------------------------------------- */
+
+.settingsList {
+  max-width: var(--content-max-width);
+  gap: var(--space-3);
+}
+
+.settingsGroup {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settingsGroupHeader,
+.settingsGroupHeader.usersGroupHeader {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
+}
+
+.settingsGroupHeader:not(.usersGroupHeader) {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.settingsGroupHeader > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+}
+
+.settingsGroupHeader > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settingsGroupHeader h2 {
+  margin: 0;
+}
+
+.settingsGroupHeader p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.usersGroupHeader .uiButton {
+  justify-self: end;
+  min-height: var(--control-height);
+}
+
+.settingsRow {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-row);
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
+}
+
+.settingsGroupHeader + .settingsRow {
+  border-top: 0;
+}
+
+.settingsRow:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
+  border-color: var(--border-row);
+}
+
+.settingsRow > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settingsRow > div:first-child > strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.settingsRow > div:first-child > span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.45;
+}
+
+.settingsRow select,
+.settingsRow > .uiButton,
+.settingsRow > button {
+  justify-self: start;
+  width: min(100%, 420px);
+  max-width: 420px;
+}
+
+.settingsRow .settingsStatus {
+  justify-self: start;
+}
+
+.settingsRow .keyForm {
+  justify-self: stretch;
+  width: min(100%, 720px);
+  max-width: 720px;
+}
+
+.keyForm fieldset,
+.keyFormConfigured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.keyForm {
+  display: block;
+  width: 100%;
+}
+
+.keyForm fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.keyForm label {
+  min-width: 0;
+}
+
+.keyFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.secretPreview {
+  min-width: 0;
+  min-height: var(--control-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.secretPreview code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secretPreview .settingsStatus {
+  flex: 0 0 auto;
+}
+
+.usersSettings {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+@media (max-width: 1100px) {
+  .settingsRow {
+    grid-template-columns: minmax(180px, 0.42fr) minmax(0, 1fr);
+  }
+
+  .settingsRow .keyForm {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .settingsGroupHeader,
+  .settingsGroupHeader.usersGroupHeader,
+  .settingsRow,
+  .keyForm fieldset,
+  .keyFormConfigured {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGroupHeader > span {
+    display: none;
+  }
+
+  .usersGroupHeader .uiButton,
+  .settingsRow select,
+  .settingsRow > .uiButton,
+  .settingsRow > button,
+  .settingsRow .keyForm,
+  .settingsRow .settingsStatus {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
+  }
+
+  .keyFormActions {
+    justify-content: stretch;
+  }
+
+  .keyFormActions .uiButton,
+  .keyFormConfigured .uiButton {
+    flex: 1 1 auto;
+  }
+
+  .secretPreview {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding-block: var(--space-3);
+  }
+
+  .usersSettings {
+    padding: var(--space-3);
+  }
 }
 
 .systemBanner,
@@ -11662,15 +11963,17 @@ textarea,
 .nodeCard.online,
 .nodeCard.offline,
 .nodeCard.unknown {
-  box-shadow: inset 3px 0 0 var(--text-soft);
+  box-shadow: none;
 }
 
 .nodeCard.online {
-  box-shadow: inset 3px 0 0 var(--sentinel-success);
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised));
 }
 
 .nodeCard.offline {
-  box-shadow: inset 3px 0 0 var(--sentinel-danger);
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 6%, var(--surface-raised));
 }
 
 .nodeStatusPills .uiStatusBadge {

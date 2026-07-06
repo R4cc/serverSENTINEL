@@ -98,7 +98,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
       </div>
       {state.step === 2 && (
         <div className="modsDrawerFooter">
-          <Button onClick={onInstall} disabled={locked || !canContinue || state.installing}>{state.installing ? "Installing..." : installButtonLabel}</Button>
+          <Button onClick={onInstall} disabled={locked || !canContinue || state.installing} reserveLabel={installButtonLabel.length > "Installing...".length ? installButtonLabel : "Installing..."}>{state.installing ? "Installing..." : installButtonLabel}</Button>
         </div>
       )}
     </div>
