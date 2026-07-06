@@ -10940,9 +10940,26 @@ textarea,
   -webkit-line-clamp: 2;
 }
 
-.overviewSummary .summaryTile > .uiStatusBadge {
-  align-self: start;
-  justify-self: start;
+.overviewSummary .summaryTile > .summaryStatusText {
+  color: var(--text);
+  font-size: clamp(16px, 1.35vw, 20px);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.overviewSummary .summaryTile.state.running > .summaryStatusText {
+  color: var(--sentinel-success);
+}
+
+.overviewSummary .summaryTile.state.stopped > .summaryStatusText,
+.overviewSummary .summaryTile.state.danger > .summaryStatusText {
+  color: var(--sentinel-danger);
+}
+
+.overviewSummary .summaryTile.state.neutral > .summaryStatusText {
+  color: var(--text);
 }
 
 .activityGrid,

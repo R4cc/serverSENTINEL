@@ -3,7 +3,7 @@ import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '.
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
 import { AppIcon } from '../components/FileTypeIcon';
-import { Button, EmptyState, PanelHeader, StatusBadge } from '../components/UiPrimitives';
+import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -27,11 +27,6 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   if (status.docker.running) return "running";
   if (status.docker.state === "dead") return "danger";
   return "stopped";
-}
-
-function summaryBadgeTone(status: ServerStatus | null, dockerSocketMounted: boolean): "success" | "danger" | "neutral" {
-  const tone = summaryTone(status, dockerSocketMounted);
-  return tone === "running" ? "success" : tone === "danger" ? "danger" : tone === "stopped" ? "neutral" : "neutral";
 }
 
 export function OverviewSummary({
@@ -59,7 +54,7 @@ export function OverviewSummary({
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
         <span>Status</span>
-        <StatusBadge tone={summaryBadgeTone(status, dockerSocketMounted)}>{state}</StatusBadge>
+        <strong className="summaryStatusText">{state}</strong>
       </div>
       <div className="summaryTile">
         <span>Minecraft</span>
