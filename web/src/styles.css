@@ -473,7 +473,6 @@ code {
 }
 
 .brandBlock p,
-.workspaceHeader p,
 .activeServerStrip span,
 .muted {
   color: var(--text-muted);
@@ -8976,7 +8975,7 @@ textarea,
 }
 
 .workspaceHeader {
-  min-height: 76px;
+  min-height: 56px;
   align-items: end;
 }
 
@@ -8987,7 +8986,6 @@ textarea,
   text-transform: none;
 }
 
-.workspaceHeader p,
 .muted {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
@@ -9308,7 +9306,7 @@ textarea,
 
 @media (max-width: 1366px) {
   .workspaceHeader {
-    min-height: 72px;
+    min-height: 56px;
   }
 
   .workspaceHeader h2 {
@@ -9411,18 +9409,11 @@ textarea,
 
 .workspaceHeader > div:first-child {
   min-width: 0;
-  display: grid;
-  gap: 3px;
 }
 
 .workspaceHeader h2 {
   font-size: clamp(22px, 1.9vw, 30px);
   line-height: 1.12;
-}
-
-.workspaceHeader p {
-  max-width: 680px;
-  margin: 0;
 }
 
 .workspaceActions,
@@ -12131,4 +12122,267 @@ textarea,
 .addNodeStepCircle {
   border-color: var(--border-muted);
   box-shadow: none;
+}
+
+/* Focused UI cohesion pass ------------------------------------------------ */
+
+.uiButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.modsBackButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled),
+.fileBreadcrumbs button:hover:not(:disabled),
+.modsWorkspaceUpdate button:hover:not(:disabled),
+.modsWorkspaceIdentity:hover:not(:disabled),
+.modsVersionList button:hover:not(:disabled),
+.modInstallVersionRow:hover:not(:disabled),
+.addNodeCardButton:hover:not(:disabled) {
+  transform: none;
+}
+
+.uiButton,
+.secondaryButton,
+.quickActionButton,
+.runtimeControlButton,
+.iconButton,
+.iconOnlyButton {
+  box-shadow: none;
+}
+
+.uiButton--primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.uiButton--secondary:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton.restart:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton--ghost:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.modsBackButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled) {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.panel,
+.settingsGroup,
+.scheduleTableCard,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodesToolbar,
+.nodeCard,
+.nodeInfoCard,
+.nodeInstallBox,
+.propertiesSettingsCard,
+.activityGrid,
+.activityItem,
+.resourceMessage,
+.summaryTile {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.panel .panel,
+.modalPanel .panel,
+.nodeModalBody .panel,
+.fileEditorBody .panel {
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.uiPanelHeader,
+.settingsGroupHeader,
+.nodeCardHeader,
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeModalHeader,
+.nodeModalFooter,
+.fileEditorHeader,
+.modalHeader,
+.userModalHeader {
+  border-color: var(--border-row);
+}
+
+.uiPanelHeader h2,
+.uiPanelHeaderCopy h2,
+.settingsGroupHeader h2,
+.nodeCardHeader h3,
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.modalHeader h2,
+.userModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.uiPanelHeader p,
+.uiPanelHeaderCopy p,
+.settingsGroupHeader p,
+.nodeCardHeader p,
+.modsWorkspaceListHeader span,
+.modsDrawerHeader p,
+.nodeModalHeader p,
+.fileEditorHeader p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.workspaceActions,
+.buttonRow,
+.fileToolbar,
+.selectionActions,
+.modsWorkspaceToolbar,
+.modsWorkspacePrimaryActions,
+.modsWorkspaceUpdateActions,
+.modsDrawerFooter,
+.scheduleRowActions,
+.nodeCardActions,
+.nodeDetailsActions,
+.nodeModalFooter,
+.modalFooter,
+.userModalFooter,
+.fileEditorFooter {
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.fileToolbar,
+.nodesToolbar,
+.modsWorkspaceToolbar {
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-3);
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  box-shadow: none;
+}
+
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.modsWorkspaceToolbar .uiButton,
+.scheduleRowActions .uiButton,
+.nodeCardActions .uiButton,
+.nodeDetailsActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  min-height: var(--control-height-compact);
+  white-space: nowrap;
+}
+
+.fileTableRow,
+.modsWorkspaceRow,
+.scheduleTableRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.settingsRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: var(--surface);
+  box-shadow: none;
+  transition: background var(--control-transition), border-color var(--control-transition), color var(--control-transition), opacity var(--control-transition);
+}
+
+.fileTableRow:hover,
+.modsWorkspaceRow:hover,
+.scheduleTableRow:hover,
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.settingsRow:hover,
+.eventRow:hover {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
+}
+
+.fileTableRow.selected,
+.nodePlacementCard.selected,
+.runtimeLoaderCard.selected,
+.modInstallVersionRow.selected,
+.modsVersionList button.selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.uiStatusBadge,
+.settingsStatus,
+.runtimeBadge,
+.roleBadge,
+.modsStatusChip,
+.nodeServerState {
+  min-height: 24px;
+  border-width: var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+  line-height: 1.1;
+}
+
+.nodeStatusDot,
+.serverCommandStatusDot,
+.scheduledRunMarker::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+
+.nodeDetailIcon,
+.nodeServerIcon,
+.nodePlayerIcon,
+.addNodeIcon,
+.serverStripIcon {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .workspaceActions,
+  .buttonRow,
+  .fileToolbar,
+  .selectionActions,
+  .modsWorkspaceToolbar,
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions,
+  .nodeCardActions,
+  .nodeDetailsActions,
+  .modalFooter,
+  .userModalFooter,
+  .fileEditorFooter {
+    align-items: stretch;
+  }
 }

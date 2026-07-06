@@ -2809,20 +2809,7 @@ export default function App() {
     settings: "Settings",
     nodes: "Nodes"
   };
-  const pageDescriptions: Partial<Record<ActivePage, string>> = {
-    servers: "Choose a managed server or create a new one.",
-    create: "Follow the steps below to create and configure your Minecraft server.",
-    overview: "Runtime, resources, and recent activity.",
-    console: "Live log output and command input.",
-    files: "Browse, preview, and edit server files.",
-    mods: "Review installed mods or search Modrinth.",
-    schedule: "Create and manage scheduled console commands.",
-    properties: "Edit server configuration and deletion settings.",
-    settings: "Interface, integrations, users, and container status.",
-    nodes: "Manage node hosts and server placement."
-  };
   const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
-  const currentPageDescription = pageDescriptions[activePage];
 
   function resetPageToDefault(page: ActivePage) {
     if (page === "mods") {
@@ -2942,7 +2929,6 @@ export default function App() {
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
-            {currentPageDescription && <p>{currentPageDescription}</p>}
           </div>
           <div className="workspaceActions">
             {activePage === "servers" && <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</Button>}
