@@ -13,7 +13,7 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     <td valign="top" width="50%">
       <p align="center"><strong>Overview</strong></p>
       <a href="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" target="_blank">
-        <img src="https://github.com/user-attachments/assets/6924c2d5-e579-4f0c-9937-a40ce735eb44" alt="Overview" style="max-width: 100%;" />
+        <img width="2579" height="1973" alt="Screenshot 2026-07-06 123724" src="https://github.com/user-attachments/assets/46d25af8-015b-470c-8154-8b80cde05edc"  style="max-width: 100%;" />
       </a>
       <p align="center">Server list, status, and high-level controls.</p>
     </td>
@@ -29,14 +29,14 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     <td valign="top" width="50%">
       <p align="center"><strong>File Manager</strong></p>
       <a href="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" target="_blank">
-        <img src="https://github.com/user-attachments/assets/09511dc4-b108-4019-917d-f33c31935111" alt="File Manager" style="max-width: 100%;" />
+        <img width="2582" height="1978" alt="Screenshot 2026-07-06 115258" src="https://github.com/user-attachments/assets/599d04df-9eca-4d33-bb7d-7f356c0209a1"  style="max-width: 100%;" />
       </a>
       <p align="center">Edit text/config files in the browser.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>File Editor</strong></p>
       <a href="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" target="_blank">
-        <img src="https://github.com/user-attachments/assets/9de7d244-fe6a-443c-8a71-b9fe690d7960" alt="File Editor" style="max-width: 100%;" />
+        <img width="1289" height="992" alt="image" src="https://github.com/user-attachments/assets/611a927c-b96f-4fa7-bd4d-afc4d9cbdacd" style="max-width: 100%;"/>
       </a>
       <p align="center">Edit server configuration and text files safely.</p>
     </td>
@@ -45,14 +45,14 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     <td valign="top" width="50%">
       <p align="center"><strong>Schedules</strong></p>
       <a href="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" target="_blank">
-        <img src="https://github.com/user-attachments/assets/5fb4095b-e99c-487a-96ee-bb128b7acec6" alt="Schedules" style="max-width: 100%;" />
+        <img width="2581" height="1974" alt="Screenshot 2026-07-06 115631" src="https://github.com/user-attachments/assets/a3c37784-5d60-4f58-91ad-b3bdb555589c"  style="max-width: 100%;" />
       </a>
       <p align="center">Create and edit scheduled server actions.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>Settings</strong></p>
       <a href="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" target="_blank">
-        <img src="https://github.com/user-attachments/assets/e33bfbe9-5b3a-4e4e-9a7e-ebff2c56c73d" alt="Settings" style="max-width: 100%;" />
+        <img width="2580" height="1976" alt="Screenshot 2026-07-06 115454" src="https://github.com/user-attachments/assets/9aa875b5-b50a-45a8-a9ab-f8c660843c04" style="max-width: 100%;" />
       </a>
       <p align="center">Configure panel settings.</p>
     </td>
@@ -61,14 +61,14 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
     <td valign="top" width="50%">
       <p align="center"><strong>User Management</strong></p>
       <a href="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" target="_blank">
-        <img src="https://github.com/user-attachments/assets/f40728ba-12d9-4755-9734-e1b789dc5ee9" alt="User Management" style="max-width: 100%;" />
+        <img width="2590" height="1972" alt="Screenshot 2026-07-06 115443" src="https://github.com/user-attachments/assets/94534c65-07b5-4e2a-b0da-3ab49259c362" style="max-width: 100%;"/>
       </a>
       <p align="center">Manage local users, roles, and permissions.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>Mod Management</strong></p>
       <a href="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" target="_blank">
-        <img src="https://github.com/user-attachments/assets/4bfe5ba0-2d32-4b01-bfd6-897a4f5c1ae0" alt="Mod Management" style="max-width: 100%;" />
+        <img width="2586" height="1968" alt="Screenshot 2026-07-06 115419" src="https://github.com/user-attachments/assets/d6d4f8ed-2235-444d-b767-dcb7cf6af975" style="max-width: 100%;"/>
       </a>
       <p align="center">Manage server mods and updates.</p>
     </td>
