@@ -1751,20 +1751,34 @@ export default function App() {
 
   async function removeNode(node: ContextNode, force = false) {
     if (node.isInternal || !canManageUsers) return;
-    if (node.servers.length > 0 && !force) {
-      notify("error", "Move or delete assigned servers before removing this node.");
-      return;
-    }
     const assignedMessage = node.servers.length
-      ? `\n\nThis will also remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel. If the node is online and supports self-stop, serverSENTINEL will ask its container to stop. Remote server files are not deleted.`
+      ? force
+        ? `\n\nThis will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
+        : `\n\nThis will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
       : "";
     if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
     setNodeBusyId(node.id);
     try {
-      const result = await api<{ ok: boolean; deletedServers?: number; selfRemoval?: { ok: boolean; message: string } }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
+      const result = await api<{
+        ok: boolean;
+        deletedServers?: number;
+        selfRemoval?: { ok: boolean; message: string };
+        serverCleanup?: {
+          attempted: number;
+          deletedContainers: number;
+          failed: Array<{ serverId: string; serverName: string; message: string }>;
+          skippedReason?: string;
+        };
+      }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
       const removedServers = result.deletedServers ?? 0;
       const selfStopSuffix = result.selfRemoval?.ok ? " The node container will stop itself." : result.selfRemoval?.message ? ` ${result.selfRemoval.message}` : "";
-      notify("success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${selfStopSuffix}`);
+      const cleanupFailures = result.serverCleanup?.failed.length ?? 0;
+      const cleanupWarning = result.serverCleanup?.skippedReason
+        ? ` ${result.serverCleanup.skippedReason}`
+        : cleanupFailures
+          ? ` ${cleanupFailures} server container cleanup ${cleanupFailures === 1 ? "failure was" : "failures were"} reported.`
+          : "";
+      notify(cleanupWarning ? "warning" : "success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${cleanupWarning}${selfStopSuffix}`);
       if (nodeDetails?.id === node.id) setNodeDetails(null);
       if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
       await refreshApp();

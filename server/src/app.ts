@@ -1028,6 +1028,56 @@ export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
   return removed;
 }
 
+export type NodeServerCleanupFailure = {
+  serverId: string;
+  serverName: string;
+  message: string;
+};
+
+export type NodeServerCleanupSummary = {
+  attempted: number;
+  deletedContainers: number;
+  failed: NodeServerCleanupFailure[];
+  skippedReason?: string;
+};
+
+export async function cleanupNodeServerContainers(input: {
+  node: ManagedNode;
+  assignedServers: ManagedServer[];
+  isConnected: (node: ManagedNode) => boolean;
+  deleteServerContainer: (node: ManagedNode, server: ManagedServer) => Promise<unknown>;
+}) {
+  const summary: NodeServerCleanupSummary = { attempted: 0, deletedContainers: 0, failed: [] };
+  if (input.assignedServers.length === 0) return summary;
+  if (!input.isConnected(input.node)) {
+    summary.skippedReason = `Node ${input.node.name} is offline or not connected. Managed server containers could not be cleaned up.`;
+    return summary;
+  }
+
+  for (const server of input.assignedServers) {
+    summary.attempted += 1;
+    try {
+      const result = await input.deleteServerContainer(input.node, server) as { deletedContainer?: boolean } | undefined;
+      if (result?.deletedContainer !== false) summary.deletedContainers += 1;
+    } catch (error) {
+      summary.failed.push({
+        serverId: server.id,
+        serverName: server.displayName,
+        message: error instanceof Error ? error.message : "Container cleanup failed"
+      });
+    }
+  }
+
+  return summary;
+}
+
+function nodeServerCleanupError(summary: NodeServerCleanupSummary) {
+  if (summary.skippedReason) return summary.skippedReason;
+  if (summary.failed.length === 0) return "";
+  const names = summary.failed.map((failure) => failure.serverName).join(", ");
+  return `Could not clean up ${summary.failed.length} managed server container${summary.failed.length === 1 ? "" : "s"} before deleting the node: ${names}.`;
+}
+
 function defaultDockerImageForMinecraftVersion(version?: string) {
   const [major, minor, patch] = (version ?? "").split(".").map((part) => Number(part));
   if (Number.isFinite(major) && major >= 26) {
@@ -3597,13 +3647,23 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
   const servers = await listManagedServers();
   const assignedServers = servers.filter((server) => server.nodeId === request.params.nodeId);
   const force = request.query.force === "true";
-  if (assignedServers.length && !force) {
-    throw new Error("Cannot delete a node while servers are assigned to it");
+  const serverCleanup = await cleanupNodeServerContainers({
+    node,
+    assignedServers,
+    isConnected: (candidate) => panelNodeConnections.isConnected(candidate.id),
+    deleteServerContainer: (candidate, server) => panelNodeConnections.request(candidate, "server.delete", { server, input: { deleteFiles: false } }, 15_000)
+  });
+  const cleanupError = nodeServerCleanupError(serverCleanup);
+  if (cleanupError && !force) {
+    throw new Error(`${cleanupError} Use force remove only if the node is stale or you will clean up containers manually.`);
   }
-  let selfRemoval: { ok: boolean; message: string } = nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)
+  const canAttemptSelfRemoval = !cleanupError && nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id);
+  let selfRemoval: { ok: boolean; message: string } = canAttemptSelfRemoval
     ? { ok: false, message: "Node container self-stop was not attempted." }
-    : { ok: false, message: "Node is offline or does not support panel-triggered self-stop. Stop its container manually if it is still running." };
-  if (nodeAdvertisesCapability(node, "node.remove") && panelNodeConnections.isConnected(node.id)) {
+    : cleanupError
+      ? { ok: false, message: "Node container self-stop was skipped because server container cleanup did not complete." }
+      : { ok: false, message: "Node is offline or does not support panel-triggered self-stop. Stop its container manually if it is still running." };
+  if (canAttemptSelfRemoval) {
     try {
       const result = await panelNodeConnections.request(node, "node.remove", undefined, 10_000) as { message?: string };
       selfRemoval = { ok: true, message: result.message || "Node container will stop itself." };
@@ -3614,9 +3674,9 @@ app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/ap
       };
     }
   }
-  const { deletedServers } = nodesRepository.deleteWithServers(request.params.nodeId, force);
+  const { deletedServers } = nodesRepository.deleteWithServers(request.params.nodeId, force || assignedServers.length > 0);
   panelNodeConnections.disconnect(request.params.nodeId);
-  return { ok: true, deletedServers, selfRemoval };
+  return { ok: true, deletedServers, selfRemoval, serverCleanup: assignedServers.length ? serverCleanup : undefined };
 });
 
 app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, reply) => {

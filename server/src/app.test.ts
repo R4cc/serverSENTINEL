@@ -7,6 +7,7 @@ import {
   validateJavaArgs,
   validateModrinthProjectId,
   nodeInstallInstructions,
+  cleanupNodeServerContainers,
   parseCookies,
   removeServersForNode,
   validateRuntimeJarFilename,
@@ -24,7 +25,7 @@ import {
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
-import type { ManagedServer, ServerEvent } from "./types.js";
+import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
 
 function testRuntimeProfile() {
   return {
@@ -308,6 +309,20 @@ describe("node install instructions", () => {
 });
 
 describe("node force delete cleanup", () => {
+  const node = {
+    id: "deleted-node",
+    name: "Remote Node",
+    type: "remote",
+    status: "online",
+    isInternal: false,
+    createdAt: "",
+    updatedAt: ""
+  } satisfies ManagedNode;
+  const assignedServers = [
+    { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
+    { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" }
+  ] satisfies ManagedServer[];
+
   it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
     const servers = [
       { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
@@ -317,6 +332,54 @@ describe("node force delete cleanup", () => {
 
     expect(removeServersForNode(servers, "deleted-node")).toBe(2);
     expect(servers.map((server) => server.id)).toEqual(["server-2"]);
+  });
+
+  it("cleans up assigned server containers before node records are deleted", async () => {
+    const calls: string[] = [];
+    const summary = await cleanupNodeServerContainers({
+      node,
+      assignedServers,
+      isConnected: () => true,
+      deleteServerContainer: async (_node, server) => {
+        calls.push(server.id);
+        return { deletedContainer: true };
+      }
+    });
+
+    expect(calls).toEqual(["server-1", "server-3"]);
+    expect(summary).toEqual({ attempted: 2, deletedContainers: 2, failed: [] });
+  });
+
+  it("reports cleanup failures without hiding successful container removals", async () => {
+    const summary = await cleanupNodeServerContainers({
+      node,
+      assignedServers,
+      isConnected: () => true,
+      deleteServerContainer: async (_node, server) => {
+        if (server.id === "server-3") throw new Error("Container is unmanaged");
+        return { deletedContainer: true };
+      }
+    });
+
+    expect(summary.attempted).toBe(2);
+    expect(summary.deletedContainers).toBe(1);
+    expect(summary.failed).toEqual([{ serverId: "server-3", serverName: "Three", message: "Container is unmanaged" }]);
+  });
+
+  it("marks assigned server cleanup as skipped when the node is offline", async () => {
+    const summary = await cleanupNodeServerContainers({
+      node: { ...node, status: "offline" },
+      assignedServers,
+      isConnected: () => false,
+      deleteServerContainer: async () => {
+        throw new Error("should not be called");
+      }
+    });
+
+    expect(summary.attempted).toBe(0);
+    expect(summary.deletedContainers).toBe(0);
+    expect(summary.failed).toEqual([]);
+    expect(summary.skippedReason).toContain("Remote Node is offline");
   });
 });
 

@@ -887,8 +887,8 @@ export function NodesPage({
                     onClick={() => {
                       if (selectedContextNode) onRemoveNode(selectedContextNode);
                     }}
-                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || Boolean(selectedContextNode?.servers.length) || !canManageNodes}
-                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Move or delete assigned servers first" : ""}
+                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes}
+                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove managed server containers and panel records for this node" : ""}
                   >
                     <AppIcon name="trash" />Remove node
                   </Button>
@@ -900,7 +900,7 @@ export function NodesPage({
                       if (selectedContextNode) onRemoveNode(selectedContextNode, true);
                     }}
                     disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !Boolean(selectedContextNode?.servers.length) || !canManageNodes}
-                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and its assigned server records from the panel without contacting the node host" : "Force remove is only available when server records are assigned"}
+                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and assigned records even if container cleanup cannot finish" : "Force remove is only available when server records are assigned"}
                   >
                     <NodeDetailIcon name="warning" />Force remove node
                   </Button>

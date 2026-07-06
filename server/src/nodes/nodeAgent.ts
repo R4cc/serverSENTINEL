@@ -329,7 +329,14 @@ function minecraftContainerCommand(server: ManagedServer) {
 }
 
 async function removeManagedContainer(server: ManagedServer) {
-  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  let details: NodeContainerInspect | null;
+  try {
+    details = await inspect(server) as NodeContainerInspect;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("No such container") || message.includes("404")) return false;
+    throw error;
+  }
   if (!details) return false;
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
@@ -1116,9 +1123,9 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.delete") {
     const status = await inspect(server).catch(() => null) as any;
     if (status?.State?.Running) throw new Error("Stop the server before deleting it");
-    await dockerRequest("DELETE", `/containers/${name}?v=1`, [204, 404]).catch(() => {});
+    const deletedContainer = await removeManagedContainer(server);
     if (payload?.input?.deleteFiles) await rm(await serverRoot(server), { recursive: true, force: true });
-    return { ok: true, deletedContainer: true, deletedFiles: Boolean(payload?.input?.deleteFiles) };
+    return { ok: true, deletedContainer, deletedFiles: Boolean(payload?.input?.deleteFiles) };
   }
   if (command === "server.inspect") return runtimeStatus(server);
   if (command === "server.queryMetrics") {

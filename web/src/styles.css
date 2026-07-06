@@ -10295,8 +10295,16 @@ textarea,
 .modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
 .modsStatusChip.unknown { border-color: var(--border); background: var(--surface); }
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
-.modsWorkspaceUpdate button { padding: 5px 0; border: 0; background: transparent; box-shadow: none; font-size: .76rem; }
-.modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: transparent; }
+.modsWorkspaceUpdate { min-width: 0; }
+.modsUpdateCell { display: flex; align-items: flex-start; gap: 8px 10px; min-width: 0; flex-wrap: wrap; }
+.modsUpdateVersions { display: grid; min-width: 0; flex: 1 1 96px; gap: 2px; line-height: 1.15; }
+.modsUpdateCurrent,
+.modsUpdateTo { overflow: hidden; color: var(--text-muted); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.modsUpdateTo { color: var(--text-soft); font-weight: var(--weight-meta); text-transform: uppercase; }
+.modsUpdateVersions strong { overflow: hidden; color: #b96305; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
+.modsUpdateCell.review .modsUpdateVersions strong { color: #7440d9; }
+.modsWorkspaceUpdate button { padding: 5px 10px; border: 1px solid color-mix(in srgb, currentColor 34%, var(--border)); background: color-mix(in srgb, currentColor 7%, transparent); box-shadow: none; font-size: .76rem; }
+.modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: color-mix(in srgb, currentColor 11%, transparent); }
 .modsUpdateAction { color: #c66a05; }
 .modsReviewAction { color: #7440d9; }
 .modsWorkspaceSwitch { justify-content: center; }
@@ -11825,6 +11833,8 @@ textarea,
 .modsWorkspaceUpdate .uiButton {
   min-height: var(--control-height-compact);
   padding-inline: var(--space-2);
+  border-color: color-mix(in srgb, currentColor 34%, var(--border-row));
+  background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
 .modsUpdateAction {
