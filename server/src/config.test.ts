@@ -55,6 +55,26 @@ describe("runtime role configuration", () => {
     });
   });
 
+  it("uses TZ for runtime time display and defaults to UTC", async () => {
+    await expect(loadConfig({ TZ: undefined })).resolves.toMatchObject({
+      config: { timeZone: "UTC" },
+      runtimeTimeZone: "UTC"
+    });
+    expect(process.env.TZ).toBe("UTC");
+
+    await expect(loadConfig({ TZ: "Europe/Vienna" })).resolves.toMatchObject({
+      config: { timeZone: "Europe/Vienna" },
+      runtimeTimeZone: "Europe/Vienna"
+    });
+    expect(process.env.TZ).toBe("Europe/Vienna");
+
+    await expect(loadConfig({ TZ: "not/a-zone" })).resolves.toMatchObject({
+      config: { timeZone: "UTC" },
+      runtimeTimeZone: "UTC"
+    });
+    expect(process.env.TZ).toBe("UTC");
+  });
+
   it("fails fast when PORT is not a usable HTTP port", async () => {
     await expect(loadConfig({ PORT: "not-a-port" })).rejects.toThrow("PORT must be a whole number");
     await expect(loadConfig({ PORT: "0" })).rejects.toThrow("PORT must be a whole number");

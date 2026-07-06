@@ -27,9 +27,11 @@ export function SchedulePage({
   onUpdate,
   onDelete,
   disabled,
-  disabledReason
+  disabledReason,
+  formatDate
 }: {
   schedules: ScheduledExecution[];
+  formatDate: (value: string | number | Date) => string;
   onCreate: (event: FormEvent<HTMLFormElement>) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
@@ -201,7 +203,7 @@ export function SchedulePage({
                 <div className="scheduleCell" data-label="Last run">
                   {schedule.lastRunAt ? (
                     <>
-                      <span>{formatScheduleTime(schedule.lastRunAt)}</span>
+                      <span>{formatScheduleTime(schedule.lastRunAt, formatDate)}</span>
                       <StatusBadge tone={statusBadgeTone(schedule.lastStatus)} className={`scheduleStatusText ${statusTone(schedule.lastStatus)}`}>{statusLabel(schedule.lastStatus)}</StatusBadge>
                     </>
                   ) : (
@@ -214,7 +216,7 @@ export function SchedulePage({
                 <div className="scheduleCell" data-label="Next run">
                   {schedule.enabled && schedule.nextRunAt ? (
                     <>
-                      <span>{formatScheduleTime(schedule.nextRunAt)}</span>
+                      <span>{formatScheduleTime(schedule.nextRunAt, formatDate)}</span>
                       <small>{relativeTime(schedule.nextRunAt)}</small>
                     </>
                   ) : (
@@ -268,7 +270,7 @@ export function SchedulePage({
                 </div>
                 <div className="scheduledRunTime">
                   <span>{relativeTime(run.ranAt)}</span>
-                  <small>{formatScheduleTime(run.ranAt)}</small>
+                  <small>{formatScheduleTime(run.ranAt, formatDate)}</small>
                 </div>
               </article>
             ))}
@@ -402,16 +404,10 @@ function statusBadgeTone(status?: string): "success" | "danger" | "warning" | "n
   return tone === "success" ? "success" : tone === "failed" ? "danger" : tone === "skipped" ? "warning" : "neutral";
 }
 
-function formatScheduleTime(value: string) {
+function formatScheduleTime(value: string, formatDate: (value: string | number | Date) => string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  const now = new Date();
-  const time = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  if (date.toDateString() === now.toDateString()) return `Today, ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDate(date);
 }
 
 function relativeTime(value: string) {

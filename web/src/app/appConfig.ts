@@ -11,6 +11,7 @@ export const emptyApp: AppState = {
   nodes: [],
   appVersion,
   runtimeMode: "all-in-one",
+  timeZone: "UTC",
   modrinthApiConfigured: false,
   dockerSocketMounted: false,
   totalMemory: 0

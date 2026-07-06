@@ -4,6 +4,19 @@ import { defaultRuntimeDataDir, runtimeDataPaths } from "./storage/runtimePaths.
 
 export const defaultServersDockerVolumeName = "serversentinel-minecraft-servers";
 
+function configuredRuntimeTimeZone() {
+  const value = process.env.TZ?.trim() || "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return value;
+  } catch {
+    return "UTC";
+  }
+}
+
+export const runtimeTimeZone = configuredRuntimeTimeZone();
+process.env.TZ = runtimeTimeZone;
+
 function defaultServersDockerVolume(dataDir: string) {
   const configuredVolume = process.env.SERVERSENTINEL_SERVERS_DOCKER_VOLUME?.trim();
   if (configuredVolume !== undefined) {
@@ -45,6 +58,7 @@ if (runtimeMode === "node") {
 
 export const config = {
   runtimeMode: runtimeMode as "all-in-one" | "panel" | "node",
+  timeZone: runtimeTimeZone,
   paths,
   dataDir: paths.dataDir,
   databasePath: paths.databasePath,

@@ -113,39 +113,23 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
   );
 }
 
-function formatEventTimestamp(value: string | undefined) {
+function formatEventTimestamp(value: string | undefined, formatDate: (value: string | number | Date) => string) {
   if (!value) return "No timestamp";
   if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-
-  const now = new Date();
-  const isToday = date.getFullYear() === now.getFullYear() &&
-                  date.getMonth() === now.getMonth() &&
-                  date.getDate() === now.getDate();
-
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const timeStr = `${hours}:${minutes}`;
-
-  if (isToday) {
-    return `Today, ${timeStr}`;
-  }
-
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const month = months[date.getMonth()];
-  const day = date.getDate();
-  return `${month} ${day}, ${timeStr}`;
+  return formatDate(date);
 }
 
 export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
+  formatDate,
   onOpenConsole
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
+  formatDate: (value: string | number | Date) => string;
   onOpenConsole: () => void;
 }) {
   const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
@@ -193,7 +177,7 @@ export function RecentEventsPanel({
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
-            <small>{formatEventTimestamp(event.timestamp)}</small>
+            <small>{formatEventTimestamp(event.timestamp, formatDate)}</small>
             <Button
               variant="ghost"
               iconOnly

@@ -12386,3 +12386,215 @@ textarea,
     align-items: stretch;
   }
 }
+
+/* Focused responsive shell pass ------------------------------------------- */
+
+@media (min-width: 1101px) and (max-width: 1280px) {
+  :root {
+    --sidebar-width: 232px;
+  }
+
+  .workspace {
+    padding-inline: var(--space-4);
+  }
+
+  .brandLockup h1,
+  .sideNav button,
+  .accountName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brandBlock p,
+  .sideNav small,
+  .settingsVersionText {
+    display: none;
+  }
+
+  .sideNav button {
+    padding-inline: var(--space-2);
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .appShell,
+  .sidebarCollapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2) !important;
+    width: 100% !important;
+    height: auto;
+    padding: var(--space-2) var(--space-3) !important;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: var(--border-heavy) solid var(--border);
+  }
+
+  .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    display: flex !important;
+    width: auto;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0;
+  }
+
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    min-width: 0;
+    max-width: clamp(116px, 17vw, 180px);
+    gap: var(--space-2) !important;
+  }
+
+  .brandLockup h1 {
+    overflow: hidden;
+    font-size: 17px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brandBlock p,
+  .brandBlock .iconButton,
+  .sidebarCollapsed .brandBlock .iconButton,
+  .selectedServerReadout,
+  .sidebarDivider,
+  .navLabel,
+  .settingsVersionText,
+  .accountName,
+  .accountLogoutButton {
+    display: none !important;
+  }
+
+  .sideNav,
+  .sidebarCollapsed .sideNav,
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .sideNav:not(.sideNavBottom) {
+    justify-content: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 2px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .sideNav button,
+  .sidebarCollapsed .sideNav button,
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    width: var(--sidebar-rail-size);
+    min-width: var(--sidebar-rail-size);
+    height: var(--sidebar-rail-size);
+    min-height: var(--sidebar-rail-size);
+    padding: 0;
+    flex: 0 0 var(--sidebar-rail-size);
+    justify-content: center;
+    gap: 0 !important;
+  }
+
+  .sideNav button.active,
+  .sidebarCollapsed .sideNav button.active {
+    border-color: color-mix(in srgb, var(--accent) 44%, var(--border-row));
+    background: var(--sentinel-accent-soft);
+    color: var(--sentinel-accent-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    justify-content: flex-end;
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    display: flex;
+  }
+
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .workspaceHeader {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .workspaceActions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    width: var(--sidebar-rail-size) !important;
+    max-width: var(--sidebar-rail-size);
+  }
+
+  .brandLockup > div,
+  .sidebarCollapsed .brandLockup > div {
+    display: none !important;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewPage,
+  .filesPage,
+  .schedulePage,
+  .settingsPage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overviewPage > *,
+  .overviewPage > .resourcePanel,
+  .overviewPage > .activityPanel,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .overviewSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -505,8 +505,9 @@ export default function App() {
 
   const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
   const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
+  const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
 
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short" }), [resolvedDateLocale]);
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
 
   useEffect(() => {
@@ -3411,7 +3412,7 @@ export default function App() {
                 />
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />
-                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} onOpenConsole={() => setActivePage("console")} />
+                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} />
 
               </section>
             )}
@@ -3705,6 +3706,7 @@ export default function App() {
             {activePage === "schedule" && (
               <SchedulePage
                 schedules={activeServer.schedules ?? []}
+                formatDate={formatDisplayDate}
                 onCreate={createSchedule}
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onUpdate={updateSchedule}

@@ -173,6 +173,7 @@ export type AppState = {
   appVersion?: string;
   buildId?: string;
   runtimeMode?: "all-in-one" | "panel" | "node";
+  timeZone?: string;
   modrinthApiConfigured: boolean;
   dockerSocketMounted: boolean;
   totalMemory: number;

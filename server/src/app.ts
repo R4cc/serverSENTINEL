@@ -3385,6 +3385,7 @@ app.get("/api/app", async (request) => {
     appVersion,
     buildId: appBuildId,
     runtimeMode: config.runtimeMode,
+    timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     dockerSocketMounted: dockerAvailable(),
     totalMemory,
