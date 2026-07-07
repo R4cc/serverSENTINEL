@@ -479,3 +479,53 @@ describe("server port conflict detection", () => {
     expect(() => allocateQueryPort(servers, "node-a", "25567:25567/tcp", "25565")).toThrow("already used");
   });
 });
+
+describe("Minecraft Query endpoint resolution", () => {
+  const server = (ports = [{ id: "minecraft-query", name: "Minecraft Query", type: "query" as const, protocol: "udp" as const, internalPort: 25566, externalPort: 32566, required: true, removable: false, advanced: true }]) => ({
+    id: "s1",
+    nodeId: "local",
+    name: "Test",
+    path: "/tmp/test",
+    dockerContainer: "mc",
+    dockerPorts: "25565:25565/tcp,32566:25566/udp",
+    managedPorts: ports
+  }) as ManagedServer;
+
+  it("prefers the managed Minecraft container IP on a shared Docker network and uses internalPort", async () => {
+    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
+    const endpoint = resolveMinecraftQueryEndpoint(server(), {}, {
+      NetworkSettings: { Networks: { app: { NetworkID: "net1", IPAddress: "172.20.0.5" } } }
+    }, {
+      NetworkSettings: { Networks: { app: { NetworkID: "net1", IPAddress: "172.20.0.2" } } }
+    });
+    expect(endpoint).toMatchObject({ host: "172.20.0.5", port: 25566, source: "container-network" });
+  });
+
+  it("falls back to externalPort through the Docker host when no shared network is reachable", async () => {
+    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
+    const endpoint = resolveMinecraftQueryEndpoint(server(), {}, {
+      NetworkSettings: { Networks: { minecraft: { NetworkID: "net-mc", IPAddress: "172.21.0.5" } } }
+    }, {
+      NetworkSettings: { Networks: { panel: { NetworkID: "net-panel", IPAddress: "172.22.0.2", Gateway: "172.22.0.1" } } }
+    });
+    expect(endpoint).toMatchObject({ host: "172.22.0.1", port: 32566, source: "published-host" });
+  });
+
+  it("returns null when query is not configured", async () => {
+    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
+    expect(resolveMinecraftQueryEndpoint(server([]), {}, null, null)).toBeNull();
+  });
+});
+
+describe("Minecraft Query timeout behavior", () => {
+  it("rejects with a useful timeout message when the UDP query endpoint does not respond", async () => {
+    const { queryMinecraftServer } = await import("./minecraftQuery.js");
+    await expect(queryMinecraftServer("127.0.0.1", 9, 5)).rejects.toThrow("Minecraft Query timed out");
+  });
+
+  it("detects disabled Minecraft Query configuration", async () => {
+    const { minecraftQueryDisabled } = await import("./queryEndpoint.js");
+    expect(minecraftQueryDisabled({ "enable-query": "false" })).toBe(true);
+    expect(minecraftQueryDisabled({ "enable-query": "true" })).toBe(false);
+  });
+});
