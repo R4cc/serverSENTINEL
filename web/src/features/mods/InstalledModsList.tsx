@@ -63,7 +63,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                 <ModIconImage src={icon} fallback="JAR" />
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
               </button>
-              <div><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div>
+              <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {plannedUpdate?.status === "safe_update" && (
@@ -81,7 +81,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                   </ModUpdateCell>
                 )}
               </div>
-              <div>
+              <div className="modsWorkspaceEnabled">
                 <label className="switch modsWorkspaceSwitch">
                   <input type="checkbox" checked={mod.enabled} onChange={() => onToggle(mod, !mod.enabled)} disabled={locked} aria-label={`${mod.enabled ? "Disable" : "Enable"} ${mod.displayName}`} />
                   <span className="slider" />
