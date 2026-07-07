@@ -199,7 +199,11 @@ export function MinecraftTerminal({
 
   function submitInput() {
     const command = inputRef.current;
-    terminalRef.current?.write(`\r\x1b[2K${command}\r\n`);
+    // The current prompt line already contains the typed command because
+    // renderInputLine redraws it as the user types. Advancing to the next
+    // line avoids rewriting the command a second time and keeps subsequent
+    // log output from being cleared by an unnecessary line erase.
+    terminalRef.current?.write("\r\n");
     promptVisibleRef.current = false;
     inputRef.current = "";
     historyIndexRef.current = null;
