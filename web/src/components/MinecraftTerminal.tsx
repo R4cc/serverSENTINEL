@@ -154,9 +154,7 @@ export function MinecraftTerminal({
     }
 
     if (key === "v") {
-      if (!canSendCommandsRef.current || !navigator.clipboard?.readText) return true;
-      void pasteClipboardText().catch(() => undefined);
-      return false;
+      return true;
     }
 
     if (event.key === "Backspace") {
@@ -171,12 +169,6 @@ export function MinecraftTerminal({
     const selection = terminalRef.current?.getSelection();
     if (!selection) return;
     await navigator.clipboard?.writeText(selection);
-  }
-
-  async function pasteClipboardText() {
-    const text = await navigator.clipboard?.readText();
-    if (!text) return;
-    insertPrintableText(text);
   }
 
   function handleTerminalData(data: string) {
