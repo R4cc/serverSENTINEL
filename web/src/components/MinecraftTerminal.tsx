@@ -199,7 +199,7 @@ export function MinecraftTerminal({
 
   function submitInput() {
     const command = inputRef.current;
-    terminalRef.current?.write(`\r\x1b[2K${command}\r\n`);
+    advanceInputLine();
     promptVisibleRef.current = false;
     inputRef.current = "";
     historyIndexRef.current = null;
@@ -211,6 +211,10 @@ export function MinecraftTerminal({
       return;
     }
     if (canSendCommandsRef.current) writePrompt();
+  }
+
+  function advanceInputLine() {
+    terminalRef.current?.write("\r\n");
   }
 
   function insertPrintableText(data: string) {
