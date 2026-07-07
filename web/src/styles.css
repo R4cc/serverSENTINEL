@@ -5260,6 +5260,17 @@ button .buttonIcon {
   margin: 0;
 }
 
+.eventsPanel {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 14px;
+}
+
+.eventsPanel .uiPanelHeader {
+  margin: 0;
+}
+
 .activityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
