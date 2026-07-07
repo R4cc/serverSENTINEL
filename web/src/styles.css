@@ -7347,6 +7347,27 @@ button .buttonIcon {
     min-width: 44px;
   }
 
+  .filesPage .fileNavBar .fileToolbar {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    width: auto;
+    padding-inline: 0;
+  }
+
+  .filesPage .fileNavBar .fileToolbar .fileToolbarLabel {
+    display: none;
+  }
+
   .keyFormActions,
   .keyFormConfigured,
   .secretPreview {
@@ -7358,6 +7379,23 @@ button .buttonIcon {
   .activityGrid,
   .resourceRow {
     grid-template-columns: 1fr;
+  }
+
+  .resourceRows {
+    gap: 8px;
+  }
+
+  .resourceRow {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .resourceChart,
+  .resourceChartEmpty {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 2px 2px 0;
   }
 
   .activityItem,
@@ -7633,7 +7671,8 @@ button .buttonIcon {
 }
 
 .workspaceHeader h2 {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .workspaceActions {
@@ -10506,8 +10545,12 @@ textarea,
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
   .modsWorkspaceSearch { min-width: 0; }
   .modsWorkspaceToolbar > div, .modsWorkspaceToolbar button { width: 100%; }
+  .modsWorkspaceToolbar .uiButton {
+    min-height: 56px;
+    padding-block: 12px;
+  }
   .modsWorkspaceUpdateActions .uiButton,
-  .modsWorkspaceUpdate .uiButton { min-height: 44px; padding-block: 0; }
+  .modsWorkspaceUpdate .uiButton { min-height: 56px; padding-block: 12px; }
   .modsWorkspaceRow {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
@@ -12418,6 +12461,13 @@ textarea,
   box-shadow: none;
 }
 
+.modsWorkspacePage > .modsWorkspaceToolbar {
+  padding-inline: 0;
+  border-inline-width: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .fileToolbar .uiButton,
 .selectionActions .uiButton,
 .modsWorkspaceToolbar .uiButton,
@@ -12829,11 +12879,14 @@ textarea,
     overflow: visible;
     text-overflow: clip;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
   }
 
   .settingsGroupHeader p {
     max-width: none;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
 
   .usersGroupHeader .uiButton {

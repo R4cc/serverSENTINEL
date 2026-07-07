@@ -3537,17 +3537,17 @@ export default function App() {
                       </div>
                       <div className="fileToolbar">
                         <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <Button variant="secondary" compact onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
+                        <Button variant="secondary" compact aria-label="Upload file" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
                           <AppIcon name="fileUp" />
-                          Upload
+                          <span className="fileToolbarLabel">Upload</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
+                        <Button variant="secondary" compact aria-label="New folder" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
                           <AppIcon name="folderPlus" />
-                          New folder
+                          <span className="fileToolbarLabel">New folder</span>
                         </Button>
-                        <Button variant="secondary" compact onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"} reserveLabel={<><AppIcon name="refresh" />Refreshing</>}>
+                        <Button variant="secondary" compact aria-label={filesLoading ? "Refreshing files" : "Refresh files"} onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"} reserveLabel={<><AppIcon name="refresh" /><span className="fileToolbarLabel">Refreshing</span></>}>
                           <AppIcon name="refresh" />
-                          {filesLoading ? "Refreshing" : "Refresh"}
+                          <span className="fileToolbarLabel">{filesLoading ? "Refreshing" : "Refresh"}</span>
                         </Button>
                       </div>
                     </div>

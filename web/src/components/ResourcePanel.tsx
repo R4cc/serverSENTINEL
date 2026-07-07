@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
 import { parseMaxMemoryGb } from '../utils/format';
@@ -51,6 +51,22 @@ const resourceGraphScopes = [
 
 type ResourceGraphScope = typeof resourceGraphScopes[number]["label"];
 
+function useCompactResourceChart() {
+  const [compact, setCompact] = useState(() => (
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 720px)").matches : false
+  ));
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 720px)");
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return compact;
+}
+
 function ResourceChartTooltip({
   active,
   payload,
@@ -87,6 +103,7 @@ export function ResourceChart({
   formatValue?: (value: number) => string;
 }) {
   const validSamples = samples.filter((sample) => sample.available && sample.running);
+  const compact = useCompactResourceChart();
   if (validSamples.length < 2) return <div className="resourceChartEmpty">{emptyLabel}</div>;
 
   const points: ChartPoint[] = [];
@@ -113,7 +130,7 @@ export function ResourceChart({
   return (
     <div className={`resourceChart ${tone}`} role="img" aria-label="Resource usage history">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+        <LineChart data={points} margin={compact ? { top: 8, right: 2, bottom: 8, left: 0 } : { top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="time"
@@ -123,7 +140,7 @@ export function ResourceChart({
             tickMargin={8}
           />
           <YAxis
-            width={76}
+            width={compact ? 56 : 76}
             tickFormatter={formatValue}
             tickLine={false}
             axisLine
