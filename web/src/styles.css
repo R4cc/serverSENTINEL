@@ -10,6 +10,7 @@
   --sentinel-accent-soft: #edf1ff;
   --sentinel-accent-muted: #b9c6ff;
   --sentinel-success: #2c7a66;
+  --sentinel-info: #2563c9;
   --sentinel-warning: #b7791f;
   --sentinel-danger: #b94a48;
   --surface: var(--swiss-white);
@@ -374,6 +375,7 @@ code {
   --sentinel-accent-soft: #272d44;
   --sentinel-accent-muted: #6f7fca;
   --sentinel-success: #8dd6c3;
+  --sentinel-info: #8fb4ff;
   --sentinel-warning: #f6c177;
   --sentinel-danger: #f1aaa6;
   --terminal-bg: #1d2027;
@@ -1316,24 +1318,76 @@ button .buttonIcon {
 
 
 .sonnerToast {
-  padding: 16px 36px 16px 16px !important;
-  border: var(--border-strong) solid var(--border-panel) !important;
+  --toast-severity: var(--sentinel-info);
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 8%, var(--surface-raised));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 38%, var(--border-panel));
+  width: min(468px, calc(100vw - 32px)) !important;
+  min-height: 58px !important;
+  padding: 14px 40px 14px 66px !important;
+  border: var(--border-strong) solid var(--toast-severity-border) !important;
+  border-left: 5px solid var(--toast-severity) !important;
   border-radius: var(--radius-sm) !important;
-  background: var(--surface-raised) !important;
+  background: var(--toast-severity-bg) !important;
   color: var(--text) !important;
   box-shadow: 0 14px 34px rgb(0 0 0 / 0.08) !important;
   font-family: var(--font-sans) !important;
   font-weight: var(--weight-heading) !important;
 }
 
+.sonnerToast[data-type="success"] {
+  --toast-severity: var(--sentinel-success);
+}
+
+.sonnerToast[data-type="info"],
+.sonnerToast[data-type="loading"] {
+  --toast-severity: var(--sentinel-info);
+}
+
+.sonnerToast[data-type="warning"] {
+  --toast-severity: var(--sentinel-warning);
+}
+
+.sonnerToast[data-type="error"] {
+  --toast-severity: var(--sentinel-danger);
+}
+
+.themeDark .sonnerToast {
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 12%, var(--surface-raised));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 46%, var(--border-panel));
+  box-shadow: 0 18px 42px rgb(0 0 0 / 0.26) !important;
+}
+
+.sonnerToast [data-icon] {
+  position: absolute !important;
+  left: 20px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  color: var(--toast-severity) !important;
+}
+
 .sonnerToast [data-title] {
+  color: color-mix(in srgb, var(--toast-severity) 42%, var(--text)) !important;
+  font-size: 14px !important;
+  font-weight: var(--weight-title) !important;
+  line-height: 1.25 !important;
   overflow-wrap: anywhere;
 }
 
 .sonnerToastDescription {
   color: var(--text-muted) !important;
+  font-size: 13px !important;
   font-weight: var(--weight-strong) !important;
+  line-height: 1.35 !important;
   overflow-wrap: anywhere;
+}
+
+.toastSeverityIcon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.12));
 }
 
 /* Custom styling for Sonner toast close button to place it in the top right, non-colored */
@@ -1368,6 +1422,11 @@ button .buttonIcon {
   background: var(--surface-muted) !important;
   color: var(--text) !important;
   transform: none !important;
+}
+
+.sonnerToast [data-close-button]:focus-visible {
+  outline: 2px solid var(--toast-severity) !important;
+  outline-offset: 2px !important;
 }
 
 .sonnerToast [data-close-button] svg {
@@ -2078,7 +2137,7 @@ button .buttonIcon {
 
 .overviewPage > .activityPanel {
   grid-column: 9 / -1;
-  align-self: stretch;
+  align-self: start;
 }
 
 .overviewPage > .eventsPanel {
@@ -5189,6 +5248,18 @@ button .buttonIcon {
     var(--surface);
 }
 
+
+.activityPanel {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 14px;
+}
+
+.activityPanel .uiPanelHeader {
+  margin: 0;
+}
+
 .activityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5200,10 +5271,11 @@ button .buttonIcon {
 }
 
 .activityItem {
-  min-height: 74px;
-  padding: var(--space-3);
-  display: grid;
-  align-content: center;
+  min-height: 84px;
+  padding: 14px var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: var(--space-1);
   border-bottom: var(--border-subtle) solid var(--border-muted);
 }
