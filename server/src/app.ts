@@ -54,6 +54,7 @@ import {
 } from "./runtime/profile.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { queryMinecraftServer } from "./minecraftQuery.js";
+import { configuredQueryExternalPort, minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -180,6 +181,7 @@ type DockerContainerInspect = {
   Name?: string;
   Config?: { Labels?: Record<string, string>; OpenStdin?: boolean; AttachStdin?: boolean; Tty?: boolean };
   Mounts?: Array<{ Type?: string; Name?: string; Source?: string; Destination?: string }>;
+  NetworkSettings?: { Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; IPAddress?: string; Gateway?: string; DriverOpts?: Record<string, string> }> };
 };
 
 type DockerStats = {
@@ -1397,13 +1399,13 @@ function parsePortNumber(value: string, field: string) {
   return Number(value);
 }
 
-function queryPortEntry(port: number): ManagedServerPort {
+function queryPortEntry(port: number, internalPort = port): ManagedServerPort {
   return {
     id: "minecraft-query",
     name: "Minecraft Query",
     type: "query",
     protocol: "udp",
-    internalPort: port,
+    internalPort,
     externalPort: port,
     required: true,
     removable: false,
@@ -1452,7 +1454,7 @@ function managedPortsForDockerPorts(dockerPorts: string, existing: ManagedServer
 function normalizeManagedPorts(dockerPorts: string, managedPorts: ManagedServerPort[] = []) {
   const ports = managedPortsForDockerPorts(dockerPorts, managedPorts);
   const query = ports.find((port) => port.type === "query");
-  return query ? ports.map((port) => port.type === "query" ? { ...queryPortEntry(query.externalPort), internalPort: query.internalPort } : port) : ports;
+  return query ? ports.map((port) => port.type === "query" ? queryPortEntry(query.externalPort, query.internalPort) : port) : ports;
 }
 
 function dockerPortsWithManagedEntries(dockerPorts: string, managedPorts: ManagedServerPort[]) {
@@ -1730,6 +1732,29 @@ async function detectedTotalMemory() {
   return totalmem();
 }
 
+function currentContainerId() {
+  return process.env.HOSTNAME || "";
+}
+
+async function currentContainerInspect() {
+  const id = currentContainerId();
+  if (!id) return null;
+  return dockerRequest<DockerContainerInspect>("GET", `/containers/${encodeURIComponent(id)}/json`, 200);
+}
+
+async function currentContainerNetworkingConfig() {
+  const inspect = await currentContainerInspect().catch(() => null);
+  const networks = inspect?.NetworkSettings?.Networks;
+  if (!networks || Object.keys(networks).length === 0) return undefined;
+  return {
+    EndpointsConfig: Object.fromEntries(Object.entries(networks).map(([name, network]) => [name, {
+      IPAMConfig: network.IPAMConfig,
+      Aliases: network.Aliases,
+      DriverOpts: network.DriverOpts
+    }]))
+  };
+}
+
 async function ensureDockerContainer(server: ManagedServer) {
   const expectedConfigHash = dockerRuntimeConfigHash(server);
   const existing = await inspectDockerContainer(server);
@@ -1777,7 +1802,6 @@ async function ensureDockerContainer(server: ManagedServer) {
         ExposedPorts: exposedPorts,
         HostConfig: {
           Privileged: false,
-          NetworkMode: "bridge",
           PortBindings: portBindings,
           RestartPolicy: { Name: "unless-stopped" },
           Mounts: [
@@ -1788,6 +1812,7 @@ async function ensureDockerContainer(server: ManagedServer) {
             }
           ]
         },
+        NetworkingConfig: await currentContainerNetworkingConfig(),
         Labels: {
           "serversentinel.server-id": server.id,
           "serversentinel.managed": "true",
@@ -2141,9 +2166,8 @@ function configuredServerPort(server: ManagedServer, props: Record<string, strin
 }
 
 function configuredQueryPort(server: ManagedServer, props: Record<string, string>) {
-  const storedQuery = server.managedPorts?.find((port) => port.type === "query");
-  if (storedQuery) return storedQuery.externalPort;
-  if (props["query.port"] && isValidServerPort(props["query.port"])) return Number(props["query.port"]);
+  const storedQuery = configuredQueryExternalPort(server, props);
+  if (storedQuery) return storedQuery;
   const udpPort = dockerHostPortBindings(server.dockerPorts || "").find((port) => port.protocol === "udp");
   return udpPort ? Number(udpPort.port) : null;
 }
@@ -2422,14 +2446,16 @@ async function serverOverviewData(server: ManagedServer) {
 }
 
 async function queryPlayerMetrics(server: ManagedServer, props: Record<string, string> = {}) {
-  if (props["enable-query"] && props["enable-query"].toLowerCase() !== "true") {
-    return { responding: false, playersOnline: null, maxPlayers: null };
+  if (minecraftQueryDisabled(props)) {
+    return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query is disabled in server.properties."] };
   }
-  const queryPort = configuredQueryPort(server, props);
-  if (!queryPort) {
-    return { responding: false, playersOnline: null, maxPlayers: null };
+  const minecraftInspect = dockerControlConfigured(server) ? await inspectDockerContainer(server).catch(() => null) : null;
+  const callerInspect = dockerAvailable() ? await currentContainerInspect().catch(() => null) : null;
+  const endpoint = resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect);
+  if (!endpoint) {
+    return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query endpoint could not be resolved."] };
   }
-  return queryMinecraftServer("127.0.0.1", queryPort);
+  return queryMinecraftServer(endpoint.host, endpoint.port).catch((error) => ({ responding: false, playersOnline: null, maxPlayers: null, diagnostics: [...endpoint.diagnostics, error instanceof Error ? error.message : String(error)] }));
 }
 
 async function onlinePlayerCount(server: ManagedServer) {

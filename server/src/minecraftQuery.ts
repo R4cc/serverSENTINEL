@@ -6,6 +6,7 @@ export type MinecraftQueryMetrics = {
   playersOnline: number | null;
   maxPlayers: number | null;
   playerNames?: string[];
+  diagnostics?: string[];
 };
 
 function readNullTerminated(buffer: Buffer, start: number) {
