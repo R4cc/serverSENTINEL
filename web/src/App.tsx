@@ -3740,9 +3740,6 @@ export default function App() {
                   onSubmit={updateServer}
                   disabled={serverSettingsLocked || serverSettingsSaving}
                   disabledReason={serverSettingsLockedReason}
-                  statusLabel={serverCommandStatusLabel}
-                  statusTone={serverCommandTone}
-                  nodeName={activeNode.name}
                   dangerZone={
                     <DeleteServerPanel
                       server={activeServer}

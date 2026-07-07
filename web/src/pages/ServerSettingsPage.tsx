@@ -371,9 +371,6 @@ export function ServerEditForm({
   totalMemory,
   onSubmit,
   dangerZone,
-  statusLabel = "Unknown",
-  statusTone = "neutral",
-  nodeName = "Unknown node",
   disabledReason = "",
   disabled = false
 }: {
@@ -382,9 +379,6 @@ export function ServerEditForm({
   totalMemory: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dangerZone?: ReactNode;
-  statusLabel?: string;
-  statusTone?: string;
-  nodeName?: string;
   disabledReason?: string;
   disabled?: boolean;
 }) {
@@ -416,7 +410,6 @@ export function ServerEditForm({
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
   const memoryWarning = maximumHeapGb > memoryBounds.max * 0.8;
-  const statusClass = statusTone === "running" ? "running" : statusTone === "starting" ? "starting" : statusTone === "stopped" || statusTone === "exited" ? "exited" : "neutral";
   const currentMinecraftVersionListed = versions.game.some((version) => version.version === minecraftVersion);
   const currentLoaderVersionListed = !loaderVersion || versions.loader.some((version) => version.version === loaderVersion);
 
@@ -485,7 +478,6 @@ export function ServerEditForm({
               <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
               <div>
                 <h2 id="properties-general-title">General</h2>
-                <p>Basic information and versions for this server.</p>
               </div>
             </div>
             <div className="propertiesFieldGrid three">
@@ -522,7 +514,6 @@ export function ServerEditForm({
               <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
               <div>
                 <h2 id="properties-runtime-title">Runtime & Resources</h2>
-                <p>Configure how your server runs and uses system resources.</p>
               </div>
             </div>
             <section className="resourceStepSection propertiesMemorySection" aria-labelledby="properties-memory-title">
@@ -618,7 +609,6 @@ export function ServerEditForm({
               <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
               <div>
                 <h2 id="properties-network-title">Network</h2>
-                <p>Configure the network ports for this server.</p>
               </div>
             </div>
             <MinecraftPortsSection
@@ -646,24 +636,9 @@ export function ServerEditForm({
       </form>
 
       <aside className="serverPropertiesSidebar">
-        <section className="propertiesSideCard">
-          <h2>Server summary</h2>
-          <dl className="propertiesSummaryList">
-            <div><dt>Server name</dt><dd>{displayName || server.displayName}</dd></div>
-            <div><dt>Status</dt><dd><span className={`summaryStatusDot ${statusClass}`} aria-hidden="true" />{statusLabel}</dd></div>
-            <div><dt>Node</dt><dd>{nodeName}</dd></div>
-            <div><dt>Runtime profile</dt><dd>{minecraftVersion || "Unknown"}</dd></div>
-            <div><dt>Loader</dt><dd>Fabric {loaderVersion || "latest stable"}</dd></div>
-          </dl>
-          <div className="propertiesInfoNote">
-            <span aria-hidden="true">i</span>
-            <p>Server settings can be changed only while the server is stopped.</p>
-          </div>
-        </section>
         {dangerZone}
         <section className="propertiesSideCard propertiesActionsCard">
           <h2>Actions</h2>
-          <p>Apply your changes to the server configuration.</p>
           {disabled && disabledReason && <p className="propertiesLockNote">{disabledReason}</p>}
           <Button type="submit" form={formId} disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
             Save changes

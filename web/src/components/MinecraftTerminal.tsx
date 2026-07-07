@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
+  deletePreviousTerminalWord,
   minecraftFormattingToAnsi,
   recallNextCommand,
   recallPreviousCommand,
@@ -97,6 +98,7 @@ export function MinecraftTerminal({
     resizeObserver.observe(container);
 
     disposables.push(terminal.onData(handleTerminalData));
+    terminal.attachCustomKeyEventHandler(handleTerminalKey);
 
     return () => {
       resizeObserver.disconnect();
@@ -136,6 +138,47 @@ export function MinecraftTerminal({
     }
   }, [canSendCommands]);
 
+  function handleTerminalKey(event: KeyboardEvent) {
+    if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
+
+    const key = event.key.toLowerCase();
+    if (key === "c") {
+      if (terminalRef.current?.hasSelection()) {
+        if (!navigator.clipboard?.writeText) return true;
+        void copySelectedText().catch(() => undefined);
+        return false;
+      }
+      if (!canSendCommandsRef.current) return true;
+      cancelInput();
+      return false;
+    }
+
+    if (key === "v") {
+      if (!canSendCommandsRef.current || !navigator.clipboard?.readText) return true;
+      void pasteClipboardText().catch(() => undefined);
+      return false;
+    }
+
+    if (event.key === "Backspace") {
+      if (canSendCommandsRef.current) deletePreviousWord();
+      return false;
+    }
+
+    return true;
+  }
+
+  async function copySelectedText() {
+    const selection = terminalRef.current?.getSelection();
+    if (!selection) return;
+    await navigator.clipboard?.writeText(selection);
+  }
+
+  async function pasteClipboardText() {
+    const text = await navigator.clipboard?.readText();
+    if (!text) return;
+    insertPrintableText(text);
+  }
+
   function handleTerminalData(data: string) {
     if (!canSendCommandsRef.current) return;
     if (data === "\r") {
@@ -145,7 +188,7 @@ export function MinecraftTerminal({
     if (data === "\x7f") {
       if (!inputRef.current) return;
       inputRef.current = inputRef.current.slice(0, -1);
-      historyIndexRef.current = null;
+      resetHistoryDraft();
       renderInputLine();
       return;
     }
@@ -159,17 +202,12 @@ export function MinecraftTerminal({
     }
     if (data.startsWith("\x1b")) return;
 
-    const printable = [...data].filter((char) => char >= " " && char !== "\x7f").join("");
-    if (!printable) return;
-    inputRef.current += printable;
-    historyIndexRef.current = null;
-    historyDraftRef.current = "";
-    renderInputLine();
+    insertPrintableText(data);
   }
 
   function submitInput() {
     const command = inputRef.current;
-    terminalRef.current?.write("\r\n");
+    terminalRef.current?.write(`\r\x1b[2K${command}\r\n`);
     promptVisibleRef.current = false;
     inputRef.current = "";
     historyIndexRef.current = null;
@@ -181,6 +219,36 @@ export function MinecraftTerminal({
       return;
     }
     if (canSendCommandsRef.current) writePrompt();
+  }
+
+  function insertPrintableText(data: string) {
+    const printable = [...data].filter((char) => char >= " " && char !== "\x7f").join("");
+    if (!printable) return;
+    inputRef.current += printable;
+    resetHistoryDraft();
+    renderInputLine();
+  }
+
+  function deletePreviousWord() {
+    const nextInput = deletePreviousTerminalWord(inputRef.current);
+    if (nextInput === inputRef.current) return;
+    inputRef.current = nextInput;
+    resetHistoryDraft();
+    renderInputLine();
+  }
+
+  function cancelInput() {
+    if (!terminalRef.current) return;
+    terminalRef.current.write(`\r\x1b[2K${inputRef.current}^C\r\n`);
+    promptVisibleRef.current = false;
+    inputRef.current = "";
+    resetHistoryDraft();
+    writePrompt();
+  }
+
+  function resetHistoryDraft() {
+    historyIndexRef.current = null;
+    historyDraftRef.current = "";
   }
 
   function currentHistoryState(): TerminalHistoryState {

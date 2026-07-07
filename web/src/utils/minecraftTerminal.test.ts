@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCommandHistory,
+  deletePreviousTerminalWord,
   minecraftFormattingToAnsi,
   recallNextCommand,
   recallPreviousCommand,
@@ -27,6 +28,13 @@ describe("Minecraft terminal helpers", () => {
 
     const draft = recallNextCommand(["list", "say hello"], newer);
     expect(draft).toEqual({ value: "sa", historyIndex: null, draft: "" });
+  });
+
+  it("deletes the previous word like terminal Ctrl+Backspace", () => {
+    expect(deletePreviousTerminalWord("say hello world")).toBe("say hello ");
+    expect(deletePreviousTerminalWord("say hello   ")).toBe("say ");
+    expect(deletePreviousTerminalWord("single")).toBe("");
+    expect(deletePreviousTerminalWord("   ")).toBe("");
   });
 
   it("converts Minecraft formatting codes into ANSI SGR sequences for xterm", () => {
