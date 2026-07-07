@@ -21,7 +21,8 @@ import {
   fileContentRevision,
   assertFileRevision,
   validateBase64Content,
-  mutableServerConfigurationBlockedReason
+  mutableServerConfigurationBlockedReason,
+  nodeUpdateImageForBuild
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -42,6 +43,21 @@ function testRuntimeProfile() {
     resolvedAt: new Date().toISOString()
   };
 }
+
+
+describe("node update image selection", () => {
+  it("uses immutable build tags for default node image updates", () => {
+    expect(nodeUpdateImageForBuild(undefined, "abc123def456")).toBe("nl2109/serversentinel:abc123def456");
+  });
+
+  it("falls back to latest when no build id is available", () => {
+    expect(nodeUpdateImageForBuild(undefined, undefined)).toBe("nl2109/serversentinel:latest");
+  });
+
+  it("preserves configured custom node images", () => {
+    expect(nodeUpdateImageForBuild("registry.example/serversentinel:stable", "abc123def456")).toBe("registry.example/serversentinel:stable");
+  });
+});
 
 describe("file revisions", () => {
   it("detects content changes before saving", () => {

@@ -165,6 +165,14 @@ import {
 const localNodeId = "local";
 const nodeImageRepository = "nl2109/serversentinel";
 const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
+
+export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: string) {
+  const configured = configuredImage?.trim();
+  if (configured) return configured;
+  const build = buildId?.trim();
+  if (build && /^[A-Za-z0-9_.-]+$/.test(build)) return `${nodeImageRepository}:${build}`;
+  return `${nodeImageRepository}:latest`;
+}
 const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 const versionMetadataFilename = ".serversentinel-version.json";
 
@@ -3584,7 +3592,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   if (node.agentVersion && node.agentVersion !== appVersion && nodePanelVersionComparison === null) {
     throw new Error(`Node agent version ${node.agentVersion} could not be compared with panel version ${appVersion}. Update the panel and node to matching release versions.`);
   }
-  const image = validateDockerImageName(body.image?.trim() || nodeImage);
+  const image = validateDockerImageName(body.image?.trim() || nodeUpdateImageForBuild(config.nodeImage, appBuildId));
   if (node.status !== "online") {
     return {
       ok: false,
