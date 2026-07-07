@@ -1035,6 +1035,22 @@ export default function App() {
         toast.loading(job.title, options);
         return;
       }
+      if (job.finalNotification) {
+        toast.dismiss(job.id);
+        activeJobToastIdsRef.current.delete(job.id);
+        const finalOptions = {
+          id: `${job.id}:final`,
+          duration: 5000,
+          dismissible: true,
+          closeButton: true
+        };
+        if (job.finalNotification.type === "success") toast.success(job.finalNotification.text, finalOptions);
+        else if (job.finalNotification.type === "error") toast.error(job.finalNotification.text, finalOptions);
+        else if (job.finalNotification.type === "warning") toast.warning(job.finalNotification.text, finalOptions);
+        else toast.info(job.finalNotification.text, finalOptions);
+        setActiveJobs((current) => current.filter((candidate) => candidate.id !== job.id));
+        return;
+      }
       if (job.status === "failed" || job.status === "cancelled") {
         toast.error(job.title, options);
         return;

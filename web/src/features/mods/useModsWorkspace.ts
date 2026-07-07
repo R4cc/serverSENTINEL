@@ -530,6 +530,16 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setActiveJobs((current) => current.filter((job) => job.id !== id));
   }
 
+  function finishJobWithNotification(id: string, type: Parameters<Notify>[0], message: string) {
+    patchJob(id, {
+      status: type === "error" ? "failed" : "succeeded",
+      progress: 100,
+      task: message,
+      finalNotification: { type, text: message },
+      dismissible: true
+    });
+  }
+
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
     if (modsLocked || !canManage || !activeServer) return;
     const file = event.target.files?.[0];
@@ -654,28 +664,26 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         const updated: InstalledMod = { ...mod, filename, modifiedAt: new Date().toISOString(), versionInfo: { ...mod.versionInfo, currentVersion: version, latestVersion: version, upToDate: true }, modrinth: { ...mod.modrinth, filename, versionNumber: version, installedAt: new Date().toISOString() } };
         setDemoInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
         setInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
-        notify("success", `Updated ${title} to ${version}`); patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true });
-        window.setTimeout(() => removeJob(jobId), 4000);
+        finishJobWithNotification(jobId, "success", `Updated ${title} to ${version}`);
       } catch (error) {
-        patchJob(jobId, { status: "failed", task: "Update failed", error: (error as Error).message, dismissible: true });
+        finishJobWithNotification(jobId, "error", (error as Error).message);
       }
       return;
     }
     try {
       patchJob(jobId, { progress: 30, task: "Downloading new version" });
       const result = await api<{ version: string; upToDate?: boolean }>("/api/modrinth/update", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: plannedChannel || mod.preferredChannel || "release" }) });
-      notify("success", result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
+      const successMessage = result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`;
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}`, dismissible: true });
+        finishJobWithNotification(jobId, "success", successMessage);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `Updated ${title}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
+        finishJobWithNotification(jobId, "warning", `${successMessage}, but failed to refresh mod list`);
       }
-      window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
       const message = (error as Error).message;
-      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Update failed", error: message, dismissible: true });
+      setNotice(message); finishJobWithNotification(jobId, "error", message);
       void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
     }
   }

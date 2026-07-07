@@ -559,6 +559,10 @@ export type GeneralJob = {
   task?: string;
   error?: string;
   errorDetails?: string;
+  finalNotification?: {
+    type: "success" | "error" | "info" | "warning";
+    text: string;
+  };
   dismissible: boolean;
 };
 
