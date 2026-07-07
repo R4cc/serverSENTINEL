@@ -2856,6 +2856,7 @@ export default function App() {
 
   function openSidebarPage(page: ActivePage) {
     setActivePage(page);
+    if (window.matchMedia("(max-width: 720px)").matches) setSidebarCollapsed(true);
   }
 
   function resetActiveSidebarPage(page: ActivePage) {
