@@ -83,4 +83,15 @@ describe("FileEditLeasesRepository", () => {
     const next = repository.acquire({ serverId: "server", path: "/ops.json", fileRevision: "rev", owner: bob }, 10_004);
     expect(next.displayName).toBe("Bob");
   });
+
+  it("prunes expired leases without touching active leases", async () => {
+    const repository = await createRepository();
+    const expired = repository.acquire({ serverId: "server", path: "/server.properties", fileRevision: "rev", owner: alice }, 1_000);
+    const active = repository.acquire({ serverId: "server", path: "/ops.json", fileRevision: "rev", owner: bob }, 20_000);
+
+    expect(repository.pruneExpired(1_000 + fileEditLeaseTimeoutMs)).toBe(1);
+
+    expect(() => repository.requireOwned(expired.leaseId, "server", "/server.properties", alice, 20_001)).toThrow("expired");
+    expect(repository.requireOwned(active.leaseId, "server", "/ops.json", bob, 20_001).leaseId).toBe(active.leaseId);
+  });
 });

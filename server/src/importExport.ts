@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { AppSettings, ManagedNode, ManagedServer, ModPreference } from "./types.js";
-import { currentSchemaVersion } from "./storage/database.js";
+import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
 import { defaultServerContainerName, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
@@ -114,6 +114,7 @@ type ImportContext = {
 };
 
 type ApplyImportContext = ImportContext & {
+  storage: StorageDatabase;
   serversRepository: ServersRepository;
   modPreferencesRepository: ModPreferencesRepository;
   settingsRepository: SettingsRepository;
@@ -530,6 +531,7 @@ export async function applyImportArtifact(artifact: ExportArtifact, context: App
   context.report?.(10, "Preparing imported server files");
   const imported: Array<{ sourceId: string; serverId: string; displayName: string; fileCount: number }> = [];
   const writtenDirs: string[] = [];
+  const preparedServers: Array<{ entry: ExportServerEntry; remapped: ManagedServer; fileCount: number }> = [];
   try {
     for (const [index, entry] of artifact.servers.entries()) {
       const plan = validation.plan.servers[index];
@@ -554,20 +556,25 @@ export async function applyImportArtifact(artifact: ExportArtifact, context: App
         storageName: plan.storageName,
         now
       });
-      context.report?.(25 + Math.floor((index / Math.max(artifact.servers.length, 1)) * 60), `Registering ${remapped.displayName}`);
-      context.serversRepository.create(remapped);
-      context.modPreferencesRepository.replaceAll(remapped.id, entry.modPreferences);
-      imported.push({
-        sourceId: entry.server.id,
-        serverId: remapped.id,
-        displayName: remapped.displayName,
-        fileCount: entry.files.length
-      });
+      preparedServers.push({ entry, remapped, fileCount: entry.files.length });
     }
-    if (context.importInstanceSettings !== false) {
-      const key = artifact.instance.settings.modrinthApiKey?.trim();
-      if (key) context.settingsRepository.setModrinthApiKey(key);
-    }
+    context.storage.transaction(() => {
+      for (const [index, prepared] of preparedServers.entries()) {
+        context.report?.(25 + Math.floor((index / Math.max(artifact.servers.length, 1)) * 60), `Registering ${prepared.remapped.displayName}`);
+        context.serversRepository.create(prepared.remapped);
+        context.modPreferencesRepository.replaceAll(prepared.remapped.id, prepared.entry.modPreferences);
+        imported.push({
+          sourceId: prepared.entry.server.id,
+          serverId: prepared.remapped.id,
+          displayName: prepared.remapped.displayName,
+          fileCount: prepared.fileCount
+        });
+      }
+      if (context.importInstanceSettings !== false) {
+        const key = artifact.instance.settings.modrinthApiKey?.trim();
+        if (key) context.settingsRepository.setModrinthApiKey(key);
+      }
+    });
   } catch (error) {
     await Promise.all(writtenDirs.map((directory) => rm(directory, { recursive: true, force: true })));
     throw error;

@@ -150,6 +150,7 @@ export class ResourceStatsCollector {
     try {
       const servers = await this.options.readServers();
       const cutoff = Date.now() - this.options.historyWindowMs;
+      this.options.statsRepository.prune(cutoff);
       for (const server of servers) {
         const samples = this.options.statsRepository.list(server.id, cutoff);
         if (samples.length > 0) this.samples.set(server.id, samples);

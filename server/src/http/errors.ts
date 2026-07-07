@@ -79,16 +79,9 @@ function publicDetails(error: unknown): Record<string, unknown> {
   const details = (error as HttpError).details;
   if (details === undefined || details === null) return {};
   if (typeof details === "string") {
-    const trimmed = details.trim();
-    if (!trimmed) return {};
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-      return isRecord(parsed) ? parsed : { value: parsed };
-    } catch {
-      return { message: trimmed };
-    }
+    return {};
   }
-  return isRecord(details) ? details : { value: details };
+  return isRecord(details) ? redactPublicDetails(details) : { value: details };
 }
 
 function toStableErrorCode(code: string) {
@@ -101,4 +94,19 @@ function toStableErrorCode(code: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function redactPublicDetails(details: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(details).map(([key, value]) => {
+    if (/secret|token|password|api[_-]?key|authorization|cookie|session/i.test(key)) {
+      return [key, "[redacted]"];
+    }
+    if (Array.isArray(value)) {
+      return [key, value.map((item) => isRecord(item) ? redactPublicDetails(item) : item)];
+    }
+    if (isRecord(value)) {
+      return [key, redactPublicDetails(value)];
+    }
+    return [key, value];
+  }));
 }

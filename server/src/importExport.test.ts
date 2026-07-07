@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -325,6 +325,7 @@ describe("export/import artifacts", () => {
       existingServers: repositories.serversRepository.list(),
       serversDir: join(root, "servers"),
       tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
       serversRepository: repositories.serversRepository,
       modPreferencesRepository: repositories.modPreferencesRepository,
       settingsRepository: repositories.settingsRepository
@@ -342,5 +343,30 @@ describe("export/import artifacts", () => {
     expect(imported.schedules?.[0].recentRuns?.[0].scheduleId).toBe(imported.schedules?.[0].id);
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");
     await expect(stat(join(imported.serverDir, "config", "fabric-api.properties"))).resolves.toMatchObject({ size: 13 });
+  });
+
+  it("rolls back SQLite rows and staged files when import registration fails", async () => {
+    const root = await tempRoot("serversentinel-import-rollback-");
+    const repositories = await createRepositories(root);
+    const importedArtifact = artifact();
+
+    await expect(applyImportArtifact(importedArtifact, {
+      targetNodeId: nodeId,
+      nodes: [node()],
+      existingServers: repositories.serversRepository.list(),
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: {
+        replaceAll() {
+          throw new Error("preference write failed");
+        }
+      } as ModPreferencesRepository,
+      settingsRepository: repositories.settingsRepository
+    })).rejects.toThrow("preference write failed");
+
+    expect(repositories.serversRepository.list()).toEqual([]);
+    expect(await readdir(join(root, "servers"))).toEqual([]);
   });
 });

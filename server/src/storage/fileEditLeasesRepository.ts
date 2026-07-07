@@ -124,6 +124,10 @@ export class FileEditLeasesRepository {
     });
   }
 
+  pruneExpired(now = Date.now()) {
+    return this.storage.connection.prepare("DELETE FROM file_edit_leases WHERE expires_at <= ?").run(now).changes;
+  }
+
   private findById(leaseId: string) {
     const row = this.storage.connection.prepare<[string], LeaseRow>("SELECT * FROM file_edit_leases WHERE lease_id = ?").get(leaseId);
     return row ? leaseFromRow(row) : undefined;

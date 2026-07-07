@@ -22,7 +22,8 @@ import {
   assertFileRevision,
   validateBase64Content,
   mutableServerConfigurationBlockedReason,
-  nodeUpdateImageForBuild
+  nodeUpdateImageForBuild,
+  assertSameOriginRequest
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -50,12 +51,41 @@ describe("node update image selection", () => {
     expect(nodeUpdateImageForBuild(undefined, "abc123def456")).toBe("nl2109/serversentinel:abc123def456");
   });
 
-  it("falls back to latest when no build id is available", () => {
-    expect(nodeUpdateImageForBuild(undefined, undefined)).toBe("nl2109/serversentinel:latest");
+  it("falls back to the app version when no build id is available", () => {
+    expect(nodeUpdateImageForBuild(undefined, undefined, "1.0.0")).toBe("nl2109/serversentinel:1.0.0");
   });
 
   it("preserves configured custom node images", () => {
     expect(nodeUpdateImageForBuild("registry.example/serversentinel:stable", "abc123def456")).toBe("registry.example/serversentinel:stable");
+  });
+});
+
+describe("CSRF origin checks", () => {
+  function request(headers: Record<string, unknown>, protocol = "http") {
+    return { headers, protocol } as any;
+  }
+
+  it("uses the public forwarded host and protocol when behind a reverse proxy", () => {
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://panel.example.com",
+      host: "127.0.0.1:8080",
+      "x-forwarded-host": "panel.example.com, 127.0.0.1:8080",
+      "x-forwarded-proto": "https,http"
+    }))).not.toThrow();
+  });
+
+  it("rejects malformed or cross-origin proxy metadata", () => {
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://evil.example.com",
+      host: "127.0.0.1:8080",
+      "x-forwarded-host": "panel.example.com",
+      "x-forwarded-proto": "https"
+    }))).toThrow("cross-origin");
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://panel.example.com",
+      host: "panel.example.com",
+      "x-forwarded-proto": "javascript"
+    }))).toThrow("invalid request protocol");
   });
 });
 

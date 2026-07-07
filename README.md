@@ -2,7 +2,7 @@
 
 serverSENTINEL is a web panel for running Minecraft servers with Docker. It gives you a browser-based place to create servers, start and stop them, view the live console, send commands, manage files, install mods, schedule actions, and manage users.
 
-This project is preproduction software. Test it on non-critical servers first, keep backups, and review your deployment settings before trusting it with production worlds or public access.
+serverSENTINEL 1.0 is intended for self-hosted administrative use. Keep regular backups, test upgrades before applying them to important worlds, and review Docker and network access before exposing the panel to other users.
 
 Do not expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
 
@@ -118,11 +118,11 @@ Minecraft itself does not run inside the panel container. Managed Minecraft serv
 - Protect API keys, node join tokens, node secrets, user passwords, and Docker socket access.
 - Docker socket access is powerful. A container with access to `/var/run/docker.sock` can control Docker on the host.
 - File manager and console access are powerful administrative features. Give those permissions only to users you trust.
-- Keep backups of your serverSENTINEL data root before upgrading or testing major changes.
+- Keep backups of your serverSENTINEL data root before upgrading or changing Docker volume mappings.
 
 ## Storage
 
-serverSENTINEL 0.8.0 uses storage model v2. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
+serverSENTINEL 1.0 uses storage model v2, introduced in 0.8.0. Application state is stored in one local SQLite database under one runtime data root. Users, sessions, settings, nodes, managed servers, ports, schedules, scheduled runs, resource-stat history, mod preferences, file edit leases, and node identity records are stored there. No external database service is required.
 
 The default runtime data root is `/data`:
 
@@ -138,38 +138,66 @@ The default runtime data root is `/data`:
 
 Set `SERVERSENTINEL_DATA_DIR` to use a different data root. serverSENTINEL derives every application storage path from that root and creates the required directories on startup.
 
-Version 0.8.0 is a breaking preproduction release. Existing `users.json`, `nodes.json`, `servers.json`, settings JSON files, and old `/config` database locations are not read, imported, or migrated. A fresh data root starts with empty panel state and prompts for initial setup.
+If you are upgrading from 0.8.x to 1.0, keep the same `SERVERSENTINEL_DATA_DIR` and Docker server-volume mapping. No database migration step is required for 0.8.x data roots. Older pre-0.8 JSON configuration files such as `users.json`, `nodes.json`, `servers.json`, settings JSON files, and old `/config` database locations are not read by 1.0; move those installs to 0.8.x first or start with a fresh 1.0 data root.
 
-Back up the whole data root. The simplest reliable file-copy backup is to stop serverSENTINEL, copy `serversentinel.sqlite` (and any adjacent `-wal`/`-shm` files if present) together with `servers/`, then restart it.
+### Backup And Restore
+
+For a complete 1.0 backup, preserve both the panel data root and the managed server directory storage. In the default Docker Compose setup, that means backing up the `serversentinel-data` volume and the `serversentinel-minecraft-servers` volume together.
+
+The safest file-copy backup is:
+
+1. Stop serverSENTINEL.
+2. Stop any managed Minecraft servers if you need a world-consistent backup.
+3. Copy `serversentinel.sqlite` and any adjacent `serversentinel.sqlite-wal` or `serversentinel.sqlite-shm` files from the data root.
+4. Copy `servers/`, or the Docker volume mounted at `/data/servers`, using the same point in time as the SQLite files.
+5. Restart serverSENTINEL.
+
+Restore by stopping serverSENTINEL, restoring those files or volumes back to the same `SERVERSENTINEL_DATA_DIR` and server-volume mapping, then starting the same or newer 1.0-compatible image. Do not restore only the SQLite database without the matching managed server directories; server IDs, paths, ports, schedules, mod preferences, and file edit leases are stored in SQLite while the Minecraft files live in server storage.
 
 Managed servers and nodes use immutable backend-generated IDs. Local managed server files live under `servers/<serverId>/`; renaming a server changes only its display label, not its ID, directory, schedules, mods, logs, jobs, or Docker container name. Leave the Docker container field blank during creation to let serverSENTINEL generate a stable container name from the server ID.
 
 The file editor opens files read-only. Entering edit mode acquires a short-lived exclusive lease for that server/path while other users can continue viewing it. Active editors heartbeat the lease, stale leases expire automatically, and saving is rejected if the file changed outside serverSENTINEL after edit mode began.
 
-Recommended host folder:
+Recommended persistent storage:
 
-```text
-/opt/serversentinel/data
+```bash
+docker volume create serversentinel-data
+docker volume create serversentinel-minecraft-servers
 ```
 
-Use it as the single persistent serverSENTINEL data root.
+The included compose file uses `serversentinel-data` for panel state and `serversentinel-minecraft-servers` for managed server directories. If you use host bind mounts instead, the path used by Minecraft sibling containers must be visible to the Docker daemon on the host, not only inside the panel container.
+
+## Release Notes
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_NOTES.md](RELEASE_NOTES.md) for 1.0 changes and upgrade notes from 0.8.x.
 
 ## Deployment
 
-The published image used by the project is:
+The pinned 1.0 image is:
 
 ```text
-nl2109/serversentinel:latest
+nl2109/serversentinel:1.0.0
 ```
 
+`nl2109/serversentinel:latest` tracks the newest stable image published from `main`. Use the pinned `1.0.0` tag when you want repeatable panel and node deployments.
+
 The panel listens on port `8080` inside the container.
+
+Recommended production setup:
+
+- Use the pinned `nl2109/serversentinel:1.0.0` tag for panel and node agents.
+- Put the panel behind a VPN, private network, Cloudflare Tunnel, or reverse proxy with TLS and strong authentication.
+- Use all-in-one mode only on a trusted single Docker host. Use panel plus node agents when Minecraft servers run on separate hosts.
+- Keep panel state and managed server directories on persistent storage and back them up together before updates.
+- Do not enable demo mode in production images or containers.
 
 ### All-In-One With Docker Run
 
 Use this for a simple single-host setup.
 
 ```bash
-sudo mkdir -p /opt/serversentinel/data/servers
+docker volume create serversentinel-data
+docker volume create serversentinel-minecraft-servers
 
 docker run -d \
   --name serversentinel \
@@ -178,11 +206,12 @@ docker run -d \
   -e SS_MODE=all-in-one \
   -e PORT=8080 \
   -e SERVERSENTINEL_DATA_DIR=/data \
-  -e SERVERSENTINEL_SERVERS_DOCKER_VOLUME= \
+  -e SERVERSENTINEL_SERVERS_DOCKER_VOLUME=serversentinel-minecraft-servers \
   -e MODRINTH_API_KEY= \
-  -v /opt/serversentinel/data:/data \
+  -v serversentinel-data:/data \
+  -v serversentinel-minecraft-servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:1.0.0
 ```
 
 Open:
@@ -196,7 +225,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:1.0.0
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -205,11 +234,17 @@ services:
       SS_MODE: all-in-one
       PORT: 8080
       SERVERSENTINEL_DATA_DIR: /data
-      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: ""
+      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
     volumes:
-      - /opt/serversentinel/data:/data
+      - serversentinel-data:/data
+      - minecraft-servers:/data/servers
       - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  serversentinel-data:
+  minecraft-servers:
+    name: serversentinel-minecraft-servers
 ```
 
 Start it:
@@ -234,7 +269,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_DATA_DIR=/data \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:1.0.0
 ```
 
 ### Panel-Only With Docker Compose
@@ -242,7 +277,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:1.0.0
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -275,7 +310,7 @@ docker run -d \
   --env SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume /opt/serversentinel/data:/data \
-  nl2109/serversentinel:latest
+  nl2109/serversentinel:1.0.0
 ```
 
 The node does not publish a web port. It connects outbound to the panel, advertises protocol `2.0`, and is rejected if required handshake fields or capabilities are missing.
@@ -285,7 +320,7 @@ The node does not publish a web port. It connects outbound to the panel, adverti
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:latest
+    image: nl2109/serversentinel:1.0.0
     container_name: serversentinel-node
     restart: unless-stopped
     environment:
@@ -302,50 +337,62 @@ services:
 
 ## Environment Reference
 
-Common panel variables:
+`.env.example` is the authoritative example for 1.0 deployments. These are the supported variables:
 
-```env
-SS_MODE=all-in-one
-PORT=8080
-SERVERSENTINEL_DATA_DIR=/data
-SERVERSENTINEL_SERVERS_DOCKER_VOLUME=
-SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest
-SERVERSENTINEL_ENABLE_DEMO=false
-VITE_ENABLE_DEMO=false
-VITE_SERVERSENTINEL_API_TARGET=http://localhost:8080
-MODRINTH_API_KEY=
-MCJARS_BASE_URL=https://mcjars.app
-MCJARS_API_KEY=
-DOCKER_SOCKET=/var/run/docker.sock
-LOG_LEVEL=info
-```
+| Variable | Default | Used by | Purpose |
+| --- | --- | --- | --- |
+| `SS_MODE` | `all-in-one` | backend | Runtime mode: `all-in-one`, `panel`, or `node`. |
+| `PORT` | `8080` | backend | HTTP port inside the panel container. |
+| `SERVERSENTINEL_DATA_DIR` | `/data` | backend/node | Runtime data root. SQLite is stored as `serversentinel.sqlite` under this path. |
+| `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` | `serversentinel-minecraft-servers` in Docker images | backend | All-in-one server-file volume mounted into sibling Minecraft containers. Leave empty only for advanced host-bind setups where host and panel paths match. |
+| `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.0.0` | backend | Image tag shown in generated node install/update instructions. |
+| `SERVERSENTINEL_ENABLE_DEMO` | `false` | backend | Enables demo login/API behavior only when set to `true`. |
+| `VITE_ENABLE_DEMO` | `false` | frontend build | Enables demo UI state only when the frontend is built with `true`. |
+| `VITE_SERVERSENTINEL_API_TARGET` | `http://localhost:8080` | frontend dev | Vite dev-server proxy target for `/api` and `/ws`. |
+| `MODRINTH_API_KEY` | empty | backend | Optional Modrinth API key used for mod search/install/update requests. |
+| `MCJARS_BASE_URL` | `https://mcjars.app` | backend/node | Fabric server jar/version provider base URL. |
+| `MCJARS_API_KEY` | empty | backend/node | Optional bearer token for the MCJars provider. |
+| `DOCKER_SOCKET` | `/var/run/docker.sock` | backend/node | Docker socket path inside all-in-one or node containers. |
+| `LOG_LEVEL` | `info` | backend | Fastify logger level. |
+| `TZ` | `UTC` | backend/node | Runtime time zone used for scheduling and display. Invalid values fall back to UTC. |
+| `SS_PANEL_URL` | none | node | Required in `SS_MODE=node`; panel URL the node connects to. |
+| `SS_NODE_NAME` | empty | node | Optional node display name used during registration. |
+| `SS_JOIN_TOKEN` | empty | node | Short-lived bootstrap token generated by the panel Add Node flow. |
+| `SERVERSENTINEL_DOCKER_DATA_DIR` | none | node | Required in `SS_MODE=node`; host path corresponding to node container `/data`. |
+| `SERVERSENTINEL_BUILD_ID` / `SS_BUILD_ID` | empty | build/runtime | Optional build metadata shown as a short commit/build identifier. |
 
-Node variables:
-
-```env
-SS_MODE=node
-SS_PANEL_URL=http://panel-host:8080
-SS_NODE_NAME=mc-node-01
-SS_JOIN_TOKEN=PASTE_JOIN_TOKEN_FROM_PANEL
-SERVERSENTINEL_DATA_DIR=/data
-SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data
-```
-
-`SS_MODE=node` fails fast unless `SS_PANEL_URL` and `SERVERSENTINEL_DOCKER_DATA_DIR` are set. `SERVERSENTINEL_DATA_DIR` is the path inside the node container. `SERVERSENTINEL_DOCKER_DATA_DIR` is the matching host-side path that Minecraft sibling containers mount.
-
-`SERVERSENTINEL_SERVERS_DOCKER_VOLUME` can be left empty when using host bind mounts. If it is set to a Docker volume name, serverSENTINEL will use that named volume for Minecraft runtime container mounts instead.
-
-`SERVERSENTINEL_DATA_DIR` is the only application storage root. Keep it on persistent local storage and include it in backups. The SQLite database is always `serversentinel.sqlite` inside that root.
-
-`SERVERSENTINEL_NODE_IMAGE` controls the image tag shown in generated node update/install instructions. Keep panel and node agent image tags on the same release unless you are deliberately testing a mixed-version upgrade.
-
-`DOCKER_SOCKET` defaults to `/var/run/docker.sock` and only needs to be changed for nonstandard Docker socket locations. `VITE_SERVERSENTINEL_API_TARGET` controls the Vite dev-server proxy target for local frontend development.
-
-`MCJARS_BASE_URL` controls the Fabric server jar/version provider used when resolving runtime profiles for new servers. `MCJARS_API_KEY` is optional; the public MCJars API does not currently require it, but private or future deployments can provide one and serverSENTINEL will send it as a bearer token.
-
-Demo mode is disabled by default. To build and run a deliberate demo/test instance, build the frontend with `VITE_ENABLE_DEMO=true` and run the backend with `SERVERSENTINEL_ENABLE_DEMO=true`. When either flag is missing, saved browser demo state is ignored, demo headers are not sent, and demo login is unavailable.
+Demo mode is disabled by default. A demo/test instance requires both `VITE_ENABLE_DEMO=true` at frontend build time and `SERVERSENTINEL_ENABLE_DEMO=true` at backend runtime. When either flag is missing, saved browser demo state is ignored, demo headers are not sent, and demo login is unavailable.
 
 Join tokens generated by the panel are short-lived bootstrap secrets. Rotate the token from the Nodes page if a generated command is exposed, expires, or is no longer needed.
+
+## Updates And Rollback
+
+Before every update, make a backup of the panel data root and managed server directory storage as described in [Backup And Restore](#backup-and-restore).
+
+Recommended update process:
+
+1. Stop managed Minecraft servers from the panel.
+2. Back up `serversentinel-data` and `serversentinel-minecraft-servers`, or the equivalent host bind mounts.
+3. Pull the target image, for example `docker pull nl2109/serversentinel:1.0.0`.
+4. Update the panel container image tag and start the panel.
+5. In multi-node deployments, update node agents to the same tag shown by `SERVERSENTINEL_NODE_IMAGE`.
+6. Run the release smoke path in [scripts/release-smoke.md](scripts/release-smoke.md).
+
+Rollback process:
+
+1. Stop the panel and node agents.
+2. Restore the backup taken immediately before the update, including SQLite WAL/SHM files if present and the matching managed server directories.
+3. Start the previous known-good image tag.
+4. Verify first-admin/login, server listing, and one start/stop cycle before reopening access to other admins.
+
+Do not roll a 1.0 data root back to pre-1.0 builds unless that exact backup was created before the 1.0 container first started. SQLite migrations are forward-only.
+
+Node update behavior:
+
+- Generated node install/update commands use `SERVERSENTINEL_NODE_IMAGE`.
+- Panel and nodes should run the same release tag for normal operation.
+- A mixed-version panel/node state is acceptable only during a short rolling update window.
+- Node agents run without a public web port, reconnect outbound to the panel, and preserve their data root across image replacement.
 
 ## First Run
 
@@ -395,14 +442,19 @@ npm run typecheck
 Build the Docker image locally:
 
 ```bash
-docker build -t nl2109/serversentinel:latest -f docker/Dockerfile .
+docker build -t nl2109/serversentinel:1.0.0 -t nl2109/serversentinel:latest -f docker/Dockerfile .
 ```
 
 To build a demo-enabled image, add `--build-arg VITE_ENABLE_DEMO=true` and run the container with `SERVERSENTINEL_ENABLE_DEMO=true`.
 
-## Current Limitations
+Run the 1.0 release smoke path before tagging a release:
 
-- This is preproduction software.
+```bash
+less scripts/release-smoke.md
+```
+
+## Known Limitations
+
 - Managed server creation is currently focused on Fabric Minecraft servers.
 - Managing arbitrary already-running external Minecraft servers is not the primary supported model.
 - Modrinth installs target compatible versions, but this is not a full dependency or conflict resolver.

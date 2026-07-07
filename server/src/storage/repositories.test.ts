@@ -73,6 +73,20 @@ describe("SQLite repositories", () => {
     expect(users.list()[0].rolePreset).toBe("admin");
   });
 
+  it("removes expired sessions by creation cutoff", async () => {
+    const storage = await createStorage();
+    const users = new UsersRepository(storage);
+    const sessions = new SessionsRepository(storage);
+    const admin = storedUser();
+    users.createFirst(admin, { id: "fresh-session", userId: admin.id, createdAt: "2026-01-02T00:00:00.000Z" });
+    sessions.create({ id: "old-session", userId: admin.id, createdAt: "2026-01-01T00:00:00.000Z" });
+
+    expect(sessions.deleteExpired("2026-01-01T12:00:00.000Z")).toBe(1);
+
+    expect(sessions.find("old-session")).toBeUndefined();
+    expect(sessions.find("fresh-session")).toBeDefined();
+  });
+
   it("stores complete node records and applies metadata updates", async () => {
     const storage = await createStorage();
     const nodes = new NodesRepository(storage);

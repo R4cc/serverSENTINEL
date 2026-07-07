@@ -14,7 +14,7 @@ export class NodeRuntimeRegistry {
     if (this.remoteRuntimeFactory) {
       return this.remoteRuntimeFactory(nodeId);
     }
-    const error = new Error(`Remote node runtime not implemented yet for node ${nodeId}`) as Error & { statusCode?: number; code?: string };
+    const error = new Error(`Remote node runtime is unavailable for node ${nodeId}`) as Error & { statusCode?: number; code?: string };
     error.statusCode = 400;
     error.code = "node_runtime_unavailable";
     throw error;

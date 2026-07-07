@@ -1,4 +1,4 @@
-name: dockerpush
+name: ci
 
 'on':
   push:
@@ -11,7 +11,7 @@ name: dockerpush
   workflow_dispatch:
 
 jobs:
-  docker-build:
+  ci:
     runs-on: ubuntu-latest
 
     permissions:
@@ -21,6 +21,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -37,7 +55,8 @@ jobs:
         if: github.event_name == 'push'
         run: |
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "tags=nl2109/serversentinel:latest,nl2109/serversentinel:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            VERSION="$(node -p "require('./package.json').version")"
+            echo "tags=nl2109/serversentinel:latest,nl2109/serversentinel:${VERSION},nl2109/serversentinel:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
             echo "tags=nl2109/serversentinel:dev,nl2109/serversentinel:dev-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           else

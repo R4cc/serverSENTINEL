@@ -1,4 +1,5 @@
 import { fetch } from "undici";
+import { appUserAgentFor } from "../buildInfo.js";
 
 let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
 const defaultModrinthTimeoutMs = 15_000;
@@ -9,7 +10,7 @@ export function configureModrinthApiKeyProvider(provider: () => Promise<string>)
 
 export function modrinthRequestHeaders(url: string, apiKey: string) {
   const headers: Record<string, string> = {
-    "User-Agent": "serverSENTINEL/0.8.0 (managed Fabric server panel)"
+    "User-Agent": appUserAgentFor("managed Fabric server panel")
   };
   if (apiKey && isModrinthApiUrl(url)) {
     headers.Authorization = apiKey;

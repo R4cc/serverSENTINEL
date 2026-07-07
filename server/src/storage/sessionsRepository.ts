@@ -21,4 +21,8 @@ export class SessionsRepository {
   delete(id: string) {
     this.storage.connection.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }
+
+  deleteExpired(cutoffCreatedAt: string) {
+    return this.storage.connection.prepare("DELETE FROM sessions WHERE created_at < ?").run(cutoffCreatedAt).changes;
+  }
 }

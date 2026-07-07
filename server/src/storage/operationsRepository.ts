@@ -253,4 +253,25 @@ export class OperationsRepository {
       WHERE status IN ('queued', 'running')
     `).run(now, message, message).changes;
   }
+
+  deleteFinishedBefore(cutoffIso: string) {
+    return this.storage.connection.prepare(`
+      DELETE FROM operations
+      WHERE finished_at IS NOT NULL AND finished_at < ?
+    `).run(cutoffIso).changes;
+  }
+
+  trimFinished(maxRows: number) {
+    const limit = Math.max(1, Math.floor(maxRows));
+    return this.storage.connection.prepare(`
+      DELETE FROM operations
+      WHERE finished_at IS NOT NULL
+        AND id NOT IN (
+          SELECT id FROM operations
+          WHERE finished_at IS NOT NULL
+          ORDER BY finished_at DESC, created_at DESC, id DESC
+          LIMIT ?
+        )
+    `).run(limit).changes;
+  }
 }

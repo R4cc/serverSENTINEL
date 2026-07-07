@@ -1,4 +1,8 @@
-export const appVersion = process.env.npm_package_version ?? "0.8.0";
+export const appVersion = process.env.npm_package_version ?? "1.0.0";
+
+export function appUserAgentFor(component: string) {
+  return `serverSENTINEL/${appVersion} (${component})`;
+}
 
 function normalizeBuildId(value?: string) {
   const trimmed = value?.trim();

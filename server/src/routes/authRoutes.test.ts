@@ -5,12 +5,21 @@ import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "..
 
 function authContext(demoEnabled: boolean) {
   const users: StoredUser[] = [];
+  const calls = {
+    cookies: [] as Array<{ sessionId: string; maxAgeSeconds: number; secure?: boolean }>,
+    deletedExpired: [] as string[]
+  };
   return {
+    calls,
     authRateLimit: {},
     destructiveRateLimit: {},
     sessions: {
       create(_session: Session) {},
-      delete(_id: string) {}
+      delete(_id: string) {},
+      deleteExpired(cutoffCreatedAt: string) {
+        calls.deletedExpired.push(cutoffCreatedAt);
+        return 0;
+      }
     },
     users: {
       list: () => users,
@@ -31,7 +40,10 @@ function authContext(demoEnabled: boolean) {
     sessionCookieName: "ss",
     sessionMaxAgeSeconds: 3600,
     parseCookies: () => new Map<string, string>(),
-    sessionCookie: () => "ss=; Path=/",
+    sessionCookie: (sessionId: string, maxAgeSeconds: number, secure?: boolean) => {
+      calls.cookies.push({ sessionId, maxAgeSeconds, secure });
+      return `ss=${sessionId}; Path=/; Max-Age=${maxAgeSeconds}${secure ? "; Secure" : ""}`;
+    },
     currentUserFromCookie: async () => null,
     requireRequestPermission: async () => {
       throw new Error("Authentication required");
@@ -87,5 +99,37 @@ describe("auth demo login", () => {
       demo: true,
       user: null
     });
+  });
+
+  it("prunes expired sessions when checking the current auth session", async () => {
+    const app = Fastify();
+    const context = authContext(false);
+    registerAuthRoutes(app, context);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/auth/session"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(context.calls.deletedExpired).toHaveLength(1);
+  });
+
+  it("clears logout cookies with Secure when the public proxy protocol is https", async () => {
+    const app = Fastify();
+    const context = authContext(false);
+    registerAuthRoutes(app, context);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/auth/logout",
+      headers: {
+        "x-forwarded-proto": "https,http"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(context.calls.cookies.at(-1)).toMatchObject({ sessionId: "", maxAgeSeconds: 0, secure: true });
+    expect(response.headers["set-cookie"]).toContain("Secure");
   });
 });

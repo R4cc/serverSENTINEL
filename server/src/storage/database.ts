@@ -246,6 +246,7 @@ const migrations: readonly Migration[] = [
 ];
 
 export const currentSchemaVersion = migrations.at(-1)?.version ?? 0;
+export const sqliteMigrations = migrations;
 
 type AppliedMigration = {
   version: number;
@@ -307,6 +308,18 @@ export class StorageDatabase {
     return this.connection.transaction(() => operation(this.connection)).immediate();
   }
 
+  checkpointWal(mode: "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE" = "PASSIVE") {
+    if (mode === "FULL") return this.connection.pragma("wal_checkpoint(FULL)");
+    if (mode === "RESTART") return this.connection.pragma("wal_checkpoint(RESTART)");
+    if (mode === "TRUNCATE") return this.connection.pragma("wal_checkpoint(TRUNCATE)");
+    return this.connection.pragma("wal_checkpoint(PASSIVE)");
+  }
+
+  async backupTo(path: string) {
+    mkdirSync(dirname(path), { recursive: true });
+    return this.connection.backup(path);
+  }
+
   metadata(key: string) {
     const row = this.connection.prepare<[string], { value: string }>("SELECT value FROM storage_metadata WHERE key = ?").get(key);
     return row?.value;
@@ -321,6 +334,7 @@ export class StorageDatabase {
 
   close() {
     if (this.connection.open) {
+      this.checkpointWal("PASSIVE");
       this.connection.close();
     }
   }

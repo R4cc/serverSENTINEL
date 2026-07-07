@@ -15,7 +15,7 @@ import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
-import { appBuildId, appVersion } from "./buildInfo.js";
+import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
@@ -67,7 +67,7 @@ import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
-import { openStorageDatabase } from "./storage/database.js";
+import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
 import { defaultServerContainerName, isInsideServersDirectory, newServerId, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
@@ -164,14 +164,14 @@ import {
 
 const localNodeId = "local";
 const nodeImageRepository = "nl2109/serversentinel";
-const nodeImage = config.nodeImage || `${nodeImageRepository}:latest`;
+const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
 
-export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: string) {
+export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: string, version = appVersion) {
   const configured = configuredImage?.trim();
   if (configured) return configured;
   const build = buildId?.trim();
   if (build && /^[A-Za-z0-9_.-]+$/.test(build)) return `${nodeImageRepository}:${build}`;
-  return `${nodeImageRepository}:latest`;
+  return `${nodeImageRepository}:${version}`;
 }
 const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 const versionMetadataFilename = ".serversentinel-version.json";
@@ -276,6 +276,7 @@ let serversRepository: ServersRepository;
 let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
 let operationsRepository: OperationsRepository;
+let storageDatabase: StorageDatabase;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -285,6 +286,7 @@ const filePreviewSizeLimit = 96 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const modFileSizeLimit = 128 * 1024 * 1024;
 const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+const nodeJoinRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
 const provisionRateLimit = { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } };
 const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
 const destructiveRateLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
@@ -292,6 +294,8 @@ const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minu
 const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
 const resourceStatsPollMs = 5_000;
 const resourceStatsHistoryWindowMs = 60 * 60 * 1000;
+const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
+const operationRetentionMaxRows = 1_000;
 
 type LogFields = Record<string, unknown>;
 
@@ -372,18 +376,33 @@ function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields
   };
 }
 
-function assertSameOriginRequest(request: FastifyRequest) {
+export function assertSameOriginRequest(request: FastifyRequest) {
   const origin = request.headers.origin;
   if (!origin) return;
-  const host = request.headers["x-forwarded-host"] ?? request.headers.host;
-  if (!host || Array.isArray(host)) {
+  const host = firstHeaderToken(request.headers["x-forwarded-host"]) || firstHeaderToken(request.headers.host);
+  if (!host || /[\r\n]/.test(host)) {
     forbidden("CSRF protection: invalid request host");
   }
-  const protocol = request.headers["x-forwarded-proto"] === "https" || request.protocol === "https" ? "https" : "http";
+  const forwardedProtocol = firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase();
+  if (forwardedProtocol && forwardedProtocol !== "http" && forwardedProtocol !== "https") {
+    forbidden("CSRF protection: invalid request protocol");
+  }
+  const protocol = forwardedProtocol || (request.protocol === "https" ? "https" : "http");
   const expected = `${protocol}://${host}`;
-  if (origin !== expected) {
+  let actualOrigin: string;
+  try {
+    actualOrigin = new URL(origin).origin;
+  } catch {
+    forbidden("CSRF protection: invalid request origin");
+  }
+  if (actualOrigin !== expected) {
     forbidden("CSRF protection: cross-origin request rejected");
   }
+}
+
+function firstHeaderToken(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw.split(",", 1)[0]?.trim() ?? "" : "";
 }
 
 function serverLogFields(server: ManagedServer): LogFields {
@@ -1242,7 +1261,7 @@ function iconContentType(filename: string) {
 async function saveModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   if (!iconUrl || !iconUrl.startsWith("https://")) return;
   const response = await fetch(iconUrl, {
-    headers: { "User-Agent": "serverSENTINEL/0.8.0 (Fabric mod manager)" }
+    headers: { "User-Agent": appUserAgentFor("Fabric mod manager") }
   });
   if (!response.ok || !response.body) return;
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -1321,7 +1340,7 @@ async function fetchModrinthIcon(iconUrl: unknown) {
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(normalizedUrl, {
-      headers: { "User-Agent": "serverSENTINEL/0.8.0 (Fabric mod manager)" }
+      headers: { "User-Agent": appUserAgentFor("Fabric mod manager") }
     });
   } catch {
     const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
@@ -2596,7 +2615,7 @@ async function downloadFabricServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
   const response = await fetch(downloadUrl, {
     headers: {
-      "User-Agent": "serverSENTINEL/0.8.0 (Fabric runtime downloader)"
+      "User-Agent": appUserAgentFor("Fabric runtime downloader")
     }
   });
   if (!response.ok || !response.body) {
@@ -2644,7 +2663,7 @@ async function createServerFiles(
 
 async function createManagedServer(input: CreateServerInput, report?: (progress: number, task: string) => void, jobId?: string) {
   if ((input.nodeId ?? localNodeId) !== localNodeId) {
-    throw new Error("Remote server provisioning is not implemented yet");
+    throw new Error("Remote server provisioning requires a connected node agent. Select a connected node or use all-in-one mode for local servers.");
   }
   const startedAt = Date.now();
   report?.(5, "Validating server settings");
@@ -2711,6 +2730,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   };
 
   logInfo({ ...serverLogFields(server), jobId, minecraftVersion: runtimeProfileForRecord.minecraftVersion, loaderVersion: runtimeProfileForRecord.loaderVersion, jarProvider: runtimeProfileForRecord.jarProvider }, "Fabric runtime profile resolved for provisioning");
+  let saved = false;
   try {
     await createServerFiles(server, input.acceptEula, serverPort, queryPort, report);
     if (dockerAvailable()) {
@@ -2723,10 +2743,15 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
 
     report?.(92, "Saving server registration");
     serversRepository.create(server);
+    saved = true;
     report?.(100, "Server setup complete");
     logInfo({ ...serverLogFields(server), jobId, durationMs: durationSince(startedAt), status: "succeeded" }, "Provisioning succeeded");
     return server;
   } catch (error) {
+    if (!saved) {
+      await removeManagedDockerContainer(server).catch(() => undefined);
+      await rm(server.serverDir, { recursive: true, force: true }).catch(() => undefined);
+    }
     logError({ ...serverLogFields(server), jobId, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Provisioning failed");
     throw error;
   }
@@ -2965,6 +2990,7 @@ async function startImportOperation(input: { artifactBase64: string; targetNodeI
         existingServers: await listManagedServers(),
         serversDir: config.serversDir,
         tmpDir: config.tmpDir,
+        storage: storageDatabase,
         serversRepository,
         modPreferencesRepository,
         settingsRepository,
@@ -3336,7 +3362,7 @@ const app = Fastify({
   bodyLimit: 180 * 1024 * 1024
 });
 appLogger = app.log;
-const storageDatabase = openStorageDatabase();
+storageDatabase = openStorageDatabase();
 usersRepository = new UsersRepository(storageDatabase);
 nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
@@ -3348,6 +3374,15 @@ operationsRepository = new OperationsRepository(storageDatabase);
 const recoveredOperations = operationsRepository.failIncompleteOnStartup();
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
+}
+const prunedOperations = operationsRepository.deleteFinishedBefore(new Date(Date.now() - operationRetentionMs).toISOString())
+  + operationsRepository.trimFinished(operationRetentionMaxRows);
+if (prunedOperations > 0) {
+  logInfo({ operationCount: prunedOperations, retentionDays: 30, maxRows: operationRetentionMaxRows }, "Pruned old operation records");
+}
+const prunedLeases = fileEditLeasesRepository.pruneExpired();
+if (prunedLeases > 0) {
+  logInfo({ leaseCount: prunedLeases }, "Pruned expired file edit leases");
 }
 configureModrinthApiKeyProvider(modrinthApiKey);
 app.addHook("onClose", async () => {
@@ -3722,7 +3757,7 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
   return (await publicNodes([node]))[0];
 });
 
-app.get("/api/nodes/connect", { websocket: true }, async (socket) => {
+app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (socket) => {
   const ws = socket as any;
   const reject = (message: string) => {
     const response: PanelWelcome = { type: "welcome", nodeId: "", protocolVersion: nodeProtocolVersion, accepted: false, compatibility: "incompatible", error: message };
@@ -4539,7 +4574,14 @@ async function localWriteEditableFile(server: ManagedServer, target: string, con
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
   }
-  await writeFile(target, content, "utf8");
+  const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, content, "utf8");
+    await rename(temporary, target);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
   logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "write_file" }, "Server file written");
   return { ok: true, path: toPublicPath(server, target) };
 }
@@ -5448,6 +5490,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
         if (planned.dependencyType === "required") continue;
         throw new Error("A mod with that filename already exists");
       }
+      const temporaryDestination = `${destination}.serversentinel-${randomUUID()}.tmp`;
       const downloadResponse = await modrinthFetch(planned.file.url);
       if (!downloadResponse.ok) {
         throw new Error(`Mod download failed: ${downloadResponse.statusText}`);
@@ -5463,10 +5506,12 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
         await pipeline(
           Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
           sizeLimitTransform(modFileSizeLimit),
-          createWriteStream(destination)
+          createWriteStream(temporaryDestination)
         );
-        await verifyDownloadedJar(destination, planned.file);
+        await verifyDownloadedJar(temporaryDestination, planned.file);
+        await rename(temporaryDestination, destination);
       } catch (error) {
+        await rm(temporaryDestination, { force: true }).catch(() => {});
         await rm(destination, { force: true }).catch(() => {});
         throw error;
       }

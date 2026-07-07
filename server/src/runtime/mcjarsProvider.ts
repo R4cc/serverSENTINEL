@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { appUserAgentFor } from "../buildInfo.js";
 import type { ServerRuntimeProfile } from "../types.js";
 import {
   minecraftJavaMajorVersion,
@@ -38,7 +39,7 @@ type CacheEntry<T> = {
 
 const successTtlMs = 15 * 60_000;
 const failureTtlMs = 30_000;
-const userAgent = "serverSENTINEL/0.8.0 (MCJars runtime provider)";
+const userAgent = appUserAgentFor("MCJars runtime provider");
 const mcjarsReachabilityMessage = "serverSENTINEL could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again.";
 
 function withDetails(error: RuntimeResolutionError, details: string) {

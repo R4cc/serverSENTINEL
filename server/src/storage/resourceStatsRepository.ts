@@ -23,4 +23,8 @@ export class ResourceStatsRepository {
       database.prepare("DELETE FROM resource_stats WHERE server_id = ? AND sampled_at < ?").run(serverId, cutoff);
     });
   }
+
+  prune(cutoff: number) {
+    return this.storage.connection.prepare("DELETE FROM resource_stats WHERE sampled_at < ?").run(cutoff).changes;
+  }
 }

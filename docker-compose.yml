@@ -1,5 +1,6 @@
 services:
   serversentinel:
+    image: nl2109/serversentinel:1.0.0
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -10,7 +11,7 @@ services:
       SS_MODE: ${SS_MODE:-all-in-one}
       SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
-      SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest}
+      SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:1.0.0}
       SERVERSENTINEL_ENABLE_DEMO: ${SERVERSENTINEL_ENABLE_DEMO:-false}
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
       MCJARS_BASE_URL: ${MCJARS_BASE_URL:-https://mcjars.app}
@@ -22,10 +23,10 @@ services:
     volumes:
       - serversentinel-data:/data
       - minecraft-servers:/data/servers
-      # Optional but powerful: enables serverSENTINEL to create/start/stop
-      # separate Minecraft runtime containers using Docker.
+      # Powerful: all-in-one mode needs Docker socket access to create,
+      # start, and stop sibling Minecraft runtime containers.
       # Only mount this in trusted environments.
-      # - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
 volumes:

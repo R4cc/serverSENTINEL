@@ -126,4 +126,25 @@ describe("OperationsRepository", () => {
     expect(operations.list({ serverId: "server-a" }).map((operation) => operation.id)).toEqual([second.id, first.id]);
     expect(operations.list({ serverId: "server-a", status: "failed" }).map((operation) => operation.id)).toEqual([second.id]);
   });
+
+  it("prunes old finished operations and caps retained history", async () => {
+    const operations = await createRepository();
+    const old = operations.create({ type: "export.run", createdAt: "2026-01-01T00:00:00.000Z" });
+    const recentA = operations.create({ type: "server.start", createdAt: "2026-02-01T00:00:00.000Z" });
+    const recentB = operations.create({ type: "server.stop", createdAt: "2026-02-02T00:00:00.000Z" });
+    const running = operations.create({ type: "server.restart", createdAt: "2026-01-01T00:00:00.000Z" });
+    operations.start(running.id);
+    operations.succeed(old.id, {}, "2026-01-01T00:00:01.000Z");
+    operations.succeed(recentA.id, {}, "2026-02-01T00:00:01.000Z");
+    operations.succeed(recentB.id, {}, "2026-02-02T00:00:01.000Z");
+
+    expect(operations.deleteFinishedBefore("2026-01-15T00:00:00.000Z")).toBe(1);
+    expect(operations.find(old.id)).toBeUndefined();
+    expect(operations.find(running.id)).toMatchObject({ status: "running" });
+
+    expect(operations.trimFinished(1)).toBe(1);
+    expect(operations.find(recentA.id)).toBeUndefined();
+    expect(operations.find(recentB.id)).toMatchObject({ status: "succeeded" });
+    expect(operations.find(running.id)).toMatchObject({ status: "running" });
+  });
 });

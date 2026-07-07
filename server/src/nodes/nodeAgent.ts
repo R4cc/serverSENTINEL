@@ -7,7 +7,7 @@ import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
-import { appBuildId, appVersion } from "../buildInfo.js";
+import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
@@ -368,7 +368,7 @@ async function downloadFabricJar(server: ManagedServer) {
   if (!artifact?.downloadUrl) throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
   if (!artifact.downloadUrl.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS Fabric server jar");
   const res = await fetch(artifact.downloadUrl, {
-    headers: { "User-Agent": "serverSENTINEL/0.8.0 (node Fabric runtime downloader)" }
+    headers: { "User-Agent": appUserAgentFor("node Fabric runtime downloader") }
   });
   if (!res.ok || !res.body) {
     const body = !res.ok ? await res.text().catch(() => "") : "";
@@ -705,7 +705,7 @@ function createNetworkingConfig(inspect?: NodeContainerInspect | null) {
 
 async function prepareNodeUpdate(payload: unknown) {
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
-  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || "nl2109/serversentinel:latest");
+  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before updating the node from the panel.");
   }

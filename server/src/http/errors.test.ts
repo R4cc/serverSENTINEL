@@ -40,4 +40,31 @@ describe("structured API errors", () => {
       }
     });
   });
+
+  it("does not expose string details from expected 4xx failures", () => {
+    expect(publicApiError(error("Remote node command failed", {
+      code: "command_failed",
+      details: "Error: boom\n    at /srv/serversentinel/secret/path.ts:1"
+    }), 400)).toEqual({
+      error: {
+        code: "COMMAND_FAILED",
+        message: "Remote node command failed",
+        details: {}
+      }
+    });
+  });
+
+  it("redacts sensitive keys from structured public details", () => {
+    expect(publicApiError(error("Validation failed", {
+      details: {
+        field: "node",
+        joinToken: "secret-token",
+        nested: { apiKey: "modrinth-key", displayName: "Remote Node" }
+      }
+    }), 400).error.details).toEqual({
+      field: "node",
+      joinToken: "[redacted]",
+      nested: { apiKey: "[redacted]", displayName: "Remote Node" }
+    });
+  });
 });
