@@ -29,6 +29,12 @@ export function appendCommandHistory(history: string[], command: string) {
   return [...history.filter((entry) => entry !== normalized), normalized].slice(-50);
 }
 
+export function deletePreviousTerminalWord(value: string) {
+  const withoutTrailingWhitespace = value.replace(/\s+$/, "");
+  if (!withoutTrailingWhitespace) return "";
+  return withoutTrailingWhitespace.replace(/\S+$/, "");
+}
+
 export function recallPreviousCommand(history: string[], state: TerminalHistoryState): TerminalHistoryState {
   if (!history.length) return state;
   const historyIndex = state.historyIndex === null ? history.length - 1 : Math.max(0, state.historyIndex - 1);
