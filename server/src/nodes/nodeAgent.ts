@@ -9,7 +9,7 @@ import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
-import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -1163,8 +1163,23 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.console.send") {
     const commandText = typeof payload?.command === "string" ? payload.command.trim() : "";
     if (!commandText) throw new Error("Console command is required");
-    const exec = await dockerJsonRequest<{ Id: string }>("POST", `/containers/${name}/exec`, { AttachStdin: false, AttachStdout: true, AttachStderr: true, Cmd: ["sh", "-lc", `printf '%s\\n' "$SS_CMD" > /proc/1/fd/0`], Env: [`SS_CMD=${commandText}`] }, 201);
-    await dockerJsonRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
+    if (/[\r\n]/.test(commandText)) throw new Error("Only one console command can be sent at a time");
+
+    const payloadBase64 = Buffer.from(`${commandText}\n`, "utf8").toString("base64");
+    const shellCommand = `printf %s ${payloadBase64} | base64 -d > /proc/1/fd/0`;
+    const exec = await dockerJsonRequest<{ Id: string }>("POST", `/containers/${name}/exec`, {
+      AttachStdin: false,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      Cmd: ["sh", "-lc", shellCommand]
+    }, 201);
+    const output = await dockerJsonBufferRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
+    const inspectExec = await dockerRequest<{ ExitCode?: number | null }>("GET", `/exec/${encodeURIComponent(exec.Id)}/json`, 200);
+    if (inspectExec.ExitCode) {
+      const detail = stripDockerLogHeaders(output).toString("utf8").trim();
+      throw new Error(`Docker could not write to the Minecraft console stdin${detail ? `: ${detail}` : ""}`);
+    }
     return { ok: true };
   }
   if (command === "files.list") return fileList(server, payload?.path);
