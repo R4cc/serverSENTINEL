@@ -1,5 +1,6 @@
 import { basename, dirname } from "node:path";
 import { Readable } from "node:stream";
+import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { assertNodeSupports } from "./protocol.js";
@@ -361,6 +362,18 @@ export class RemoteNodeRuntime implements NodeRuntime {
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
     const result = await this.command(server, "files.download", { path: normalizeRemotePath(target) }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
     return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
+  }
+
+  async downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult> {
+    const size = entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+    return {
+      filename,
+      size,
+      stream: createZipArchiveStream(entries, async (entry) => {
+        const download = await this.downloadFile(server, entry.sourcePath);
+        return download.stream;
+      })
+    };
   }
 
   readFile(server: ManagedServer, target: string) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolve } from "node:path";
+import { Readable } from "node:stream";
 import {
   compactRecentEvents,
   parseLogEvent,
@@ -26,8 +27,12 @@ import {
   assertSameOriginRequest,
   localFilePathInput,
   publicServerStatus,
-  publicInstalledModsResult
+  publicInstalledModsResult,
+  assertDownloadSize,
+  fileDownloadIntentMode,
+  dedupeDownloadSelections
 } from "./app.js";
+import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
@@ -46,6 +51,12 @@ function testRuntimeProfile() {
     compatibilityStatus: "compatible" as const,
     resolvedAt: new Date().toISOString()
   };
+}
+
+async function streamToBuffer(stream: NodeJS.ReadableStream) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
 
 
@@ -107,6 +118,48 @@ describe("base64 upload validation", () => {
     expect(() => validateBase64Content("abcd=", true)).toThrow("valid base64");
     expect(validateBase64Content("", true)).toBe("");
     expect(validateBase64Content(Buffer.from("hello").toString("base64"), true)).toBe("aGVsbG8=");
+  });
+});
+
+describe("file download planning", () => {
+  it("uses individual downloads for small selected files", () => {
+    expect(fileDownloadIntentMode({ hasDirectory: false, fileCount: 2, totalSize: 1024 })).toBe("individual");
+    expect(fileDownloadIntentMode({ hasDirectory: false, fileCount: 1, totalSize: 128 * 1024 * 1024 })).toBe("individual");
+  });
+
+  it("uses archives for folders, many files, or large selected files", () => {
+    expect(fileDownloadIntentMode({ hasDirectory: true, fileCount: 0, totalSize: 0 })).toBe("archive");
+    expect(fileDownloadIntentMode({ hasDirectory: false, fileCount: 10, totalSize: 10 })).toBe("archive");
+    expect(fileDownloadIntentMode({ hasDirectory: false, fileCount: 2, totalSize: 128 * 1024 * 1024 })).toBe("archive");
+  });
+
+  it("rejects downloads above the configured hard cap", () => {
+    expect(() => assertDownloadSize(512 * 1024 * 1024 + 1)).toThrow("Download is larger");
+  });
+
+  it("deduplicates child paths when their parent folder is selected", () => {
+    const selections = dedupeDownloadSelections([
+      { name: "a.txt", path: "/world/a.txt", target: "world/a.txt", type: "file", size: 1 },
+      { name: "world", path: "/world", target: "world", type: "directory", size: 0 },
+      { name: "server.properties", path: "/server.properties", target: "server.properties", type: "file", size: 1 }
+    ]);
+
+    expect(selections.map((entry) => entry.path)).toEqual(["/server.properties", "/world"]);
+  });
+});
+
+describe("file download archives", () => {
+  it("creates zip entries from lazy streams and validates archive paths", async () => {
+    expect(safeArchivePath("world/level.dat")).toBe("world/level.dat");
+    expect(() => safeArchivePath("../level.dat")).toThrow("normalized");
+
+    const stream = createZipArchiveStream([
+      { sourcePath: "level.dat", archivePath: "world/level.dat", type: "file", size: 5 }
+    ], async () => Readable.from(Buffer.from("hello")));
+    const archive = await streamToBuffer(stream);
+
+    expect(archive.includes(Buffer.from("world/level.dat"))).toBe(true);
+    expect(archive.includes(Buffer.from("hello"))).toBe(true);
   });
 });
 

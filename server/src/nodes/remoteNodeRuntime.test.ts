@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, ServerRuntimeProfile } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
@@ -72,6 +73,12 @@ function runtimeWithRecorder(result: unknown = { ok: true }) {
   return { runtime, calls };
 }
 
+async function drain(stream: Readable) {
+  for await (const _chunk of stream) {
+    // Drain the stream so lazy archive entries open their remote transfers.
+  }
+}
+
 describe("RemoteNodeRuntime command timeouts", () => {
   it("allows slow remote server provisioning commands to outlive the default request timeout", async () => {
     const server = testServer();
@@ -102,6 +109,20 @@ describe("RemoteNodeRuntime command timeouts", () => {
       { command: "mods.upload", timeoutMs: 120_000 },
       { command: "mods.list", timeoutMs: 300_000 },
       { command: "mods.install", timeoutMs: 300_000 }
+    ]);
+  });
+
+  it("uses existing remote file downloads when streaming archives", async () => {
+    const server = testServer();
+    const { runtime, calls } = runtimeWithRecorder({ filename: "a.txt", size: 1, contentBase64: Buffer.from("a").toString("base64") });
+
+    const archive = await runtime.downloadArchive(server, [
+      { sourcePath: "a.txt", archivePath: "a.txt", type: "file", size: 1 }
+    ], "files.zip");
+    await drain(archive.stream);
+
+    expect(calls).toEqual([
+      { command: "files.download", timeoutMs: 120_000 }
     ]);
   });
 });

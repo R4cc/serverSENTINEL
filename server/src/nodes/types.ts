@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
@@ -39,6 +40,7 @@ export type NodeRuntime = {
   listFiles(server: ManagedServer, target: string): Promise<unknown>;
   previewFile(server: ManagedServer, target: string): Promise<unknown>;
   downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult>;
+  downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult>;
   readFile(server: ManagedServer, target: string): Promise<unknown>;
   writeFile(server: ManagedServer, target: string, content: unknown): Promise<unknown>;
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;

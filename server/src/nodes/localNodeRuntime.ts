@@ -1,4 +1,5 @@
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
+import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
 
 export type LocalNodeRuntimeHandlers = {
@@ -24,6 +25,7 @@ export type LocalNodeRuntimeHandlers = {
   listFiles(server: ManagedServer, target: string): Promise<unknown>;
   previewFile(server: ManagedServer, target: string): Promise<unknown>;
   downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult>;
+  downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult>;
   readFile(server: ManagedServer, target: string): Promise<unknown>;
   writeFile(server: ManagedServer, target: string, content: unknown): Promise<unknown>;
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;
@@ -130,6 +132,10 @@ export class LocalNodeRuntime implements NodeRuntime {
 
   downloadFile(server: ManagedServer, target: string) {
     return this.handlers.downloadFile(server, target);
+  }
+
+  downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string) {
+    return this.handlers.downloadArchive(server, entries, filename);
   }
 
   readFile(server: ManagedServer, target: string) {

@@ -44,6 +44,32 @@ function parseHttpPort(value: string | undefined) {
   return port;
 }
 
+function parseByteLimitEnv(name: string, defaultValue: number) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return defaultValue;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a whole number of bytes`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive whole number of bytes`);
+  }
+  return value;
+}
+
+function parseCountLimitEnv(name: string, defaultValue: number) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return defaultValue;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a whole number`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive whole number`);
+  }
+  return value;
+}
+
 const paths = runtimeDataPaths(process.env.SERVERSENTINEL_DATA_DIR);
 const panelUrl = process.env.SS_PANEL_URL?.trim();
 const nodeDockerDataDir = process.env.SERVERSENTINEL_DOCKER_DATA_DIR?.trim();
@@ -78,6 +104,9 @@ export const config = {
   nodeDockerDataDir: nodeDockerDataDir || paths.dataDir,
   nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim(),
   enableDemo: process.env.SERVERSENTINEL_ENABLE_DEMO === "true",
+  fileDownloadMaxBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES", 512 * 1024 * 1024),
+  fileDownloadZipThresholdBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES", 128 * 1024 * 1024),
+  fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
   mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
 };

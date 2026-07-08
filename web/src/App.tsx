@@ -41,6 +41,20 @@ import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 
 const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
 
+type DownloadIntent =
+  | {
+      mode: "individual";
+      totalSize: number;
+      files: Array<{ name: string; path: string; size: number; url: string }>;
+    }
+  | {
+      mode: "archive";
+      totalSize: number;
+      filename: string;
+      url: string;
+      expiresAt: string;
+    };
+
 function consoleLine(text: string) {
   return `${text}\n`;
 }
@@ -601,7 +615,7 @@ export default function App() {
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
   const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
-  const canDownloadSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
   const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
   const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
   const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedTouchesMutableConfiguration));
@@ -2545,42 +2559,61 @@ export default function App() {
     }
   }
 
-  async function downloadSelectedFile() {
-    if (!activeServer || selectedEntries.length !== 1) return;
-    if (!canDownloadSelectedFile) return;
-    const entry = selectedEntries[0];
-    if (entry.type !== "file") return;
+  async function downloadUrl(url: string, filename: string) {
+    const response = await fetch(url, {
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        ...(demoMode ? demoRequestHeaders() : {})
+      },
+      credentials: "same-origin"
+    });
+    if (!response.ok) {
+      throw await apiErrorFromResponse(response);
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  async function downloadSelectedItems() {
+    if (!activeServer || selectedEntries.length === 0) return;
+    if (!canDownloadSelectedItems) return;
     setFileOperationBusy("download");
     try {
       if (activeServerIsDemo) {
-        const blob = new Blob([demoFiles[entry.path] ?? ""], { type: "application/octet-stream" });
+        const selectedFiles = selectedEntries.filter((entry) => entry.type === "file");
+        const content = selectedFiles.length === 1
+          ? demoFiles[selectedFiles[0].path] ?? ""
+          : selectedFiles.map((entry) => `# ${entry.path}\n${demoFiles[entry.path] ?? ""}`).join("\n\n");
+        const filename = selectedFiles.length === 1 ? selectedFiles[0].name : "demo-selection.txt";
+        const blob = new Blob([content], { type: "application/octet-stream" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = entry.name;
+        anchor.download = filename;
         anchor.click();
         URL.revokeObjectURL(url);
       } else {
-        const response = await fetch(`/api/servers/${activeServer.id}/file/download?path=${encodeURIComponent(entry.path)}`, {
-          headers: {
-            "X-Requested-With": "XMLHttpRequest",
-            ...(demoMode ? demoRequestHeaders() : {})
-          },
-          credentials: "same-origin"
+        const intent = await api<DownloadIntent>(`/api/servers/${activeServer.id}/files/download/intent`, {
+          method: "POST",
+          body: JSON.stringify({
+            paths: selectedEntries.map((entry) => entry.path)
+          })
         });
-        if (!response.ok) {
-          throw await apiErrorFromResponse(response);
+        if (intent.mode === "archive") {
+          await downloadUrl(intent.url, intent.filename);
+        } else {
+          for (const file of intent.files) {
+            await downloadUrl(file.url, file.name);
+          }
         }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = entry.name;
-        anchor.click();
-        URL.revokeObjectURL(url);
       }
     } catch (error) {
-      notify("error", errorMessage(error, "Could not download the selected file."));
+      notify("error", errorMessage(error, "Could not download the selected items."));
     } finally {
       setFileOperationBusy("");
     }
@@ -3712,7 +3745,7 @@ export default function App() {
                           <AppIcon name="edit" />
                           <span className="selectionActionLabel">Open</span>
                         </Button>
-                        <Button variant="secondary" compact aria-label="Download selected file" onClick={downloadSelectedFile} disabled={!canDownloadSelectedFile} title={!selectedEntry ? "Select one file to download" : selectedEntry.type !== "file" ? "Folders cannot be downloaded from this toolbar" : fileReadActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "download") && !activeServerIsDemo ? "Download files permission is required." : "Download selected file")}>
+                        <Button variant="secondary" compact aria-label="Download selected items" onClick={downloadSelectedItems} disabled={!canDownloadSelectedItems} title={!selectedEntries.length ? "Select files or folders to download" : fileReadActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "download")) && !activeServerIsDemo ? "Download files permission is required for every selected item." : "Download selected items")}>
                           <AppIcon name="download" />
                           <span className="selectionActionLabel">Download</span>
                         </Button>

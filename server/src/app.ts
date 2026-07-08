@@ -46,6 +46,7 @@ import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime } from "./nodes/types.js";
 import { defaultServerJarProvider } from "./runtime/mcjarsProvider.js";
+import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
 import {
   normalizeRuntimeProfile,
   runtimeProfileForServer,
@@ -265,7 +266,34 @@ type Client = {
   readyState: number;
 };
 
+type DownloadIntentEntry = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  size: number;
+  modifiedAt?: string;
+};
+
+type DownloadSelection = DownloadIntentEntry & {
+  target: string;
+};
+
+type PreparedDownload = {
+  entries: FileArchiveEntry[];
+  totalSize: number;
+  archiveFilename: string;
+};
+
+type ArchiveDownloadToken = {
+  serverId: string;
+  entries: FileArchiveEntry[];
+  filename: string;
+  totalSize: number;
+  expiresAt: number;
+};
+
 const activeProvisionPortReservations = new Map<string, ProvisionPortReservation>();
+const archiveDownloadTokens = new Map<string, ArchiveDownloadToken>();
 let usersRepository: UsersRepository;
 let nodesRepository: NodesRepository;
 let settingsRepository: SettingsRepository;
@@ -282,6 +310,9 @@ const passwordHashKeyLength = 64;
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
+const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
+const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
+const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
 const modFileSizeLimit = 128 * 1024 * 1024;
 const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 const nodeJoinRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
@@ -820,7 +851,7 @@ async function writeVersionMetadataFile(server: ManagedServer) {
   await writeFile(target, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }
 
-function readZipEntry(buffer: Buffer, entryName: string) {
+export function readZipEntry(buffer: Buffer, entryName: string) {
   let offset = 0;
   while (offset + 30 <= buffer.length) {
     const signature = buffer.readUInt32LE(offset);
@@ -1232,6 +1263,212 @@ function safeFileManagerName(name?: string) {
     throw new Error("File or folder name contains unsafe characters");
   }
   return filename;
+}
+
+function fileDownloadLimitError(size: number): never {
+  const error = new Error(`Download is larger than ${Math.floor(fileDownloadMaxBytes / 1024 / 1024)} MiB`) as Error & { statusCode?: number; code?: string; details?: unknown };
+  error.statusCode = 413;
+  error.code = "download_size_limit";
+  error.details = { size, limit: fileDownloadMaxBytes };
+  throw error;
+}
+
+function archiveSegment(name: string) {
+  const segment = basename(name).trim().replace(/[^a-zA-Z0-9._ -]/g, "_");
+  return segment && segment !== "." && segment !== ".." ? segment : "download";
+}
+
+function publicPathParent(path: string) {
+  const normalized = normalizePublicFilePath(path);
+  if (normalized === "/") return "/";
+  const parts = normalized.slice(1).split("/");
+  parts.pop();
+  return parts.length ? `/${parts.join("/")}` : "/";
+}
+
+function publicPathName(path: string) {
+  const normalized = normalizePublicFilePath(path);
+  if (normalized === "/") return "server-files";
+  return archiveSegment(normalized.split("/").pop() ?? "download");
+}
+
+function publicPathContains(parent: string, child: string) {
+  const normalizedParent = normalizePublicFilePath(parent);
+  const normalizedChild = normalizePublicFilePath(child);
+  return normalizedParent === "/" || normalizedChild === normalizedParent || normalizedChild.startsWith(`${normalizedParent}/`);
+}
+
+export function assertDownloadSize(totalSize: number) {
+  if (totalSize > fileDownloadMaxBytes) fileDownloadLimitError(totalSize);
+}
+
+export function fileDownloadIntentMode(input: { hasDirectory: boolean; fileCount: number; totalSize: number }) {
+  assertDownloadSize(input.totalSize);
+  return input.hasDirectory || (input.fileCount > 1 && (input.fileCount >= fileDownloadZipThresholdCount || input.totalSize >= fileDownloadZipThresholdBytes))
+    ? "archive"
+    : "individual";
+}
+
+function parseFileListing(value: unknown) {
+  if (!value || typeof value !== "object") throw new Error("File listing is unavailable");
+  const listing = value as { path?: unknown; entries?: unknown };
+  if (typeof listing.path !== "string" || !Array.isArray(listing.entries)) throw new Error("File listing is malformed");
+  const entries = listing.entries.map((entry) => {
+    if (!entry || typeof entry !== "object") throw new Error("File listing entry is malformed");
+    const candidate = entry as Record<string, unknown>;
+    if (typeof candidate.name !== "string" || typeof candidate.path !== "string" || (candidate.type !== "file" && candidate.type !== "directory") || typeof candidate.size !== "number") {
+      throw new Error("File listing entry is malformed");
+    }
+    return {
+      name: candidate.name,
+      path: normalizePublicFilePath(candidate.path),
+      type: candidate.type,
+      size: candidate.size,
+      modifiedAt: typeof candidate.modifiedAt === "string" ? candidate.modifiedAt : undefined
+    } satisfies DownloadIntentEntry;
+  });
+  return { path: normalizePublicFilePath(listing.path), entries };
+}
+
+async function localDownloadSelection(server: ManagedServer, target: string): Promise<DownloadSelection> {
+  const targetStat = await lstat(target);
+  if (targetStat.isSymbolicLink()) {
+    throw new Error("Symlinked files and folders cannot be downloaded");
+  }
+  const type = targetStat.isDirectory() ? "directory" : targetStat.isFile() ? "file" : undefined;
+  if (!type) throw new Error("Only files and folders can be downloaded");
+  return {
+    name: publicPathName(toPublicPath(server, target)),
+    path: normalizePublicFilePath(toPublicPath(server, target)),
+    target,
+    type,
+    size: type === "file" ? targetStat.size : 0,
+    modifiedAt: targetStat.mtime.toISOString()
+  };
+}
+
+async function remoteDownloadSelection(runtime: NodeRuntime, server: ManagedServer, target: string): Promise<DownloadSelection> {
+  const publicPath = normalizePublicFilePath(runtime.publicPath(server, target));
+  try {
+    await runtime.listFiles(server, target);
+    return { name: publicPathName(publicPath), path: publicPath, target, type: "directory", size: 0 };
+  } catch {
+    const parentPath = publicPathParent(publicPath);
+    const parentTarget = await runtime.resolveExistingPath(server, parentPath);
+    const parentListing = parseFileListing(await runtime.listFiles(server, parentTarget));
+    const entry = parentListing.entries.find((candidate) => candidate.path === publicPath);
+    if (!entry || entry.type !== "file") throw new Error("Only files and folders can be downloaded");
+    return { ...entry, target, name: publicPathName(publicPath) };
+  }
+}
+
+async function downloadSelection(runtime: NodeRuntime, server: ManagedServer, target: string): Promise<DownloadSelection> {
+  return server.nodeId === localNodeId
+    ? localDownloadSelection(server, target)
+    : remoteDownloadSelection(runtime, server, target);
+}
+
+export function dedupeDownloadSelections(selections: DownloadSelection[]) {
+  const sorted = [...selections].sort((left, right) => left.path.length - right.path.length);
+  const kept: DownloadSelection[] = [];
+  for (const selection of sorted) {
+    if (kept.some((candidate) => candidate.type === "directory" && candidate.path !== selection.path && publicPathContains(candidate.path, selection.path))) {
+      continue;
+    }
+    if (!kept.some((candidate) => candidate.path === selection.path)) kept.push(selection);
+  }
+  return kept.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function collectArchiveEntries(
+  request: { headers: { cookie?: string } },
+  runtime: NodeRuntime,
+  server: ManagedServer,
+  selection: DownloadSelection,
+  archivePath: string,
+  entries: FileArchiveEntry[],
+  total: { size: number }
+) {
+  if (server.nodeId === localNodeId) {
+    const targetStat = await lstat(selection.target);
+    if (targetStat.isSymbolicLink()) throw new Error("Symlinked files and folders cannot be downloaded");
+  }
+  if (selection.type === "file") {
+    total.size += selection.size;
+    assertDownloadSize(total.size);
+    entries.push({
+      sourcePath: selection.target,
+      archivePath,
+      type: "file",
+      size: selection.size,
+      modifiedAt: selection.modifiedAt
+    });
+    return;
+  }
+
+  entries.push({
+    sourcePath: selection.target,
+    archivePath,
+    type: "directory",
+    size: 0,
+    modifiedAt: selection.modifiedAt
+  });
+  const listing = parseFileListing(await runtime.listFiles(server, selection.target));
+  for (const entry of listing.entries) {
+    const childTarget = await runtime.resolveExistingPath(server, entry.path);
+    await requireFilePathPermission(request, server, childTarget, "files.download");
+    const childSelection = server.nodeId === localNodeId
+      ? await localDownloadSelection(server, childTarget)
+      : { ...entry, target: childTarget };
+    await collectArchiveEntries(
+      request,
+      runtime,
+      server,
+      childSelection,
+      `${archivePath}/${archiveSegment(entry.name)}`,
+      entries,
+      total
+    );
+  }
+}
+
+async function prepareDownload(
+  request: { headers: { cookie?: string } },
+  runtime: NodeRuntime,
+  server: ManagedServer,
+  selections: DownloadSelection[]
+): Promise<PreparedDownload> {
+  const entries: FileArchiveEntry[] = [];
+  const total = { size: 0 };
+  const multiple = selections.length > 1;
+  for (const selection of selections) {
+    const topLevelName = selection.path === "/" ? archiveSegment(server.displayName || "server-files") : archiveSegment(selection.name);
+    const archivePath = multiple || selection.type === "directory" ? topLevelName : archiveSegment(selection.name);
+    await collectArchiveEntries(request, runtime, server, selection, archivePath, entries, total);
+  }
+  const baseName = selections.length === 1
+    ? selections[0].path === "/" ? server.displayName || "server-files" : selections[0].name
+    : `${server.displayName || "server"} files`;
+  return { entries, totalSize: total.size, archiveFilename: safeArchiveFilename(baseName) };
+}
+
+function cleanupArchiveDownloadTokens(now = Date.now()) {
+  for (const [token, value] of archiveDownloadTokens) {
+    if (value.expiresAt <= now) archiveDownloadTokens.delete(token);
+  }
+}
+
+function createArchiveDownloadToken(serverId: string, prepared: PreparedDownload) {
+  cleanupArchiveDownloadTokens();
+  const token = randomUUID();
+  archiveDownloadTokens.set(token, {
+    serverId,
+    entries: prepared.entries,
+    filename: prepared.archiveFilename,
+    totalSize: prepared.totalSize,
+    expiresAt: Date.now() + 5 * 60 * 1000
+  });
+  return token;
 }
 
 function pathIsInsideRoot(root: string, target: string) {
@@ -4361,10 +4598,75 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, "files.download");
+  const selection = await downloadSelection(runtime, server, target);
+  if (selection.type !== "file") throw new Error("Only files can be downloaded");
+  assertDownloadSize(selection.size);
   const download = await runtime.downloadFile(server, target);
   return reply
     .header("Content-Type", "application/octet-stream")
     .header("Content-Length", download.size)
+    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`)
+    .send(download.stream);
+});
+
+app.post<{ Params: { id: string }; Body: { paths?: unknown } }>("/api/servers/:id/files/download/intent", async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const rawPaths = Array.isArray(request.body.paths) ? request.body.paths : [];
+  if (rawPaths.length < 1) throw new Error("At least one file or folder path is required");
+  if (rawPaths.length > 200) throw new Error("A download selection is limited to 200 items");
+
+  const selections: DownloadSelection[] = [];
+  for (const rawPath of rawPaths) {
+    if (typeof rawPath !== "string") throw new Error("Download paths must be strings");
+    const target = await runtime.resolveExistingPath(server, rawPath);
+    await requireFilePathPermission(request, server, target, "files.download");
+    selections.push(await downloadSelection(runtime, server, target));
+  }
+  const deduped = dedupeDownloadSelections(selections);
+  const fileOnly = deduped.every((entry) => entry.type === "file");
+  const selectedFileCount = deduped.filter((entry) => entry.type === "file").length;
+  const selectedFileSize = deduped.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  assertDownloadSize(selectedFileSize);
+
+  const mode = fileDownloadIntentMode({ hasDirectory: !fileOnly, fileCount: selectedFileCount, totalSize: selectedFileSize });
+  if (mode === "individual") {
+    return {
+      mode: "individual",
+      totalSize: selectedFileSize,
+      files: deduped.map((entry) => ({
+        name: entry.name,
+        path: entry.path,
+        size: entry.size,
+        url: `/api/servers/${encodeURIComponent(server.id)}/file/download?path=${encodeURIComponent(entry.path)}`
+      }))
+    };
+  }
+
+  const prepared = await prepareDownload(request, runtime, server, deduped);
+  const token = createArchiveDownloadToken(server.id, prepared);
+  return {
+    mode: "archive",
+    totalSize: prepared.totalSize,
+    filename: prepared.archiveFilename,
+    url: `/api/servers/${encodeURIComponent(server.id)}/files/download/archive/${encodeURIComponent(token)}`,
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+  };
+});
+
+app.get<{ Params: { id: string; token: string } }>("/api/servers/:id/files/download/archive/:token", async (request, reply) => {
+  cleanupArchiveDownloadTokens();
+  const token = archiveDownloadTokens.get(request.params.token);
+  if (!token || token.serverId !== request.params.id) throw new Error("Download archive is no longer available");
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  for (const entry of token.entries) {
+    const target = await runtime.resolveExistingPath(server, entry.sourcePath);
+    await requireFilePathPermission(request, server, target, "files.download");
+  }
+  const download = await runtime.downloadArchive(server, token.entries, token.filename);
+  return reply
+    .header("Content-Type", "application/zip")
     .header("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`)
     .send(download.stream);
 });
@@ -4572,10 +4874,21 @@ async function localDownloadFile(_server: ManagedServer, target: string) {
   if (!targetStat.isFile()) {
     throw new Error("Only files can be downloaded");
   }
+  assertDownloadSize(targetStat.size);
   return {
     filename: basename(target),
     size: targetStat.size,
     stream: createReadStream(target)
+  };
+}
+
+async function localDownloadArchive(_server: ManagedServer, entries: FileArchiveEntry[], filename: string) {
+  const size = entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  assertDownloadSize(size);
+  return {
+    filename,
+    size,
+    stream: createZipArchiveStream(entries)
   };
 }
 
@@ -6144,6 +6457,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   listFiles: localListFiles,
   previewFile: localPreviewFile,
   downloadFile: localDownloadFile,
+  downloadArchive: localDownloadArchive,
   readFile: localReadEditableFile,
   writeFile: localWriteEditableFile,
   createFolder: localCreateFolder,
