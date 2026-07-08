@@ -1,0 +1,1775 @@
+@media (max-width: 1320px) {
+  .overviewPage {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewSummary,
+  .overviewPage > .resourcePanel,
+  .overviewPage > .activityPanel,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .appShell,
+  .sidebarCollapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    width: 100% !important;
+    transition: none !important;
+    padding: var(--space-4) !important;
+    border-right: 0;
+    border-bottom: var(--border-heavy) solid var(--border);
+  }
+
+  .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    height: auto !important;
+    padding-bottom: var(--space-4) !important;
+  }
+
+  .brandBlock .iconButton,
+  .sidebarCollapsed .brandBlock .iconButton {
+    position: static !important;
+  }
+
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    left: 0 !important;
+    width: auto !important;
+    gap: var(--space-2) !important;
+    padding-right: 0 !important;
+  }
+
+  .brandLockup > div,
+  .sidebarCollapsed .brandLockup > div {
+    opacity: 1 !important;
+    max-width: none !important;
+    visibility: visible !important;
+  }
+
+  .sidebarCollapsed .brandBlock h1,
+  .sidebarCollapsed .brandBlock p,
+  .sidebarCollapsed .navLabel,
+  .sidebarCollapsed .selectedServerReadout,
+  .sidebarCollapsed .accountName,
+  .sidebarCollapsed .accountLogoutButton,
+  .sidebarCollapsed .settingsVersionText {
+    opacity: 1 !important;
+    max-width: none !important;
+    visibility: visible !important;
+  }
+
+  .sidebarCollapsed .brandBlock {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .sidebarCollapsed .sideNav button {
+    justify-content: flex-start;
+    padding: 10px 12px;
+    gap: var(--space-3) !important;
+  }
+
+  .sidebarCollapsed .selectedServerReadout {
+    display: block;
+  }
+
+  .sidebarCollapsed .accountChip {
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    justify-content: flex-start;
+    gap: var(--space-2) !important;
+    padding: var(--space-1);
+  }
+
+  .sidebarCollapsed .accountLogoutButton {
+    display: flex;
+    opacity: 1 !important;
+    max-width: 34px !important;
+    min-width: 34px !important;
+    visibility: visible !important;
+    padding: 0 !important;
+    border-width: var(--border-strong) !important;
+    margin: 0 !important;
+  }
+
+  .workspaceHeader,
+  .systemBanner,
+  .keyForm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+
+
+  .activeServerStrip {
+    grid-template-columns: 1fr;
+  }
+
+
+  .runtimeControls {
+    flex-wrap: wrap;
+  }
+
+  .systemBanner {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewPage,
+  .filesPage,
+  .schedulePage,
+  .settingsPage {
+    grid-template-columns: 1fr;
+  }
+
+  .filesPage {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .filesExplorer {
+    height: min(640px, calc(100vh - 220px));
+    min-height: 420px;
+  }
+
+  .overviewSummary,
+  .overviewPage > .resourcePanel,
+  .overviewPage > .activityPanel,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .fileDetailsPanel {
+    height: auto;
+    min-height: 320px;
+  }
+
+  .fileNavBar {
+    grid-template-columns: 1fr;
+  }
+
+  .fileToolbar {
+    justify-content: start;
+  }
+
+  .settingsGroupHeader,
+  .settingsRow {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+.settingsRow select,
+.settingsRow .keyForm,
+.settingsStatus {
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .keyFormActions,
+  .secretPreview {
+    width: 100%;
+  }
+
+  .keyFormActions {
+    justify-content: end;
+  }
+
+}
+
+@media (max-width: 720px) {
+  .workspace,
+  .sidebar {
+    padding: var(--space-3);
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(34px, 14vw, 58px);
+  }
+
+.workspaceActions,
+.buttonRow,
+.fileActions,
+.fileToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+.workspaceActions button,
+.buttonRow button,
+.fileActions button,
+.fileToolbar button,
+.keyFormActions button,
+.keyFormConfigured button {
+    width: 100%;
+  }
+
+
+  .resourceScopeControl {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .resourceScopeControl button {
+    flex: 1;
+  }
+
+  .nodesToolbar .buttonRow {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .nodesToolbar .nodesRefreshButton {
+    width: 44px;
+    min-width: 44px;
+  }
+
+  .filesPage .fileNavBar .fileToolbar {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    width: auto;
+    padding-inline: 0;
+  }
+
+  .filesPage .fileNavBar .fileToolbar .fileToolbarLabel {
+    display: none;
+  }
+
+  .keyFormActions,
+  .keyFormConfigured,
+  .secretPreview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .overviewSummary,
+  .activityGrid,
+  .resourceRow {
+    grid-template-columns: 1fr;
+  }
+
+  .resourceRows {
+    gap: 8px;
+  }
+
+  .resourceRow {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .resourceChart,
+  .resourceChartEmpty {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 2px 2px 0;
+  }
+
+  .activityItem,
+  .activityItem:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .activityItem:nth-last-child(2) {
+    border-bottom: var(--border-subtle) solid var(--border-muted);
+  }
+
+  .eventRow {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+
+  .eventRow small {
+    grid-column: 2;
+  }
+
+  .eventHideButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+
+  .userActions {
+    justify-content: stretch;
+  }
+
+  .userActions button {
+    flex: 1;
+  }
+
+  .usersGroupHeader {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .usersGroupHeader button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .userModalFields,
+  .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .userModalHeader,
+  .userModalFooter {
+    padding: var(--space-3);
+  }
+
+  .userModalBody {
+    padding: var(--space-3);
+  }
+
+
+
+
+
+  .minecraftTerminal {
+    height: 360px;
+  }
+}
+
+.fieldError {
+  color: var(--sentinel-danger);
+  font-size: 12px;
+  font-weight: var(--weight-heading);
+  line-height: 1.35;
+  text-transform: none;
+}
+
+/* Redesigned Installed Mods Styles */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.switchStateLabel {
+  color: var(--text-soft);
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+}
+
+.switchStateLabel.enabled {
+  color: var(--sentinel-success);
+}
+
+/* Switch styling */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: var(--weight-heading);
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+  background-color: var(--surface-muted);
+  border: var(--border-strong) solid var(--border);
+  border-radius: 999px;
+  transition: all 200ms ease;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-muted);
+  border-radius: 50%;
+  transition: all 200ms ease;
+}
+
+.switch input:checked + .slider {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(18px);
+  background-color: var(--swiss-white);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.switch input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+
+
+/* Responsive Table Styles */
+
+/* Mod Details Modal Refinements */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.emptyInline.noBorder {
+  border: 0;
+}
+
+
+
+
+
+
+
+/* Responsive application layout */
+.workspace {
+  max-width: 1680px;
+}
+
+.workspaceHeader {
+  min-height: 104px;
+  align-items: end;
+}
+
+.workspaceHeader > div {
+  min-width: 0;
+}
+
+.workspaceHeader h2 {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.workspaceActions {
+  justify-content: flex-end;
+}
+
+.pageStack,
+.tabPage,
+.settingsList,
+.nodesPage {
+  min-width: 0;
+}
+
+.tabPage:has(.consolePanel) {
+  display: grid;
+  grid-template-rows: 1fr;
+  height: max(560px, calc(100vh - 238px));
+  min-height: 0;
+}
+
+.tabPage:has(.consolePanel) {
+  max-width: none;
+  align-content: stretch;
+}
+
+
+.panel,
+.activeServerStrip,
+.modalPanel {
+  border-radius: var(--radius-sm);
+}
+
+.settingsGroupHeader > div,
+.settingsRow > div,
+.serverStripInfo {
+  min-width: 0;
+}
+
+.settingsGroupHeader h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyInline,
+.eventEmpty,
+.fileDetailsEmpty {
+  border-radius: var(--radius-sm);
+}
+
+button,
+.quickActionButton,
+.runtimeControlButton,
+.secondaryButton {
+  min-height: 42px;
+}
+
+
+.secondaryButton {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.eventHideButton,
+.iconDangerButton,
+.roleInfoButton,
+.accountLogoutButton {
+  flex: 0 0 auto;
+}
+
+button:disabled,
+.sideNav button:disabled {
+  filter: grayscale(0.2);
+}
+
+.sideNav button:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border-muted);
+  color: var(--text-soft);
+  opacity: 0.64;
+}
+
+.sideNav button.active {
+  box-shadow: inset 5px 0 0 var(--accent);
+}
+
+.sideNav button:not(.active):hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--text);
+  transform: none;
+}
+
+.selectedServerReadout {
+  min-height: 28px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 6px 8px;
+}
+
+.serverListItem,
+.nodeCard,
+.addNodeCardButton {
+  min-width: 0;
+}
+
+.serverListItem strong,
+.nodeCardTitle h3,
+.nodeServerName,
+.selectedServerReadout,
+.accountName,
+.settingsNavLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inlineState {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+}
+
+.inlineStateSpinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.85s linear infinite;
+}
+
+.inlineState-empty,
+.emptyInline,
+.eventEmpty,
+.fileDetailsEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
+    var(--surface-muted);
+}
+
+.themeDark .inlineState-empty,
+.themeDark .emptyInline,
+.themeDark .eventEmpty,
+.themeDark .fileDetailsEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 10px),
+    var(--surface-muted);
+}
+
+.modalHeader,
+.modalBody,
+.modalFooter {
+  padding: var(--space-4);
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.modalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+}
+
+.modalHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modalBody {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.modalBody p {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.modalFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+}
+
+.confirmModalPanel,
+.discardEditorModal {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.confirmContent blockquote {
+  margin: 0;
+  border-left: var(--border-heavy) solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.discardEditorActions {
+  margin: 0;
+}
+
+.fileEditorHeader,
+.fileEditorFooter,
+.userModalHeader,
+.userModalFooter,
+.nodeModalHeader,
+.nodeModalBody {
+  padding: var(--space-4);
+}
+
+.nodeModalFooter.inline {
+  margin-top: 0;
+}
+
+.nodeModalHeader.nodeDetailsHeader {
+  padding: var(--space-6) var(--space-7);
+}
+
+.nodeModalBody.nodeDetailsBody {
+  padding: var(--space-6) var(--space-7) var(--space-7);
+}
+
+@media (max-width: 920px) {
+  .nodeInfoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nodeDetailsActions {
+    align-items: stretch;
+  }
+
+  .nodeActionGroup,
+  .nodeActionGroup.destructive {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .nodeModalPanel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    border-radius: 14px;
+  }
+
+  .nodeModalHeader.nodeDetailsHeader,
+  .nodeModalBody.nodeDetailsBody {
+    padding: var(--space-4);
+  }
+
+  .nodeDetailsHeader {
+    align-items: flex-start;
+  }
+
+  .nodeDetailsTitleBlock {
+    gap: var(--space-3);
+  }
+
+  .nodeDetailIcon {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+  .nodeDetailIcon svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .nodeInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .nodeDetailsActions {
+    margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);
+    padding: var(--space-4);
+  }
+
+}
+
+.fileEditorModal {
+  height: min(820px, calc(100vh - 80px));
+  max-height: calc(100vh - 80px);
+}
+
+.fileEditorBody {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.fileEditorMetaRow {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fileEditorMetaRow span {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.fileEditorMetaRow span.dirty {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sentinel-accent-soft);
+}
+
+.fileEditorMetaRow span.editRequiredHint {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.fileLeaseNotice {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border, #d6a84b);
+  border-radius: 8px;
+  background: color-mix(in srgb, #d6a84b 12%, transparent);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.fileCodeEditor {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.fileCodeEditor-disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.fileCodeEditor-disabled .cm-editor,
+.fileCodeEditor-disabled .cm-scroller,
+.fileCodeEditor-disabled .cm-content,
+.fileCodeEditor-disabled .cm-line,
+.fileCodeEditor-disabled .cm-gutters {
+  cursor: not-allowed;
+}
+
+.fileEditorMainArea {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.fileEditorMainArea > .fileCodeEditor:first-child,
+.fileEditorMainArea > .fileEditorStateFill:first-child {
+  grid-row: 1 / -1;
+}
+
+.fileCodeEditor .cm-theme,
+.fileCodeEditor .cm-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.fileCodeEditor .cm-scroller {
+  min-height: 0;
+}
+
+.fileCodeEditor .cm-line {
+  white-space: pre;
+}
+
+.fileCodeEditor .cm-gutter {
+  min-height: 100%;
+}
+
+.fileEditorStateFill {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.fileEditorStateFill .inlineState {
+  width: min(560px, 100%);
+}
+
+.installSnippet {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.installSnippetShell {
+  overflow-x: auto;
+}
+
+.terminal,
+.installSnippet {
+  scrollbar-width: thin;
+}
+
+.installSnippet code {
+  overflow-wrap: normal;
+}
+
+.fileTable {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fileTableHead,
+.fileTableRow {
+  min-width: 760px;
+}
+
+.fileTableRow.selected {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.fileTableRow > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+.settingsRow,
+.settingsGroupHeader {
+  min-width: 0;
+}
+
+.settingsRow select,
+.settingsRow input,
+.keyForm,
+.secretPreview {
+  min-width: 0;
+}
+
+.usersTable td,
+.usersTable th {
+  overflow: hidden;
+}
+
+.usersTable td:nth-child(2) {
+  overflow: visible;
+}
+
+.usersTable td:last-child {
+  overflow: visible;
+}
+
+.usersTable td > *,
+.usersTable th > * {
+  min-width: 0;
+}
+
+.nodeServerRow {
+  min-width: 0;
+}
+
+.nodeServerState,
+.nodeServerPlayers {
+  flex: 0 0 auto;
+}
+
+.nodesGrid {
+  min-height: 0;
+}
+
+.addNodeCardButton {
+  min-height: 320px;
+  border-radius: var(--radius-sm);
+}
+
+/* Unified interaction primitives */
+.buttonRow,
+.userActions,
+.keyFormActions,
+.consoleHeaderActions,
+.fileToolbar,
+.selectionActions,
+.nodeCardActions,
+.nodeActions,
+.nodeDetailsActions,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  padding: var(--space-3);
+}
+
+.nodesToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.panel,
+.authPanel,
+.activeServerStrip,
+.modalPanel {
+  background: var(--surface-raised);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.settingsGroupHeader,
+.nodeCardHeader,
+.nodeInstallHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.settingsGroupHeader h2,
+.modalHeader h2,
+.userModalHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uiForm,
+.appForm,
+.userModalForm,
+.keyForm {
+  min-width: 0;
+}
+
+.appForm label,
+.userModalForm label,
+.keyForm label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.appForm label input,
+.appForm label select,
+.appForm label textarea,
+.userModalForm label input,
+.userModalForm label select,
+.userModalForm label textarea,
+.keyForm label input {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.checkLine,
+.appForm label.checkLine,
+.userModalForm label.checkLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsStatus,
+.runtimeBadge,
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  border: var(--border-subtle) solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.settingsStatus.ready,
+.runtimeBadge.running,
+.nodeServerState.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.settingsStatus.warning,
+.runtimeBadge.starting {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.settingsStatus.limited,
+.runtimeBadge.stopped,
+.runtimeBadge.exited,
+.nodeServerState.stopped {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.runtimeBadge.neutral,
+.settingsStatus.neutral {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.fileTableRow:hover,
+.eventRow:hover,
+.settingsRow:hover {
+  background: var(--sentinel-accent-soft);
+}
+
+.modalPanel {
+  padding: 0;
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody {
+}
+
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  background: var(--surface-muted);
+  padding: var(--space-4);
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+
+
+
+
+.dangerTextButton,
+.iconDangerButton {
+  border-color: var(--sentinel-danger);
+}
+
+
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled) {
+  background: var(--sentinel-danger);
+  border-color: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.themeDark .fileToolbar,
+.themeDark .selectionActionBar,
+.themeDark .nodesToolbar {
+  background: var(--surface-raised);
+}
+
+/* Surface and interaction hierarchy */
+.sidebar {
+  border-right: var(--border-subtle) solid var(--border-panel);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 78%, var(--surface)), var(--surface-muted));
+}
+
+.themeDark .sidebar {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 82%, var(--surface)), var(--surface-muted));
+}
+
+.brandBlock,
+.workspaceHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.settingsGroupHeader,
+.fileNavBar,
+.usersTable th,
+.usersTable td,
+.fileTableHead,
+.fileTableRow,
+.settingsRow {
+  border-color: var(--border-row);
+}
+
+.workspaceHeader {
+  border-bottom-width: var(--border-heavy);
+  border-color: var(--border-panel);
+}
+
+.brandLogo,
+.serverStripIcon,
+.fileTypeIcon,
+.accountIcon,
+.nodeDetailIcon,
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+}
+
+.sideNav {
+  gap: 3px;
+}
+
+.sideNav button,
+.serverListItem {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.sideNav button:hover:not(:disabled),
+.serverListItem:hover:not(.active) {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
+  color: var(--text);
+  transform: none;
+}
+
+.sideNav button.active,
+.serverListItem.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: none;
+}
+
+.sideNav button.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.sideNav button.active:hover,
+.serverListItem.active:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 78%, var(--surface-raised));
+  color: var(--sentinel-accent-strong);
+}
+
+.selectedServerReadout,
+.accountChip {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+}
+
+.sidebarDivider {
+  background-color: var(--border-row);
+}
+
+.panel,
+.authPanel,
+.activeServerStrip,
+.modalPanel,
+.nodeCard,
+.addNodeCardButton,
+.fileCodeEditor,
+.fileEditorStateFill,
+.installSnippetShell,
+.systemBanner {
+  border-color: var(--border-panel);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.045);
+}
+
+.themeDark .panel,
+.themeDark .authPanel,
+.themeDark .activeServerStrip,
+.themeDark .modalPanel,
+.themeDark .nodeCard,
+.themeDark .addNodeCardButton,
+.themeDark .fileCodeEditor,
+.themeDark .fileEditorStateFill,
+.themeDark .installSnippetShell,
+.themeDark .systemBanner {
+  box-shadow: 0 16px 44px rgb(0 0 0 / 0.18);
+}
+
+.panel .panel,
+.modalPanel .panel,
+.nodeModalBody .panel,
+.fileEditorBody .panel,
+.settingsGroup,
+.permissionsCategory,
+.presetSummary,
+.secretPreview,
+.addNodeStatusCard,
+.inlineState,
+.notice,
+.toast,
+.emptyInline,
+.eventEmpty,
+.fileDetailsEmpty {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
+  box-shadow: none;
+}
+
+input,
+select,
+textarea,
+.fileBreadcrumbs button,
+.roleInfoButton,
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.eventHideButton,
+.accountLogoutButton {
+  border-color: var(--border-muted);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.fileBreadcrumbs button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+}
+
+.secondaryButton,
+.quickActionButton,
+.iconButton,
+.iconOnlyButton,
+.modalCloseButton,
+.overflowButton,
+.eventHideButton,
+.accountLogoutButton {
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.modalCloseButton:hover:not(:disabled),
+.overflowButton:hover:not(:disabled),
+.eventHideButton:hover:not(:disabled),
+.accountLogoutButton:hover:not(:disabled) {
+  background: var(--sentinel-accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+  transform: none;
+}
+
+.runtimeControlButton,
+.workspaceActions > button:not(.secondaryButton) {
+  border-color: var(--text);
+}
+
+.settingsStatus,
+.runtimeBadge,
+.roleBadge {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  letter-spacing: var(--tracking-label);
+}
+
+.settingsStatus.ready,
+.runtimeBadge.running,
+.nodeServerState.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 36%, transparent);
+}
+
+.settingsStatus.warning,
+.runtimeBadge.starting {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, transparent);
+}
+
+.settingsStatus.limited,
+.runtimeBadge.stopped,
+.runtimeBadge.exited,
+.nodeServerState.stopped {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.fileTableRow,
+.eventRow,
+.settingsRow {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.fileTableRow:hover,
+.eventRow:hover,
+.settingsRow:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter.inline,
+.fileEditorFooter {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody {
+  background: var(--surface-raised);
+}
+
+.terminal,
+.minecraftTerminal,
+.fileCodeEditor,
+.installSnippetShell {
+  border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
+}
+
+.terminal,
+.minecraftTerminal {
+  border-color: color-mix(in srgb, var(--terminal-text) 22%, var(--terminal-bg));
+}
+
+.emptyInline,
+.eventEmpty,
+.fileDetailsEmpty,
+.inlineState-empty {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
+}
+
+.systemBanner.warning,
+.systemBanner.error,
+.systemBanner.accent {
+  background-image: none;
+}
+
+.sideNav button:disabled {
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.46;
+}
+
+.summaryTile,
+.resourceRow,
+.activityGrid,
+.activityItem,
+.resourceMessage,
+.usersTable,
+.fileTable,
+.scheduleCommands,
+.propertiesGroup,
+.deletePanel {
+  border-color: var(--border-row);
+}
+
+.summaryTile {
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+  box-shadow: none;
+}
+
+.summaryTile::before {
+  display: none;
+}
+
+.resourceRows,
+.eventList {
+  gap: var(--space-2);
+}
+
+.resourceRow {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+}
+
+.activityGrid {
+  background: color-mix(in srgb, var(--surface-raised) 70%, var(--surface-muted));
+}
+
+.activityItem {
+  border-color: var(--border-row);
+}
+
+.resourceChart,
+.resourceChartEmpty,
+.resourceMessage,
+.commandHelp,
+.modDropzone,
+.uploadDropzone,
+.permissionWarning,
+.permissionGroup,
+.nodeCapabilitiesPanel,
+.installTabs,
+.addNodeStepCircle,
+.nodeDetailsActions {
+  border-color: var(--border-muted);
+}
+
+.permissionGroup {
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
+}
+
+.resourceRow.unavailable .resourceChart,
+.resourceRow.unavailable .resourceChartEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.018) 0 1px, transparent 1px 12px),
+    var(--surface);
+}
+
+.themeDark .resourceRow.unavailable .resourceChart,
+.themeDark .resourceRow.unavailable .resourceChartEmpty {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 12px),
+    var(--surface);
+}
+
+.usersTable th,
+.fileTableHead,
+.settingsGroupHeader {
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
+}
+
+.usersTable td,
+.fileTableRow {
+  border-color: var(--border-row);
+}
+
+.fileNameCell {
+  border-color: transparent;
+}
+
+.fileNameCell:hover,
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: var(--border-row);
+}
+
+
+
+.installTabs button.active {
+  background: var(--text);
+  color: var(--surface);
+}
+
+@media (max-width: 1366px) {
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .workspaceHeader {
+    min-height: 88px;
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(34px, 4.8vw, 64px);
+  }
+
+  .activeServerStrip {
+    padding: var(--space-3);
+  }
+
+  .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .nodesGrid {
+    max-height: calc(100vh - 220px);
+  }
+}
+
+@media (max-width: 900px) {
+  .workspaceHeader {
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .workspaceActions {
+    justify-content: flex-start;
+  }
+
+  .selectionActionBar {
+    grid-template-columns: 1fr;
+  }
+
+  .selectionActions,
+  .fileToolbar {
+    justify-content: flex-start;
+  }
+
+  .modalFooter,
+  .fileEditorFooter,
+  .userModalFooter {
+    flex-wrap: wrap;
+  }
+
+  .fileEditorModal {
+    height: calc(100vh - 40px);
+    max-height: calc(100vh - 40px);
+  }
+}
+
+@media (max-width: 720px) {
+  .modalHeader,
+  .modalBody,
+  .modalFooter,
+  .fileEditorHeader,
+  .fileEditorFooter,
+  .userModalHeader,
+  .userModalFooter,
+  .nodeModalHeader,
+  .nodeModalBody {
+    padding: var(--space-3);
+  }
+
+  .modalFooter button,
+  .fileEditorFooter button,
+  .discardEditorActions button {
+    width: 100%;
+  }
+
+  .inlineState {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inlineStateSpinner {
+    align-self: start;
+  }
+
+  .fileEditorMetaRow {
+    align-items: stretch;
+  }
+
+  .fileEditorMetaRow span {
+    border-radius: var(--radius-sm);
+  }
+}

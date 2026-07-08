@@ -1,0 +1,499 @@
+/* Canonical typography scale */
+
+
+
+
+
+
+
+
+
+
+
+
+
+body {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.18;
+  text-transform: none;
+}
+
+h1 {
+  font-size: var(--type-brand-size);
+  font-weight: var(--weight-title);
+}
+
+h2 {
+  font-size: var(--type-section-title-size);
+}
+
+h3,
+h4 {
+  font-size: var(--type-card-title-size);
+}
+
+p,
+li,
+dd,
+dt,
+small,
+span {
+  letter-spacing: var(--tracking-ui);
+}
+
+strong {
+  font-weight: var(--weight-strong);
+}
+
+button,
+.quickActionButton,
+.runtimeControlButton,
+.secondaryButton,
+.dangerTextButton,
+.fileNameCell,
+.modInstallVersionRow,
+.accountLogoutButton,
+.overflowDropdown button {
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.overflowDropdown button {
+  font-size: var(--type-meta-size);
+}
+
+input,
+select,
+textarea {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+textarea,
+.terminal,
+.minecraftTerminal,
+.installSnippet,
+.fileCodeEditor .cm-editor,
+.fileEditorHeader p {
+  font-family: var(--font-mono);
+  font-size: var(--type-code-size);
+  letter-spacing: 0;
+}
+
+.brandBlock h1,
+.authPanel h1 {
+  font-size: var(--type-brand-size);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.brandBlock p,
+.authPanel .brandLockup p {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.sideNav {
+}
+
+.sideNav button {
+  min-height: 44px;
+}
+
+.navLabel,
+.settingsNavLabel,
+.accountName {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 540;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsVersionText,
+.selectedServerReadout {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sideNav button.active .navLabel,
+.serverListItem.active strong {
+  font-weight: var(--weight-strong);
+}
+
+.serverListItem strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sideNav small,
+.serverListItem small,
+.serverListItem span {
+  color: currentColor;
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  line-height: 1.35;
+}
+
+.workspaceHeader {
+  min-height: 56px;
+  align-items: end;
+}
+
+.workspaceHeader h2 {
+  font-size: var(--type-page-title-size);
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.activeServerStrip strong {
+  font-size: 16px;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.serverStripMeta,
+.activeServerStrip span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+}
+
+.activeServerStrip .runtimeControlButton span,
+.activeServerStrip .quickActionButton span,
+.activeServerStrip button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.runtimeBadge,
+.settingsStatus,
+.nodeServerState {
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+  line-height: 1.1;
+}
+
+.roleBadge {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.settingsGroupHeader h2,
+.modalHeader h2,
+.userModalHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.nodesToolbar h2,
+.nodeInstallHeader h3,
+.permissionsHeader h3,
+.modInstallStepIntro h3 {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.fileEditorHeader p {
+  color: var(--text-muted);
+  font-weight: var(--weight-body);
+}
+
+
+.emptyInline,
+.emptyInline span,
+.eventEmpty,
+.eventEmpty span,
+.fileDetailsEmpty,
+.inlineState span,
+.modalBody p,
+.notice,
+.systemBanner span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+}
+
+.emptyInline strong,
+.eventEmpty strong,
+.fileDetailsEmpty strong,
+.inlineState strong,
+.systemBanner strong,
+.notice strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.appForm label,
+.userModalForm label,
+.keyForm label,
+.fieldLabel,
+.settingsRow strong,
+.nodeServerSectionLabel,
+.nodeInfoCard dt,
+.resourceMetricLabel span,
+.modInstallVersionGroupHeader > strong,
+.fileDetailsContent dt {
+  color: var(--text-muted);
+  font-size: var(--type-form-label-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.appForm label input,
+.appForm label select,
+.appForm label textarea,
+.userModalForm label input,
+.userModalForm label select,
+.userModalForm label textarea,
+.keyForm label input {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+.checkLine,
+.appForm label.checkLine,
+.userModalForm label.checkLine,
+.permissionRow span {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsGroupHeader > span {
+  font-size: 18px;
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+}
+
+.settingsGroupHeader p,
+.settingsRow span,
+.permissionsHeader span,
+.permissionRow small,
+.presetSummary,
+.permissionWarning {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.settingsStatus {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.usersTable th,
+.fileTableHead button,
+.fileTableHead label,
+.fileTableHead span,
+.modInstallVersionTableHeader {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.usersTable td,
+.fileTableRow > span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.userNameCell strong,
+.fileNameCell > span:last-child,
+.fileDetailsTitle h2,
+.nodeCardTitle h3,
+.nodeServerName,
+.resourceMetricLabel strong,
+.eventRow strong,
+.modInstallVersionRow span:first-child {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p,
+.nodeDetailsTitleBlock p,
+.modInstallStepIntro p,
+.fileDetailsTitle > div > span,
+.fileDetailsContent dd,
+.resourceMetricLabel small,
+.eventRow small {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.nodeDetailsTitleBlock h2 {
+  font-size: clamp(21px, 2.2vw, 28px);
+  letter-spacing: 0;
+  line-height: 1.12;
+  text-transform: none;
+}
+
+.nodeInfoCard dd,
+.nodeServerPlayers {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+}
+
+.addNodeCardInner span,
+.addNodeStepLabel,
+.addNodeStatusCard h3,
+.placementHeader h3 {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.addNodeStatusCard p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+
+
+
+.modInstallVersionGroupHeader > span {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+
+
+.fileEditorMetaRow span {
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+}
+
+
+.switchStateLabel {
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+}
+
+.selectionSummary {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.permissionGroup h4,
+.presetSummary strong,
+.currentUserMark {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.summaryTile span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-badge);
+}
+
+.summaryTile strong {
+  font-size: clamp(16px, 1.25vw, 19px);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.summaryTile small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+}
+
+@media (max-width: 1366px) {
+  .workspaceHeader {
+    min-height: 56px;
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(24px, 2.8vw, 32px);
+  }
+}
+
+@media (max-width: 720px) {
+  .workspaceHeader h2 {
+    font-size: clamp(22px, 7vw, 30px);
+  }
+
+}

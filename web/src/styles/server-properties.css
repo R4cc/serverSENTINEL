@@ -1,0 +1,243 @@
+.filesPage {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  height: calc(100vh - 300px);
+  min-height: 520px;
+  max-height: calc(100vh - 220px);
+  min-width: 0;
+}
+
+.settingsPage {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.settingsPage.single {
+  grid-template-columns: minmax(320px, 560px);
+}
+
+.serverPropertiesWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: var(--space-4);
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+.serverPropertiesForm {
+  min-width: 0;
+}
+
+.serverPropertiesForm fieldset {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.propertiesSettingsCard,
+.propertiesSideCard {
+  min-width: 0;
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+}
+
+.propertiesSettingsCard {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.propertiesCardHeader {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.propertiesCardIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border-row));
+  border-radius: var(--radius-sm);
+  background: var(--sentinel-accent-soft);
+  color: var(--accent);
+}
+
+.propertiesCardIcon .buttonIcon {
+  width: 17px;
+  height: 17px;
+}
+
+.propertiesCardHeader h2,
+.propertiesSideCard h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.propertiesCardHeader p,
+.propertiesSideCard p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.propertiesFieldGrid {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.propertiesFieldGrid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.propertiesFieldGrid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.propertiesFieldWide {
+  grid-column: 1 / -1;
+}
+
+.propertiesMemorySection {
+  gap: var(--space-3);
+}
+
+.propertiesMemorySection .memoryRangeLayout {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+}
+
+.serverPropertiesForm fieldset:disabled input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.serverPropertiesForm fieldset:disabled select,
+.serverPropertiesForm fieldset:disabled textarea {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
+  color: var(--text-muted);
+  border-color: var(--border-row);
+  opacity: 1;
+}
+
+.serverPropertiesForm fieldset:disabled select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23707070' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+}
+
+.themeDark .serverPropertiesForm fieldset:disabled select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23929baa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+.serverPropertiesForm fieldset:disabled .memoryRangeInput {
+  opacity: 0;
+}
+
+.serverPropertiesForm fieldset:disabled .memoryRangeTrack {
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 var(--xms-percent),
+      color-mix(in srgb, var(--accent) 70%, var(--border-muted)) var(--xms-percent) var(--xmx-percent),
+      transparent var(--xmx-percent) 100%
+    ),
+    var(--border-muted);
+}
+
+.serverPropertiesForm fieldset:disabled .memoryValueBubble {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 56%, var(--surface-raised));
+  color: var(--sentinel-accent-strong);
+}
+
+.propertiesDisclosure {
+  margin-top: 0;
+}
+
+.propertiesDisclosure summary {
+  min-height: 46px;
+}
+
+.serverPropertiesSidebar {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.propertiesSideCard {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.dangerPanel {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-row));
+  background: var(--surface-raised);
+}
+
+.dangerPanel h2 {
+  color: var(--sentinel-danger);
+}
+
+.dangerPanel .appForm {
+  gap: var(--space-3);
+}
+
+.dangerPanel fieldset {
+  gap: var(--space-3);
+}
+
+.dangerPanel .uiButton--critical {
+  width: 100%;
+}
+
+.dangerCheck {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.propertiesActionsCard .uiButton {
+  width: 100%;
+  justify-content: center;
+}
+
+.propertiesLockNote {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 11%, var(--surface-raised));
+  color: var(--text);
+  font-weight: var(--weight-strong);
+}
+
+@media (max-width: 1180px) {
+  .serverPropertiesWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .serverPropertiesSidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .propertiesFieldGrid.two,
+  .propertiesFieldGrid.three,
+  .propertiesMemorySection .memoryRangeLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .propertiesSettingsCard,
+  .propertiesSideCard {
+    padding: var(--space-3);
+  }
+
+}

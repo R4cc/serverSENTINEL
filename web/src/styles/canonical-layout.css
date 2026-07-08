@@ -1,0 +1,914 @@
+/* Canonical application layout */
+:root {
+  --page-max-width: 1440px;
+  --content-max-width: 1180px;
+  --panel-gap: var(--space-4);
+  --toolbar-min-height: 44px;
+  --control-height: 40px;
+  --modal-padding: var(--space-4);
+  --modal-small-width: 480px;
+  --modal-medium-width: 760px;
+  --modal-large-width: 1040px;
+  --sidebar-width: 248px;
+  --sidebar-rail-size: 40px;
+}
+
+.workspace {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: var(--space-4) var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.sidebar {
+  padding: var(--space-3);
+  gap: var(--space-3);
+}
+
+.brandBlock {
+  padding-bottom: var(--space-3);
+}
+
+.brandLogo {
+  width: var(--sidebar-rail-size);
+  height: var(--sidebar-rail-size);
+}
+
+.sideNav {
+  gap: 4px;
+}
+
+.sideNav button,
+.serverListItem,
+.accountChip {
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+.sideNav button {
+  padding: 8px 10px;
+  gap: var(--space-2);
+}
+
+.selectedServerReadout {
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-row);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  display: flex;
+  align-items: center;
+}
+
+.accountChip {
+  padding: 6px 8px;
+  gap: var(--space-2);
+}
+
+.sidebarDivider {
+  height: 1px;
+  margin: 6px 0;
+}
+
+.workspaceHeader {
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid var(--border-row);
+  align-items: center;
+}
+
+.workspaceHeader > div:first-child {
+  min-width: 0;
+}
+
+.workspaceHeader h2 {
+  font-size: clamp(22px, 1.9vw, 30px);
+  line-height: 1.12;
+}
+
+.workspaceActions,
+.buttonRow,
+.selectionActions,
+.nodeCardActions,
+.modInstallFooter,
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter,
+.fileEditorFooter {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.workspaceActions button,
+.buttonRow button,
+.secondaryButton,
+.runtimeControlButton,
+.quickActionButton,
+.modalFooter button,
+.userModalFooter button,
+.nodeModalFooter button,
+.fileEditorFooter button,
+.modInstallFooter button {
+  min-height: var(--control-height);
+}
+
+.pageStack,
+.tabPage,
+.settingsList,
+.nodesPage {
+  width: 100%;
+  max-width: var(--page-max-width);
+  display: grid;
+  gap: var(--panel-gap);
+  align-content: start;
+}
+
+.tabPage {
+  min-width: 0;
+}
+
+.panel,
+.inlineState,
+.systemBanner,
+.notice,
+.activeServerStrip,
+.modalPanel {
+  border-width: 1px;
+  border-radius: 8px;
+}
+
+.panel {
+  padding: var(--space-4);
+}
+
+.nodeCardHeader,
+.settingsGroupHeader,
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader {
+  min-height: 0;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-row);
+}
+
+.nodeCardHeader,
+.settingsGroupHeader,
+.fileEditorHeader {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.activeServerStrip {
+  margin: 0;
+  padding: var(--space-3);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.serverStripLeft {
+  flex: 1 1 360px;
+  gap: var(--space-3);
+}
+
+.serverStripIcon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+
+.server-icon-cube {
+  width: 20px;
+  height: 20px;
+}
+
+.serverStripInfo {
+  display: grid;
+  gap: 3px;
+}
+
+.serverStripTitleRow,
+.serverStripMetaRow,
+.serverStripRight {
+  gap: var(--space-2);
+}
+
+.serverStripRight {
+  align-items: center;
+}
+
+.runtimeControls {
+  gap: var(--space-1);
+}
+
+.runtimeControlButton,
+.quickActionButton {
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+}
+
+.overflowButton,
+.nodesRefreshButton {
+  width: var(--control-height);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+}
+
+.overflowDropdown {
+  padding: 6px;
+  min-width: 180px;
+}
+
+.overflowDropdown button {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.inlineState,
+.eventEmpty,
+.fileDetailsEmpty {
+  max-width: none;
+  padding: var(--space-5);
+  gap: var(--space-3);
+}
+
+.systemBanner,
+.notice,
+.inlineState {
+  padding: var(--space-3) var(--space-4);
+}
+
+.serverList {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.serverListItem {
+  padding: var(--space-3);
+  gap: 4px;
+}
+
+.overviewPage {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.overviewSummary {
+  gap: var(--space-2);
+}
+
+.summaryTile {
+  min-height: 72px;
+  padding: 10px 12px;
+  gap: var(--space-1);
+}
+
+.resourcePanel {
+  min-width: 0;
+}
+
+.eventRow,
+.nodeServerRow,
+.fileTableRow {
+  min-height: 0;
+}
+
+
+.nodeServerRow {
+  padding: var(--space-3);
+}
+
+.eventRow {
+  padding: var(--space-2) var(--space-3);
+}
+
+.consolePanel,
+.filesPage,
+.schedulePage,
+.createServerPanel {
+  min-width: 0;
+}
+
+.consolePanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+
+.terminal {
+  min-height: 0;
+}
+
+.consolePanel .terminal {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.fileNavBar,
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-3);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.fileNavBar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.fileNavBar .fileToolbar {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: var(--space-2);
+  justify-content: end;
+}
+
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.filesPage {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--space-4);
+  height: max(560px, calc(100vh - 238px));
+  max-height: none;
+  align-items: stretch;
+}
+
+.tabPage.filesPage {
+  max-width: none;
+  align-content: stretch;
+}
+
+.filesPage .filesExplorer,
+.filesPage .filesPanel,
+.filesPage .fileDetailsPanel {
+  height: 100%;
+  min-height: 0;
+}
+
+.filesPage .fileNavBar,
+.filesPage .selectionActionBar,
+.filesPage .fileTableFooter {
+  flex: 0 0 auto;
+}
+
+.filesPage .selectionActionBar {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: center;
+  container-type: inline-size;
+}
+
+.filesPage .selectionActions {
+  justify-content: flex-end;
+}
+
+@container (max-width: 960px) {
+  .filesPage .selectionActions {
+    flex-wrap: nowrap;
+  }
+
+  .filesPage .selectionActions .uiButton {
+    width: var(--control-height-compact);
+    min-width: var(--control-height-compact);
+    padding-inline: 0;
+  }
+
+  .filesPage .selectionActionLabel {
+    display: none;
+  }
+}
+
+.filesPage .fileTable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.fileTableHead,
+.fileTableRow {
+  min-height: 42px;
+}
+
+.fileTableHead,
+.fileTableRow {
+  padding-inline: var(--space-3);
+}
+
+.fileNameCell {
+  min-width: 0;
+}
+
+.fileDetailsPanel {
+  padding: var(--space-4);
+}
+
+.fileDetailsContent dl {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+}
+
+.fileDetailsContent dl {
+  grid-template-columns: 1fr;
+}
+
+.fileDetailsContent dl div {
+  grid-template-columns: minmax(76px, 0.32fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+}
+
+.fileDetailsContent dd {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.scheduleManagementPage {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--space-4);
+  align-items: stretch;
+  align-content: stretch;
+  width: 100%;
+  max-width: none;
+  height: max(640px, calc(100vh - 238px));
+  min-height: 0;
+}
+
+.scheduleTableCard,
+.scheduledRunsCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
+.scheduleEditOptions {
+  align-items: flex-start;
+}
+
+.settingsList {
+  max-width: var(--content-max-width);
+  gap: var(--space-3);
+}
+
+.settingsGroup {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settingsGroupHeader {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  border-bottom-color: rgb(0 0 0 / 0.08);
+}
+
+.usersGroupHeader {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.settingsGroupHeader > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: 8px;
+}
+
+.settingsRow {
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  border-top: 1px solid rgb(0 0 0 / 0.08);
+  border-bottom: 0;
+}
+
+.themeDark .settingsGroupHeader {
+  border-bottom-color: rgb(255 255 255 / 0.1);
+}
+
+.themeDark .settingsRow {
+  border-top-color: rgb(255 255 255 / 0.1);
+}
+
+.settingsRow select,
+.settingsRow > button {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 420px;
+}
+
+.settingsRow .settingsStatus {
+  justify-self: start;
+}
+
+.settingsRow .keyForm {
+  justify-self: stretch;
+  width: 100%;
+}
+
+.keyFormConfigured {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+
+@media (min-width: 1101px) {
+  .keyFormConfigured {
+    align-items: center;
+  }
+}
+
+.usersSettings {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.usersTable {
+  margin: 0;
+}
+
+.nodesPage {
+  max-width: 1280px;
+  gap: var(--space-3);
+}
+
+.nodesToolbar {
+  margin: 0;
+}
+
+.nodesGrid {
+  gap: var(--space-3);
+  max-height: none;
+  overflow: visible;
+}
+
+.nodeCard {
+  padding: var(--space-3);
+  gap: var(--space-3);
+}
+
+.nodeCardHeader {
+  margin: 0;
+}
+
+.nodeCardTopLine,
+.nodeServerRow {
+  gap: var(--space-3);
+}
+
+.nodeServerList {
+  gap: var(--space-2);
+}
+
+.nodeServerRow,
+.nodeServerPlaceholder {
+  min-height: 52px;
+  padding: var(--space-3);
+}
+
+.addNodeCardButton {
+  min-height: 220px;
+  padding: var(--space-4);
+}
+
+.appForm,
+.userModalForm,
+.keyForm {
+  gap: var(--space-3);
+}
+
+.appForm fieldset,
+.userModalFields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.appForm fieldset {
+  padding: var(--space-4);
+}
+
+.modalBackdrop {
+  padding: var(--space-4);
+}
+
+.modalPanel {
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.confirmModalPanel,
+.discardEditorModal {
+  width: min(var(--modal-small-width), calc(100vw - 32px));
+}
+
+.userModalPanel,
+.nodeModalPanel {
+  width: min(var(--modal-medium-width), calc(100vw - 32px));
+}
+
+.nodeDetailsPanel {
+  width: min(1180px, calc(100vw - 32px));
+}
+
+.nodeDetailsPanel .nodeDetailsActions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 920px) {
+  .nodeDetailsPanel .nodeDetailsActions {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .nodeDetailsPanel .nodeDetailsActions {
+    bottom: calc(var(--space-4) * -1);
+  }
+}
+
+
+.fileEditorModal {
+  width: min(1120px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 48px));
+}
+
+.modalHeader,
+.userModalHeader,
+.nodeModalHeader,
+.fileEditorHeader {
+  flex: 0 0 auto;
+  min-height: 56px;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.modalBody,
+.userModalBody,
+.nodeModalBody,
+.fileEditorBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  overflow: auto;
+}
+
+.modalFooter,
+.userModalFooter,
+.nodeModalFooter,
+.fileEditorFooter,
+.modInstallFooter {
+  flex: 0 0 auto;
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-row);
+}
+
+.fileEditorBody {
+  padding: 0;
+}
+
+.modInstallStep,
+.modInstallReview,
+.modInstallVersionTable,
+.nodeInfoCard,
+.addNodeStatusCard {
+  border-width: 1px;
+  border-radius: 8px;
+}
+
+.modInstallStep,
+.modInstallReview,
+.nodeInfoCard,
+.addNodeStatusCard {
+  padding: var(--space-3);
+}
+
+
+@media (max-width: 1180px) {
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .filesPage,
+  .schedulePage {
+    grid-template-columns: 1fr;
+  }
+
+  .filesPage {
+    height: auto;
+  }
+
+  .filesPage .filesExplorer {
+    height: max(520px, calc(100vh - 238px));
+  }
+
+  .overviewPage {
+    grid-template-columns: 1fr;
+  }
+
+.overviewPage > *,
+.resourcePanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .workspaceHeader,
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .workspaceActions,
+  .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+.settingsRow,
+.settingsGroupHeader,
+.usersGroupHeader,
+.nodeServerRow {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsRow select,
+  .settingsRow .keyForm,
+  .settingsRow .settingsStatus,
+  .settingsRow > button {
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .usersSettings {
+    padding-inline: var(--space-3);
+  }
+
+  .usersTable {
+    margin-inline: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --sidebar-width: 100%;
+  }
+
+  .appShell,
+  .sidebarCollapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: relative;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sidebarToggleIconDesktop {
+    display: none;
+  }
+
+  .sidebarToggleIconMobile {
+    display: inline-flex;
+  }
+
+  .sidebarCollapsed .sidebar {
+    gap: 0 !important;
+    overflow: hidden;
+    padding: var(--space-3) !important;
+  }
+
+  .sidebarCollapsed .brandBlock {
+    border-bottom: 0;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size) !important;
+    justify-content: space-between !important;
+    justify-items: stretch !important;
+    padding-bottom: 0 !important;
+  }
+
+  .sidebarCollapsed .sideNav,
+  .sidebarCollapsed .sideNavBottom {
+    display: none;
+  }
+
+  .workspace {
+    padding: var(--space-3);
+  }
+
+  .workspaceHeader {
+    padding-bottom: var(--space-3);
+  }
+
+  .workspaceHeader h2 {
+    font-size: clamp(22px, 7vw, 28px);
+  }
+
+.activeServerStrip,
+.panel,
+.modalBody,
+.userModalBody,
+.nodeModalBody {
+    padding: var(--space-3);
+  }
+
+  .serverStripLeft,
+  .serverStripRight,
+  .runtimeControls {
+    width: 100%;
+  }
+
+  .runtimeControlButton,
+  .quickActionButton {
+    flex: 1 1 120px;
+  }
+
+.fileNavBar,
+.fileToolbar,
+.selectionActionBar,
+.nodesToolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+
+
+  .modalBackdrop {
+    padding: var(--space-2);
+  }
+
+.modalPanel,
+.confirmModalPanel,
+.discardEditorModal,
+.userModalPanel,
+.nodeModalPanel,
+.fileEditorModal {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .fileEditorModal {
+    height: calc(100vh - 16px);
+  }
+}

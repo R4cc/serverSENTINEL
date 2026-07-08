@@ -1,36 +1,24 @@
-import { ChangeEvent, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  functionalUpdate,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type RowSelectionState,
-  type SortingState
-} from "@tanstack/react-table";
+import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
-import { ApiError, api, apiErrorFromResponse } from "./api";
-import { demoListing, demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, FileEditLease, FileEntry, FileListing, FilePreview, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
-import { bufferToBase64, clientId, fileDisplayType, fileStatusLabel, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "./utils/files";
-import { formatBytes, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
-import { hasFileManagerPermission, hasPermission, isModsPublicPath, isServerPropertiesPath, normalizePermissions } from "./utils/permissions";
-import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateSafePath, validateUsername } from "./utils/validation";
+import { ApiError, api } from "./api";
+import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import { clientId } from "./utils/files";
+import { minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { hasPermission, normalizePermissions } from "./utils/permissions";
+import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, demoModeEnabled, demoRequestHeaders, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, demoModeEnabled, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
-import type { FilePreviewState } from "./app/uiState";
-import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, hasPotentialEvent, publicPathContains, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
+import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
-import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
-import { FileEditorModal } from "./components/FileEditorModal";
+import { AppIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
-import { SortHeaderButton } from "./components/TableControls";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
@@ -38,22 +26,10 @@ import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 import { ModsPage } from "./pages/ModsPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
+import { FilesPage } from "./features/files/FilesPage";
+import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 
 const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
-
-type DownloadIntent =
-  | {
-      mode: "individual";
-      totalSize: number;
-      files: Array<{ name: string; path: string; size: number; url: string }>;
-    }
-  | {
-      mode: "archive";
-      totalSize: number;
-      filename: string;
-      url: string;
-      expiresAt: string;
-    };
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -232,22 +208,6 @@ export default function App() {
   const [activeServerId, setActiveServerId] = useState("");
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
-  const [listing, setListing] = useState<FileListing>({ path: "/", entries: [] });
-  const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
-  const [fileBackStack, setFileBackStack] = useState<string[]>([]);
-  const [fileForwardStack, setFileForwardStack] = useState<string[]>([]);
-  const [fileSorting, setFileSorting] = useState<SortingState>([{ id: "name", desc: false }]);
-  const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
-  const [fileOperationBusy, setFileOperationBusy] = useState("");
-  const [selectedPath, setSelectedPath] = useState("");
-  const [editorText, setEditorText] = useState("");
-  const [savedEditorText, setSavedEditorText] = useState("");
-  const [fileRevision, setFileRevision] = useState("");
-  const [fileEditLease, setFileEditLease] = useState<FileEditLease | null>(null);
-  const [fileEditMode, setFileEditMode] = useState(false);
-  const [fileLeaseBusy, setFileLeaseBusy] = useState(false);
-  const [fileLeaseMessage, setFileLeaseMessage] = useState("");
-  const [dirty, setDirty] = useState(false);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
@@ -259,12 +219,6 @@ export default function App() {
   const [statusError, setStatusError] = useState("");
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [consoleError, setConsoleError] = useState("");
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [filesError, setFilesError] = useState("");
-  const [fileReadError, setFileReadError] = useState("");
-  const [fileOpenFailed, setFileOpenFailed] = useState(false);
-  const [fileOpening, setFileOpening] = useState(false);
-  const [fileSaving, setFileSaving] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
@@ -290,7 +244,6 @@ export default function App() {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
   const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("run");
-  const [discardEditorRequest, setDiscardEditorRequest] = useState<{ action: "close" } | { action: "switch"; path: string } | null>(null);
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const {
     themePreference,
@@ -313,8 +266,7 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const fileWorkspaceServerIdRef = useRef("");
-  const fileUploadRef = useRef<HTMLInputElement>(null);
-  const fileSelectAllRef = useRef<HTMLInputElement>(null);
+  const refreshModsAfterFileMutationRef = useRef<() => Promise<unknown> | unknown>(() => undefined);
   const activeServerIdRef = useRef("");
   const panelFirstRunPromptedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
@@ -328,7 +280,6 @@ export default function App() {
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
   const staleSessionSuppressUntilRef = useRef(0);
-  const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
   const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
     if (demoMode && serverId === demoServerId) {
@@ -419,9 +370,6 @@ export default function App() {
   const canInstallMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install");
   const canManageMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update");
   const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
-  const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "view");
-  const canUploadToCurrentPath = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload");
-  const canEditSelectedPath = activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false);
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = hasPermission(permissionUser, "users.view");
@@ -501,6 +449,37 @@ export default function App() {
               : isAnyModJobRunning
                 ? "A mod operation is already running."
                 : "Upload a local Fabric mod file.";
+  const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
+  const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
+  const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
+
+  function formatDisplayDate(value: string | number | Date) {
+    return dateTimeFormatter.format(new Date(value));
+  }
+
+  const filesWorkspace = useFilesWorkspace({
+    activeServer,
+    activeServerIsDemo,
+    activeServerIdRef,
+    demoMode,
+    demoFiles,
+    setDemoFiles,
+    demoInstalledMods,
+    setDemoInstalledMods,
+    isProvisioning,
+    dockerOperationalLock,
+    runtimeControlsDisabledReason,
+    serverRequiresStoppedForMutableConfig,
+    stoppedServerMutationMessage,
+    permissionUser,
+    formatDisplayDate,
+    notify,
+    setNotice,
+    handleStaleSession,
+    refreshModsAfterFilesChange: () => refreshModsAfterFileMutationRef.current()
+  });
   const modsWorkspace = useModsWorkspace({
     activeServer,
     activePage,
@@ -520,8 +499,11 @@ export default function App() {
     setNotice,
     setActiveJobs,
     handleStaleSession,
-    refreshFiles: loadFiles
+    refreshFiles: filesWorkspace.actions.loadFiles
   });
+  useEffect(() => {
+    refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
+  }, [modsWorkspace.actions]);
   const scheduleDisabledReason = scheduleBusy
     ? "Schedule changes are still saving."
     : isProvisioning
@@ -544,139 +526,6 @@ export default function App() {
     && !dockerOperationalLock
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
-  const selectedEntries = useMemo(() => {
-    const selected = new Set(selectedFilePaths);
-    return listing.entries.filter((entry) => selected.has(entry.path));
-  }, [listing.entries, selectedFilePaths]);
-  const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
-  const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
-  const selectedTouchesMutableConfiguration = selectedEntries.some((entry) => isModsPublicPath(entry.path) || isServerPropertiesPath(entry.path));
-  const selectedEntryTouchesMutableConfiguration = Boolean(selectedEntry && (isModsPublicPath(selectedEntry.path) || isServerPropertiesPath(selectedEntry.path)));
-  const uploadTouchesMutableConfiguration = isModsPublicPath(listing.path);
-  const fileRowSelection = useMemo<RowSelectionState>(() => (
-    Object.fromEntries(selectedFilePaths.map((path) => [path, true]))
-  ), [selectedFilePaths]);
-  const fileColumns = useMemo<ColumnDef<FileEntry>[]>(() => {
-    const sortedColumn = fileSorting.find((sort) => sort.id !== "select")?.id;
-    const fileSortWithFolders = (columnId: string, compare: (left: FileEntry, right: FileEntry) => number) => (left: { original: FileEntry }, right: { original: FileEntry }) => {
-      const folderOrder = Number(right.original.type === "directory") - Number(left.original.type === "directory");
-      if (folderOrder !== 0) return sortedColumn === columnId && fileSorting[0]?.desc ? -folderOrder : folderOrder;
-      const result = compare(left.original, right.original);
-      return result === 0 ? left.original.name.localeCompare(right.original.name) : result;
-    };
-
-    return [
-      { id: "select", enableSorting: false },
-      {
-        id: "name",
-        accessorKey: "name",
-        sortingFn: fileSortWithFolders("name", (left, right) => left.name.localeCompare(right.name))
-      },
-      {
-        id: "modifiedAt",
-        accessorKey: "modifiedAt",
-        sortingFn: fileSortWithFolders("modifiedAt", (left, right) => new Date(left.modifiedAt).getTime() - new Date(right.modifiedAt).getTime())
-      },
-      {
-        id: "type",
-        accessorFn: (entry) => fileDisplayType(entry),
-        sortingFn: fileSortWithFolders("type", (left, right) => fileDisplayType(left).localeCompare(fileDisplayType(right)))
-      },
-      {
-        id: "size",
-        accessorKey: "size",
-        sortingFn: fileSortWithFolders("size", (left, right) => left.size - right.size)
-      }
-    ];
-  }, [fileSorting]);
-  const fileTable = useReactTable({
-    data: listing.entries,
-    columns: fileColumns,
-    getRowId: (entry) => entry.path,
-    state: {
-      sorting: fileSorting,
-      rowSelection: fileRowSelection
-    },
-    enableRowSelection: true,
-    onSortingChange: setFileSorting,
-    onRowSelectionChange: (updater) => {
-      setSelectedFilePaths((current) => {
-        const currentSelection = Object.fromEntries(current.map((path) => [path, true]));
-        const nextSelection = functionalUpdate(updater, currentSelection);
-        return Object.keys(nextSelection).filter((path) => nextSelection[path]);
-      });
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
-  });
-  const sortedFileRows = fileTable.getRowModel().rows;
-  const selectionSummary = selectedEntries.length === 0
-    ? "No selection"
-    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
-  const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
-  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
-  const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
-  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
-  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !(serverRequiresStoppedForMutableConfig && selectedTouchesMutableConfiguration));
-  const fileActionBlockedReason = isProvisioning
-    ? "Server setup is still running."
-    : dockerOperationalLock
-      ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-      : serverRequiresStoppedForMutableConfig && (uploadTouchesMutableConfiguration || selectedTouchesMutableConfiguration)
-        ? stoppedServerMutationMessage
-      : fileOperationBusy
-        ? "A file operation is already running."
-        : "";
-  const fileReadActionBlockedReason = isProvisioning
-    ? "Server setup is still running."
-    : dockerOperationalLock
-      ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-      : fileOperationBusy
-        ? "A file operation is already running."
-        : "";
-  const fileBreadcrumbs = useMemo(() => {
-    const parts = listing.path.split("/").filter(Boolean);
-    return [
-      { label: "/", path: "/" },
-      ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
-    ];
-  }, [listing.path]);
-  useEffect(() => {
-    if (fileSelectAllRef.current) {
-      fileSelectAllRef.current.indeterminate = fileTable.getIsSomeRowsSelected() && !fileTable.getIsAllRowsSelected();
-    }
-  }, [fileRowSelection, fileTable, sortedFileRows.length]);
-
-
-
-  const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
-  const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
-  const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
-
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
-
-  useEffect(() => {
-    if (!selectedEntry) {
-      setFilePreview({ path: "", loading: false, data: null, error: "" });
-      return;
-    }
-    if (selectedEntry.type === "directory") {
-      setFilePreview({
-        path: selectedEntry.path,
-        loading: false,
-        data: { path: selectedEntry.path, preview: "unsupported", message: "Preview unavailable" },
-        error: ""
-      });
-      return;
-    }
-    void loadFilePreview(selectedEntry);
-  }, [selectedEntry?.path, selectedEntry?.modifiedAt, selectedEntry?.size, activeServer?.id, demoFiles]);
-
-  function formatDisplayDate(value: string | number | Date) {
-    return dateTimeFormatter.format(new Date(value));
-  }
 
   function formatDisplayNumber(value: number) {
     return numberFormatter.format(value);
@@ -700,52 +549,6 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
-
-  useEffect(() => {
-    fileEditLeaseRef.current = fileEditLease;
-  }, [fileEditLease]);
-
-  useEffect(() => {
-    if (!fileEditLease || !fileEditMode || activeServerIsDemo) return;
-    const heartbeat = async () => {
-      try {
-        const result = await api<{ lease: FileEditLease }>(
-          `/api/servers/${encodeURIComponent(fileEditLease.serverId)}/file/lease/${encodeURIComponent(fileEditLease.leaseId)}/heartbeat`,
-          { method: "POST" }
-        );
-        setFileEditLease(result.lease);
-      } catch (error) {
-        const message = error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
-          ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
-          : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
-        releaseFileLease(fileEditLease);
-        setFileEditMode(false);
-        setFileEditLease(null);
-        setFileLeaseMessage(message);
-        notify("error", message);
-      }
-    };
-    const interval = window.setInterval(() => void heartbeat(), 20_000);
-    return () => window.clearInterval(interval);
-  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo]);
-
-  useEffect(() => {
-    const releaseOnUnload = () => {
-      const lease = fileEditLeaseRef.current;
-      if (!lease) return;
-      void fetch(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
-        method: "DELETE",
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        credentials: "same-origin",
-        keepalive: true
-      });
-    };
-    window.addEventListener("beforeunload", releaseOnUnload);
-    return () => {
-      window.removeEventListener("beforeunload", releaseOnUnload);
-      releaseOnUnload();
-    };
-  }, []);
 
   useEffect(() => {
     if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
@@ -892,8 +695,7 @@ export default function App() {
       setActiveServerId("");
       setStatus(null);
       setLogs([]);
-      setListing({ path: "/", entries: [] });
-      resetEditorState();
+      filesWorkspace.actions.clearWorkspace();
       void refreshApp();
     }
   }, [demoMode]);
@@ -917,7 +719,7 @@ export default function App() {
     }
     if (initializeFileWorkspace) {
       fileWorkspaceServerIdRef.current = activeServer.id;
-      resetEditorState();
+      filesWorkspace.actions.resetEditorState();
       setResourceSamples([]);
     }
     if (demoMode && activeServer.id === demoServerId) {
@@ -928,26 +730,26 @@ export default function App() {
         consoleLine("[demo] Preparing spawn area: 100%"),
         consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
       ]);
-      if (initializeFileWorkspace) setListing(demoListing("/", demoFiles, demoInstalledMods));
+      if (initializeFileWorkspace) filesWorkspace.actions.initializeDemoRoot();
       return;
     }
     if (activeNodeRuntimeBlocked) {
       fileWorkspaceServerIdRef.current = "";
-      resetEditorState();
+      filesWorkspace.actions.resetEditorState();
       setStatus(null);
       setStatusError(activeNodeBlockMessage);
       setConsoleError(activeNodeBlockMessage);
-      setFilesError(activeNodeBlockMessage);
+      filesWorkspace.actions.setFilesError(activeNodeBlockMessage);
       setOverviewError(activeNodeBlockMessage);
       setOverviewLoading(false);
-      setFilesLoading(false);
+      filesWorkspace.actions.setFilesLoading(false);
       setConsoleLoading(false);
-      setListing({ path: "/", entries: [] });
+      filesWorkspace.actions.setListing({ path: "/", entries: [] });
       return;
     }
     if (initializeFileWorkspace) {
       void refreshStatus(activeServer.id);
-      void loadFiles(activeServer.id, "/");
+      void filesWorkspace.actions.loadFiles(activeServer.id, "/");
     }
 
     if (consoleReconnectTimeoutRef.current !== null) {
@@ -1272,10 +1074,9 @@ export default function App() {
     setOverviewLoading(false);
     setResourceSamples([]);
     setConsoleError("");
-    setFilesError("");
+    filesWorkspace.actions.setFilesError("");
     setLogs([]);
-    setListing({ path: "/", entries: [] });
-    resetEditorState();
+    filesWorkspace.actions.clearWorkspace();
     notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
     return true;
   }
@@ -2100,698 +1901,6 @@ export default function App() {
     }
   }
 
-  async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace") {
-    if (isProvisioning) return false;
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
-      const message = "View files permission is required for this folder.";
-      setFilesError(message);
-      setNotice(message);
-      return false;
-    }
-    const previousPath = listing.path;
-    setFilesLoading(true);
-    setFilesError("");
-    setNotice("");
-    if (demoMode && serverId === demoServerId) {
-      if (activeServerIdRef.current === serverId) {
-        const nextListing = demoListing(path, demoFiles, demoInstalledMods);
-        setListing(nextListing);
-        setSelectedFilePaths([]);
-        setFilePreview({ path: "", loading: false, data: null, error: "" });
-        if (historyMode === "push" && nextListing.path !== previousPath) {
-          setFileBackStack((current) => [...current, previousPath].slice(-50));
-          setFileForwardStack([]);
-        }
-      }
-      setFilesLoading(false);
-      return true;
-    }
-    try {
-      const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
-      if (activeServerIdRef.current === serverId) {
-        setListing(nextListing);
-        setSelectedFilePaths([]);
-        setFilePreview({ path: "", loading: false, data: null, error: "" });
-        setFilesError("");
-        if (historyMode === "push" && nextListing.path !== previousPath) {
-          setFileBackStack((current) => [...current, previousPath].slice(-50));
-          setFileForwardStack([]);
-        }
-      }
-      return true;
-    } catch (error) {
-      if (handleStaleSession(error)) return;
-      const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
-      setFilesError(message);
-      setNotice(message);
-      notify("error", message);
-      return false;
-    } finally {
-      if (activeServerIdRef.current === serverId) setFilesLoading(false);
-    }
-  }
-
-  async function navigateFiles(path: string) {
-    if (!activeServer) return;
-    await loadFiles(activeServer.id, path, "push");
-  }
-
-  async function navigateBackFiles() {
-    if (!activeServer || fileBackStack.length === 0) return;
-    const target = fileBackStack[fileBackStack.length - 1];
-    const loaded = await loadFiles(activeServer.id, target, "back");
-    if (loaded) {
-      setFileBackStack((current) => current.slice(0, -1));
-      setFileForwardStack((current) => [listing.path, ...current].slice(0, 50));
-    }
-  }
-
-  async function navigateForwardFiles() {
-    if (!activeServer || fileForwardStack.length === 0) return;
-    const target = fileForwardStack[0];
-    const loaded = await loadFiles(activeServer.id, target, "forward");
-    if (loaded) {
-      setFileForwardStack((current) => current.slice(1));
-      setFileBackStack((current) => [...current, listing.path].slice(-50));
-    }
-  }
-
-  function releaseFileLease(lease = fileEditLease) {
-    if (!lease || activeServerIsDemo) return;
-    void api(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
-      method: "DELETE"
-    }).catch(() => undefined);
-  }
-
-  function resetEditorState() {
-    releaseFileLease();
-    setSelectedPath("");
-    setEditorText("");
-    setSavedEditorText("");
-    setFileRevision("");
-    setFileEditLease(null);
-    setFileEditMode(false);
-    setFileLeaseBusy(false);
-    setFileLeaseMessage("");
-    setDirty(false);
-    setFileReadError("");
-    setFileOpenFailed(false);
-    setFileOpening(false);
-    setFileSaving(false);
-  }
-
-  function closeEditor() {
-    resetEditorState();
-    setDiscardEditorRequest(null);
-  }
-
-  function requestCloseEditor() {
-    if (dirty) {
-      setDiscardEditorRequest({ action: "close" });
-      return;
-    }
-    closeEditor();
-  }
-
-  function discardEditorChanges() {
-    const request = discardEditorRequest;
-    setDiscardEditorRequest(null);
-    if (!request) return;
-    if (request.action === "close") {
-      closeEditor();
-      return;
-    }
-    resetEditorState();
-    void openFile(request.path, true);
-  }
-
-  function unsupportedEditorMessage(entry: FileEntry) {
-    if (entry.type !== "file") return "Folders cannot be edited in the browser editor.";
-    if (entry.size > 2 * 1024 * 1024) return "Only files up to 2 MiB can be edited in the browser editor.";
-    return "Only small text files can be edited in the browser editor.";
-  }
-
-  function activateFileEntry(entry: FileEntry) {
-    if (entry.type === "directory") {
-      void navigateFiles(entry.path);
-      return;
-    }
-    if (!isEditableFile(entry)) {
-      const message = unsupportedEditorMessage(entry);
-      setSelectedFilePaths([entry.path]);
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    void openFile(entry.path);
-  }
-
-  async function loadFilePreview(entry: FileEntry) {
-    if (!activeServer) return;
-    setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, entry.path, "view")) {
-      setFilePreview((current) => current.path === entry.path
-        ? { path: entry.path, loading: false, data: null, error: "View files permission is required to preview this file." }
-        : current);
-      return;
-    }
-    if (activeServerIsDemo) {
-      const content = demoFiles[entry.path] ?? "";
-      if (!isPreviewableFile(entry)) {
-        setFilePreview((current) => current.path === entry.path
-          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "unsupported", message: "Preview unavailable" }, error: "" }
-          : current);
-      } else if (new Blob([content]).size > 96 * 1024) {
-        setFilePreview((current) => current.path === entry.path
-          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "too_large", message: "File too large to preview" }, error: "" }
-          : current);
-      } else {
-        setFilePreview((current) => current.path === entry.path
-          ? { path: entry.path, loading: false, data: { path: entry.path, preview: "text", content }, error: "" }
-          : current);
-      }
-      return;
-    }
-    try {
-      const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`);
-      setFilePreview((current) => current.path === entry.path
-        ? { path: entry.path, loading: false, data: preview, error: "" }
-        : current);
-    } catch (error) {
-      setFilePreview((current) => current.path === entry.path
-        ? { path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") }
-        : current);
-    }
-  }
-
-  async function openFile(path: string, discardConfirmed = false) {
-    if (isProvisioning) return;
-    if (!activeServer) return;
-    if (dockerOperationalLock) {
-      const message = dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-        : "Server files are unavailable.";
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
-      const message = "View files permission is required to open this file.";
-      setFileReadError(message);
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    if (selectedPath && selectedPath !== path && dirty && !discardConfirmed) {
-      setDiscardEditorRequest({ action: "switch", path });
-      return;
-    }
-    const pathError = validateSafePath(path);
-    if (pathError) {
-      setFileReadError(pathError);
-      setNotice(pathError);
-      return;
-    }
-    const targetEntry = listing.entries.find((entry) => entry.path === path);
-    if (targetEntry && !isEditableFile(targetEntry)) {
-      const message = unsupportedEditorMessage(targetEntry);
-      setSelectedFilePaths([path]);
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    if (fileEditLease && selectedPath !== path) releaseFileLease(fileEditLease);
-    setSelectedPath(path);
-    setEditorText("");
-    setSavedEditorText("");
-    setDirty(false);
-    setFileRevision("");
-    setFileEditLease(null);
-    setFileEditMode(false);
-    setFileLeaseMessage("");
-    setFileReadError("");
-    setFileOpenFailed(false);
-    setFileOpening(true);
-    setNotice("");
-    setSelectedFilePaths([path]);
-    if (activeServerIsDemo) {
-      const content = demoFiles[path] ?? `Demo binary or generated file: ${path}`;
-      setSelectedPath(path);
-      setEditorText(content);
-      setSavedEditorText(content);
-      setFileRevision("demo");
-      setDirty(false);
-      setFileOpening(false);
-      return;
-    }
-    try {
-      const file = await api<{ path: string; content: string; revision: string }>(
-        `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
-      );
-      setSelectedPath(file.path);
-      setEditorText(file.content);
-      setSavedEditorText(file.content);
-      setFileRevision(file.revision);
-      setDirty(false);
-      setSelectedFilePaths([file.path]);
-    } catch (error) {
-      const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
-      setFileReadError(message);
-      setFileOpenFailed(true);
-      setSelectedFilePaths([]);
-      notify("error", message);
-    } finally {
-      setFileOpening(false);
-    }
-  }
-
-  function leaseConflictMessage(error: unknown) {
-    if (!(error instanceof ApiError) || error.code !== "FILE_EDIT_LEASE_CONFLICT") {
-      return errorMessage(error, "Could not acquire an edit lease for this file.");
-    }
-    const details = error.details as { lease?: FileEditLease } | undefined;
-    if (details?.lease) {
-      return `${details.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(details.lease.refreshedAt)}).`;
-    }
-    return error.message;
-  }
-
-  async function enterFileEditMode() {
-    if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
-    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
-      setFileLeaseMessage(stoppedServerMutationMessage);
-      notify("warning", stoppedServerMutationMessage);
-      return;
-    }
-    if (!canEditSelectedPath) {
-      const message = "Edit permission is required to modify this file.";
-      setFileLeaseMessage(message);
-      notify("warning", message);
-      return;
-    }
-    if (activeServerIsDemo) {
-      setFileEditMode(true);
-      setFileLeaseMessage("");
-      return;
-    }
-    setFileLeaseBusy(true);
-    setFileLeaseMessage("");
-    try {
-      const result = await api<{ lease: FileEditLease }>(`/api/servers/${activeServer.id}/file/lease`, {
-        method: "POST",
-        body: JSON.stringify({ path: selectedPath, revision: fileRevision })
-      });
-      setFileEditLease(result.lease);
-      setFileEditMode(true);
-    } catch (error) {
-      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
-        ? "This file changed since it was opened. Reload it before entering edit mode."
-        : leaseConflictMessage(error);
-      setFileLeaseMessage(message);
-      notify("warning", message);
-    } finally {
-      setFileLeaseBusy(false);
-    }
-  }
-
-  async function deleteSelectedFiles() {
-    if (!activeServer || selectedEntries.length === 0 || fileOperationBusy) return;
-    if (isProvisioning || dockerOperationalLock || !canDeleteSelectedItems) return;
-    const invalidPath = selectedEntries.map((entry) => validateSafePath(entry.path)).find(Boolean);
-    if (invalidPath) {
-      setNotice(invalidPath);
-      notify("error", invalidPath);
-      return;
-    }
-    const directoryCount = selectedEntries.filter((entry) => entry.type === "directory").length;
-    const fileCount = selectedEntries.length - directoryCount;
-    const itemLabel = selectedEntries.length === 1 ? selectedEntries[0].name : `${selectedEntries.length} selected items`;
-    const previewList = selectedEntries.slice(0, 5).map((entry) => `- ${entry.path}`).join("\n");
-    const moreText = selectedEntries.length > 5 ? `\n- ...and ${selectedEntries.length - 5} more` : "";
-    const directoryWarning = directoryCount ? "\n\nSelected folders and their contents will be deleted." : "";
-    if (!window.confirm(`Delete ${itemLabel}?\n\nFiles: ${fileCount}\nFolders: ${directoryCount}\n${previewList}${moreText}${directoryWarning}\n\nThis cannot be undone.`)) return;
-
-    setFileOperationBusy("delete");
-    setNotice("");
-    try {
-      if (activeServerIsDemo) {
-        const deletedEntries = [...selectedEntries];
-        const nextFiles = { ...demoFiles };
-        for (const entry of deletedEntries) {
-          for (const path of Object.keys(nextFiles)) {
-            if (publicPathContains(entry.path, path)) delete nextFiles[path];
-          }
-        }
-        const deletedModPaths = new Set(deletedEntries.filter((entry) => entry.path.startsWith("/mods/")).map((entry) => entry.path));
-        const nextMods = demoInstalledMods.filter((mod) => !deletedModPaths.has(`/mods/${mod.filename}`));
-        setDemoFiles(nextFiles);
-        setDemoInstalledMods(nextMods);
-        setListing(demoListing(listing.path, nextFiles, nextMods));
-        clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
-        setSelectedFilePaths([]);
-        notify("success", selectedEntries.length === 1 ? `Deleted ${selectedEntries[0].name}` : `Deleted ${selectedEntries.length} items`);
-        return;
-      }
-
-      const failures: string[] = [];
-      const deletedEntries: FileEntry[] = [];
-      const deleteTargets = selectedEntries.filter((entry) => !selectedEntries.some((candidate) => (
-        candidate.path !== entry.path
-        && candidate.type === "directory"
-        && publicPathContains(candidate.path, entry.path)
-      )));
-      for (const entry of deleteTargets) {
-        try {
-          const recursive = entry.type === "directory" ? "&recursive=true" : "";
-          await api(`/api/servers/${activeServer.id}/file?path=${encodeURIComponent(entry.path)}${recursive}`, {
-            method: "DELETE"
-          });
-          deletedEntries.push(entry);
-        } catch (error) {
-          failures.push(`${entry.name}: ${errorMessage(error, "Delete failed")}`);
-        }
-      }
-      if (deletedEntries.length) {
-        clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
-        setSelectedFilePaths((current) => current.filter((path) => !deletedEntries.some((entry) => publicPathContains(entry.path, path))));
-        notify("success", deletedEntries.length === 1 ? `Deleted ${deletedEntries[0].name}` : `Deleted ${deletedEntries.length} items`);
-      }
-      await loadFiles(activeServer.id, listing.path);
-      await modsWorkspace.actions.refresh(false);
-      if (failures.length) {
-        const message = `Could not delete ${failures.length} item${failures.length === 1 ? "" : "s"}: ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "; ..." : ""}`;
-        setNotice(message);
-        notify("error", message);
-      }
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function createFolder() {
-    if (!activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
-    const name = window.prompt("New folder name");
-    if (name === null) return;
-    const nameError = fileNameValidation(name);
-    if (nameError) {
-      notify("error", nameError);
-      return;
-    }
-    setFileOperationBusy("new-folder");
-    try {
-      if (activeServerIsDemo) {
-        const folderPath = joinPublicPath(listing.path, name.trim());
-        const nextFiles = { ...demoFiles, [joinPublicPath(folderPath, ".serversentinel-folder")]: "" };
-        setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      } else {
-        await api(`/api/servers/${activeServer.id}/folder`, {
-          method: "POST",
-          body: JSON.stringify({ path: listing.path, name: name.trim() })
-        });
-        await loadFiles(activeServer.id, listing.path);
-      }
-      notify("success", `Created ${name.trim()}`);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not create the folder."));
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function uploadFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || !activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
-    const nameError = fileNameValidation(file.name);
-    if (nameError) {
-      notify("error", nameError);
-      return;
-    }
-    if (file.size > 32 * 1024 * 1024) {
-      notify("error", "Upload is larger than the 32 MiB file manager limit.");
-      return;
-    }
-    setFileOperationBusy("upload");
-    try {
-      const targetPath = joinPublicPath(listing.path, file.name);
-      if (activeServerIsDemo) {
-        const content = await file.text();
-        const nextFiles = { ...demoFiles, [targetPath]: content };
-        setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      } else {
-        const contentBase64 = bufferToBase64(await file.arrayBuffer());
-        await api(`/api/servers/${activeServer.id}/files/upload`, {
-          method: "POST",
-          body: JSON.stringify({ path: listing.path, filename: file.name, contentBase64 })
-        });
-        await loadFiles(activeServer.id, listing.path);
-      }
-      setSelectedFilePaths([targetPath]);
-      notify("success", `Uploaded ${file.name}`);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not upload the file."));
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function downloadUrl(url: string, filename: string) {
-    const response = await fetch(url, {
-      headers: {
-        "X-Requested-With": "XMLHttpRequest",
-        ...(demoMode ? demoRequestHeaders() : {})
-      },
-      credentials: "same-origin"
-    });
-    if (!response.ok) {
-      throw await apiErrorFromResponse(response);
-    }
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
-  }
-
-  async function downloadSelectedItems() {
-    if (!activeServer || selectedEntries.length === 0) return;
-    if (!canDownloadSelectedItems) return;
-    setFileOperationBusy("download");
-    try {
-      if (activeServerIsDemo) {
-        const selectedFiles = selectedEntries.filter((entry) => entry.type === "file");
-        const content = selectedFiles.length === 1
-          ? demoFiles[selectedFiles[0].path] ?? ""
-          : selectedFiles.map((entry) => `# ${entry.path}\n${demoFiles[entry.path] ?? ""}`).join("\n\n");
-        const filename = selectedFiles.length === 1 ? selectedFiles[0].name : "demo-selection.txt";
-        const blob = new Blob([content], { type: "application/octet-stream" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.click();
-        URL.revokeObjectURL(url);
-      } else {
-        const intent = await api<DownloadIntent>(`/api/servers/${activeServer.id}/files/download/intent`, {
-          method: "POST",
-          body: JSON.stringify({
-            paths: selectedEntries.map((entry) => entry.path)
-          })
-        });
-        if (intent.mode === "archive") {
-          await downloadUrl(intent.url, intent.filename);
-        } else {
-          for (const file of intent.files) {
-            await downloadUrl(file.url, file.name);
-          }
-        }
-      }
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not download the selected items."));
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function renameSelectedFile() {
-    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
-    if (!canRenameSelectedItem) return;
-    const entry = selectedEntries[0];
-    if (dirty && selectedPath && publicPathContains(entry.path, selectedPath)) {
-      const message = "Save or discard the open editor changes before renaming this item.";
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    const name = window.prompt("Rename item", entry.name);
-    if (name === null || name.trim() === entry.name) return;
-    const nameError = fileNameValidation(name);
-    if (nameError) {
-      notify("error", nameError);
-      return;
-    }
-    setFileOperationBusy("rename");
-    try {
-      const targetPath = joinPublicPath(parentPath(entry.path), name.trim());
-      if (activeServerIsDemo) {
-        const nextFiles = { ...demoFiles };
-        for (const path of Object.keys(nextFiles)) {
-          if (path === entry.path || path.startsWith(`${entry.path}/`)) {
-            const replacement = path.replace(entry.path, targetPath);
-            nextFiles[replacement] = nextFiles[path];
-            delete nextFiles[path];
-          }
-        }
-        setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      } else {
-        await api(`/api/servers/${activeServer.id}/file`, {
-          method: "PATCH",
-          body: JSON.stringify({ path: entry.path, name: name.trim() })
-        });
-        await loadFiles(activeServer.id, listing.path);
-      }
-      setSelectedFilePaths([targetPath]);
-      if (selectedPath && publicPathContains(entry.path, selectedPath)) {
-        setSelectedPath(selectedPath.replace(entry.path, targetPath));
-      }
-      if (filePreview.path && publicPathContains(entry.path, filePreview.path)) {
-        setFilePreview({ path: "", loading: false, data: null, error: "" });
-      }
-      notify("success", `Renamed to ${name.trim()}`);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not rename the selected item."));
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function duplicateSelectedFile() {
-    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
-    if (!canDuplicateSelectedFile) return;
-    const entry = selectedEntries[0];
-    if (entry.type !== "file") return;
-    const suggestedName = defaultDuplicateName(entry.name);
-    const name = window.prompt("Duplicate file as", suggestedName);
-    if (name === null) return;
-    const nameError = fileNameValidation(name);
-    if (nameError) {
-      notify("error", nameError);
-      return;
-    }
-    setFileOperationBusy("duplicate");
-    try {
-      const targetPath = joinPublicPath(parentPath(entry.path), name.trim());
-      if (activeServerIsDemo) {
-        const nextFiles = { ...demoFiles, [targetPath]: demoFiles[entry.path] ?? "" };
-        setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      } else {
-        await api(`/api/servers/${activeServer.id}/file/duplicate`, {
-          method: "POST",
-          body: JSON.stringify({ path: entry.path, name: name.trim() })
-        });
-        await loadFiles(activeServer.id, listing.path);
-      }
-      setSelectedFilePaths([targetPath]);
-      notify("success", `Duplicated ${entry.name}`);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not duplicate the selected file."));
-    } finally {
-      setFileOperationBusy("");
-    }
-  }
-
-  async function saveFile() {
-    if (isProvisioning || dockerOperationalLock || !canEditSelectedPath) return;
-    if (!activeServer) return;
-    if (!selectedPath || !dirty) return;
-    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
-      setFileLeaseMessage(stoppedServerMutationMessage);
-      notify("warning", stoppedServerMutationMessage);
-      return;
-    }
-    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
-    if (fileSaving) return;
-    setFileSaving(true);
-    setNotice("");
-    setFileReadError("");
-    setFileOpenFailed(false);
-    const pathError = validateSafePath(selectedPath);
-    if (pathError) {
-      setNotice(pathError);
-      notify("error", pathError);
-      setFileSaving(false);
-      return;
-    }
-    if (new Blob([editorText]).size > 2 * 1024 * 1024) {
-      const message = "File content is larger than the 2 MiB editor limit.";
-      setNotice(message);
-      notify("error", message);
-      setFileSaving(false);
-      return;
-    }
-    if (activeServerIsDemo) {
-      const nextFiles = { ...demoFiles, [selectedPath]: editorText };
-      setDemoFiles(nextFiles);
-      setSavedEditorText(editorText);
-      setDirty(false);
-      setNotice(`Saved ${selectedPath}`);
-      notify("success", `Saved ${selectedPath}`);
-      setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      closeEditor();
-      setFileSaving(false);
-      return;
-    }
-    try {
-      const result = await api<{ revision: string }>(`/api/servers/${activeServer.id}/file`, {
-        method: "PUT",
-        body: JSON.stringify({
-          path: selectedPath,
-          content: editorText,
-          leaseId: fileEditLease?.leaseId,
-          revision: fileRevision
-        })
-      });
-      setSavedEditorText(editorText);
-      setFileRevision(result.revision);
-      setDirty(false);
-      setNotice(`Saved ${selectedPath}`);
-      notify("success", `Saved ${selectedPath}`);
-      await loadFiles(activeServer.id, listing.path);
-      closeEditor();
-    } catch (error) {
-      const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
-      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
-        ? "The file changed outside this editor. Your changes were not saved. Reload the file before editing again."
-        : error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
-          ? "Your edit lease expired or was lost. Your changes were not saved. Reload the file before editing again."
-          : errorMessage(error, "Could not save the file. Review the path and try again.");
-      if (conflict) {
-        releaseFileLease();
-        setFileEditLease(null);
-        setFileEditMode(false);
-        setFileLeaseMessage(message);
-      }
-      setFileReadError(message);
-      setFileOpenFailed(false);
-      setNotice(message);
-      notify("error", message);
-    } finally {
-      setFileSaving(false);
-    }
-  }
-
-  function cancelFileEdit() {
-    requestCloseEditor();
-  }
-
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
@@ -3057,13 +2166,7 @@ export default function App() {
       return;
     }
     if (page === "files") {
-      setSelectedFilePaths([]);
-      setFileBackStack([]);
-      setFileForwardStack([]);
-      setFileReadError("");
-      setFilePreview({ path: "", loading: false, data: null, error: "" });
-      resetEditorState();
-      if (activeServer) void navigateFiles("/");
+      filesWorkspace.actions.resetPageState();
       return;
     }
     if (page === "console") {
@@ -3699,224 +2802,16 @@ export default function App() {
             )}
 
             {activePage === "files" && (
-              <section className="tabPage filesPage">
-                <section className="filesExplorer">
-                  <section className="panel filesPanel">
-                    <div className="fileNavBar">
-                      <div className="fileNavButtons">
-                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
-                          <AppIcon name="chevronLeft" />
-                        </Button>
-                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
-                          <AppIcon name="chevronRight" />
-                        </Button>
-                        <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
-                          <AppIcon name="home" />
-                        </Button>
-                      </div>
-                      <div className="fileBreadcrumbs" aria-label="Current folder">
-                        {fileBreadcrumbs.map((crumb) => (
-                          <button key={crumb.path} type="button" onClick={() => void navigateFiles(crumb.path)} className={crumb.path === listing.path ? "active" : ""} title={crumb.path}>
-                            {crumb.label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="fileToolbar">
-                        <input ref={fileUploadRef} className="hiddenInput" type="file" onChange={uploadFile} />
-                        <Button variant="secondary" compact aria-label="Upload file" onClick={() => fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
-                          <AppIcon name="fileUp" />
-                          <span className="fileToolbarLabel">Upload</span>
-                        </Button>
-                        <Button variant="secondary" compact aria-label="New folder" onClick={createFolder} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
-                          <AppIcon name="folderPlus" />
-                          <span className="fileToolbarLabel">New folder</span>
-                        </Button>
-                        <Button variant="secondary" compact aria-label={filesLoading ? "Refreshing files" : "Refresh files"} onClick={() => loadFiles(activeServer.id, listing.path)} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"} reserveLabel={<><AppIcon name="refresh" /><span className="fileToolbarLabel">Refreshing</span></>}>
-                          <AppIcon name="refresh" />
-                          <span className="fileToolbarLabel">{filesLoading ? "Refreshing" : "Refresh"}</span>
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="selectionActionBar" aria-label="File selection actions">
-                      <span className="selectionSummary">{selectionSummary}</span>
-                      <div className="selectionActions">
-                        <Button variant="secondary" compact aria-label="Open selected file" onClick={() => selectedEntry && openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={!selectedEntry ? "Select one text file" : selectedEntry.type !== "file" ? "Folders cannot be opened" : !isEditableFile(selectedEntry) ? "Only small text files can be opened" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
-                          <AppIcon name="edit" />
-                          <span className="selectionActionLabel">Open</span>
-                        </Button>
-                        <Button variant="secondary" compact aria-label="Download selected items" onClick={downloadSelectedItems} disabled={!canDownloadSelectedItems} title={!selectedEntries.length ? "Select files or folders to download" : fileReadActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "download")) && !activeServerIsDemo ? "Download files permission is required for every selected item." : "Download selected items")}>
-                          <AppIcon name="download" />
-                          <span className="selectionActionLabel">Download</span>
-                        </Button>
-                        <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={duplicateSelectedFile} disabled={!canDuplicateSelectedFile} title={!selectedEntry ? "Select one file to duplicate" : selectedEntry.type === "directory" ? "Directory duplication is not supported" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate") && !activeServerIsDemo ? "Upload files permission is required to duplicate here." : "Duplicate selected file")}>
-                          <AppIcon name="copy" />
-                          <span className="selectionActionLabel">Duplicate</span>
-                        </Button>
-                        <Button variant="secondary" compact aria-label="Rename selected item" onClick={renameSelectedFile} disabled={!canRenameSelectedItem} title={!selectedEntry ? "Select one item to rename" : fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "rename") && !activeServerIsDemo ? "Edit files permission is required to rename this item." : "Rename selected item")}>
-                          <AppIcon name="rename" />
-                          <span className="selectionActionLabel">Rename</span>
-                        </Button>
-                        <Button variant="critical" compact aria-label="Delete selected items" onClick={deleteSelectedFiles} disabled={!canDeleteSelectedItems} title={!selectedEntries.length ? "Select items to delete" : fileActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "delete")) && !activeServerIsDemo ? "Delete files permission is required for every selected item." : "Delete selected items")}>
-                          <AppIcon name="trash" />
-                          <span className="selectionActionLabel">Delete</span>
-                        </Button>
-                      </div>
-                    </div>
-
-                    {filesLoading && listing.entries.length === 0 && (
-                      <InlineState tone="loading" title="Loading files" message={`Loading the contents of ${listing.path}.`} />
-                    )}
-                    {filesError && (
-                      <InlineState
-                        tone="error"
-                        title="Could not load this folder"
-                        message={`${filesError} Check that the server files are available, then retry.`}
-                        actionLabel="Retry"
-                        onAction={() => void loadFiles(activeServer.id, listing.path)}
-                        busy={filesLoading}
-                      />
-                    )}
-
-                    <div className="fileTable" role="table" aria-label="Server files">
-                      <div className="fileTableHead" role="row">
-                        <label className="fileCheckboxCell fileSelectAllCell" aria-label={fileTable.getIsAllRowsSelected() ? "Clear visible selection" : "Select all visible files"}>
-                          <input
-                            ref={fileSelectAllRef}
-                            type="checkbox"
-                            checked={fileTable.getIsAllRowsSelected()}
-                            disabled={sortedFileRows.length === 0}
-                            onChange={fileTable.getToggleAllRowsSelectedHandler()}
-                          />
-                        </label>
-                        {fileTable.getHeaderGroups()[0]?.headers.filter((header) => header.id !== "select").map((header) => (
-                          <SortHeaderButton key={header.id} header={header}>
-                            {header.id === "name" ? "Name" : header.id === "modifiedAt" ? "Date Modified" : header.id === "type" ? "Type" : "Size"}
-                          </SortHeaderButton>
-                        ))}
-                      </div>
-                      {!filesLoading && !filesError && sortedFileRows.length === 0 && (
-                        <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
-                      )}
-                      {sortedFileRows.map((row) => {
-                        const entry = row.original;
-                        const selected = row.getIsSelected();
-                        return (
-                          <div key={entry.path} className={`fileTableRow ${selected ? "selected" : ""}`} role="row" onDoubleClick={() => activateFileEntry(entry)}>
-                            <label className="fileCheckboxCell" aria-label={`Select ${entry.name}`}>
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={row.getToggleSelectedHandler()}
-                              />
-                            </label>
-                            <button type="button" className="fileNameCell" onClick={() => entry.type === "directory" ? navigateFiles(entry.path) : setSelectedFilePaths([entry.path])} title={entry.path}>
-                              <FileTypeIcon entry={entry} />
-                              <span>{entry.name}</span>
-                            </button>
-                            <span>{dateTimeFormatter.format(new Date(entry.modifiedAt))}</span>
-                            <span>{fileDisplayType(entry)}</span>
-                            <span>{entry.type === "file" ? formatBytes(entry.size) : "-"}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="fileTableFooter">
-                      <span>{sortedFileRows.length} items</span>
-                      <span>{selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
-                    </div>
-                  </section>
-
-                </section>
-
-                <aside className="panel fileDetailsPanel">
-                  {!selectedEntry && selectedEntries.length === 0 && (
-                    <div className="fileDetailsEmpty">
-                      <h2>No file selected</h2>
-                      <p>Select a file or folder from the list to view details. Text files will also show a read-only preview here.</p>
-                    </div>
-                  )}
-                  {selectedEntries.length > 1 && (
-                    <div className="fileDetailsContent">
-                      <h2>{selectedEntries.length} items selected</h2>
-                      <dl>
-                        <div><dt>Total file size</dt><dd>{formatBytes(selectedTotalSize)}</dd></div>
-                        <div><dt>Folders</dt><dd>{selectedEntries.filter((entry) => entry.type === "directory").length}</dd></div>
-                        <div><dt>Files</dt><dd>{selectedEntries.filter((entry) => entry.type === "file").length}</dd></div>
-                      </dl>
-                    </div>
-                  )}
-                  {selectedEntry && (
-                    <div className="fileDetailsContent">
-                      <div className="fileDetailsTitle">
-                        <FileTypeIcon entry={selectedEntry} />
-                        <div>
-                          <h2>{selectedEntry.name}</h2>
-                          <span>{fileDisplayType(selectedEntry)}</span>
-                        </div>
-                      </div>
-                      <dl>
-                        <div><dt>Location</dt><dd>{selectedEntry.path}</dd></div>
-                        <div><dt>Type</dt><dd>{fileDisplayType(selectedEntry)}</dd></div>
-                        <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "-"}</dd></div>
-                        <div><dt>Modified</dt><dd>{dateTimeFormatter.format(new Date(selectedEntry.modifiedAt))}</dd></div>
-                        {selectedEntry.permissions && <div><dt>Permissions</dt><dd>{selectedEntry.permissions}</dd></div>}
-                        {selectedEntry.owner && <div><dt>Owner</dt><dd>{selectedEntry.owner}</dd></div>}
-                        <div><dt>Status</dt><dd>{fileStatusLabel(selectedEntry)}</dd></div>
-                      </dl>
-                      <section className="filePreviewPanel">
-                        <h3>Preview</h3>
-                        {filePreview.loading && <InlineState tone="loading" title="Loading preview" message="Reading a small preview of this file." />}
-                        {filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
-                        {!filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
-                          <pre>
-                            {(filePreview.data.content ?? "").split(/\r?\n/).slice(0, 80).map((line, index) => (
-                              <span key={`${index}-${line.slice(0, 8)}`}><b>{index + 1}</b>{line || " "}</span>
-                            ))}
-                          </pre>
-                        )}
-                        {!filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
-                          <div className="previewUnavailable">
-                            <strong>Preview unavailable</strong>
-                            <span>{filePreview.data?.message ?? "This item cannot be previewed here. You can still use the available file actions above."}</span>
-                          </div>
-                        )}
-                      </section>
-                    </div>
-                  )}
-                </aside>
-
-                <FileEditorModal
-                  selectedPath={selectedPath}
-                  editorText={editorText}
-                  dirty={dirty}
-                  fileOpening={fileOpening}
-                  fileOpenFailed={fileOpenFailed}
-                  fileReadError={fileReadError}
-                  fileSaving={fileSaving}
-                  editing={fileEditMode}
-                  editBusy={fileLeaseBusy}
-                  editMessage={fileLeaseMessage}
-                  editDisabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-                  editDisabledReason={serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath) ? stoppedServerMutationMessage : ""}
-                  editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-                  saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
-                  discardRequestOpen={Boolean(discardEditorRequest)}
-                  onTextChange={(nextText) => {
-                    setEditorText(nextText);
-                    setDirty(nextText !== savedEditorText);
-                  }}
-                  onRequestClose={requestCloseEditor}
-                  onCancel={cancelFileEdit}
-                  onSave={saveFile}
-                  onEnterEdit={enterFileEditMode}
-                  onRetryOpen={() => {
-                    if (selectedPath) void openFile(selectedPath, true);
-                  }}
-                  onKeepEditing={() => setDiscardEditorRequest(null)}
-                  onDiscardChanges={discardEditorChanges}
-                />
-              </section>
+              <FilesPage
+                workspace={filesWorkspace}
+                activeServerIsDemo={activeServerIsDemo}
+                permissionUser={permissionUser}
+                isProvisioning={isProvisioning}
+                dockerOperationalLock={dockerOperationalLock}
+                serverRequiresStoppedForMutableConfig={serverRequiresStoppedForMutableConfig}
+                stoppedServerMutationMessage={stoppedServerMutationMessage}
+                dateTimeFormatter={dateTimeFormatter}
+              />
             )}
 
             {activePage === "mods" && (

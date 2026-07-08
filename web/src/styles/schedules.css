@@ -1,0 +1,608 @@
+.scheduleManagementPage {
+  height: max(620px, calc(100vh - 238px));
+}
+
+
+
+.commandStack {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.commandInputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.commandInputRow:first-of-type {
+  grid-template-columns: 1fr;
+}
+
+.portBindingsEditor {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.portBindingRows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.portBindingRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.portBindingRow input {
+  width: 100%;
+  min-width: 0;
+}
+
+.portBindingColon {
+  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: var(--weight-title);
+  line-height: 1;
+}
+
+.portBindingAddButton {
+  width: 100%;
+  min-height: 42px;
+}
+
+.portBindingsEditor.hasExtraBindings .portBindingAddButton {
+  width: calc(100% - 44px - var(--space-2));
+}
+
+.portBindingRemoveButton {
+  align-self: stretch;
+}
+
+.iconDangerButton {
+  min-width: 44px;
+  width: 44px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-color: var(--sentinel-danger);
+  background: var(--surface);
+  color: var(--sentinel-danger);
+}
+
+.iconDangerButton:hover:not(:disabled) {
+  background: var(--sentinel-danger);
+  border-color: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.fieldLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.scheduleTableCard,
+.scheduledRunsCard {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.scheduleTableCard {
+  flex-direction: column;
+}
+
+.scheduledRunsCard {
+  flex-direction: column;
+}
+
+.tabPage.scheduleManagementPage {
+  width: 100%;
+  max-width: none;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
+.scheduleCardHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+}
+
+.scheduleCardHeader.compact {
+  align-items: flex-start;
+}
+
+.scheduleCardHeader h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+}
+
+.scheduleCardHeader p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.scheduleAddButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--swiss-white);
+}
+
+.scheduleTableFrame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scheduleTableHeader,
+.scheduleTableRow {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.8fr) minmax(150px, 1.2fr) minmax(140px, 1fr) minmax(150px, 1.1fr) minmax(140px, 1fr) minmax(150px, auto);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.scheduleTableHeader {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface));
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.scheduleTableHeader button {
+  justify-content: start;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.scheduleTableBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.scheduleTableRow {
+  min-height: 78px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  background: var(--surface);
+  transition: background 150ms ease;
+}
+
+.scheduleTableRow:hover {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.scheduleTableRow.disabled {
+  background: color-mix(in srgb, var(--surface-muted) 50%, var(--surface));
+}
+
+.scheduleNameCell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.scheduleNameCell strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.scheduleNameCell small,
+.scheduleCell small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.scheduledRunMarker {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  font-weight: var(--weight-title);
+}
+
+.scheduledRunItem.success .scheduledRunMarker {
+  background: color-mix(in srgb, var(--sentinel-success) 14%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.scheduledRunItem.failed .scheduledRunMarker {
+  background: color-mix(in srgb, var(--sentinel-danger) 12%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.scheduledRunItem.skipped .scheduledRunMarker {
+  background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.scheduleCell {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.scheduleCell code {
+  display: inline-block;
+  max-width: 100%;
+  border: 1px solid var(--border-row);
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--surface-muted);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.scheduleStatusText.success {
+  color: var(--sentinel-success);
+}
+
+.scheduleStatusText.failed {
+  color: var(--sentinel-danger);
+}
+
+.scheduleStatusText.skipped {
+  color: var(--sentinel-warning);
+}
+
+.scheduleEnabledCell {
+  min-width: 0;
+}
+
+.scheduleEnabledCell .switch {
+  justify-content: flex-start;
+}
+
+.scheduleRowActions {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  justify-self: end;
+}
+
+.scheduleRowActions button {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+
+.scheduleTableFooter {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--border-row);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.scheduleNoRows {
+  min-height: 88px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  color: var(--text-muted);
+}
+
+.scheduleNoRows strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0;
+}
+
+.scheduleNoRows span {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.scheduledRunsFeed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.scheduledRunItem {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
+}
+
+.scheduledRunItem.success {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface));
+}
+
+.scheduledRunItem.failed {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
+}
+
+.scheduledRunItem.skipped {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
+}
+
+.scheduledRunItem.unknown {
+  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--text-soft) 5%, var(--surface));
+}
+
+.scheduledRunItem + .scheduledRunItem {
+  margin-top: 0;
+}
+
+.scheduledRunItem:hover {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.scheduledRunItem::before {
+  display: none;
+  background: var(--border-row);
+}
+
+.scheduledRunItem:last-child {
+  padding-bottom: 0;
+}
+
+.scheduledRunItem:last-child::before {
+  display: none;
+}
+
+.scheduledRunMarker {
+  width: 32px;
+  height: 32px;
+}
+
+.scheduledRunMarker::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.scheduledRunItem strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+}
+
+.scheduledRunItem small,
+.scheduledRunTime {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.scheduledRunTime {
+  grid-column: auto;
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  text-align: right;
+}
+
+.scheduledRunTime span {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.scheduledRunsEmpty {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: var(--space-5);
+}
+
+@media (max-width: 1180px) {
+  .scheduleManagementPage {
+    height: auto;
+  }
+
+  .scheduleTableCard {
+    min-height: max(520px, calc(100vh - 238px));
+  }
+
+  .scheduledRunsCard {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 860px) {
+  .scheduleCardHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scheduleAddButton {
+    width: 100%;
+  }
+
+  .scheduleTableHeader {
+    display: none;
+  }
+
+  .scheduleTableRow {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+    align-items: stretch;
+  }
+
+  .scheduleNameCell,
+  .scheduleCell,
+  .scheduleEnabledCell,
+  .scheduleRowActions {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: center;
+    justify-self: stretch;
+  }
+
+  .scheduleNameCell::before,
+  .scheduleCell::before,
+  .scheduleEnabledCell::before,
+  .scheduleRowActions::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: var(--weight-title);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .scheduleRowActions {
+    grid-template-columns: 110px auto auto;
+    justify-content: start;
+  }
+
+  .scheduledRunItem {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .scheduledRunTime {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+.scheduleModalPanel {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.scheduleEditBody {
+  border: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.scheduleEditFields {
+  align-items: start;
+}
+
+.scheduleEditOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.scheduleOptionToggle {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
+}
+
+.scheduleOptionToggle input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.scheduleCommandStack {
+  min-height: 0;
+}
+
+.scheduleCommandList {
+  max-height: min(260px, 34vh);
+  overflow: auto;
+  display: grid;
+  gap: var(--space-2);
+  padding-right: 2px;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+.skeletonBlock {
+    animation: none !important;
+  }
+}

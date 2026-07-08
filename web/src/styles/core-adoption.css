@@ -1,0 +1,1901 @@
+/* Core application adoption ------------------------------------------------ */
+
+.overviewSummary .summaryTile {
+  min-height: 64px;
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.035);
+  align-content: center;
+  justify-items: start;
+  gap: 6px;
+}
+
+.overviewSummary .summaryTile::before {
+  display: none;
+}
+
+.summaryTile > span,
+.activityItem > span,
+.resourceMetricLabel > span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.overviewSummary .summaryTile > span {
+  line-height: 1;
+}
+
+.summaryTile > strong,
+.activityItem > strong,
+.resourceMetricLabel > strong {
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.3;
+}
+
+.overviewSummary .summaryTile > strong {
+  max-width: 100%;
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.overviewSummary .summaryTile > .summaryStatusText {
+  color: var(--text);
+  font-size: clamp(16px, 1.35vw, 20px);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.overviewSummary .summaryTile.state.running > .summaryStatusText {
+  color: var(--sentinel-success);
+}
+
+.overviewSummary .summaryTile.state.stopped > .summaryStatusText,
+.overviewSummary .summaryTile.state.danger > .summaryStatusText {
+  color: var(--sentinel-danger);
+}
+
+.overviewSummary .summaryTile.state.neutral > .summaryStatusText {
+  color: var(--text);
+}
+
+.activityGrid,
+.resourceRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.eventRow {
+  min-height: 40px;
+}
+
+.eventRow strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.eventRow small,
+.scheduleTableFooter,
+.scheduledRunTime {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.eventHideButton.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.eventHideButton.uiButton:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.resourceScopeControl .uiButton {
+  min-width: 40px;
+  min-height: 30px;
+  height: 30px;
+  padding-inline: var(--space-2);
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-muted);
+}
+
+.resourceScopeControl .uiButton.active {
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton,
+.uiButton.quickActionButton {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  box-shadow: none;
+}
+
+.uiButton.runtimeControlButton.start {
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 80%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
+}
+
+.uiButton.runtimeControlButton.stop {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.restart,
+.uiButton.quickActionButton {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.uiButton.runtimeControlButton.restart:hover:not(:disabled),
+.uiButton.quickActionButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton:disabled,
+.uiButton.quickActionButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.fileTableHead .uiSortHeaderButton,
+.scheduleTableHeader .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-2);
+}
+
+.fileNameCell {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+
+.scheduleTableHeader {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.scheduleNameCell strong,
+.scheduledRunItem strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+.scheduleNameCell small,
+.scheduleCell small,
+.scheduledRunItem small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+}
+
+.scheduleStatusText.uiStatusBadge {
+  margin-top: var(--space-1);
+}
+
+.scheduleRowActions .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.scheduleRowActions .uiButton--critical {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.scheduleRowActions .uiButton--critical:hover:not(:disabled) {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.scheduleNoRows.uiEmptyState,
+.scheduledRunsEmpty.uiEmptyState,
+.eventEmpty.uiEmptyState {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 66%, var(--surface));
+}
+
+.settingsGroupHeader .uiPanelHeaderCopy,
+.settingsRow > div {
+  min-width: 0;
+}
+
+.settingsRow strong,
+.permissionRow > span,
+.usersTable td {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+}
+
+.settingsRow > div > strong,
+.userNameCell strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.authPanel .uiButton,
+.keyForm .uiButton,
+.usersTable .uiButton {
+  min-height: var(--control-height);
+}
+
+.usersTable .uiButton--compact {
+  min-height: var(--control-height-compact);
+}
+
+/* Settings screen layout --------------------------------------------------- */
+
+.settingsList {
+  max-width: var(--content-max-width);
+  gap: var(--space-3);
+}
+
+.settingsGroup {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settingsGroupHeader,
+.settingsGroupHeader.usersGroupHeader {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
+}
+
+.settingsGroupHeader:not(.usersGroupHeader) {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.settingsGroupHeader > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+}
+
+.settingsGroupHeader > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settingsGroupHeader h2 {
+  margin: 0;
+}
+
+.settingsGroupHeader p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.usersGroupHeader .uiButton {
+  justify-self: end;
+  min-height: var(--control-height);
+}
+
+.settingsRow {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-row);
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
+}
+
+.settingsGroupHeader + .settingsRow {
+  border-top: 0;
+}
+
+.settingsRow:hover {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
+  border-color: var(--border-row);
+}
+
+.settingsRow > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settingsRow > div:first-child > strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.settingsRow > div:first-child > span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.45;
+}
+
+.settingsRow select,
+.settingsRow > .uiButton,
+.settingsRow > button {
+  justify-self: start;
+  width: min(100%, 420px);
+  max-width: 420px;
+}
+
+.settingsRow .settingsStatus {
+  justify-self: start;
+}
+
+.settingsRow .keyForm {
+  justify-self: stretch;
+  width: min(100%, 720px);
+  max-width: 720px;
+}
+
+.keyForm fieldset,
+.keyFormConfigured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.keyForm {
+  display: block;
+  width: 100%;
+}
+
+.keyForm fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.keyForm label {
+  min-width: 0;
+}
+
+.keyFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.secretPreview {
+  min-width: 0;
+  min-height: var(--control-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.secretPreview code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secretPreview .settingsStatus {
+  flex: 0 0 auto;
+}
+
+.usersSettings {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+@media (max-width: 1100px) {
+  .settingsRow {
+    grid-template-columns: minmax(180px, 0.42fr) minmax(0, 1fr);
+  }
+
+  .settingsRow .keyForm {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .settingsGroupHeader,
+  .settingsGroupHeader.usersGroupHeader,
+  .settingsRow,
+  .keyForm fieldset,
+  .keyFormConfigured {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGroupHeader > span {
+    display: none;
+  }
+
+  .usersGroupHeader .uiButton,
+  .settingsRow select,
+  .settingsRow > .uiButton,
+  .settingsRow > button,
+  .settingsRow .keyForm,
+  .settingsRow .settingsStatus {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
+  }
+
+  .keyFormActions {
+    justify-content: stretch;
+  }
+
+  .keyFormActions .uiButton,
+  .keyFormConfigured .uiButton {
+    flex: 1 1 auto;
+  }
+
+  .secretPreview {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding-block: var(--space-3);
+  }
+
+  .usersSettings {
+    padding: var(--space-3);
+  }
+}
+
+.systemBanner,
+.notice,
+.permissionWarning {
+  border-radius: var(--radius-md);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+/* Compact contextual server command header */
+.activeServerStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+}
+
+.themeDark .activeServerStrip {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--surface-muted));
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.22);
+}
+
+.activeServerStrip .serverStripLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripIcon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.activeServerStrip .server-icon-cube {
+  width: 18px;
+  height: 18px;
+}
+
+.activeServerStrip .serverStripInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverListTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.serverListTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverCommandStatusDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-soft);
+}
+
+.serverCommandStatusDot.running,
+.serverCommandStatusDot.starting {
+  background: var(--sentinel-success);
+}
+
+.serverCommandStatusDot.stopped,
+.serverCommandStatusDot.exited {
+  background: var(--sentinel-warning);
+}
+
+.serverCommandStatusDot.neutral {
+  background: var(--text-soft);
+}
+
+.activeServerStrip .runtimeBadge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.activeServerStrip .runtimeBadge.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text));
+}
+
+.activeServerStrip .runtimeBadge.stopped,
+.activeServerStrip .runtimeBadge.exited {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
+}
+
+.activeServerStrip .serverStripMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.activeServerStrip .serverStripMeta,
+.activeServerStrip .serverStripSeparator {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+}
+
+.activeServerStrip .serverStripRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.activeServerStrip .runtimeControlsCompact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton,
+.activeServerStrip .uiButton.quickActionButton {
+  min-height: 40px;
+  height: 40px;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.start {
+  min-width: 112px;
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.stop {
+  min-width: 112px;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart,
+.activeServerStrip .uiButton.quickActionButton {
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.activeServerStrip .quickActionButton.consoleLink.active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.activeServerStrip .overflowButton {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 980px) {
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .activeServerStrip {
+    padding: var(--space-3);
+  }
+
+  .activeServerStrip .serverStripLeft {
+    align-items: flex-start;
+  }
+
+  .activeServerStrip .serverStripRight,
+  .activeServerStrip .runtimeControlsCompact {
+    width: 100%;
+  }
+
+  .activeServerStrip .uiButton.runtimeControlButton,
+  .activeServerStrip .uiButton.quickActionButton {
+    flex: 1 1 140px;
+  }
+
+  .activeServerStrip .overflowMenuContainer {
+    margin-left: auto;
+  }
+}
+
+/* Mods and Nodes adoption -------------------------------------------------- */
+
+.nodeAlert,
+.nodeWarnings span {
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
+  color: var(--text);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.modsWorkspaceMetric,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodeCard,
+.nodeInfoCard,
+.nodeInstallBox {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.modsWorkspaceMetric {
+  min-height: 76px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.modsWorkspaceMetric small,
+.modsWorkspaceTableHead,
+.nodeServerSectionLabel,
+.nodeInfoCard dt {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceMetric strong,
+.modsWorkspaceIdentity strong,
+.modsResultContent strong,
+.nodeCardTitle h3,
+.nodeServerName {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.modsWorkspaceMetric span:last-child,
+.modsWorkspaceIdentity small,
+.modsResultContent p,
+.modsResultContent small,
+.modsDetailsDescription,
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.modsWorkspaceToolbar .uiButton,
+.modsDrawerFooter .uiButton,
+.modsUpdateReviewActions .uiButton,
+.modsResultCard > .uiButton,
+.nodeCardActions .uiButton,
+.nodeDetailsActions .uiButton,
+.nodeModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeCardHeader,
+.nodeModalHeader,
+.nodeModalFooter {
+  border-color: var(--border-row);
+}
+
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeInstallHeader h3,
+.nodeModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.modsWorkspaceListHeader > div span,
+.modsDrawerHeader p,
+.modsDrawerHeader small,
+.modsSearchActivity,
+.modsSafeSearchNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.4;
+}
+
+.modsDrawerHeader small {
+  color: var(--accent);
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceSearch,
+.modsAddSearch label {
+  min-height: var(--control-height);
+  border-color: var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.modsWorkspaceSearch .buttonIcon,
+.modsAddSearch .buttonIcon,
+.modsSafeSearchNote .buttonIcon {
+  width: var(--control-icon-size);
+  height: var(--control-icon-size);
+}
+
+.modsWorkspaceSearch input,
+.modsAddSearch input {
+  min-height: calc(var(--control-height) - 2px);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
+}
+
+.modsSafeSearchNote {
+  gap: var(--space-2);
+}
+
+.modsSafeSearchNote .buttonIcon {
+  color: var(--sentinel-success);
+}
+
+.modsSafeSearchNote.warning .buttonIcon {
+  color: #e98a15;
+}
+
+.modsWorkspaceRow {
+  border-color: var(--border-row);
+  transition: background var(--control-transition), opacity var(--control-transition);
+}
+
+.modsWorkspaceRow:hover {
+  background: var(--sentinel-accent-soft);
+}
+
+.modsWorkspaceIdentity {
+  border-radius: var(--radius-sm);
+}
+
+.modsWorkspaceIdentity:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.modsWorkspaceUpdate .uiButton {
+  min-height: var(--control-height-compact);
+  padding-inline: var(--space-2);
+  border-color: color-mix(in srgb, currentColor 34%, var(--border-row));
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.modsUpdateAction {
+  color: var(--sentinel-warning);
+}
+
+.modsReviewAction {
+  color: var(--accent);
+}
+
+.modsWorkspaceDetailsButton.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+}
+
+.modsStatusChip.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.modsStatusChip.update {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.modsStatusChip.review {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.modsStatusChip.not-recommended {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.modsStatusChip.unknown {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.modsWorkspaceEmpty.uiEmptyState {
+  min-height: 140px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.modsResultCard {
+  border-color: var(--border-row);
+  padding: var(--space-3);
+}
+
+.modsResultCard:hover:not(.isSkeleton) {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface-raised));
+}
+
+.modsWorkflowDrawer,
+.modsDetailsDrawer {
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+}
+
+.modsDrawerHeader,
+.modsDrawerFooter {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.modsBackButton.uiButton {
+  min-height: var(--control-height-compact);
+  margin-bottom: var(--space-1);
+  padding-inline: var(--space-1);
+}
+
+.modsRecommendedVersion,
+.modsCompatibilityCard.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.modsReviewWarning,
+.modsRiskAcknowledgement {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.modsChannelPicker .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.modsChannelPicker .uiButton.active,
+.installTabs .uiButton.active {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.nodesToolbar,
+.nodeCard {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.nodesToolbar h2 {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.nodesRefreshButton.uiButton {
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+}
+
+.nodeCard.online,
+.nodeCard.offline,
+.nodeCard.unknown {
+  box-shadow: none;
+}
+
+.nodeCard.online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised));
+}
+
+.nodeCard.offline {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 6%, var(--surface-raised));
+}
+
+.nodeStatusPills .uiStatusBadge {
+  min-height: 24px;
+}
+
+.nodeCardActions .uiButton {
+  min-width: 96px;
+}
+
+.nodeUpgradeButton.uiButton {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow,
+.nodeServerPlaceholder {
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+}
+
+.nodeServerIcon svg,
+.nodePlayerIcon svg,
+.nodeDetailIcon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeServerState {
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--surface-muted);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+}
+
+.nodeDetailIcon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-color: var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+.nodeDetailIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nodeDetailsTitleBlock > .nodeDetailIcon {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+
+.nodeDetailsTitleBlock > .nodeDetailIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.nodeDetailsTitleBlock h2 {
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+}
+
+.nodeInfoCard {
+  min-height: 72px;
+  gap: var(--space-3);
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.nodeInfoCard dd {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-meta);
+}
+
+.nodeDetailsActions .uiButton {
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  font-size: var(--type-button-size);
+  box-shadow: none;
+}
+
+.nodeDetailsActions .uiButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.addNodeIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  stroke: none;
+}
+
+.addNodeIcon .buttonIcon {
+  width: 24px;
+  height: 24px;
+}
+
+.addNodeCardInner > span:last-child {
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.installTabs .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.installCopyButton.uiButton {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-color: rgb(255 255 255 / 0.36);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--terminal-text);
+}
+
+.addNodeStepper {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+  box-shadow: none;
+}
+
+/* Focused UI cohesion pass ------------------------------------------------ */
+
+.uiButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.modsBackButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled),
+.fileBreadcrumbs button:hover:not(:disabled),
+.modsWorkspaceUpdate button:hover:not(:disabled),
+.modsWorkspaceIdentity:hover:not(:disabled),
+.modsVersionList button:hover:not(:disabled),
+.modInstallVersionRow:hover:not(:disabled),
+.addNodeCardButton:hover:not(:disabled) {
+  transform: none;
+}
+
+.uiButton,
+.secondaryButton,
+.quickActionButton,
+.runtimeControlButton,
+.iconButton,
+.iconOnlyButton {
+  box-shadow: none;
+}
+
+.uiButton--primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.uiButton--secondary:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton.restart:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton--ghost:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.modsBackButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled) {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.panel,
+.settingsGroup,
+.scheduleTableCard,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodesToolbar,
+.nodeCard,
+.nodeInfoCard,
+.nodeInstallBox,
+.propertiesSettingsCard,
+.activityGrid,
+.activityItem,
+.resourceMessage,
+.summaryTile {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.panel .panel,
+.modalPanel .panel,
+.nodeModalBody .panel,
+.fileEditorBody .panel {
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.uiPanelHeader,
+.settingsGroupHeader,
+.nodeCardHeader,
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeModalHeader,
+.nodeModalFooter,
+.fileEditorHeader,
+.modalHeader,
+.userModalHeader {
+  border-color: var(--border-row);
+}
+
+.uiPanelHeader h2,
+.uiPanelHeaderCopy h2,
+.settingsGroupHeader h2,
+.nodeCardHeader h3,
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.modalHeader h2,
+.userModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.uiPanelHeader p,
+.uiPanelHeaderCopy p,
+.settingsGroupHeader p,
+.nodeCardHeader p,
+.modsWorkspaceListHeader span,
+.modsDrawerHeader p,
+.nodeModalHeader p,
+.fileEditorHeader p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.workspaceActions,
+.buttonRow,
+.fileToolbar,
+.selectionActions,
+.modsWorkspaceToolbar,
+.modsWorkspacePrimaryActions,
+.modsWorkspaceUpdateActions,
+.modsDrawerFooter,
+.scheduleRowActions,
+.nodeCardActions,
+.nodeDetailsActions,
+.nodeModalFooter,
+.modalFooter,
+.userModalFooter,
+.fileEditorFooter {
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.fileToolbar,
+.nodesToolbar,
+.modsWorkspaceToolbar {
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-3);
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  box-shadow: none;
+}
+
+.modsWorkspacePage > .modsWorkspaceToolbar {
+  padding-inline: 0;
+  border-inline-width: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.modsWorkspaceToolbar .uiButton,
+.scheduleRowActions .uiButton,
+.nodeCardActions .uiButton,
+.nodeDetailsActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  min-height: var(--control-height-compact);
+  white-space: nowrap;
+}
+
+.fileTableRow,
+.modsWorkspaceRow,
+.scheduleTableRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.settingsRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: var(--surface);
+  box-shadow: none;
+  transition: background var(--control-transition), border-color var(--control-transition), color var(--control-transition), opacity var(--control-transition);
+}
+
+.fileTableRow:hover,
+.modsWorkspaceRow:hover,
+.scheduleTableRow:hover,
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.settingsRow:hover,
+.eventRow:hover {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
+}
+
+.fileTableRow.selected,
+.runtimeLoaderCard.selected,
+.modInstallVersionRow.selected,
+.modsVersionList button.selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.uiStatusBadge,
+.settingsStatus,
+.runtimeBadge,
+.roleBadge,
+.modsStatusChip,
+.nodeServerState {
+  min-height: 24px;
+  border-width: var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+  line-height: 1.1;
+}
+
+.nodeStatusDot,
+.serverCommandStatusDot,
+.scheduledRunMarker::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+
+.nodeDetailIcon,
+.nodeServerIcon,
+.nodePlayerIcon,
+.addNodeIcon,
+.serverStripIcon {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .workspaceActions,
+  .buttonRow,
+  .fileToolbar,
+  .selectionActions,
+  .modsWorkspaceToolbar,
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions,
+  .nodeCardActions,
+  .nodeDetailsActions,
+  .modalFooter,
+  .userModalFooter,
+  .fileEditorFooter {
+    align-items: stretch;
+  }
+}
+
+/* Focused responsive shell pass ------------------------------------------- */
+
+@media (min-width: 1101px) and (max-width: 1280px) {
+  :root {
+    --sidebar-width: 232px;
+  }
+
+  .workspace {
+    padding-inline: var(--space-4);
+  }
+
+  .brandLockup h1,
+  .sideNav button,
+  .accountName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brandBlock p,
+  .sideNav small,
+  .settingsVersionText {
+    display: none;
+  }
+
+  .sideNav button {
+    padding-inline: var(--space-2);
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .appShell,
+  .sidebarCollapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2) !important;
+    width: 100% !important;
+    height: auto;
+    padding: var(--space-2) var(--space-3) !important;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: var(--border-heavy) solid var(--border);
+  }
+
+  .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    display: flex !important;
+    width: auto;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0;
+  }
+
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    min-width: 0;
+    max-width: clamp(116px, 17vw, 180px);
+    gap: var(--space-2) !important;
+  }
+
+  .brandLockup h1 {
+    overflow: hidden;
+    font-size: 17px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brandBlock p,
+  .brandBlock .iconButton,
+  .sidebarCollapsed .brandBlock .iconButton,
+  .selectedServerReadout,
+  .sidebarDivider,
+  .navLabel,
+  .settingsVersionText,
+  .accountName,
+  .accountLogoutButton {
+    display: none !important;
+  }
+
+  .sideNav,
+  .sidebarCollapsed .sideNav,
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .sideNav:not(.sideNavBottom) {
+    justify-content: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 2px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .sideNav button,
+  .sidebarCollapsed .sideNav button,
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    width: var(--sidebar-rail-size);
+    min-width: var(--sidebar-rail-size);
+    height: var(--sidebar-rail-size);
+    min-height: var(--sidebar-rail-size);
+    padding: 0;
+    flex: 0 0 var(--sidebar-rail-size);
+    justify-content: center;
+    gap: 0 !important;
+  }
+
+  .sideNav button.active,
+  .sidebarCollapsed .sideNav button.active {
+    border-color: color-mix(in srgb, var(--accent) 44%, var(--border-row));
+    background: var(--sentinel-accent-soft);
+    color: var(--sentinel-accent-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    justify-content: flex-end;
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+
+  .accountChip,
+  .sidebarCollapsed .accountChip {
+    display: flex;
+  }
+
+  .workspace {
+    padding: var(--space-4);
+  }
+
+  .workspaceHeader {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .workspaceActions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    width: var(--sidebar-rail-size) !important;
+    max-width: var(--sidebar-rail-size);
+  }
+
+  .brandLockup > div,
+  .sidebarCollapsed .brandLockup > div {
+    display: none !important;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewPage,
+  .filesPage,
+  .schedulePage,
+  .settingsPage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overviewPage > *,
+  .overviewPage > .resourcePanel,
+  .overviewPage > .activityPanel,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .overviewSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Responsive schedule layout pass: keep table and recent runs separated on narrower screens. */
+@media (max-width: 1180px) {
+  .scheduleManagementPage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: start;
+    align-items: stretch;
+    height: auto;
+    min-height: 0;
+  }
+
+  .scheduleTableCard,
+  .scheduledRunsCard {
+    height: auto;
+    min-height: 0;
+  }
+
+  .scheduledRunsFeed {
+    max-height: min(420px, 55vh);
+  }
+}
+
+@media (max-width: 860px) {
+  .scheduleManagementPage {
+    gap: var(--space-3);
+  }
+
+  .scheduleTableCard,
+  .scheduledRunsCard,
+  .scheduleTableFrame,
+  .scheduleTableBody,
+  .scheduledRunsFeed {
+    overflow: visible;
+  }
+
+  .scheduleTableRow {
+    min-width: 0;
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .scheduleNameCell,
+  .scheduleCell,
+  .scheduleEnabledCell,
+  .scheduleRowActions {
+    grid-template-columns: minmax(86px, .34fr) minmax(0, 1fr);
+  }
+
+  .scheduleRowActions {
+    grid-template-columns: minmax(86px, .34fr) repeat(2, minmax(0, 1fr));
+  }
+
+  .scheduleRowActions .uiButton {
+    width: 100%;
+  }
+
+  .scheduledRunsFeed {
+    max-height: none;
+    padding: var(--space-3);
+  }
+
+  .scheduledRunItem {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+}
+
+/* Responsive settings layout pass: keep labels, helpers, and controls readable on phones. */
+@media (max-width: 860px) {
+  .settingsList {
+    width: 100%;
+    max-width: none;
+    gap: var(--space-3);
+  }
+
+  .settingsGroup {
+    overflow: visible;
+  }
+
+  .settingsGroupHeader,
+  .settingsGroupHeader.usersGroupHeader {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-3);
+  }
+
+  .settingsGroupHeader > span {
+    display: none;
+  }
+
+  .settingsGroupHeader > div {
+    min-width: 0;
+  }
+
+  .settingsGroupHeader h2 {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+
+  .settingsGroupHeader p {
+    max-width: none;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .usersGroupHeader .uiButton {
+    justify-self: stretch;
+    width: 100%;
+    margin-top: var(--space-1);
+  }
+
+  .settingsRow {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-3);
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .settingsRow > div:first-child > strong {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .settingsRow > div:first-child > span {
+    overflow-wrap: break-word;
+  }
+
+  .settingsRow select,
+  .settingsRow > .uiButton,
+  .settingsRow > button,
+  .settingsRow .keyForm,
+  .settingsRow .settingsStatus {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
+  }
+
+  .keyForm fieldset,
+  .keyFormConfigured {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .keyFormActions {
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .keyFormActions .uiButton,
+  .keyFormConfigured .uiButton {
+    flex: 1 1 min(160px, 100%);
+  }
+
+  .secretPreview {
+    flex-wrap: wrap;
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .secretPreview code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .usersSettings {
+    padding: var(--space-3);
+  }
+}

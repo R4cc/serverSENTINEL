@@ -1,0 +1,34 @@
+.overviewPage {
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.overviewPage > .inlineState {
+  grid-column: 1 / -1;
+}
+
+.overviewSummary {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.overviewPage > .resourcePanel {
+  grid-column: 1 / span 8;
+  grid-row: span 2;
+}
+
+.overviewPage > .activityPanel {
+  grid-column: 9 / -1;
+  align-self: start;
+}
+
+.overviewPage > .eventsPanel {
+  grid-column: 9 / -1;
+  align-self: stretch;
+}
+
+.overviewPage .consolePanel {
+  grid-column: 1 / -1;
+}
