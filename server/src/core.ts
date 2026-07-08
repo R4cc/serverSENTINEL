@@ -1,5 +1,5 @@
 import { realpath } from "node:fs/promises";
-import { basename, dirname, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 
 export type ServerPathScope = {
   serverDir: string;
@@ -7,8 +7,9 @@ export type ServerPathScope = {
 
 export function ensureInsideServer(server: ServerPathScope, userPath = ".") {
   const serverDir = resolve(server.serverDir);
-  const trimmed = userPath.replace(/^[/\\]+/, "");
-  const target = resolve(serverDir, trimmed || ".");
+  const target = isAbsolute(userPath)
+    ? resolve(userPath)
+    : resolve(serverDir, userPath || ".");
   assertPathInside(serverDir, target, "Path escapes the registered server directory");
   return target;
 }

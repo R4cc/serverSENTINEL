@@ -561,7 +561,7 @@ async function requireStoppedForMutableConfiguration(server: ManagedServer) {
   if (status.docker?.running) throw new Error(stoppedServerMutationMessage);
   const state = status.docker?.state || "";
   if (state === "unknown") {
-    if (status.docker?.configured === false || (status.docker?.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(status.docker?.message || ""))) return;
+    if (status.docker?.configured === false) return;
     throw new Error(stoppedServerMutationMessage);
   }
   if (state && !stoppedLikeDockerStates.has(state)) throw new Error(stoppedServerMutationMessage);
