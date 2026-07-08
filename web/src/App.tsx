@@ -71,6 +71,10 @@ const serverStatusPollMs = 10_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 
+function isReconnectableConsoleUnavailable(message?: string) {
+  return /node .*offline|node disconnected|disconnected before command/i.test(message ?? "");
+}
+
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
   if (type === "warning") {
     return (
@@ -845,11 +849,26 @@ export default function App() {
       consoleCommandRefreshTimeoutRef.current = null;
     }
 
+    const serverId = activeServer.id;
     let closedByCleanup = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(activeServer.id)}`);
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}`);
+    function reconnect() {
+      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
+      setConsoleError("Live console stream disconnected. Reconnecting automatically.");
+      if (consoleReconnectTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectTimeoutRef.current);
+      }
+      consoleReconnectTimeoutRef.current = window.setTimeout(() => {
+        consoleReconnectTimeoutRef.current = null;
+        if (activeServerIdRef.current === serverId) {
+          setConsoleStreamVersion((version) => version + 1);
+        }
+      }, 2_000);
+    }
+
     socket.onopen = () => {
-      if (activeServerIdRef.current === activeServer.id) {
+      if (activeServerIdRef.current === serverId) {
         setConsoleError("");
       }
     };
@@ -868,24 +887,18 @@ export default function App() {
         }
       }
       if (message.type === "unavailable") {
-        setLogs([consoleLine(message.message ?? "Console stream is unavailable.")]);
+        const unavailableMessage = message.message ?? "Console stream is unavailable.";
+        setLogs([consoleLine(unavailableMessage)]);
+        if (isReconnectableConsoleUnavailable(unavailableMessage)) {
+          void refreshApp({ silent: true });
+          void refreshStatus(serverId);
+          reconnect();
+          socket.close();
+        }
       }
       if (message.type === "empty") {
         setLogs((current) => current.length ? current : []);
       }
-    };
-    const reconnect = () => {
-      if (closedByCleanup || activeServerIdRef.current !== activeServer.id) return;
-      setConsoleError("Live console stream disconnected. Reconnecting automatically.");
-      if (consoleReconnectTimeoutRef.current !== null) {
-        window.clearTimeout(consoleReconnectTimeoutRef.current);
-      }
-      consoleReconnectTimeoutRef.current = window.setTimeout(() => {
-        consoleReconnectTimeoutRef.current = null;
-        if (activeServerIdRef.current === activeServer.id) {
-          setConsoleStreamVersion((version) => version + 1);
-        }
-      }, 2_000);
     };
     socket.onerror = reconnect;
     socket.onclose = reconnect;
