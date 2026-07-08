@@ -1,8 +1,8 @@
 import { initialDemoMods } from "../../demo";
 import type { InstalledMod } from "../../types";
 
-export const modsDemoFixtureQuery = "mods-fixture";
-export const modsDemoFixtureNames = ["default", "empty", "large", "mixed", "missing-modrinth", "fail-update-plan", "fail-search", "fail-versions"] as const;
+const modsDemoFixtureQuery = "mods-fixture";
+const modsDemoFixtureNames = ["default", "empty", "large", "mixed", "missing-modrinth", "fail-update-plan", "fail-search", "fail-versions"] as const;
 export type ModsDemoFixtureName = typeof modsDemoFixtureNames[number];
 
 export type ModsDemoFailure = "update-plan" | "search" | "versions";

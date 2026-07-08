@@ -1,6 +1,6 @@
 import type { PermissionKey, PublicUser, RolePreset } from "../types";
 
-export const ALL_PERMISSIONS = [
+const ALL_PERMISSIONS = [
   "servers.view",
   "servers.control",
   "servers.create",
@@ -27,7 +27,7 @@ export const ALL_PERMISSIONS = [
   "users.manage"
 ] as const satisfies readonly PermissionKey[];
 
-export const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, PermissionKey[]> = {
+const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, PermissionKey[]> = {
   viewer: ["servers.view", "console.view", "files.view", "mods.view", "schedules.view", "settings.view"],
   operator: ["servers.view", "console.view", "files.view", "mods.view", "schedules.view", "settings.view", "servers.control", "console.command"],
   maintainer: [

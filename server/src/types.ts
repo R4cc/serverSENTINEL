@@ -319,14 +319,6 @@ export type ResolvedServerVersions = {
 
 export type DockerState = "running" | "exited" | "created" | "paused" | "restarting" | "removing" | "dead" | "unknown";
 
-export type DockerExecCreate = {
-  Id: string;
-};
-
-export type DockerExecInspect = {
-  ExitCode?: number | null;
-};
-
 export type ServerEvent = {
   id: string;
   eventType: "server_started" | "server_stopped" | "player_joined" | "player_left" | "mod_disabled" | "server_crashed";

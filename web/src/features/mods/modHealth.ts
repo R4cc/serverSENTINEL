@@ -1,6 +1,6 @@
 import type { InstalledMod, ModCompatibility, ModrinthHit, ModrinthInstallVersion } from "../../types";
 
-export type ModHealthKey =
+type ModHealthKey =
   | "healthy"
   | "safe_update_available"
   | "review_update_available"
@@ -8,9 +8,9 @@ export type ModHealthKey =
   | "not_recommended"
   | "unknown";
 
-export type ModHealthTone = "ready" | "update" | "review" | "not-recommended" | "unknown";
+type ModHealthTone = "ready" | "update" | "review" | "not-recommended" | "unknown";
 
-export type InstalledModHealth = {
+type InstalledModHealth = {
   key: ModHealthKey;
   label: string;
   shortDescription: string;
@@ -190,7 +190,7 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
   };
 }
 
-export type ModChoiceHealth = Pick<InstalledModHealth, "label" | "shortDescription" | "detailDescription" | "tone" | "safeToRunDirectly"> & {
+type ModChoiceHealth = Pick<InstalledModHealth, "label" | "shortDescription" | "detailDescription" | "tone" | "safeToRunDirectly"> & {
   requiresAcknowledgement: boolean;
   primaryActionLabel: "Review and install" | "Review" | "Review risk";
 };

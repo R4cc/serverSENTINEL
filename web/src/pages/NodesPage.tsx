@@ -3,6 +3,7 @@ import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
+import { defaultNodeDataPath } from "../app/appConfig";
 import { formatBytes } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
 
@@ -12,7 +13,6 @@ type AddNodeInput = {
   dataMount: string;
 };
 
-const defaultNodeDataPath = "/var/lib/serversentinel";
 const collapsedServerLimit = 4;
 
 function formatNodeDate(value?: string, formatter?: (value: string | number | Date) => string) {

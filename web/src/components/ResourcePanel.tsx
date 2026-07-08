@@ -24,7 +24,7 @@ export function formatActivityDate(value: string | undefined, formatDate: (value
   return Number.isNaN(date.getTime()) ? "Unknown" : formatDate(value);
 }
 
-export function formatRate(bytesPerSecond?: number) {
+function formatRate(bytesPerSecond?: number) {
   if (bytesPerSecond === undefined || !Number.isFinite(bytesPerSecond)) return "Unavailable";
   if (bytesPerSecond < 1024) return `${Math.max(0, bytesPerSecond).toFixed(0)} B/s`;
   if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(0)} KB/s`;
@@ -89,7 +89,7 @@ function ResourceChartTooltip({
   );
 }
 
-export function ResourceChart({
+function ResourceChart({
   samples,
   value,
   tone = "blue",

@@ -10,7 +10,6 @@ import {
   nodeInstallInstructions,
   cleanupNodeServerContainers,
   parseCookies,
-  removeServersForNode,
   validateRuntimeJarFilename,
   dockerHostPortBindings,
   findExistingServerPortConflict,
@@ -486,17 +485,6 @@ describe("node force delete cleanup", () => {
     { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
     { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" }
   ] satisfies ManagedServer[];
-
-  it("removes every server assigned to the deleted node and leaves other nodes alone", () => {
-    const servers = [
-      { id: "server-1", nodeId: "deleted-node", displayName: "One", serverDir: "/tmp/one", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
-      { id: "server-2", nodeId: "kept-node", displayName: "Two", serverDir: "/tmp/two", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" },
-      { id: "server-3", nodeId: "deleted-node", displayName: "Three", serverDir: "/tmp/three", runtimeProfile: testRuntimeProfile(), createdAt: "", updatedAt: "" }
-    ] satisfies ManagedServer[];
-
-    expect(removeServersForNode(servers, "deleted-node")).toBe(2);
-    expect(servers.map((server) => server.id)).toEqual(["server-2"]);
-  });
 
   it("cleans up assigned server containers before node records are deleted", async () => {
     const calls: string[] = [];

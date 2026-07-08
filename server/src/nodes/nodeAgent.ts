@@ -18,7 +18,7 @@ import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
-import { configuredQueryExternalPort, minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
+import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
 import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
@@ -243,13 +243,6 @@ function queryPortFromInput(input: { queryPort?: string; dockerPorts?: string })
   const udpBinding = (input.dockerPorts || "").split(",").map((part) => part.trim()).find((part) => part.endsWith("/udp"));
   const port = udpBinding?.split(":", 1)[0]?.trim();
   return port && isValidServerPort(port) ? Number(port) : 25566;
-}
-
-function queryPortForServer(server: ManagedServer, props: Record<string, string> = {}) {
-  const stored = configuredQueryExternalPort(server, props);
-  if (stored) return stored;
-  if (props["query.port"] && isValidServerPort(props["query.port"])) return Number(props["query.port"]);
-  return queryPortFromInput({ dockerPorts: server.dockerPorts });
 }
 
 function ensureQueryDockerPort(dockerPorts: string, queryPort: number) {

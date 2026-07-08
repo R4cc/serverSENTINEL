@@ -1,8 +1,8 @@
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import { validateJarFilename } from "../../utils/validation";
 
-export type ModUploadCandidate = Pick<File, "name" | "size">;
-export type ModUploadSelection = { kind: "cancelled" } | { kind: "error"; message: string } | { kind: "ready"; file: ModUploadCandidate };
+type ModUploadCandidate = Pick<File, "name" | "size">;
+type ModUploadSelection = { kind: "cancelled" } | { kind: "error"; message: string } | { kind: "ready"; file: ModUploadCandidate };
 
 export function filterInstalledMods(mods: InstalledMod[], query: string) {
   const normalized = query.trim().toLowerCase();

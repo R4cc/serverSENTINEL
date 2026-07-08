@@ -18,7 +18,3 @@ export const appBuildId = normalizeBuildId(
     ?? process.env.SOURCE_COMMIT
     ?? process.env.RAILWAY_GIT_COMMIT_SHA
 );
-
-export function shortBuildId(value?: string) {
-  return value ? value.slice(0, 12) : undefined;
-}

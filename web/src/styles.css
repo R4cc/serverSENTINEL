@@ -674,7 +674,6 @@ button .buttonIcon {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
-.emptyState,
 .panel,
 .activeServerStrip,
 .toast,
@@ -682,29 +681,6 @@ button .buttonIcon {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
-}
-
-.emptyState {
-  padding: var(--space-6);
-  display: grid;
-  gap: var(--space-4);
-  max-width: 760px;
-  background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.04) 1px, transparent 0) 0 0 / 16px 16px,
-    var(--surface-muted);
-}
-
-.themeDark .emptyState {
-  background:
-    radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.026) 1px, transparent 0) 0 0 / 16px 16px,
-    var(--surface-muted);
-}
-
-.emptyState h2 {
-  font-size: clamp(34px, 7vw, 88px);
-  line-height: 0.9;
-  letter-spacing: var(--tracking-tight);
-  overflow-wrap: break-word;
 }
 
 .activeServerStrip {
@@ -792,12 +768,6 @@ button .buttonIcon {
   font-size: 12px;
   color: var(--text-soft);
   font-weight: 600;
-}
-
-.nodeStripMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 .serverStripRight {
@@ -968,9 +938,6 @@ button .buttonIcon {
   cursor: pointer;
 }
 
-.runtimeControlButton span:last-child {
-}
-
 .runtimeControlButton:hover:not(:disabled) {
   transform: translateY(-1px);
 }
@@ -1118,7 +1085,6 @@ button .buttonIcon {
   display: none !important;
 }
 
-.pill,
 .runtimeBadge {
   border: var(--border-strong) solid var(--border);
   border-radius: 999px;
@@ -1131,23 +1097,19 @@ button .buttonIcon {
   white-space: nowrap;
 }
 
-.pill.running,
 .runtimeBadge.running,
 .ok {
   color: var(--sentinel-success);
 }
 
-.pill.stopped,
 .runtimeBadge.stopped {
   color: var(--text-soft);
 }
 
-.pill.exited,
 .runtimeBadge.exited {
   color: var(--sentinel-danger);
 }
 
-.pill.starting,
 .runtimeBadge.starting {
   color: var(--sentinel-warning);
 }
@@ -2098,8 +2060,7 @@ button .buttonIcon {
   margin-top: var(--space-3);
 }
 
-.buttonRow,
-.fileActions {
+.buttonRow {
   display: flex;
   gap: var(--space-2);
   align-items: center;
@@ -2329,88 +2290,6 @@ button .buttonIcon {
   padding: var(--space-4);
 }
 
-.propertiesSummaryList {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.propertiesSummaryList div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.propertiesSummaryList dt {
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.propertiesSummaryList dd {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: flex-end;
-  max-width: 210px;
-  margin: 0;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: var(--weight-strong);
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.summaryStatusDot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-
-.summaryStatusDot.running {
-  background: var(--sentinel-success);
-}
-
-.summaryStatusDot.starting {
-  background: var(--sentinel-warning);
-}
-
-.summaryStatusDot.exited {
-  background: var(--sentinel-danger);
-}
-
-.propertiesInfoNote {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  margin-top: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--accent-soft-border);
-  border-radius: var(--radius-sm);
-  background: var(--sentinel-accent-soft);
-  color: var(--accent-strong);
-}
-
-.propertiesInfoNote span {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 13px;
-  font-weight: var(--weight-title);
-}
-
-.propertiesInfoNote p {
-  margin: 0;
-  color: inherit;
-}
-
 .dangerPanel {
   border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-row));
   background: var(--surface-raised);
@@ -2473,16 +2352,6 @@ button .buttonIcon {
     padding: var(--space-3);
   }
 
-  .propertiesSummaryList div {
-    grid-template-columns: 1fr;
-    gap: var(--space-1);
-  }
-
-  .propertiesSummaryList dd {
-    justify-content: flex-start;
-    max-width: 100%;
-    text-align: left;
-  }
 }
 
 .settingsList {
@@ -2600,9 +2469,6 @@ button .buttonIcon {
 .settingsStatus.warning {
   border-color: var(--sentinel-warning);
   color: var(--sentinel-warning);
-}
-
-.nodesPage {
 }
 
 .nodesToolbar {
@@ -2905,14 +2771,6 @@ button .buttonIcon {
 
 
 
-
-.nodeFacts dd.ready {
-  color: var(--sentinel-success);
-}
-
-.nodeFacts dd.limited {
-  color: var(--sentinel-danger);
-}
 
 .nodeModalHeader.nodeDetailsHeader {
   display: flex;
@@ -3617,7 +3475,6 @@ button .buttonIcon {
 }
 
 
-.runtimeSelection,
 .minecraftPortsSection {
   display: grid;
   gap: var(--space-3);
@@ -3650,21 +3507,6 @@ button .buttonIcon {
 
 
 
-.nodePlacementCard.selected {
-  border-color: var(--accent);
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.nodePlacementCard.selected strong {
-  font-weight: var(--weight-title);
-}
-
-.nodePlacementCard.disabled {
-  opacity: 0.56;
-  cursor: not-allowed;
-}
 
 
 
@@ -3796,8 +3638,7 @@ button .buttonIcon {
 }
 
 .createWizardCard > .modInstallStepIntro,
-.createWizardFields,
-.createWizardPlaceholder {
+.createWizardFields {
   padding: var(--space-4) var(--space-4) 0;
 }
 
@@ -4944,8 +4785,7 @@ button .buttonIcon {
   }
 
   .createWizardCard > .modInstallStepIntro,
-  .createWizardFields,
-  .createWizardPlaceholder {
+  .createWizardFields {
     padding: var(--space-3) var(--space-3) 0;
   }
 
@@ -5002,13 +4842,6 @@ button .buttonIcon {
 
 
 
-.runtimePreview.resolved {
-  border-color: var(--sentinel-success);
-}
-
-.runtimePreview.error {
-  border-color: var(--sentinel-danger);
-}
 
 
 
@@ -5085,8 +4918,6 @@ button .buttonIcon {
   text-transform: none;
 }
 
-.resourcePanel {
-}
 
 
 .resourceScopeControl {
@@ -5505,15 +5336,6 @@ button .buttonIcon {
 }
 
 
-.fileList,
-.mods {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.mods {
-  max-width: 1020px;
-}
 
 
 
@@ -5527,10 +5349,6 @@ button .buttonIcon {
 
 
 
-.segmentedControl button.active {
-  background: var(--text);
-  color: var(--surface);
-}
 
 
 
@@ -6073,20 +5891,12 @@ button .buttonIcon {
 
 
 
-.modResultsHeader.placeholder {
-  visibility: hidden;
-}
 
 
 
 
 
 
-.modRow.disabled {
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.04) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
-}
 
 
 
@@ -6166,9 +5976,6 @@ button .buttonIcon {
 
 
 
-.modRow .compatibilityReason.ok {
-  color: var(--sentinel-success);
-}
 
 
 
@@ -6186,17 +5993,6 @@ button .buttonIcon {
 
 
 
-
-
-.forceInstallWarning .buttonRow {
-  justify-content: start;
-  margin-top: var(--space-2);
-}
-
-.forceInstallModal .buttonRow {
-  justify-content: end;
-  margin-top: var(--space-3);
-}
 
 
 
@@ -6263,16 +6059,6 @@ button .buttonIcon {
 
 
 
-.modInstallChannelButtons button.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--swiss-white);
-}
-
-.modInstallChannelButtons button:not(.active):hover:not(:disabled) {
-  background: var(--surface-muted);
-  color: var(--text);
-}
 
 
 .modInstallVersionGroups {
@@ -6306,11 +6092,6 @@ button .buttonIcon {
 
 
 
-
-.modInstallDisclosureMeta .buttonIcon {
-  width: 16px;
-  height: 16px;
-}
 
 .modInstallVersionTable {
   min-width: 100%;
@@ -7300,14 +7081,6 @@ button .buttonIcon {
     font-size: clamp(34px, 14vw, 58px);
   }
 
-  .emptyState {
-    padding: var(--space-4);
-  }
-
-  .emptyState h2 {
-    font-size: clamp(24px, 8vw, 44px);
-  }
-
 .workspaceActions,
 .buttonRow,
 .fileActions,
@@ -7501,41 +7274,6 @@ button .buttonIcon {
 
 
 
-.modInfoText .filename {
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  color: var(--text-soft);
-  font-family: var(--font-mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.modInfoText .description {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 2px 0 0;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-
-
-
-.compatStatus.compatible {
-  color: var(--sentinel-success);
-}
-
-.compatStatus.incompatible {
-  color: var(--sentinel-danger);
-}
-
-.compatStatus.unknown {
-  color: var(--text-muted);
-}
 
 
 
@@ -7544,9 +7282,10 @@ button .buttonIcon {
 
 
 
-.updateStatus.unknown {
-  color: var(--text-soft);
-}
+
+
+
+
 
 
 
@@ -7700,15 +7439,10 @@ button .buttonIcon {
 
 
 .panel,
-.emptyState,
 .activeServerStrip,
 .modalPanel {
   border-radius: var(--radius-sm);
 }
-
-.panel {
-}
-
 
 .settingsGroupHeader > div,
 .settingsRow > div,
@@ -7721,18 +7455,11 @@ button .buttonIcon {
   text-overflow: ellipsis;
 }
 
-.emptyState,
 .emptyInline,
 .eventEmpty,
 .fileDetailsEmpty {
   border-radius: var(--radius-sm);
 }
-
-.emptyState {
-  width: 100%;
-}
-
-
 
 button,
 .quickActionButton,
@@ -8238,7 +7965,6 @@ button:disabled,
 .panel,
 .authPanel,
 .activeServerStrip,
-.emptyState,
 .modalPanel {
   background: var(--surface-raised);
   border: var(--border-strong) solid var(--border);
@@ -8525,7 +8251,6 @@ button:disabled,
 .panel,
 .authPanel,
 .activeServerStrip,
-.emptyState,
 .modalPanel,
 .nodeCard,
 .addNodeCardButton,
@@ -8540,7 +8265,6 @@ button:disabled,
 .themeDark .panel,
 .themeDark .authPanel,
 .themeDark .activeServerStrip,
-.themeDark .emptyState,
 .themeDark .modalPanel,
 .themeDark .nodeCard,
 .themeDark .addNodeCardButton,
@@ -8715,7 +8439,6 @@ textarea:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--terminal-text) 22%, var(--terminal-bg));
 }
 
-.emptyState,
 .emptyInline,
 .eventEmpty,
 .fileDetailsEmpty,
@@ -9123,7 +8846,6 @@ textarea,
 }
 
 .serverStripMeta,
-.nodeStripMeta,
 .activeServerStrip span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -9181,15 +8903,6 @@ textarea,
 }
 
 
-.emptyState h2 {
-  font-size: clamp(22px, 3vw, 34px);
-  font-weight: var(--weight-title);
-  letter-spacing: 0;
-  line-height: 1.15;
-  text-transform: none;
-}
-
-.emptyState p,
 .emptyInline,
 .emptyInline span,
 .eventEmpty,
@@ -9441,9 +9154,6 @@ textarea,
     font-size: clamp(22px, 7vw, 30px);
   }
 
-.emptyState h2 {
-    font-size: clamp(21px, 7vw, 30px);
-  }
 }
 
 /* Canonical application layout */
@@ -9583,7 +9293,6 @@ textarea,
 }
 
 .panel,
-.emptyState,
 .inlineState,
 .systemBanner,
 .notice,
@@ -9685,17 +9394,12 @@ textarea,
   padding: 8px 10px;
 }
 
-.emptyState,
 .inlineState,
 .eventEmpty,
 .fileDetailsEmpty {
   max-width: none;
   padding: var(--space-5);
   gap: var(--space-3);
-}
-
-.emptyState h2 {
-  font-size: clamp(21px, 2.8vw, 30px);
 }
 
 .systemBanner,
@@ -10321,7 +10025,6 @@ textarea,
 
 .activeServerStrip,
 .panel,
-.emptyState,
 .modalBody,
 .userModalBody,
 .nodeModalBody {
@@ -10828,7 +10531,6 @@ textarea,
 }
 
 .uiStatusBadge,
-.pill,
 .runtimeBadge,
 .settingsStatus,
 .roleBadge,
@@ -10940,7 +10642,6 @@ textarea,
 }
 
 .uiEmptyState,
-.emptyState,
 .emptyInline,
 .modsWorkspaceEmpty {
   color: var(--text-muted);
@@ -12485,7 +12186,6 @@ textarea,
 }
 
 .fileTableRow.selected,
-.nodePlacementCard.selected,
 .runtimeLoaderCard.selected,
 .modInstallVersionRow.selected,
 .modsVersionList button.selected {

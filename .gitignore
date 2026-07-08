@@ -3,6 +3,8 @@ dist/
 .local-config/
 .local-servers/
 .tmp/
+.codex-tmp/
+.codex-run/
 .tmp-codex/
 .tmp-config/
 .tmp-config-ux/

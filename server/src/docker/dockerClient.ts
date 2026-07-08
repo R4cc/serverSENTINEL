@@ -105,17 +105,6 @@ export async function dockerJsonRequest<T>(
   return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { payload })).toString("utf8"));
 }
 
-export async function dockerJsonBufferRequest(
-  method: "POST",
-  path: string,
-  body: unknown,
-  expectedStatus: number | number[] = 200
-) {
-  const payload = JSON.stringify(body);
-  return dockerSocketRequest(method, path, expectedStatus, { payload });
-}
-
-
 export async function sendDockerContainerStdinLine(containerName: string, line: string, options: DockerStdinOptions = {}) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");

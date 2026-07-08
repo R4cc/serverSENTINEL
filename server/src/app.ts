@@ -34,7 +34,7 @@ import {
   versionChannel
 } from "./modrinth/compatibility.js";
 import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
-import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan, type SafeBatchUpdateResult } from "./modrinth/updatePlan.js";
+import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -54,7 +54,7 @@ import {
 } from "./runtime/profile.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { queryMinecraftServer } from "./minecraftQuery.js";
-import { configuredQueryExternalPort, minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
+import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -1100,17 +1100,6 @@ async function readServers() {
 
 function listManagedServers() {
   return readServers();
-}
-
-export function removeServersForNode(servers: ManagedServer[], nodeId: string) {
-  let removed = 0;
-  for (let index = servers.length - 1; index >= 0; index -= 1) {
-    if (servers[index].nodeId === nodeId) {
-      servers.splice(index, 1);
-      removed += 1;
-    }
-  }
-  return removed;
 }
 
 export type NodeServerCleanupFailure = {
@@ -2249,13 +2238,6 @@ function configuredServerPort(server: ManagedServer, props: Record<string, strin
   if (props["server-port"]) return props["server-port"];
   const tcpPort = dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp").find((port) => port.protocol === "tcp");
   return tcpPort?.port || "25565";
-}
-
-function configuredQueryPort(server: ManagedServer, props: Record<string, string>) {
-  const storedQuery = configuredQueryExternalPort(server, props);
-  if (storedQuery) return storedQuery;
-  const udpPort = dockerHostPortBindings(server.dockerPorts || "").find((port) => port.protocol === "udp");
-  return udpPort ? Number(udpPort.port) : null;
 }
 
 function validDockerTimestamp(value?: string) {

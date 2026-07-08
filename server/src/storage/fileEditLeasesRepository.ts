@@ -4,7 +4,6 @@ import { normalizePublicFilePath } from "../core.js";
 import type { StorageDatabase } from "./database.js";
 
 export const fileEditLeaseTimeoutMs = 60_000;
-export const fileEditLeaseHeartbeatMs = 20_000;
 
 type LeaseRow = {
   lease_id: string;
