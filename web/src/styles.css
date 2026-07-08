@@ -2155,7 +2155,7 @@ button .buttonIcon {
   border: 1px solid var(--border-row);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-elevated);
 }
 
 .propertiesSettingsCard {
@@ -2176,7 +2176,7 @@ button .buttonIcon {
   flex: 0 0 30px;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--accent-soft-border);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border-row));
   border-radius: var(--radius-sm);
   background: var(--sentinel-accent-soft);
   color: var(--accent);
@@ -2266,7 +2266,7 @@ button .buttonIcon {
 .serverPropertiesForm fieldset:disabled .memoryValueBubble {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--sentinel-accent-soft) 56%, var(--surface-raised));
-  color: var(--accent-strong);
+  color: var(--sentinel-accent-strong);
 }
 
 .propertiesDisclosure {
@@ -3633,7 +3633,7 @@ button .buttonIcon {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.05);
   overflow: hidden;
 }
 
@@ -5044,7 +5044,7 @@ button .buttonIcon {
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-elevated);
   padding: 8px 10px;
   font-size: 12px;
 }
@@ -5951,21 +5951,6 @@ button .buttonIcon {
 
   to {
     background-position: -180% 0;
-  }
-}
-
-@keyframes skeletonCardBreath {
-  0%,
-  100% {
-    border-color: var(--border);
-    opacity: 0.78;
-    transform: translateY(0);
-  }
-
-  50% {
-    border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-    opacity: 1;
-    transform: translateY(-1px);
   }
 }
 
@@ -7756,7 +7741,7 @@ button:disabled,
 .fileEditorMetaRow span.editRequiredHint {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
   background: var(--sentinel-accent-soft);
-  color: var(--accent-strong);
+  color: var(--sentinel-accent-strong);
 }
 
 .fileLeaseNotice {
@@ -7765,7 +7750,7 @@ button:disabled,
   border: 1px solid var(--warning-border, #d6a84b);
   border-radius: 8px;
   background: color-mix(in srgb, #d6a84b 12%, transparent);
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 0.875rem;
 }
 
@@ -10163,7 +10148,7 @@ textarea,
 .modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; color: var(--text-muted); font-size: .82rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .modsResultContent small { color: var(--text-muted); font-size: .72rem; }
 .modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: #b96305; font-size: .74rem; line-height: 1.35; }
-.modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--surface); background-size: 220% 100%; animation: skeleton 1.4s infinite; }
+.modsResultCard.isSkeleton { min-height: 94px; background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--border) 55%, transparent) 40%, transparent 55%) var(--surface); background-size: 220% 100%; animation: skeletonSweep 1.4s infinite; }
 .modsSearchSentinel { height: 1px; }
 .modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
 .modsDetailsTitle h2 { margin: 0 0 6px; }
