@@ -73,6 +73,14 @@ const stoppedServerMutationMessage = "Stop the server before changing mods or se
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 const activePageStorageKey = "serversentinel-active-page";
 const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
+const playerMetricsStorageKey = "serversentinel-player-metrics";
+const playerMetricsMaxAgeMs = 15 * 60 * 1000;
+
+type StoredPlayerMetrics = {
+  playersOnline: number;
+  maxPlayers?: number | null;
+  savedAt: number;
+};
 
 function isReconnectableConsoleUnavailable(message?: string) {
   return /node .*offline|node disconnected|disconnected before command/i.test(message ?? "");
@@ -85,6 +93,50 @@ function mergeTransientPlayerMetrics(incoming: ServerActivity, previous: ServerA
     ...incoming,
     playersOnline: previous.playersOnline,
     maxPlayers: incoming.maxPlayers ?? previous.maxPlayers
+  };
+}
+
+function readStoredPlayerMetrics() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(playerMetricsStorageKey) || "{}") as Record<string, StoredPlayerMetrics>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredPlayerMetrics(serverId: string, activity: ServerActivity) {
+  if (activity.playersOnline === null || activity.playersOnline === undefined) return;
+  try {
+    const current = readStoredPlayerMetrics();
+    current[serverId] = {
+      playersOnline: activity.playersOnline,
+      maxPlayers: activity.maxPlayers,
+      savedAt: Date.now()
+    };
+    window.localStorage.setItem(playerMetricsStorageKey, JSON.stringify(current));
+  } catch {
+    // Ignore unavailable browser storage; overview will fall back to live data.
+  }
+}
+
+function clearStoredPlayerMetrics(serverId: string) {
+  try {
+    const current = readStoredPlayerMetrics();
+    if (!(serverId in current)) return;
+    delete current[serverId];
+    window.localStorage.setItem(playerMetricsStorageKey, JSON.stringify(current));
+  } catch {
+    // Ignore unavailable browser storage.
+  }
+}
+
+function storedPlayerMetricsActivity(serverId: string): ServerActivity | null {
+  const stored = readStoredPlayerMetrics()[serverId];
+  if (!stored || Date.now() - stored.savedAt > playerMetricsMaxAgeMs) return null;
+  return {
+    playersOnline: stored.playersOnline,
+    maxPlayers: stored.maxPlayers
   };
 }
 
@@ -276,14 +328,22 @@ export default function App() {
     try {
       const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
       const preservePlayerMetrics = Boolean(status?.server.id === serverId && status.docker.running);
+      const cachedPlayerMetrics = storedPlayerMetricsActivity(serverId);
       setServerActivities((current) => {
-        const activity = mergeTransientPlayerMetrics(data.activity, current[serverId], preservePlayerMetrics);
+        const previousActivity = current[serverId] ?? cachedPlayerMetrics ?? undefined;
+        const activity = mergeTransientPlayerMetrics(data.activity, previousActivity, preservePlayerMetrics);
+        if (activity.playersOnline !== null && activity.playersOnline !== undefined) writeStoredPlayerMetrics(serverId, activity);
+        else if (!preservePlayerMetrics) clearStoredPlayerMetrics(serverId);
         return { ...current, [serverId]: activity };
       });
       if (activeServerIdRef.current === serverId) {
         setOverviewData((current) => ({
           ...data,
-          activity: mergeTransientPlayerMetrics(data.activity, current.activity, preservePlayerMetrics)
+          activity: mergeTransientPlayerMetrics(
+            data.activity,
+            current.activity.playersOnline !== null && current.activity.playersOnline !== undefined ? current.activity : cachedPlayerMetrics ?? undefined,
+            preservePlayerMetrics
+          )
         }));
         setOverviewError("");
       }
@@ -834,6 +894,13 @@ export default function App() {
     const initializeFileWorkspace = fileWorkspaceServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
     if (serverChanged) setLogs([]);
+    if (serverChanged) {
+      const cachedPlayerMetrics = storedPlayerMetricsActivity(activeServer.id);
+      setOverviewData({ events: [], activity: cachedPlayerMetrics ?? {} });
+      if (cachedPlayerMetrics) {
+        setServerActivities((current) => ({ ...current, [activeServer.id]: cachedPlayerMetrics }));
+      }
+    }
     if (initializeFileWorkspace) {
       fileWorkspaceServerIdRef.current = activeServer.id;
       resetEditorState();
@@ -940,6 +1007,25 @@ export default function App() {
       socket.close();
     };
   }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
+
+  useEffect(() => {
+    if (!activeServer || activeServerIsDemo || !activeStatus || activeStatus.docker.running) return;
+    clearStoredPlayerMetrics(activeServer.id);
+    setServerActivities((current) => {
+      const activity = current[activeServer.id];
+      if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return current;
+      return {
+        ...current,
+        [activeServer.id]: { ...activity, playersOnline: null }
+      };
+    });
+    if (activeServerIdRef.current === activeServer.id) {
+      setOverviewData((current) => {
+        if (current.activity.playersOnline === null || current.activity.playersOnline === undefined) return current;
+        return { ...current, activity: { ...current.activity, playersOnline: null } };
+      });
+    }
+  }, [activeServer?.id, activeServerIsDemo, activeStatus?.docker.running]);
 
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
