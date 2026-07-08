@@ -75,6 +75,16 @@ function isReconnectableConsoleUnavailable(message?: string) {
   return /node .*offline|node disconnected|disconnected before command/i.test(message ?? "");
 }
 
+function mergeTransientPlayerMetrics(incoming: ServerActivity, previous: ServerActivity | undefined, preservePrevious: boolean): ServerActivity {
+  if (!preservePrevious || incoming.playersOnline !== null && incoming.playersOnline !== undefined) return incoming;
+  if (previous?.playersOnline === null || previous?.playersOnline === undefined) return incoming;
+  return {
+    ...incoming,
+    playersOnline: previous.playersOnline,
+    maxPlayers: incoming.maxPlayers ?? previous.maxPlayers
+  };
+}
+
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
   if (type === "warning") {
     return (
@@ -253,9 +263,16 @@ export default function App() {
     setOverviewError("");
     try {
       const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
-      setServerActivities((current) => ({ ...current, [serverId]: data.activity }));
+      const preservePlayerMetrics = Boolean(status?.server.id === serverId && status.docker.running);
+      setServerActivities((current) => {
+        const activity = mergeTransientPlayerMetrics(data.activity, current[serverId], preservePlayerMetrics);
+        return { ...current, [serverId]: activity };
+      });
       if (activeServerIdRef.current === serverId) {
-        setOverviewData(data);
+        setOverviewData((current) => ({
+          ...data,
+          activity: mergeTransientPlayerMetrics(data.activity, current.activity, preservePlayerMetrics)
+        }));
         setOverviewError("");
       }
     } catch (error) {
@@ -266,7 +283,7 @@ export default function App() {
     } finally {
       if (activeServerIdRef.current === serverId) setOverviewLoading(false);
     }
-  }, [demoMode, demoRunning]);
+  }, [demoMode, demoRunning, status]);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (overviewRefreshTimeoutRef.current !== null) {
