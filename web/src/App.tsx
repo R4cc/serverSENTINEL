@@ -70,6 +70,8 @@ const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
+const activePageStorageKey = "serversentinel-active-page";
+const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
 
 function isReconnectableConsoleUnavailable(message?: string) {
   return /node .*offline|node disconnected|disconnected before command/i.test(message ?? "");
@@ -83,6 +85,15 @@ function mergeTransientPlayerMetrics(incoming: ServerActivity, previous: ServerA
     playersOnline: previous.playersOnline,
     maxPlayers: incoming.maxPlayers ?? previous.maxPlayers
   };
+}
+
+function readStoredActivePage() {
+  try {
+    const stored = window.localStorage.getItem(activePageStorageKey);
+    return activePages.has(stored as ActivePage) ? stored as ActivePage : "overview";
+  } catch {
+    return "overview";
+  }
 }
 
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
@@ -201,7 +212,7 @@ export default function App() {
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
-  const [activePage, setActivePage] = useState<ActivePage>("overview");
+  const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [nodeBusyId, setNodeBusyId] = useState("");
@@ -932,6 +943,14 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
   }, [commandHistory]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(activePageStorageKey, activePage);
+    } catch {
+      // Ignore unavailable browser storage; the page will fall back to overview on reload.
+    }
+  }, [activePage]);
 
   useEffect(() => {
     if (!addNodeOpen || !addNodeResult || demoMode) return;
