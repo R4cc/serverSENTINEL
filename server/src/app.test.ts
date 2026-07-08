@@ -25,7 +25,9 @@ import {
   mutableServerConfigurationBlockedReason,
   nodeUpdateImageForBuild,
   assertSameOriginRequest,
-  localFilePathInput
+  localFilePathInput,
+  publicServerStatus,
+  publicInstalledModsResult
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -130,6 +132,96 @@ describe("local file path input", () => {
   it("rejects unsafe public paths", () => {
     expect(() => localFilePathInput(server, "/../etc/passwd")).toThrow("normalized");
     expect(() => localFilePathInput(server, "/mods\\bad.jar")).toThrow("invalid characters");
+  });
+});
+
+describe("public server status DTO", () => {
+  it("keeps status polling payloads to browser-needed fields", () => {
+    const status = publicServerStatus({
+      server: {
+        id: "server-1",
+        serverDir: "/srv/private/server-1",
+        dockerMountSource: "/srv/private/server-1",
+        resolvedVersions: {
+          minecraftVersion: { version: "1.21.4", source: "detected", lastCheckedAt: "now" }
+        }
+      },
+      docker: {
+        configured: true,
+        available: true,
+        controllable: true,
+        running: true,
+        state: "running",
+        container: "serversentinel-server-1",
+        name: "/serversentinel-server-1",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "0001-01-01T00:00:00Z",
+        message: ""
+      },
+      fileLogsAvailable: true,
+      controlAvailable: true,
+      commandInputAvailable: true,
+      commandInputMessage: "ready",
+      backendOnly: "hidden"
+    }, { id: "server-1" });
+
+    expect(status).toEqual({
+      server: { id: "server-1" },
+      docker: {
+        configured: true,
+        available: true,
+        controllable: true,
+        state: "running",
+        running: true,
+        container: "serversentinel-server-1",
+        message: undefined
+      },
+      fileLogsAvailable: true,
+      controlAvailable: true,
+      commandInputAvailable: true,
+      commandInputMessage: "ready"
+    });
+    expect(JSON.stringify(status)).not.toContain("/srv/private");
+    expect(JSON.stringify(status)).not.toContain("startedAt");
+    expect(JSON.stringify(status)).not.toContain("backendOnly");
+  });
+});
+
+describe("public installed mods DTO", () => {
+  it("removes Modrinth hashes and download URLs from browser mod lists", () => {
+    const result = publicInstalledModsResult({
+      mods: [{
+        filename: "fabric-api.jar",
+        displayName: "Fabric API",
+        compatibility: {
+          status: "compatible",
+          compatible: true,
+          reason: "ok",
+          file: {
+            filename: "fabric-api.jar",
+            url: "https://cdn.modrinth.com/private.jar",
+            size: 123,
+            hashes: { sha1: "abc", sha512: "def" }
+          }
+        },
+        modrinth: {
+          projectId: "fabric-api",
+          versionId: "version-1",
+          filename: "fabric-api.jar",
+          versionNumber: "1.0.0",
+          gameVersions: ["1.21.4"],
+          loaders: ["fabric"],
+          hashes: { sha1: "abc", sha512: "def" },
+          installedAt: "2026-01-01T00:00:00.000Z",
+          installedWithForceIncompatible: false
+        }
+      }]
+    }) as { mods: Array<{ compatibility: { file?: unknown }; modrinth: Record<string, unknown> }> };
+
+    expect(JSON.stringify(result)).not.toContain("sha512");
+    expect(JSON.stringify(result)).not.toContain("cdn.modrinth.com");
+    expect(result.mods[0].compatibility.file).toEqual({ filename: "fabric-api.jar", size: 123 });
+    expect(result.mods[0].modrinth.hashes).toBeUndefined();
   });
 });
 

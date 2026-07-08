@@ -932,6 +932,64 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
   };
 }
 
+function publicDockerStatus(value: unknown) {
+  const docker = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    configured: docker.configured === true,
+    available: docker.available === true,
+    controllable: docker.controllable === true,
+    state: typeof docker.state === "string" ? docker.state : "unknown",
+    running: typeof docker.running === "boolean" ? docker.running : undefined,
+    container: typeof docker.container === "string" ? docker.container : undefined,
+    message: typeof docker.message === "string" && docker.message ? docker.message : undefined
+  };
+}
+
+export function publicServerStatus(status: unknown, server: Pick<ManagedServer, "id">) {
+  const source = status && typeof status === "object" ? status as Record<string, unknown> : {};
+  return {
+    server: { id: server.id },
+    docker: publicDockerStatus(source.docker),
+    fileLogsAvailable: source.fileLogsAvailable === true,
+    controlAvailable: source.controlAvailable === true,
+    commandInputAvailable: source.commandInputAvailable === true,
+    commandInputMessage: typeof source.commandInputMessage === "string" ? source.commandInputMessage : ""
+  };
+}
+
+function publicModCompatibility(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const compatibility = value as Record<string, unknown>;
+  const file = compatibility.file && typeof compatibility.file === "object" ? compatibility.file as Record<string, unknown> : undefined;
+  return {
+    ...compatibility,
+    file: file ? {
+      filename: typeof file.filename === "string" ? file.filename : undefined,
+      size: typeof file.size === "number" ? file.size : undefined
+    } : undefined
+  };
+}
+
+function publicInstalledModMetadata(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const metadata = value as Record<string, unknown>;
+  const { hashes: _hashes, ...publicMetadata } = metadata;
+  return publicMetadata;
+}
+
+export function publicInstalledModsResult(result: unknown) {
+  if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
+  const base = result as { mods: Array<Record<string, unknown>> };
+  return {
+    ...base,
+    mods: base.mods.map((mod) => ({
+      ...mod,
+      compatibility: publicModCompatibility(mod.compatibility),
+      modrinth: publicInstalledModMetadata(mod.modrinth)
+    }))
+  };
+}
+
 function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
   return {
@@ -3305,14 +3363,14 @@ async function localServerStatus(server: ManagedServer) {
   const latestLogPath = await validateExistingInsideServer(server, "logs/latest.log").catch(() => "");
   const docker = await dockerStatus(server);
   const commandInput = await dockerCommandInputCapability(server, docker);
-  return {
-    server: await publicServer(server),
+  return publicServerStatus({
+    server,
     docker,
     fileLogsAvailable: Boolean(latestLogPath && existsSync(latestLogPath)),
     controlAvailable: Boolean(docker.controllable),
     commandInputAvailable: commandInput.available,
     commandInputMessage: commandInput.message
-  };
+  }, server);
 }
 
 async function localSendConsoleCommand(server: ManagedServer, command: unknown) {
@@ -4145,7 +4203,7 @@ app.delete<{
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).serverStatus(server);
+  return publicServerStatus(await runtimeForServer(server).serverStatus(server), server);
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
@@ -4496,7 +4554,6 @@ async function localListFiles(server: ManagedServer, target: string) {
             type: entry.isDirectory() ? "directory" : "file",
             size: entryStat.size,
             modifiedAt: entryStat.mtime.toISOString(),
-            permissions: `0${(entryStat.mode & 0o777).toString(8)}`,
             status: fileManagerStatus(entryStat, entry.name)
           };
         })
@@ -5574,7 +5631,7 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
   const server = await getServer(request.params.id);
   const options = { forceRefresh: request.query.forceRefresh === "true" };
   const result = await runtimeForServer(server).listMods(server, options);
-  return options.forceRefresh ? enrichInstalledModUpdates(server, result, options) : result;
+  return publicInstalledModsResult(options.forceRefresh ? await enrichInstalledModUpdates(server, result, options) : result);
 });
 
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
@@ -5706,8 +5763,7 @@ function classifyModrinthInstallVersion(input: {
     loaders: input.version.loaders,
     file: file ? {
       filename: file.filename,
-      size: file.size,
-      hashes: file.hashes
+      size: file.size
     } : undefined,
     compatible,
     selectable,

@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   functionalUpdate,
   getCoreRowModel,
@@ -27,7 +27,6 @@ import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, FileTypeIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { FileEditorModal } from "./components/FileEditorModal";
 import { InlineState } from "./components/InlineState";
-import { MinecraftTerminal } from "./components/MinecraftTerminal";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
@@ -39,6 +38,8 @@ import { NodesPage } from "./pages/NodesPage";
 import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
 import { ModsPage } from "./pages/ModsPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
+
+const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -3562,15 +3563,17 @@ export default function App() {
                     />
                   )}
                   <div className="terminal">
-                    <MinecraftTerminal
-                      entries={logs}
-                      canSendCommands={canSendConsoleCommands}
-                      disabledReason={consoleCommandDisabledReason}
-                      commandHistory={commandHistory}
-                      onCommand={(command) => {
-                        void sendCommand(command);
-                      }}
-                    />
+                    <Suspense fallback={<InlineState tone="loading" title="Preparing terminal" message="Loading the interactive console." />}>
+                      <MinecraftTerminal
+                        entries={logs}
+                        canSendCommands={canSendConsoleCommands}
+                        disabledReason={consoleCommandDisabledReason}
+                        commandHistory={commandHistory}
+                        onCommand={(command) => {
+                          void sendCommand(command);
+                        }}
+                      />
+                    </Suspense>
                   </div>
                 </section>
               </section>

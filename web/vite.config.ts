@@ -30,6 +30,9 @@ export default defineConfig({
           if (normalizedId.includes("/recharts/") || normalizedId.includes("/d3-") || normalizedId.includes("/decimal.js-light/") || normalizedId.includes("/victory-vendor/")) {
             return "charts";
           }
+          if (normalizedId.includes("/@xterm/")) {
+            return "terminal";
+          }
           if (normalizedId.includes("/@tanstack/react-table/")) {
             return "table";
           }

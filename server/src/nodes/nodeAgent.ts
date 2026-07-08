@@ -911,7 +911,7 @@ async function fileList(server: ManagedServer, path: unknown) {
     entries: await Promise.all(entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name)).map(async (entry) => {
       const entryPath = join(target, entry.name);
       const entryStat = await lstat(entryPath);
-      return { name: entry.name, path: publicPath(root, entryPath), type: entry.isDirectory() ? "directory" : "file", size: entryStat.size, modifiedAt: entryStat.mtime.toISOString(), permissions: `0${(entryStat.mode & 0o777).toString(8)}`, status: "managed" };
+      return { name: entry.name, path: publicPath(root, entryPath), type: entry.isDirectory() ? "directory" : "file", size: entryStat.size, modifiedAt: entryStat.mtime.toISOString(), status: "managed" };
     }))
   };
 }

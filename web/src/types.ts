@@ -240,7 +240,7 @@ export type DockerStatus = {
 };
 
 export type ServerStatus = {
-  server: ManagedServer;
+  server: Pick<ManagedServer, "id">;
   docker: DockerStatus;
   fileLogsAvailable: boolean;
   controlAvailable: boolean;
@@ -349,9 +349,7 @@ export type ModCompatibility = {
   matchedGameVersions?: string[];
   file?: {
     filename: string;
-    url: string;
     size?: number;
-    hashes?: Record<string, string>;
   };
   serverSide?: string;
   clientSide?: string;
@@ -389,7 +387,6 @@ export type ModrinthInstallVersion = {
   file?: {
     filename: string;
     size?: number;
-    hashes?: Record<string, string>;
   };
   compatible: boolean;
   selectable: boolean;
@@ -444,7 +441,6 @@ export type InstalledMod = {
     versionType?: ReleaseChannel;
     gameVersions: string[];
     loaders: string[];
-    hashes?: Record<string, string>;
     installedAt: string;
     installedWithForceIncompatible: boolean;
     incompatibilityReason?: string;

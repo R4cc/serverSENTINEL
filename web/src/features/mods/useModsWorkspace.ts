@@ -606,7 +606,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           iconUrl: installState.data.project.iconUrl || installState.mod.icon_url, description: installState.data.project.description || installState.mod.description,
           modrinth: {
             projectId, versionId: selectedVersion.id, filename, versionNumber: selectedVersion.versionNumber, versionType: selectedVersion.releaseChannel,
-            gameVersions: selectedVersion.minecraftVersions, loaders: selectedVersion.loaders, hashes: selectedVersion.file?.hashes, installedAt: new Date().toISOString(),
+            gameVersions: selectedVersion.minecraftVersions, loaders: selectedVersion.loaders, installedAt: new Date().toISOString(),
             installedWithForceIncompatible: forceIncompatible, incompatibilityReason: forceIncompatible ? selectedVersion.reason : undefined,
             overrideMinecraftVersion, overrideReason: overrideMinecraftVersion ? selectedVersion.reason : undefined,
             clientSide: installState.data.project.clientSide, serverSide: installState.data.project.serverSide, forceIncompatible

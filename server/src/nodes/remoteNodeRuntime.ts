@@ -245,8 +245,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     }
 
     try {
-      const status = await this.serverStatus(server);
-      send({ type: "status", status });
+      const status = await this.serverStatus(server) as { docker?: unknown };
+      send({ type: "status", status: { docker: status.docker } });
     } catch (error) {
       send({ type: "unavailable", message: (error as Error).message });
     }
