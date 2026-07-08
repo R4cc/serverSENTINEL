@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 - 2026-07-08
+
+### Fixed
+
+- Clean up previous node containers after successful node self-upgrades while retaining them when replacement startup or health verification fails.
+
 ## 1.0.0 - 2026-07-07
 
 serverSENTINEL 1.0.0 is the first stable release line for the Docker-based Minecraft server panel.

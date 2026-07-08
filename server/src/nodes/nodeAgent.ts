@@ -32,7 +32,7 @@ type NodeUpdateRequest = {
 type NodeContainerInspect = {
   Id: string;
   Name?: string;
-  State?: { Status?: string; Running?: boolean; StartedAt?: string; FinishedAt?: string };
+  State?: { Status?: string; Running?: boolean; StartedAt?: string; FinishedAt?: string; Health?: { Status?: string } };
   Config?: Record<string, unknown> & {
     Image?: string;
     Labels?: Record<string, string>;
@@ -43,6 +43,12 @@ type NodeContainerInspect = {
   NetworkSettings?: {
     Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; EndpointID?: string; Gateway?: string; IPAddress?: string; IPPrefixLen?: number; IPv6Gateway?: string; GlobalIPv6Address?: string; GlobalIPv6PrefixLen?: number; MacAddress?: string; DriverOpts?: Record<string, string> }>;
   };
+};
+type DockerContainerListItem = {
+  Id: string;
+  Names?: string[];
+  State?: string;
+  Status?: string;
 };
 type DockerInfo = {
   MemTotal?: number;
@@ -75,6 +81,7 @@ const uploadLimit = 128 * 1024 * 1024;
 const reconnectDelayMs = 5000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
+const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
 
 function detailedError(error: Error, details: string) {
   (error as Error & { details?: string }).details = details;
@@ -756,7 +763,7 @@ async function prepareNodeUpdate(payload: unknown) {
   return {
     ok: true,
     mode: "self",
-    message: "Node update started. The node will reconnect shortly.",
+    message: "Node update started. The node will reconnect shortly. After the replacement is running and healthy, the previous node container will be removed; if startup fails, it will be retained for recovery.",
     image,
     planPath
   };
@@ -809,6 +816,7 @@ async function prepareNodeRemoval() {
 }
 
 async function selfUpdateContainer(inspect: NodeContainerInspect, image: string, currentName: string, planPath: string) {
+  await mkdir(nodeUpdateDir, { recursive: true });
   await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(image)}`, [200, 201, 204], 10 * 60 * 1000);
   const oldName = `${currentName}-previous-${Date.now()}`;
   await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
@@ -826,8 +834,62 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
   await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, configBody, 201);
   await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "created" }, null, 2)}\n`, "utf8");
   await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
-  await dockerRequest("POST", `/containers/${encodeURIComponent(oldName)}/stop?t=10`, [204, 304]);
-  await dockerRequest("DELETE", `/containers/${encodeURIComponent(oldName)}?v=1`, [204, 404]);
+  await verifyUpdatedNodeContainer(currentName);
+  await cleanupPreviousNodeContainers(currentName, oldName);
+  await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "healthy", cleanup: "previous-container-removed" }, null, 2)}\n`, "utf8");
+}
+
+async function verifyUpdatedNodeContainer(currentName: string) {
+  let lastInspect: NodeContainerInspect | undefined;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    lastInspect = await inspectNodeContainer(currentName);
+    const state = lastInspect.State;
+    const health = state?.Health?.Status;
+    if (state?.Running && (!health || health === "healthy")) return lastInspect;
+    if (health === "unhealthy") {
+      throw new Error(`Updated node container ${currentName} reported unhealthy. Previous container was retained for recovery.`);
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
+  }
+  const status = lastInspect?.State?.Status || "unknown";
+  const health = lastInspect?.State?.Health?.Status;
+  throw new Error(`Updated node container ${currentName} did not become healthy enough to remove the previous container. Current status: ${status}${health ? `, health: ${health}` : ""}. Previous container was retained for recovery.`);
+}
+
+async function inspectNodeContainer(nameOrId: string) {
+  return dockerRequest<NodeContainerInspect>("GET", `/containers/${encodeURIComponent(nameOrId)}/json`, 200);
+}
+
+function isPreviousNodeContainerName(name: string, currentName: string) {
+  return name.startsWith(`${currentName}-previous-`);
+}
+
+function previousNodeContainerNames(container: DockerContainerListItem) {
+  return (container.Names || []).map(cleanContainerName).filter(Boolean);
+}
+
+async function cleanupPreviousNodeContainers(currentName: string, requiredPreviousName?: string) {
+  const removed: string[] = [];
+  const removePreviousContainer = async (name: string) => {
+    await dockerRequest("DELETE", `/containers/${encodeURIComponent(name)}?force=1&v=1`, [204, 404]);
+    removed.push(name);
+  };
+
+  const containers = await dockerRequest<DockerContainerListItem[]>("GET", "/containers/json?all=1", 200);
+  for (const container of containers) {
+    const names = previousNodeContainerNames(container).filter((name) => isPreviousNodeContainerName(name, currentName));
+    if (names.length === 0) continue;
+    if (names.includes(currentName)) continue;
+    const state = (container.State || "").toLowerCase();
+    if (!removablePreviousNodeStates.has(state)) continue;
+    const name = names[0];
+    if (requiredPreviousName && name === requiredPreviousName) continue;
+    await removePreviousContainer(name);
+  }
+  if (requiredPreviousName) {
+    await removePreviousContainer(requiredPreviousName);
+  }
+  return { removed };
 }
 
 async function selfStopContainer(containerId: string, currentName: string) {
@@ -1300,9 +1362,11 @@ function runtimeSelection(input: unknown) {
 }
 
 export const __nodeAgentTestHooks = {
+  cleanupPreviousNodeContainers,
   createdServerRecord,
   handleCommand,
-  minecraftContainerCommand
+  minecraftContainerCommand,
+  selfUpdateContainer
 };
 
 export async function startNodeAgent() {

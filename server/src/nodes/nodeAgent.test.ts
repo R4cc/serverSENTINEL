@@ -9,6 +9,11 @@ type NodeAgentTestHooks = typeof import("./nodeAgent.js").__nodeAgentTestHooks;
 
 let tempRoot: string;
 let hooks: NodeAgentTestHooks;
+let mockDockerAvailable = false;
+let mockDockerRequest: ReturnType<typeof vi.fn>;
+let mockDockerBufferRequest: ReturnType<typeof vi.fn>;
+let mockDockerJsonRequest: ReturnType<typeof vi.fn>;
+let mockSendDockerContainerStdinLine: ReturnType<typeof vi.fn>;
 
 function testRuntimeProfile(): ServerRuntimeProfile {
   return {
@@ -45,11 +50,24 @@ function testServer(storageName = "survival"): ManagedServer {
 async function loadHooks() {
   vi.resetModules();
   process.env.SERVERSENTINEL_DATA_DIR = tempRoot;
+  vi.doMock("../docker/dockerClient.js", () => ({
+    dockerAvailable: () => mockDockerAvailable,
+    dockerBufferRequest: mockDockerBufferRequest,
+    dockerErrorMessage: (body: string, statusCode?: number) => body || `Docker API returned ${statusCode ?? "an error"}`,
+    dockerJsonRequest: mockDockerJsonRequest,
+    dockerRequest: mockDockerRequest,
+    sendDockerContainerStdinLine: mockSendDockerContainerStdinLine
+  }));
   return (await import("./nodeAgent.js")).__nodeAgentTestHooks;
 }
 
 beforeEach(async () => {
   tempRoot = await mkdtemp(join(tmpdir(), "serversentinel-node-agent-"));
+  mockDockerAvailable = false;
+  mockDockerRequest = vi.fn();
+  mockDockerBufferRequest = vi.fn();
+  mockDockerJsonRequest = vi.fn();
+  mockSendDockerContainerStdinLine = vi.fn();
   hooks = await loadHooks();
 });
 
@@ -226,5 +244,102 @@ describe("remote node mod upload safety", () => {
     });
 
     expect(await readFile(join(modsDir, "fabric-api.jar"))).toEqual(jar);
+  });
+});
+
+describe("node self-update container cleanup", () => {
+  function nodeInspect(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      Id: "old-node-id",
+      Name: "/serversentinel-node",
+      State: { Running: true, Status: "running" },
+      Config: {
+        Image: "nl2109/serversentinel:old",
+        Labels: { "serversentinel.test": "true" }
+      },
+      HostConfig: {},
+      NetworkSettings: {},
+      ...overrides
+    };
+  }
+
+  it("removes the previous container after the replacement starts successfully", async () => {
+    mockDockerAvailable = true;
+    mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
+    mockDockerJsonRequest.mockResolvedValue({});
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "POST" && path.includes("/rename?")) return {};
+      if (method === "POST" && path === "/containers/serversentinel-node/start") return {};
+      if (method === "GET" && path === "/containers/serversentinel-node/json") {
+        return { Id: "new-node-id", Name: "/serversentinel-node", State: { Running: true, Status: "running" } };
+      }
+      if (method === "GET" && path === "/containers/json?all=1") return [];
+      if (method === "DELETE" && path.startsWith("/containers/serversentinel-node-previous-")) return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    await hooks.selfUpdateContainer(nodeInspect(), "nl2109/serversentinel:new", "serversentinel-node", join(tempRoot, "plan.json"));
+
+    expect(mockDockerRequest).toHaveBeenCalledWith("POST", expect.stringMatching(/^\/containers\/old-node-id\/rename\?name=serversentinel-node-previous-\d+$/), 204);
+    expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-node/start", 204);
+    expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", expect.stringMatching(/^\/containers\/serversentinel-node-previous-\d+\?force=1&v=1$/), [204, 404]);
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("POST", expect.stringContaining("/stop?t=10"), expect.anything());
+  });
+
+  it("preserves the previous container when the replacement fails health verification", async () => {
+    mockDockerAvailable = true;
+    mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
+    mockDockerJsonRequest.mockResolvedValue({});
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "POST" && path.includes("/rename?")) return {};
+      if (method === "POST" && path === "/containers/serversentinel-node/start") return {};
+      if (method === "GET" && path === "/containers/serversentinel-node/json") {
+        return { Id: "new-node-id", Name: "/serversentinel-node", State: { Running: true, Status: "running", Health: { Status: "unhealthy" } } };
+      }
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    await expect(hooks.selfUpdateContainer(nodeInspect(), "nl2109/serversentinel:new", "serversentinel-node", join(tempRoot, "plan.json")))
+      .rejects.toThrow("Previous container was retained");
+
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", expect.any(String), expect.anything());
+  });
+
+  it("cleanup does not delete the active node container", async () => {
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/json?all=1") {
+        return [
+          { Id: "active", Names: ["/serversentinel-node"], State: "running" },
+          { Id: "previous", Names: ["/serversentinel-node-previous-100"], State: "exited" }
+        ];
+      }
+      if (method === "DELETE" && path === "/containers/serversentinel-node-previous-100?force=1&v=1") return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    await hooks.cleanupPreviousNodeContainers("serversentinel-node");
+
+    expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", "/containers/serversentinel-node-previous-100?force=1&v=1", [204, 404]);
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", "/containers/serversentinel-node?force=1&v=1", [204, 404]);
+  });
+
+  it("cleanup ignores unrelated containers", async () => {
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/json?all=1") {
+        return [
+          { Id: "other", Names: ["/other-node-previous-100"], State: "exited" },
+          { Id: "project", Names: ["/serversentinel-node-previous-100"], State: "exited" },
+          { Id: "running-previous", Names: ["/serversentinel-node-previous-200"], State: "running" }
+        ];
+      }
+      if (method === "DELETE" && path === "/containers/serversentinel-node-previous-100?force=1&v=1") return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    const result = await hooks.cleanupPreviousNodeContainers("serversentinel-node");
+
+    expect(result.removed).toEqual(["serversentinel-node-previous-100"]);
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", "/containers/other-node-previous-100?force=1&v=1", [204, 404]);
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", "/containers/serversentinel-node-previous-200?force=1&v=1", [204, 404]);
   });
 });
