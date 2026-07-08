@@ -10369,11 +10369,6 @@ textarea,
 }
 /* Cohesive Mods workspace */
 .modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
-.modsLockBanner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #e98a15 7%, var(--surface-raised)); }
-.modsLockBanner > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #c66a05; background: color-mix(in srgb, #e98a15 14%, transparent); }
-.modsLockBanner > div { flex: 1; }
-.modsLockBanner strong, .modsLockBanner p { display: block; }
-.modsLockBanner p { margin: 2px 0 0; font-size: .82rem; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-raised); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
 .modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
@@ -11805,7 +11800,6 @@ textarea,
 
 /* Mods and Nodes adoption -------------------------------------------------- */
 
-.modsLockBanner,
 .nodeAlert,
 .nodeWarnings span {
   border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
@@ -11815,21 +11809,6 @@ textarea,
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
   line-height: 1.45;
-}
-
-.modsLockBanner > span {
-  width: var(--control-height);
-  height: var(--control-height);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
-  color: var(--sentinel-warning);
-}
-
-.modsLockBanner p {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-body);
 }
 
 .modsWorkspaceMetric,

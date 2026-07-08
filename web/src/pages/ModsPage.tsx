@@ -16,12 +16,9 @@ type ModsPageServerContext = {
 };
 
 type ModsPageAccess = {
-  serverRunning: boolean;
   changesAllowed: boolean;
   locked: boolean;
   toggleLocked: boolean;
-  canStopServer: boolean;
-  stoppingServer: boolean;
   modrinthConfigured: boolean;
   addDisabled: boolean;
   addDisabledReason: string;
@@ -37,10 +34,9 @@ type Props = {
     date: (value: string | number | Date) => string;
     number: (value: number) => string;
   };
-  onStopServer: () => void;
 };
 
-export function ModsPage({ workspace, serverContext, access, formatters, onStopServer }: Props) {
+export function ModsPage({ workspace, serverContext, access, formatters }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const { data, state, derived, refs, actions } = workspace;
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
@@ -52,7 +48,6 @@ export function ModsPage({ workspace, serverContext, access, formatters, onStopS
 
   return (
     <section className="tabPage modsWorkspacePage">
-      {access.serverRunning && <section className="modsLockBanner"><span><AppIcon name="shield" /></span><div><strong>Stop the server to change mods.</strong><p>Installs, uploads, removals, updates, and enable or disable changes require the server to be stopped.</p></div>{access.canStopServer && <Button variant="secondary" onClick={onStopServer} disabled={access.stoppingServer} reserveLabel="Stopping...">{access.stoppingServer ? "Stopping..." : "Stop server"}</Button>}</section>}
       {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
       <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} />
       <div className="modsWorkspaceToolbar">

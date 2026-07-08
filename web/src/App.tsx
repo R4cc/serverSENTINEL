@@ -368,7 +368,6 @@ export default function App() {
           : serverSettingsSaving
             ? "Server settings are saving."
             : "";
-  const modServerRunning = serverRequiresStoppedForMutableConfig;
   const modsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
   const addModFromModrinthDisabled = isProvisioning || serverRequiresStoppedForMutableConfig || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
@@ -3758,12 +3757,9 @@ export default function App() {
                   contextMessage: activeModContext
                 }}
                 access={{
-                  serverRunning: modServerRunning,
                   changesAllowed: !modsLocked,
                   locked: modsLocked,
                   toggleLocked: modToggleLocked,
-                  canStopServer: canBasic && !dockerOperationalLock,
-                  stoppingServer: runtimeAction === "stop",
                   modrinthConfigured: effectiveAppState.modrinthApiConfigured,
                   addDisabled: addModFromModrinthDisabled,
                   addDisabledReason: addModFromModrinthDisabledReason,
@@ -3771,7 +3767,6 @@ export default function App() {
                   uploadDisabledReason: uploadModDisabledReason
                 }}
                 formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
-                onStopServer={() => void runContainerAction("stop", { announceRequest: false })}
               />
             )}
 

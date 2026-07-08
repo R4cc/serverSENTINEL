@@ -199,7 +199,7 @@ export function MinecraftTerminal({
 
   function submitInput() {
     const command = inputRef.current;
-    advanceInputLine();
+    clearPromptLine();
     promptVisibleRef.current = false;
     inputRef.current = "";
     historyIndexRef.current = null;
@@ -208,13 +208,10 @@ export function MinecraftTerminal({
     const trimmed = command.trim();
     if (trimmed) {
       onCommandRef.current(trimmed);
+      if (canSendCommandsRef.current) writePrompt();
       return;
     }
     if (canSendCommandsRef.current) writePrompt();
-  }
-
-  function advanceInputLine() {
-    terminalRef.current?.write("\r\n");
   }
 
   function insertPrintableText(data: string) {
