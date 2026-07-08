@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import {
   compactRecentEvents,
   parseLogEvent,
@@ -23,7 +24,8 @@ import {
   validateBase64Content,
   mutableServerConfigurationBlockedReason,
   nodeUpdateImageForBuild,
-  assertSameOriginRequest
+  assertSameOriginRequest,
+  localFilePathInput
 } from "./app.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -104,6 +106,30 @@ describe("base64 upload validation", () => {
     expect(() => validateBase64Content("abcd=", true)).toThrow("valid base64");
     expect(validateBase64Content("", true)).toBe("");
     expect(validateBase64Content(Buffer.from("hello").toString("base64"), true)).toBe("aGVsbG8=");
+  });
+});
+
+describe("local file path input", () => {
+  const server = {
+    serverDir: process.platform === "win32"
+      ? "C:\\serversentinel\\servers\\server-id"
+      : "/data/servers/server-id"
+  } as ManagedServer;
+
+  it("maps public root and child paths to server-relative filesystem paths", () => {
+    expect(localFilePathInput(server, "/")).toBe(".");
+    expect(localFilePathInput(server, "/mods")).toBe("mods");
+    expect(localFilePathInput(server, "server.properties")).toBe("server.properties");
+  });
+
+  it("preserves absolute filesystem paths that are already inside the server root", () => {
+    const absolute = resolve(server.serverDir, "mods");
+    expect(localFilePathInput(server, absolute)).toBe(resolve(absolute));
+  });
+
+  it("rejects unsafe public paths", () => {
+    expect(() => localFilePathInput(server, "/../etc/passwd")).toThrow("normalized");
+    expect(() => localFilePathInput(server, "/mods\\bad.jar")).toThrow("invalid characters");
   });
 });
 

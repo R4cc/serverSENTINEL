@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -1185,6 +1185,28 @@ function safeFileManagerName(name?: string) {
     throw new Error("File or folder name contains unsafe characters");
   }
   return filename;
+}
+
+function pathIsInsideRoot(root: string, target: string) {
+  const rel = relative(resolve(root), resolve(target));
+  return !rel || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+export function localFilePathInput(server: Pick<ManagedServer, "serverDir">, path: string) {
+  const value = path || ".";
+  if (isAbsolute(value) && pathIsInsideRoot(server.serverDir, value)) {
+    return resolve(value);
+  }
+  const publicPath = value === "." ? "/" : normalizePublicFilePath(value.startsWith("/") ? value : `/${value}`);
+  return publicPath === "/" ? "." : publicPath.slice(1);
+}
+
+function localResolveExistingPath(server: ManagedServer, path: string) {
+  return validateExistingInsideServer(server, localFilePathInput(server, path));
+}
+
+function localResolveWritablePath(server: ManagedServer, path: string) {
+  return ensureWritableInsideServer(server, localFilePathInput(server, path));
 }
 
 function isTextLikeServerFile(name: string) {
@@ -6074,8 +6096,8 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   onlinePlayerCount,
   serverStats: dockerResourceStats,
   serverOverview: serverOverviewData,
-  resolveExistingPath: validateExistingInsideServer,
-  resolveWritablePath: ensureWritableInsideServer,
+  resolveExistingPath: localResolveExistingPath,
+  resolveWritablePath: localResolveWritablePath,
   resolveWritableResolvedPath: ensureWritableResolvedInsideServer,
   publicPath: toPublicPath,
   isModsPath,
