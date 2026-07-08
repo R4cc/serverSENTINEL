@@ -9,7 +9,7 @@ import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
-import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -36,6 +36,8 @@ type NodeContainerInspect = {
   Config?: Record<string, unknown> & {
     Image?: string;
     Labels?: Record<string, string>;
+    OpenStdin?: boolean;
+    AttachStdin?: boolean;
   };
   HostConfig?: Record<string, unknown>;
   NetworkSettings?: {
@@ -356,7 +358,7 @@ async function ensureContainer(server: ManagedServer) {
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
-  if (details.Config?.Labels?.["serversentinel.config-hash"] !== runtimeConfigHash(server)) {
+  if (details.Config?.Labels?.["serversentinel.config-hash"] !== runtimeConfigHash(server) || !details.Config?.OpenStdin || !details.Config?.AttachStdin) {
     await removeManagedContainer(server);
     await createContainer(server);
   }
@@ -534,8 +536,10 @@ async function inspect(server: ManagedServer) {
 }
 
 async function runtimeStatus(server: ManagedServer) {
-  const details = await inspect(server).catch(() => null) as any;
+  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
   const running = Boolean(details?.State?.Running);
+  const managed = details?.Config?.Labels?.["serversentinel.managed"] === "true";
+  const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   return {
     server,
     docker: {
@@ -551,8 +555,14 @@ async function runtimeStatus(server: ManagedServer) {
     },
     fileLogsAvailable: existsSync(await inside(server, "logs/latest.log", false)),
     controlAvailable: Boolean(details),
-    commandInputAvailable: running,
-    commandInputMessage: running ? "" : "Start the server before sending console commands."
+    commandInputAvailable: running && managed && stdinReady,
+    commandInputMessage: !running
+      ? "Start the server before sending console commands."
+      : !managed
+        ? "Console command input is unavailable because the remote container is not managed by serverSENTINEL."
+        : !stdinReady
+          ? "Console command input is unavailable because the remote container was not created with reliable stdin settings. Stop and recreate it to enable commands."
+          : ""
   };
 }
 
@@ -1163,23 +1173,12 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.console.send") {
     const commandText = typeof payload?.command === "string" ? payload.command.trim() : "";
     if (!commandText) throw new Error("Console command is required");
-    if (/[\r\n]/.test(commandText)) throw new Error("Only one console command can be sent at a time");
-
-    const payloadBase64 = Buffer.from(`${commandText}\n`, "utf8").toString("base64");
-    const shellCommand = `printf %s ${payloadBase64} | base64 -d > /proc/1/fd/0`;
-    const exec = await dockerJsonRequest<{ Id: string }>("POST", `/containers/${name}/exec`, {
-      AttachStdin: false,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false,
-      Cmd: ["sh", "-lc", shellCommand]
-    }, 201);
-    const output = await dockerJsonBufferRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
-    const inspectExec = await dockerRequest<{ ExitCode?: number | null }>("GET", `/exec/${encodeURIComponent(exec.Id)}/json`, 200);
-    if (inspectExec.ExitCode) {
-      const detail = stripDockerLogHeaders(output).toString("utf8").trim();
-      throw new Error(`Docker could not write to the Minecraft console stdin${detail ? `: ${detail}` : ""}`);
+    if (/\r|\n/.test(commandText)) throw new Error("Only one console command can be sent at a time");
+    const status = await runtimeStatus(server);
+    if (!(status as any).commandInputAvailable) {
+      throw new Error((status as any).commandInputMessage || "Console command input is unavailable");
     }
+    await sendDockerContainerStdinLine(name, commandText, { timeoutMs: 5000 });
     return { ok: true };
   }
   if (command === "files.list") return fileList(server, payload?.path);

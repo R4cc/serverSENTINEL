@@ -16,7 +16,7 @@ import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonBufferRequest, dockerJsonRequest, dockerRequest } from "./docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
 import {
@@ -117,8 +117,6 @@ export {
   validateRuntimeJarFilename
 } from "./http/validation.js";
 import type {
-  DockerExecCreate,
-  DockerExecInspect,
   DockerState,
   InstalledModMetadata,
   ManagedNode,
@@ -1790,7 +1788,7 @@ async function ensureDockerContainer(server: ManagedServer) {
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
       throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
     }
-    if (dockerContainerMountValid(server, existing) && existing.Config?.Labels?.["serversentinel.config-hash"] === expectedConfigHash) {
+    if (dockerContainerMountValid(server, existing) && existing.Config?.Labels?.["serversentinel.config-hash"] === expectedConfigHash && existing.Config?.OpenStdin && existing.Config?.AttachStdin) {
       return;
     }
     logWarn(serverLogFields(server), "Removing managed Docker container with stale runtime configuration");
@@ -2010,30 +2008,11 @@ async function sendDockerStdinCommand(server: ManagedServer, command: string) {
   if (!line) {
     throw new Error("Command is required");
   }
-  if (/[\r\n]/.test(line)) {
+  if (/\r|\n/.test(line)) {
     throw new Error("Only one console command can be sent at a time");
   }
 
-  const payload = Buffer.from(`${line}\n`, "utf8").toString("base64");
-  const shellCommand = `printf %s ${payload} | base64 -d > /proc/1/fd/0`;
-  const exec = await dockerJsonRequest<DockerExecCreate>(
-    "POST",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/exec`,
-    {
-      AttachStdin: false,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false,
-      Cmd: ["sh", "-lc", shellCommand]
-    },
-    201
-  );
-  const output = await dockerJsonBufferRequest("POST", `/exec/${encodeURIComponent(exec.Id)}/start`, { Detach: false, Tty: false }, 200);
-  const inspect = await dockerRequest<DockerExecInspect>("GET", `/exec/${encodeURIComponent(exec.Id)}/json`, 200);
-  if (inspect.ExitCode) {
-    const detail = stripDockerLogHeaders(output).toString("utf8").trim();
-    throw new Error(`Docker could not write to the Minecraft console stdin${detail ? `: ${detail}` : ""}`);
-  }
+  await sendDockerContainerStdinLine(dockerContainerName(server), line, { timeoutMs: 5000 });
   return { ok: true };
 }
 
