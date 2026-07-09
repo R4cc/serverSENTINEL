@@ -367,6 +367,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setSearching(false);
       return;
     }
+    if (installState?.mode === "switch") {
+      setDebouncedQuery("");
+      setSearching(false);
+      return;
+    }
     const trimmedQuery = query.trim();
     setInstallState(null);
     setSearchError("");
@@ -380,7 +385,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearching(true);
     const timeout = window.setTimeout(() => setDebouncedQuery(trimmedQuery), modSearchDebounceMs);
     return () => window.clearTimeout(timeout);
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query, installState?.mode]);
 
   function updateShowIncompatibleResults(value: boolean) {
     setShowIncompatibleResults(value);

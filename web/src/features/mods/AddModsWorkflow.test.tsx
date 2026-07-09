@@ -120,6 +120,22 @@ describe("AddModsWorkflow", () => {
     expect(renderAddWorkflow()).toContain("No compatible mods found");
     expect(renderAddWorkflow({ showIncompatibleResults: true })).toContain("No matching mods found");
   });
+
+  it("renders only version selection for switch mode", () => {
+    const version = incompatibleVersion();
+    const html = renderAddWorkflow({
+      query: "",
+      installState: installState(version, 1, false, "switch"),
+      selectedVersion: version,
+      canContinue: false
+    });
+
+    expect(html).toContain("Choose a version");
+    expect(html).toContain("Installed mods");
+    expect(html).not.toContain("Find a Fabric mod");
+    expect(html).not.toContain("Search by mod name");
+    expect(html).not.toContain("What would you like to add?");
+  });
 });
 
 describe("ModInstallReview", () => {
