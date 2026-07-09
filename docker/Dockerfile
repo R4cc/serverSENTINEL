@@ -4,6 +4,10 @@ WORKDIR /app
 ARG VITE_ENABLE_DEMO=false
 ENV VITE_ENABLE_DEMO=${VITE_ENABLE_DEMO}
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 COPY server/package.json server/package.json
 COPY web/package.json web/package.json
@@ -24,6 +28,10 @@ ENV SERVERSENTINEL_DATA_DIR=/data
 ENV SERVERSENTINEL_SERVERS_DOCKER_VOLUME=serversentinel-minecraft-servers
 ENV SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:1.0.3
 ENV PORT=8080
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY server/package.json server/package.json
