@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3 - 2026-07-09
+
+- Bumped the panel, node image defaults, and release-facing UI metadata to 1.0.3.
+
 ## 1.0.2 - 2026-07-08
 
 ### Fixed
