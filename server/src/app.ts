@@ -5734,7 +5734,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
 
     const [project, versions] = await Promise.all([
       fetchProject(projectId) as Promise<ModrinthProject>,
-      fetchProjectVersions(projectId)
+      fetchProjectVersions(projectId, undefined, { forceRefresh: true })
     ]);
     const projectSides = { server_side: project.server_side, client_side: project.client_side };
     const selectedVersion = install.versionId
@@ -6094,7 +6094,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
   try {
     const [project, versions] = await Promise.all([
       fetchProject(projectId) as Promise<ModrinthProject>,
-      fetchProjectVersions(projectId)
+      fetchProjectVersions(projectId, undefined, { forceRefresh: true })
     ]);
     const allowedVersions = versions.filter((version) => allowedForChannel(version, selectedChannel));
     const dependencyProjectIds = Array.from(new Set(allowedVersions.flatMap((version) => (
@@ -6192,13 +6192,55 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
       const serverMatches = modrinthServerSideSupported(hit.server_side);
       return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
     };
-    const filtered = (body.hits ?? []).filter((hit) => {
-      if (hit.project_type && hit.project_type !== "mod") return false;
+    const searchableHits = (body.hits ?? []).filter((hit) => !hit.project_type || hit.project_type === "mod");
+    const refreshedCompatibility = new Map<string, ModCompatibility>();
+    const refreshCandidates = searchableHits.filter((hit) => {
+      const projectId = hit.project_id || hit.id;
       const match = compatibility(hit);
+      return Boolean(projectId && match.loaderMatches && match.serverMatches && !match.versionMatches);
+    });
+    await Promise.all(refreshCandidates.map(async (hit) => {
+      const projectId = hit.project_id || hit.id;
+      if (!projectId) return;
+      try {
+        const versions = await fetchProjectVersions(projectId, {
+          loader: targetRuntime.loader,
+          minecraftVersion
+        }, { forceRefresh: true });
+        const latest = latestCompatibleProjectVersion(versions, {
+          loader: targetRuntime.loader,
+          minecraftVersion,
+          channel: selectedChannel
+        });
+        if (!latest) return;
+        refreshedCompatibility.set(projectId, {
+          status: "compatible",
+          compatible: true,
+          reason: "Matches this Fabric server search",
+          matchedVersionId: latest.id,
+          matchedVersionNumber: latest.version_number,
+          matchedVersionType: versionChannel(latest.version_type),
+          matchedLoaders: latest.loaders,
+          matchedGameVersions: latest.game_versions,
+          serverSide: hit.server_side,
+          clientSide: hit.client_side
+        });
+      } catch (error) {
+        logWarn({ ...serverLogFields(server), projectId, action: "modrinth_search_compatibility_refresh", ...errorLogFields(error) }, "Modrinth search compatibility refresh failed");
+      }
+    }));
+    const searchCompatibility = (hit: ModrinthProject) => {
+      const projectId = hit.project_id || hit.id;
+      const refreshed = projectId ? refreshedCompatibility.get(projectId) : undefined;
+      if (refreshed) return { ...compatibility(hit), compatible: true, refreshed };
+      return { ...compatibility(hit), refreshed: undefined };
+    };
+    const filtered = searchableHits.filter((hit) => {
+      const match = searchCompatibility(hit);
       if (compatibilityFilter === "all") return true;
       if (compatibilityFilter === "compatible") return match.compatible;
       if (compatibilityFilter === "incompatible") return !match.compatible;
-      return match.loaderMatches && match.versionMatches && hit.server_side !== "unsupported";
+      return match.loaderMatches && (match.versionMatches || Boolean(match.refreshed)) && hit.server_side !== "unsupported";
     });
     body = { ...body, hits: filtered.slice(offset, offset + limit), total_hits: filtered.length, offset, limit };
     const hits = (body.hits ?? []).map((hit) => {
@@ -6218,7 +6260,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
         ...hit,
         project_id: projectId,
         icon_url: modrinthIconProxyUrl(hit.icon_url),
-        compatibility: compatible
+        compatibility: refreshedCompatibility.get(projectId) ?? (compatible
           ? {
               status: "compatible",
               compatible: true,
@@ -6250,7 +6292,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
                 matchedGameVersions: [minecraftVersion],
                 serverSide,
                 clientSide: hit.client_side
-              }
+              })
       };
     });
     logInfo({ ...serverLogFields(server), resultCount: hits.length, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
