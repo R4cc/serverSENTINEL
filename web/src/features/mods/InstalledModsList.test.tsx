@@ -30,6 +30,7 @@ function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePla
       onQueryChange={noop}
       onToggle={noop}
       onUpdate={noop}
+      onSwitchVersion={noop}
       onDetails={noop}
       updatePlan={updatePlan}
     />
@@ -69,5 +70,18 @@ describe("InstalledModsList", () => {
 
     expect(html).toContain("0.154.0+26.2");
     expect(html).toContain("Update available");
+  });
+
+  it("renders a switch version button for Modrinth-managed mods", () => {
+    const html = renderInstalledMods([mod()]);
+
+    expect(html).toContain("Switch version for Fabric API");
+  });
+
+  it("disables switch version for manual mods", () => {
+    const html = renderInstalledMods([mod({ modrinth: undefined })], null);
+
+    expect(html).toContain("Only Modrinth-managed mods can switch versions");
+    expect(html).toContain("disabled");
   });
 });

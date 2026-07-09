@@ -66,9 +66,11 @@ function incompatibleVersion(): ModrinthInstallVersion {
   };
 }
 
-function installState(version: ModrinthInstallVersion, step: 1 | 2, acknowledged: boolean): ModInstallModalState {
+function installState(version: ModrinthInstallVersion, step: 1 | 2, acknowledged: boolean, mode: "install" | "switch" = "install"): ModInstallModalState {
   return {
+    mode,
     mod: { project_id: "clumps", title: "Clumps", description: "", downloads: 1 },
+    sourceFilename: mode === "switch" ? "clumps.jar" : undefined,
     step,
     channel: "release",
     loading: false,
@@ -144,5 +146,31 @@ describe("ModInstallReview", () => {
     expect(html).toContain("not marked compatible with the server Minecraft version");
     expect(html).toContain("Install incompatible mod");
     expect(html).toContain("disabled");
+  });
+
+  it("uses switch copy without dependency install summary in switch mode", () => {
+    const version = { ...incompatibleVersion(), compatible: true, requiresMinecraftAcknowledgement: false, dependencies: [{ projectId: "fabric-api", dependencyType: "required", title: "Fabric API" }] };
+    const html = renderToStaticMarkup(
+      <ModInstallReview
+        state={installState(version, 2, true, "switch")}
+        selected={version}
+        requiredDependencies={version.dependencies}
+        canContinue
+        formatDate={() => "Jan 1, 2026"}
+        onClose={noop}
+        onChannelChange={noop}
+        onRetry={noop}
+        onSelect={noop}
+        onToggleAdvanced={noop}
+        onAcknowledge={noop}
+        onContinue={noop}
+        onBack={noop}
+        onInstall={noop}
+      />
+    );
+
+    expect(html).toContain("Review switch");
+    expect(html).toContain("Switch version");
+    expect(html).not.toContain("Also installs");
   });
 });

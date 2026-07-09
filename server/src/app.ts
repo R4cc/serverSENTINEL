@@ -5563,9 +5563,152 @@ async function updateModrinthMod(server: ManagedServer, input: unknown) {
   }
 }
 
+async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
+  const startedAt = Date.now();
+  const request = parseModrinthSwitchVersionRequest(input);
+  const runtime = runtimeForServer(server);
+  try {
+    const listResult = await enrichInstalledModUpdates(server, await runtime.listMods(server, { forceRefresh: true }), { forceRefresh: true });
+    const mods = modsFromListResult(listResult);
+    const currentMod = mods.find((mod) => mod.filename === request.filename);
+    const metadata = remoteModMetadata(currentMod?.modrinth);
+    if (!currentMod || !metadata) {
+      throw new Error("Installed Modrinth metadata could not be found for that mod");
+    }
+
+    const targetRuntime = runtimeTarget(server);
+    if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
+      throw new Error("A resolved Fabric runtime profile is required before switching mod versions");
+    }
+
+    const [project, filteredVersions] = await Promise.all([
+      fetchProject(metadata.projectId) as Promise<ModrinthProject>,
+      fetchProjectVersions(metadata.projectId, {
+        loader: targetRuntime.loader,
+        minecraftVersion: targetRuntime.minecraftVersion
+      }, { forceRefresh: true })
+    ]);
+    const selectedVersion = await resolveSelectedProjectVersion({
+      projectId: metadata.projectId,
+      project,
+      versionId: request.versionId,
+      versions: filteredVersions
+    });
+    if (!allowedForChannel(selectedVersion, request.channel)) {
+      throw new Error("The selected version is outside the requested release channel");
+    }
+
+    const file = modrinthJarFile(selectedVersion);
+    if (!file) {
+      throw new Error("No installable .jar file was found for that version");
+    }
+    if (!selectedVersion.loaders.includes(targetRuntime.loader)) {
+      throw new Error("The selected version is not a Fabric version");
+    }
+    const projectSides = { server_side: project.server_side, client_side: project.client_side };
+    const serverSide = project.server_side;
+    const serverSupported = modrinthServerSideSupported(serverSide);
+    if (serverSide === "unsupported") {
+      throw new Error("Client-only mods cannot be installed on the server");
+    }
+    if (!serverSupported) {
+      throw new Error("Server-side support could not be verified for that version");
+    }
+    const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, targetRuntime.minecraftVersion);
+    if (!matchesMinecraft && !request.overrideMinecraftVersion) {
+      throw new Error(`This version is not marked for Minecraft ${targetRuntime.minecraftVersion}. Confirm the Minecraft version override before switching.`);
+    }
+
+    const targetFilename = safeModFilename(safeInstalledModFilename(file.filename));
+    const currentEnabled = !request.filename.endsWith(".disabled");
+    const finalFilename = currentEnabled ? targetFilename : `${targetFilename}.disabled`;
+    const existingTarget = mods.find((mod) => (
+      mod.filename === targetFilename
+      || mod.filename === `${targetFilename}.disabled`
+    ));
+    if (existingTarget && existingTarget.filename !== request.filename) {
+      throw new Error("A mod with that filename already exists");
+    }
+
+    const content = await downloadModrinthJar(file);
+    if (request.filename === targetFilename || request.filename === `${targetFilename}.disabled`) {
+      await runtime.removeMod(server, request.filename);
+      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
+    } else {
+      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
+      await runtime.removeMod(server, request.filename);
+    }
+    if (!currentEnabled) {
+      await runtime.toggleMod(server, targetFilename, false);
+    }
+
+    const compatible = matchesMinecraft && serverSupported;
+    const incompatibilityReason = compatible
+      ? undefined
+      : !matchesMinecraft
+        ? `Switched with Minecraft version override. Server ${targetRuntime.minecraftVersion}; mod ${selectedVersion.game_versions.join(", ") || "unknown"}.`
+        : "Switched with compatibility override";
+    const compatibility = compatibilityFromSelectedVersion({
+      version: selectedVersion,
+      file,
+      projectSides,
+      minecraftVersion: targetRuntime.minecraftVersion,
+      compatible,
+      reason: compatible ? "Compatible server-side Fabric mod" : incompatibilityReason ?? "Switched with compatibility override"
+    });
+
+    const prefs = await readModPreferences(server);
+    delete prefs[request.filename];
+    if (targetFilename !== finalFilename) delete prefs[targetFilename];
+    prefs[finalFilename] = {
+      channel: request.channel,
+      modrinth: {
+        projectId: metadata.projectId,
+        versionId: selectedVersion.id,
+        filename: finalFilename,
+        versionNumber: selectedVersion.version_number,
+        versionType: versionChannel(selectedVersion.version_type),
+        gameVersions: selectedVersion.game_versions,
+        loaders: selectedVersion.loaders,
+        hashes: file.hashes,
+        installedAt: new Date().toISOString(),
+        installedWithForceIncompatible: request.forceIncompatible && !compatibility.compatible,
+        incompatibilityReason,
+        overrideMinecraftVersion: request.overrideMinecraftVersion && !matchesMinecraft,
+        overrideReason: request.overrideMinecraftVersion && !matchesMinecraft ? incompatibilityReason : undefined,
+        clientSide: project.client_side,
+        serverSide: project.server_side,
+        forceIncompatible: request.forceIncompatible && !compatibility.compatible
+      }
+    };
+    await writeModPreferences(server, prefs);
+
+    logInfo({ ...serverLogFields(server), filename: request.filename, targetFilename: finalFilename, projectId: metadata.projectId, versionId: selectedVersion.id, action: "switch_mod_version", status: "succeeded", durationMs: durationSince(startedAt) }, "Mod version switch succeeded");
+    return {
+      ok: true,
+      filename: finalFilename,
+      replaced: request.filename,
+      version: selectedVersion.version_number,
+      channel: versionChannel(selectedVersion.version_type),
+      compatibility
+    };
+  } catch (error) {
+    logOperationFailure({ ...serverLogFields(server), filename: request.filename, versionId: request.versionId, action: "switch_mod_version", status: "failed", durationMs: durationSince(startedAt) }, "Mod version switch failed", error);
+    throw error;
+  }
+}
+
 type ModrinthInstallRequest = {
   projectId: string;
   versionId?: string;
+  forceIncompatible: boolean;
+  overrideMinecraftVersion: boolean;
+  channel: ReleaseChannel;
+};
+
+type ModrinthSwitchVersionRequest = {
+  filename: string;
+  versionId: string;
   forceIncompatible: boolean;
   overrideMinecraftVersion: boolean;
   channel: ReleaseChannel;
@@ -5576,6 +5719,21 @@ function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequest {
   return {
     projectId: validateModrinthProjectId(body.projectId),
     versionId: validateModrinthVersionId(body.versionId),
+    forceIncompatible: optionalStrictBoolean(body.forceIncompatible, "forceIncompatible", false),
+    overrideMinecraftVersion: optionalStrictBoolean(body.overrideMinecraftVersion, "overrideMinecraftVersion", false),
+    channel: optionalReleaseChannel(body.channel)
+  };
+}
+
+function parseModrinthSwitchVersionRequest(input: unknown): ModrinthSwitchVersionRequest {
+  const body = asObject(input, "mod version switch request");
+  const versionId = validateModrinthVersionId(body.versionId);
+  if (!versionId) {
+    throw new Error("A valid Modrinth version id is required");
+  }
+  return {
+    filename: safeInstalledModFilename(requiredString(body.filename, "filename")),
+    versionId,
     forceIncompatible: optionalStrictBoolean(body.forceIncompatible, "forceIncompatible", false),
     overrideMinecraftVersion: optionalStrictBoolean(body.overrideMinecraftVersion, "overrideMinecraftVersion", false),
     channel: optionalReleaseChannel(body.channel)
@@ -6315,6 +6473,20 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
     task: "Updating mod",
     successTask: "Mod updated"
   }, () => updateModrinthMod(server, request.body));
+});
+
+app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/switch-version", modChangeRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "mods.update");
+  const server = await getServer(request.body.serverId);
+  await requireServerStoppedForMutableConfiguration(server);
+  return recordOperation({
+    type: "mod.update",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Switching mod version",
+    successTask: "Mod version switched"
+  }, () => switchModrinthModVersion(server, request.body));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {

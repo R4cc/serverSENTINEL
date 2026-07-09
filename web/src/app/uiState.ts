@@ -8,7 +8,9 @@ export type FilePreviewState = {
 };
 
 export type ModInstallModalState = {
+  mode: "install" | "switch";
   mod: ModrinthHit;
+  sourceFilename?: string;
   step: 1 | 2;
   channel: ReleaseChannel;
   loading: boolean;

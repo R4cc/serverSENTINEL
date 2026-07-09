@@ -14,14 +14,16 @@ type Props = {
   query: string;
   busy: boolean;
   locked: boolean;
+  switchLocked?: boolean;
   onQueryChange: (value: string) => void;
   onToggle: (mod: InstalledMod, enabled: boolean) => void;
   onUpdate: (mod: InstalledMod) => void;
+  onSwitchVersion: (mod: InstalledMod) => void;
   onDetails: (mod: InstalledMod) => void;
   updatePlan?: ModUpdatePlan | null;
 };
 
-export function InstalledModsList({ mods, query, busy, locked, onQueryChange, onToggle, onUpdate, onDetails, updatePlan }: Props) {
+export function InstalledModsList({ mods, query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
 
   return (
@@ -40,7 +42,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
 
       <div className="modsWorkspaceTable" aria-busy={busy}>
         <div className="modsWorkspaceTableHead" aria-hidden="true">
-          <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
+          <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span /><span />
         </div>
         {visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
@@ -87,6 +89,7 @@ export function InstalledModsList({ mods, query, busy, locked, onQueryChange, on
                   <span className="slider" />
                 </label>
               </div>
+              <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => onSwitchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : "Only Modrinth-managed mods can switch versions"}><AppIcon name="switch" /></Button>
               <Button variant="ghost" iconOnly className="modsWorkspaceDetailsButton" onClick={() => onDetails(mod)} aria-label={`More options for ${mod.displayName}`}><AppIcon name="chevronRight" /></Button>
             </article>
           );

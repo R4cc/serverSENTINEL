@@ -208,6 +208,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     return [...installState.data.compatibleVersions, ...installState.data.otherVersions].find((version) => version.id === installState.selectedVersionId) ?? null;
   }, [installState?.data, installState?.selectedVersionId]);
   const pendingDependencies = useMemo(() => activeServerUsesInternalNode ? pendingRequiredDependencies(selectedVersion, installedMods) : [], [activeServerUsesInternalNode, installedMods, selectedVersion]);
+  const effectivePendingDependencies = installState?.mode === "switch" ? [] : pendingDependencies;
   const canContinueInstall = Boolean(
     selectedVersion
     && selectedVersion.selectable
@@ -508,8 +509,33 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   function openInstallReview(mod: ModrinthHit) {
     const channel: ReleaseChannel = "release";
-    setInstallState({ mod, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
+    setInstallState({ mode: "install", mod, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
     void loadInstallVersions(mod, channel, { useFallbackChannel: true });
+  }
+
+  function modrinthHitFromInstalledMod(mod: InstalledMod): ModrinthHit | null {
+    if (!mod.modrinth) return null;
+    return {
+      project_id: mod.modrinth.projectId,
+      title: mod.displayName,
+      description: mod.description || "",
+      downloads: 0,
+      icon_url: mod.iconUrl,
+      date_modified: mod.modifiedAt,
+      compatibility: mod.compatibility,
+      client_side: mod.modrinth.clientSide,
+      server_side: mod.modrinth.serverSide
+    };
+  }
+
+  function openSwitchVersionReview(mod: InstalledMod) {
+    const hit = modrinthHitFromInstalledMod(mod);
+    if (!hit) return;
+    const channel = mod.preferredChannel || mod.modrinth?.versionType || "release";
+    setDetailsModKey("");
+    setAddOpen(true);
+    setInstallState({ mode: "switch", mod: hit, sourceFilename: mod.filename, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
+    void loadInstallVersions(hit, channel, { useFallbackChannel: true });
   }
 
   function selectInstallVersion(version: ModrinthInstallVersion) {
@@ -590,10 +616,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     const title = installState.data.project.title || installState.mod.title;
     const { forceIncompatible, overrideMinecraftVersion } = selectedInstallFlags(selectedVersion);
     if (getInstallVersionHealth(selectedVersion).requiresAcknowledgement && !installState.acknowledgeMinecraftMismatch) return;
+    const switchMode = installState.mode === "switch";
     setNotice("");
     setInstallState((current) => current ? { ...current, installing: true, error: "" } : current);
-    const jobId = `install-${projectId}-${selectedVersion.id}-${Date.now()}`;
-    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Installing mod", subject: `${title} ${selectedVersion.versionNumber}`, progress: 10, task: "Resolving version", dismissible: false }]);
+    const jobId = `${switchMode ? "switch" : "install"}-${projectId}-${selectedVersion.id}-${Date.now()}`;
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: switchMode ? "Switching mod version" : "Installing mod", subject: `${title} ${selectedVersion.versionNumber}`, progress: 10, task: "Resolving version", dismissible: false }]);
     if (activeServerIsDemo) {
       try {
         await new Promise((resolve) => window.setTimeout(resolve, 600)); patchJob(jobId, { progress: 40, task: "Resolving version" });
@@ -612,35 +639,42 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
             clientSide: installState.data.project.clientSide, serverSide: installState.data.project.serverSide, forceIncompatible
           }
         };
-        setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
-        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== filename)]);
-        removeJob(jobId); notify("success", `Installed ${title}`); setInstallState(null);
+        const replacedFilename = switchMode ? installState.sourceFilename : filename;
+        setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
+        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
+        removeJob(jobId); notify("success", switchMode ? `Switched ${title} to ${selectedVersion.versionNumber}` : `Installed ${title}`); setInstallState(null); if (switchMode) setAddOpen(false);
       } catch (error) {
         const message = (error as Error).message;
-        patchJob(jobId, { status: "failed", task: "Install failed", error: message, dismissible: true });
+        patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
         setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       }
       return;
     }
     try {
       patchJob(jobId, { progress: 35, task: "Downloading jar" });
-      const result = await api<{ installed?: Array<{ filename: string; dependencyType: "root" | "required" }> }>("/api/modrinth/install", {
-        method: "POST", body: JSON.stringify({ serverId: activeServer.id, projectId, versionId: selectedVersion.id, channel: installState.channel, forceIncompatible, overrideMinecraftVersion })
+      const result = switchMode
+        ? await api<{ version: string }>("/api/modrinth/switch-version", {
+            method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: installState.sourceFilename, versionId: selectedVersion.id, channel: installState.channel, forceIncompatible, overrideMinecraftVersion })
+          })
+        : await api<{ installed?: Array<{ filename: string; dependencyType: "root" | "required" }> }>("/api/modrinth/install", {
+            method: "POST", body: JSON.stringify({ serverId: activeServer.id, projectId, versionId: selectedVersion.id, channel: installState.channel, forceIncompatible, overrideMinecraftVersion })
       });
       setInstallState(null);
+      if (switchMode) setAddOpen(false);
       patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
-        const requiredCount = result.installed?.filter((item) => item.dependencyType === "required").length ?? 0;
+        const requiredCount = "installed" in result ? result.installed?.filter((item) => item.dependencyType === "required").length ?? 0 : 0;
         removeJob(jobId);
-        notify("success", requiredCount ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`);
+        const switchedVersion = "version" in result ? result.version : selectedVersion.versionNumber;
+        notify("success", switchMode ? `Switched ${title} to ${switchedVersion}` : requiredCount ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `Installed ${title}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "succeeded", progress: 100, task: `${switchMode ? `Switched ${title}` : `Installed ${title}`}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
       const message = (error as Error).message;
-      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Install failed", error: message, dismissible: true });
+      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
       setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
     }
@@ -822,7 +856,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   return {
     data: { installedMods, searchResults, searchTotal, updatePlan },
     state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
-    derived: { selectedVersion, pendingDependencies, canContinueInstall },
+    derived: { selectedVersion, pendingDependencies: effectivePendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {
       setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
@@ -832,9 +866,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       retry: () => loadInstalledMods(activeServer?.id),
       retrySearch: () => setSearchRequestVersion((current) => current + 1),
       setShowIncompatibleResults: updateShowIncompatibleResults,
-      loadInstallVersions, openInstallReview, selectInstallVersion, continueInstallReview,
+      loadInstallVersions, openInstallReview, openSwitchVersionReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
-      closeInstall: () => setInstallState(null),
+      closeInstall: () => {
+        if (installState?.mode === "switch") setAddOpen(false);
+        setInstallState(null);
+      },
       toggleAdvanced: () => setInstallState((current) => {
         if (!current) return current;
         const showOtherVersions = !current.showOtherVersions;

@@ -24,7 +24,7 @@
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
 .modsWorkspaceTable { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px; align-items: center; gap: 14px; }
+.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px 40px; align-items: center; gap: 14px; }
 .modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; color: var(--text-muted); background: var(--surface-muted); font-size: .72rem; font-weight: var(--weight-strong); }
 .modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
@@ -57,7 +57,9 @@
 .modsReviewAction { color: #7440d9; }
 .modsWorkspaceSwitch { justify-content: center; }
 .modsWorkspaceSwitch .switchStateLabel { display: none; }
+.modsWorkspaceSwitchVersionButton,
 .modsWorkspaceDetailsButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
+.modsWorkspaceSwitchVersionButton:hover:not(:disabled),
 .modsWorkspaceDetailsButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .modsWorkspaceEmpty { display: grid; place-items: center; min-height: 150px; padding: 28px; text-align: center; }
 .modsWorkspaceEmpty span { margin-top: 5px; color: var(--text-muted); font-size: .85rem; }
@@ -162,7 +164,7 @@
 @media (max-width: 1100px) {
   .modsWorkspaceSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .modsWorkspaceTableHead { display: none; }
-  .modsWorkspaceRow { grid-template-columns: minmax(220px, 1.5fr) 120px 110px 130px 60px 36px; }
+  .modsWorkspaceRow { grid-template-columns: minmax(220px, 1.5fr) 120px 110px 130px 60px 36px 36px; }
 }
 @media (max-width: 760px) {
   .modsWorkspacePage { height: auto; }
@@ -183,7 +185,7 @@
       "identity details"
       "status enabled"
       "version enabled"
-      "update update";
+      "update switchVersion";
     align-items: center;
     gap: 8px 12px;
     min-height: 0;
@@ -202,6 +204,7 @@
   .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; padding-top: 4px; }
   .modsUpdateVersions { flex: none; }
   .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: flex-end; align-items: center; align-self: stretch; }
+  .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: end; align-self: center; }
   .modsWorkspaceDetailsButton { grid-area: details; justify-self: end; }
   .modsSearchActivity { text-align: left; }
   .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
