@@ -4,6 +4,12 @@ import { appUserAgentFor } from "../buildInfo.js";
 let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
 const defaultModrinthTimeoutMs = 15_000;
 
+type PublicHttpError = Error & {
+  statusCode?: number;
+  code?: string;
+  details?: unknown;
+};
+
 export function configureModrinthApiKeyProvider(provider: () => Promise<string>) {
   apiKeyProvider = provider;
 }
@@ -12,10 +18,28 @@ export function modrinthRequestHeaders(url: string, apiKey: string) {
   const headers: Record<string, string> = {
     "User-Agent": appUserAgentFor("managed Fabric server panel")
   };
-  if (apiKey && isModrinthApiUrl(url)) {
-    headers.Authorization = apiKey;
+  const authorization = isModrinthApiUrl(url) ? modrinthAuthorizationHeader(apiKey) : "";
+  if (authorization) {
+    headers.Authorization = authorization;
   }
   return headers;
+}
+
+function modrinthAuthorizationHeader(apiKey: string) {
+  const value = apiKey.trim();
+  if (!value) return "";
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw modrinthPublicError("The configured Modrinth API key contains invalid characters. Re-enter it in Settings.", 400, "MODRINTH_API_KEY_INVALID");
+  }
+  return value;
+}
+
+function modrinthPublicError(message: string, statusCode = 424, code = "MODRINTH_REQUEST_FAILED", details?: unknown) {
+  const error = new Error(message) as PublicHttpError;
+  error.statusCode = statusCode;
+  error.code = code;
+  if (details !== undefined) error.details = details;
+  return error;
 }
 
 async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number) {
@@ -26,7 +50,7 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
     return await fetch(url, { headers, signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`Modrinth request timed out after ${timeoutMs}ms`);
+      throw modrinthPublicError(`Modrinth request timed out after ${timeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
     }
     throw error;
   } finally {
@@ -51,7 +75,10 @@ export async function modrinthFetch(url: string, options: { timeoutMs?: number }
     if (response.ok) return response;
     const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
     if (!retryable || attempt === retryDelays.length - 1) {
-      throw new Error(`Modrinth request failed: ${response.status} ${response.statusText}`);
+      throw modrinthPublicError(`Modrinth request failed: ${response.status} ${response.statusText}`, 424, "MODRINTH_REQUEST_FAILED", {
+        upstreamStatus: response.status,
+        upstreamStatusText: response.statusText
+      });
     }
     const retryAfterSeconds = Number(response.headers.get("retry-after"));
     await response.arrayBuffer().catch(() => undefined);

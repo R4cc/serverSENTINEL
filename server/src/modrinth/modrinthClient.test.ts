@@ -24,6 +24,22 @@ describe("Modrinth client", () => {
     expect(modrinthRequestHeaders("not a url", "secret")).not.toHaveProperty("Authorization");
   });
 
+  it("trims the API key before using it as an authorization header", () => {
+    expect(modrinthRequestHeaders("https://api.modrinth.com/v2/search", "  mrp_secret  ")).toMatchObject({
+      Authorization: "mrp_secret"
+    });
+  });
+
+  it("rejects API keys that cannot be sent as HTTP headers", () => {
+    expect(() => modrinthRequestHeaders("https://api.modrinth.com/v2/search", "mrp_secret\nhidden"))
+      .toThrow("Modrinth API key contains invalid characters");
+  });
+
+  it("does not validate the API key for non-API URLs where it is not sent", () => {
+    expect(modrinthRequestHeaders("https://cdn.modrinth.com/data/example.jar", "mrp_secret\nhidden"))
+      .not.toHaveProperty("Authorization");
+  });
+
   it("passes an abort signal to external requests so stalled Modrinth calls time out", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
 
@@ -32,5 +48,19 @@ describe("Modrinth client", () => {
     expect(fetchMock).toHaveBeenCalledWith("https://api.modrinth.com/v2/project/fabric-api", expect.objectContaining({
       signal: expect.any(AbortSignal)
     }));
+  });
+
+  it("marks upstream Modrinth failures as public dependency errors", async () => {
+    fetchMock.mockResolvedValue(new Response("nope", { status: 401, statusText: "Unauthorized" }) as never);
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/search")).rejects.toMatchObject({
+      message: "Modrinth request failed: 401 Unauthorized",
+      statusCode: 424,
+      code: "MODRINTH_REQUEST_FAILED",
+      details: {
+        upstreamStatus: 401,
+        upstreamStatusText: "Unauthorized"
+      }
+    });
   });
 });
