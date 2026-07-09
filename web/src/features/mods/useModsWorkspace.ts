@@ -853,6 +853,37 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
   }
 
+  async function acknowledgeModReview(mod: InstalledMod) {
+    if (!canManage || !activeServer || !mod.modrinth) return;
+    setNotice("");
+    const acknowledgedAt = new Date().toISOString();
+    const applyAcknowledgement = (current: InstalledMod[]) => current.map((candidate) => (
+      candidate.filename === mod.filename && candidate.modrinth
+        ? { ...candidate, modrinth: { ...candidate.modrinth, reviewAcknowledgedVersionId: candidate.modrinth.versionId, reviewAcknowledgedAt: acknowledgedAt } }
+        : candidate
+    ));
+    if (activeServerIsDemo) {
+      setDemoInstalledMods(applyAcknowledgement);
+      setInstalledMods(applyAcknowledgement);
+      notify("success", `Marked ${mod.displayName} as healthy`);
+      return;
+    }
+    try {
+      await api("/api/modrinth/acknowledge-review", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: mod.filename }) });
+      setInstalledMods(applyAcknowledgement);
+      notify("success", `Marked ${mod.displayName} as healthy`);
+      await Promise.all([
+        loadInstalledMods(activeServer.id, { forceRefresh: true, notifyOnError: true }),
+        loadUpdatePlan(activeServer.id, { forceRefresh: true, notifyOnError: true })
+      ]);
+    } catch (error) {
+      const message = errorMessage(error, "Could not acknowledge the mod review.");
+      setNotice(message);
+      notify("error", message);
+      throw error;
+    }
+  }
+
   return {
     data: { installedMods, searchResults, searchTotal, updatePlan },
     state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
@@ -878,7 +909,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         return { ...current, showOtherVersions, selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? preferredInstallVersionId(current.data) : "", acknowledgeMinecraftMismatch: false };
       }),
       acknowledgeInstall: (checked: boolean) => setInstallState((current) => current ? { ...current, acknowledgeMinecraftMismatch: checked } : current),
-      uploadMod, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, resetPageState
+      uploadMod, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, acknowledgeModReview, resetPageState
     }
   };
 }

@@ -64,6 +64,31 @@ describe("getInstalledModHealth", () => {
     expect(getInstalledModHealth(managedMod({ compatibility: { ...compatible, status: "unknown", serverSide: "unknown" } })).key).toBe("needs_review");
   });
 
+  it("marks an acknowledged current-version review as healthy", () => {
+    const health = getInstalledModHealth(managedMod({
+      compatibility: { ...compatible, status: "unknown", reason: "Server-side support could not be verified", serverSide: "unknown" },
+      modrinth: {
+        ...managedMod().modrinth!,
+        reviewAcknowledgedVersionId: "v1",
+        reviewAcknowledgedAt: "2026-01-02T00:00:00.000Z"
+      }
+    }));
+    expect(health).toMatchObject({ key: "healthy", needsAttention: false, safeToRunDirectly: true });
+  });
+
+  it("does not apply a review acknowledgement after the version changes", () => {
+    const health = getInstalledModHealth(managedMod({
+      compatibility: { ...compatible, status: "unknown", reason: "Server-side support could not be verified", serverSide: "unknown" },
+      modrinth: {
+        ...managedMod().modrinth!,
+        versionId: "v2",
+        reviewAcknowledgedVersionId: "v1",
+        reviewAcknowledgedAt: "2026-01-02T00:00:00.000Z"
+      }
+    }));
+    expect(health.key).toBe("needs_review");
+  });
+
   it("marks an unidentified manual upload as unknown", () => {
     const mod = managedMod({ modrinth: undefined, compatibility: undefined, versionInfo: null });
     expect(getInstalledModHealth(mod)).toMatchObject({ key: "unknown", needsAttention: true });
@@ -81,7 +106,7 @@ describe("getInstalledModHealth", () => {
 
   it("keeps a force-installed mod not recommended even with otherwise compatible metadata", () => {
     const base = managedMod();
-    const health = getInstalledModHealth({ ...base, modrinth: { ...base.modrinth!, installedWithForceIncompatible: true, incompatibilityReason: "Version mismatch acknowledged" } });
+    const health = getInstalledModHealth({ ...base, modrinth: { ...base.modrinth!, installedWithForceIncompatible: true, incompatibilityReason: "Version mismatch acknowledged", reviewAcknowledgedVersionId: "v1" } });
     expect(health).toMatchObject({ key: "not_recommended", safeToRunDirectly: false });
   });
 

@@ -93,6 +93,10 @@ function hasAvailableUpdate(mod: InstalledMod) {
   return mod.versionInfo?.upToDate === false && Boolean(mod.versionInfo.latestVersion);
 }
 
+function hasAcknowledgedCurrentReview(mod: InstalledMod) {
+  return Boolean(mod.modrinth?.reviewAcknowledgedVersionId && mod.modrinth.reviewAcknowledgedVersionId === mod.modrinth.versionId);
+}
+
 export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
   const forcedRisk = hasForcedRisk(mod);
   const assessment = forcedRisk
@@ -146,6 +150,20 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       hasReviewUpdate: true,
       primaryActionLabel: "Review update",
       safeToRunDirectly: false
+    };
+  }
+
+  if (assessment.kind === "review" && hasAcknowledgedCurrentReview(mod)) {
+    return {
+      key: "healthy",
+      label: "Healthy",
+      shortDescription: "Compatibility review acknowledged for this version.",
+      detailDescription: "You acknowledged the compatibility review for this installed version.",
+      tone: "ready",
+      needsAttention: false,
+      hasSafeUpdate: false,
+      hasReviewUpdate: false,
+      safeToRunDirectly: true
     };
   }
 

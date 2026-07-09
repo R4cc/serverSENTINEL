@@ -449,6 +449,8 @@ export type InstalledMod = {
     clientSide?: string;
     serverSide?: string;
     forceIncompatible?: boolean;
+    reviewAcknowledgedVersionId?: string;
+    reviewAcknowledgedAt?: string;
   };
   versionInfo?: {
     currentVersion?: string;

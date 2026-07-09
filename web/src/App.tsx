@@ -424,6 +424,7 @@ export default function App() {
             ? "Server settings are saving."
             : "";
   const modsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
   const addModFromModrinthDisabled = isProvisioning || serverRequiresStoppedForMutableConfig || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
   const uploadModDisabled = modsLocked;
@@ -2825,6 +2826,7 @@ export default function App() {
                 access={{
                   changesAllowed: !modsLocked,
                   locked: modsLocked,
+                  reviewAcknowledgementLocked: modReviewAcknowledgementLocked,
                   toggleLocked: modToggleLocked,
                   modrinthConfigured: effectiveAppState.modrinthApiConfigured,
                   addDisabled: addModFromModrinthDisabled,

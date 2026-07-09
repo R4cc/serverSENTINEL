@@ -5076,7 +5076,9 @@ function normalizeInstalledModMetadata(value: unknown): InstalledModMetadata {
     overrideReason: optionalString(metadata.overrideReason, "modrinth.overrideReason"),
     clientSide: optionalString(metadata.clientSide, "modrinth.clientSide"),
     serverSide: optionalString(metadata.serverSide, "modrinth.serverSide"),
-    forceIncompatible: metadata.forceIncompatible === undefined ? undefined : requireStrictBoolean(metadata.forceIncompatible, "modrinth.forceIncompatible")
+    forceIncompatible: metadata.forceIncompatible === undefined ? undefined : requireStrictBoolean(metadata.forceIncompatible, "modrinth.forceIncompatible"),
+    reviewAcknowledgedVersionId: optionalString(metadata.reviewAcknowledgedVersionId, "modrinth.reviewAcknowledgedVersionId"),
+    reviewAcknowledgedAt: optionalString(metadata.reviewAcknowledgedAt, "modrinth.reviewAcknowledgedAt")
   };
 }
 
@@ -5143,6 +5145,20 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
     };
   }
   return { status: "compatible", compatible: true, reason: "Compatibility verified for this server.", serverSide, clientSide };
+}
+
+function installedModReviewCanBeAcknowledged(server: ManagedServer, metadata?: InstalledModMetadata) {
+  if (!metadata) return false;
+  if (metadata.reviewAcknowledgedVersionId === metadata.versionId) return false;
+  if (metadata.installedWithForceIncompatible || metadata.forceIncompatible || metadata.overrideMinecraftVersion || metadata.incompatibilityReason || metadata.overrideReason) return false;
+  const target = runtimeTarget(server);
+  if (!metadata.loaders.includes("fabric")) return false;
+  if (target.minecraftVersion && !minecraftVersionsInclude(metadata.gameVersions, target.minecraftVersion)) return false;
+  const compatibility = installedModCompatibility(server, metadata);
+  return compatibility.status === "unknown"
+    || compatibility.serverSide === "unknown"
+    || compatibility.reason === "Server-side support unknown"
+    || compatibility.reason === "Server-side support could not be verified";
 }
 
 type InstalledModUpdateCurrent = {
@@ -5696,6 +5712,41 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
     logOperationFailure({ ...serverLogFields(server), filename: request.filename, versionId: request.versionId, action: "switch_mod_version", status: "failed", durationMs: durationSince(startedAt) }, "Mod version switch failed", error);
     throw error;
   }
+}
+
+async function acknowledgeInstalledModReview(server: ManagedServer, input: unknown) {
+  const body = asObject(input, "mod review acknowledgement request");
+  const filename = safeInstalledModFilename(requiredString(body.filename, "filename"));
+  const runtime = runtimeForServer(server);
+  const listResult = await runtime.listMods(server, { forceRefresh: true });
+  const currentMod = modsFromListResult(listResult).find((mod) => mod.filename === filename);
+  if (!currentMod) {
+    throw new Error("Installed mod could not be found");
+  }
+
+  const prefs = await readModPreferences(server);
+  const metadata = prefs[filename]?.modrinth ?? remoteModMetadata(currentMod.modrinth);
+  if (!metadata) {
+    throw new Error("Installed Modrinth metadata could not be found for that mod");
+  }
+  if (!installedModReviewCanBeAcknowledged(server, metadata)) {
+    throw new Error("Only installed Modrinth mods that need review can be acknowledged");
+  }
+
+  const acknowledgedAt = new Date().toISOString();
+  prefs[filename] = {
+    ...(prefs[filename] || {}),
+    channel: normalizeReleaseChannel(prefs[filename]?.channel),
+    modrinth: {
+      ...metadata,
+      filename,
+      reviewAcknowledgedVersionId: metadata.versionId,
+      reviewAcknowledgedAt: acknowledgedAt
+    }
+  };
+  await writeModPreferences(server, prefs);
+  logInfo({ ...serverLogFields(server), filename, projectId: metadata.projectId, versionId: metadata.versionId, action: "acknowledge_mod_review", status: "succeeded" }, "Mod review acknowledged");
+  return { ok: true, filename, reviewAcknowledgedVersionId: metadata.versionId, reviewAcknowledgedAt: acknowledgedAt };
 }
 
 type ModrinthInstallRequest = {
@@ -6487,6 +6538,19 @@ app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; cha
     task: "Switching mod version",
     successTask: "Mod version switched"
   }, () => switchModrinthModVersion(server, request.body));
+});
+
+app.post<{ Body: { serverId?: string; filename?: string } }>("/api/modrinth/acknowledge-review", modChangeRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "mods.update");
+  const server = await getServer(request.body.serverId);
+  return recordOperation({
+    type: "mod.update",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Acknowledging mod review",
+    successTask: "Mod review acknowledged"
+  }, () => acknowledgeInstalledModReview(server, request.body));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {

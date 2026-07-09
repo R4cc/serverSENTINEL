@@ -265,7 +265,9 @@ describe("public installed mods DTO", () => {
           loaders: ["fabric"],
           hashes: { sha1: "abc", sha512: "def" },
           installedAt: "2026-01-01T00:00:00.000Z",
-          installedWithForceIncompatible: false
+          installedWithForceIncompatible: false,
+          reviewAcknowledgedVersionId: "version-1",
+          reviewAcknowledgedAt: "2026-01-02T00:00:00.000Z"
         }
       }]
     }) as { mods: Array<{ compatibility: { file?: unknown }; modrinth: Record<string, unknown> }> };
@@ -274,6 +276,7 @@ describe("public installed mods DTO", () => {
     expect(JSON.stringify(result)).not.toContain("cdn.modrinth.com");
     expect(result.mods[0].compatibility.file).toEqual({ filename: "fabric-api.jar", size: 123 });
     expect(result.mods[0].modrinth.hashes).toBeUndefined();
+    expect(result.mods[0].modrinth.reviewAcknowledgedVersionId).toBe("version-1");
   });
 });
 

@@ -122,6 +122,8 @@ export type InstalledModMetadata = {
   clientSide?: string;
   serverSide?: string;
   forceIncompatible?: boolean;
+  reviewAcknowledgedVersionId?: string;
+  reviewAcknowledgedAt?: string;
 };
 
 export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";

@@ -10,19 +10,25 @@ import { ModIconImage } from "./ModIconImage";
 type Props = {
   mod: InstalledMod;
   locked: boolean;
+  reviewAcknowledgementLocked: boolean;
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
   onToggle: (mod: InstalledMod, enabled: boolean) => void;
   onUpdate: (mod: InstalledMod) => void;
   onRemove: (mod: InstalledMod) => void;
+  onAcknowledgeReview: (mod: InstalledMod) => Promise<void> | void;
   updatePlanEntry?: ModUpdatePlanEntry | null;
 };
 
-export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, onUpdate, onRemove, updatePlanEntry }: Props) {
+export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, formatDate, onClose, onToggle, onUpdate, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
   const health = getInstalledModHealth(mod);
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);
+  const [reviewingInstalledVersion, setReviewingInstalledVersion] = useState(false);
+  const [installedReviewAcknowledged, setInstalledReviewAcknowledged] = useState(false);
+  const [acknowledgingInstalledReview, setAcknowledgingInstalledReview] = useState(false);
+  const canAcknowledgeInstalledReview = Boolean(mod.modrinth && health.key === "needs_review");
   const hasPlannedUpdate = Boolean(updatePlanEntry && ["safe_update", "needs_review", "blocked"].includes(updatePlanEntry.status));
   const statusTone = updatePlanEntry?.status === "safe_update" ? "ready" : updatePlanEntry?.status === "blocked" ? "not-recommended" : updatePlanEntry?.status === "needs_review" ? "review" : health.tone;
   const statusTitle = updatePlanEntry?.status === "safe_update"
@@ -44,7 +50,22 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
   useEffect(() => {
     setReviewingUpdate(false);
     setUpdateAcknowledged(false);
-  }, [mod.filename]);
+    setReviewingInstalledVersion(false);
+    setInstalledReviewAcknowledged(false);
+    setAcknowledgingInstalledReview(false);
+  }, [mod.filename, mod.modrinth?.versionId]);
+
+  async function confirmInstalledReviewAcknowledgement() {
+    if (!installedReviewAcknowledged || acknowledgingInstalledReview || reviewAcknowledgementLocked) return;
+    setAcknowledgingInstalledReview(true);
+    try {
+      await onAcknowledgeReview(mod);
+      setReviewingInstalledVersion(false);
+      setInstalledReviewAcknowledged(false);
+    } finally {
+      setAcknowledgingInstalledReview(false);
+    }
+  }
 
   return (
     <aside className="modsDetailsDrawer" role="dialog" aria-modal="true" aria-labelledby="mod-details-title">
@@ -98,6 +119,20 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
             </div>
           </section>
         )}
+        {reviewingInstalledVersion && canAcknowledgeInstalledReview && (
+          <section className="modsUpdateReview" aria-labelledby="review-installed-title">
+            <strong id="review-installed-title">Acknowledge review</strong>
+            <p>{health.detailDescription}</p>
+            <label className="modsRiskAcknowledgement">
+              <input type="checkbox" checked={installedReviewAcknowledged} onChange={(event) => setInstalledReviewAcknowledged(event.target.checked)} disabled={reviewAcknowledgementLocked || acknowledgingInstalledReview} />
+              <span><strong>Compatibility is not fully verified.</strong> I reviewed this installed version and want to mark it healthy until the version changes.</span>
+            </label>
+            <div className="modsUpdateReviewActions">
+              <Button variant="secondary" onClick={() => { setReviewingInstalledVersion(false); setInstalledReviewAcknowledged(false); }} disabled={acknowledgingInstalledReview}>Cancel</Button>
+              <Button onClick={() => void confirmInstalledReviewAcknowledgement()} disabled={reviewAcknowledgementLocked || acknowledgingInstalledReview || !installedReviewAcknowledged}>{acknowledgingInstalledReview ? "Acknowledging..." : "Mark healthy"}</Button>
+            </div>
+          </section>
+        )}
         <details className="modsTechnicalDetails">
             <summary>File and source details</summary>
             <dl className="modsDetailsFacts">
@@ -114,6 +149,7 @@ export function ModDetailsPanel({ mod, locked, formatDate, onClose, onToggle, on
       <div className="modsDrawerFooter">
         {updatePlanEntry?.status === "safe_update" && <Button onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</Button>}
         {updatePlanEntry?.status === "needs_review" && !reviewingUpdate && <Button onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</Button>}
+        {canAcknowledgeInstalledReview && !reviewingInstalledVersion && <Button onClick={() => setReviewingInstalledVersion(true)} disabled={reviewAcknowledgementLocked}>Acknowledge review</Button>}
         <Button variant="secondary" onClick={() => onToggle(mod, !mod.enabled)} disabled={locked}>{mod.enabled ? "Disable" : "Enable"}</Button>
         <Button variant="critical" onClick={() => onRemove(mod)} disabled={locked}>Remove</Button>
       </div>
