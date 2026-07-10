@@ -1,5 +1,6 @@
 import type { Readable } from "node:stream";
 import type { FileArchiveEntry } from "../downloadArchive.js";
+import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
@@ -41,6 +42,11 @@ export type NodeRuntime = {
   previewFile(server: ManagedServer, target: string): Promise<unknown>;
   downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult>;
   downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult>;
+  listArchive(server: ManagedServer, archivePath: string, entryPath: string): Promise<ZipArchiveListing>;
+  previewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<unknown>;
+  downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<FileDownloadResult>;
+  planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string): Promise<ZipExtractionPlan>;
+  extractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: RuntimeProgressReporter): Promise<ZipExtractionResult>;
   readFile(server: ManagedServer, target: string): Promise<unknown>;
   writeFile(server: ManagedServer, target: string, content: unknown): Promise<unknown>;
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;

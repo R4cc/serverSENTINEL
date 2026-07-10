@@ -24,6 +24,7 @@ import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamData
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
 import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
+import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "../zipArchive.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
 type NodeUpdateRequest = {
@@ -78,6 +79,7 @@ const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
+const zipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const reconnectDelayMs = 5000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
@@ -927,6 +929,88 @@ async function fileDownload(server: ManagedServer, path: unknown) {
   return { filename: basename(target), size: st.size, contentBase64: (await readFile(target)).toString("base64") };
 }
 
+function publicExtractionPlan(root: string, plan: ZipExtractionPlan): ZipExtractionPlan {
+  return {
+    ...plan,
+    archivePath: publicPath(root, plan.archivePath),
+    destinationPath: publicPath(root, plan.destinationPath),
+    outputPaths: plan.outputPaths.map((entry) => ({ ...entry, path: publicPath(root, entry.path) })),
+    conflicts: plan.conflicts.map((entry) => ({ ...entry, path: publicPath(root, entry.path) })),
+    blocked: plan.blocked.map((entry) => ({ ...entry, path: publicPath(root, entry.path) }))
+  };
+}
+
+async function archiveList(server: ManagedServer, path: unknown, entryPath: unknown) {
+  const root = await serverRoot(server);
+  const archive = await inside(server, path);
+  const listing = await listZipArchive(archive, typeof entryPath === "string" ? entryPath : "/", zipLimits);
+  return { ...listing, archivePath: publicPath(root, archive) };
+}
+
+async function archiveRead(server: ManagedServer, path: unknown, entryPath: unknown) {
+  const archive = await inside(server, path);
+  const selected = typeof entryPath === "string" ? entryPath : "";
+  const indexed = await readZipArchiveEntry(archive, selected, zipLimits, editorFileSizeLimit);
+  const publicEntryPath = selected.startsWith("/") ? selected : `/${selected}`;
+  const textLike = /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(indexed.entry.name) || !indexed.entry.name.includes(".");
+  if (!textLike) return { path: publicEntryPath, preview: "unsupported", message: "Preview unavailable" };
+  if (indexed.content.includes(0)) return { path: publicEntryPath, preview: "binary", message: "Preview unavailable" };
+  return { path: publicEntryPath, preview: "text", content: indexed.content.toString("utf8"), modifiedAt: indexed.entry.modifiedAt };
+}
+
+async function archiveDownload(server: ManagedServer, path: unknown, entryPath: unknown) {
+  const archive = await inside(server, path);
+  const opened = await openZipArchiveEntryStream(archive, typeof entryPath === "string" ? entryPath : "", zipLimits);
+  if (opened.entry.size > uploadLimit) throw new Error("Archive entry is larger than the remote transfer limit");
+  const chunks: Buffer[] = [];
+  for await (const chunk of opened.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return { filename: opened.entry.name, size: opened.entry.size, contentBase64: Buffer.concat(chunks).toString("base64") };
+}
+
+async function archivePlan(server: ManagedServer, path: unknown, destinationPath: unknown) {
+  const root = await serverRoot(server);
+  const archive = await inside(server, path);
+  const destination = await writableInside(server, destinationPath);
+  const plan = await planZipExtraction(archive, destination, zipLimits);
+  if (plan.outputPaths.some((entry) => isMutableConfigurationPath(publicPath(root, entry.path).replace(/^\//, "")))) {
+    await requireStoppedForMutableConfiguration(server);
+  }
+  return publicExtractionPlan(root, plan);
+}
+
+function startArchiveExtractionStream(server: ManagedServer, payload: Record<string, unknown>, streamId: string, socket: WebSocket, onDone: () => void) {
+  let closed = false;
+  void (async () => {
+    const root = await serverRoot(server);
+    const archive = await inside(server, payload.path);
+    const destination = await writableInside(server, payload.destinationPath);
+    const conflictPolicy = payload.conflictPolicy;
+    if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
+    const plan = await planZipExtraction(archive, destination, zipLimits);
+    if (plan.outputPaths.some((entry) => isMutableConfigurationPath(publicPath(root, entry.path).replace(/^\//, "")))) {
+      await requireStoppedForMutableConfiguration(server);
+    }
+    const result = await extractZipArchive({
+      archivePath: archive,
+      destinationPath: destination,
+      conflictPolicy,
+      limits: zipLimits,
+      report: (progress, task) => {
+        if (!closed) sendStreamData(socket, streamId, { type: "progress", progress, task });
+      }
+    });
+    if (!closed) {
+      sendStreamData(socket, streamId, { type: "result", result: { ...result, destinationPath: publicPath(root, result.destinationPath) } });
+      sendStreamEnd(socket, streamId);
+    }
+  })().catch((error) => {
+    if (!closed) sendStreamEnd(socket, streamId, { code: "archive_extraction_failed", message: (error as Error).message, details: detailedErrorMessage(error) });
+  }).finally(onDone);
+  return () => {
+    closed = true;
+  };
+}
+
 async function writeRelativeFile(server: ManagedServer, path: unknown, content: Buffer | string) {
   const root = await serverRoot(server);
   const target = await writableInside(server, path);
@@ -1237,6 +1321,10 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true };
   }
   if (command === "files.list") return fileList(server, payload?.path);
+  if (command === "files.archive.list") return archiveList(server, payload?.path, payload?.entryPath);
+  if (command === "files.archive.read") return archiveRead(server, payload?.path, payload?.entryPath);
+  if (command === "files.archive.download") return archiveDownload(server, payload?.path, payload?.entryPath);
+  if (command === "files.archive.plan") return archivePlan(server, payload?.path, payload?.destinationPath);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
   if (command === "files.write") {
@@ -1442,7 +1530,7 @@ export async function startNodeAgent() {
       if (message.type === "streamStart") {
         activeStreams.get(message.id)?.();
         activeStreams.delete(message.id);
-        if (message.command !== "server.console.stream") {
+        if (message.command !== "server.console.stream" && message.command !== "files.archive.extract") {
           sendStreamData(socket, message.id, { type: "unavailable", message: `Unsupported node stream ${message.command}` });
           sendStreamEnd(socket, message.id, { code: "unsupported_stream", message: `Unsupported node stream ${message.command}` });
           return;
@@ -1451,6 +1539,15 @@ export async function startNodeAgent() {
         if (!server) {
           sendStreamData(socket, message.id, { type: "unavailable", message: "server payload is required" });
           sendStreamEnd(socket, message.id, { code: "invalid_payload", message: "server payload is required" });
+          return;
+        }
+        if (message.command === "files.archive.extract") {
+          let completed = false;
+          const cleanup = startArchiveExtractionStream(server, message.payload as Record<string, unknown>, message.id, socket, () => {
+            completed = true;
+            activeStreams.delete(message.id);
+          });
+          if (!completed) activeStreams.set(message.id, cleanup);
           return;
         }
         let completed = false;

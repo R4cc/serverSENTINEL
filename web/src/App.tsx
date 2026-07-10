@@ -479,6 +479,7 @@ export default function App() {
     notify,
     setNotice,
     handleStaleSession,
+    setActiveJobs,
     refreshModsAfterFilesChange: () => refreshModsAfterFileMutationRef.current()
   });
   const modsWorkspace = useModsWorkspace({
@@ -502,6 +503,12 @@ export default function App() {
     handleStaleSession,
     refreshFiles: filesWorkspace.actions.loadFiles
   });
+  useEffect(() => {
+    if (!activeServer || demoMode || !authSession?.authenticated) return;
+    void api<{ operations: OperationRecord[] }>(`/api/operations?serverId=${encodeURIComponent(activeServer.id)}&limit=25`)
+      .then(({ operations }) => operations.filter((operation) => operation.type === "file.extract" && (operation.status === "queued" || operation.status === "running")).forEach(filesWorkspace.actions.resumeZipOperation))
+      .catch(() => undefined);
+  }, [activeServer?.id, authSession?.authenticated, demoMode]);
   useEffect(() => {
     refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
   }, [modsWorkspace.actions]);

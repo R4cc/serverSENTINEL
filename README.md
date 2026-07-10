@@ -350,6 +350,8 @@ services:
 | `SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES` | `536870912` | backend | Maximum total source bytes allowed in one file-manager download action. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES` | `134217728` | backend | Selected individual files at or above this total source size are downloaded as one zip. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT` | `10` | backend | Selected individual files at or above this count are downloaded as one zip. |
+| `SERVERSENTINEL_FILE_ZIP_MAX_ENTRIES` | `10000` | backend/node | Maximum number of entries accepted when browsing or extracting a ZIP archive. |
+| `SERVERSENTINEL_FILE_ZIP_MAX_EXPANDED_BYTES` | `536870912` | backend/node | Maximum total expanded size accepted for a ZIP archive. |
 | `VITE_ENABLE_DEMO` | `false` | frontend build | Enables demo UI state only when the frontend is built with `true`. |
 | `VITE_SERVERSENTINEL_API_TARGET` | `http://localhost:8080` | frontend dev | Vite dev-server proxy target for `/api` and `/ws`. |
 | `MODRINTH_API_KEY` | empty | backend | Optional Modrinth API key used for mod search/install/update requests. |

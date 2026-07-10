@@ -29,6 +29,11 @@ export const nodeCapabilities = [
   "files.rename",
   "files.copy",
   "files.mkdir",
+  "files.archive.list",
+  "files.archive.read",
+  "files.archive.download",
+  "files.archive.plan",
+  "files.archive.extract",
   "mods.list",
   "mods.install",
   "mods.upload",
@@ -119,6 +124,15 @@ export type NodeStreamEvent =
   | {
       type: "empty";
       message?: string;
+    }
+  | {
+      type: "progress";
+      progress: number;
+      task: string;
+    }
+  | {
+      type: "result";
+      result: unknown;
     };
 
 export type NodeStreamDataMessage = {
@@ -177,7 +191,12 @@ export const nodeOperationContract: NodeOperationContract = {
     "files.delete",
     "files.rename",
     "files.copy",
-    "files.mkdir"
+    "files.mkdir",
+    "files.archive.list",
+    "files.archive.read",
+    "files.archive.download",
+    "files.archive.plan",
+    "files.archive.extract"
   ],
   mods: [
     "mods.list",

@@ -47,6 +47,7 @@ import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime } from "./nodes/types.js";
 import { defaultServerJarProvider } from "./runtime/mcjarsProvider.js";
 import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
+import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "./zipArchive.js";
 import {
   normalizeRuntimeProfile,
   runtimeProfileForServer,
@@ -311,6 +312,7 @@ const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
+const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
 const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
 const modFileSizeLimit = 128 * 1024 * 1024;
@@ -4585,6 +4587,169 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   return runtime.listFiles(server, target);
 });
 
+async function resolveZipArchive(runtime: NodeRuntime, server: ManagedServer, path?: string) {
+  const target = await runtime.resolveExistingPath(server, path ?? "");
+  if (!/\.zip$/i.test(basename(target))) throw new Error("Only .zip archives can be opened");
+  if (server.nodeId === localNodeId && !(await stat(target)).isFile()) throw new Error("Archive path is not a file");
+  return target;
+}
+
+function requireNoRunningFileExtraction(serverId: string) {
+  const running = [
+    ...operationsRepository.list({ serverId, status: "queued", limit: 25 }),
+    ...operationsRepository.list({ serverId, status: "running", limit: 25 })
+  ].some((operation) => operation.type === "file.extract");
+  if (running) throw new Error("File mutations are unavailable while ZIP extraction is running");
+}
+
+function archiveOutputPermission(path: string): Permission {
+  if (path === "/server.properties") return "servers.editSettings";
+  if (path === "/mods" || path.startsWith("/mods/")) return "mods.upload";
+  return "files.upload";
+}
+
+async function requireArchiveExtractionPermissions(
+  request: { headers: { cookie?: string } },
+  server: ManagedServer,
+  runtime: NodeRuntime,
+  destination: string,
+  plan: ZipExtractionPlan
+) {
+  const destinationPublicPath = runtime.publicPath(server, destination);
+  const paths = new Set([destinationPublicPath, ...plan.outputPaths.map((entry) => entry.path)]);
+  let restartSensitive = false;
+  for (const path of paths) {
+    const permission = archiveOutputPermission(path);
+    await requireRequestPermission(request, permission);
+    restartSensitive ||= permission === "mods.upload" || permission === "servers.editSettings";
+  }
+  if (restartSensitive) await requireServerStoppedForMutableConfiguration(server);
+}
+
+app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive", async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.query.path);
+  await requireFilePathPermission(request, server, archive, "files.view");
+  return runtime.listArchive(server, archive, request.query.entryPath ?? "/");
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive/preview", async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.query.path);
+  await requireFilePathPermission(request, server, archive, "files.view");
+  return runtime.previewArchiveEntry(server, archive, request.query.entryPath ?? "");
+});
+
+app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive/download", async (request, reply) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.query.path);
+  await requireFilePathPermission(request, server, archive, "files.download");
+  const download = await runtime.downloadArchiveEntry(server, archive, request.query.entryPath ?? "");
+  return reply
+    .header("Content-Type", "application/octet-stream")
+    .header("Content-Length", download.size)
+    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`)
+    .send(download.stream);
+});
+
+async function collectSelectedArchiveEntries(runtime: NodeRuntime, server: ManagedServer, archivePath: string, selectedPaths: string[]) {
+  const collected = new Map<string, FileArchiveEntry>();
+  const collectDirectory = async (entryPath: string) => {
+    const listing = await runtime.listArchive(server, archivePath, entryPath);
+    const normalizedDirectory = entryPath.replace(/^\/+|\/+$/g, "");
+    if (normalizedDirectory) collected.set(normalizedDirectory, { sourcePath: `/${normalizedDirectory}`, archivePath: normalizedDirectory, type: "directory", size: 0 });
+    for (const entry of listing.entries) {
+      const normalized = entry.path.replace(/^\/+/, "");
+      if (entry.type === "directory") await collectDirectory(entry.path);
+      else collected.set(normalized, { sourcePath: entry.path, archivePath: normalized, type: "file", size: entry.size, modifiedAt: entry.modifiedAt });
+    }
+  };
+  for (const selectedPath of selectedPaths) {
+    const normalized = selectedPath.replace(/^\/+|\/+$/g, "");
+    if (!normalized || normalized.includes("\\") || normalized.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("Archive selection path must be normalized");
+    const parent = normalized.includes("/") ? `/${normalized.split("/").slice(0, -1).join("/")}` : "/";
+    const listing = await runtime.listArchive(server, archivePath, parent);
+    const entry = listing.entries.find((candidate) => candidate.path.replace(/^\/+/, "") === normalized);
+    if (!entry) throw new Error(`Archive entry ${selectedPath} was not found`);
+    if (entry.type === "directory") await collectDirectory(entry.path);
+    else collected.set(normalized, { sourcePath: entry.path, archivePath: normalized, type: "file", size: entry.size, modifiedAt: entry.modifiedAt });
+  }
+  const entries = Array.from(collected.values());
+  assertDownloadSize(entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0));
+  return entries;
+}
+
+app.post<{ Params: { id: string }; Body: { path?: string; entryPaths?: unknown } }>("/api/servers/:id/files/archive/download", async (request, reply) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.body.path);
+  await requireFilePathPermission(request, server, archive, "files.download");
+  const entryPaths = Array.isArray(request.body.entryPaths) ? request.body.entryPaths : [];
+  if (entryPaths.length < 1 || entryPaths.length > 200 || entryPaths.some((entry) => typeof entry !== "string")) throw new Error("Choose between 1 and 200 archive entries");
+  const entries = await collectSelectedArchiveEntries(runtime, server, archive, entryPaths as string[]);
+  const filename = entryPaths.length === 1 ? safeArchiveFilename(basename(entryPaths[0] as string)) : safeArchiveFilename(`${basename(archive, extname(archive))}-selection`);
+  const stream = createZipArchiveStream(entries, async (entry) => (await runtime.downloadArchiveEntry(server, archive, entry.sourcePath)).stream);
+  return reply
+    .header("Content-Type", "application/zip")
+    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`)
+    .send(stream);
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string } }>("/api/servers/:id/files/archive/extract/plan", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.body.path);
+  await requireFilePathPermission(request, server, archive, "files.view");
+  const destination = await runtime.resolveWritableResolvedPath(server, request.body.destinationPath ?? "");
+  const plan = await runtime.planArchiveExtraction(server, archive, destination);
+  await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
+  return plan;
+});
+
+app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string; conflictPolicy?: string } }>("/api/servers/:id/files/archive/extract", destructiveRateLimit, async (request, reply) => {
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const archive = await resolveZipArchive(runtime, server, request.body.path);
+  await requireFilePathPermission(request, server, archive, "files.view");
+  const destination = await runtime.resolveWritableResolvedPath(server, request.body.destinationPath ?? "");
+  const conflictPolicy = request.body.conflictPolicy;
+  if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
+  const plan = await runtime.planArchiveExtraction(server, archive, destination);
+  if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
+  await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
+  const alreadyRunning = [
+    ...operationsRepository.list({ serverId: server.id, status: "queued", limit: 25 }),
+    ...operationsRepository.list({ serverId: server.id, status: "running", limit: 25 })
+  ].some((operation) => operation.type === "file.extract");
+  if (alreadyRunning) throw new Error("Another ZIP extraction is already running for this server");
+  const user = await requireRequestPermission(request);
+  const operation = operationsRepository.create({
+    type: "file.extract",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    progress: 0,
+    task: `Extracting ${basename(archive)}`
+  });
+  operationsRepository.update(operation.id, {
+    result: { archivePath: runtime.publicPath(server, archive), destinationPath: runtime.publicPath(server, destination) }
+  });
+  queueMicrotask(() => {
+    operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
+    void runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
+      operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
+    }).then(async (result) => {
+      operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
+    }).catch((error) => {
+      operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
+    });
+  });
+  return reply.code(202).send(operationsRepository.find(operation.id)!);
+});
+
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
@@ -4722,6 +4887,7 @@ app.delete<{ Params: { id: string; leaseId: string }; Querystring: { force?: str
 
 app.put<{ Params: { id: string }; Body: { path?: string; content?: string; leaseId?: string; revision?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
@@ -4746,6 +4912,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
   await requireFilePathPermission(request, server, parent, "files.upload");
@@ -4757,6 +4924,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
 
 app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
   if (server.nodeId === localNodeId) {
@@ -4777,6 +4945,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
   if (resolve(source) === resolve(server.serverDir)) {
@@ -4794,6 +4963,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
   await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
@@ -4806,6 +4976,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
@@ -4890,6 +5061,47 @@ async function localDownloadArchive(_server: ManagedServer, entries: FileArchive
     size,
     stream: createZipArchiveStream(entries)
   };
+}
+
+function publicZipExtractionPlan(server: ManagedServer, plan: ZipExtractionPlan): ZipExtractionPlan {
+  return {
+    ...plan,
+    archivePath: toPublicPath(server, plan.archivePath),
+    destinationPath: toPublicPath(server, plan.destinationPath),
+    outputPaths: plan.outputPaths.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) })),
+    conflicts: plan.conflicts.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) })),
+    blocked: plan.blocked.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) }))
+  };
+}
+
+async function localListArchive(_server: ManagedServer, archivePath: string, entryPath: string) {
+  const listing = await listZipArchive(archivePath, entryPath, fileZipLimits);
+  return { ...listing, archivePath: toPublicPath(_server, archivePath) };
+}
+
+async function localPreviewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
+  const normalizedPath = entryPath.startsWith("/") ? entryPath : `/${entryPath}`;
+  const indexed = await readZipArchiveEntry(archivePath, entryPath, fileZipLimits, editorFileSizeLimit);
+  if (!isTextLikeServerFile(indexed.entry.name)) {
+    return { path: normalizedPath, preview: "unsupported", message: "Preview unavailable" };
+  }
+  if (indexed.content.includes(0)) return { path: normalizedPath, preview: "binary", message: "Preview unavailable" };
+  return { path: normalizedPath, preview: "text", content: indexed.content.toString("utf8"), modifiedAt: indexed.entry.modifiedAt };
+}
+
+async function localDownloadArchiveEntry(_server: ManagedServer, archivePath: string, entryPath: string) {
+  const opened = await openZipArchiveEntryStream(archivePath, entryPath, fileZipLimits);
+  assertDownloadSize(opened.entry.size);
+  return { filename: opened.entry.name, size: opened.entry.size, stream: opened.stream as Readable };
+}
+
+async function localPlanArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {
+  return publicZipExtractionPlan(server, await planZipExtraction(archivePath, destinationPath, fileZipLimits));
+}
+
+async function localExtractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: (progress: number, task: string) => void) {
+  const result = await extractZipArchive({ archivePath, destinationPath, conflictPolicy, limits: fileZipLimits, report });
+  return { ...result, destinationPath: toPublicPath(server, result.destinationPath) };
 }
 
 async function localReadEditableFile(server: ManagedServer, target: string) {
@@ -6736,6 +6948,11 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   previewFile: localPreviewFile,
   downloadFile: localDownloadFile,
   downloadArchive: localDownloadArchive,
+  listArchive: localListArchive,
+  previewArchiveEntry: localPreviewArchiveEntry,
+  downloadArchiveEntry: localDownloadArchiveEntry,
+  planArchiveExtraction: localPlanArchiveExtraction,
+  extractArchive: localExtractArchive,
   readFile: localReadEditableFile,
   writeFile: localWriteEditableFile,
   createFolder: localCreateFolder,

@@ -4,7 +4,8 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { assertNodeSupports } from "./protocol.js";
-import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction } from "./types.js";
+import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
+import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 
 type ConsoleClient = {
@@ -22,6 +23,7 @@ const defaultRemoteCommandTimeoutMs = 15_000;
 const provisioningCommandTimeoutMs = 10 * 60 * 1000;
 const transferCommandTimeoutMs = 2 * 60 * 1000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
+const archiveCommandTimeoutMs = 30 * 60 * 1000;
 
 function normalizeRemotePath(path: string) {
   const value = path || ".";
@@ -374,6 +376,41 @@ export class RemoteNodeRuntime implements NodeRuntime {
         return download.stream;
       })
     };
+  }
+
+  listArchive(server: ManagedServer, archivePath: string, entryPath: string) {
+    return this.command(server, "files.archive.list", { path: normalizeRemotePath(archivePath), entryPath }) as Promise<ZipArchiveListing>;
+  }
+
+  previewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
+    return this.command(server, "files.archive.read", { path: normalizeRemotePath(archivePath), entryPath, preview: true });
+  }
+
+  async downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<FileDownloadResult> {
+    const result = await this.command(server, "files.archive.download", { path: normalizeRemotePath(archivePath), entryPath }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
+    return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
+  }
+
+  planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {
+    return this.command(server, "files.archive.plan", { path: normalizeRemotePath(archivePath), destinationPath: normalizeRemotePath(destinationPath) }, archiveCommandTimeoutMs) as Promise<ZipExtractionPlan>;
+  }
+
+  async extractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: RuntimeProgressReporter): Promise<ZipExtractionResult> {
+    const node = await this.lookupNode(server.nodeId);
+    if (!node) throw new Error(`Node ${server.nodeId} not found`);
+    return new Promise<ZipExtractionResult>((resolvePromise, reject) => {
+      let result: ZipExtractionResult | undefined;
+      void this.connections.stream(
+        node,
+        "files.archive.extract",
+        { server, path: normalizeRemotePath(archivePath), destinationPath: normalizeRemotePath(destinationPath), conflictPolicy },
+        (event) => {
+          if (event.type === "progress") report?.(event.progress, event.task);
+          if (event.type === "result") result = event.result as ZipExtractionResult;
+        },
+        (error) => error ? reject(error) : result ? resolvePromise(result) : reject(new Error("Remote ZIP extraction completed without a result"))
+      ).catch(reject);
+    });
   }
 
   readFile(server: ManagedServer, target: string) {

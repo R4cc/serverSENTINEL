@@ -46,6 +46,7 @@ export type OperationType =
   | "schedule.run"
   | "backup.create"
   | "backup.restore"
+  | "file.extract"
   | "import.run"
   | "export.run";
 

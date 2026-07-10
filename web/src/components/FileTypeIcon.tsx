@@ -81,7 +81,7 @@ export function SidebarIcon({ name }: { name: "overview" | "console" | "files" |
   );
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" }) {
+export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "archive" | "extract" }) {
   return (
     <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
@@ -143,6 +143,24 @@ export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chev
           <path d="M12 4v11" />
           <path d="m8 11 4 4 4-4" />
           <path d="M5 20h14" />
+        </>
+      )}
+      {name === "archive" && (
+        <>
+          <path d="M6 3h8l4 4v14H6Z" />
+          <path d="M14 3v5h4" />
+          <path d="M10 8h3" />
+          <path d="M11 8v3" />
+          <path d="M10 11h3v3h-3z" />
+          <path d="M11.5 14v3" />
+        </>
+      )}
+      {name === "extract" && (
+        <>
+          <path d="M4 5h16v5H4z" />
+          <path d="M6 10v9h12v-9" />
+          <path d="M12 12v5" />
+          <path d="m9.5 14.5 2.5 2.5 2.5-2.5" />
         </>
       )}
       {name === "folderPlus" && (
@@ -248,6 +266,14 @@ export function FileTypeIcon({ entry }: { entry: FileEntry }) {
             <path d="m17 18.4-1.1-1.1" />
             <path d="m15.9 12.7 1.1-1.1" />
             <path d="M7 18.4 8.1 17.3" />
+          </>
+        )}
+        {kind === "archive" && (
+          <>
+            <path d="M10 8h3" />
+            <path d="M11 8v3" />
+            <path d="M10 11h3v3h-3z" />
+            <path d="M11.5 14v4" />
           </>
         )}
       </svg>

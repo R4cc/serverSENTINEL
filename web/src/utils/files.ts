@@ -19,6 +19,7 @@ export function fileDisplayType(entry: FileEntry) {
   if (/\.json5?$/i.test(entry.name)) return "JSON File";
   if (/\.properties$/i.test(entry.name)) return "Properties File";
   if (/\.jar(\.disabled)?$/i.test(entry.name)) return "JAR File";
+  if (/\.zip$/i.test(entry.name)) return "ZIP Archive";
   if (/\.log$/i.test(entry.name)) return "Log File";
   if (/\.(txt|md|csv|env)$/i.test(entry.name)) return "Text Document";
   if (/\.(toml|ya?ml|cfg|conf)$/i.test(entry.name)) return "Config File";
@@ -45,6 +46,7 @@ export function joinPublicPath(parent: string, name: string) {
 export function fileIconKind(entry: FileEntry) {
   if (entry.type === "directory") return "folder";
   if (/\.jar$/i.test(entry.name)) return "jar";
+  if (/\.zip$/i.test(entry.name)) return "archive";
   if (/\.(log|txt|md|csv|env)$/i.test(entry.name)) return "text";
   if (/\.(properties|json5?|ya?ml|toml|cfg|conf)$/i.test(entry.name)) return "config";
   return "file";

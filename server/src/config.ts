@@ -107,6 +107,8 @@ export const config = {
   fileDownloadMaxBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES", 512 * 1024 * 1024),
   fileDownloadZipThresholdBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES", 128 * 1024 * 1024),
   fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),
+  fileZipMaxEntries: parseCountLimitEnv("SERVERSENTINEL_FILE_ZIP_MAX_ENTRIES", 10_000),
+  fileZipMaxExpandedBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_ZIP_MAX_EXPANDED_BYTES", 512 * 1024 * 1024),
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
   mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
 };

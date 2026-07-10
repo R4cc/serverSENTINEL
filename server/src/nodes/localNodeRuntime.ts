@@ -1,5 +1,6 @@
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 import type { FileArchiveEntry } from "../downloadArchive.js";
+import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
 
 export type LocalNodeRuntimeHandlers = {
@@ -26,6 +27,11 @@ export type LocalNodeRuntimeHandlers = {
   previewFile(server: ManagedServer, target: string): Promise<unknown>;
   downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult>;
   downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult>;
+  listArchive(server: ManagedServer, archivePath: string, entryPath: string): Promise<ZipArchiveListing>;
+  previewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<unknown>;
+  downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<FileDownloadResult>;
+  planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string): Promise<ZipExtractionPlan>;
+  extractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: RuntimeProgressReporter): Promise<ZipExtractionResult>;
   readFile(server: ManagedServer, target: string): Promise<unknown>;
   writeFile(server: ManagedServer, target: string, content: unknown): Promise<unknown>;
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;
@@ -136,6 +142,26 @@ export class LocalNodeRuntime implements NodeRuntime {
 
   downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string) {
     return this.handlers.downloadArchive(server, entries, filename);
+  }
+
+  listArchive(server: ManagedServer, archivePath: string, entryPath: string) {
+    return this.handlers.listArchive(server, archivePath, entryPath);
+  }
+
+  previewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
+    return this.handlers.previewArchiveEntry(server, archivePath, entryPath);
+  }
+
+  downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
+    return this.handlers.downloadArchiveEntry(server, archivePath, entryPath);
+  }
+
+  planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {
+    return this.handlers.planArchiveExtraction(server, archivePath, destinationPath);
+  }
+
+  extractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: RuntimeProgressReporter) {
+    return this.handlers.extractArchive(server, archivePath, destinationPath, conflictPolicy, report);
   }
 
   readFile(server: ManagedServer, target: string) {

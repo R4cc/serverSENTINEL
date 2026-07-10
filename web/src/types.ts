@@ -316,6 +316,23 @@ export type FileListing = {
   entries: FileEntry[];
 };
 
+export type ZipArchiveListing = FileListing & {
+  archivePath: string;
+  readOnly: true;
+  encrypted: boolean;
+};
+
+export type ZipExtractionPlan = {
+  archivePath: string;
+  destinationPath: string;
+  fileCount: number;
+  directoryCount: number;
+  totalBytes: number;
+  outputPaths: Array<{ path: string; type: "directory" | "file" }>;
+  conflicts: Array<{ path: string; kind: "file" | "type" | "symlink" }>;
+  blocked: Array<{ path: string; kind: "file" | "type" | "symlink" }>;
+};
+
 export type FilePreview = {
   path: string;
   preview: "text" | "unsupported" | "binary" | "too_large";
@@ -531,6 +548,7 @@ export type OperationRecord = {
     | "schedule.run"
     | "backup.create"
     | "backup.restore"
+    | "file.extract"
     | "import.run"
     | "export.run";
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -549,7 +567,7 @@ export type OperationRecord = {
 
 export type GeneralJob = {
   id: string;
-  type: "provision" | "mod-install" | "mod-upload";
+  type: "provision" | "mod-install" | "mod-upload" | "file-extract";
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   title: string;
   subject?: string;

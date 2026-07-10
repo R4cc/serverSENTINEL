@@ -132,6 +132,12 @@
   border-color: color-mix(in srgb, var(--sentinel-accent-muted) 38%, var(--border));
 }
 
+.fileTypeIcon.archive {
+  color: var(--sentinel-accent-strong);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
 .fileTypeIcon > span {
   position: absolute;
   right: 3px;
@@ -223,6 +229,68 @@
   border-bottom: var(--border-subtle) solid var(--border-muted);
   background: var(--surface-muted);
   padding: var(--space-2) var(--space-3);
+}
+
+.zipReadOnlyBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: var(--border-strong) solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  padding: var(--space-2) var(--space-3);
+}
+
+.zipReadOnlyBanner > div {
+  display: grid;
+  gap: 2px;
+}
+
+.zipReadOnlyBanner span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.zipDestinationModal,
+.zipConflictModal {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.zipDestinationBody {
+  display: grid;
+  gap: var(--space-2);
+  max-height: min(480px, 60vh);
+  overflow: auto;
+}
+
+.zipDestinationPath {
+  border: var(--border-subtle) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.zipFolderChoice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 42px;
+  text-align: left;
+}
+
+.zipFolderChoice .fileTypeIcon {
+  width: 28px;
+  height: 28px;
+}
+
+.zipConflictModal ul {
+  max-height: 180px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .selectionSummary {
