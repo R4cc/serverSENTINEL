@@ -117,6 +117,132 @@ describe("remote node create and Docker command safety", () => {
   it("passes the configured time zone to managed Minecraft containers", () => {
     expect(hooks.minecraftContainerEnvironment()).toContain(`TZ=${process.env.TZ}`);
   });
+
+  it("preserves custom Minecraft container networks without Docker-assigned endpoint fields", () => {
+    const inspect = {
+      NetworkSettings: {
+        Networks: {
+          minecraft: {
+            IPAMConfig: { IPv4Address: "172.30.0.8" },
+            Aliases: ["survival"],
+            DriverOpts: { "com.example.option": "enabled" },
+            EndpointID: "endpoint-id",
+            NetworkID: "network-id",
+            IPAddress: "172.30.0.12",
+            Gateway: "172.30.0.1",
+            MacAddress: "02:42:ac:1e:00:0c"
+          }
+        }
+      }
+    };
+
+    expect(hooks.createNetworkingConfig(inspect)).toEqual({
+      EndpointsConfig: {
+        minecraft: {
+          IPAMConfig: { IPv4Address: "172.30.0.8" },
+          Aliases: ["survival"],
+          DriverOpts: { "com.example.option": "enabled" }
+        }
+      }
+    });
+  });
+
+  it("prefers the old Minecraft container networks and falls back to node networks", () => {
+    const minecraftInspect = { NetworkSettings: { Networks: { minecraft: { Aliases: ["survival"] } } } };
+    const nodeInspect = { NetworkSettings: { Networks: { panel: { Aliases: ["node"] } } } };
+
+    expect(hooks.minecraftContainerNetworkingConfig(minecraftInspect, nodeInspect)).toEqual(hooks.createNetworkingConfig(minecraftInspect));
+    expect(hooks.minecraftContainerNetworkingConfig({ NetworkSettings: { Networks: {} } }, nodeInspect)).toEqual(hooks.createNetworkingConfig(nodeInspect));
+  });
+});
+
+describe("remote node Docker container recreation", () => {
+  function managedStoppedInspect(server: ManagedServer) {
+    return {
+      Id: "minecraft-container-id",
+      Name: `/${server.dockerContainer}`,
+      State: { Running: false, Status: "exited" },
+      Config: {
+        Labels: {
+          "serversentinel.managed": "true",
+          "serversentinel.serverId": server.id,
+          "serversentinel.config-hash": "stale"
+        },
+        OpenStdin: true,
+        AttachStdin: true
+      },
+      NetworkSettings: {
+        Networks: {
+          minecraft: {
+            Aliases: ["survival"],
+            EndpointID: "endpoint-id",
+            NetworkID: "network-id",
+            IPAddress: "172.30.0.12",
+            Gateway: "172.30.0.1"
+          }
+        }
+      }
+    };
+  }
+
+  it("carries custom networks across a stopped port-edit recreate", async () => {
+    mockDockerAvailable = true;
+    mockDockerJsonRequest.mockResolvedValue({});
+    const server = {
+      ...testServer(),
+      dockerContainer: "serversentinel-survival",
+      managedPorts: [{
+        id: "minecraft-query",
+        name: "Minecraft Query",
+        type: "query" as const,
+        protocol: "udp" as const,
+        internalPort: 25566,
+        externalPort: 25566,
+        required: true,
+        removable: false,
+        advanced: true
+      }]
+    };
+    await mkdir(join(tempRoot, "servers", server.storageName!), { recursive: true });
+    const inspect = managedStoppedInspect(server);
+    let inspectCount = 0;
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/serversentinel-survival/json") {
+        inspectCount += 1;
+        if (inspectCount <= 5) return inspect;
+        throw new Error("No such container");
+      }
+      if (method === "GET" && path === "/images/eclipse-temurin%3A21-jre/json") return {};
+      if (method === "DELETE" && path === "/containers/serversentinel-survival?force=1") return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    await hooks.handleCommand("server.update", {
+      server,
+      input: { dockerPorts: "25567:25565/tcp,25566:25566/udp" }
+    });
+
+    expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", "/containers/serversentinel-survival?force=1", [204, 404]);
+    expect(mockDockerJsonRequest).toHaveBeenCalledWith(
+      "POST",
+      "/containers/create?name=serversentinel-survival",
+      expect.objectContaining({
+        NetworkingConfig: {
+          EndpointsConfig: {
+            minecraft: {
+              Aliases: ["survival"],
+              IPAMConfig: undefined,
+              DriverOpts: undefined
+            }
+          }
+        }
+      }),
+      [201, 409]
+    );
+    const createBody = mockDockerJsonRequest.mock.calls.find((call) => call[1] === "/containers/create?name=serversentinel-survival")?.[2] as { NetworkingConfig?: unknown };
+    expect(JSON.stringify(createBody.NetworkingConfig)).not.toContain("EndpointID");
+    expect(JSON.stringify(createBody.NetworkingConfig)).not.toContain("172.30.0.12");
+  });
 });
 
 describe("remote node file operation safety", () => {

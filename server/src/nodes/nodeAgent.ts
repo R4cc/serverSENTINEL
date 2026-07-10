@@ -44,8 +44,27 @@ type NodeContainerInspect = {
   };
   HostConfig?: Record<string, unknown>;
   NetworkSettings?: {
-    Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; EndpointID?: string; Gateway?: string; IPAddress?: string; IPPrefixLen?: number; IPv6Gateway?: string; GlobalIPv6Address?: string; GlobalIPv6PrefixLen?: number; MacAddress?: string; DriverOpts?: Record<string, string> }>;
+    Networks?: Record<string, NodeNetworkAttachment>;
   };
+};
+
+type NodeNetworkAttachment = {
+  IPAMConfig?: unknown;
+  Aliases?: string[];
+  DriverOpts?: Record<string, string>;
+  NetworkID?: string;
+  EndpointID?: string;
+  Gateway?: string;
+  IPAddress?: string;
+  IPPrefixLen?: number;
+  IPv6Gateway?: string;
+  GlobalIPv6Address?: string;
+  GlobalIPv6PrefixLen?: number;
+  MacAddress?: string;
+};
+
+type NodeNetworkingConfig = {
+  EndpointsConfig: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; DriverOpts?: Record<string, string> }>;
 };
 type DockerContainerListItem = {
   Id: string;
@@ -195,16 +214,20 @@ function containerName(server: ManagedServer) {
   return validateDockerContainerName(server.dockerContainer?.trim() || defaultServerContainerName(server.id));
 }
 
-function runtimeConfigHash(server: ManagedServer) {
+function runtimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean }) {
   const targetRuntime = runtimeTarget(server);
-  return createHash("sha256").update(JSON.stringify({
+  return {
     image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
     timeZone: config.timeZone,
-    terminal: minecraftTerminalConfigFingerprint()
-  })).digest("hex");
+    ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {})
+  };
+}
+
+function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: false }) {
+  return createHash("sha256").update(JSON.stringify(runtimeConfigHashInput(server, options))).digest("hex");
 }
 
 function minecraftContainerEnvironment() {
@@ -306,7 +329,7 @@ async function pullImage(image: string) {
   await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag || "latest")}`, [200, 201]);
 }
 
-async function createContainer(server: ManagedServer) {
+async function createContainer(server: ManagedServer, networkingConfig?: NodeNetworkingConfig) {
   const targetRuntime = runtimeTarget(server);
   const image = validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion));
   await pullImage(image);
@@ -325,7 +348,7 @@ async function createContainer(server: ManagedServer) {
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
-    NetworkingConfig: createNetworkingConfig(await inspectCurrentContainer()),
+    NetworkingConfig: networkingConfig ?? createNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
     Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
   }, [201, 409]);
 }
@@ -360,18 +383,21 @@ async function removeManagedContainer(server: ManagedServer) {
   return true;
 }
 
-async function ensureContainer(server: ManagedServer) {
+async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?: NodeNetworkingConfig) {
   const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
   if (!details) {
-    await createContainer(server);
+    await createContainer(server, preferredNetworkingConfig);
     return;
   }
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
-  if (details.Config?.Labels?.["serversentinel.config-hash"] !== runtimeConfigHash(server) || !details.Config?.OpenStdin || !details.Config?.AttachStdin) {
+  const configHash = details.Config?.Labels?.["serversentinel.config-hash"];
+  const compatibleConfigHash = configHash === runtimeConfigHash(server) || configHash === runtimeConfigHash(server, { includeTerminal: true });
+  if (!compatibleConfigHash || !details.Config?.OpenStdin || !details.Config?.AttachStdin) {
+    const networkingConfig = minecraftContainerNetworkingConfig(details) ?? preferredNetworkingConfig;
     await removeManagedContainer(server);
-    await createContainer(server);
+    await createContainer(server, networkingConfig);
   }
 }
 
@@ -536,8 +562,9 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     }), "utf8");
   }
   if (containerConfigChanged && dockerAvailable() && !running) {
+    const networkingConfig = minecraftContainerNetworkingConfig(await inspect(server).catch(() => null) as NodeContainerInspect | null);
     await removeManagedContainer(server);
-    await ensureContainer(updated);
+    await ensureContainer(updated, networkingConfig);
   }
   return updated;
 }
@@ -712,7 +739,7 @@ function validateNodeDockerImageName(image: string) {
   return value;
 }
 
-function createNetworkingConfig(inspect?: NodeContainerInspect | null) {
+function createNetworkingConfig(inspect?: Pick<NodeContainerInspect, "NetworkSettings"> | null): NodeNetworkingConfig | undefined {
   const networks = inspect?.NetworkSettings?.Networks;
   if (!networks || Object.keys(networks).length === 0) return undefined;
   return {
@@ -722,6 +749,10 @@ function createNetworkingConfig(inspect?: NodeContainerInspect | null) {
       DriverOpts: network.DriverOpts
     }]))
   };
+}
+
+function minecraftContainerNetworkingConfig(existing?: Pick<NodeContainerInspect, "NetworkSettings"> | null, fallback?: Pick<NodeContainerInspect, "NetworkSettings"> | null) {
+  return createNetworkingConfig(existing) ?? createNetworkingConfig(fallback);
 }
 
 async function prepareNodeUpdate(payload: unknown) {
@@ -1471,8 +1502,10 @@ function runtimeSelection(input: unknown) {
 
 export const __nodeAgentTestHooks = {
   cleanupPreviousNodeContainers,
+  createNetworkingConfig,
   createdServerRecord,
   handleCommand,
+  minecraftContainerNetworkingConfig,
   minecraftContainerEnvironment,
   minecraftContainerCommand,
   selfUpdateContainer

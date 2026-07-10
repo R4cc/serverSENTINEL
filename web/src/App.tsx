@@ -2,7 +2,7 @@ import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
 import { formatTimestampForFilename, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -2052,6 +2052,25 @@ export default function App() {
     }
   }
 
+  async function cancelScheduleRun(run: ScheduledActiveRun) {
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer || activeServerIsDemo) return false;
+    if (!window.confirm(`Cancel scheduled run "${run.scheduleName}"?\n\nRemaining scheduled actions will not execute.`)) return false;
+    setScheduleBusy(true);
+    try {
+      await api(`/api/servers/${activeServer.id}/schedules/${run.scheduleId}/runs/${run.id}/cancel`, { method: "POST" });
+      notify("success", `Cancelled ${run.scheduleName}`);
+      await refreshApp();
+      return true;
+    } catch (error) {
+      const message = errorMessage(error, "Could not cancel the schedule run. It may have already finished.");
+      setNotice(message);
+      notify("error", message);
+      return false;
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isProvisioning || serverSettingsSaving || dockerOperationalLock || !canDeleteServers) return;
@@ -2868,6 +2887,7 @@ export default function App() {
                 onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                 onUpdate={updateSchedule}
                 onDelete={deleteSchedule}
+                onCancelRun={cancelScheduleRun}
                 disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
                 disabledReason={scheduleDisabledReason}
               />

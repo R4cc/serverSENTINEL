@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import {
@@ -31,7 +31,10 @@ import {
   assertDownloadSize,
   fileDownloadIntentMode,
   dedupeDownloadSelections,
-  sanitizeCommandDelays
+  sanitizeCommandDelays,
+  waitForCommandDelay,
+  dockerNetworkingConfigFromInspect,
+  minecraftContainerNetworkingConfig
 } from "./app.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
@@ -67,6 +70,20 @@ describe("scheduled command delays", () => {
     expect(() => sanitizeCommandDelays([0], 2)).toThrow(/every scheduled command/);
     expect(() => sanitizeCommandDelays([0, 1.5], 2)).toThrow(/whole minutes/);
     expect(() => sanitizeCommandDelays([0, 10_081], 2)).toThrow(/whole minutes/);
+  });
+
+  it("can interrupt a pending schedule delay", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const delay = waitForCommandDelay(5, controller.signal);
+
+      controller.abort();
+
+      await expect(delay).rejects.toThrow("Schedule run cancelled by user");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -741,6 +758,52 @@ describe("Minecraft Query endpoint resolution", () => {
   it("returns null when query is not configured", async () => {
     const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
     expect(resolveMinecraftQueryEndpoint(server([]), {}, null, null)).toBeNull();
+  });
+});
+
+describe("Minecraft Docker network preservation", () => {
+  const customNetworkInspect = {
+    NetworkSettings: {
+      Networks: {
+        minecraft: {
+          IPAMConfig: { IPv4Address: "172.30.0.8" },
+          Aliases: ["survival"],
+          DriverOpts: { "com.example.option": "enabled" },
+          EndpointID: "endpoint-id",
+          NetworkID: "network-id",
+          IPAddress: "172.30.0.12",
+          Gateway: "172.30.0.1",
+          MacAddress: "02:42:ac:1e:00:0c"
+        }
+      }
+    }
+  };
+
+  it("preserves user-provided network endpoint options without copying Docker-assigned fields", () => {
+    expect(dockerNetworkingConfigFromInspect(customNetworkInspect)).toEqual({
+      EndpointsConfig: {
+        minecraft: {
+          IPAMConfig: { IPv4Address: "172.30.0.8" },
+          Aliases: ["survival"],
+          DriverOpts: { "com.example.option": "enabled" }
+        }
+      }
+    });
+  });
+
+  it("prefers the old Minecraft container networks and falls back to panel networks", () => {
+    const panelInspect = {
+      NetworkSettings: {
+        Networks: {
+          panel: {
+            Aliases: ["serversentinel"]
+          }
+        }
+      }
+    };
+
+    expect(minecraftContainerNetworkingConfig(customNetworkInspect, panelInspect)).toEqual(dockerNetworkingConfigFromInspect(customNetworkInspect));
+    expect(minecraftContainerNetworkingConfig({ NetworkSettings: { Networks: {} } }, panelInspect)).toEqual(dockerNetworkingConfigFromInspect(panelInspect));
   });
 });
 

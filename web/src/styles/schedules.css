@@ -374,13 +374,19 @@
 
 .scheduledRunItem {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3);
   border: 1px solid var(--border-row);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
+}
+
+.scheduledRunItem.active,
+.scheduledRunItem.running {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
 }
 
 .scheduledRunItem.success {
@@ -396,6 +402,11 @@
 .scheduledRunItem.skipped {
   border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
+}
+
+.scheduledRunItem.cancelled {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 6%, var(--surface));
 }
 
 .scheduledRunItem.unknown {
@@ -444,6 +455,14 @@
   font-weight: var(--weight-title);
 }
 
+.scheduledRunDetails {
+  min-width: 0;
+}
+
+.scheduledRunAction {
+  overflow-wrap: anywhere;
+}
+
 .scheduledRunItem small,
 .scheduledRunTime {
   color: var(--text-muted);
@@ -462,6 +481,18 @@
 .scheduledRunTime span {
   color: var(--text);
   font-weight: var(--weight-heading);
+}
+
+.scheduledRunActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scheduledRunCancelButton {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
 }
 
 .scheduledRunsEmpty {
@@ -538,13 +569,19 @@
   }
 
   .scheduledRunItem {
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr) 36px;
   }
 
   .scheduledRunTime {
     grid-column: 2;
     justify-items: start;
     text-align: left;
+  }
+
+  .scheduledRunActions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: start;
   }
 }
 

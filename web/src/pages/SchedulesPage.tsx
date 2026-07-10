@@ -6,7 +6,7 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
-import type { ScheduledExecution, ScheduledRun } from '../types';
+import type { ScheduledActiveRun, ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
@@ -19,6 +19,9 @@ type ScheduleFormMode =
   | { type: "edit"; schedule: ScheduledExecution };
 
 type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "commandDelaysMinutes" | "onlyWhenNoPlayers" | "enabled">;
+type ScheduledRunPanelItem =
+  | (ScheduledActiveRun & { kind: "active"; sortAt: string })
+  | (ScheduledRun & { kind: "completed"; sortAt: string });
 
 export function SchedulePage({
   schedules,
@@ -26,6 +29,7 @@ export function SchedulePage({
   onToggle,
   onUpdate,
   onDelete,
+  onCancelRun,
   disabled,
   disabledReason,
   formatDate
@@ -36,6 +40,7 @@ export function SchedulePage({
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
   onDelete: (schedule: ScheduledExecution) => void;
+  onCancelRun: (run: ScheduledActiveRun) => boolean | Promise<boolean>;
   disabled: boolean;
   disabledReason?: string;
 }) {
@@ -57,8 +62,9 @@ export function SchedulePage({
     setFormError("");
   }, [formMode]);
 
-  const recentRuns = useMemo(() => scheduleRuns(schedules), [schedules]);
-  const recentRunsKey = recentRuns.map((run) => run.id).join("|");
+  const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
+  const activeRunCount = runItems.filter((run) => run.kind === "active").length;
+  const recentRunsKey = runItems.map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`).join("|");
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
       id: "name",
@@ -264,20 +270,30 @@ export function SchedulePage({
       </section>
 
       <aside className="panel scheduledRunsCard">
-        <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description="Most recent scheduled executions." />
-        {recentRuns.length ? (
+        <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : "Most recent scheduled executions."} />
+        {runItems.length ? (
           <div ref={runsFeedRef} className="scheduledRunsFeed">
-            {recentRuns.map((run) => (
-              <article key={run.id} className={`scheduledRunItem ${statusTone(run.status)}`}>
+            {runItems.map((run) => (
+              <article key={`${run.kind}:${run.id}`} className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}>
                 <span className="scheduledRunMarker" aria-hidden="true"></span>
-                <div>
+                <div className="scheduledRunDetails">
                   <strong>{run.scheduleName}</strong>
-                  <small>{statusLabel(run.status)}</small>
+                  <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
+                  {run.kind === "active" && run.currentAction && (
+                    <small className="scheduledRunAction">Action {(run.currentActionIndex ?? 0) + 1} of {run.actionCount}: {run.currentAction}</small>
+                  )}
                 </div>
                 <div className="scheduledRunTime">
-                  <span>{relativeTime(run.ranAt)}</span>
-                  <small>{formatScheduleTime(run.ranAt, formatDate)}</small>
+                  <span>{run.kind === "active" ? relativeTime(run.startedAt) : relativeTime(run.ranAt)}</span>
+                  <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>
                 </div>
+                {run.kind === "active" && (
+                  <div className="scheduledRunActions">
+                    <Button variant="critical" iconOnly compact className="scheduledRunCancelButton" onClick={() => void onCancelRun(run)} disabled={disabled} aria-label={`Cancel ${run.scheduleName}`} title={disabled ? disabledReason || "Schedule cancellation is unavailable right now." : `Cancel ${run.scheduleName}`}>
+                      <AppIcon name="x" />
+                    </Button>
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -388,6 +404,17 @@ function scheduleRuns(schedules: ScheduledExecution[]) {
     .slice(0, 8);
 }
 
+function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelItem[] {
+  const active = schedules.flatMap((schedule) => schedule.activeRuns ?? [])
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .map((run) => ({ ...run, kind: "active" as const, sortAt: run.startedAt }));
+  const activeIds = new Set(active.map((run) => run.id));
+  const completed = scheduleRuns(schedules)
+    .filter((run) => !activeIds.has(run.id))
+    .map((run) => ({ ...run, kind: "completed" as const, sortAt: run.ranAt }));
+  return [...active, ...completed.slice(0, Math.max(8 - active.length, 0))];
+}
+
 function scheduleDescription(schedule: ScheduledExecution) {
   if (schedule.commands.length > 1) {
     const delayedCommands = schedule.commandDelaysMinutes.filter((delay) => delay > 0).length;
@@ -415,6 +442,8 @@ function statusLabel(status?: string) {
   if (normalized === "success" || normalized === "succeeded") return "Succeeded";
   if (normalized === "failed") return "Failed";
   if (normalized === "skipped") return "Skipped";
+  if (normalized === "cancelled") return "Cancelled";
+  if (normalized === "running") return "In progress";
   return "Not run";
 }
 
@@ -423,12 +452,21 @@ function statusTone(status?: string) {
   if (normalized === "success" || normalized === "succeeded") return "success";
   if (normalized === "failed") return "failed";
   if (normalized === "skipped") return "skipped";
+  if (normalized === "cancelled") return "cancelled";
+  if (normalized === "running") return "running";
   return "unknown";
 }
 
 function statusBadgeTone(status?: string): "success" | "danger" | "warning" | "neutral" {
   const tone = statusTone(status);
-  return tone === "success" ? "success" : tone === "failed" ? "danger" : tone === "skipped" ? "warning" : "neutral";
+  return tone === "success" ? "success" : tone === "failed" ? "danger" : tone === "skipped" || tone === "cancelled" ? "warning" : "neutral";
+}
+
+function activeRunStatus(run: ScheduledActiveRun) {
+  if (run.message === "Cancellation requested") return run.message;
+  if (run.waitingUntil) return `Waiting ${remainingDelayLabel(run.waitingUntil)}`;
+  if (run.currentActionIndex !== undefined) return `Action ${run.currentActionIndex + 1} of ${run.actionCount}`;
+  return run.message || "In progress";
 }
 
 function formatScheduleTime(value: string, formatDate: (value: string | number | Date) => string) {
@@ -451,4 +489,17 @@ function relativeTime(value: string) {
     ? `${hours}h ${minutes % 60}m`
     : `${minutes}m`;
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
+}
+
+function remainingDelayLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "on delay";
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs <= 0) return "less than 1m";
+  const minutes = Math.max(1, Math.ceil(diffMs / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${minutes}m`;
 }

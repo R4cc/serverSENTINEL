@@ -141,6 +141,7 @@ import type {
   ResolvedServerVersions,
   ServerActivity,
   ServerEvent,
+  ScheduledActiveRun,
   ScheduledExecution,
   ScheduledRun,
   ServerRuntimeProfile,
@@ -190,7 +191,26 @@ type DockerContainerInspect = {
   Name?: string;
   Config?: { Labels?: Record<string, string>; OpenStdin?: boolean; AttachStdin?: boolean; Tty?: boolean };
   Mounts?: Array<{ Type?: string; Name?: string; Source?: string; Destination?: string }>;
-  NetworkSettings?: { Networks?: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; NetworkID?: string; IPAddress?: string; Gateway?: string; DriverOpts?: Record<string, string> }> };
+  NetworkSettings?: { Networks?: Record<string, DockerNetworkAttachment> };
+};
+
+type DockerNetworkAttachment = {
+  IPAMConfig?: unknown;
+  Aliases?: string[];
+  DriverOpts?: Record<string, string>;
+  EndpointID?: string;
+  NetworkID?: string;
+  IPAddress?: string;
+  Gateway?: string;
+  IPPrefixLen?: number;
+  IPv6Gateway?: string;
+  GlobalIPv6Address?: string;
+  GlobalIPv6PrefixLen?: number;
+  MacAddress?: string;
+};
+
+type DockerNetworkingConfig = {
+  EndpointsConfig: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; DriverOpts?: Record<string, string> }>;
 };
 
 type DockerStats = {
@@ -952,7 +972,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     restartRequiredSince: server.restartRequiredSince,
-    schedules: (server.schedules ?? []).map(publicSchedule),
+    schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     directoryLabel: server.storageName || server.id,
@@ -1040,7 +1060,8 @@ function normalizeSchedule(value: unknown): ScheduledExecution {
     lastRunAt: optionalString(schedule.lastRunAt, "schedule.lastRunAt"),
     lastStatus: optionalString(schedule.lastStatus, "schedule.lastStatus"),
     lastMessage: optionalString(schedule.lastMessage, "schedule.lastMessage"),
-    recentRuns: schedule.recentRuns === undefined ? undefined : asArray(schedule.recentRuns, "schedule.recentRuns").map(normalizeScheduledRun).slice(0, 25)
+    recentRuns: schedule.recentRuns === undefined ? undefined : asArray(schedule.recentRuns, "schedule.recentRuns").map(normalizeScheduledRun).slice(0, 25),
+    activeRuns: schedule.activeRuns === undefined ? undefined : asArray(schedule.activeRuns, "schedule.activeRuns").map(normalizeScheduledActiveRun).slice(0, 25)
   };
 }
 
@@ -1056,12 +1077,30 @@ function normalizeScheduledRun(value: unknown): ScheduledRun {
   };
 }
 
-function publicSchedule(schedule: ScheduledExecution): ScheduledExecution {
+function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
+  const run = asObject(value, "active scheduled run");
+  return {
+    id: validateOperationId(run.id),
+    scheduleId: validateScheduleId(run.scheduleId),
+    scheduleName: requiredString(run.scheduleName, "activeRun.scheduleName"),
+    status: "running",
+    startedAt: requiredString(run.startedAt, "activeRun.startedAt"),
+    actionCount: typeof run.actionCount === "number" ? run.actionCount : 0,
+    currentActionIndex: typeof run.currentActionIndex === "number" ? run.currentActionIndex : undefined,
+    currentAction: optionalString(run.currentAction, "activeRun.currentAction"),
+    waitingUntil: optionalString(run.waitingUntil, "activeRun.waitingUntil"),
+    waitingDelayMinutes: typeof run.waitingDelayMinutes === "number" ? run.waitingDelayMinutes : undefined,
+    message: optionalString(run.message, "activeRun.message")
+  };
+}
+
+function publicSchedule(serverId: string, schedule: ScheduledExecution): ScheduledExecution {
   const nextRun = schedule.enabled ? safeNextCronRun(schedule.cron) : null;
   return {
     ...schedule,
     nextRunAt: nextRun?.toISOString(),
-    recentRuns: (schedule.recentRuns ?? []).slice(0, 25)
+    recentRuns: (schedule.recentRuns ?? []).slice(0, 25),
+    activeRuns: activeScheduledRunsFor(serverId, schedule.id)
   };
 }
 
@@ -1954,10 +1993,38 @@ export function sanitizeCommandDelays(delays: unknown, commandCount: number) {
   });
 }
 
-function waitForCommandDelay(minutes: number) {
+class ScheduleCancellationError extends Error {
+  constructor(message = "Schedule run cancelled by user") {
+    super(message);
+    this.name = "ScheduleCancellationError";
+  }
+}
+
+function throwIfScheduleCancelled(signal?: AbortSignal) {
+  if (signal?.aborted) throw new ScheduleCancellationError();
+}
+
+export function waitForCommandDelay(minutes: number, signal?: AbortSignal) {
+  throwIfScheduleCancelled(signal);
   if (minutes === 0) return Promise.resolve();
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, minutes * 60_000).unref();
+  return new Promise<void>((resolve, reject) => {
+    let timeout: NodeJS.Timeout;
+    let abort = () => {};
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const finish = () => {
+      cleanup();
+      resolve();
+    };
+    abort = () => {
+      clearTimeout(timeout);
+      cleanup();
+      reject(new ScheduleCancellationError());
+    };
+    timeout = setTimeout(finish, minutes * 60_000);
+    timeout.unref?.();
+    signal?.addEventListener("abort", abort, { once: true });
+  }).finally(() => {
+    throwIfScheduleCancelled(signal);
   });
 }
 
@@ -2062,18 +2129,22 @@ async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
-function dockerRuntimeConfigHash(server: ManagedServer) {
+function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean }) {
   const targetRuntime = runtimeTarget(server);
-  return createHash("sha256").update(JSON.stringify({
+  return {
     image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
     workingDir: serverDockerWorkingDir(server),
     bindTarget: serverDockerBindTarget(server),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
-    terminal: minecraftTerminalConfigFingerprint(),
+    ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
     restartPolicy: "unless-stopped"
-  })).digest("hex");
+  };
+}
+
+function dockerRuntimeConfigHash(server: ManagedServer, options = { includeTerminal: false }) {
+  return createHash("sha256").update(JSON.stringify(dockerRuntimeConfigHashInput(server, options))).digest("hex");
 }
 
 async function detectedTotalMemory() {
@@ -2100,8 +2171,7 @@ async function currentContainerInspect() {
   return dockerRequest<DockerContainerInspect>("GET", `/containers/${encodeURIComponent(id)}/json`, 200);
 }
 
-async function currentContainerNetworkingConfig() {
-  const inspect = await currentContainerInspect().catch(() => null);
+export function dockerNetworkingConfigFromInspect(inspect?: Pick<DockerContainerInspect, "NetworkSettings"> | null): DockerNetworkingConfig | undefined {
   const networks = inspect?.NetworkSettings?.Networks;
   if (!networks || Object.keys(networks).length === 0) return undefined;
   return {
@@ -2113,17 +2183,30 @@ async function currentContainerNetworkingConfig() {
   };
 }
 
-async function ensureDockerContainer(server: ManagedServer) {
+export function minecraftContainerNetworkingConfig(existing?: Pick<DockerContainerInspect, "NetworkSettings"> | null, fallback?: Pick<DockerContainerInspect, "NetworkSettings"> | null) {
+  return dockerNetworkingConfigFromInspect(existing) ?? dockerNetworkingConfigFromInspect(fallback);
+}
+
+async function currentContainerNetworkingConfig() {
+  return dockerNetworkingConfigFromInspect(await currentContainerInspect().catch(() => null));
+}
+
+async function ensureDockerContainer(server: ManagedServer, preferredNetworkingConfig?: DockerNetworkingConfig) {
   const expectedConfigHash = dockerRuntimeConfigHash(server);
+  const legacyConfigHash = dockerRuntimeConfigHash(server, { includeTerminal: true });
   const existing = await inspectDockerContainer(server);
+  let networkingConfig = preferredNetworkingConfig;
   if (existing) {
     if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
       throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
     }
-    if (dockerContainerMountValid(server, existing) && existing.Config?.Labels?.["serversentinel.config-hash"] === expectedConfigHash && existing.Config?.OpenStdin && existing.Config?.AttachStdin) {
+    const existingConfigHash = existing.Config?.Labels?.["serversentinel.config-hash"];
+    const compatibleConfigHash = existingConfigHash === expectedConfigHash || existingConfigHash === legacyConfigHash;
+    if (dockerContainerMountValid(server, existing) && compatibleConfigHash && existing.Config?.OpenStdin && existing.Config?.AttachStdin) {
       return;
     }
+    networkingConfig = minecraftContainerNetworkingConfig(existing) ?? networkingConfig;
     logWarn(serverLogFields(server), "Removing managed Docker container with stale runtime configuration");
     await removeDockerContainer(server);
   }
@@ -2170,7 +2253,7 @@ async function ensureDockerContainer(server: ManagedServer) {
             }
           ]
         },
-        NetworkingConfig: await currentContainerNetworkingConfig(),
+        NetworkingConfig: networkingConfig ?? await currentContainerNetworkingConfig(),
         Labels: {
           "serversentinel.server-id": server.id,
           "serversentinel.managed": "true",
@@ -3354,16 +3437,64 @@ function scheduleFromBody(body: {
   };
 }
 
-async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution) {
+type ActiveScheduleExecution = ScheduledActiveRun & {
+  serverId: string;
+  operationId: string;
+  controller: AbortController;
+};
+
+const runningSchedules = new Set<string>();
+const activeScheduleExecutions = new Map<string, ActiveScheduleExecution>();
+
+function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
+  return {
+    id: run.id,
+    scheduleId: run.scheduleId,
+    scheduleName: run.scheduleName,
+    status: "running",
+    startedAt: run.startedAt,
+    actionCount: run.actionCount,
+    currentActionIndex: run.currentActionIndex,
+    currentAction: run.currentAction,
+    waitingUntil: run.waitingUntil,
+    waitingDelayMinutes: run.waitingDelayMinutes,
+    message: run.message
+  };
+}
+
+function activeScheduledRunsFor(serverId: string, scheduleId: string) {
+  return [...activeScheduleExecutions.values()]
+    .filter((run) => run.serverId === serverId && run.scheduleId === scheduleId)
+    .map(publicActiveScheduleRun);
+}
+
+function cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: string) {
+  const active = activeScheduleExecutions.get(runId);
+  if (!active || active.serverId !== serverId || active.scheduleId !== scheduleId) return undefined;
+  if (!active.controller.signal.aborted) {
+    active.message = "Cancellation requested";
+    active.waitingDelayMinutes = undefined;
+    active.waitingUntil = undefined;
+    active.controller.abort();
+    operationsRepository.update(active.operationId, { task: "Cancelling schedule run" });
+  }
+  return publicActiveScheduleRun(active);
+}
+
+async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution, active: ActiveScheduleExecution) {
   const startedAt = Date.now();
   try {
     const runtime = runtimeForServer(server);
+    throwIfScheduleCancelled(active.controller.signal);
+    active.message = "Checking server status";
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
     if (!status.docker?.running) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped" };
     }
     if (schedule.onlyWhenNoPlayers) {
+      throwIfScheduleCancelled(active.controller.signal);
+      active.message = "Checking online players";
       const count = await runtime.onlinePlayerCount(server);
       if (count === null) {
         logWarn({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, reason: "player_count_unknown" }, "Schedule skipped");
@@ -3376,18 +3507,34 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
     }
 
     for (const [index, command] of schedule.commands.entries()) {
-      await waitForCommandDelay(schedule.commandDelaysMinutes[index] ?? 0);
+      throwIfScheduleCancelled(active.controller.signal);
+      const delayMinutes = schedule.commandDelaysMinutes[index] ?? 0;
+      active.currentActionIndex = index;
+      active.currentAction = command;
+      active.waitingDelayMinutes = delayMinutes || undefined;
+      active.waitingUntil = delayMinutes ? new Date(Date.now() + delayMinutes * 60_000).toISOString() : undefined;
+      active.message = delayMinutes
+        ? `Waiting before command ${index + 1} of ${schedule.commands.length}`
+        : `Sending command ${index + 1} of ${schedule.commands.length}`;
+      await waitForCommandDelay(delayMinutes, active.controller.signal);
+      active.waitingDelayMinutes = undefined;
+      active.waitingUntil = undefined;
+      active.message = `Sending command ${index + 1} of ${schedule.commands.length}`;
+      throwIfScheduleCancelled(active.controller.signal);
       await runtime.sendConsoleCommand(server, command);
+      active.message = `Sent command ${index + 1} of ${schedule.commands.length}`;
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
     return { status: "success", message: `Sent ${schedule.commands.length} command${schedule.commands.length === 1 ? "" : "s"}` };
   } catch (error) {
+    if (error instanceof ScheduleCancellationError || active.controller.signal.aborted) {
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
+      return { status: "cancelled", message: "Cancelled by user" };
+    }
     logError({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
     return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed" };
   }
 }
-
-const runningSchedules = new Set<string>();
 
 async function executeMatchedSchedule(server: ManagedServer, schedule: ScheduledExecution) {
   logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
@@ -3399,10 +3546,24 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
     progress: 0
   });
   operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
-  const result = await runScheduledExecution(server, schedule);
+  const runId = randomUUID();
+  const active: ActiveScheduleExecution = {
+    id: runId,
+    serverId: server.id,
+    scheduleId: schedule.id,
+    scheduleName: schedule.name,
+    status: "running",
+    startedAt: new Date().toISOString(),
+    actionCount: schedule.commands.length,
+    message: "Starting",
+    operationId: operation.id,
+    controller: new AbortController()
+  };
+  activeScheduleExecutions.set(runId, active);
+  const result = await runScheduledExecution(server, schedule, active);
   const ranAt = new Date().toISOString();
   const run: ScheduledRun = {
-    id: randomUUID(),
+    id: runId,
     scheduleId: schedule.id,
     scheduleName: schedule.name,
     status: result.status,
@@ -3410,12 +3571,20 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
     ranAt
   };
   serversRepository.recordScheduledRun(server.id, schedule.id, run);
+  activeScheduleExecutions.delete(runId);
   if (result.status === "failed") {
     operationsRepository.fail(operation.id, result.message, {
       progress: 100,
       task: "Schedule run failed",
       result: { scheduleId: schedule.id, run }
     });
+  } else if (result.status === "cancelled") {
+    operationsRepository.update(operation.id, {
+      progress: 100,
+      task: "Schedule run cancelled",
+      result: { scheduleId: schedule.id, run }
+    });
+    operationsRepository.cancel(operation.id, result.message);
   } else {
     operationsRepository.succeed(operation.id, {
       progress: 100,
@@ -3556,8 +3725,9 @@ async function localUpdateServer(serverId: string, input: unknown) {
       await downloadFabricServerJar(updated);
     }
     if (containerConfigChanged && dockerAvailable() && !status.running) {
+      const networkingConfig = minecraftContainerNetworkingConfig(await inspectDockerContainer(current).catch(() => null));
       await removeManagedDockerContainer(current);
-      await ensureDockerContainer(updated);
+      await ensureDockerContainer(updated, networkingConfig);
     }
     await writeVersionMetadataFile(updated);
     if (serverPort || queryPort !== currentQueryPort) {
@@ -4512,7 +4682,7 @@ app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:
 app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
   await requireRequestPermission(request, "schedules.view");
   const server = await getServer(request.params.id);
-  return { schedules: server.schedules ?? [] };
+  return { schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)) };
 });
 
 app.post<{
@@ -4549,6 +4719,19 @@ app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/sch
   serversRepository.deleteSchedule(server.id, scheduleId, new Date().toISOString());
   logInfo({ ...serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
+});
+
+app.post<{ Params: { id: string; scheduleId: string; runId: string } }>("/api/servers/:id/schedules/:scheduleId/runs/:runId/cancel", destructiveRateLimit, async (request, reply) => {
+  await requireRequestPermission(request, "schedules.manage");
+  const server = await getServer(request.params.id);
+  const scheduleId = validateScheduleId(request.params.scheduleId);
+  const runId = validateOperationId(request.params.runId);
+  const cancelled = cancelActiveScheduleRun(server.id, scheduleId, runId);
+  if (!cancelled) {
+    return reply.code(404).send(apiErrorResponse("SCHEDULE_RUN_NOT_FOUND", "Active schedule run not found"));
+  }
+  logInfo({ ...serverLogFields(server), scheduleId, runId, action: "cancel_schedule_run" }, "Schedule run cancellation requested");
+  return { run: cancelled };
 });
 
 app.get("/ws/console", { websocket: true }, async (socket, request) => {

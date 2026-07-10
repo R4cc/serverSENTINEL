@@ -278,6 +278,7 @@ export type ScheduledExecution = {
   lastMessage?: string;
   nextRunAt?: string;
   recentRuns?: ScheduledRun[];
+  activeRuns?: ScheduledActiveRun[];
 };
 
 export type ManagedServerPort = {
@@ -299,6 +300,20 @@ export type ScheduledRun = {
   status: string;
   message?: string;
   ranAt: string;
+};
+
+export type ScheduledActiveRun = {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  status: "running";
+  startedAt: string;
+  actionCount: number;
+  currentActionIndex?: number;
+  currentAction?: string;
+  waitingUntil?: string;
+  waitingDelayMinutes?: number;
+  message?: string;
 };
 
 export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
