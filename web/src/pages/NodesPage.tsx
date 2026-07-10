@@ -15,9 +15,9 @@ type AddNodeInput = {
 
 const collapsedServerLimit = 4;
 
-function formatNodeDate(value?: string, formatter?: (value: string | number | Date) => string) {
+function formatNodeDate(value: string | undefined, formatter: (value: string | number | Date) => string) {
   if (!value) return "Never";
-  return formatter ? formatter(value) : new Date(value).toLocaleString();
+  return formatter(value);
 }
 
 function statusTone(value?: string) {
@@ -226,12 +226,14 @@ function InstallInstructions({
   result,
   method,
   onMethodChange,
-  onCopy
+  onCopy,
+  formatDate
 }: {
   result: CreateNodeResponse | NodeInstallResponse;
   method: "compose" | "run";
   onMethodChange: (method: "compose" | "run") => void;
   onCopy: (text: string) => void;
+  formatDate: (value: string | number | Date) => string;
 }) {
   const snippet = method === "compose" ? dockerComposeSnippet(result.install) : result.install.dockerRun;
   const expiresAt = "expiresAt" in result ? result.expiresAt : result.node.joinTokenExpiresAt;
@@ -241,7 +243,7 @@ function InstallInstructions({
       <div className="nodeInstallHeader">
         <div>
           <h3>Install {result.node.name}</h3>
-          <p>{expiresAt ? `Join token expires ${formatNodeDate(expiresAt)}` : result.install.tokenRequired ? "Rotate the join token before installing this node." : "Token is not included in this snippet."}</p>
+          <p>{expiresAt ? `Join token expires ${formatNodeDate(expiresAt, formatDate)}` : result.install.tokenRequired ? "Rotate the join token before installing this node." : "Token is not included in this snippet."}</p>
           {result.install.joinToken && <p className="sensitiveHint">This command contains a secret join token. Copy it only to the node host.</p>}
         </div>
       </div>
@@ -377,7 +379,8 @@ function AddNodeModal({
   onClose,
   onDone,
   onCreate,
-  onCopy
+  onCopy,
+  formatDate
 }: {
   busy: boolean;
   defaultPanelUrl: string;
@@ -389,6 +392,7 @@ function AddNodeModal({
   onDone: () => void;
   onCreate: (input: AddNodeInput) => void;
   onCopy: (text: string) => void;
+  formatDate: (value: string | number | Date) => string;
 }) {
   const [name, setName] = useState("");
   const [panelUrl, setPanelUrl] = useState(defaultPanelUrl);
@@ -476,7 +480,7 @@ function AddNodeModal({
           <div className="nodeModalBody">
             <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
             <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
-            {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />}
+            {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
             <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
               {!isSuccess && <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>Cancel</Button>}
               <Button onClick={isSuccess ? onDone : onClose}>Done</Button>
@@ -924,7 +928,7 @@ export function NodesPage({
               <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
             </header>
             <div className="nodeModalBody">
-              <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} />
+              <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />
             </div>
           </section>
         </div>
@@ -942,6 +946,7 @@ export function NodesPage({
           onDone={onDoneAddNode}
           onCreate={onCreateNode}
           onCopy={onCopy}
+          formatDate={formatDate}
         />
       )}
     </section>

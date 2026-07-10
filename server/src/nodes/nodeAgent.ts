@@ -202,8 +202,13 @@ function runtimeConfigHash(server: ManagedServer) {
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
+    timeZone: config.timeZone,
     terminal: minecraftTerminalConfigFingerprint()
   })).digest("hex");
+}
+
+function minecraftContainerEnvironment() {
+  return [...minecraftTerminalContainerConfig().Env, `TZ=${config.timeZone}`];
 }
 
 async function dockerServerRoot(server: ManagedServer) {
@@ -309,13 +314,15 @@ async function createContainer(server: ManagedServer) {
   const binds = [`${root}:/data`];
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts ?? "25565:25565/tcp");
   const command = minecraftContainerCommand(server);
+  const terminalConfig = minecraftTerminalContainerConfig();
   await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(validateDockerContainerName(containerName(server)))}`, {
     Image: image,
     WorkingDir: "/data",
     Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
-    ...minecraftTerminalContainerConfig(),
+    ...terminalConfig,
+    Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
     NetworkingConfig: createNetworkingConfig(await inspectCurrentContainer()),
@@ -1466,6 +1473,7 @@ export const __nodeAgentTestHooks = {
   cleanupPreviousNodeContainers,
   createdServerRecord,
   handleCommand,
+  minecraftContainerEnvironment,
   minecraftContainerCommand,
   selfUpdateContainer
 };
@@ -1538,6 +1546,15 @@ export async function startNodeAgent() {
           console.error(`Node registration rejected: ${message.error ?? "unknown error"}`);
           socket.close();
           return;
+        }
+        if (message.timeZone) {
+          try {
+            new Intl.DateTimeFormat("en-US", { timeZone: message.timeZone }).format(new Date());
+            config.timeZone = message.timeZone;
+            process.env.TZ = message.timeZone;
+          } catch {
+            console.warn(`Panel supplied an invalid time zone (${message.timeZone}); continuing with ${config.timeZone}.`);
+          }
         }
         if (message.nodeSecret) {
           await writeNodeIdentity({ nodeId: message.nodeId, nodeSecret: message.nodeSecret });

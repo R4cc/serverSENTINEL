@@ -31,10 +31,6 @@ function formatRate(bytesPerSecond?: number) {
   return `${(bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`;
 }
 
-function formatChartTime(sampledAt: number) {
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(sampledAt));
-}
-
 type ChartPoint = {
   sampledAt: number;
   time: string;
@@ -94,13 +90,15 @@ function ResourceChart({
   value,
   tone = "blue",
   emptyLabel = "No history yet",
-  formatValue = (item) => item.toFixed(1)
+  formatValue = (item) => item.toFixed(1),
+  formatTime
 }: {
   samples: ResourceSample[];
   value: (sample: ResourceSample, index: number, samples: ResourceSample[]) => number;
   tone?: "blue" | "green";
   emptyLabel?: string;
   formatValue?: (value: number) => string;
+  formatTime: (value: string | number | Date) => string;
 }) {
   const validSamples = samples.filter((sample) => sample.available && sample.running);
   const compact = useCompactResourceChart();
@@ -114,7 +112,7 @@ function ResourceChart({
     if (prev && sample.sampledAt - prev.sampledAt > 15000) {
       points.push({
         sampledAt: prev.sampledAt + 5000,
-        time: formatChartTime(prev.sampledAt + 5000),
+        time: formatTime(prev.sampledAt + 5000),
         value: null
       });
     }
@@ -122,7 +120,7 @@ function ResourceChart({
     const val = value(sample, i, validSamples);
     points.push({
       sampledAt: sample.sampledAt,
-      time: formatChartTime(sample.sampledAt),
+      time: formatTime(sample.sampledAt),
       value: Number.isFinite(val) ? val : null
     });
   }
@@ -170,13 +168,15 @@ export function ResourcePanel({
   samples,
   status,
   dockerSocketMounted,
-  formatNumber
+  formatNumber,
+  formatTime
 }: {
   server: ManagedServer;
   samples: ResourceSample[];
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   formatNumber: (value: number) => string;
+  formatTime: (value: string | number | Date) => string;
 }) {
   const [graphScope, setGraphScope] = useState<ResourceGraphScope>("5m");
   const latest = samples.at(-1);
@@ -239,7 +239,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${formatNumber(Math.round(memoryUsage / 1024 / 1024))} MB / ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB` : statsUnavailableLabel}</strong>
             <small>{hasStats ? `${memoryPercent.toFixed(1)}%` : `Configured limit ${formatNumber(Math.round(configuredMemoryBytes / 1024 / 1024))} MB`}</small>
           </div>
-          <ResourceChart samples={scopedSamples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={scopedSamples} value={(sample) => sample.memoryUsageBytes / 1024 / 1024} formatValue={(value) => `${formatNumber(Math.round(value))} MB`} formatTime={formatTime} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -247,7 +247,7 @@ export function ResourcePanel({
             <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
             <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
           </div>
-          <ResourceChart samples={scopedSamples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={scopedSamples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} formatTime={formatTime} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
@@ -265,6 +265,7 @@ export function ResourcePanel({
             }}
             tone="green"
             formatValue={formatRate}
+            formatTime={formatTime}
             emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel}
           />
         </div>

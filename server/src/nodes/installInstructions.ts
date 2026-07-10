@@ -27,6 +27,7 @@ export function buildNodeInstallInstructions(input: {
   joinToken?: string;
   dataMount?: string;
   nodeName?: string;
+  timeZone: string;
 }): NodeInstallInstructions {
   const panelUrl = input.panelUrl?.trim() || `http://<panel-host>:${input.defaultPanelPort}`;
   const { mount: dataMount, hostSource, containerTarget } = nodeDataMountParts(input.dataMount);
@@ -36,7 +37,8 @@ export function buildNodeInstallInstructions(input: {
     SS_MODE: "node",
     SS_PANEL_URL: panelUrl,
     SERVERSENTINEL_DATA_DIR: containerTarget,
-    SERVERSENTINEL_DOCKER_DATA_DIR: hostSource
+    SERVERSENTINEL_DOCKER_DATA_DIR: hostSource,
+    TZ: input.timeZone
   };
   if (nodeName) {
     environment.SS_NODE_NAME = nodeName;
@@ -58,6 +60,6 @@ export function buildNodeInstallInstructions(input: {
       environment,
       volumes: [dockerSocketMount, dataMount]
     },
-    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped --env SS_MODE=node --env SS_PANEL_URL=${shellQuote(panelUrl)} --env SERVERSENTINEL_DATA_DIR=${shellQuote(containerTarget)} --env SERVERSENTINEL_DOCKER_DATA_DIR=${shellQuote(hostSource)}${nodeName ? ` --env SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` --env SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} --volume ${shellQuote(dockerSocketMount)} --volume ${shellQuote(dataMount)} ${input.image}`
+    dockerRun: `docker run -d --name serversentinel-node --restart unless-stopped --env SS_MODE=node --env SS_PANEL_URL=${shellQuote(panelUrl)} --env SERVERSENTINEL_DATA_DIR=${shellQuote(containerTarget)} --env SERVERSENTINEL_DOCKER_DATA_DIR=${shellQuote(hostSource)} --env TZ=${shellQuote(input.timeZone)}${nodeName ? ` --env SS_NODE_NAME=${shellQuote(nodeName)}` : ""}${input.joinToken ? ` --env SS_JOIN_TOKEN=${shellQuote(input.joinToken)}` : ""} --volume ${shellQuote(dockerSocketMount)} --volume ${shellQuote(dataMount)} ${input.image}`
   };
 }

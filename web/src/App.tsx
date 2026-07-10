@@ -4,7 +4,7 @@ import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
-import { minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { formatTimestampForFilename, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
@@ -454,10 +454,15 @@ export default function App() {
   const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
   const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
   const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
 
   function formatDisplayDate(value: string | number | Date) {
     return dateTimeFormatter.format(new Date(value));
+  }
+
+  function formatDisplayTime(value: string | number | Date) {
+    return timeFormatter.format(new Date(value));
   }
 
   const filesWorkspace = useFilesWorkspace({
@@ -1428,7 +1433,7 @@ export default function App() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "server";
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const timestamp = formatTimestampForFilename(new Date(), runtimeTimeZone);
     const filename = `${safeServerName}-console-${timestamp}.log`;
     const blob = new Blob([logs.join("")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -2760,6 +2765,7 @@ export default function App() {
                   status={activeStatus}
                   dockerSocketMounted={activeServerDockerSocketMounted}
                   formatNumber={formatDisplayNumber}
+                  formatTime={formatDisplayTime}
                 />
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />

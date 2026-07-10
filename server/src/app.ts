@@ -730,7 +730,7 @@ async function publicNodes(nodes: ManagedNode[], detectedInternalTotalMemory?: n
 }
 
 export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
-  return buildNodeInstallInstructions({ ...input, image: nodeImage, defaultPanelPort: config.port });
+  return buildNodeInstallInstructions({ ...input, image: nodeImage, defaultPanelPort: config.port, timeZone: config.timeZone });
 }
 
 function createJoinToken(ttlMinutesInput?: number) {
@@ -4122,7 +4122,8 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       nodeSecret: issuedSecret,
       protocolVersion: nodeProtocolVersion,
       accepted: true,
-      compatibility: "compatible"
+      compatibility: "compatible",
+      timeZone: config.timeZone
     };
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);

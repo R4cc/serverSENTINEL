@@ -88,6 +88,7 @@ export type PanelWelcome = {
   protocolVersion: string;
   accepted: boolean;
   compatibility: "compatible" | "incompatible";
+  timeZone?: string;
   error?: string;
 };
 

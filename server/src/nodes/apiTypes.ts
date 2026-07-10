@@ -16,6 +16,7 @@ export type NodeInstallInstructions = {
       SS_PANEL_URL: string;
       SERVERSENTINEL_DATA_DIR: string;
       SERVERSENTINEL_DOCKER_DATA_DIR: string;
+      TZ: string;
       SS_NODE_NAME?: string;
       SS_JOIN_TOKEN?: string;
     };

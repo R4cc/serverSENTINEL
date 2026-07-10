@@ -519,10 +519,12 @@ describe("node install instructions", () => {
     expect(install.protocolVersion).toBe("2.0");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DATA_DIR).toBe("/data");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
+    expect(install.dockerCompose.environment.TZ).toBe(process.env.TZ);
     expect(install.dockerCompose.restart).toBe("unless-stopped");
     expect(install.dockerRun).toContain("--restart unless-stopped");
     expect(install.dockerRun).toContain("--env SERVERSENTINEL_DATA_DIR='/data'");
     expect(install.dockerRun).toContain("--env SERVERSENTINEL_DOCKER_DATA_DIR='/var/lib/serversentinel'");
+    expect(install.dockerRun).toContain(`--env TZ='${process.env.TZ}'`);
     expect(install.dockerRun).toContain("--volume '/var/lib/serversentinel:/data'");
   });
 });

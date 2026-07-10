@@ -113,6 +113,10 @@ describe("remote node create and Docker command safety", () => {
     expect(command).toContain("-Dexample=hello world");
     expect(command).toContain("-Xmx4G");
   });
+
+  it("passes the configured time zone to managed Minecraft containers", () => {
+    expect(hooks.minecraftContainerEnvironment()).toContain(`TZ=${process.env.TZ}`);
+  });
 });
 
 describe("remote node file operation safety", () => {
