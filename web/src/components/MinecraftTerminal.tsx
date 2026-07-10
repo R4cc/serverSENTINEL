@@ -5,7 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
-  deletePreviousTerminalWord,
+  deletePreviousTerminalWordAtCursor,
   minecraftFormattingToAnsi,
   recallNextCommand,
   recallPreviousCommand,
@@ -37,6 +37,7 @@ export function MinecraftTerminal({
   const commandHistoryRef = useRef(commandHistory);
   const onCommandRef = useRef(onCommand);
   const inputRef = useRef("");
+  const inputCursorRef = useRef(0);
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
   const promptVisibleRef = useRef(false);
@@ -133,6 +134,7 @@ export function MinecraftTerminal({
       clearPromptLine();
       promptVisibleRef.current = false;
       inputRef.current = "";
+      inputCursorRef.current = 0;
       historyIndexRef.current = null;
       historyDraftRef.current = "";
     }
@@ -178,8 +180,10 @@ export function MinecraftTerminal({
       return;
     }
     if (data === "\x7f") {
-      if (!inputRef.current) return;
-      inputRef.current = inputRef.current.slice(0, -1);
+      if (!inputCursorRef.current) return;
+      const cursor = inputCursorRef.current;
+      inputRef.current = inputRef.current.slice(0, cursor - 1) + inputRef.current.slice(cursor);
+      inputCursorRef.current = cursor - 1;
       resetHistoryDraft();
       renderInputLine();
       return;
@@ -192,6 +196,14 @@ export function MinecraftTerminal({
       applyHistoryState(recallNextCommand(commandHistoryRef.current, currentHistoryState()));
       return;
     }
+    if (data === "\x1b[D" || data === "\x1bOD") {
+      moveCursor(-1);
+      return;
+    }
+    if (data === "\x1b[C" || data === "\x1bOC") {
+      moveCursor(1);
+      return;
+    }
     if (data.startsWith("\x1b")) return;
 
     insertPrintableText(data);
@@ -202,6 +214,7 @@ export function MinecraftTerminal({
     clearPromptLine();
     promptVisibleRef.current = false;
     inputRef.current = "";
+    inputCursorRef.current = 0;
     historyIndexRef.current = null;
     historyDraftRef.current = "";
 
@@ -217,16 +230,26 @@ export function MinecraftTerminal({
   function insertPrintableText(data: string) {
     const printable = [...data].filter((char) => char >= " " && char !== "\x7f").join("");
     if (!printable) return;
-    inputRef.current += printable;
+    const cursor = inputCursorRef.current;
+    inputRef.current = inputRef.current.slice(0, cursor) + printable + inputRef.current.slice(cursor);
+    inputCursorRef.current = cursor + printable.length;
     resetHistoryDraft();
     renderInputLine();
   }
 
   function deletePreviousWord() {
-    const nextInput = deletePreviousTerminalWord(inputRef.current);
-    if (nextInput === inputRef.current) return;
-    inputRef.current = nextInput;
+    const nextState = deletePreviousTerminalWordAtCursor(inputRef.current, inputCursorRef.current);
+    if (nextState.value === inputRef.current) return;
+    inputRef.current = nextState.value;
+    inputCursorRef.current = nextState.cursor;
     resetHistoryDraft();
+    renderInputLine();
+  }
+
+  function moveCursor(direction: -1 | 1) {
+    const nextCursor = Math.max(0, Math.min(inputRef.current.length, inputCursorRef.current + direction));
+    if (nextCursor === inputCursorRef.current) return;
+    inputCursorRef.current = nextCursor;
     renderInputLine();
   }
 
@@ -235,6 +258,7 @@ export function MinecraftTerminal({
     terminalRef.current.write(`\r\x1b[2K${inputRef.current}^C\r\n`);
     promptVisibleRef.current = false;
     inputRef.current = "";
+    inputCursorRef.current = 0;
     resetHistoryDraft();
     writePrompt();
   }
@@ -254,6 +278,7 @@ export function MinecraftTerminal({
 
   function applyHistoryState(state: TerminalHistoryState) {
     inputRef.current = state.value;
+    inputCursorRef.current = state.value.length;
     historyIndexRef.current = state.historyIndex;
     historyDraftRef.current = state.draft;
     renderInputLine();
@@ -308,6 +333,8 @@ export function MinecraftTerminal({
     if (!terminalRef.current) return;
     promptVisibleRef.current = true;
     terminalRef.current.write(`\r\x1b[2K${prompt}${inputRef.current}`);
+    const charactersAfterCursor = inputRef.current.length - inputCursorRef.current;
+    if (charactersAfterCursor) terminalRef.current.write(`\x1b[${charactersAfterCursor}D`);
     terminalRef.current.scrollToBottom();
   }
 

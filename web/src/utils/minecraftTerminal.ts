@@ -30,9 +30,17 @@ export function appendCommandHistory(history: string[], command: string) {
 }
 
 export function deletePreviousTerminalWord(value: string) {
-  const withoutTrailingWhitespace = value.replace(/\s+$/, "");
-  if (!withoutTrailingWhitespace) return "";
-  return withoutTrailingWhitespace.replace(/\S+$/, "");
+  return deletePreviousTerminalWordAtCursor(value, value.length).value;
+}
+
+export function deletePreviousTerminalWordAtCursor(value: string, cursor: number) {
+  const beforeCursor = value.slice(0, cursor);
+  const afterCursor = value.slice(cursor);
+  const retainedBeforeCursor = beforeCursor.replace(/\s+$/, "").replace(/\S+$/, "");
+  return {
+    value: retainedBeforeCursor + afterCursor,
+    cursor: retainedBeforeCursor.length
+  };
 }
 
 export function recallPreviousCommand(history: string[], state: TerminalHistoryState): TerminalHistoryState {

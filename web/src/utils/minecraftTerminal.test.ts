@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendCommandHistory,
   deletePreviousTerminalWord,
+  deletePreviousTerminalWordAtCursor,
   minecraftFormattingToAnsi,
   recallNextCommand,
   recallPreviousCommand,
@@ -35,6 +36,13 @@ describe("Minecraft terminal helpers", () => {
     expect(deletePreviousTerminalWord("say hello   ")).toBe("say ");
     expect(deletePreviousTerminalWord("single")).toBe("");
     expect(deletePreviousTerminalWord("   ")).toBe("");
+  });
+
+  it("deletes the word before the cursor without changing text after it", () => {
+    expect(deletePreviousTerminalWordAtCursor("say hello world", 9)).toEqual({
+      value: "say  world",
+      cursor: 4
+    });
   });
 
   it("converts Minecraft formatting codes into ANSI SGR sequences for xterm", () => {
