@@ -36,6 +36,7 @@ type NodeContainerInspect = {
   State?: { Status?: string; Running?: boolean; StartedAt?: string; FinishedAt?: string; Health?: { Status?: string } };
   Config?: Record<string, unknown> & {
     Image?: string;
+    Env?: string[];
     Labels?: Record<string, string>;
     OpenStdin?: boolean;
     AttachStdin?: boolean;
@@ -819,6 +820,7 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
   const configBody = {
     ...inspect.Config,
     Image: image,
+    Env: withoutBuildMetadataEnvironment(inspect.Config?.Env),
     Hostname: undefined,
     Domainname: undefined,
     MacAddress: undefined,
@@ -832,6 +834,23 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
   await verifyUpdatedNodeContainer(currentName);
   await cleanupPreviousNodeContainers(currentName, oldName);
   await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "healthy", cleanup: "previous-container-removed" }, null, 2)}\n`, "utf8");
+}
+
+const buildMetadataEnvironmentNames = new Set([
+  "SERVERSENTINEL_BUILD_ID",
+  "SS_BUILD_ID",
+  "GITHUB_SHA",
+  "COMMIT_SHA",
+  "SOURCE_COMMIT",
+  "RAILWAY_GIT_COMMIT_SHA"
+]);
+
+function withoutBuildMetadataEnvironment(environment?: string[]) {
+  return environment?.filter((entry) => {
+    const separator = entry.indexOf("=");
+    const name = separator === -1 ? entry : entry.slice(0, separator);
+    return !buildMetadataEnvironmentNames.has(name);
+  });
 }
 
 async function verifyUpdatedNodeContainer(currentName: string) {

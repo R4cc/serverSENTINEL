@@ -255,6 +255,16 @@ describe("node self-update container cleanup", () => {
       State: { Running: true, Status: "running" },
       Config: {
         Image: "nl2109/serversentinel:old",
+        Env: [
+          "SS_MODE=node",
+          "SS_PANEL_URL=https://panel.example.test",
+          "SERVERSENTINEL_BUILD_ID=old-primary-build",
+          "SS_BUILD_ID=old-short-build",
+          "GITHUB_SHA=old-github-build",
+          "COMMIT_SHA=old-commit-build",
+          "SOURCE_COMMIT=old-source-build",
+          "RAILWAY_GIT_COMMIT_SHA=old-railway-build"
+        ],
         Labels: { "serversentinel.test": "true" }
       },
       HostConfig: {},
@@ -281,6 +291,15 @@ describe("node self-update container cleanup", () => {
     await hooks.selfUpdateContainer(nodeInspect(), "nl2109/serversentinel:new", "serversentinel-node", join(tempRoot, "plan.json"));
 
     expect(mockDockerRequest).toHaveBeenCalledWith("POST", expect.stringMatching(/^\/containers\/old-node-id\/rename\?name=serversentinel-node-previous-\d+$/), 204);
+    expect(mockDockerJsonRequest).toHaveBeenCalledWith(
+      "POST",
+      "/containers/create?name=serversentinel-node",
+      expect.objectContaining({
+        Image: "nl2109/serversentinel:new",
+        Env: ["SS_MODE=node", "SS_PANEL_URL=https://panel.example.test"]
+      }),
+      201
+    );
     expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-node/start", 204);
     expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", expect.stringMatching(/^\/containers\/serversentinel-node-previous-\d+\?force=1&v=1$/), [204, 404]);
     expect(mockDockerRequest).not.toHaveBeenCalledWith("POST", expect.stringContaining("/stop?t=10"), expect.anything());
