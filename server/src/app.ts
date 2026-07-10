@@ -4594,6 +4594,16 @@ async function resolveZipArchive(runtime: NodeRuntime, server: ManagedServer, pa
   return target;
 }
 
+async function resolveArchiveDestination(runtime: NodeRuntime, server: ManagedServer, path?: string) {
+  const destinationPath = path ?? "";
+  try {
+    return await runtime.resolveExistingPath(server, destinationPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return runtime.resolveWritablePath(server, destinationPath);
+  }
+}
+
 function requireNoRunningFileExtraction(serverId: string) {
   const running = [
     ...operationsRepository.list({ serverId, status: "queued", limit: 25 }),
@@ -4703,7 +4713,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const runtime = runtimeForServer(server);
   const archive = await resolveZipArchive(runtime, server, request.body.path);
   await requireFilePathPermission(request, server, archive, "files.view");
-  const destination = await runtime.resolveWritableResolvedPath(server, request.body.destinationPath ?? "");
+  const destination = await resolveArchiveDestination(runtime, server, request.body.destinationPath);
   const plan = await runtime.planArchiveExtraction(server, archive, destination);
   await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
   return plan;
@@ -4714,7 +4724,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const runtime = runtimeForServer(server);
   const archive = await resolveZipArchive(runtime, server, request.body.path);
   await requireFilePathPermission(request, server, archive, "files.view");
-  const destination = await runtime.resolveWritableResolvedPath(server, request.body.destinationPath ?? "");
+  const destination = await resolveArchiveDestination(runtime, server, request.body.destinationPath);
   const conflictPolicy = request.body.conflictPolicy;
   if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
   const plan = await runtime.planArchiveExtraction(server, archive, destination);
