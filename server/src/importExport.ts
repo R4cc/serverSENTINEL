@@ -349,11 +349,22 @@ function assertSchedules(value: unknown, label: string) {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const [index, schedule] of value.entries()) {
     if (!isPlainObject(schedule)) throw new Error(`${label}[${index}] must be a JSON object`);
-    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "commands", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
+    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "commands", "commandDelaysMinutes", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
     stringValue(schedule.id, `${label}[${index}].id`);
     stringValue(schedule.name, `${label}[${index}].name`);
     stringValue(schedule.cron, `${label}[${index}].cron`);
     stringArray(schedule.commands, `${label}[${index}].commands`);
+    if (schedule.commandDelaysMinutes !== undefined) {
+      const commandCount = Array.isArray(schedule.commands) ? schedule.commands.length : 0;
+      if (!Array.isArray(schedule.commandDelaysMinutes) || schedule.commandDelaysMinutes.length !== commandCount) {
+        throw new Error(`${label}[${index}].commandDelaysMinutes must contain one delay for every command`);
+      }
+      for (const [delayIndex, delay] of schedule.commandDelaysMinutes.entries()) {
+        if (!Number.isInteger(delay) || delay < 0 || delay > 10_080) {
+          throw new Error(`${label}[${index}].commandDelaysMinutes[${delayIndex}] must be a whole number from 0 to 10080`);
+        }
+      }
+    }
     booleanValue(schedule.onlyWhenNoPlayers, `${label}[${index}].onlyWhenNoPlayers`);
     booleanValue(schedule.enabled, `${label}[${index}].enabled`);
     stringValue(schedule.createdAt, `${label}[${index}].createdAt`);

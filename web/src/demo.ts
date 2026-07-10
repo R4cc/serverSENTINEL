@@ -9,6 +9,7 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
   name: "Nightly backup",
   cron: "0 4 * * *",
   commands: ["save-all", "say Backup complete"],
+  commandDelaysMinutes: [0, 0],
   onlyWhenNoPlayers: true,
   enabled: true,
   createdAt: new Date(demoStartedAt - 86_400_000).toISOString(),

@@ -30,7 +30,8 @@ import {
   publicInstalledModsResult,
   assertDownloadSize,
   fileDownloadIntentMode,
-  dedupeDownloadSelections
+  dedupeDownloadSelections,
+  sanitizeCommandDelays
 } from "./app.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
@@ -52,6 +53,22 @@ function testRuntimeProfile() {
     resolvedAt: new Date().toISOString()
   };
 }
+
+describe("scheduled command delays", () => {
+  it("defaults legacy schedules to immediate commands", () => {
+    expect(sanitizeCommandDelays(undefined, 2)).toEqual([0, 0]);
+  });
+
+  it("accepts an aligned whole-minute delay list", () => {
+    expect(sanitizeCommandDelays([0, 5], 2)).toEqual([0, 5]);
+  });
+
+  it("rejects missing, fractional, and excessive delay values", () => {
+    expect(() => sanitizeCommandDelays([0], 2)).toThrow(/every scheduled command/);
+    expect(() => sanitizeCommandDelays([0, 1.5], 2)).toThrow(/whole minutes/);
+    expect(() => sanitizeCommandDelays([0, 10_081], 2)).toThrow(/whole minutes/);
+  });
+});
 
 async function streamToBuffer(stream: NodeJS.ReadableStream) {
   const chunks: Buffer[] = [];

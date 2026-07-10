@@ -18,7 +18,7 @@ type ScheduleFormMode =
   | { type: "create" }
   | { type: "edit"; schedule: ScheduledExecution };
 
-type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "onlyWhenNoPlayers" | "enabled">;
+type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "commandDelaysMinutes" | "onlyWhenNoPlayers" | "enabled">;
 
 export function SchedulePage({
   schedules,
@@ -103,10 +103,16 @@ export function SchedulePage({
   }, [schedules, recentRunsKey]);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
+    const delayValues = form.getAll("commandDelaysMinutes").map(Number);
+    const commandRows = form.getAll("commands").map(String).map((command, index) => ({
+      command: command.trim(),
+      delayMinutes: delayValues[index] ?? 0
+    })).filter((row) => Boolean(row.command));
     return {
       name: String(form.get("name") ?? "").trim(),
       cron: String(form.get("cron") ?? "").trim(),
-      commands: form.getAll("commands").map(String).map((command) => command.trim()).filter(Boolean),
+      commands: commandRows.map((row) => row.command),
+      commandDelaysMinutes: commandRows.map((row) => row.delayMinutes),
       onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
       enabled: form.get("enabled") === "on"
     };
@@ -310,6 +316,24 @@ export function SchedulePage({
                     {commandIds.map((id, index) => (
                       <div key={id} className="commandInputRow">
                         <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
+                        {index === 0 ? (
+                          <input name="commandDelaysMinutes" type="hidden" value="0" />
+                        ) : (
+                          <label className="scheduleCommandDelay">
+                            <span>Delay</span>
+                            <input
+                              name="commandDelaysMinutes"
+                              type="number"
+                              min="0"
+                              max="10080"
+                              step="1"
+                              defaultValue={modalSchedule?.commandDelaysMinutes[index] ?? 0}
+                              required
+                              aria-label={`Delay before command ${index + 1} in minutes`}
+                            />
+                            <span>min</span>
+                          </label>
+                        )}
                         {index > 0 && (
                           <Button variant="ghost" iconOnly className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
                             <AppIcon name="x" />
@@ -365,7 +389,10 @@ function scheduleRuns(schedules: ScheduledExecution[]) {
 }
 
 function scheduleDescription(schedule: ScheduledExecution) {
-  if (schedule.commands.length > 1) return `${schedule.commands.length} console commands`;
+  if (schedule.commands.length > 1) {
+    const delayedCommands = schedule.commandDelaysMinutes.filter((delay) => delay > 0).length;
+    return `${schedule.commands.length} console commands${delayedCommands ? `, ${delayedCommands} delayed` : ""}`;
+  }
   if (schedule.commands[0]) return schedule.commands[0];
   return schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Console command automation";
 }

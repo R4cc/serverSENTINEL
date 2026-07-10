@@ -1923,7 +1923,13 @@ export default function App() {
     const form = new FormData(formElement);
     const scheduleName = trimFormValue(form, "name");
     const cron = trimFormValue(form, "cron");
-    const commands = form.getAll("commands").map(String);
+    const delayValues = form.getAll("commandDelaysMinutes").map(Number);
+    const commandRows = form.getAll("commands").map(String).map((command, index) => ({
+      command: command.trim(),
+      delayMinutes: delayValues[index] ?? 0
+    })).filter((row) => Boolean(row.command));
+    const commands = commandRows.map((row) => row.command);
+    const commandDelaysMinutes = commandRows.map((row) => row.delayMinutes);
     const scheduleErrors = [
       scheduleName ? null : { field: "name", message: "Schedule name is required." },
       validateCronExpression(cron) ? { field: "cron", message: validateCronExpression(cron)! } : null,
@@ -1941,7 +1947,8 @@ export default function App() {
         id: clientId(),
         name: scheduleName,
         cron,
-        commands: commands.map((command) => command.trim()).filter(Boolean),
+        commands,
+        commandDelaysMinutes,
         onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
         enabled: form.get("enabled") === "on",
         createdAt: new Date().toISOString(),
@@ -1961,6 +1968,7 @@ export default function App() {
           name: form.get("name"),
           cron,
           commands,
+          commandDelaysMinutes,
           onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
           enabled: form.get("enabled") === "on"
         })
@@ -2003,6 +2011,7 @@ export default function App() {
           name: next.name,
           cron: next.cron,
           commands: next.commands,
+          commandDelaysMinutes: next.commandDelaysMinutes,
           onlyWhenNoPlayers: next.onlyWhenNoPlayers,
           enabled: next.enabled
         })

@@ -268,6 +268,7 @@ export type ScheduledExecution = {
   name: string;
   cron: string;
   commands: string[];
+  commandDelaysMinutes: number[];
   onlyWhenNoPlayers: boolean;
   enabled: boolean;
   createdAt: string;

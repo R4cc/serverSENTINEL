@@ -1026,11 +1026,13 @@ export function publicInstalledModsResult(result: unknown) {
 
 function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
+  const commands = sanitizeCommands(asArray(schedule.commands, "schedule.commands"));
   return {
     id: validateScheduleId(schedule.id),
     name: requiredString(schedule.name, "schedule.name"),
     cron: requiredString(schedule.cron, "schedule.cron"),
-    commands: sanitizeCommands(asArray(schedule.commands, "schedule.commands")),
+    commands,
+    commandDelaysMinutes: sanitizeCommandDelays(schedule.commandDelaysMinutes, commands.length),
     onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
     enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
     createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
@@ -1935,6 +1937,28 @@ function sanitizeCommands(commands: unknown) {
     throw new Error("Scheduled commands must be one line each");
   }
   return clean;
+}
+
+const maximumCommandDelayMinutes = 10_080;
+
+export function sanitizeCommandDelays(delays: unknown, commandCount: number) {
+  if (delays === undefined) return Array<number>(commandCount).fill(0);
+  if (!Array.isArray(delays) || delays.length !== commandCount) {
+    throw new Error("A delay in minutes is required for every scheduled command");
+  }
+  return delays.map((delay) => {
+    if (!Number.isInteger(delay) || delay < 0 || delay > maximumCommandDelayMinutes) {
+      throw new Error(`Scheduled command delays must be whole minutes between 0 and ${maximumCommandDelayMinutes}`);
+    }
+    return delay;
+  });
+}
+
+function waitForCommandDelay(minutes: number) {
+  if (minutes === 0) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, minutes * 60_000).unref();
+  });
 }
 
 function dockerContainerName(server: ManagedServer) {
@@ -3298,6 +3322,7 @@ function scheduleFromBody(body: {
   name?: string;
   cron?: string;
   commands?: unknown;
+  commandDelaysMinutes?: unknown;
   onlyWhenNoPlayers?: boolean;
   enabled?: boolean;
 }, existing?: ScheduledExecution): ScheduledExecution {
@@ -3310,12 +3335,14 @@ function scheduleFromBody(body: {
     throw new Error("Cron schedule is required");
   }
   validateCron(cron);
+  const commands = sanitizeCommands(body.commands);
   const now = new Date().toISOString();
   return {
     id: existing?.id ?? randomUUID(),
     name,
     cron,
-    commands: sanitizeCommands(body.commands),
+    commands,
+    commandDelaysMinutes: sanitizeCommandDelays(body.commandDelaysMinutes, commands.length),
     onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
     enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
@@ -3348,7 +3375,8 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       }
     }
 
-    for (const command of schedule.commands) {
+    for (const [index, command] of schedule.commands.entries()) {
+      await waitForCommandDelay(schedule.commandDelaysMinutes[index] ?? 0);
       await runtime.sendConsoleCommand(server, command);
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
@@ -3361,6 +3389,42 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
 
 const runningSchedules = new Set<string>();
 
+async function executeMatchedSchedule(server: ManagedServer, schedule: ScheduledExecution) {
+  logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
+  const operation = operationsRepository.create({
+    type: "schedule.run",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    task: `Running schedule ${schedule.name}`,
+    progress: 0
+  });
+  operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
+  const result = await runScheduledExecution(server, schedule);
+  const ranAt = new Date().toISOString();
+  const run: ScheduledRun = {
+    id: randomUUID(),
+    scheduleId: schedule.id,
+    scheduleName: schedule.name,
+    status: result.status,
+    message: result.message,
+    ranAt
+  };
+  serversRepository.recordScheduledRun(server.id, schedule.id, run);
+  if (result.status === "failed") {
+    operationsRepository.fail(operation.id, result.message, {
+      progress: 100,
+      task: "Schedule run failed",
+      result: { scheduleId: schedule.id, run }
+    });
+  } else {
+    operationsRepository.succeed(operation.id, {
+      progress: 100,
+      task: result.status === "skipped" ? "Schedule run skipped" : "Schedule run complete",
+      result: { scheduleId: schedule.id, run }
+    });
+  }
+}
+
 async function tickSchedules() {
   const now = new Date();
   const runKey = now.toISOString().slice(0, 16);
@@ -3368,7 +3432,7 @@ async function tickSchedules() {
   for (const server of servers) {
     for (const schedule of server.schedules ?? []) {
       if (!schedule.enabled) continue;
-      const key = `${server.id}:${schedule.id}:${runKey}`;
+      const key = `${server.id}:${schedule.id}`;
       if (runningSchedules.has(key) || schedule.lastRunAt?.startsWith(runKey)) continue;
       try {
         if (!cronMatches(schedule.cron, now)) continue;
@@ -3378,46 +3442,13 @@ async function tickSchedules() {
       }
 
       runningSchedules.add(key);
-      try {
-        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
-        const operation = operationsRepository.create({
-          type: "schedule.run",
-          serverId: server.id,
-          nodeId: server.nodeId,
-          task: `Running schedule ${schedule.name}`,
-          progress: 0
-        });
-        operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
-        const result = await runScheduledExecution(server, schedule);
-        const ranAt = new Date().toISOString();
-        const run: ScheduledRun = {
-          id: randomUUID(),
-          scheduleId: schedule.id,
-          scheduleName: schedule.name,
-          status: result.status,
-          message: result.message,
-          ranAt
-        };
-        serversRepository.recordScheduledRun(server.id, schedule.id, run);
-        if (result.status === "failed") {
-          operationsRepository.fail(operation.id, result.message, {
-            progress: 100,
-            task: "Schedule run failed",
-            result: { scheduleId: schedule.id, run }
-          });
-        } else {
-          operationsRepository.succeed(operation.id, {
-            progress: 100,
-            task: result.status === "skipped" ? "Schedule run skipped" : "Schedule run complete",
-            result: { scheduleId: schedule.id, run }
-          });
-        }
-      } finally {
-        runningSchedules.delete(key);
-      }
+      void executeMatchedSchedule(server, schedule)
+        .catch((error) => {
+          logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
+        })
+        .finally(() => runningSchedules.delete(key));
     }
   }
-
 }
 
 async function localUpdateServer(serverId: string, input: unknown) {
@@ -4486,7 +4517,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request
 
 app.post<{
   Params: { id: string };
-  Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);
@@ -4498,7 +4529,7 @@ app.post<{
 
 app.put<{
   Params: { id: string; scheduleId: string };
-  Body: { name?: string; cron?: string; commands?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);

@@ -11,13 +11,30 @@
 
 .commandInputRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, auto) 44px;
   gap: var(--space-2);
   align-items: center;
 }
 
 .commandInputRow:first-of-type {
   grid-template-columns: 1fr;
+}
+
+.scheduleCommandDelay {
+  display: grid !important;
+  grid-template-columns: auto 64px auto;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.scheduleCommandDelay input {
+  min-width: 0;
+  width: 64px;
 }
 
 .portBindingsEditor {
@@ -590,6 +607,18 @@
   display: grid;
   gap: var(--space-2);
   padding-right: 2px;
+}
+
+@media (max-width: 600px) {
+  .scheduleCommandList .commandInputRow:not(:first-of-type) {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .scheduleCommandList .scheduleCommandDelay {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: start;
+  }
 }
 
 

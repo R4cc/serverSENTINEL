@@ -242,6 +242,15 @@ const migrations: readonly Migration[] = [
         ALTER TABLE nodes ADD COLUMN build_id TEXT
       `);
     }
+  },
+  {
+    version: 10,
+    name: "schedule-command-delays",
+    up(database) {
+      database.exec(`
+        ALTER TABLE schedules ADD COLUMN command_delays_json TEXT NOT NULL DEFAULT '[]'
+      `);
+    }
   }
 ];
 
