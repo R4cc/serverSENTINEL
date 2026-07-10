@@ -35,4 +35,13 @@ describe("Docker log decoding", () => {
     expect(stripDockerLogHeaders(raw)).toEqual(raw);
     expect(decoder.write(raw)).toEqual(raw);
   });
+
+  it("preserves ANSI sequences split across raw TTY chunks", () => {
+    const decoder = new DockerLogDecoder();
+    const first = Buffer.from("\x1b[38;2;24;", "utf8");
+    const second = Buffer.from("166;255mLuckPerms\x1b[0m\n", "utf8");
+
+    expect(Buffer.concat([decoder.write(first), decoder.write(second)]).toString("utf8"))
+      .toBe("\x1b[38;2;24;166;255mLuckPerms\x1b[0m\n");
+  });
 });

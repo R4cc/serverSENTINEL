@@ -54,6 +54,7 @@ import {
   runtimeTarget,
   type ServerJarProvider
 } from "./runtime/profile.js";
+import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "./runtime/terminal.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { queryMinecraftServer } from "./minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
@@ -2046,7 +2047,7 @@ function dockerRuntimeConfigHash(server: ManagedServer) {
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
-    tty: true,
+    terminal: minecraftTerminalConfigFingerprint(),
     restartPolicy: "unless-stopped"
   })).digest("hex");
 }
@@ -2131,7 +2132,7 @@ async function ensureDockerContainer(server: ManagedServer) {
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        Tty: true,
+        ...minecraftTerminalContainerConfig(),
         ExposedPorts: exposedPorts,
         HostConfig: {
           Privileged: false,

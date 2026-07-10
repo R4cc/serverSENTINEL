@@ -148,6 +148,27 @@ export function minecraftFormattingToAnsi(text: string) {
   return output;
 }
 
+export class MinecraftLogStreamDecoder {
+  private pending = "";
+
+  write(chunk: string) {
+    const text = this.pending + chunk;
+    const lastLineFeed = text.lastIndexOf("\n");
+    if (lastLineFeed === -1) {
+      this.pending = text;
+      return "";
+    }
+
+    const complete = text.slice(0, lastLineFeed + 1);
+    this.pending = text.slice(lastLineFeed + 1);
+    return minecraftFormattingToAnsi(complete).replace(/\r?\n/g, "\r\n");
+  }
+
+  reset() {
+    this.pending = "";
+  }
+}
+
 function isHexColor(value: string) {
   return /^[0-9a-fA-F]{6}$/.test(value);
 }

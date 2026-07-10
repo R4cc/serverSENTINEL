@@ -7,7 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import {
   deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWordAtCursor,
-  minecraftFormattingToAnsi,
+  MinecraftLogStreamDecoder,
   nextTerminalWordBoundary,
   previousTerminalWordBoundary,
   recallNextCommand,
@@ -41,6 +41,7 @@ export function MinecraftTerminal({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const previousEntriesRef = useRef<string[]>([]);
+  const logDecoderRef = useRef(new MinecraftLogStreamDecoder());
   const canSendCommandsRef = useRef(canSendCommands);
   const commandHistoryRef = useRef(commandHistory);
   const onCommandRef = useRef(onCommand);
@@ -386,6 +387,7 @@ export function MinecraftTerminal({
     const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
     if (diff.reset) {
       terminal.reset();
+      logDecoderRef.current.reset();
       promptVisibleRef.current = false;
     } else if (promptVisibleRef.current) {
       clearPromptLine();
@@ -402,8 +404,8 @@ export function MinecraftTerminal({
   function writeLogChunk(chunk: string) {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    const normalized = minecraftFormattingToAnsi(chunk).replace(/\r?\n/g, "\r\n");
-    terminal.write(normalized.endsWith("\r\n") ? normalized : `${normalized}\r\n`);
+    const decoded = logDecoderRef.current.write(chunk);
+    if (decoded) terminal.write(decoded);
   }
 
   function writePrompt() {

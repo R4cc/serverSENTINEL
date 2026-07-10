@@ -4,6 +4,7 @@ import {
   deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWord,
   deletePreviousTerminalWordAtCursor,
+  MinecraftLogStreamDecoder,
   minecraftFormattingToAnsi,
   nextTerminalWordBoundary,
   previousTerminalWordBoundary,
@@ -66,5 +67,31 @@ describe("Minecraft terminal helpers", () => {
     expect(minecraftFormattingToAnsi("\u00a7aLuckPerms &lOK&r")).toBe("\x1b[38;2;85;255;85mLuckPerms \x1b[1mOK\x1b[0m");
     expect(minecraftFormattingToAnsi("&#18a6ffblue")).toBe("\x1b[38;2;24;166;255mblue");
     expect(minecraftFormattingToAnsi("plain &x")).toBe("plain &x");
+  });
+
+  it("preserves ANSI and legacy formatting split across stream chunks", () => {
+    const ansi = new MinecraftLogStreamDecoder();
+    expect(ansi.write("\x1b[38;5;")).toBe("");
+    expect(ansi.write("82mLuckPerms\x1b[0m")).toBe("");
+    expect(ansi.write("\n")).toBe("\x1b[38;5;82mLuckPerms\x1b[0m\r\n");
+
+    const legacy = new MinecraftLogStreamDecoder();
+    expect(legacy.write("\u00a7")).toBe("");
+    expect(legacy.write("aLuckPerms &")).toBe("");
+    expect(legacy.write("lOK&r\n")).toBe("\x1b[38;2;85;255;85mLuckPerms \x1b[1mOK\x1b[0m\r\n");
+  });
+
+  it("does not invent line endings for partial chunks or duplicate split CRLF", () => {
+    const decoder = new MinecraftLogStreamDecoder();
+    expect(decoder.write("partial")).toBe("");
+    expect(decoder.write(" line\r")).toBe("");
+    expect(decoder.write("\nnext\n")).toBe("partial line\r\nnext\r\n");
+  });
+
+  it("discards pending stream text when reset before a history replay", () => {
+    const decoder = new MinecraftLogStreamDecoder();
+    expect(decoder.write("stale partial")).toBe("");
+    decoder.reset();
+    expect(decoder.write("fresh\n")).toBe("fresh\r\n");
   });
 });

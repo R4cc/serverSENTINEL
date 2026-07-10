@@ -16,6 +16,7 @@ import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatible
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
@@ -201,7 +202,7 @@ function runtimeConfigHash(server: ManagedServer) {
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
-    tty: true
+    terminal: minecraftTerminalConfigFingerprint()
   })).digest("hex");
 }
 
@@ -314,7 +315,7 @@ async function createContainer(server: ManagedServer) {
     Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
-    Tty: true,
+    ...minecraftTerminalContainerConfig(),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
     NetworkingConfig: createNetworkingConfig(await inspectCurrentContainer()),
