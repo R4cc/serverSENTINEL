@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCommandHistory,
+  deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWord,
   deletePreviousTerminalWordAtCursor,
   minecraftFormattingToAnsi,
+  nextTerminalWordBoundary,
+  previousTerminalWordBoundary,
   recallNextCommand,
   recallPreviousCommand,
   type TerminalHistoryState
@@ -41,6 +44,20 @@ describe("Minecraft terminal helpers", () => {
   it("deletes the word before the cursor without changing text after it", () => {
     expect(deletePreviousTerminalWordAtCursor("say hello world", 9)).toEqual({
       value: "say  world",
+      cursor: 4
+    });
+  });
+
+  it("finds PowerShell-style word navigation boundaries", () => {
+    expect(previousTerminalWordBoundary("say hello world", 15)).toBe(10);
+    expect(previousTerminalWordBoundary("say hello   world", 12)).toBe(4);
+    expect(nextTerminalWordBoundary("say hello   world", 4)).toBe(12);
+    expect(nextTerminalWordBoundary("say hello", 9)).toBe(9);
+  });
+
+  it("deletes the next word like terminal Ctrl+Delete", () => {
+    expect(deleteNextTerminalWordAtCursor("say hello   world", 4)).toEqual({
+      value: "say world",
       cursor: 4
     });
   });

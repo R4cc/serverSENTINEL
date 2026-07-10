@@ -5,8 +5,11 @@ import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
+  deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWordAtCursor,
   minecraftFormattingToAnsi,
+  nextTerminalWordBoundary,
+  previousTerminalWordBoundary,
   recallNextCommand,
   recallPreviousCommand,
   type TerminalHistoryState
@@ -18,6 +21,11 @@ type MinecraftTerminalProps = {
   disabledReason: string;
   commandHistory: string[];
   onCommand(command: string): void;
+};
+
+type InputSnapshot = {
+  value: string;
+  cursor: number;
 };
 
 const prompt = "\x1b[38;2;112;208;255m>\x1b[0m ";
@@ -38,6 +46,7 @@ export function MinecraftTerminal({
   const onCommandRef = useRef(onCommand);
   const inputRef = useRef("");
   const inputCursorRef = useRef(0);
+  const undoStackRef = useRef<InputSnapshot[]>([]);
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
   const promptVisibleRef = useRef(false);
@@ -135,22 +144,43 @@ export function MinecraftTerminal({
       promptVisibleRef.current = false;
       inputRef.current = "";
       inputCursorRef.current = 0;
+      undoStackRef.current = [];
       historyIndexRef.current = null;
       historyDraftRef.current = "";
     }
   }, [canSendCommands]);
 
   function handleTerminalKey(event: KeyboardEvent) {
-    if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
+    if (event.type !== "keydown" || event.altKey || event.metaKey) return true;
 
     const key = event.key.toLowerCase();
+    if (event.ctrlKey && key === "c" && terminalRef.current?.hasSelection()) {
+      if (!navigator.clipboard?.writeText) return true;
+      void copySelectedText().catch(() => undefined);
+      return false;
+    }
+
+    if (!canSendCommandsRef.current) return true;
+
+    if (event.key === "Home") {
+      setCursor(0);
+      return false;
+    }
+
+    if (event.key === "End") {
+      setCursor(inputRef.current.length);
+      return false;
+    }
+
+    if (event.key === "Delete") {
+      if (event.ctrlKey) deleteNextWord();
+      else deleteNextCharacter();
+      return false;
+    }
+
+    if (!event.ctrlKey) return true;
+
     if (key === "c") {
-      if (terminalRef.current?.hasSelection()) {
-        if (!navigator.clipboard?.writeText) return true;
-        void copySelectedText().catch(() => undefined);
-        return false;
-      }
-      if (!canSendCommandsRef.current) return true;
       cancelInput();
       return false;
     }
@@ -160,7 +190,22 @@ export function MinecraftTerminal({
     }
 
     if (event.key === "Backspace") {
-      if (canSendCommandsRef.current) deletePreviousWord();
+      deletePreviousWord();
+      return false;
+    }
+
+    if (key === "z") {
+      undoInput();
+      return false;
+    }
+
+    if (event.key === "ArrowLeft") {
+      setCursor(previousTerminalWordBoundary(inputRef.current, inputCursorRef.current));
+      return false;
+    }
+
+    if (event.key === "ArrowRight") {
+      setCursor(nextTerminalWordBoundary(inputRef.current, inputCursorRef.current));
       return false;
     }
 
@@ -181,6 +226,7 @@ export function MinecraftTerminal({
     }
     if (data === "\x7f") {
       if (!inputCursorRef.current) return;
+      rememberInputForUndo();
       const cursor = inputCursorRef.current;
       inputRef.current = inputRef.current.slice(0, cursor - 1) + inputRef.current.slice(cursor);
       inputCursorRef.current = cursor - 1;
@@ -215,6 +261,7 @@ export function MinecraftTerminal({
     promptVisibleRef.current = false;
     inputRef.current = "";
     inputCursorRef.current = 0;
+    undoStackRef.current = [];
     historyIndexRef.current = null;
     historyDraftRef.current = "";
 
@@ -230,6 +277,7 @@ export function MinecraftTerminal({
   function insertPrintableText(data: string) {
     const printable = [...data].filter((char) => char >= " " && char !== "\x7f").join("");
     if (!printable) return;
+    rememberInputForUndo();
     const cursor = inputCursorRef.current;
     inputRef.current = inputRef.current.slice(0, cursor) + printable + inputRef.current.slice(cursor);
     inputCursorRef.current = cursor + printable.length;
@@ -240,14 +288,53 @@ export function MinecraftTerminal({
   function deletePreviousWord() {
     const nextState = deletePreviousTerminalWordAtCursor(inputRef.current, inputCursorRef.current);
     if (nextState.value === inputRef.current) return;
+    rememberInputForUndo();
     inputRef.current = nextState.value;
     inputCursorRef.current = nextState.cursor;
     resetHistoryDraft();
     renderInputLine();
   }
 
+  function deleteNextWord() {
+    const nextState = deleteNextTerminalWordAtCursor(inputRef.current, inputCursorRef.current);
+    if (nextState.value === inputRef.current) return;
+    rememberInputForUndo();
+    inputRef.current = nextState.value;
+    resetHistoryDraft();
+    renderInputLine();
+  }
+
+  function deleteNextCharacter() {
+    const cursor = inputCursorRef.current;
+    if (cursor >= inputRef.current.length) return;
+    rememberInputForUndo();
+    inputRef.current = inputRef.current.slice(0, cursor) + inputRef.current.slice(cursor + 1);
+    resetHistoryDraft();
+    renderInputLine();
+  }
+
+  function rememberInputForUndo() {
+    undoStackRef.current = [
+      ...undoStackRef.current.slice(-99),
+      { value: inputRef.current, cursor: inputCursorRef.current }
+    ];
+  }
+
+  function undoInput() {
+    const snapshot = undoStackRef.current.pop();
+    if (!snapshot) return;
+    inputRef.current = snapshot.value;
+    inputCursorRef.current = snapshot.cursor;
+    resetHistoryDraft();
+    renderInputLine();
+  }
+
   function moveCursor(direction: -1 | 1) {
-    const nextCursor = Math.max(0, Math.min(inputRef.current.length, inputCursorRef.current + direction));
+    setCursor(inputCursorRef.current + direction);
+  }
+
+  function setCursor(cursor: number) {
+    const nextCursor = Math.max(0, Math.min(inputRef.current.length, cursor));
     if (nextCursor === inputCursorRef.current) return;
     inputCursorRef.current = nextCursor;
     renderInputLine();
@@ -259,6 +346,7 @@ export function MinecraftTerminal({
     promptVisibleRef.current = false;
     inputRef.current = "";
     inputCursorRef.current = 0;
+    undoStackRef.current = [];
     resetHistoryDraft();
     writePrompt();
   }
@@ -321,6 +409,7 @@ export function MinecraftTerminal({
   function writePrompt() {
     if (promptVisibleRef.current || !terminalRef.current) return;
     terminalRef.current.write(`${prompt}${inputRef.current}`);
+    positionCursorAfterRender();
     terminalRef.current.scrollToBottom();
     promptVisibleRef.current = true;
   }
@@ -333,9 +422,15 @@ export function MinecraftTerminal({
     if (!terminalRef.current) return;
     promptVisibleRef.current = true;
     terminalRef.current.write(`\r\x1b[2K${prompt}${inputRef.current}`);
-    const charactersAfterCursor = inputRef.current.length - inputCursorRef.current;
-    if (charactersAfterCursor) terminalRef.current.write(`\x1b[${charactersAfterCursor}D`);
+    positionCursorAfterRender();
     terminalRef.current.scrollToBottom();
+  }
+
+  function positionCursorAfterRender() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const charactersAfterCursor = inputRef.current.length - inputCursorRef.current;
+    if (charactersAfterCursor) terminal.write(`\x1b[${charactersAfterCursor}D`);
   }
 
   return (

@@ -43,6 +43,25 @@ export function deletePreviousTerminalWordAtCursor(value: string, cursor: number
   };
 }
 
+export function previousTerminalWordBoundary(value: string, cursor: number) {
+  const beforeCursor = value.slice(0, cursor);
+  return beforeCursor.replace(/\s+$/, "").replace(/\S+$/, "").length;
+}
+
+export function nextTerminalWordBoundary(value: string, cursor: number) {
+  const afterCursor = value.slice(cursor);
+  const match = afterCursor.match(/^\S*\s*/);
+  return Math.min(value.length, cursor + (match?.[0].length ?? 0));
+}
+
+export function deleteNextTerminalWordAtCursor(value: string, cursor: number) {
+  const boundary = nextTerminalWordBoundary(value, cursor);
+  return {
+    value: value.slice(0, cursor) + value.slice(boundary),
+    cursor
+  };
+}
+
 export function recallPreviousCommand(history: string[], state: TerminalHistoryState): TerminalHistoryState {
   if (!history.length) return state;
   const historyIndex = state.historyIndex === null ? history.length - 1 : Math.max(0, state.historyIndex - 1);
