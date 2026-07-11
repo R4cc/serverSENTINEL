@@ -292,16 +292,25 @@
   overflow-wrap: anywhere;
 }
 
-.scheduleStatusText.success {
+.scheduleStatusIcon {
+  display: inline-grid;
+  place-items: center;
+  margin-left: var(--space-1);
+  vertical-align: -3px;
+}
+
+.scheduleStatusIcon .buttonIcon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+}
+
+.scheduleStatusIcon.success {
   color: var(--sentinel-success);
 }
 
-.scheduleStatusText.failed {
+.scheduleStatusIcon.failed {
   color: var(--sentinel-danger);
-}
-
-.scheduleStatusText.skipped {
-  color: var(--sentinel-warning);
 }
 
 .scheduleEnabledCell {
@@ -425,10 +434,6 @@
 .scheduledRunItem::before {
   display: none;
   background: var(--border-row);
-}
-
-.scheduledRunItem:last-child {
-  padding-bottom: 0;
 }
 
 .scheduledRunItem:last-child::before {

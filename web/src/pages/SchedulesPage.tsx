@@ -10,7 +10,7 @@ import type { ScheduledActiveRun, ScheduledExecution, ScheduledRun } from '../ty
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
-import { Button, EmptyState, PanelHeader, StatusBadge } from '../components/UiPrimitives';
+import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 
@@ -216,7 +216,14 @@ export function SchedulePage({
                   {schedule.lastRunAt ? (
                     <>
                       <span>{formatScheduleTime(schedule.lastRunAt, formatDate)}</span>
-                      <StatusBadge tone={statusBadgeTone(schedule.lastStatus)} className={`scheduleStatusText ${statusTone(schedule.lastStatus)}`}>{statusLabel(schedule.lastStatus)}</StatusBadge>
+                      <span
+                        className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
+                        role="img"
+                        aria-label={statusLabel(schedule.lastStatus)}
+                        title={statusLabel(schedule.lastStatus)}
+                      >
+                        <AppIcon name={statusTone(schedule.lastStatus) === "success" ? "check" : "x"} />
+                      </span>
                     </>
                   ) : (
                     <>
@@ -455,11 +462,6 @@ function statusTone(status?: string) {
   if (normalized === "cancelled") return "cancelled";
   if (normalized === "running") return "running";
   return "unknown";
-}
-
-function statusBadgeTone(status?: string): "success" | "danger" | "warning" | "neutral" {
-  const tone = statusTone(status);
-  return tone === "success" ? "success" : tone === "failed" ? "danger" : tone === "skipped" || tone === "cancelled" ? "warning" : "neutral";
 }
 
 function activeRunStatus(run: ScheduledActiveRun) {

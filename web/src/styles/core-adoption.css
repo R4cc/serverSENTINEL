@@ -216,10 +216,6 @@
   font-weight: var(--weight-body);
 }
 
-.scheduleStatusText.uiStatusBadge {
-  margin-top: var(--space-1);
-}
-
 .scheduleRowActions .uiButton {
   min-height: var(--control-height-compact);
 }
