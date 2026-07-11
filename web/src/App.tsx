@@ -27,6 +27,7 @@ import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/Se
 import { ModsPage } from "./pages/ModsPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { FilesPage } from "./features/files/FilesPage";
+import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { scheduleDelayToSeconds } from "./features/schedules/scheduleDelays";
 
@@ -744,7 +745,7 @@ export default function App() {
         consoleLine("[demo] Preparing spawn area: 100%"),
         consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
       ]);
-      if (initializeFileWorkspace) filesWorkspace.actions.initializeDemoRoot();
+      if (initializeFileWorkspace) filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
       return;
     }
     if (activeNodeRuntimeBlocked) {
@@ -763,7 +764,10 @@ export default function App() {
     }
     if (initializeFileWorkspace) {
       void refreshStatus(activeServer.id);
-      void filesWorkspace.actions.loadFiles(activeServer.id, "/");
+      const restoredFilePath = readStoredFileLocation(activeServer.id);
+      void filesWorkspace.actions.loadFiles(activeServer.id, restoredFilePath).then((loaded) => {
+        if (!loaded && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
+      });
     }
 
     if (consoleReconnectTimeoutRef.current !== null) {

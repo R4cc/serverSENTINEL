@@ -19,6 +19,7 @@ import { validateSafePath } from "../../utils/validation";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, publicPathContains } from "../../utils/appHelpers";
 import { formatBytes } from "../../utils/format";
 import { adjacentFilePath, retainedFileFocus, updateFileSelection, type FileSelectionModifiers } from "./fileSelection";
+import { writeStoredFileLocation } from "./fileLocationStorage";
 
 type DownloadIntent =
   | {
@@ -356,6 +357,7 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         const nextListing = demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
+        writeStoredFileLocation(serverId, nextListing.path);
         setArchiveContext(null);
         setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
         setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
@@ -373,6 +375,7 @@ export function useFilesWorkspace({
       const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
+        writeStoredFileLocation(serverId, nextListing.path);
         setArchiveContext(null);
         setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
         setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
@@ -1377,9 +1380,11 @@ export function useFilesWorkspace({
     resetEditorState();
   }
 
-  function initializeDemoRoot() {
+  function initializeDemoRoot(path = "/") {
     setArchiveContext(null);
-    setListing(demoListing("/", demoFiles, demoInstalledMods));
+    const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+    setListing(nextListing);
+    writeStoredFileLocation(demoServerId, nextListing.path);
   }
 
   function setUnavailable(message: string) {
