@@ -565,8 +565,57 @@
 .activeServerStrip .serverStripTitleRow {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.restartRequirement {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.restartRequirementBadge {
+  cursor: help;
+  outline-offset: 2px;
+  text-transform: none;
+}
+
+.restartRequirementTooltip {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.restartRequirementTooltip ul {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.restartRequirement:hover .restartRequirementTooltip,
+.restartRequirement:focus-within .restartRequirementTooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .activeServerStrip .serverStripTitleRow strong {

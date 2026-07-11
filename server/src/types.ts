@@ -128,6 +128,24 @@ export type InstalledModMetadata = {
   reviewAcknowledgedAt?: string;
 };
 
+export type RestartRequiredModAction = "added" | "removed" | "enabled" | "disabled" | "updated";
+
+export type RestartRequiredChange = {
+  type: "mod";
+  identity: string;
+  displayName: string;
+  filename?: string;
+  action: RestartRequiredModAction;
+};
+
+export type RestartRequiredModSnapshot = {
+  identity: string;
+  displayName: string;
+  filename: string;
+  enabled: boolean;
+  sha1: string;
+};
+
 export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";
 
 export type ModCompatibility = {
@@ -259,6 +277,8 @@ export type ManagedServer = {
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   restartRequiredSince?: string;
+  restartRequiredChanges?: RestartRequiredChange[];
+  restartRequiredModBaseline?: RestartRequiredModSnapshot[];
   schedules?: ScheduledExecution[];
   createdAt: string;
   updatedAt: string;

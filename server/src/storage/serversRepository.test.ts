@@ -207,6 +207,24 @@ describe("ServersRepository", () => {
     expect(storage.connection.prepare("SELECT updated_at FROM servers WHERE id = ?").get(server.id)).toEqual({ updated_at: "2026-01-05T00:00:00.000Z" });
   });
 
+  it("persists and clears pending mod restart details", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+    const baseline = [{ identity: "file:example.jar", displayName: "example.jar", filename: "example.jar", enabled: true, sha1: "before" }];
+    expect(servers.beginModRestartTracking(server.id, baseline, "2026-01-02T00:00:00.000Z")).toBe(true);
+    servers.updateModRestartChanges(server.id, [{ type: "mod", identity: "file:example.jar", displayName: "example.jar", filename: "example.jar.disabled", action: "disabled" }], "2026-01-03T00:00:00.000Z");
+    expect(servers.list()[0]).toMatchObject({
+      restartRequiredSince: "2026-01-02T00:00:00.000Z",
+      restartRequiredModBaseline: baseline,
+      restartRequiredChanges: [{ action: "disabled", displayName: "example.jar" }]
+    });
+    servers.updateModRestartChanges(server.id, [], "2026-01-04T00:00:00.000Z");
+    expect(servers.list()[0].restartRequiredSince).toBeUndefined();
+    expect(servers.list()[0].restartRequiredChanges).toBeUndefined();
+    expect(servers.list()[0].restartRequiredModBaseline).toBeUndefined();
+  });
+
   it("renames display names without changing immutable identity or dependent state", async () => {
     const { storage, servers } = await createRepositories();
     const original = managedServer("00000000-0000-4000-8000-000000000001");

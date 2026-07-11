@@ -16,8 +16,6 @@ type FilesPageProps = {
   permissionUser: PublicUser | null;
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
-  serverRequiresStoppedForMutableConfig: boolean;
-  stoppedServerMutationMessage: string;
   dateTimeFormatter: Intl.DateTimeFormat;
   onCopyText: (text: string) => void;
 };
@@ -28,8 +26,6 @@ export function FilesPage({
   permissionUser,
   isProvisioning,
   dockerOperationalLock,
-  serverRequiresStoppedForMutableConfig,
-  stoppedServerMutationMessage,
   dateTimeFormatter,
   onCopyText
 }: FilesPageProps) {
@@ -68,7 +64,6 @@ export function FilesPage({
     fileLeaseBusy,
     fileLeaseMessage,
     discardEditorRequest,
-    uploadTouchesMutableConfiguration,
     canViewCurrentFiles,
     canUploadToCurrentPath,
     canEditSelectedPath,
@@ -166,11 +161,11 @@ export function FilesPage({
             <div className="fileToolbar">
               {!archiveContext && <>
                 <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
-                <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
+                <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
                   <AppIcon name="fileUp" />
                   <span className="fileToolbarLabel">Upload</span>
                 </Button>
-                <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration) || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
+                <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
                   <AppIcon name="folderPlus" />
                   <span className="fileToolbarLabel">New folder</span>
                 </Button>

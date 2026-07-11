@@ -1,3 +1,13 @@
+export type RestartRequiredModAction = "added" | "removed" | "enabled" | "disabled" | "updated";
+
+export type RestartRequiredChange = {
+  type: "mod";
+  identity: string;
+  displayName: string;
+  filename?: string;
+  action: RestartRequiredModAction;
+};
+
 export type ManagedServer = {
   id: string;
   displayName: string;
@@ -11,6 +21,7 @@ export type ManagedServer = {
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   restartRequiredSince?: string;
+  restartRequiredChanges?: RestartRequiredChange[];
   schedules?: ScheduledExecution[];
   hasDockerContainer: boolean;
   resolvedVersions?: ResolvedServerVersions;

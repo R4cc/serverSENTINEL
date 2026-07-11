@@ -260,6 +260,16 @@ const migrations: readonly Migration[] = [
         ALTER TABLE schedules ADD COLUMN command_delays_seconds_json TEXT NOT NULL DEFAULT '[]'
       `);
     }
+  },
+  {
+    version: 12,
+    name: "server-restart-required-mods",
+    up(database) {
+      database.exec(`
+        ALTER TABLE servers ADD COLUMN restart_required_changes_json TEXT;
+        ALTER TABLE servers ADD COLUMN restart_required_mod_baseline_json TEXT
+      `);
+    }
   }
 ];
 

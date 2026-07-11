@@ -270,6 +270,8 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
     "managedPorts",
     "javaArgs",
     "restartRequiredSince",
+    "restartRequiredChanges",
+    "restartRequiredModBaseline",
     "schedules",
     "createdAt",
     "updatedAt"
@@ -287,6 +289,8 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
   optionalStringValue(server.dockerWorkingDir, `${label}.dockerWorkingDir`);
   optionalStringValue(server.javaArgs, `${label}.javaArgs`);
   optionalStringValue(server.restartRequiredSince, `${label}.restartRequiredSince`);
+  if (server.restartRequiredChanges !== undefined && !Array.isArray(server.restartRequiredChanges)) throw new Error(`${label}.restartRequiredChanges must be an array`);
+  if (server.restartRequiredModBaseline !== undefined && !Array.isArray(server.restartRequiredModBaseline)) throw new Error(`${label}.restartRequiredModBaseline must be an array`);
   const dockerPorts = optionalStringValue(server.dockerPorts, `${label}.dockerPorts`);
   if (dockerPorts) parseDockerPorts(dockerPorts);
   if (!isPlainObject(server.runtimeProfile)) throw new Error(`${label}.runtimeProfile must be a JSON object`);

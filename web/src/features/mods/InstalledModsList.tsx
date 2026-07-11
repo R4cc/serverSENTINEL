@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { InstalledMod, ModUpdatePlan } from "../../types";
+import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
@@ -11,6 +11,7 @@ import { ModStatusBadge } from "./ModStatusBadge";
 
 type Props = {
   mods: InstalledMod[];
+  restartRequiredChanges?: RestartRequiredChange[];
   query: string;
   busy: boolean;
   locked: boolean;
@@ -23,7 +24,7 @@ type Props = {
   updatePlan?: ModUpdatePlan | null;
 };
 
-export function InstalledModsList({ mods, query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, updatePlan }: Props) {
+export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
 
   return (
@@ -52,6 +53,8 @@ export function InstalledModsList({ mods, query, busy, locked, switchLocked = lo
           const currentVersion = plannedUpdate?.currentVersion || modVersion(mod);
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
+          const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${mod.filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase()}`;
+          const requiresRestart = restartRequiredChanges.some((change) => change.identity === identity && change.action !== "removed");
           return (
             <article
               key={mod.filename}
@@ -65,7 +68,7 @@ export function InstalledModsList({ mods, query, busy, locked, switchLocked = lo
                 <ModIconImage src={icon} fallback="JAR" />
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
               </button>
-              <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div>
+              <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {plannedUpdate?.status === "safe_update" && (

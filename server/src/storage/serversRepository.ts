@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { ManagedServer, ManagedServerPort, ScheduledExecution, ScheduledRun } from "../types.js";
+import type { ManagedServer, ManagedServerPort, RestartRequiredChange, RestartRequiredModSnapshot, ScheduledExecution, ScheduledRun } from "../types.js";
 import type { StorageDatabase } from "./database.js";
 
 type ServerRow = {
@@ -16,6 +16,8 @@ type ServerRow = {
   docker_ports: string | null;
   java_args: string | null;
   restart_required_since: string | null;
+  restart_required_changes_json: string | null;
+  restart_required_mod_baseline_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,6 +170,8 @@ export class ServersRepository {
       managedPorts: portsByServer.get(row.id) ?? [],
       javaArgs: row.java_args ?? undefined,
       restartRequiredSince: row.restart_required_since ?? undefined,
+      restartRequiredChanges: row.restart_required_changes_json ? JSON.parse(row.restart_required_changes_json) as RestartRequiredChange[] : undefined,
+      restartRequiredModBaseline: row.restart_required_mod_baseline_json ? JSON.parse(row.restart_required_mod_baseline_json) as RestartRequiredModSnapshot[] : undefined,
       schedules: schedulesByServer.get(row.id) ?? [],
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -207,11 +211,33 @@ export class ServersRepository {
     `).run(now, now, serverId).changes > 0;
   }
 
+  beginModRestartTracking(serverId: string, baseline: RestartRequiredModSnapshot[], now = new Date().toISOString()) {
+    return this.storage.connection.prepare(`
+      UPDATE servers
+      SET restart_required_since = COALESCE(restart_required_since, ?),
+          restart_required_mod_baseline_json = ?,
+          restart_required_changes_json = COALESCE(restart_required_changes_json, '[]'),
+          updated_at = ?
+      WHERE id = ? AND restart_required_mod_baseline_json IS NULL
+    `).run(now, JSON.stringify(baseline), now, serverId).changes > 0;
+  }
+
+  updateModRestartChanges(serverId: string, changes: RestartRequiredChange[], now = new Date().toISOString()) {
+    if (changes.length === 0) return this.clearRestartRequired(serverId, now);
+    return this.storage.connection.prepare(`
+      UPDATE servers
+      SET restart_required_since = COALESCE(restart_required_since, ?),
+          restart_required_changes_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(now, JSON.stringify(changes), now, serverId).changes > 0;
+  }
+
   clearRestartRequired(serverId: string, now = new Date().toISOString()) {
     return this.storage.connection.prepare(`
       UPDATE servers
-      SET restart_required_since = NULL, updated_at = ?
-      WHERE id = ? AND restart_required_since IS NOT NULL
+      SET restart_required_since = NULL, restart_required_changes_json = NULL,
+          restart_required_mod_baseline_json = NULL, updated_at = ?
+      WHERE id = ? AND (restart_required_since IS NOT NULL OR restart_required_changes_json IS NOT NULL OR restart_required_mod_baseline_json IS NOT NULL)
     `).run(now, serverId).changes > 0;
   }
 
@@ -282,8 +308,9 @@ export class ServersRepository {
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, restart_required_since, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          docker_ports, java_args, restart_required_since, restart_required_changes_json,
+          restart_required_mod_baseline_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -292,14 +319,17 @@ export class ServersRepository {
           docker_mount_source=excluded.docker_mount_source,
           docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
           java_args=excluded.java_args, restart_required_since=servers.restart_required_since,
+          restart_required_changes_json=servers.restart_required_changes_json,
+          restart_required_mod_baseline_json=servers.restart_required_mod_baseline_json,
           created_at=excluded.created_at, updated_at=excluded.updated_at
       `)
       : database.prepare(`
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, restart_required_since, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          docker_ports, java_args, restart_required_since, restart_required_changes_json,
+          restart_required_mod_baseline_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -308,13 +338,18 @@ export class ServersRepository {
           docker_mount_source=excluded.docker_mount_source,
           docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
           java_args=excluded.java_args, restart_required_since=excluded.restart_required_since,
+          restart_required_changes_json=excluded.restart_required_changes_json,
+          restart_required_mod_baseline_json=excluded.restart_required_mod_baseline_json,
           created_at=excluded.created_at, updated_at=excluded.updated_at
       `);
     statement.run(
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,
-      server.dockerPorts ?? null, server.javaArgs ?? null, server.restartRequiredSince ?? null, server.createdAt, server.updatedAt
+      server.dockerPorts ?? null, server.javaArgs ?? null, server.restartRequiredSince ?? null,
+      server.restartRequiredChanges ? JSON.stringify(server.restartRequiredChanges) : null,
+      server.restartRequiredModBaseline ? JSON.stringify(server.restartRequiredModBaseline) : null,
+      server.createdAt, server.updatedAt
     );
   }
 

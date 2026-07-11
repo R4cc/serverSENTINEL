@@ -18,6 +18,7 @@ import { AppIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIc
 import { InlineState } from "./components/InlineState";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
+import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
@@ -425,33 +426,35 @@ export default function App() {
           : serverSettingsSaving
             ? "Server settings are saving."
             : "";
-  const modsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
-  const addModFromModrinthDisabled = isProvisioning || serverRequiresStoppedForMutableConfig || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
+  const addModFromModrinthDisabled = isProvisioning || dockerOperationalLock || !activeStatus || isAnyModJobRunning || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
   const uploadModDisabled = modsLocked;
   const addModFromModrinthDisabledReason = isProvisioning
       ? "Server setup is still running."
-      : serverRequiresStoppedForMutableConfig
-        ? stoppedServerMutationMessage
-        : !canInstallMods
-          ? "Server management permission is required."
-          : !effectiveAppState.modrinthApiConfigured
-            ? "Add a Modrinth API key in Settings before searching for mods."
-            : "Search Modrinth for compatible Fabric mods.";
+      : dockerOperationalLock
+        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+        : !activeStatus
+          ? "Server status is still loading."
+          : isAnyModJobRunning
+            ? "A mod operation is already running."
+            : !canInstallMods
+              ? "Server management permission is required."
+              : !effectiveAppState.modrinthApiConfigured
+                ? "Add a Modrinth API key in Settings before searching for mods."
+                : "Search Modrinth for compatible Fabric mods.";
   const uploadModDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : serverRequiresStoppedForMutableConfig
-          ? stoppedServerMutationMessage
-          : !canManageMods
-            ? "Server management permission is required."
-            : !activeStatus
-              ? "Server status is still loading."
-              : isAnyModJobRunning
-                ? "A mod operation is already running."
-                : "Upload a local Fabric mod file.";
+        : !canManageMods
+          ? "Server management permission is required."
+          : !activeStatus
+            ? "Server status is still loading."
+            : isAnyModJobRunning
+              ? "A mod operation is already running."
+              : "Upload a local Fabric mod file.";
   const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
   const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
   const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
@@ -508,7 +511,8 @@ export default function App() {
     setNotice,
     setActiveJobs,
     handleStaleSession,
-    refreshFiles: filesWorkspace.actions.loadFiles
+    refreshFiles: filesWorkspace.actions.loadFiles,
+    refreshServerState: () => refreshApp({ silent: true })
   });
   useEffect(() => {
     if (!activeServer || demoMode || !authSession?.authenticated) return;
@@ -2674,6 +2678,7 @@ export default function App() {
                     <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                       {serverCommandStatusLabel}
                     </StatusBadge>
+                    {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
                   </div>
                   <div className="serverStripMetaRow">
                     <small className="serverStripMeta">
@@ -2856,8 +2861,6 @@ export default function App() {
                 permissionUser={permissionUser}
                 isProvisioning={isProvisioning}
                 dockerOperationalLock={dockerOperationalLock}
-                serverRequiresStoppedForMutableConfig={serverRequiresStoppedForMutableConfig}
-                stoppedServerMutationMessage={stoppedServerMutationMessage}
                 dateTimeFormatter={dateTimeFormatter}
                 onCopyText={(text) => void copyText(text)}
               />
@@ -2866,6 +2869,7 @@ export default function App() {
             {activePage === "mods" && (
               <ModsPage
                 workspace={modsWorkspace}
+                restartRequiredChanges={activeServer.restartRequiredChanges}
                 serverContext={{
                   minecraftVersion: activeServer.runtimeProfile.minecraftVersion || "Unknown",
                   versionsUnknown: activeModVersionsUnknown,

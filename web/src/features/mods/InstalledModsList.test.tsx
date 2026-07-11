@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { InstalledMod, ModUpdatePlan } from "../../types";
+import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { InstalledModsList } from "./InstalledModsList";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
 
@@ -20,10 +20,11 @@ function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   };
 }
 
-function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePlan | null = createDemoUpdatePlan("demo", installed)) {
+function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePlan | null = createDemoUpdatePlan("demo", installed), restartRequiredChanges?: RestartRequiredChange[]) {
   return renderToStaticMarkup(
     <InstalledModsList
       mods={installed}
+      restartRequiredChanges={restartRequiredChanges}
       query=""
       busy={false}
       locked={false}
@@ -83,5 +84,14 @@ describe("InstalledModsList", () => {
 
     expect(html).toContain("Only Modrinth-managed mods can switch versions");
     expect(html).toContain("disabled");
+  });
+
+  it("keeps health status and adds a restart chip for affected installed mods", () => {
+    const healthyMod = mod({ versionInfo: { currentVersion: "0.154.0+26.2", latestVersion: "0.154.0+26.2", upToDate: true } });
+    const html = renderInstalledMods([healthyMod], null, [{
+      type: "mod", identity: "modrinth:fabric-api", displayName: "Fabric API", filename: "fabric-api.jar", action: "updated"
+    }]);
+    expect(html).toContain("Healthy");
+    expect(html).toContain("Requires restart");
   });
 });

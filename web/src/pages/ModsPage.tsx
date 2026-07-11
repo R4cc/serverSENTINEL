@@ -7,6 +7,7 @@ import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
 import { ModsSummary } from "../features/mods/ModsSummary";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
+import type { RestartRequiredChange } from "../types";
 import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
 
 type ModsPageServerContext = {
@@ -29,6 +30,7 @@ type ModsPageAccess = {
 
 type Props = {
   workspace: ModsWorkspaceController;
+  restartRequiredChanges?: RestartRequiredChange[];
   serverContext: ModsPageServerContext;
   access: ModsPageAccess;
   formatters: {
@@ -37,7 +39,7 @@ type Props = {
   };
 };
 
-export function ModsPage({ workspace, serverContext, access, formatters }: Props) {
+export function ModsPage({ workspace, restartRequiredChanges, serverContext, access, formatters }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const { data, state, derived, refs, actions } = workspace;
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
@@ -59,7 +61,7 @@ export function ModsPage({ workspace, serverContext, access, formatters }: Props
       {state.modsLoading && data.installedMods.length === 0 && <InlineState tone="loading" title="Loading installed mods" message="Checking the mods folder and compatibility information." />}
       {visibleModsError && <InlineState tone="error" title="Could not load installed mods" message={visibleModsError} actionLabel="Retry" onAction={actions.retry} busy={state.modsLoading} />}
       {visibleUpdatePlanError && <InlineState tone="error" title="Could not check updates" message={visibleUpdatePlanError} actionLabel="Retry" onAction={() => void actions.refresh()} busy={state.updatePlanLoading} />}
-      <InstalledModsList mods={data.installedMods} query={state.installedQuery} busy={state.modsLoading} locked={access.toggleLocked} switchLocked={access.locked} onQueryChange={actions.setInstalledQuery} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onSwitchVersion={actions.openSwitchVersionReview} onDetails={actions.setDetailsMod} updatePlan={data.updatePlan} />
+      <InstalledModsList mods={data.installedMods} restartRequiredChanges={restartRequiredChanges} query={state.installedQuery} busy={state.modsLoading} locked={access.toggleLocked} switchLocked={access.locked} onQueryChange={actions.setInstalledQuery} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onSwitchVersion={actions.openSwitchVersionReview} onDetails={actions.setDetailsMod} updatePlan={data.updatePlan} />
       {(state.addOpen || state.detailsMod) && <div className="modsDrawerBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) state.addOpen ? actions.closeAdd() : actions.setDetailsMod(null); }}>
         {state.addOpen && <aside className="modsWorkflowDrawer" role="dialog" aria-modal="true" aria-label="Add mods"><AddModsWorkflow query={state.query} results={data.searchResults} total={data.searchTotal} installedMods={data.installedMods} searching={state.searching} loadingMore={state.loadingMore} error={state.searchError} configured={access.modrinthConfigured} versionsUnknown={serverContext.versionsUnknown} contextMessage={serverContext.contextMessage} minecraftVersion={serverContext.minecraftVersion} showIncompatibleResults={state.showIncompatibleResults} locked={access.locked} sentinelRef={refs.sentinelRef} installState={state.installState} selectedVersion={derived.selectedVersion} requiredDependencies={derived.pendingDependencies} canContinue={derived.canContinueInstall} formatDate={formatters.date} formatNumber={formatters.number} onClose={actions.closeAdd} onQueryChange={actions.setQuery} onShowIncompatibleResultsChange={actions.setShowIncompatibleResults} onChoose={actions.openInstallReview} onRetrySearch={actions.retrySearch} onInstallClose={actions.closeInstall} onChannelChange={(mod, channel) => void actions.loadInstallVersions(mod, channel)} onSelectVersion={actions.selectInstallVersion} onToggleAdvanced={actions.toggleAdvanced} onAcknowledge={actions.acknowledgeInstall} onContinue={actions.continueInstallReview} onBack={actions.backInstall} onInstall={actions.installSelectedMod} /></aside>}
         {state.detailsMod && <ModDetailsPanel mod={state.detailsMod} locked={access.locked} reviewAcknowledgementLocked={access.reviewAcknowledgementLocked} formatDate={formatters.date} onClose={() => actions.setDetailsMod(null)} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onRemove={actions.removeMod} onAcknowledgeReview={actions.acknowledgeModReview} updatePlanEntry={updatePlanEntryForMod(data.updatePlan, state.detailsMod)} />}

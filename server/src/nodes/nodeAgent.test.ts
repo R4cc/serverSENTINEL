@@ -246,17 +246,19 @@ describe("remote node Docker container recreation", () => {
 });
 
 describe("remote node file operation safety", () => {
-  it("rejects copies into mutable configuration paths when runtime status is unavailable", async () => {
+  it("allows copies into the mods directory when runtime status is unavailable", async () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     await mkdir(join(tempRoot, "servers", server.storageName!, "safe"), { recursive: true });
+    await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });
     await writeFile(join(tempRoot, "servers", server.storageName!, "safe", "source.jar"), "source");
 
-    await expect(hooks.handleCommand("files.copy", {
+    await hooks.handleCommand("files.copy", {
       server,
       path: "safe/source.jar",
       parent: "mods",
       name: "fabric-api.jar"
-    })).rejects.toThrow("Stop the server before changing mods or server properties");
+    });
+    expect(await readFile(join(tempRoot, "servers", server.storageName!, "mods", "fabric-api.jar"), "utf8")).toBe("source");
   });
 
   it("rejects uploads through a symlinked parent directory", async () => {
@@ -336,16 +338,17 @@ describe("remote node file operation safety", () => {
 });
 
 describe("remote node mod upload safety", () => {
-  it("rejects mod uploads when runtime status is unavailable", async () => {
+  it("allows mod uploads when runtime status is unavailable", async () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });
     const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
-    await expect(hooks.handleCommand("mods.upload", {
+    await hooks.handleCommand("mods.upload", {
       server,
       filename: "fabric-api.jar",
       contentBase64: jar.toString("base64")
-    })).rejects.toThrow("Stop the server before changing mods or server properties");
+    });
+    expect(await readFile(join(tempRoot, "servers", server.storageName!, "mods", "fabric-api.jar"))).toEqual(jar);
   });
 
   it("rejects path-like mod upload names", async () => {

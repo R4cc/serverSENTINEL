@@ -14,7 +14,7 @@ import type { FileEditLease, FileEntry, FileListing, FilePreview, GeneralJob, In
 import type { FilePreviewState } from "../../app/uiState";
 import { demoRequestHeaders } from "../../app/appConfig";
 import { bufferToBase64, fileDisplayType, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
-import { hasFileManagerPermission, isModsPublicPath, isServerPropertiesPath } from "../../utils/permissions";
+import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, publicPathContains } from "../../utils/appHelpers";
 import { formatBytes } from "../../utils/format";
@@ -131,7 +131,9 @@ export function useFilesWorkspace({
   const permissionPath = archiveContext?.archivePath ?? listing.path;
   const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view");
   const canUploadToCurrentPath = !archiveContext && (activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload"));
-  const canEditSelectedPath = !archiveContext && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
+  const canEditSelectedPath = !archiveContext
+    && !(serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath))
+    && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
@@ -140,9 +142,8 @@ export function useFilesWorkspace({
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const selectedZipEntry = !archiveContext && selectedEntry?.type === "file" && /\.zip$/i.test(selectedEntry.name) ? selectedEntry : null;
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
-  const selectedTouchesMutableConfiguration = selectedEntries.some((entry) => isModsPublicPath(entry.path) || isServerPropertiesPath(entry.path));
-  const selectedEntryTouchesMutableConfiguration = Boolean(selectedEntry && (isModsPublicPath(selectedEntry.path) || isServerPropertiesPath(selectedEntry.path)));
-  const uploadTouchesMutableConfiguration = isModsPublicPath(listing.path);
+  const selectedTouchesServerSettings = selectedEntries.some((entry) => isServerPropertiesPath(entry.path));
+  const selectedEntryTouchesServerSettings = Boolean(selectedEntry && isServerPropertiesPath(selectedEntry.path));
   const fileRowSelection = useMemo<RowSelectionState>(() => (
     Object.fromEntries(selectedFilePaths.map((path) => [path, true]))
   ), [selectedFilePaths]);
@@ -230,14 +231,14 @@ export function useFilesWorkspace({
   const canOpenSelectedZip = Boolean(selectedZipEntry && !fileRuntimeLocked && !fileOperationBusy && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view")));
   const canExtractSelectedZip = Boolean(selectedZipEntry && !activeServerIsDemo && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view"));
   const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && (archiveContext ? archivePermission("download") : selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download"))) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(!archiveContext && selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
-  const canRenameSelectedItem = Boolean(!archiveContext && selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesMutableConfiguration));
-  const canDeleteSelectedItems = Boolean(!archiveContext && selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesMutableConfiguration));
+  const canDuplicateSelectedFile = Boolean(!archiveContext && selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canRenameSelectedItem = Boolean(!archiveContext && selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canDeleteSelectedItems = Boolean(!archiveContext && selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
   const fileActionBlockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-      : serverRequiresStoppedForMutableConfig && (uploadTouchesMutableConfiguration || selectedTouchesMutableConfiguration)
+      : serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings
         ? stoppedServerMutationMessage
       : fileOperationBusy
         ? "A file operation is already running."
@@ -869,7 +870,7 @@ export function useFilesWorkspace({
 
   async function createFolder(name: string) {
     if (!activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
     const nameError = fileNameValidation(name);
     if (nameError) {
       notify("error", nameError);
@@ -908,7 +909,7 @@ export function useFilesWorkspace({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
+    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);
@@ -1442,7 +1443,6 @@ export function useFilesWorkspace({
       fileLeaseBusy,
       fileLeaseMessage,
       discardEditorRequest,
-      uploadTouchesMutableConfiguration,
       canViewCurrentFiles,
       canUploadToCurrentPath,
       canEditSelectedPath,

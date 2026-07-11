@@ -83,6 +83,7 @@ import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js"
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
+import { diffModSnapshots, snapshotMods } from "./modRestartState.js";
 import {
   applyImportArtifact,
   createExportArtifact,
@@ -138,6 +139,8 @@ import type {
   PublicServer,
   PublicUser,
   ReleaseChannel,
+  RestartRequiredChange,
+  RestartRequiredModSnapshot,
   RolePreset,
   ResolvedServerVersions,
   ServerActivity,
@@ -1017,6 +1020,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     restartRequiredSince: server.restartRequiredSince,
+    restartRequiredChanges: server.restartRequiredChanges,
     schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
@@ -1201,6 +1205,28 @@ function normalizeManagedServer(value: unknown): ManagedServer {
   if (nodeId === localNodeId && !isInsideServersDirectory(config.serversDir, serverDir)) {
     throw new Error("managed server serverDir must be inside the canonical data root servers directory");
   }
+  const restartRequiredChanges = server.restartRequiredChanges === undefined ? undefined : asArray(server.restartRequiredChanges, "server.restartRequiredChanges").map((entry, index) => {
+    const change = asObject(entry, `server.restartRequiredChanges[${index}]`);
+    const action = requiredString(change.action, `server.restartRequiredChanges[${index}].action`);
+    if (!new Set(["added", "removed", "enabled", "disabled", "updated"]).has(action)) throw new Error("Invalid restart-required mod action");
+    return {
+      type: "mod" as const,
+      identity: requiredString(change.identity, `server.restartRequiredChanges[${index}].identity`),
+      displayName: requiredString(change.displayName, `server.restartRequiredChanges[${index}].displayName`),
+      filename: optionalString(change.filename, `server.restartRequiredChanges[${index}].filename`),
+      action: action as RestartRequiredChange["action"]
+    };
+  });
+  const restartRequiredModBaseline = server.restartRequiredModBaseline === undefined ? undefined : asArray(server.restartRequiredModBaseline, "server.restartRequiredModBaseline").map((entry, index) => {
+    const mod = asObject(entry, `server.restartRequiredModBaseline[${index}]`);
+    return {
+      identity: requiredString(mod.identity, `server.restartRequiredModBaseline[${index}].identity`),
+      displayName: requiredString(mod.displayName, `server.restartRequiredModBaseline[${index}].displayName`),
+      filename: requiredString(mod.filename, `server.restartRequiredModBaseline[${index}].filename`),
+      enabled: Boolean(mod.enabled),
+      sha1: optionalString(mod.sha1, `server.restartRequiredModBaseline[${index}].sha1`) || ""
+    } satisfies RestartRequiredModSnapshot;
+  });
   return {
     id,
     nodeId,
@@ -1216,6 +1242,8 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
     restartRequiredSince: optionalString(server.restartRequiredSince, "server.restartRequiredSince"),
+    restartRequiredChanges,
+    restartRequiredModBaseline,
     schedules: server.schedules === undefined ? undefined : asArray(server.schedules, "server.schedules").map(normalizeSchedule),
     createdAt: requiredString(server.createdAt, "server.createdAt"),
     updatedAt: requiredString(server.updatedAt, "server.updatedAt")
@@ -3300,10 +3328,6 @@ async function recordOperation<T>(
   }
 }
 
-function isRestartSensitivePath(server: ManagedServer, runtime: NodeRuntime, absolutePath: string) {
-  return runtime.isServerSettingsFile(server, absolutePath) || runtime.isModsPath(server, absolutePath);
-}
-
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "server.stop", "server.restart"]);
 const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
@@ -4748,6 +4772,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) =
 app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  requireNoActiveModMutation(server.id);
   const runtime = runtimeForServer(server);
   const wasRunning = ((await runtime.serverStatus(server).catch(() => null)) as { docker?: { running?: boolean } } | null)?.docker?.running === true;
   return recordOperation({
@@ -4764,6 +4789,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.stop",
     serverId: server.id,
@@ -4777,6 +4803,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.restart",
     serverId: server.id,
@@ -4958,13 +4985,16 @@ async function requireArchiveExtractionPermissions(
 ) {
   const destinationPublicPath = runtime.publicPath(server, destination);
   const paths = new Set([destinationPublicPath, ...plan.outputPaths.map((entry) => entry.path)]);
-  let restartSensitive = false;
+  let touchesMods = false;
+  let touchesServerSettings = false;
   for (const path of paths) {
     const permission = archiveOutputPermission(path);
     await requireRequestPermission(request, permission);
-    restartSensitive ||= permission === "mods.upload" || permission === "servers.editSettings";
+    touchesMods ||= permission === "mods.upload";
+    touchesServerSettings ||= permission === "servers.editSettings";
   }
-  if (restartSensitive) await requireServerStoppedForMutableConfiguration(server);
+  if (touchesServerSettings) await requireServerStoppedForMutableConfiguration(server);
+  return touchesMods;
 }
 
 app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive", async (request) => {
@@ -5060,7 +5090,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
   const plan = await runtime.planArchiveExtraction(server, archive, destination);
   if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
-  await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
+  const touchesMods = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
   const alreadyRunning = [
     ...operationsRepository.list({ serverId: server.id, status: "queued", limit: 25 }),
     ...operationsRepository.list({ serverId: server.id, status: "running", limit: 25 })
@@ -5080,9 +5110,10 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   });
   queueMicrotask(() => {
     operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
-    void runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
+    const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
       operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
-    }).then(async (result) => {
+    });
+    void (touchesMods ? withTrackedModMutation(server, extract) : extract()).then(async (result) => {
       operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
     }).catch((error) => {
       operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
@@ -5190,6 +5221,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const file = await readFileWithRevision(runtime, server, target);
   if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
   const path = await fileEditLockPath(runtime, server, target);
@@ -5251,9 +5283,6 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
   await requireFilePathPermission(request, server, parent, "files.upload");
-  if (runtime.isModsPath(server, parent)) {
-    await requireServerStoppedForMutableConfiguration(server);
-  }
   return runtime.createFolder(server, parent, request.body.name);
 });
 
@@ -5269,13 +5298,17 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
     }
   }
   const filename = safeFileManagerName(request.body.filename);
-  const uploadPermission: Permission = runtime.isModsPath(server, join(parent, filename)) && (filename.endsWith(".jar") || filename.endsWith(".jar.disabled")) ? "mods.upload" : "files.upload";
+  const target = join(parent, filename);
+  const uploadPermission: Permission = runtime.isServerSettingsFile(server, target)
+    ? "servers.editSettings"
+    : runtime.isModsPath(server, target) && (filename.endsWith(".jar") || filename.endsWith(".jar.disabled"))
+      ? "mods.upload"
+      : "files.upload";
   await requireFilePathPermission(request, server, parent, uploadPermission);
-  if (runtime.isModsPath(server, join(parent, filename))) {
-    await requireServerStoppedForMutableConfiguration(server);
-  }
-  const result = await runtime.uploadFile(server, parent, filename, request.body.contentBase64);
-  return result;
+  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
+  const touchesMods = runtime.isModsPath(server, target);
+  const upload = () => runtime.uploadFile(server, parent, filename, request.body.contentBase64);
+  return touchesMods ? withTrackedModMutation(server, upload) : upload();
 });
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -5289,11 +5322,11 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const targetName = safeFileManagerName(request.body.name);
   const target = await runtime.resolveWritableResolvedPath(server, join(dirname(source), targetName));
   await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, target));
-  if (isRestartSensitivePath(server, runtime, source) || isRestartSensitivePath(server, runtime, target)) {
-    await requireServerStoppedForMutableConfiguration(server);
-  }
-  const result = await runtime.renameFile(server, source, targetName);
-  return result;
+  const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
+  const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
+  if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
+  const renameEntry = () => runtime.renameFile(server, source, targetName);
+  return touchesMods ? withTrackedModMutation(server, renameEntry) : renameEntry();
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
@@ -5302,11 +5335,10 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
   await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
-  if (runtime.isModsPath(server, source) || runtime.isServerSettingsFile(server, source)) {
-    await requireServerStoppedForMutableConfiguration(server);
-  }
-  const result = await runtime.duplicateFile(server, source, request.body.name);
-  return result;
+  const touchesMods = runtime.isModsPath(server, source);
+  if (runtime.isServerSettingsFile(server, source)) await requireServerStoppedForMutableConfiguration(server);
+  const duplicate = () => runtime.duplicateFile(server, source, request.body.name);
+  return touchesMods ? withTrackedModMutation(server, duplicate) : duplicate();
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -5315,11 +5347,10 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
   await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
-  if (isRestartSensitivePath(server, runtime, target)) {
-    await requireServerStoppedForMutableConfiguration(server);
-  }
-  const result = await runtime.deleteFile(server, target, request.query.recursive);
-  return result;
+  const touchesMods = runtime.isModsPath(server, target);
+  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
+  const deleteEntry = () => runtime.deleteFile(server, target, request.query.recursive);
+  return touchesMods ? withTrackedModMutation(server, deleteEntry) : deleteEntry();
 });
 
 
@@ -5824,6 +5855,56 @@ function remoteModMetadata(value: unknown): InstalledModMetadata | null {
   };
 }
 
+function runtimeRunning(status: unknown) {
+  if (!status || typeof status !== "object") return undefined;
+  const docker = "docker" in status ? (status as { docker?: { running?: unknown } }).docker : status as { running?: unknown };
+  return typeof docker?.running === "boolean" ? docker.running : undefined;
+}
+
+async function withTrackedModMutation<T>(server: ManagedServer, action: () => Promise<T>) {
+  return withModMutationLock(server.id, async () => {
+    if (blockingRuntimeOperations(server.id).length > 0) {
+      operationInProgress("A server runtime action is already running", "RUNTIME_OPERATION_IN_PROGRESS");
+    }
+
+    let baseline = server.restartRequiredModBaseline;
+    if (!baseline) {
+      const running = runtimeRunning(await runtimeForServer(server).serverStatus(server));
+      if (running === undefined) throw new Error("Server runtime status is unavailable; retry the mod change when the runtime reconnects");
+      if (running) {
+        baseline = snapshotMods(await listModsWithPanelMetadata(server));
+        serversRepository.beginModRestartTracking(server.id, baseline);
+      }
+    }
+
+    let result!: T;
+    let actionError: unknown;
+    try {
+      result = await action();
+    } catch (error) {
+      actionError = error;
+    }
+
+    let reconciliationError: unknown;
+    if (baseline) {
+      try {
+        const current = snapshotMods(await listModsWithPanelMetadata(server));
+        serversRepository.updateModRestartChanges(server.id, diffModSnapshots(baseline, current));
+      } catch (error) {
+        reconciliationError = error;
+      }
+    }
+
+    if (actionError) throw actionError;
+    if (reconciliationError) throw reconciliationError;
+    return result;
+  });
+}
+
+function requireNoActiveModMutation(serverId: string) {
+  if (activeModMutations.has(serverId)) operationInProgress("A mod change is already running for this server", "MOD_OPERATION_IN_PROGRESS");
+}
+
 async function enrichInstalledModUpdates(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
@@ -5980,13 +6061,13 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
       .map(async (entry) => {
         const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
         const modStat = await stat(modPath);
+        const sha1 = createHash("sha1").update(await readFile(modPath)).digest("hex");
         const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
         let metadata = prefs[entry.name]?.modrinth;
 
         if (!metadata) {
           try {
-            const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
-            const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+            const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${sha1}?algorithm=sha1`);
             if (currentRes.ok) {
               const current = await currentRes.json() as any;
               if (current && current.project_id) {
@@ -5999,7 +6080,7 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
                   versionType: normalizeReleaseChannel(current.version_type),
                   gameVersions: current.game_versions,
                   loaders: current.loaders,
-                  hashes: current.files?.find((f: any) => f.hashes?.sha1 === hash || f.primary)?.hashes || { sha1: hash },
+                  hashes: current.files?.find((f: any) => f.hashes?.sha1 === sha1 || f.primary)?.hashes || { sha1 },
                   installedAt: new Date().toISOString(),
                   installedWithForceIncompatible: false,
                   clientSide: project.client_side,
@@ -6027,6 +6108,7 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
           enabled: entry.name.endsWith(".jar"),
           size: modStat.size,
           modifiedAt: modStat.mtime.toISOString(),
+          sha1,
           iconUrl: await modIconUrl(server, entry.name) ?? metadata?.iconUrl,
           preferredChannel,
           compatibility: installedModCompatibility(server, metadata),
@@ -6863,8 +6945,7 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.toggle",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -6878,8 +6959,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.remove",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -6892,8 +6972,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.upload",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -7170,8 +7249,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChannel } }>("/api/modrinth/update", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -7184,8 +7262,7 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
 app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/switch-version", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -7211,8 +7288,7 @@ app.post<{ Body: { serverId?: string; filename?: string } }>("/api/modrinth/ackn
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.batchUpdate",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -7374,8 +7450,7 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
-  await requireServerStoppedForMutableConfiguration(server);
-  return withModMutationLock(server.id, () => recordOperation({
+  return withTrackedModMutation(server, () => recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,

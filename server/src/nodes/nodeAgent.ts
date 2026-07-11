@@ -618,7 +618,7 @@ async function requireStoppedForMutableConfiguration(server: ManagedServer) {
 
 function isMutableConfigurationPath(path: unknown) {
   const normalized = safeRelative(path);
-  return normalized === "server.properties" || normalized === "mods" || normalized.startsWith("mods/");
+  return normalized === "server.properties";
 }
 
 function sendStreamData(socket: WebSocket, id: string, event: NodeStreamDataMessage["event"]) {
@@ -1301,6 +1301,7 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
   if (command === "files.write") {
+    if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
     return writeEditableFile(server, payload?.path, payload?.content);
   }
   if (command === "files.upload") {
@@ -1373,15 +1374,12 @@ async function handleCommand(command: string, payload: any) {
   }
   if (command === "mods.list") return modsList(server, { forceRefresh: payload?.forceRefresh === true });
   if (command === "mods.upload") {
-    await requireStoppedForMutableConfiguration(server);
     return modUpload(server, payload?.filename, payload?.contentBase64);
   }
   if (command === "mods.install") {
-    await requireStoppedForMutableConfiguration(server);
     return modInstall(server, payload);
   }
   if (command === "mods.enableDisable") {
-    await requireStoppedForMutableConfiguration(server);
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     const enabled = requireStrictBoolean(payload?.enabled, "enabled");
     const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer({ serverDir: await serverRoot(server) }, posix.join("mods", filename)))
@@ -1394,7 +1392,6 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, filename: basename(target), enabled };
   }
   if (command === "mods.remove") {
-    await requireStoppedForMutableConfiguration(server);
     const filename = safeInstalledModFilename(payload?.filename as string | undefined);
     await rm(await inside(server, posix.join("mods", filename)), { force: true });
     return { ok: true, filename };

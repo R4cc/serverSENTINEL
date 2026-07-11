@@ -76,7 +76,8 @@ describe("SQLite storage", () => {
         { version: 8, name: "server-restart-required" },
         { version: 9, name: "node-build-id" },
         { version: 10, name: "schedule-command-delays" },
-        { version: 11, name: "schedule-command-delay-seconds" }
+        { version: 11, name: "schedule-command-delay-seconds" },
+        { version: 12, name: "server-restart-required-mods" }
       ]);
   });
 

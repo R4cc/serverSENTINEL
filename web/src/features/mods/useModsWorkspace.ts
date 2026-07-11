@@ -98,6 +98,7 @@ export type ModsWorkspaceInputs = {
   setActiveJobs: Dispatch<SetStateAction<GeneralJob[]>>;
   handleStaleSession: (error: unknown) => boolean;
   refreshFiles: (serverId: string, path: string) => Promise<unknown>;
+  refreshServerState: () => Promise<unknown>;
 };
 
 export type ModsWorkspaceController = ReturnType<typeof useModsWorkspace>;
@@ -182,7 +183,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     activeServer, activePage, activeServerIsDemo, activeServerUsesInternalNode, activeNodeRuntimeBlocked,
     activeNodeBlockMessage, demoMode, demoInstalledMods, setDemoInstalledMods, modrinthConfigured,
     isProvisioning, canManage, modsLocked, toggleLocked, notify, setNotice,
-    setActiveJobs, handleStaleSession, refreshFiles
+    setActiveJobs, handleStaleSession, refreshFiles, refreshServerState
   } = inputs;
   const demoFixture = readModsDemoFixture();
 
@@ -300,7 +301,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       await Promise.all([
         loadInstalledMods(activeServer?.id, { forceRefresh, notifyOnError }),
-        loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError })
+        loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError }),
+        refreshServerState()
       ]);
     } finally {
       refreshUpdatesInFlightRef.current = false;
@@ -311,7 +313,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     await Promise.all([
       loadInstalledMods(serverId, options),
       loadUpdatePlan(serverId, options),
-      refreshFiles(serverId, "/mods")
+      refreshFiles(serverId, "/mods"),
+      refreshServerState()
     ]);
   }
 
@@ -823,7 +826,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           const nextFilename = result.filename || currentFilename;
           setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
           currentFilename = nextFilename;
-          void refreshFiles(activeServer.id, "/mods");
+          void Promise.all([refreshFiles(activeServer.id, "/mods"), refreshServerState()]);
         } catch (error) {
           const message = `Failed to toggle mod ${displayName}: ${(error as Error).message}`;
           setNotice(message); notify("error", message);
@@ -837,7 +840,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (item.targetEnabled === runEnabled) break;
     }
     delete toggleQueueRef.current[filename];
-    if (activeServer && !activeServerIsDemo) void loadInstalledMods(activeServer.id);
+    if (activeServer && !activeServerIsDemo) void Promise.all([loadInstalledMods(activeServer.id), refreshServerState()]);
   }
 
   function setInstalledModEnabled(mod: InstalledMod, enabled: boolean) {
