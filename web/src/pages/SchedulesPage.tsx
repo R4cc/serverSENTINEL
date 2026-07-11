@@ -505,7 +505,7 @@ function relativeTime(value: string) {
   const label = days > 0
     ? `${days}d`
     : hours > 0
-    ? `${hours}h ${minutes % 60}m`
+    ? `${Math.round(minutes / 60)}h`
     : `${minutes}m`;
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
