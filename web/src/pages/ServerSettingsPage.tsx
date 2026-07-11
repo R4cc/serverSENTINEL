@@ -323,11 +323,7 @@ function MinecraftPortsSection({
   portConflict: boolean;
 }) {
   return (
-    <section className="minecraftPortsSection" aria-labelledby="minecraft-ports-title">
-      <div className="placementHeader">
-        <span>Ports</span>
-        <h3 id="minecraft-ports-title">Minecraft network ports</h3>
-      </div>
+    <section className="minecraftPortsSection" aria-label="Minecraft network ports">
       <div className="minecraftPortsGrid">
         <label>
           Server port
@@ -472,182 +468,161 @@ export function ServerEditForm({
   return (
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={onSubmit} className="serverPropertiesForm">
+        {disabled && disabledReason && (
+          <div className="propertiesLockBanner" role="status">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="5" y="10" width="14" height="10" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            <span>{disabledReason}</span>
+          </div>
+        )}
         <fieldset disabled={disabled}>
-          <section className="propertiesSettingsCard" aria-labelledby="properties-general-title">
-            <div className="propertiesCardHeader">
-              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
-              <div>
-                <h2 id="properties-general-title">General</h2>
-              </div>
-            </div>
-            <div className="propertiesFieldGrid three">
-              <label>
-                Display name
-                <input name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
-              </label>
-              <label>
-                Minecraft version
-                <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
-                  {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
-                  {versions.game.length ? versions.game.map((version) => (
-                    <option key={version.version} value={version.version}>{version.version}</option>
-                  )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
-                </select>
-                <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
-              </label>
-              <label>
-                Fabric loader version
-                <select name="loaderVersion" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
-                  <option value="">Latest stable</option>
-                  {loaderVersion && !currentLoaderVersionListed && <option value={loaderVersion}>{loaderVersion}</option>}
-                  {versions.loader.map((version) => (
-                    <option key={version.version} value={version.version}>{version.version}</option>
-                  ))}
-                </select>
-                <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
-              </label>
-            </div>
-          </section>
-
-          <section className="propertiesSettingsCard" aria-labelledby="properties-runtime-title">
-            <div className="propertiesCardHeader">
-              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
-              <div>
-                <h2 id="properties-runtime-title">Runtime & Resources</h2>
-              </div>
-            </div>
-            <section className="resourceStepSection propertiesMemorySection" aria-labelledby="properties-memory-title">
-              <div className="resourceSectionIntro">
-                <h4 id="properties-memory-title">Minecraft memory</h4>
-                <p>Adjust the minimum and maximum heap memory available to the server.</p>
-              </div>
-              <div className="memoryRangeLayout">
-                <MemoryRangeControl
-                  bounds={memoryBounds}
-                  minimumHeapGb={minimumHeapGb}
-                  maximumHeapGb={maximumHeapGb}
-                  onMinimumHeapChange={updateMinimumHeap}
-                  onMaximumHeapChange={updateMaximumHeap}
-                />
-                <div className="memoryNumberFields">
-                  <MemoryNumberInput
-                    id="edit-minimum-heap"
-                    label="Minimum heap (Xms)"
-                    value={minimumHeapGb}
-                    min={memoryBounds.min}
-                    max={maximumHeapGb}
-                    onChange={updateMinimumHeap}
-                  />
-                  <span className="memoryHeapDivider" aria-hidden="true">/</span>
-                  <MemoryNumberInput
-                    id="edit-maximum-heap"
-                    label="Maximum heap (Xmx)"
-                    value={maximumHeapGb}
-                    min={minimumHeapGb}
-                    max={memoryBounds.max}
-                    onChange={updateMaximumHeap}
-                  />
-                </div>
-              </div>
-              <div className="memoryRangeMeta">
-                <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
-                <span>Total available: {memoryBounds.max} GB</span>
-              </div>
-              {memoryWarning && <span className="fieldError">Leave some RAM for the host. Using nearly all memory may cause instability.</span>}
-              <input type="hidden" name="javaArgs" value={javaArgs} />
-            </section>
-            <div className="propertiesFieldGrid two">
-              <label>
-                Docker runtime image
-                <select name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)}>
-                  <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
-                  <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
-                  <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
-                </select>
-              </label>
-              <label>
-                Server jar filename
-                <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
-              </label>
-              <label className="propertiesFieldWide">
-                Docker container name
-                <input
-                  name="dockerContainer"
-                  value={dockerContainer}
-                  onChange={(event) => setDockerContainer(event.target.value)}
-                  pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
-                  title="Use letters, numbers, dots, dashes, and underscores."
-                />
-              </label>
-            </div>
-            <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
-              <summary>
-                <span>
-                  <strong>Advanced Java arguments</strong>
-                  <small>Customize launch flags while preserving the heap sliders above.</small>
-                </span>
-              </summary>
-              <div className="advancedResourceBody">
-                <label className="advancedResourceField" htmlFor="edit-java-args">
-                  <span>Java arguments</span>
-                  <textarea
-                    id="edit-java-args"
-                    className="javaArgsInput"
-                    value={javaArgs}
-                    onChange={(event) => updateJavaArgs(event.target.value)}
-                    rows={4}
-                    spellCheck={false}
-                  />
-                  <small>If -Xms and -Xmx differ, the two-point slider preserves that split.</small>
+          <section className="propertiesSettingsSurface">
+            <div className="propertiesSection" aria-labelledby="properties-general-title">
+              <h2 id="properties-general-title">General</h2>
+              <div className="propertiesFieldGrid three">
+                <label>
+                  Display name
+                  <input name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
+                </label>
+                <label>
+                  Minecraft version
+                  <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
+                    {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
+                    {versions.game.length ? versions.game.map((version) => (
+                      <option key={version.version} value={version.version}>{version.version}</option>
+                    )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
+                  </select>
+                  <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
+                </label>
+                <label>
+                  Fabric loader version
+                  <select name="loaderVersion" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
+                    <option value="">Latest stable</option>
+                    {loaderVersion && !currentLoaderVersionListed && <option value={loaderVersion}>{loaderVersion}</option>}
+                    {versions.loader.map((version) => (
+                      <option key={version.version} value={version.version}>{version.version}</option>
+                    ))}
+                  </select>
+                  <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
                 </label>
               </div>
-            </details>
-          </section>
-
-          <section className="propertiesSettingsCard" aria-labelledby="properties-network-title">
-            <div className="propertiesCardHeader">
-              <span className="propertiesCardIcon" aria-hidden="true"><AppIcon name="server" /></span>
-              <div>
-                <h2 id="properties-network-title">Network</h2>
-              </div>
             </div>
-            <MinecraftPortsSection
-              serverPort={serverPort}
-              queryPort={queryPort}
-              onServerPortChange={setServerPort}
-              onQueryPortChange={setQueryPort}
-              serverPortValid={serverPortValid}
-              queryPortValid={queryPortValid}
-              portConflict={portConflict}
-            />
+
+            <div className="propertiesSection" aria-labelledby="properties-resources-title">
+              <h2 id="properties-resources-title">Resources</h2>
+              <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
+                <div className="memoryRangeLayout">
+                  <MemoryRangeControl
+                    bounds={memoryBounds}
+                    minimumHeapGb={minimumHeapGb}
+                    maximumHeapGb={maximumHeapGb}
+                    onMinimumHeapChange={updateMinimumHeap}
+                    onMaximumHeapChange={updateMaximumHeap}
+                  />
+                  <div className="memoryNumberFields">
+                    <MemoryNumberInput
+                      id="edit-minimum-heap"
+                      label="Minimum heap (Xms)"
+                      value={minimumHeapGb}
+                      min={memoryBounds.min}
+                      max={maximumHeapGb}
+                      onChange={updateMinimumHeap}
+                    />
+                    <span className="memoryHeapDivider" aria-hidden="true">/</span>
+                    <MemoryNumberInput
+                      id="edit-maximum-heap"
+                      label="Maximum heap (Xmx)"
+                      value={maximumHeapGb}
+                      min={minimumHeapGb}
+                      max={memoryBounds.max}
+                      onChange={updateMaximumHeap}
+                    />
+                  </div>
+                </div>
+                <div className="memoryRangeMeta">
+                  <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
+                  <span>Total available: {memoryBounds.max} GB</span>
+                </div>
+                {memoryWarning && <span className="fieldError">Leave some RAM for the host. Using nearly all memory may cause instability.</span>}
+                <input type="hidden" name="javaArgs" value={javaArgs} />
+              </section>
+            </div>
+
+            <div className="propertiesSection" aria-labelledby="properties-network-title">
+              <h2 id="properties-network-title">Network</h2>
+              <MinecraftPortsSection
+                serverPort={serverPort}
+                queryPort={queryPort}
+                onServerPortChange={setServerPort}
+                onQueryPortChange={setQueryPort}
+                serverPortValid={serverPortValid}
+                queryPortValid={queryPortValid}
+                portConflict={portConflict}
+              />
+            </div>
+
             <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
               <summary>
-                <span>
-                  <strong>Additional port bindings</strong>
-                  <small>Expose extra TCP or UDP ports for mods and integrations.</small>
-                </span>
+                <strong>Advanced</strong>
               </summary>
-              <div className="advancedResourceBody">
-                <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
+              <div className="advancedResourceBody propertiesAdvancedBody">
+                <div className="propertiesFieldGrid two">
+                  <label>
+                    Docker runtime image
+                    <select name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)}>
+                      <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
+                      <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
+                      <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
+                    </select>
+                  </label>
+                  <label>
+                    Server jar filename
+                    <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
+                  </label>
+                  <label className="propertiesFieldWide">
+                    Docker container name
+                    <input
+                      name="dockerContainer"
+                      value={dockerContainer}
+                      onChange={(event) => setDockerContainer(event.target.value)}
+                      pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                      title="Use letters, numbers, dots, dashes, and underscores."
+                    />
+                  </label>
+                  <label className="propertiesFieldWide" htmlFor="edit-java-args">
+                    Java arguments
+                    <textarea
+                      id="edit-java-args"
+                      className="javaArgsInput"
+                      value={javaArgs}
+                      onChange={(event) => updateJavaArgs(event.target.value)}
+                      rows={4}
+                      spellCheck={false}
+                    />
+                  </label>
+                </div>
+                <div className="propertiesAdvancedPorts">
+                  <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
+                </div>
               </div>
             </details>
           </section>
         </fieldset>
+        <div className="propertiesActionBar">
+          <div className="propertiesActionButtons">
+            <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
+              Discard changes
+            </Button>
+            <Button type="submit" disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
+              Save changes
+            </Button>
+          </div>
+        </div>
       </form>
 
-      <aside className="serverPropertiesSidebar">
-        {dangerZone}
-        <section className="propertiesSideCard propertiesActionsCard">
-          <h2>Actions</h2>
-          {disabled && disabledReason && <p className="propertiesLockNote">{disabledReason}</p>}
-          <Button type="submit" form={formId} disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
-            Save changes
-          </Button>
-          <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
-            Discard changes
-          </Button>
-        </section>
-      </aside>
+      {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
     </div>
   );
 }
