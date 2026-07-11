@@ -36,27 +36,39 @@ type TimedCacheEntry<T> = {
 
 const projectCacheTtlMs = 60 * 60 * 1000;
 const projectVersionsCacheTtlMs = 5 * 60 * 1000;
+const modrinthMetadataCacheMaxEntries = 500;
 
 const projectCache = new Map<string, TimedCacheEntry<any>>();
 const projectRequestCache = new Map<string, Promise<any>>();
 const projectVersionsCache = new Map<string, TimedCacheEntry<ModrinthVersion[]>>();
 const projectVersionsRequestCache = new Map<string, Promise<ModrinthVersion[]>>();
 
+function setBoundedCache<T>(cache: Map<string, TimedCacheEntry<T>>, key: string, value: TimedCacheEntry<T>) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > modrinthMetadataCacheMaxEntries) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
+
 export async function fetchProject(projectId: string): Promise<any> {
   const cached = projectCache.get(projectId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-  if (cached) projectCache.delete(projectId);
   const pending = projectRequestCache.get(projectId);
   if (pending) return pending;
   const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`;
   const request = (async () => {
-    const response = await modrinthFetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch project ${projectId}: ${response.statusText}`);
+    try {
+      const response = await modrinthFetch(url);
+      const data = await response.json();
+      setBoundedCache(projectCache, projectId, { value: data, expiresAt: Date.now() + projectCacheTtlMs });
+      return data;
+    } catch (error) {
+      if (cached) return cached.value;
+      throw error;
     }
-    const data = await response.json();
-    projectCache.set(projectId, { value: data, expiresAt: Date.now() + projectCacheTtlMs });
-    return data;
   })().finally(() => {
     projectRequestCache.delete(projectId);
   });
@@ -265,7 +277,6 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
   const cacheKey = `${projectId}|${filters?.loader ?? ""}|${filters?.minecraftVersion ?? ""}`;
   const cached = projectVersionsCache.get(cacheKey);
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
-  if (cached && (options.forceRefresh || cached.expiresAt <= Date.now())) projectVersionsCache.delete(cacheKey);
   const pending = projectVersionsRequestCache.get(cacheKey);
   if (pending) return pending;
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
@@ -277,10 +288,15 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
     url.searchParams.set("game_versions", JSON.stringify(minecraftVersionFacetValues(filters.minecraftVersion)));
   }
   const request = (async () => {
-    const response = await modrinthFetch(url.toString());
-    const versions = await response.json() as ModrinthVersion[];
-    projectVersionsCache.set(cacheKey, { value: versions, expiresAt: Date.now() + projectVersionsCacheTtlMs });
-    return versions;
+    try {
+      const response = await modrinthFetch(url.toString());
+      const versions = await response.json() as ModrinthVersion[];
+      setBoundedCache(projectVersionsCache, cacheKey, { value: versions, expiresAt: Date.now() + projectVersionsCacheTtlMs });
+      return versions;
+    } catch (error) {
+      if (cached && !options.forceRefresh) return cached.value;
+      throw error;
+    }
   })().finally(() => {
     projectVersionsRequestCache.delete(cacheKey);
   });

@@ -24,6 +24,8 @@ import {
   validateBase64Content,
   mutableServerConfigurationBlockedReason,
   nodeUpdateImageForBuild,
+  nodeUpdateAlreadyCurrent,
+  modrinthSearchFacets,
   assertSameOriginRequest,
   localFilePathInput,
   publicServerStatus,
@@ -105,6 +107,30 @@ describe("node update image selection", () => {
 
   it("preserves configured custom node images", () => {
     expect(nodeUpdateImageForBuild("registry.example/serversentinel:stable", "abc123def456")).toBe("registry.example/serversentinel:stable");
+  });
+});
+
+describe("Modrinth search facets", () => {
+  it("filters compatible searches at the upstream API including patch wildcards", () => {
+    expect(modrinthSearchFacets("fabric", "1.21.4", "compatible")).toEqual([
+      ["project_type:mod"],
+      ["categories:fabric"],
+      ["versions:1.21.4", "versions:1.21.x"],
+      ["server_side:required", "server_side:optional"]
+    ]);
+  });
+
+  it("keeps all-result searches limited only to mods", () => {
+    expect(modrinthSearchFacets("fabric", "1.21.4", "all")).toEqual([["project_type:mod"]]);
+  });
+
+  it("treats the matching version and immutable build as already current", () => {
+    expect(nodeUpdateAlreadyCurrent({ agentVersion: "1.0.3", buildId: "abc123" }, undefined, "1.0.3", "abc123")).toBe(true);
+    expect(nodeUpdateAlreadyCurrent({ agentVersion: "1.0.3", buildId: "old" }, undefined, "1.0.3", "abc123")).toBe(false);
+  });
+
+  it("allows an explicit custom image even when build metadata matches", () => {
+    expect(nodeUpdateAlreadyCurrent({ agentVersion: "1.0.3", buildId: "abc123" }, "registry.example/custom:next", "1.0.3", "abc123")).toBe(false);
   });
 });
 

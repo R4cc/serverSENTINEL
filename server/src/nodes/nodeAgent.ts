@@ -12,12 +12,12 @@ import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedI
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, latestCompatibleProjectVersion, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
-import type { ManagedServer, ManagedServerPort, ModCompatibility, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
 import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
@@ -120,6 +120,7 @@ function detailedErrorMessage(error: unknown) {
 }
 
 let nodeStorageDatabase: StorageDatabase | undefined;
+let nodeUpdateInProgress = false;
 
 function nodeStorage() {
   nodeStorageDatabase ??= openStorageDatabase();
@@ -756,6 +757,7 @@ function minecraftContainerNetworkingConfig(existing?: Pick<NodeContainerInspect
 }
 
 async function prepareNodeUpdate(payload: unknown) {
+  if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
   const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
   if (!dockerAvailable()) {
@@ -781,9 +783,11 @@ async function prepareNodeUpdate(payload: unknown) {
   await mkdir(nodeUpdateDir, { recursive: true });
   const planPath = join(nodeUpdateDir, `node-update-${Date.now()}.json`);
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+  nodeUpdateInProgress = true;
 
   setTimeout(() => {
     void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
+      nodeUpdateInProgress = false;
       void writeFile(join(nodeUpdateDir, `node-update-error-${Date.now()}.json`), `${JSON.stringify({
         at: new Date().toISOString(),
         image,
@@ -871,6 +875,7 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
   await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "created" }, null, 2)}\n`, "utf8");
   await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
   await verifyUpdatedNodeContainer(currentName);
+  await verifyUpdatedNodeSession(currentName);
   await cleanupPreviousNodeContainers(currentName, oldName);
   await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "healthy", cleanup: "previous-container-removed" }, null, 2)}\n`, "utf8");
 }
@@ -907,6 +912,18 @@ async function verifyUpdatedNodeContainer(currentName: string) {
   const status = lastInspect?.State?.Status || "unknown";
   const health = lastInspect?.State?.Health?.Status;
   throw new Error(`Updated node container ${currentName} did not become healthy enough to remove the previous container. Current status: ${status}${health ? `, health: ${health}` : ""}. Previous container was retained for recovery.`);
+}
+
+async function verifyUpdatedNodeSession(currentName: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=100`, 200, 10_000);
+    const text = logs.toString("utf8");
+    if (/Node (?:session|registration) accepted/i.test(text)) return;
+    const inspect = await inspectNodeContainer(currentName);
+    if (!inspect.State?.Running) throw new Error(`Updated node container ${currentName} stopped before reconnecting to the panel. Previous container was retained for recovery.`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
+  }
+  throw new Error(`Updated node container ${currentName} did not reconnect to the panel. Previous container was retained for recovery.`);
 }
 
 async function inspectNodeContainer(nameOrId: string) {
@@ -1105,84 +1122,6 @@ async function uploadFile(server: ManagedServer, parentInput: unknown, filenameI
   return { ok: true, path: publicPath(root, target), size: content.length };
 }
 
-function remoteInstalledModCompatibility(server: ManagedServer, version: ModrinthVersion, project: { server_side?: string; client_side?: string }): ModCompatibility {
-  const target = runtimeTarget(server);
-  const serverSide = project.server_side;
-  const clientSide = project.client_side;
-
-  if (!target.minecraftVersion || target.loader !== "fabric") {
-    return { status: "unknown", compatible: false, reason: "A resolved Fabric runtime profile is required to verify compatibility.", serverSide, clientSide };
-  }
-  if (serverSide === "unsupported") {
-    return { status: "incompatible", compatible: false, reason: "Client-only mod; server-side support is unsupported", serverSide, clientSide };
-  }
-  if (serverSide === "unknown") {
-    return { status: "unknown", compatible: false, reason: "Server-side support could not be verified", serverSide, clientSide };
-  }
-  if (!version.loaders.includes(target.loader)) {
-    return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
-  }
-  if (!minecraftVersionsInclude(version.game_versions, target.minecraftVersion)) {
-    return {
-      status: "no_minecraft_version",
-      compatible: false,
-      reason: `This mod was installed for Minecraft ${version.game_versions.join(", ") || "unknown"}, but this server is ${target.minecraftVersion}.`,
-      serverSide,
-      clientSide
-    };
-  }
-  if (!modrinthServerSideSupported(serverSide)) {
-    return { status: "incompatible", compatible: false, reason: "Server-side support could not be verified.", serverSide, clientSide };
-  }
-  const file = modrinthJarFile(version);
-  return {
-    status: "compatible",
-    compatible: true,
-    reason: "Compatibility verified for this server.",
-    matchedVersionId: version.id,
-    matchedVersionNumber: version.version_number,
-    matchedVersionType: versionChannel(version.version_type),
-    matchedLoaders: version.loaders,
-    matchedGameVersions: version.game_versions,
-    file,
-    serverSide,
-    clientSide
-  };
-}
-
-async function remoteLookupModrinthUpdate(server: ManagedServer, version: ModrinthVersion, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
-  const target = runtimeTarget(server);
-  if (!target.minecraftVersion || target.loader !== "fabric" || !version.project_id) return null;
-
-  const versionFilter = {
-    loader: target.loader,
-    minecraftVersion: target.minecraftVersion
-  };
-  const versions = await fetchProjectVersions(version.project_id, versionFilter, options);
-  let latest = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: preferredChannel });
-  if (!latest) {
-    latest = latestCompatibleProjectVersion(await fetchProjectVersions(version.project_id, undefined, options), { ...versionFilter, channel: preferredChannel });
-  }
-  if (allowedForChannel(version, preferredChannel)
-    && version.loaders.includes(versionFilter.loader)
-    && minecraftVersionsInclude(version.game_versions, versionFilter.minecraftVersion)
-    && modrinthJarFile(version)
-    && modrinthVersionIsNewer(version, latest)
-  ) {
-    latest = version;
-  }
-  return {
-    projectId: version.project_id,
-    currentVersion: version.version_number,
-    currentChannel: versionChannel(version.version_type),
-    latestVersion: latest?.version_number,
-    latestVersionId: latest?.id,
-    latestFilename: modrinthJarFile(latest)?.filename,
-    latestChannel: latest ? versionChannel(latest.version_type) : undefined,
-    upToDate: Boolean(latest && version.version_number === latest.version_number)
-  };
-}
-
 async function modsList(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
@@ -1202,32 +1141,8 @@ async function modsList(server: ManagedServer, options: { forceRefresh?: boolean
         };
         try {
           const target = await inside(server, posix.join("mods", filename));
-          const hash = createHash("sha1").update(await readFile(target)).digest("hex");
-          const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
-          const version = await versionResponse.json() as ModrinthVersion;
-          if (!version?.project_id) return base;
-          const project = await fetchProject(version.project_id);
-          const primaryFile = version.files?.find((file: any) => file.hashes?.sha1 === hash || file.primary);
-          return {
-            ...base,
-            iconUrl: project.icon_url,
-            compatibility: remoteInstalledModCompatibility(server, version, project),
-            versionInfo: await remoteLookupModrinthUpdate(server, version, base.preferredChannel, options),
-            modrinth: {
-              projectId: version.project_id,
-              versionId: version.id,
-              filename,
-              versionNumber: version.version_number,
-              versionType: version.version_type,
-              gameVersions: version.game_versions ?? [],
-              loaders: version.loaders ?? [],
-              hashes: primaryFile?.hashes ?? { sha1: hash },
-              installedAt: new Date().toISOString(),
-              installedWithForceIncompatible: false,
-              clientSide: project.client_side,
-              serverSide: project.server_side
-            }
-          };
+          const sha1 = createHash("sha1").update(await readFile(target)).digest("hex");
+          return { ...base, sha1 };
         } catch {
           return base;
         }
@@ -1516,7 +1431,7 @@ export async function startNodeAgent() {
   nodeStorageDatabase = openStorageDatabase();
   let persisted = await readNodeIdentity();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
-  console.info(`serverSENTINEL node agent starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
+  console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
   const connect = async () => {
     persisted = await readNodeIdentity();

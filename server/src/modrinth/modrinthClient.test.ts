@@ -63,4 +63,48 @@ describe("Modrinth client", () => {
       }
     });
   });
+
+  it("converts transport failures into public dependency errors instead of 500s", async () => {
+    fetchMock.mockRejectedValue(new Error("connect ECONNRESET"));
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/search")).rejects.toMatchObject({
+      message: "Modrinth request failed: connect ECONNRESET",
+      statusCode: 424,
+      code: "MODRINTH_REQUEST_FAILED",
+      details: { attempt: 3 }
+    });
+  });
+
+  it("uses a stable rate-limit error code after retries", async () => {
+    fetchMock.mockResolvedValue(new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "0" } }) as never);
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/search?rate-test=1")).rejects.toMatchObject({
+      statusCode: 424,
+      code: "MODRINTH_RATE_LIMITED",
+      details: { upstreamStatus: 429, attempt: 3 }
+    });
+  });
+
+  it("supports JSON POST requests for batched hash resolution", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
+
+    await modrinthFetch("https://api.modrinth.com/v2/version_files", { method: "POST", json: { hashes: ["abc"], algorithm: "sha1" } });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.modrinth.com/v2/version_files", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ hashes: ["abc"], algorithm: "sha1" }),
+      headers: expect.objectContaining({ "Content-Type": "application/json" })
+    }));
+  });
+
+  it("coalesces simultaneous GET requests", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
+
+    await Promise.all([
+      modrinthFetch("https://api.modrinth.com/v2/project/shared"),
+      modrinthFetch("https://api.modrinth.com/v2/project/shared")
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -375,6 +375,21 @@ describe("remote node mod upload safety", () => {
 
     expect(await readFile(join(modsDir, "fabric-api.jar"))).toEqual(jar);
   });
+
+  it("lists stable file hashes without requiring Modrinth metadata on the node", async () => {
+    const server = testServer();
+    const modsDir = join(tempRoot, "servers", server.storageName!, "mods");
+    await mkdir(modsDir, { recursive: true });
+    await writeFile(join(modsDir, "fabric-api.jar"), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+
+    const result = await hooks.handleCommand("mods.list", { server }) as { mods: Array<Record<string, unknown>> };
+
+    expect(result.mods).toHaveLength(1);
+    expect(result.mods[0]).toMatchObject({ filename: "fabric-api.jar", enabled: true });
+    expect(result.mods[0].sha1).toMatch(/^[a-f0-9]{40}$/);
+    expect(result.mods[0]).not.toHaveProperty("modrinth");
+    expect(result.mods[0]).not.toHaveProperty("iconUrl");
+  });
 });
 
 describe("node self-update container cleanup", () => {
@@ -405,7 +420,7 @@ describe("node self-update container cleanup", () => {
 
   it("removes the previous container after the replacement starts successfully", async () => {
     mockDockerAvailable = true;
-    mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
+    mockDockerBufferRequest.mockImplementation(async (_method: string, path: string) => path.includes("/logs?") ? Buffer.from("Node session accepted for node-1") : Buffer.alloc(0));
     mockDockerJsonRequest.mockResolvedValue({});
     mockDockerRequest.mockImplementation(async (method: string, path: string) => {
       if (method === "POST" && path.includes("/rename?")) return {};
@@ -431,6 +446,7 @@ describe("node self-update container cleanup", () => {
       201
     );
     expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-node/start", 204);
+    expect(mockDockerBufferRequest).toHaveBeenCalledWith("GET", "/containers/serversentinel-node/logs?stdout=1&stderr=1&tail=100", 200, 10_000);
     expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", expect.stringMatching(/^\/containers\/serversentinel-node-previous-\d+\?force=1&v=1$/), [204, 404]);
     expect(mockDockerRequest).not.toHaveBeenCalledWith("POST", expect.stringContaining("/stop?t=10"), expect.anything());
   });

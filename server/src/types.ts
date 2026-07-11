@@ -122,6 +122,7 @@ export type InstalledModMetadata = {
   overrideReason?: string;
   clientSide?: string;
   serverSide?: string;
+  iconUrl?: string;
   forceIncompatible?: boolean;
   reviewAcknowledgedVersionId?: string;
   reviewAcknowledgedAt?: string;
