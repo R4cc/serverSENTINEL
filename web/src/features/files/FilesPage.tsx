@@ -6,7 +6,7 @@ import { SortHeaderButton } from "../../components/TableControls";
 import { Button } from "../../components/UiPrimitives";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
-import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
+import { hasFileManagerPermission } from "../../utils/permissions";
 import type { PublicUser } from "../../types";
 import type { FileActionDialog, FilesWorkspace } from "./useFilesWorkspace";
 
@@ -428,11 +428,11 @@ export function FilesPage({
         editing={fileEditMode}
         editBusy={fileLeaseBusy}
         editMessage={fileLeaseMessage}
-        editDisabled={Boolean(archiveContext) || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-        editDisabledReason={archiveContext ? "ZIP archive contents are read-only. Extract this file before editing it." : serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath) ? stoppedServerMutationMessage : ""}
+        editDisabled={Boolean(archiveContext) || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+        editDisabledReason={archiveContext ? "ZIP archive contents are read-only. Extract this file before editing it." : ""}
         readOnlyOnly={Boolean(archiveContext)}
-        editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-        saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+        editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+        saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
         discardRequestOpen={Boolean(discardEditorRequest)}
         onTextChange={(nextText) => {
           actions.setEditorText(nextText);

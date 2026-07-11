@@ -722,11 +722,6 @@ export function useFilesWorkspace({
       return;
     }
     if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
-    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
-      setFileLeaseMessage(stoppedServerMutationMessage);
-      notify("warning", stoppedServerMutationMessage);
-      return;
-    }
     if (!canEditSelectedPath) {
       const message = "Edit permission is required to modify this file.";
       setFileLeaseMessage(message);
@@ -1285,11 +1280,6 @@ export function useFilesWorkspace({
     if (isProvisioning || dockerOperationalLock || !canEditSelectedPath) return;
     if (!activeServer) return;
     if (!selectedPath || !dirty) return;
-    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath)) {
-      setFileLeaseMessage(stoppedServerMutationMessage);
-      notify("warning", stoppedServerMutationMessage);
-      return;
-    }
     if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
     if (fileSaving) return;
     setFileSaving(true);
