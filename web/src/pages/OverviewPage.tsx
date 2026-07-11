@@ -108,12 +108,31 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
   );
 }
 
-function formatEventTimestamp(value: string | undefined, formatDate: (value: string | number | Date) => string) {
-  if (!value) return "No timestamp";
-  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value;
+export function eventDate(value: string | undefined, now = new Date()) {
+  if (!value) return null;
+  const timeOnly = /^(\d{2}):(\d{2}):(\d{2})$/.exec(value);
+  if (timeOnly) {
+    const date = new Date(now);
+    date.setHours(Number(timeOnly[1]), Number(timeOnly[2]), Number(timeOnly[3]), 0);
+    // Log lines without a date refer to the latest occurrence of that clock time.
+    if (date.getTime() > now.getTime()) date.setDate(date.getDate() - 1);
+    return date;
+  }
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return formatDate(date);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatRelativeEventTime(value: string | undefined, now = new Date()) {
+  const date = eventDate(value, now);
+  if (!date) return value ? "Unknown" : "No timestamp";
+  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+  if (elapsedSeconds < 60) return "Just now";
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 export function RecentEventsPanel({
@@ -137,6 +156,7 @@ export function RecentEventsPanel({
     }
   });
   const [confirmHide, setConfirmHide] = useState<{ signature: string; text: string } | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
   const visibleEvents = useMemo(
     () => events.filter((event) => !hiddenSignatureSet.has(event.signature)),
@@ -152,6 +172,11 @@ export function RecentEventsPanel({
       // Ignore unavailable browser storage; hidden events remain hidden for this session.
     }
   }, [hiddenSignatures]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function hideEvent(signature: string) {
     setHiddenSignatures((current) => current.includes(signature) ? current : [...current, signature]);
@@ -172,7 +197,9 @@ export function RecentEventsPanel({
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>
-            <small>{formatEventTimestamp(event.timestamp, formatDate)}</small>
+            <small title={eventDate(event.timestamp, now) ? formatDate(eventDate(event.timestamp, now)!) : undefined}>
+              {formatRelativeEventTime(event.timestamp, now)}
+            </small>
             <Button
               variant="ghost"
               iconOnly
