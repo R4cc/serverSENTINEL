@@ -12,6 +12,10 @@ function technicalValue(value?: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function technicalTone(value?: string) {
+  return `tone-${(value || "unknown").toLowerCase().replaceAll("_", "-")}`;
+}
+
 type Props = {
   mod: InstalledMod;
   locked: boolean;
@@ -100,9 +104,9 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, form
               <div className="modsCompatibilityReason"><dt>Health reason</dt><dd>{health.detailDescription}</dd></div>
               {mod.compatibility && (
                 <>
-                <div><dt>Raw status</dt><dd><span>{technicalValue(mod.compatibility.status)}</span></dd></div>
-                <div><dt>Server side</dt><dd><span>{technicalValue(mod.compatibility.serverSide)}</span></dd></div>
-                <div><dt>Client side</dt><dd><span>{technicalValue(mod.compatibility.clientSide)}</span></dd></div>
+                <div><dt>Raw status</dt><dd><span className={technicalTone(mod.compatibility.status)}>{technicalValue(mod.compatibility.status)}</span></dd></div>
+                <div><dt>Server side</dt><dd><span className={technicalTone(mod.compatibility.serverSide)}>{technicalValue(mod.compatibility.serverSide)}</span></dd></div>
+                <div><dt>Client side</dt><dd><span className={technicalTone(mod.compatibility.clientSide)}>{technicalValue(mod.compatibility.clientSide)}</span></dd></div>
                 {mod.compatibility.matchedGameVersions?.length && <div><dt>Game versions</dt><dd>{mod.compatibility.matchedGameVersions.map((version) => <span key={version}>{version}</span>)}</dd></div>}
                 {mod.compatibility.matchedLoaders?.length && <div><dt>Loaders</dt><dd>{mod.compatibility.matchedLoaders.map((loader) => <span key={loader}>{technicalValue(loader)}</span>)}</dd></div>}
                 </>

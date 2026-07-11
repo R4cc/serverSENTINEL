@@ -124,9 +124,16 @@
 .modsCompatibilityFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--border); }
 .modsCompatibilityFacts > div { min-width: 0; padding: 11px 12px; background: var(--surface-raised); }
 .modsCompatibilityFacts > .modsCompatibilityReason { grid-column: 1 / -1; }
+.modsCompatibilityFacts > div:last-child:nth-child(even) { grid-column: 1 / -1; }
 .modsCompatibilityFacts dt { margin-bottom: 6px; color: var(--text-muted); font-size: .69rem; font-weight: var(--weight-heading); letter-spacing: .04em; text-transform: uppercase; }
 .modsCompatibilityFacts dd { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; margin: 0; color: var(--text); font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .modsCompatibilityFacts dd > span { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: .72rem; font-weight: var(--weight-strong); }
+.modsCompatibilityFacts dd > .tone-compatible { border-color: color-mix(in srgb, #159267 48%, var(--border)); color: #087451; background: color-mix(in srgb, #159267 12%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-required { border-color: color-mix(in srgb, #2878d0 45%, var(--border)); color: #1765b8; background: color-mix(in srgb, #2878d0 11%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-optional { border-color: color-mix(in srgb, #0d8fa3 42%, var(--border)); color: #08788a; background: color-mix(in srgb, #0d8fa3 10%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-unsupported,
+.modsCompatibilityFacts dd > .tone-incompatible { border-color: color-mix(in srgb, #d14343 45%, var(--border)); color: #b62f2f; background: color-mix(in srgb, #d14343 11%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-unknown { border-color: color-mix(in srgb, var(--text-muted) 38%, var(--border)); color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 7%, var(--surface)); }
 .modsCompatibilityFacts .modsCompatibilityReason dd { color: var(--text-muted); }
 .modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
 .modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
