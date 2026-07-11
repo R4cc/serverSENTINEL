@@ -15,6 +15,7 @@ export function SortHeaderButton<TData, TValue>({
   return (
     <button
       type="button"
+      role="columnheader"
       className="uiSortHeaderButton"
       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
       disabled={!canSort}

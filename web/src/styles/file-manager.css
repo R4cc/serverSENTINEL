@@ -1,0 +1,354 @@
+/* Canonical file-manager layout and interaction rules. Keep this import last. */
+.filesPage {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: stretch;
+  gap: var(--space-4);
+  height: max(560px, calc(100vh - 238px));
+  max-height: none;
+}
+
+.filesPage .filesExplorer,
+.filesPage .filesPanel,
+.filesPage .fileDetailsPanel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.filesPage .filesPanel {
+  overflow: hidden;
+}
+
+.filesPage .fileNavBar {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  gap: var(--space-2);
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-bottom: var(--border-strong) solid var(--border-row);
+  border-radius: 0;
+  background: var(--surface-raised);
+}
+
+.filesPage .fileNavButtons,
+.filesPage .fileToolbar {
+  flex-wrap: nowrap;
+}
+
+.filesPage .fileBreadcrumbs {
+  min-width: 0;
+  padding: 2px;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+
+.filesPage .fileBreadcrumbs button {
+  flex: 0 1 auto;
+  max-width: min(180px, 28vw);
+  min-width: 34px;
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+}
+
+.filesPage .fileBreadcrumbs button.active {
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.filesPage .selectionActionBar {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+}
+
+.filesPage .selectionActions {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.filesPage .selectionActions:empty::after {
+  content: "Select an item to see available actions";
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.filesPage .selectionActions .uiButton--critical {
+  margin-left: var(--space-1);
+}
+
+.filesPage .fileTable {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  overflow: auto;
+  border: 0;
+}
+
+.filesPage .fileTableHead,
+.filesPage .fileTableRow {
+  display: grid;
+  grid-template-columns: 42px minmax(220px, 1.6fr) minmax(150px, 0.8fr) minmax(115px, 0.6fr) minmax(86px, 0.4fr);
+  min-width: 680px;
+  padding-inline: var(--space-2);
+}
+
+.filesPage .fileColumnHeader {
+  display: contents;
+}
+
+.filesPage .fileTableHead .uiSortHeaderButton {
+  width: 100%;
+  min-width: 0;
+}
+
+.filesPage .fileTableRow {
+  cursor: default;
+}
+
+.filesPage .fileTableRow[aria-selected="true"] {
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.filesPage .fileNameCell {
+  cursor: default;
+}
+
+.filesPage .fileNameCell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--radius-sm);
+}
+
+.filesPage .fileTableRow:has(.fileNameCell:focus-visible) {
+  outline: none;
+}
+
+.filesPage .fileModifiedCell,
+.filesPage .fileTypeCell,
+.filesPage .fileSizeCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filesPage .fileTableFooter {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.filesPage .fileTableFooter span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filesPage .fileTableFooter span:last-child {
+  text-align: right;
+}
+
+.filesPage .fileDetailsPanel {
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.filesPage .fileDetailsContent dl {
+  grid-template-columns: 1fr;
+}
+
+.filesPage .fileDetailsContent dl div {
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.fileActionBackdrop {
+  z-index: 42;
+}
+
+.fileActionModal {
+  width: min(520px, calc(100vw - 32px));
+  overflow: hidden;
+  padding: 0;
+}
+
+.fileActionModal form,
+.fileActionBody,
+.fileNameField {
+  display: grid;
+}
+
+.fileActionModal form {
+  max-height: min(720px, calc(100vh - 40px));
+}
+
+.fileActionBody,
+.fileNameField {
+  gap: var(--space-2);
+}
+
+.fileNameField > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.fileNameField input {
+  width: 100%;
+}
+
+.deleteSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.deleteSummary span {
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-3);
+  color: var(--text-muted);
+}
+
+.deleteSummary strong {
+  color: var(--text);
+}
+
+.deletePathList {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-6);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.fileActionWarning,
+.fileActionDanger,
+.fileActionError {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.fileActionWarning {
+  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.fileActionDanger,
+.fileActionError {
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+@media (max-width: 1180px) {
+  .filesPage {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .filesPage .filesExplorer {
+    height: max(520px, calc(100vh - 238px));
+  }
+
+  .filesPage .fileDetailsPanel {
+    height: auto;
+    min-height: 260px;
+  }
+}
+
+@media (max-width: 900px) {
+  .filesPage .fileNavBar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .filesPage .fileToolbar {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .filesPage .fileToolbar .uiButton {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .filesPage .selectionActionBar {
+    grid-template-columns: 1fr;
+  }
+
+  .filesPage .selectionActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .filesPage .filesExplorer {
+    height: min(640px, calc(100vh - 180px));
+    min-height: 420px;
+  }
+
+  .filesPage .fileNavBar {
+    padding-inline: var(--space-2);
+  }
+
+  .filesPage .fileNavButtons {
+    gap: var(--space-1);
+  }
+
+  .filesPage .fileNavButtons .uiButton {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  .filesPage .fileToolbarLabel,
+  .filesPage .selectionActionLabel {
+    display: none;
+  }
+
+  .filesPage .selectionActions .uiButton {
+    width: var(--control-height-compact);
+    min-width: var(--control-height-compact);
+    padding-inline: 0;
+  }
+
+  .filesPage .fileTableHead,
+  .filesPage .fileTableRow {
+    grid-template-columns: 38px minmax(150px, 1fr) minmax(78px, auto);
+    min-width: 0;
+    padding-inline: var(--space-1);
+  }
+
+  .filesPage .fileColumnHeader--modifiedAt,
+  .filesPage .fileColumnHeader--type,
+  .filesPage .fileModifiedCell,
+  .filesPage .fileTypeCell {
+    display: none;
+  }
+
+  .filesPage .fileNameCell,
+  .filesPage .fileTableRow > span {
+    padding-inline: var(--space-2);
+  }
+
+  .filesPage .fileTableFooter span:last-child {
+    max-width: 65%;
+  }
+
+  .fileActionModal .modalFooter button {
+    width: 100%;
+  }
+}

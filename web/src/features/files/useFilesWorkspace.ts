@@ -18,6 +18,7 @@ import { hasFileManagerPermission, isModsPublicPath, isServerPropertiesPath } fr
 import { validateSafePath } from "../../utils/validation";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, publicPathContains } from "../../utils/appHelpers";
 import { formatBytes } from "../../utils/format";
+import { adjacentFilePath, retainedFileFocus, updateFileSelection, type FileSelectionModifiers } from "./fileSelection";
 
 type DownloadIntent =
   | {
@@ -62,6 +63,12 @@ type FileLocation =
   | { kind: "filesystem"; path: string }
   | { kind: "archive"; archivePath: string; path: string };
 
+export type FileActionDialog =
+  | { kind: "create"; value: string; error: string }
+  | { kind: "rename"; value: string; error: string; entry: FileEntry }
+  | { kind: "duplicate"; value: string; error: string; entry: FileEntry }
+  | { kind: "delete"; error: string; entries: FileEntry[] };
+
 export function useFilesWorkspace({
   activeServer,
   activeServerIsDemo,
@@ -86,6 +93,9 @@ export function useFilesWorkspace({
 }: UseFilesWorkspaceOptions) {
   const [listing, setListing] = useState<FileListing>({ path: "/", entries: [] });
   const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
+  const [focusedFilePath, setFocusedFilePath] = useState("");
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
+  const [fileActionDialog, setFileActionDialog] = useState<FileActionDialog | null>(null);
   const [archiveContext, setArchiveContext] = useState<{ archivePath: string; path: string; encrypted: boolean } | null>(null);
   const [fileBackStack, setFileBackStack] = useState<FileLocation[]>([]);
   const [fileForwardStack, setFileForwardStack] = useState<FileLocation[]>([]);
@@ -189,6 +199,27 @@ export function useFilesWorkspace({
     getSortedRowModel: getSortedRowModel()
   });
   const sortedFileRows = fileTable.getRowModel().rows;
+  const sortedFilePaths = sortedFileRows.map((row) => row.original.path);
+
+  function selectFileEntry(path: string, modifiers: FileSelectionModifiers = {}) {
+    const result = updateFileSelection(selectedFilePaths, sortedFilePaths, path, selectionAnchorPath, modifiers);
+    setSelectedFilePaths(result.selectedPaths);
+    setSelectionAnchorPath(result.anchorPath);
+    setFocusedFilePath(path);
+  }
+
+  function moveFileFocus(path: string, direction: -1 | 1, extendSelection = false) {
+    const nextPath = adjacentFilePath(sortedFilePaths, path, direction);
+    if (!nextPath) return "";
+    setFocusedFilePath(nextPath);
+    if (extendSelection) selectFileEntry(nextPath, { range: true });
+    else {
+      setSelectedFilePaths([nextPath]);
+      setSelectionAnchorPath(nextPath);
+    }
+    return nextPath;
+  }
+
   const selectionSummary = selectedEntries.length === 0
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
@@ -307,7 +338,7 @@ export function useFilesWorkspace({
     };
   }, []);
 
-  async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace") {
+  async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace", preserveSelection = false) {
     if (isProvisioning) return false;
     if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
       const message = "View files permission is required for this folder.";
@@ -326,7 +357,9 @@ export function useFilesWorkspace({
         const nextListing = demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
         setArchiveContext(null);
-        setSelectedFilePaths([]);
+        setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
+        setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
+        if (!preserveSelection) setSelectionAnchorPath("");
         setFilePreview({ path: "", loading: false, data: null, error: "" });
         if (historyMode === "push" && (previousLocation.kind !== "filesystem" || nextListing.path !== previousLocation.path)) {
           setFileBackStack((current) => [...current, previousLocation].slice(-50));
@@ -341,7 +374,9 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
         setArchiveContext(null);
-        setSelectedFilePaths([]);
+        setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
+        setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
+        if (!preserveSelection) setSelectionAnchorPath("");
         setFilePreview({ path: "", loading: false, data: null, error: "" });
         setFilesError("");
         if (historyMode === "push" && (previousLocation.kind !== "filesystem" || nextListing.path !== previousLocation.path)) {
@@ -367,7 +402,7 @@ export function useFilesWorkspace({
     await loadFiles(activeServer.id, path, "push");
   }
 
-  async function loadArchive(serverId: string, archivePath: string, entryPath = "/", historyMode: "replace" | "push" | "back" | "forward" = "push") {
+  async function loadArchive(serverId: string, archivePath: string, entryPath = "/", historyMode: "replace" | "push" | "back" | "forward" = "push", preserveSelection = false) {
     if (isProvisioning || activeServerIsDemo) return false;
     if (!hasFileManagerPermission(permissionUser, archivePath, "view")) {
       notify("warning", "View files permission is required to open this ZIP archive.");
@@ -382,7 +417,9 @@ export function useFilesWorkspace({
       const next = await api<ZipArchiveListing>(`/api/servers/${serverId}/files/archive?path=${encodeURIComponent(archivePath)}&entryPath=${encodeURIComponent(entryPath)}`);
       setListing({ path: next.path, entries: next.entries });
       setArchiveContext({ archivePath: next.archivePath, path: next.path, encrypted: next.encrypted });
-      setSelectedFilePaths([]);
+      setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPathValue) => next.entries.some((entry) => entry.path === entryPathValue)) : []);
+      setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, next.entries.map((entry) => entry.path)) : "");
+      if (!preserveSelection) setSelectionAnchorPath("");
       setFilePreview({ path: "", loading: false, data: null, error: "" });
       if (historyMode === "push" && (previousLocation.kind !== "archive" || previousLocation.archivePath !== next.archivePath || previousLocation.path !== next.path)) {
         setFileBackStack((current) => [...current, previousLocation].slice(-50));
@@ -413,8 +450,17 @@ export function useFilesWorkspace({
 
   async function refreshCurrentFiles() {
     if (!activeServer) return;
-    if (archiveContext) await loadArchive(activeServer.id, archiveContext.archivePath, archiveContext.path, "replace");
-    else await loadFiles(activeServer.id, listing.path);
+    if (archiveContext) await loadArchive(activeServer.id, archiveContext.archivePath, archiveContext.path, "replace", true);
+    else await loadFiles(activeServer.id, listing.path, "replace", true);
+  }
+
+  async function navigateFilesUp() {
+    if (archiveContext) {
+      if (archiveContext.path === "/") await navigateFiles(parentPath(archiveContext.archivePath));
+      else await navigateArchive(parentPath(archiveContext.path));
+      return;
+    }
+    if (listing.path !== "/") await navigateFiles(parentPath(listing.path));
   }
 
   async function navigateBackFiles() {
@@ -498,6 +544,14 @@ export function useFilesWorkspace({
     if (entry.type === "directory") {
       if (archiveContext) void navigateArchive(entry.path);
       else void navigateFiles(entry.path);
+      return;
+    }
+    if (!archiveContext && /\.zip$/i.test(entry.name) && activeServer && !activeServerIsDemo) {
+      setSelectedFilePaths([entry.path]);
+      setFocusedFilePath(entry.path);
+      setSelectionAnchorPath(entry.path);
+      if (fileRuntimeLocked || fileOperationBusy) return;
+      void loadArchive(activeServer.id, entry.path, "/", "push");
       return;
     }
     if (!isEditableFile(entry)) {
@@ -603,6 +657,8 @@ export function useFilesWorkspace({
     setFileOpening(true);
     setNotice("");
     setSelectedFilePaths([path]);
+    setFocusedFilePath(path);
+    setSelectionAnchorPath(path);
     if (activeServerIsDemo) {
       const content = demoFiles[path] ?? `Demo binary or generated file: ${path}`;
       setSelectedPath(path);
@@ -699,28 +755,65 @@ export function useFilesWorkspace({
     }
   }
 
-  async function deleteSelectedFiles() {
-    if (!activeServer || selectedEntries.length === 0 || fileOperationBusy) return;
+  function openCreateFolderDialog() {
+    if (fileRuntimeLocked || !canUploadToCurrentPath || fileOperationBusy) return;
+    setFileActionDialog({ kind: "create", value: "", error: "" });
+  }
+
+  function openRenameDialog() {
+    if (!selectedEntry || !canRenameSelectedItem) return;
+    setFileActionDialog({ kind: "rename", value: selectedEntry.name, error: "", entry: selectedEntry });
+  }
+
+  function openDuplicateDialog() {
+    if (!selectedEntry || !canDuplicateSelectedFile) return;
+    setFileActionDialog({ kind: "duplicate", value: defaultDuplicateName(selectedEntry.name), error: "", entry: selectedEntry });
+  }
+
+  function openDeleteDialog() {
+    if (!canDeleteSelectedItems) return;
+    setFileActionDialog({ kind: "delete", error: "", entries: [...selectedEntries] });
+  }
+
+  function closeFileActionDialog() {
+    if (!fileOperationBusy) setFileActionDialog(null);
+  }
+
+  function setFileActionDialogValue(value: string) {
+    setFileActionDialog((current) => current && current.kind !== "delete" ? { ...current, value, error: "" } : current);
+  }
+
+  async function submitFileActionDialog() {
+    const dialog = fileActionDialog;
+    if (!dialog || fileOperationBusy) return;
+    if (dialog.kind !== "delete") {
+      const nameError = fileNameValidation(dialog.value);
+      if (nameError) {
+        setFileActionDialog({ ...dialog, error: nameError });
+        return;
+      }
+    }
+    if (dialog.kind === "create") await createFolder(dialog.value.trim());
+    else if (dialog.kind === "rename") await renameSelectedFile(dialog.value.trim(), dialog.entry);
+    else if (dialog.kind === "duplicate") await duplicateSelectedFile(dialog.value.trim(), dialog.entry);
+    else await deleteSelectedFiles(dialog.entries);
+  }
+
+  async function deleteSelectedFiles(entries = selectedEntries) {
+    if (!activeServer || entries.length === 0 || fileOperationBusy) return;
     if (isProvisioning || dockerOperationalLock || !canDeleteSelectedItems) return;
-    const invalidPath = selectedEntries.map((entry) => validateSafePath(entry.path)).find(Boolean);
+    const invalidPath = entries.map((entry) => validateSafePath(entry.path)).find(Boolean);
     if (invalidPath) {
       setNotice(invalidPath);
       notify("error", invalidPath);
+      setFileActionDialog((current) => current?.kind === "delete" ? { ...current, error: invalidPath } : current);
       return;
     }
-    const directoryCount = selectedEntries.filter((entry) => entry.type === "directory").length;
-    const fileCount = selectedEntries.length - directoryCount;
-    const itemLabel = selectedEntries.length === 1 ? selectedEntries[0].name : `${selectedEntries.length} selected items`;
-    const previewList = selectedEntries.slice(0, 5).map((entry) => `- ${entry.path}`).join("\n");
-    const moreText = selectedEntries.length > 5 ? `\n- ...and ${selectedEntries.length - 5} more` : "";
-    const directoryWarning = directoryCount ? "\n\nSelected folders and their contents will be deleted." : "";
-    if (!window.confirm(`Delete ${itemLabel}?\n\nFiles: ${fileCount}\nFolders: ${directoryCount}\n${previewList}${moreText}${directoryWarning}\n\nThis cannot be undone.`)) return;
-
     setFileOperationBusy("delete");
     setNotice("");
     try {
       if (activeServerIsDemo) {
-        const deletedEntries = [...selectedEntries];
+        const deletedEntries = [...entries];
         const nextFiles = { ...demoFiles };
         for (const entry of deletedEntries) {
           for (const path of Object.keys(nextFiles)) {
@@ -734,13 +827,14 @@ export function useFilesWorkspace({
         setListing(demoListing(listing.path, nextFiles, nextMods));
         clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
         setSelectedFilePaths([]);
-        notify("success", selectedEntries.length === 1 ? `Deleted ${selectedEntries[0].name}` : `Deleted ${selectedEntries.length} items`);
+        setFileActionDialog(null);
+        notify("success", entries.length === 1 ? `Deleted ${entries[0].name}` : `Deleted ${entries.length} items`);
         return;
       }
 
       const failures: string[] = [];
       const deletedEntries: FileEntry[] = [];
-      const deleteTargets = selectedEntries.filter((entry) => !selectedEntries.some((candidate) => (
+      const deleteTargets = entries.filter((entry) => !entries.some((candidate) => (
         candidate.path !== entry.path
         && candidate.type === "directory"
         && publicPathContains(candidate.path, entry.path)
@@ -760,6 +854,7 @@ export function useFilesWorkspace({
         clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
         setSelectedFilePaths((current) => current.filter((path) => !deletedEntries.some((entry) => publicPathContains(entry.path, path))));
         notify("success", deletedEntries.length === 1 ? `Deleted ${deletedEntries[0].name}` : `Deleted ${deletedEntries.length} items`);
+        setFileActionDialog(null);
       }
       await loadFiles(activeServer.id, listing.path);
       await refreshModsAfterFilesChange();
@@ -767,17 +862,16 @@ export function useFilesWorkspace({
         const message = `Could not delete ${failures.length} item${failures.length === 1 ? "" : "s"}: ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "; ..." : ""}`;
         setNotice(message);
         notify("error", message);
+        if (!deletedEntries.length) setFileActionDialog((current) => current?.kind === "delete" ? { ...current, error: message } : current);
       }
     } finally {
       setFileOperationBusy("");
     }
   }
 
-  async function createFolder() {
+  async function createFolder(name: string) {
     if (!activeServer || fileOperationBusy) return;
     if (fileRuntimeLocked || !canUploadToCurrentPath || (serverRequiresStoppedForMutableConfig && uploadTouchesMutableConfiguration)) return;
-    const name = window.prompt("New folder name");
-    if (name === null) return;
     const nameError = fileNameValidation(name);
     if (nameError) {
       notify("error", nameError);
@@ -797,9 +891,16 @@ export function useFilesWorkspace({
         });
         await loadFiles(activeServer.id, listing.path);
       }
+      const folderPath = joinPublicPath(listing.path, name.trim());
+      setSelectedFilePaths([folderPath]);
+      setFocusedFilePath(folderPath);
+      setSelectionAnchorPath(folderPath);
+      setFileActionDialog(null);
       notify("success", `Created ${name.trim()}`);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not create the folder."));
+      const message = errorMessage(error, "Could not create the folder.");
+      setFileActionDialog((current) => current?.kind === "create" ? { ...current, error: message } : current);
+      notify("error", message);
     } finally {
       setFileOperationBusy("");
     }
@@ -836,6 +937,8 @@ export function useFilesWorkspace({
         await loadFiles(activeServer.id, listing.path);
       }
       setSelectedFilePaths([targetPath]);
+      setFocusedFilePath(targetPath);
+      setSelectionAnchorPath(targetPath);
       notify("success", `Uploaded ${file.name}`);
     } catch (error) {
       notify("error", errorMessage(error, "Could not upload the file."));
@@ -1078,18 +1181,20 @@ export function useFilesWorkspace({
     if (destination) await planSelectedZipExtraction(destination);
   }
 
-  async function renameSelectedFile() {
-    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+  async function renameSelectedFile(name: string, entry = selectedEntry) {
+    if (!activeServer || !entry || fileOperationBusy) return;
     if (!canRenameSelectedItem) return;
-    const entry = selectedEntries[0];
     if (dirty && selectedPath && publicPathContains(entry.path, selectedPath)) {
       const message = "Save or discard the open editor changes before renaming this item.";
       setNotice(message);
       notify("warning", message);
+      setFileActionDialog((current) => current?.kind === "rename" ? { ...current, error: message } : current);
       return;
     }
-    const name = window.prompt("Rename item", entry.name);
-    if (name === null || name.trim() === entry.name) return;
+    if (name.trim() === entry.name) {
+      setFileActionDialog(null);
+      return;
+    }
     const nameError = fileNameValidation(name);
     if (nameError) {
       notify("error", nameError);
@@ -1117,28 +1222,29 @@ export function useFilesWorkspace({
         await loadFiles(activeServer.id, listing.path);
       }
       setSelectedFilePaths([targetPath]);
+      setFocusedFilePath(targetPath);
+      setSelectionAnchorPath(targetPath);
       if (selectedPath && publicPathContains(entry.path, selectedPath)) {
         setSelectedPath(selectedPath.replace(entry.path, targetPath));
       }
       if (filePreview.path && publicPathContains(entry.path, filePreview.path)) {
         setFilePreview({ path: "", loading: false, data: null, error: "" });
       }
+      setFileActionDialog(null);
       notify("success", `Renamed to ${name.trim()}`);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not rename the selected item."));
+      const message = errorMessage(error, "Could not rename the selected item.");
+      setFileActionDialog((current) => current?.kind === "rename" ? { ...current, error: message } : current);
+      notify("error", message);
     } finally {
       setFileOperationBusy("");
     }
   }
 
-  async function duplicateSelectedFile() {
-    if (!activeServer || selectedEntries.length !== 1 || fileOperationBusy) return;
+  async function duplicateSelectedFile(name: string, entry = selectedEntry) {
+    if (!activeServer || !entry || fileOperationBusy) return;
     if (!canDuplicateSelectedFile) return;
-    const entry = selectedEntries[0];
     if (entry.type !== "file") return;
-    const suggestedName = defaultDuplicateName(entry.name);
-    const name = window.prompt("Duplicate file as", suggestedName);
-    if (name === null) return;
     const nameError = fileNameValidation(name);
     if (nameError) {
       notify("error", nameError);
@@ -1159,9 +1265,14 @@ export function useFilesWorkspace({
         await loadFiles(activeServer.id, listing.path);
       }
       setSelectedFilePaths([targetPath]);
+      setFocusedFilePath(targetPath);
+      setSelectionAnchorPath(targetPath);
+      setFileActionDialog(null);
       notify("success", `Duplicated ${entry.name}`);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not duplicate the selected file."));
+      const message = errorMessage(error, "Could not duplicate the selected file.");
+      setFileActionDialog((current) => current?.kind === "duplicate" ? { ...current, error: message } : current);
+      notify("error", message);
     } finally {
       setFileOperationBusy("");
     }
@@ -1257,6 +1368,9 @@ export function useFilesWorkspace({
     setFilesError("");
     setFilesLoading(false);
     setSelectedFilePaths([]);
+    setFocusedFilePath("");
+    setSelectionAnchorPath("");
+    setFileActionDialog(null);
     setFileBackStack([]);
     setFileForwardStack([]);
     setFilePreview({ path: "", loading: false, data: null, error: "" });
@@ -1274,6 +1388,9 @@ export function useFilesWorkspace({
     setListing({ path: "/", entries: [] });
     setArchiveContext(null);
     setSelectedFilePaths([]);
+    setFocusedFilePath("");
+    setSelectionAnchorPath("");
+    setFileActionDialog(null);
     setFileBackStack([]);
     setFileForwardStack([]);
     setFilePreview({ path: "", loading: false, data: null, error: "" });
@@ -1281,6 +1398,9 @@ export function useFilesWorkspace({
 
   function resetPageState() {
     setSelectedFilePaths([]);
+    setFocusedFilePath("");
+    setSelectionAnchorPath("");
+    setFileActionDialog(null);
     setFileBackStack([]);
     setFileForwardStack([]);
     setFileReadError("");
@@ -1313,6 +1433,8 @@ export function useFilesWorkspace({
       fileBackStack,
       fileForwardStack,
       fileOperationBusy,
+      focusedFilePath,
+      fileActionDialog,
       selectedPath,
       editorText,
       savedEditorText,
@@ -1354,9 +1476,12 @@ export function useFilesWorkspace({
       loadArchive,
       navigateBackFiles,
       navigateForwardFiles,
+      navigateFilesUp,
       activateFileEntry,
+      selectFileEntry,
+      moveFileFocus,
       openFile,
-      createFolder,
+      openCreateFolderDialog,
       uploadFile,
       downloadSelectedItems,
       openSelectedZip,
@@ -1367,9 +1492,12 @@ export function useFilesWorkspace({
       confirmZipDestination,
       startZipExtraction,
       resumeZipOperation,
-      duplicateSelectedFile,
-      renameSelectedFile,
-      deleteSelectedFiles,
+      openDuplicateDialog,
+      openRenameDialog,
+      openDeleteDialog,
+      closeFileActionDialog,
+      setFileActionDialogValue,
+      submitFileActionDialog,
       saveFile,
       enterFileEditMode,
       cancelFileEdit,
@@ -1385,6 +1513,7 @@ export function useFilesWorkspace({
       setListing,
       setFilePreview,
       setSelectedFilePaths,
+      setFocusedFilePath,
       setEditorText,
       setDirty,
       setDiscardEditorRequest,
