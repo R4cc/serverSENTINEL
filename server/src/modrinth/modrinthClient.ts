@@ -112,10 +112,11 @@ export type ModrinthFetchOptions = {
 
 async function executeModrinthFetch(url: string, options: ModrinthFetchOptions = {}) {
   const apiKey = await apiKeyProvider();
-  const headers = modrinthRequestHeaders(url, apiKey);
+  let headers = modrinthRequestHeaders(url, apiKey);
   if (options.json !== undefined) headers["Content-Type"] = "application/json";
   const timeoutMs = options.timeoutMs ?? defaultModrinthTimeoutMs;
   const retryAttempts = 3;
+  let canRetryPublicGetWithoutAuthorization = (options.method ?? "GET") === "GET" && options.json === undefined && Boolean(headers.Authorization);
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
     let response: Awaited<ReturnType<typeof fetch>>;
     try {
@@ -146,6 +147,13 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
       releaseRequestSlot();
     }
     if (response.ok) return response;
+    if (canRetryPublicGetWithoutAuthorization && (response.status === 401 || response.status === 403)) {
+      canRetryPublicGetWithoutAuthorization = false;
+      headers = modrinthRequestHeaders(url, "");
+      await response.arrayBuffer().catch(() => undefined);
+      attempt -= 1;
+      continue;
+    }
     const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
     if (!retryable || attempt === retryAttempts - 1) {
       const code = response.status === 429 ? "MODRINTH_RATE_LIMITED" : "MODRINTH_REQUEST_FAILED";

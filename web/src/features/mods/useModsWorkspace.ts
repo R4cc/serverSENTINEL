@@ -27,8 +27,22 @@ function waitForRetry(signal?: AbortSignal) {
 }
 
 function shouldRetryModrinthError(error: unknown) {
-  if (error instanceof ApiError) return error.status === 429 || error.status >= 500;
+  if (error instanceof ApiError) {
+    return error.status === 424
+      || error.status === 429
+      || error.status >= 500
+      || error.code === "MODRINTH_REQUEST_FAILED"
+      || error.code === "MODRINTH_REQUEST_TIMED_OUT"
+      || error.code === "MODRINTH_RATE_LIMITED";
+  }
   return true;
+}
+
+function modrinthSearchErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status === 424 && /^Request failed with 424$/i.test(error.message)) {
+    return "Modrinth is temporarily unavailable. Try the search again in a moment.";
+  }
+  return errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
 }
 
 function mergeSafeBatchUpdateResults(results: SafeBatchUpdateResult[]): SafeBatchUpdateResult {
@@ -441,8 +455,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }).catch((error) => {
       if (cancelled || abortController.signal.aborted) return;
       if (handleStaleSession(error)) return;
-      const message = errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
-      setSearchError(message);
+      setSearchError(modrinthSearchErrorMessage(error));
     }).finally(() => { if (!cancelled) setSearching(false); });
     return () => { cancelled = true; abortController.abort(); };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo, showIncompatibleResults]);

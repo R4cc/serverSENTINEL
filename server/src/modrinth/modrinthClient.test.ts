@@ -64,6 +64,32 @@ describe("Modrinth client", () => {
     });
   });
 
+  it("retries public GET requests without an invalid configured API key", async () => {
+    configureModrinthApiKeyProvider(async () => "expired-token");
+    fetchMock
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401, statusText: "Unauthorized" }) as never)
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }) as never);
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/search?query=servercore")).resolves.toMatchObject({ status: 200 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ headers: expect.objectContaining({ Authorization: "expired-token" }) });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ headers: expect.not.objectContaining({ Authorization: expect.anything() }) });
+  });
+
+  it("does not remove authentication from POST requests", async () => {
+    configureModrinthApiKeyProvider(async () => "expired-token");
+    fetchMock.mockResolvedValue(new Response("unauthorized", { status: 401, statusText: "Unauthorized" }) as never);
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/version_files", { method: "POST", json: { hashes: [] } })).rejects.toMatchObject({
+      statusCode: 424,
+      details: { upstreamStatus: 401 }
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ headers: expect.objectContaining({ Authorization: "expired-token" }) });
+  });
+
   it("converts transport failures into public dependency errors instead of 500s", async () => {
     fetchMock.mockRejectedValue(new Error("connect ECONNRESET"));
 

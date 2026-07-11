@@ -66,11 +66,12 @@
 .modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: rgb(15 23 42 / 38%); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
 .modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: 1px solid var(--border); background: var(--surface-raised); box-shadow: -18px 0 50px rgb(15 23 42 / 15%); animation: modsSlideIn .2s ease-out; }
 .modsDetailsDrawer { width: min(440px, 96vw); }
+.modsAddWorkflow { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; }
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
 .modsDrawerHeader h2 { margin: 2px 0 0; font-size: 1.35rem; }
 .modsDrawerHeader p { margin: 4px 0 0; color: var(--text-muted); font-size: .84rem; }
 .modsDrawerHeader small { font-size: .72rem; font-weight: var(--weight-heading); letter-spacing: var(--tracking-label); }
-.modsDrawerBody { flex: 1; overflow: auto; padding: 22px 24px; }
+.modsDrawerBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; }
 .modsDrawerFooter { display: flex; flex-wrap: wrap; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--border); }
 .modsDrawerFooter > button:first-child { flex: 1; }
 .modsAddSearch { display: grid; gap: 6px; }
