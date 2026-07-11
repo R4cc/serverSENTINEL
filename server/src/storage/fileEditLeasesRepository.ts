@@ -41,14 +41,14 @@ function leaseFromRow(row: LeaseRow): FileEditLease {
 
 export class FileLeaseError extends Error {
   statusCode = 409;
-  details?: string;
+  details?: { lease: Omit<FileEditLease, "sessionId"> };
 
   constructor(message: string, readonly code: "file_edit_lease_conflict" | "file_edit_lease_lost", lease?: FileEditLease) {
     super(message);
     this.name = "FileLeaseError";
     if (lease) {
       const { sessionId: _sessionId, ...publicLease } = lease;
-      this.details = JSON.stringify({ lease: publicLease });
+      this.details = { lease: publicLease };
     }
   }
 }

@@ -164,7 +164,12 @@ export function FileEditorModal({
                 <span>{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
               </div>
-              {editMessage && <div className="fileLeaseNotice" role="status">{editMessage}</div>}
+              {editMessage && (
+                <div className="fileLeaseNotice" role="status">
+                  <strong>Editing is unavailable</strong>
+                  <span>{editMessage}</span>
+                </div>
+              )}
               <div className="fileEditorMainArea">
                 {fileOpening ? (
                   <div className="fileEditorStateFill">

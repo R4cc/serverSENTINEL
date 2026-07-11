@@ -703,14 +703,14 @@ export function useFilesWorkspace({
   }
 
   function leaseConflictMessage(error: unknown) {
-    if (!(error instanceof ApiError) || error.code !== "FILE_EDIT_LEASE_CONFLICT") {
+    if (!(error instanceof ApiError) || (error.code !== "FILE_EDIT_LEASE_CONFLICT" && error.status !== 409)) {
       return errorMessage(error, "Could not acquire an edit lease for this file.");
     }
     const details = error.details as { lease?: FileEditLease } | undefined;
     if (details?.lease) {
-      return `${details.lease.displayName || "Another user"} is editing this file (last active ${formatDisplayDate(details.lease.refreshedAt)}).`;
+      return `${details.lease.displayName || "Another user"} is editing this file. They were last active ${formatDisplayDate(details.lease.refreshedAt)}. You can try again after they close the editor.`;
     }
-    return error.message;
+    return "Another editing session currently has exclusive access to this file. Try again after the other editor closes it.";
   }
 
   async function enterFileEditMode() {
