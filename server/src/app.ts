@@ -1100,7 +1100,7 @@ function normalizeSchedule(value: unknown): ScheduledExecution {
     name: requiredString(schedule.name, "schedule.name"),
     cron: requiredString(schedule.cron, "schedule.cron"),
     commands,
-    commandDelaysMinutes: sanitizeCommandDelays(schedule.commandDelaysMinutes, commands.length),
+    commandDelaysSeconds: sanitizeCommandDelaysSeconds(schedule.commandDelaysSeconds, commands.length, schedule.commandDelaysMinutes),
     onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
     enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
     createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
@@ -1137,6 +1137,11 @@ function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
     currentActionIndex: typeof run.currentActionIndex === "number" ? run.currentActionIndex : undefined,
     currentAction: optionalString(run.currentAction, "activeRun.currentAction"),
     waitingUntil: optionalString(run.waitingUntil, "activeRun.waitingUntil"),
+    waitingDelaySeconds: typeof run.waitingDelaySeconds === "number"
+      ? run.waitingDelaySeconds
+      : typeof run.waitingDelayMinutes === "number"
+        ? run.waitingDelayMinutes * 60
+        : undefined,
     waitingDelayMinutes: typeof run.waitingDelayMinutes === "number" ? run.waitingDelayMinutes : undefined,
     message: optionalString(run.message, "activeRun.message")
   };
@@ -2051,6 +2056,7 @@ function sanitizeCommands(commands: unknown) {
 }
 
 const maximumCommandDelayMinutes = 10_080;
+const maximumCommandDelaySeconds = maximumCommandDelayMinutes * 60;
 
 export function sanitizeCommandDelays(delays: unknown, commandCount: number) {
   if (delays === undefined) return Array<number>(commandCount).fill(0);
@@ -2060,6 +2066,19 @@ export function sanitizeCommandDelays(delays: unknown, commandCount: number) {
   return delays.map((delay) => {
     if (!Number.isInteger(delay) || delay < 0 || delay > maximumCommandDelayMinutes) {
       throw new Error(`Scheduled command delays must be whole minutes between 0 and ${maximumCommandDelayMinutes}`);
+    }
+    return delay;
+  });
+}
+
+export function sanitizeCommandDelaysSeconds(delays: unknown, commandCount: number, legacyMinutes?: unknown) {
+  if (delays === undefined) return sanitizeCommandDelays(legacyMinutes, commandCount).map((minutes) => minutes * 60);
+  if (!Array.isArray(delays) || delays.length !== commandCount) {
+    throw new Error("A delay in seconds is required for every scheduled command");
+  }
+  return delays.map((delay) => {
+    if (!Number.isInteger(delay) || delay < 0 || delay > maximumCommandDelaySeconds) {
+      throw new Error(`Scheduled command delays must be whole seconds between 0 and ${maximumCommandDelaySeconds}`);
     }
     return delay;
   });
@@ -2076,9 +2095,9 @@ function throwIfScheduleCancelled(signal?: AbortSignal) {
   if (signal?.aborted) throw new ScheduleCancellationError();
 }
 
-export function waitForCommandDelay(minutes: number, signal?: AbortSignal) {
+export function waitForCommandDelay(seconds: number, signal?: AbortSignal) {
   throwIfScheduleCancelled(signal);
-  if (minutes === 0) return Promise.resolve();
+  if (seconds === 0) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
     let timeout: NodeJS.Timeout;
     let abort = () => {};
@@ -2092,7 +2111,7 @@ export function waitForCommandDelay(minutes: number, signal?: AbortSignal) {
       cleanup();
       reject(new ScheduleCancellationError());
     };
-    timeout = setTimeout(finish, minutes * 60_000);
+    timeout = setTimeout(finish, seconds * 1000);
     timeout.unref?.();
     signal?.addEventListener("abort", abort, { once: true });
   }).finally(() => {
@@ -3477,6 +3496,7 @@ function scheduleFromBody(body: {
   name?: string;
   cron?: string;
   commands?: unknown;
+  commandDelaysSeconds?: unknown;
   commandDelaysMinutes?: unknown;
   onlyWhenNoPlayers?: boolean;
   enabled?: boolean;
@@ -3497,7 +3517,7 @@ function scheduleFromBody(body: {
     name,
     cron,
     commands,
-    commandDelaysMinutes: sanitizeCommandDelays(body.commandDelaysMinutes, commands.length),
+    commandDelaysSeconds: sanitizeCommandDelaysSeconds(body.commandDelaysSeconds, commands.length, body.commandDelaysMinutes),
     onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
     enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
@@ -3580,15 +3600,17 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
 
     for (const [index, command] of schedule.commands.entries()) {
       throwIfScheduleCancelled(active.controller.signal);
-      const delayMinutes = schedule.commandDelaysMinutes[index] ?? 0;
+      const delaySeconds = schedule.commandDelaysSeconds[index] ?? 0;
       active.currentActionIndex = index;
       active.currentAction = command;
-      active.waitingDelayMinutes = delayMinutes || undefined;
-      active.waitingUntil = delayMinutes ? new Date(Date.now() + delayMinutes * 60_000).toISOString() : undefined;
-      active.message = delayMinutes
+      active.waitingDelaySeconds = delaySeconds || undefined;
+      active.waitingDelayMinutes = delaySeconds && delaySeconds % 60 === 0 ? delaySeconds / 60 : undefined;
+      active.waitingUntil = delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : undefined;
+      active.message = delaySeconds
         ? `Waiting before command ${index + 1} of ${schedule.commands.length}`
         : `Sending command ${index + 1} of ${schedule.commands.length}`;
-      await waitForCommandDelay(delayMinutes, active.controller.signal);
+      await waitForCommandDelay(delaySeconds, active.controller.signal);
+      active.waitingDelaySeconds = undefined;
       active.waitingDelayMinutes = undefined;
       active.waitingUntil = undefined;
       active.message = `Sending command ${index + 1} of ${schedule.commands.length}`;
@@ -4780,7 +4802,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request
 
 app.post<{
   Params: { id: string };
-  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);
@@ -4792,7 +4814,7 @@ app.post<{
 
 app.put<{
   Params: { id: string; scheduleId: string };
-  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);

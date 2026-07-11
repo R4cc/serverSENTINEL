@@ -34,6 +34,7 @@ import {
   fileDownloadIntentMode,
   dedupeDownloadSelections,
   sanitizeCommandDelays,
+  sanitizeCommandDelaysSeconds,
   waitForCommandDelay,
   dockerNetworkingConfigFromInspect,
   minecraftContainerNetworkingConfig
@@ -120,6 +121,16 @@ describe("Modrinth search facets", () => {
     ]);
   });
 
+  it("accepts whole-second delays and converts legacy minute delays", () => {
+    expect(sanitizeCommandDelaysSeconds([0, 75, 7200], 3)).toEqual([0, 75, 7200]);
+    expect(sanitizeCommandDelaysSeconds(undefined, 2, [0, 5])).toEqual([0, 300]);
+  });
+
+  it("rejects fractional and longer-than-seven-day second delays", () => {
+    expect(() => sanitizeCommandDelaysSeconds([0, 1.5], 2)).toThrow(/whole seconds/);
+    expect(() => sanitizeCommandDelaysSeconds([0, 604_801], 2)).toThrow(/whole seconds/);
+  });
+
   it("keeps all-result searches limited only to mods", () => {
     expect(modrinthSearchFacets("fabric", "1.21.4", "all")).toEqual([["project_type:mod"]]);
   });
@@ -131,6 +142,17 @@ describe("Modrinth search facets", () => {
 
   it("allows an explicit custom image even when build metadata matches", () => {
     expect(nodeUpdateAlreadyCurrent({ agentVersion: "1.0.3", buildId: "abc123" }, "registry.example/custom:next", "1.0.3", "abc123")).toBe(false);
+  });
+
+  it("executes delays using second precision", async () => {
+    vi.useFakeTimers();
+    try {
+      const delay = waitForCommandDelay(2);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await expect(delay).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

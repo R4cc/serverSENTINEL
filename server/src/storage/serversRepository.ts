@@ -40,6 +40,7 @@ type ScheduleRow = {
   cron: string;
   commands_json: string;
   command_delays_json: string;
+  command_delays_seconds_json: string;
   only_when_no_players: number;
   enabled: number;
   created_at: string;
@@ -86,13 +87,18 @@ function runFromRow(row: RunRow): ScheduledRun {
 
 function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecution {
   const commands = JSON.parse(row.commands_json) as string[];
-  const storedDelays = JSON.parse(row.command_delays_json) as number[];
+  const storedDelaySeconds = JSON.parse(row.command_delays_seconds_json) as number[];
+  const storedDelayMinutes = JSON.parse(row.command_delays_json) as number[];
   return {
     id: row.id,
     name: row.name,
     cron: row.cron,
     commands,
-    commandDelaysMinutes: storedDelays.length === 0 ? commands.map(() => 0) : storedDelays,
+    commandDelaysSeconds: storedDelaySeconds.length > 0
+      ? storedDelaySeconds
+      : storedDelayMinutes.length > 0
+        ? storedDelayMinutes.map((minutes) => minutes * 60)
+        : commands.map(() => 0),
     onlyWhenNoPlayers: row.only_when_no_players === 1,
     enabled: row.enabled === 1,
     createdAt: row.created_at,
@@ -102,6 +108,12 @@ function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecu
     lastMessage: row.last_message ?? undefined,
     recentRuns: runs
   };
+}
+
+function scheduleDelaySeconds(schedule: ScheduledExecution) {
+  return schedule.commandDelaysSeconds
+    ?? schedule.commandDelaysMinutes?.map((minutes) => minutes * 60)
+    ?? schedule.commands.map(() => 0);
 }
 
 function equal(left: unknown, right: unknown) {
@@ -246,18 +258,19 @@ export class ServersRepository {
   }
 
   private writeSchedule(database: Database.Database, serverId: string, schedule: ScheduledExecution, update: boolean) {
+    const delays = scheduleDelaySeconds(schedule);
     const statement = update
       ? database.prepare(`
-        UPDATE schedules SET name=?, cron=?, commands_json=?, command_delays_json=?, only_when_no_players=?, enabled=?,
+        UPDATE schedules SET name=?, cron=?, commands_json=?, command_delays_json=?, command_delays_seconds_json=?, only_when_no_players=?, enabled=?,
           created_at=?, updated_at=? WHERE server_id=? AND id=?
       `)
       : database.prepare(`
         INSERT INTO schedules (
-          name, cron, commands_json, command_delays_json, only_when_no_players, enabled, created_at, updated_at, server_id, id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          name, cron, commands_json, command_delays_json, command_delays_seconds_json, only_when_no_players, enabled, created_at, updated_at, server_id, id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
     const result = statement.run(
-      schedule.name, schedule.cron, JSON.stringify(schedule.commands), JSON.stringify(schedule.commandDelaysMinutes), schedule.onlyWhenNoPlayers ? 1 : 0,
+      schedule.name, schedule.cron, JSON.stringify(schedule.commands), JSON.stringify(delays.map((seconds) => seconds / 60)), JSON.stringify(delays), schedule.onlyWhenNoPlayers ? 1 : 0,
       schedule.enabled ? 1 : 0, schedule.createdAt, schedule.updatedAt, serverId, schedule.id
     );
     if (update && result.changes === 0) throw new Error("Schedule not found");
@@ -325,20 +338,22 @@ export class ServersRepository {
   private syncSchedules(database: Database.Database, server: ManagedServer) {
     const upsert = database.prepare(`
       INSERT INTO schedules (
-        server_id, id, name, cron, commands_json, command_delays_json, only_when_no_players, enabled,
+        server_id, id, name, cron, commands_json, command_delays_json, command_delays_seconds_json, only_when_no_players, enabled,
         created_at, updated_at, last_run_at, last_status, last_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(server_id, id) DO UPDATE SET
         name=excluded.name, cron=excluded.cron, commands_json=excluded.commands_json,
         command_delays_json=excluded.command_delays_json,
+        command_delays_seconds_json=excluded.command_delays_seconds_json,
         only_when_no_players=excluded.only_when_no_players, enabled=excluded.enabled,
         created_at=excluded.created_at, updated_at=excluded.updated_at,
         last_run_at=excluded.last_run_at, last_status=excluded.last_status,
         last_message=excluded.last_message
     `);
     for (const schedule of server.schedules ?? []) {
+      const delays = scheduleDelaySeconds(schedule);
       upsert.run(
-        server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.commands), JSON.stringify(schedule.commandDelaysMinutes),
+        server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.commands), JSON.stringify(delays.map((seconds) => seconds / 60)), JSON.stringify(delays),
         schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
         schedule.updatedAt, schedule.lastRunAt ?? null, schedule.lastStatus ?? null,
         schedule.lastMessage ?? null

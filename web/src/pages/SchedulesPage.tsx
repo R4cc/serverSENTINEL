@@ -13,12 +13,13 @@ import { SortHeaderButton } from '../components/TableControls';
 import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
+import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
 
 type ScheduleFormMode =
   | { type: "create" }
   | { type: "edit"; schedule: ScheduledExecution };
 
-type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "commandDelaysMinutes" | "onlyWhenNoPlayers" | "enabled">;
+type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "commandDelaysSeconds" | "onlyWhenNoPlayers" | "enabled">;
 type ScheduledRunPanelItem =
   | (ScheduledActiveRun & { kind: "active"; sortAt: string })
   | (ScheduledRun & { kind: "completed"; sortAt: string });
@@ -109,16 +110,17 @@ export function SchedulePage({
   }, [schedules, recentRunsKey]);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
-    const delayValues = form.getAll("commandDelaysMinutes").map(Number);
+    const delayValues = form.getAll("commandDelayValues").map(Number);
+    const delayUnits = form.getAll("commandDelayUnits").map(String);
     const commandRows = form.getAll("commands").map(String).map((command, index) => ({
       command: command.trim(),
-      delayMinutes: delayValues[index] ?? 0
+      delaySeconds: scheduleDelayToSeconds(delayValues[index] ?? 0, delayUnits[index] ?? "seconds")
     })).filter((row) => Boolean(row.command));
     return {
       name: String(form.get("name") ?? "").trim(),
       cron: String(form.get("cron") ?? "").trim(),
       commands: commandRows.map((row) => row.command),
-      commandDelaysMinutes: commandRows.map((row) => row.delayMinutes),
+      commandDelaysSeconds: commandRows.map((row) => row.delaySeconds),
       onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
       enabled: form.get("enabled") === "on"
     };
@@ -127,7 +129,11 @@ export function SchedulePage({
   function validatePatch(patch: SchedulePatch) {
     return !patch.name
       ? "Schedule name is required."
-      : validateCronExpression(patch.cron) || validateCommandList(patch.commands) || "";
+      : validateCronExpression(patch.cron)
+        || validateCommandList(patch.commands)
+        || (patch.commandDelaysSeconds.some((delay) => !Number.isInteger(delay) || delay < 0 || delay > 604_800)
+          ? "Command delays must be whole values no longer than 7 days."
+          : "");
   }
 
   async function submitSchedule(event: FormEvent<HTMLFormElement>) {
@@ -340,21 +346,32 @@ export function SchedulePage({
                       <div key={id} className="commandInputRow">
                         <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
                         {index === 0 ? (
-                          <input name="commandDelaysMinutes" type="hidden" value="0" />
+                          <>
+                            <input name="commandDelayValues" type="hidden" value="0" />
+                            <input name="commandDelayUnits" type="hidden" value="seconds" />
+                          </>
                         ) : (
                           <label className="scheduleCommandDelay">
                             <span>Delay</span>
                             <input
-                              name="commandDelaysMinutes"
+                              name="commandDelayValues"
                               type="number"
                               min="0"
-                              max="10080"
+                              max="604800"
                               step="1"
-                              defaultValue={modalSchedule?.commandDelaysMinutes[index] ?? 0}
+                              defaultValue={scheduleDelayParts(modalSchedule?.commandDelaysSeconds[index] ?? 0).value}
                               required
-                              aria-label={`Delay before command ${index + 1} in minutes`}
+                              aria-label={`Delay before command ${index + 1}`}
                             />
-                            <span>min</span>
+                            <select
+                              name="commandDelayUnits"
+                              defaultValue={scheduleDelayParts(modalSchedule?.commandDelaysSeconds[index] ?? 0).unit}
+                              aria-label={`Delay unit before command ${index + 1}`}
+                            >
+                              <option value="seconds">Seconds</option>
+                              <option value="minutes">Minutes</option>
+                              <option value="hours">Hours</option>
+                            </select>
                           </label>
                         )}
                         {index > 0 && (
@@ -424,7 +441,7 @@ function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelIte
 
 function scheduleDescription(schedule: ScheduledExecution) {
   if (schedule.commands.length > 1) {
-    const delayedCommands = schedule.commandDelaysMinutes.filter((delay) => delay > 0).length;
+    const delayedCommands = schedule.commandDelaysSeconds.filter((delay) => delay > 0).length;
     return `${schedule.commands.length} console commands${delayedCommands ? `, ${delayedCommands} delayed` : ""}`;
   }
   if (schedule.commands[0]) return schedule.commands[0];
@@ -497,7 +514,8 @@ function remainingDelayLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "on delay";
   const diffMs = date.getTime() - Date.now();
-  if (diffMs <= 0) return "less than 1m";
+  if (diffMs <= 0) return "less than 1s";
+  if (diffMs < 60_000) return `${Math.max(1, Math.ceil(diffMs / 1000))}s`;
   const minutes = Math.max(1, Math.ceil(diffMs / 60_000));
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);

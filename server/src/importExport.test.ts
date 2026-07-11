@@ -340,6 +340,7 @@ describe("export/import artifacts", () => {
     const imported = servers.find((server) => server.id === importedId)!;
     expect(imported.displayName).toBe("Survival (2)");
     expect(imported.schedules?.[0].id).not.toBe(sourceScheduleId);
+    expect(imported.schedules?.[0].commandDelaysSeconds).toEqual([0, 300]);
     expect(imported.schedules?.[0].recentRuns?.[0].id).not.toBe(sourceRunId);
     expect(imported.schedules?.[0].recentRuns?.[0].scheduleId).toBe(imported.schedules?.[0].id);
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");

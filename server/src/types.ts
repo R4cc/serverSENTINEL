@@ -269,7 +269,8 @@ export type ScheduledExecution = {
   name: string;
   cron: string;
   commands: string[];
-  commandDelaysMinutes: number[];
+  commandDelaysSeconds: number[];
+  commandDelaysMinutes?: number[];
   onlyWhenNoPlayers: boolean;
   enabled: boolean;
   createdAt: string;
@@ -313,6 +314,7 @@ export type ScheduledActiveRun = {
   currentActionIndex?: number;
   currentAction?: string;
   waitingUntil?: string;
+  waitingDelaySeconds?: number;
   waitingDelayMinutes?: number;
   message?: string;
 };

@@ -28,6 +28,7 @@ import { ModsPage } from "./pages/ModsPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { FilesPage } from "./features/files/FilesPage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
+import { scheduleDelayToSeconds } from "./features/schedules/scheduleDelays";
 
 const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
 
@@ -1923,13 +1924,14 @@ export default function App() {
     const form = new FormData(formElement);
     const scheduleName = trimFormValue(form, "name");
     const cron = trimFormValue(form, "cron");
-    const delayValues = form.getAll("commandDelaysMinutes").map(Number);
+    const delayValues = form.getAll("commandDelayValues").map(Number);
+    const delayUnits = form.getAll("commandDelayUnits").map(String);
     const commandRows = form.getAll("commands").map(String).map((command, index) => ({
       command: command.trim(),
-      delayMinutes: delayValues[index] ?? 0
+      delaySeconds: scheduleDelayToSeconds(delayValues[index] ?? 0, delayUnits[index] ?? "seconds")
     })).filter((row) => Boolean(row.command));
     const commands = commandRows.map((row) => row.command);
-    const commandDelaysMinutes = commandRows.map((row) => row.delayMinutes);
+    const commandDelaysSeconds = commandRows.map((row) => row.delaySeconds);
     const scheduleErrors = [
       scheduleName ? null : { field: "name", message: "Schedule name is required." },
       validateCronExpression(cron) ? { field: "cron", message: validateCronExpression(cron)! } : null,
@@ -1948,7 +1950,7 @@ export default function App() {
         name: scheduleName,
         cron,
         commands,
-        commandDelaysMinutes,
+        commandDelaysSeconds,
         onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
         enabled: form.get("enabled") === "on",
         createdAt: new Date().toISOString(),
@@ -1968,7 +1970,7 @@ export default function App() {
           name: form.get("name"),
           cron,
           commands,
-          commandDelaysMinutes,
+          commandDelaysSeconds,
           onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
           enabled: form.get("enabled") === "on"
         })
@@ -2011,7 +2013,7 @@ export default function App() {
           name: next.name,
           cron: next.cron,
           commands: next.commands,
-          commandDelaysMinutes: next.commandDelaysMinutes,
+          commandDelaysSeconds: next.commandDelaysSeconds,
           onlyWhenNoPlayers: next.onlyWhenNoPlayers,
           enabled: next.enabled
         })

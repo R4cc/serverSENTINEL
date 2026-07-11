@@ -22,7 +22,7 @@
 
 .scheduleCommandDelay {
   display: grid !important;
-  grid-template-columns: auto 64px auto;
+  grid-template-columns: auto 72px 104px;
   align-items: center;
   gap: var(--space-1);
   margin: 0;
@@ -35,6 +35,11 @@
 .scheduleCommandDelay input {
   min-width: 0;
   width: 64px;
+}
+
+.scheduleCommandDelay select {
+  min-width: 0;
+  width: 104px;
 }
 
 .portBindingsEditor {
