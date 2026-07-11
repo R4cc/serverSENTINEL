@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetch } from "undici";
-import { configureModrinthApiKeyProvider, modrinthFetch, modrinthRequestHeaders } from "./modrinthClient.js";
+import { configureModrinthApiKeyProvider, modrinthFetch, modrinthRequestHeaders, resetModrinthClientStateForTests } from "./modrinthClient.js";
 
 vi.mock("undici", () => ({
   fetch: vi.fn()
@@ -10,6 +10,7 @@ const fetchMock = vi.mocked(fetch);
 
 beforeEach(() => {
   fetchMock.mockReset();
+  resetModrinthClientStateForTests();
   configureModrinthApiKeyProvider(async () => "");
 });
 
@@ -109,6 +110,55 @@ describe("Modrinth client", () => {
       code: "MODRINTH_RATE_LIMITED",
       details: { upstreamStatus: 429, attempt: 3 }
     });
+  });
+
+  it("bounds rate-limit waiting by the overall request deadline", async () => {
+    fetchMock.mockResolvedValue(new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "60" } }) as never);
+
+    await expect(modrinthFetch("https://api.modrinth.com/v2/search?deadline-test=1", { deadlineMs: 20 })).rejects.toMatchObject({
+      statusCode: 424,
+      code: "MODRINTH_RATE_LIMITED"
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares a server rate-limit cooldown across requests", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock
+        .mockResolvedValueOnce(new Response("limited", { status: 429, headers: { "retry-after": "1" } }) as never)
+        .mockResolvedValue(new Response("{}", { status: 200 }) as never);
+
+      const first = modrinthFetch("https://api.modrinth.com/v2/search?cooldown-a=1", { deadlineMs: 5_000 });
+      await vi.advanceTimersByTimeAsync(0);
+      const second = modrinthFetch("https://api.modrinth.com/v2/search?cooldown-b=1", { deadlineMs: 5_000 });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("pauses new requests when successful responses exhaust the reported allowance", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock
+        .mockResolvedValueOnce(new Response("{}", { status: 200, headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1" } }) as never)
+        .mockResolvedValueOnce(new Response("{}", { status: 200 }) as never);
+
+      await modrinthFetch("https://api.modrinth.com/v2/search?allowance-a=1");
+      const next = modrinthFetch("https://api.modrinth.com/v2/search?allowance-b=1", { deadlineMs: 5_000 });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(next).resolves.toMatchObject({ status: 200 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("supports JSON POST requests for batched hash resolution", async () => {

@@ -43,6 +43,13 @@ const projectRequestCache = new Map<string, Promise<any>>();
 const projectVersionsCache = new Map<string, TimedCacheEntry<ModrinthVersion[]>>();
 const projectVersionsRequestCache = new Map<string, Promise<ModrinthVersion[]>>();
 
+export function resetModrinthMetadataCachesForTests() {
+  projectCache.clear();
+  projectRequestCache.clear();
+  projectVersionsCache.clear();
+  projectVersionsRequestCache.clear();
+}
+
 function setBoundedCache<T>(cache: Map<string, TimedCacheEntry<T>>, key: string, value: TimedCacheEntry<T>) {
   cache.delete(key);
   cache.set(key, value);
@@ -74,6 +81,41 @@ export async function fetchProject(projectId: string): Promise<any> {
   });
   projectRequestCache.set(projectId, request);
   return request;
+}
+
+export async function fetchProjects(projectIds: string[]): Promise<Map<string, any>> {
+  const ids = Array.from(new Set(projectIds.filter(Boolean)));
+  const resolved = new Map<string, any>();
+  const missing: string[] = [];
+  const stale = new Map<string, any>();
+  const now = Date.now();
+  for (const id of ids) {
+    const cached = projectCache.get(id);
+    if (cached?.expiresAt && cached.expiresAt > now) resolved.set(id, cached.value);
+    else {
+      missing.push(id);
+      if (cached) stale.set(id, cached.value);
+    }
+  }
+  try {
+    for (let index = 0; index < missing.length; index += 100) {
+      const chunk = missing.slice(index, index + 100);
+      const url = new URL("https://api.modrinth.com/v2/projects");
+      url.searchParams.set("ids", JSON.stringify(chunk));
+      const response = await modrinthFetch(url.toString());
+      const projects = await response.json() as Array<{ id?: string; project_id?: string }>;
+      for (const project of projects) {
+        const id = project.id || project.project_id;
+        if (!id) continue;
+        resolved.set(id, project);
+        setBoundedCache(projectCache, id, { value: project, expiresAt: Date.now() + projectCacheTtlMs });
+      }
+    }
+  } catch (error) {
+    if (stale.size === 0) throw error;
+    for (const [id, project] of stale) resolved.set(id, project);
+  }
+  return resolved;
 }
 
 export async function fetchProjectVersion(versionId: string): Promise<ModrinthVersion> {

@@ -11,32 +11,8 @@ import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 
 const modSearchDebounceMs = 650;
-const modrinthRetryDelayMs = 1500;
 
 type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
-
-function waitForRetry(signal?: AbortSignal) {
-  if (signal?.aborted) return Promise.reject(new DOMException("The request was cancelled.", "AbortError"));
-  return new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(resolve, modrinthRetryDelayMs);
-    signal?.addEventListener("abort", () => {
-      window.clearTimeout(timeout);
-      reject(new DOMException("The request was cancelled.", "AbortError"));
-    }, { once: true });
-  });
-}
-
-function shouldRetryModrinthError(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.status === 424
-      || error.status === 429
-      || error.status >= 500
-      || error.code === "MODRINTH_REQUEST_FAILED"
-      || error.code === "MODRINTH_REQUEST_TIMED_OUT"
-      || error.code === "MODRINTH_RATE_LIMITED";
-  }
-  return true;
-}
 
 function modrinthSearchErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 424 && /^Request failed with 424$/i.test(error.message)) {
@@ -218,11 +194,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const activeServerIdRef = useRef("");
   const loadMoreInFlightRef = useRef(false);
   const refreshUpdatesInFlightRef = useRef(false);
+  const installVersionsRequestRef = useRef(0);
+  const installReviewOpenRef = useRef(false);
+  const searchAbortControllerRef = useRef<AbortController | null>(null);
   const toggleQueueRef = useRef<Record<string, { targetEnabled: boolean; inFlightEnabled: boolean | null }>>({});
 
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+  installReviewOpenRef.current = Boolean(installState);
 
   const detailsMod = useMemo(() => installedMods.find((mod) => installedModKey(mod) === detailsModKey) ?? null, [detailsModKey, installedMods]);
   const selectedVersion = useMemo(() => {
@@ -325,17 +305,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     ]);
   }
 
-  async function retrySidebarRequest<T>(request: () => Promise<T>, signal?: AbortSignal) {
-    try {
-      return await request();
-    } catch (error) {
-      if (handleStaleSession(error) || !shouldRetryModrinthError(error)) throw error;
-      await waitForRetry(signal);
-      return request();
-    }
-  }
-
   function resetPageState() {
+    installVersionsRequestRef.current += 1;
+    searchAbortControllerRef.current?.abort();
     setAddOpen(false);
     setQuery("");
     setDebouncedQuery("");
@@ -391,13 +363,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setSearching(false);
       return;
     }
-    if (installState?.mode === "switch") {
-      setDebouncedQuery("");
+    if (installState) {
       setSearching(false);
       return;
     }
     const trimmedQuery = query.trim();
-    setInstallState(null);
     setSearchError("");
     if (!trimmedQuery) {
       setDebouncedQuery("");
@@ -406,10 +376,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setSearching(false);
       return;
     }
+    if (debouncedQuery === trimmedQuery) {
+      setSearching(false);
+      return;
+    }
     setSearching(true);
     const timeout = window.setTimeout(() => setDebouncedQuery(trimmedQuery), modSearchDebounceMs);
     return () => window.clearTimeout(timeout);
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query, installState?.mode]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query, Boolean(installState)]);
 
   function updateShowIncompatibleResults(value: boolean) {
     setShowIncompatibleResults(value);
@@ -424,7 +398,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || !addOpen || !modrinthConfigured) return;
+    if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || !addOpen || !modrinthConfigured || installState) return;
     const trimmedQuery = debouncedQuery.trim();
     if (!trimmedQuery) return;
     setSearchResults([]);
@@ -450,13 +424,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     let cancelled = false;
     const abortController = new AbortController();
+    searchAbortControllerRef.current?.abort();
+    searchAbortControllerRef.current = abortController;
     setSearching(true);
-    void retrySidebarRequest(
-      () => api<{ hits: ModrinthHit[]; total_hits: number }>(
-        buildModrinthSearchPath({ query: trimmedQuery, serverId: activeServer.id, showIncompatibleResults }),
-        { signal: abortController.signal }
-      ),
-      abortController.signal
+    void api<{ hits: ModrinthHit[]; total_hits: number }>(
+      buildModrinthSearchPath({ query: trimmedQuery, serverId: activeServer.id, showIncompatibleResults }),
+      { signal: abortController.signal }
     ).then((result) => {
       if (!cancelled) {
         setSearchResults(result.hits);
@@ -467,11 +440,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (handleStaleSession(error)) return;
       setSearchError(modrinthSearchErrorMessage(error));
     }).finally(() => { if (!cancelled) setSearching(false); });
-    return () => { cancelled = true; abortController.abort(); };
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      if (searchAbortControllerRef.current === abortController) searchAbortControllerRef.current = null;
+    };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo, showIncompatibleResults]);
 
   async function loadMoreMods() {
-    if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer) return;
+    if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer || installState) return;
     const offset = searchResults.length;
     if (offset >= searchTotal) return;
     loadMoreInFlightRef.current = true;
@@ -487,8 +464,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return;
     }
     try {
-      const result = await retrySidebarRequest(() => api<{ hits: ModrinthHit[]; total_hits: number }>(buildModrinthSearchPath({ query: searchQuery, serverId: activeServer.id, showIncompatibleResults, offset, limit: 20 })));
-      setSearchResults((current) => [...current, ...result.hits]);
+      const serverId = activeServer.id;
+      const compatibility = showIncompatibleResults;
+      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(buildModrinthSearchPath({ query: searchQuery, serverId, showIncompatibleResults: compatibility, offset, limit: 20 }));
+      if (activeServerIdRef.current === serverId && query.trim() === searchQuery && showIncompatibleResults === compatibility && !installReviewOpenRef.current) {
+        setSearchResults((current) => [...current, ...result.hits]);
+      }
     } catch (error) {
       if (handleStaleSession(error)) return;
       setSearchError(errorMessage(error, "Could not load more search results."));
@@ -505,15 +486,17 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }, { rootMargin: "200px" });
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [searchResults.length, searchTotal, loadingMore, searching, query, showIncompatibleResults]);
+  }, [searchResults.length, searchTotal, loadingMore, searching, query, showIncompatibleResults, Boolean(installState)]);
 
   async function loadInstallVersions(mod: ModrinthHit, channel: ReleaseChannel, options: { useFallbackChannel?: boolean } = {}) {
     if (!activeServer) return;
+    const requestId = ++installVersionsRequestRef.current;
+    const serverId = activeServer.id;
     setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel, loading: true, installing: false, error: "", step: 1, acknowledgeMinecraftMismatch: false, selectedVersionId: "", data: current.channel === channel ? current.data : null } : current);
     try {
       const fetchVersions = async (nextChannel: ReleaseChannel) => {
         if (!activeServerIsDemo) {
-          return retrySidebarRequest(() => api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(activeServer.id)}&channel=${encodeURIComponent(nextChannel)}`));
+          return api<ModrinthInstallVersionsResponse>(`/api/modrinth/projects/${encodeURIComponent(mod.project_id)}/versions?serverId=${encodeURIComponent(serverId)}&channel=${encodeURIComponent(nextChannel)}`);
         }
         const fixtureError = demoFixtureFailureMessage(demoFixture, "versions");
         if (fixtureError) throw new Error(fixtureError);
@@ -527,8 +510,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         resolvedChannel = fallback;
         data = await fetchVersions(resolvedChannel);
       }
+      if (installVersionsRequestRef.current !== requestId || activeServerIdRef.current !== serverId) return;
       setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel: resolvedChannel, loading: false, installing: false, error: "", data, selectedVersionId: preferredInstallVersionId(data), acknowledgeMinecraftMismatch: false } : current);
     } catch (error) {
+      if (installVersionsRequestRef.current !== requestId || activeServerIdRef.current !== serverId) return;
       if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load Modrinth versions for this project.");
       setInstallState((current) => current?.mod.project_id === mod.project_id ? { ...current, channel, loading: false, installing: false, error: message, data: null, selectedVersionId: "" } : current);
@@ -537,6 +522,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   function openInstallReview(mod: ModrinthHit) {
     const channel: ReleaseChannel = "release";
+    installReviewOpenRef.current = true;
+    searchAbortControllerRef.current?.abort();
+    setSearching(false);
     setInstallState({ mode: "install", mod, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
     void loadInstallVersions(mod, channel, { useFallbackChannel: true });
   }
@@ -560,6 +548,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     const hit = modrinthHitFromInstalledMod(mod);
     if (!hit) return;
     const channel = mod.preferredChannel || mod.modrinth?.versionType || "release";
+    installReviewOpenRef.current = true;
+    searchAbortControllerRef.current?.abort();
+    setSearching(false);
     setDetailsModKey("");
     setAddOpen(true);
     setInstallState({ mode: "switch", mod: hit, sourceFilename: mod.filename, step: 1, channel, loading: true, installing: false, error: "", data: null, selectedVersionId: "", showOtherVersions: false, acknowledgeMinecraftMismatch: false });
@@ -928,7 +919,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     actions: {
       setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
       openAdd: () => { setDetailsModKey(""); setAddOpen(true); },
-      closeAdd: () => { setInstallState(null); setQuery(""); setDebouncedQuery(""); setShowIncompatibleResults(false); setSearchResults([]); setSearchTotal(0); setSearchError(""); setLoadingMore(false); loadMoreInFlightRef.current = false; setAddOpen(false); },
+      closeAdd: () => { installVersionsRequestRef.current += 1; searchAbortControllerRef.current?.abort(); installReviewOpenRef.current = false; setInstallState(null); setQuery(""); setDebouncedQuery(""); setShowIncompatibleResults(false); setSearchResults([]); setSearchTotal(0); setSearchError(""); setLoadingMore(false); loadMoreInFlightRef.current = false; setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
       retrySearch: () => setSearchRequestVersion((current) => current + 1),
@@ -936,6 +927,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       loadInstallVersions, openInstallReview, openSwitchVersionReview, selectInstallVersion, continueInstallReview,
       backInstall: () => setInstallState((current) => current ? { ...current, step: 1, installing: false } : current),
       closeInstall: () => {
+        installVersionsRequestRef.current += 1;
+        installReviewOpenRef.current = false;
         if (installState?.mode === "switch") setAddOpen(false);
         setInstallState(null);
       },

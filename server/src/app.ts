@@ -22,6 +22,7 @@ import { shellQuote } from "./docker/shell.js";
 import {
   allowedForChannel,
   fetchProject,
+  fetchProjects,
   fetchProjectVersions,
   latestCompatibleProjectVersion,
   minecraftVersionFacetValues,
@@ -35,6 +36,7 @@ import {
   versionChannel
 } from "./modrinth/compatibility.js";
 import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
+import { searchModrinth } from "./modrinth/searchCache.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
@@ -5953,19 +5955,7 @@ async function loadBatchVersionsFromSha1(hashes: string[]) {
 }
 
 async function batchProjects(projectIds: string[]) {
-  const resolved = new Map<string, ModrinthProject>();
-  for (let index = 0; index < projectIds.length; index += 100) {
-    const chunk = projectIds.slice(index, index + 100);
-    const url = new URL("https://api.modrinth.com/v2/projects");
-    url.searchParams.set("ids", JSON.stringify(chunk));
-    const response = await modrinthFetch(url.toString());
-    const projects = await response.json() as ModrinthProject[];
-    for (const project of projects) {
-      const projectId = project.id || project.project_id;
-      if (projectId) resolved.set(projectId, project);
-    }
-  }
-  return resolved;
+  return await fetchProjects(projectIds) as Map<string, ModrinthProject>;
 }
 
 async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
@@ -7084,20 +7074,20 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
   try {
     const [project, versions] = await Promise.all([
       fetchProject(projectId) as Promise<ModrinthProject>,
-      fetchProjectVersions(projectId, undefined, { forceRefresh: true })
+      fetchProjectVersions(projectId)
     ]);
     const allowedVersions = versions.filter((version) => allowedForChannel(version, selectedChannel));
     const dependencyProjectIds = Array.from(new Set(allowedVersions.flatMap((version) => (
       version.dependencies ?? []
     )).map((dependency) => dependency.project_id).filter((id): id is string => Boolean(id)))).slice(0, 40);
     const dependencyProjects = new Map<string, ModrinthProject>();
-    await Promise.all(dependencyProjectIds.map(async (dependencyProjectId) => {
-      try {
-        dependencyProjects.set(dependencyProjectId, await fetchProject(dependencyProjectId) as ModrinthProject);
-      } catch {
-        // Dependency names are helpful for the modal, but should not block version selection.
+    try {
+      for (const [dependencyProjectId, dependencyProject] of await fetchProjects(dependencyProjectIds)) {
+        dependencyProjects.set(dependencyProjectId, dependencyProject as ModrinthProject);
       }
-    }));
+    } catch {
+      // Dependency names are helpful for the modal, but should not block version selection.
+    }
     const projectSides = {
       server_side: project.server_side,
       client_side: project.client_side
@@ -7118,7 +7108,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
     const compatibleVersions = classified.filter((version) => version.compatible);
     const otherVersions = classified.filter((version) => !version.compatible);
 
-    logInfo({ ...serverLogFields(server), projectId, resultCount: classified.length, durationMs: durationSince(startedAt), action: "modrinth_project_versions", status: "versions_found" }, "Modrinth project versions completed");
+    logInfo({ ...serverLogFields(server), projectId, resultCount: classified.length, dependencyProjectCount: dependencyProjectIds.length, dependencyLookup: dependencyProjectIds.length > 0 ? "batch" : "none", durationMs: durationSince(startedAt), action: "modrinth_project_versions", status: "versions_found" }, "Modrinth project versions completed");
     return {
       project: {
         id: projectId,
@@ -7176,8 +7166,8 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     }
     url.searchParams.set("offset", String(offset));
     url.searchParams.set("facets", JSON.stringify(modrinthSearchFacets(targetRuntime.loader, minecraftVersion, compatibilityFilter ?? "compatible")));
-    const response = await modrinthFetch(url.toString());
-    let body = await response.json() as { hits?: ModrinthProject[]; total_hits?: number; offset?: number; limit?: number };
+    const searchResponse = await searchModrinth(url.toString());
+    let body = searchResponse.body;
     const compatibility = (hit: ModrinthProject) => {
       const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
       const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
@@ -7245,7 +7235,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
               }
       };
     });
-    logInfo({ ...serverLogFields(server), resultCount: hits.length, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
+    logInfo({ ...serverLogFields(server), resultCount: hits.length, cacheStatus: searchResponse.cacheStatus, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
     return { ...body, hits, status: hits.length > 0 ? "projects_found" : "no_project_found" };
   } catch (error) {
     logError({ ...serverLogFields(server), durationMs: durationSince(startedAt), action: "modrinth_search", status: "failed", ...errorLogFields(error) }, "Modrinth search failed");

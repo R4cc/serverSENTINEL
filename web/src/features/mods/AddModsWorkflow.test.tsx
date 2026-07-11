@@ -136,6 +136,20 @@ describe("AddModsWorkflow", () => {
     expect(html).not.toContain("Search by mod name");
     expect(html).not.toContain("What would you like to add?");
   });
+
+  it("keeps an install selection in review instead of returning to search skeletons", () => {
+    const version = incompatibleVersion();
+    const html = renderAddWorkflow({
+      installState: { ...installState(version, 1, false), loading: true, data: null },
+      selectedVersion: null,
+      searching: true
+    });
+
+    expect(html).toContain("Choose a version");
+    expect(html).not.toContain("Find a Fabric mod");
+    expect(html).not.toContain("Searching…");
+    expect(html).not.toContain("modsResultCard isSkeleton");
+  });
 });
 
 describe("ModInstallReview", () => {
