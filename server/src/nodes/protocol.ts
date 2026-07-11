@@ -38,7 +38,8 @@ export const nodeCapabilities = [
   "mods.install",
   "mods.upload",
   "mods.enableDisable",
-  "mods.remove"
+  "mods.remove",
+  "mods.liveMutation"
 ] as const;
 
 export type NodeCapability = typeof nodeCapabilities[number];
@@ -204,7 +205,8 @@ export const nodeOperationContract: NodeOperationContract = {
     "mods.install",
     "mods.upload",
     "mods.enableDisable",
-    "mods.remove"
+    "mods.remove",
+    "mods.liveMutation"
   ]
 };
 

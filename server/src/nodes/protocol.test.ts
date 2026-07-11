@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManagedNode } from "../types.js";
 import {
   assertNodeSupports,
+  nodeAdvertisesCapability,
   nodeCapabilities,
   nodeOperationContract,
   nodeProtocolVersion,
@@ -77,5 +78,7 @@ describe("node protocol v2", () => {
     expect(() => assertNodeSupports(node(), "server.start")).not.toThrow();
     expect(() => assertNodeSupports(node({ protocolVersion: "1.2" }), "server.start")).toThrow("protocol 2.0 is required");
     expect(() => assertNodeSupports(node({ capabilities: ["server.start"] }), "files.list")).toThrow("does not advertise files.list");
+    expect(nodeAdvertisesCapability(node(), "mods.liveMutation")).toBe(true);
+    expect(nodeAdvertisesCapability(node({ capabilities: nodeCapabilities.filter((capability) => capability !== "mods.liveMutation") }), "mods.liveMutation")).toBe(false);
   });
 });

@@ -5872,6 +5872,13 @@ async function withTrackedModMutation<T>(server: ManagedServer, action: () => Pr
       const running = runtimeRunning(await runtimeForServer(server).serverStatus(server));
       if (running === undefined) throw new Error("Server runtime status is unavailable; retry the mod change when the runtime reconnects");
       if (running) {
+        if (server.nodeId !== localNodeId) {
+          const node = findServerNode(server, await readNodes());
+          if (!node || !nodeAdvertisesCapability(node, "mods.liveMutation")) {
+            const nodeName = node?.name || server.nodeId;
+            throw new Error(`Node ${nodeName} must be updated and restarted before mods can be changed while the server is running. Update the node agent, or stop the Minecraft server before changing mods.`);
+          }
+        }
         baseline = snapshotMods(await listModsWithPanelMetadata(server));
         serversRepository.beginModRestartTracking(server.id, baseline);
       }

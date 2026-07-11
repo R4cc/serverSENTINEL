@@ -45,6 +45,13 @@ function modrinthSearchErrorMessage(error: unknown) {
   return errorMessage(error, "Could not search Modrinth. Check the API key and network availability.");
 }
 
+function modUploadErrorMessage(error: unknown, filename: string) {
+  if (error instanceof ApiError && /^Request failed with \d+$/i.test(error.message)) {
+    return `The panel rejected ${filename} (HTTP ${error.status}) without an error message. If this server uses a remote node, update and restart the node agent; otherwise check whether the filename already exists and review the panel logs.`;
+  }
+  return errorMessage(error, `Could not upload ${filename}.`);
+}
+
 function mergeSafeBatchUpdateResults(results: SafeBatchUpdateResult[]): SafeBatchUpdateResult {
   return {
     updated: results.flatMap((result) => result.updated),
@@ -624,7 +631,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
-      const message = (error as Error).message;
+      const message = modUploadErrorMessage(error, file.name);
       setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Upload failed", error: message, dismissible: true });
     } finally {
       setSearching(false);
