@@ -2343,7 +2343,7 @@ export default function App() {
           </section>
         )}
 
-        {notice && <div className="notice">{notice}</div>}
+        {notice && activePage !== "files" && <div className="notice">{notice}</div>}
 
         {isServerWorkspacePage(activePage) && activeServer && activeNodeRuntimeBlocked && (
           <section className="systemBanner error" role="alert">
