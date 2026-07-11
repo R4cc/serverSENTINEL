@@ -847,34 +847,53 @@ button:disabled,
 }
 
 .fileEditorMetaRow {
-  min-height: 34px;
+  min-height: 42px;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
   flex-wrap: wrap;
-}
-
-.fileEditorMetaRow span {
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: 999px;
-  background: var(--surface-muted);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border-row);
   color: var(--text-muted);
-  padding: 5px 8px;
-  font-size: 10px;
+  font-size: 12px;
+}
+
+.fileEditorMode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
   font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
 }
 
-.fileEditorMetaRow span.dirty {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--sentinel-accent-soft);
+.fileEditorModeDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--text-muted);
 }
 
-.fileEditorMetaRow span.editRequiredHint {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
-  background: var(--sentinel-accent-soft);
+.fileEditorMode.editing .fileEditorModeDot {
+  background: var(--accent);
+}
+
+.fileEditorMetaDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-row);
+}
+
+.fileEditorMetaRow .dirty {
   color: var(--sentinel-accent-strong);
+  font-weight: var(--weight-title);
+}
+
+.fileEditorRestriction {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fileLeaseNotice {
@@ -1778,10 +1797,12 @@ textarea:hover:not(:disabled),
   }
 
   .fileEditorMetaRow {
-    align-items: stretch;
+    align-items: center;
   }
 
-  .fileEditorMetaRow span {
-    border-radius: var(--radius-sm);
+  .fileEditorRestriction {
+    width: 100%;
+    margin-left: 0;
+    white-space: normal;
   }
 }

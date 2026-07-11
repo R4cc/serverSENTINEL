@@ -100,6 +100,7 @@ export function FileEditorModal({
   const onRequestCloseRef = useRef(onRequestClose);
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
+  const editorLocation = editorFolderPath || "Root directory";
   const canCloseEditor = !fileSaving;
   const saveDisabledReason = fileSaving
     ? "File save is already in progress."
@@ -150,7 +151,7 @@ export function FileEditorModal({
             <header className="fileEditorHeader">
               <div>
                 <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
-                <p>{editorFolderPath || "/"}</p>
+                <p className="fileEditorLocation">{editorLocation}</p>
               </div>
               <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
                 <AppIcon name="x" />
@@ -158,11 +159,14 @@ export function FileEditorModal({
             </header>
             <div className="fileEditorBody">
               <div className="fileEditorMetaRow">
-                <span>{editing ? "Exclusive edit lease" : "Read only"}</span>
-                {!editing && !editDisabled && <span className="editRequiredHint">Click Edit file to make changes</span>}
-                {!editing && editDisabled && editDisabledReason && <span className="editRequiredHint">{editDisabledReason}</span>}
-                <span>{editorText.split("\n").length} lines</span>
+                <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}`}>
+                  <span className="fileEditorModeDot" aria-hidden="true" />
+                  {editing ? "Editing" : "Read-only"}
+                </span>
+                <span className="fileEditorMetaDivider" aria-hidden="true" />
+                <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
+                {!editing && editDisabled && editDisabledReason && <span className="fileEditorRestriction">{editDisabledReason}</span>}
               </div>
               {editMessage && (
                 <div className="fileLeaseNotice" role="status">

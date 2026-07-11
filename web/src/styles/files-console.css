@@ -565,8 +565,11 @@
 
 .fileEditorHeader p {
   margin-top: var(--space-1);
-  font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.fileEditorHeader .fileEditorLocation {
+  color: var(--text-muted);
 }
 
 .fileEditorBody {

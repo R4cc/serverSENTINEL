@@ -432,9 +432,8 @@ textarea,
 
 
 .fileEditorMetaRow span {
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-badge);
+  font-size: 12px;
+  letter-spacing: normal;
 }
 
 
