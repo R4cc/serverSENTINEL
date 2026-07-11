@@ -210,7 +210,7 @@
   border: 1px solid var(--border-row);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 7%, transparent);
   backdrop-filter: blur(10px);
 }
 
