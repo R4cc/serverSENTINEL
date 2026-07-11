@@ -50,7 +50,7 @@ export function ModsPage({ workspace, serverContext, access, formatters }: Props
   return (
     <section className="tabPage modsWorkspacePage">
       {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
-      <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} />
+      <ModsSummary mods={data.installedMods} />
       <div className="modsWorkspaceToolbar">
         <div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add mods</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>
         <div className="modsWorkspaceUpdateActions"><Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? "Waiting for the current mod change to finish." : state.updatePlanLoading ? "Checking installed mods for updates." : "Check installed mods for updates."} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>{showSafeBatch && <Button onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch} reserveLabel="Updating safe mods…">{state.batchUpdateRunning ? "Updating safe mods…" : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</Button>}</div>

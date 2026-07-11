@@ -1,19 +1,17 @@
-import type { InstalledMod, ModUpdatePlan } from "../../types";
+import type { InstalledMod } from "../../types";
 import { getInstalledModHealth } from "./modHealth";
 
 type Props = {
   mods: InstalledMod[];
-  updatePlan?: ModUpdatePlan | null;
 };
 
-export function buildModsSummary(mods: InstalledMod[], updatePlan?: ModUpdatePlan | null) {
+export function buildModsSummary(mods: InstalledMod[]) {
   const health = mods.map(getInstalledModHealth);
-  const safeUpdates = updatePlan?.counts.safeUpdates ?? health.filter((item) => item.hasSafeUpdate).length;
-  const reviewUpdates = updatePlan?.counts.reviewUpdates ?? health.filter((item) => item.hasReviewUpdate).length;
-  const updates = safeUpdates + reviewUpdates;
-  const attention = updatePlan
-    ? updatePlan.counts.reviewUpdates + updatePlan.counts.blockedUpdates + updatePlan.counts.unknown
-    : health.filter((item) => item.needsAttention).length;
+  // Keep the summary aligned with the status badges shown for these same mods.
+  // The update plan is loaded independently and can briefly be stale or contain
+  // incomplete classifications while the installed-mod list is already current.
+  const updates = health.filter((item) => item.hasSafeUpdate || item.hasReviewUpdate).length;
+  const attention = health.filter((item) => item.needsAttention).length;
 
   return [
     { label: "Total mods", value: mods.length, tone: "blue" },
@@ -22,8 +20,8 @@ export function buildModsSummary(mods: InstalledMod[], updatePlan?: ModUpdatePla
   ];
 }
 
-export function ModsSummary({ mods, updatePlan }: Props) {
-  const items = buildModsSummary(mods, updatePlan);
+export function ModsSummary({ mods }: Props) {
+  const items = buildModsSummary(mods);
 
   return (
     <section className="modsWorkspaceSummary" aria-label="Mods status summary">

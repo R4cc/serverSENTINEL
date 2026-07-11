@@ -120,6 +120,14 @@
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: 14px; }
 .modsCompatibilityCard summary, .modsTechnicalDetails summary, .modsAdvancedOptions summary, .modsDependencySummary summary { cursor: pointer; color: var(--text-muted); font-size: .8rem; font-weight: var(--weight-strong); }
+.modsCompatibilityCard details[open] > summary { margin-bottom: 12px; color: var(--text); }
+.modsCompatibilityFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--border); }
+.modsCompatibilityFacts > div { min-width: 0; padding: 11px 12px; background: var(--surface-raised); }
+.modsCompatibilityFacts > .modsCompatibilityReason { grid-column: 1 / -1; }
+.modsCompatibilityFacts dt { margin-bottom: 6px; color: var(--text-muted); font-size: .69rem; font-weight: var(--weight-heading); letter-spacing: .04em; text-transform: uppercase; }
+.modsCompatibilityFacts dd { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; margin: 0; color: var(--text); font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.modsCompatibilityFacts dd > span { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: .72rem; font-weight: var(--weight-strong); }
+.modsCompatibilityFacts .modsCompatibilityReason dd { color: var(--text-muted); }
 .modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
 .modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
 .modsTechnicalDetails a { display: inline-block; margin-top: 14px; }
