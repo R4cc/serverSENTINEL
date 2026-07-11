@@ -19,6 +19,7 @@ type FilesPageProps = {
   serverRequiresStoppedForMutableConfig: boolean;
   stoppedServerMutationMessage: string;
   dateTimeFormatter: Intl.DateTimeFormat;
+  onCopyText: (text: string) => void;
 };
 
 export function FilesPage({
@@ -29,7 +30,8 @@ export function FilesPage({
   dockerOperationalLock,
   serverRequiresStoppedForMutableConfig,
   stoppedServerMutationMessage,
-  dateTimeFormatter
+  dateTimeFormatter,
+  onCopyText
 }: FilesPageProps) {
   const { data, state, refs, table, actions } = workspace;
   const {
@@ -439,6 +441,7 @@ export function FilesPage({
         onRequestClose={actions.requestCloseEditor}
         onCancel={actions.cancelFileEdit}
         onSave={actions.saveFile}
+        onCopy={() => onCopyText(editorText)}
         onEnterEdit={actions.enterFileEditMode}
         onRetryOpen={() => {
           if (selectedPath) void actions.openFile(selectedPath, true);

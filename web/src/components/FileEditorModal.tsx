@@ -25,6 +25,7 @@ type FileEditorModalProps = {
   onRequestClose: () => void;
   onCancel: () => void;
   onSave: () => void;
+  onCopy: () => void;
   onEnterEdit: () => void;
   onRetryOpen: () => void;
   onKeepEditing: () => void;
@@ -90,6 +91,7 @@ export function FileEditorModal({
   onRequestClose,
   onCancel,
   onSave,
+  onCopy,
   onEnterEdit,
   onRetryOpen,
   onKeepEditing,
@@ -166,7 +168,12 @@ export function FileEditorModal({
                 <span className="fileEditorMetaDivider" aria-hidden="true" />
                 <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
-                {!editing && editDisabled && editDisabledReason && <span className="fileEditorRestriction">{editDisabledReason}</span>}
+                <div className="fileEditorMetaActions">
+                  {!editing && editDisabled && editDisabledReason && <span className="fileEditorRestriction">{editDisabledReason}</span>}
+                  <Button iconOnly compact variant="ghost" className="fileEditorCopyButton" onClick={onCopy} aria-label="Copy entire file" title="Copy entire file">
+                    <AppIcon name="copy" />
+                  </Button>
+                </div>
               </div>
               {editMessage && (
                 <div className="fileLeaseNotice" role="status">
@@ -174,7 +181,7 @@ export function FileEditorModal({
                   <span>{editMessage}</span>
                 </div>
               )}
-              <div className="fileEditorMainArea">
+              <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
                 {fileOpening ? (
                   <div className="fileEditorStateFill">
                     <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />

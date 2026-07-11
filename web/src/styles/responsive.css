@@ -890,10 +890,21 @@ button:disabled,
 }
 
 .fileEditorRestriction {
-  margin-left: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.fileEditorMetaActions {
+  min-width: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fileEditorCopyButton {
+  flex: 0 0 auto;
 }
 
 .fileLeaseNotice {
@@ -945,13 +956,12 @@ button:disabled,
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-3);
 }
 
-.fileEditorMainArea > .fileCodeEditor:first-child,
-.fileEditorMainArea > .fileEditorStateFill:first-child {
-  grid-row: 1 / -1;
+.fileEditorMainArea.hasReadError {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .fileCodeEditor .cm-theme,
@@ -1801,8 +1811,12 @@ textarea:hover:not(:disabled),
   }
 
   .fileEditorRestriction {
+    white-space: normal;
+  }
+
+  .fileEditorMetaActions {
     width: 100%;
     margin-left: 0;
-    white-space: normal;
+    justify-content: space-between;
   }
 }

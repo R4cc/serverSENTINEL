@@ -2855,6 +2855,7 @@ export default function App() {
                 serverRequiresStoppedForMutableConfig={serverRequiresStoppedForMutableConfig}
                 stoppedServerMutationMessage={stoppedServerMutationMessage}
                 dateTimeFormatter={dateTimeFormatter}
+                onCopyText={(text) => void copyText(text)}
               />
             )}
 
