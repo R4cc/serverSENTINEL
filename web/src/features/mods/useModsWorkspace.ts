@@ -594,12 +594,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     });
   }
 
-  async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
+  async function uploadModFile(file: File) {
     if (modsLocked || !canManage || !activeServer) return;
-    const file = event.target.files?.[0];
-    event.target.value = "";
     const selection = validateModUploadSelection(file, installedMods);
-    if (!file || selection.kind === "cancelled") return;
+    if (selection.kind === "cancelled") return;
     if (selection.kind === "error") { notify("error", selection.message); return; }
     setNotice("");
     const jobId = `upload-${file.name}-${Date.now()}`;
@@ -706,6 +704,16 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
     }
+  }
+
+  async function uploadModFiles(files: File[]) {
+    for (const file of files) await uploadModFile(file);
+  }
+
+  async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    await uploadModFiles(files);
   }
 
   async function updateMod(mod: InstalledMod) {
@@ -937,7 +945,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         return { ...current, showOtherVersions, selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? preferredInstallVersionId(current.data) : "", acknowledgeMinecraftMismatch: false };
       }),
       acknowledgeInstall: (checked: boolean) => setInstallState((current) => current ? { ...current, acknowledgeMinecraftMismatch: checked } : current),
-      uploadMod, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, acknowledgeModReview, resetPageState
+      uploadMod, uploadModFiles, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, acknowledgeModReview, resetPageState
     }
   };
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState } from "../../components/UiPrimitives";
@@ -21,11 +21,18 @@ type Props = {
   onUpdate: (mod: InstalledMod) => void;
   onSwitchVersion: (mod: InstalledMod) => void;
   onDetails: (mod: InstalledMod) => void;
+  onDropFiles?: (files: File[]) => void;
+  dropLocked?: boolean;
   updatePlan?: ModUpdatePlan | null;
 };
 
-export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, updatePlan }: Props) {
+export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+
+  function hasFiles(event: DragEvent) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
 
   return (
     <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">
@@ -41,7 +48,19 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
         </label>
       </div>
 
-      <div className="modsWorkspaceTable" aria-busy={busy}>
+      <div
+        className={`modsWorkspaceTable ${draggingFiles ? "isDragTarget" : ""}`}
+        aria-busy={busy}
+        onDragEnter={(event) => { if (hasFiles(event) && !dropLocked) { event.preventDefault(); setDraggingFiles(true); } }}
+        onDragOver={(event) => { if (hasFiles(event) && !dropLocked) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
+        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false); }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDraggingFiles(false);
+          if (!dropLocked) onDropFiles?.(Array.from(event.dataTransfer.files));
+        }}
+      >
+        {draggingFiles && <div className="modsWorkspaceDropOverlay" role="status"><AppIcon name="fileUp" /><strong>Drop JAR files to upload</strong></div>}
         <div className="modsWorkspaceTableHead" aria-hidden="true">
           <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span /><span />
         </div>

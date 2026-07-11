@@ -23,7 +23,10 @@
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
-.modsWorkspaceTable { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.modsWorkspaceTable { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.modsWorkspaceTable.isDragTarget { outline: 2px solid var(--sentinel-accent); outline-offset: -2px; }
+.modsWorkspaceDropOverlay { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 150px; color: var(--text); background: color-mix(in srgb, var(--surface-raised) 88%, transparent); pointer-events: none; }
+.modsWorkspaceDropOverlay svg { width: 28px; height: 28px; color: var(--sentinel-accent); }
 .modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px 40px; align-items: center; gap: 14px; }
 .modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; color: var(--text-muted); background: var(--surface-muted); font-size: .72rem; font-weight: var(--weight-strong); }
 .modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }

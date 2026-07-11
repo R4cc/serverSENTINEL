@@ -33,6 +33,7 @@ function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePla
       onUpdate={noop}
       onSwitchVersion={noop}
       onDetails={noop}
+      onDropFiles={noop}
       updatePlan={updatePlan}
     />
   );
@@ -93,5 +94,11 @@ describe("InstalledModsList", () => {
     }]);
     expect(html).toContain("Healthy");
     expect(html).toContain("Requires restart");
+  });
+
+  it("exposes the installed mods table as a file drop target", () => {
+    const html = renderInstalledMods([mod()]);
+
+    expect(html).toContain("modsWorkspaceTable");
   });
 });
