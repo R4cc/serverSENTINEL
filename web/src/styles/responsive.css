@@ -1347,6 +1347,27 @@ button:disabled,
   background-color: color-mix(in srgb, var(--sidebar-foreground) 14%, transparent);
 }
 
+/* Sidebar-specific states need to remain legible against its navy surface. */
+.sidebar .sideNav button.active,
+.sidebar .serverListItem.active {
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--sidebar-background));
+  background: var(--accent);
+  color: var(--swiss-white);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--swiss-white) 72%, var(--accent));
+}
+
+.sidebar .sideNav button.active:hover,
+.sidebar .serverListItem.active:hover {
+  background: var(--sentinel-accent-strong);
+  color: var(--swiss-white);
+}
+
+.sidebar .accountIcon {
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
 .brandBlock,
 .workspaceHeader,
 .modalHeader,
@@ -1949,4 +1970,25 @@ textarea:hover:not(:disabled),
     width: 100%;
     margin-left: 0;
   }
+}
+
+/* Keep sidebar selections and account controls independent of page-theme surfaces. */
+.sidebar .sideNav button.active,
+.sidebar .serverListItem.active {
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--sidebar-background));
+  background: var(--accent);
+  color: var(--swiss-white);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--swiss-white) 72%, var(--accent));
+}
+
+.sidebar .sideNav button.active:hover,
+.sidebar .serverListItem.active:hover {
+  background: var(--sentinel-accent-strong);
+  color: var(--swiss-white);
+}
+
+.sidebar .accountIcon {
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
 }
