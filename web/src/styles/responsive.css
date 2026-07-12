@@ -1311,14 +1311,40 @@ button:disabled,
 
 /* Surface and interaction hierarchy */
 .sidebar {
-  border-right: var(--border-subtle) solid var(--border-panel);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 78%, var(--surface)), var(--surface-muted));
+  border-right: var(--border-subtle) solid color-mix(in srgb, var(--sidebar-foreground) 16%, var(--sidebar-background));
+  background: var(--sidebar-background);
+  color: var(--sidebar-foreground);
 }
 
 .themeDark .sidebar {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 82%, var(--surface)), var(--surface-muted));
+  background: var(--sidebar-background);
+}
+
+.sidebar .brandBlock,
+.sidebar .selectedServerReadout,
+.sidebar .accountChip {
+  color: var(--sidebar-foreground);
+}
+
+.sidebar .sideNav button,
+.sidebar .serverListItem {
+  color: var(--sidebar-foreground-muted);
+}
+
+.sidebar .sideNav button:hover:not(:disabled),
+.sidebar .serverListItem:hover:not(.active) {
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+  color: var(--sidebar-foreground);
+}
+
+.sidebar .selectedServerReadout,
+.sidebar .accountChip {
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
+}
+
+.sidebar .sidebarDivider {
+  background-color: color-mix(in srgb, var(--sidebar-foreground) 14%, transparent);
 }
 
 .brandBlock,

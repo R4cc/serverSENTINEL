@@ -68,6 +68,9 @@
   --surface: #1b1d22;
   --surface-raised: #22252b;
   --surface-muted: #2a2e36;
+  --sidebar-background: #050b17;
+  --sidebar-foreground: #f4f7ff;
+  --sidebar-foreground-muted: #aeb9cc;
   --text: #e6e8ee;
   --text-muted: #b8becb;
   --text-soft: #929baa;
