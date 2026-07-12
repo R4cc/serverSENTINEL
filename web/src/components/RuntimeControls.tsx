@@ -51,7 +51,12 @@ export function RuntimeControls({
   const actionLabel = (action: "start" | "stop" | "restart") => `${action[0].toUpperCase()}${action.slice(1)}`;
 
   return (
-    <div className={`runtimeControls ${className}`.trim()} aria-label="Container controls">
+    <div
+      className={`runtimeControls ${className}`.trim()}
+      aria-label="Container controls"
+      aria-busy={Boolean(busyAction)}
+      data-busy-action={busyAction || undefined}
+    >
       {([mainAction, "restart"] as const).map((action) => {
         const actionDisabled = disabled || (action === "restart" && !isRunning);
         const actionReason = action === "restart" && !isRunning
@@ -62,6 +67,8 @@ export function RuntimeControls({
             key={action}
             variant={action === "stop" ? "critical" : action === "restart" ? "secondary" : "primary"}
             className={`runtimeControlButton ${action}`}
+            data-action={action}
+            data-busy={busyAction === action || undefined}
             onClick={() => onAction(action)}
             disabled={actionDisabled}
             title={actionDisabled ? actionReason : `${actionLabel(action)} server`}

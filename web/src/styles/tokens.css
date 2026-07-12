@@ -83,6 +83,12 @@
   --control-icon-size: 18px;
   --control-icon-button-size: 40px;
   --control-transition: 150ms ease;
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 420ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-status-cycle: 2800ms;
   font-family: var(--font-sans);
   background: var(--surface);
   color: var(--text);

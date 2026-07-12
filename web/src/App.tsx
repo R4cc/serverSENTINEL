@@ -217,6 +217,7 @@ export default function App() {
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
+  const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const [nodeBusyId, setNodeBusyId] = useState("");
@@ -261,12 +262,38 @@ export default function App() {
   const consoleReconnectNoticeTimeoutRef = useRef<number | null>(null);
   const consoleReconnectAttemptRef = useRef(0);
   const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
+  const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
   const staleSessionSuppressUntilRef = useRef(0);
+
+  useEffect(() => {
+    setRuntimeFeedbackAction(null);
+    if (runtimeFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(runtimeFeedbackTimeoutRef.current);
+      runtimeFeedbackTimeoutRef.current = null;
+    }
+    return () => {
+      if (runtimeFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(runtimeFeedbackTimeoutRef.current);
+      }
+    };
+  }, [activeServerId]);
+
+  function showRuntimeFeedback(action: "start" | "stop" | "restart") {
+    if (action === "stop") return;
+    if (runtimeFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(runtimeFeedbackTimeoutRef.current);
+    }
+    setRuntimeFeedbackAction(action);
+    runtimeFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setRuntimeFeedbackAction(null);
+      runtimeFeedbackTimeoutRef.current = null;
+    }, 900);
+  }
 
   const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
     if (demoMode && serverId === demoServerId) {
@@ -2041,6 +2068,7 @@ export default function App() {
           consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
           consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
         ]);
+        showRuntimeFeedback(action);
         notify("success", `Demo server ${completedLabel}`);
         return;
       }
@@ -2049,6 +2077,7 @@ export default function App() {
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
       await refreshConsoleLogs(activeServer.id);
+      showRuntimeFeedback(action);
       notify("success", `${activeServer.displayName} ${completedLabel}`);
     } catch (error) {
       setConsoleStreamVersion((version) => version + 1);
@@ -2415,7 +2444,10 @@ export default function App() {
           <div className="brandLockup">
             <img className="brandLogo" src="/logo.png" alt="" />
             <div>
-              <h1>serverSENTINEL</h1>
+              <h1 className="sidebarBrandWordmark" aria-label="serverSENTINEL">
+                <span aria-hidden="true">server</span>
+                <span aria-hidden="true">SENTINEL</span>
+              </h1>
             </div>
           </div>
           <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
@@ -2840,7 +2872,7 @@ export default function App() {
 
         {isServerWorkspacePage(activePage) && activeServer && (
           <>
-            <div className="activeServerStrip">
+            <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
               <div className="serverStripPrimary">
                 <div className="serverStripLeft">
                   <div className="serverStripIcon">

@@ -1,0 +1,228 @@
+/* Lightweight motion language. Loaded last so interaction polish stays intentional. */
+
+/* Living server state ---------------------------------------------------- */
+.serverCommandStatusDot.running,
+.serverSwitcherStatus.running,
+.serverCommandStatusDot.starting,
+.serverSwitcherStatus.starting,
+.activeServerStrip.runtimeAction-start .serverCommandStatusDot,
+.activeServerStrip.runtimeAction-restart .serverCommandStatusDot {
+  position: relative;
+  isolation: isolate;
+}
+
+.serverCommandStatusDot.running::after,
+.serverSwitcherStatus.running::after,
+.serverCommandStatusDot.starting::after,
+.serverSwitcherStatus.starting::after,
+.activeServerStrip.runtimeAction-start .serverCommandStatusDot::after,
+.activeServerStrip.runtimeAction-restart .serverCommandStatusDot::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -5px;
+  border: 1px solid color-mix(in srgb, var(--sentinel-success) 62%, transparent);
+  border-radius: inherit;
+  opacity: 0;
+  transform: scale(0.55);
+  animation: sentinelStatusHeartbeat var(--motion-status-cycle) var(--motion-ease-standard) infinite;
+  pointer-events: none;
+}
+
+.serverCommandStatusDot.starting::after,
+.serverSwitcherStatus.starting::after {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 68%, transparent);
+  animation-duration: 1400ms;
+}
+
+.activeServerStrip.runtimeAction-start .serverCommandStatusDot::after,
+.activeServerStrip.runtimeAction-restart .serverCommandStatusDot::after {
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  animation-duration: 1400ms;
+}
+
+/* Runtime controls ------------------------------------------------------ */
+.runtimeControlButton .controlGlyphSVG {
+  transform-origin: center;
+  transition: transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.runtimeControlButton.start:hover:not(:disabled) .controlGlyphSVG {
+  transform: translateX(2px) scale(1.08);
+}
+
+.runtimeControlButton.stop:hover:not(:disabled) .controlGlyphSVG {
+  transform: scale(0.88);
+}
+
+.runtimeControlButton.restart:hover:not(:disabled) .controlGlyphSVG {
+  transform: rotate(28deg);
+}
+
+.runtimeControlButton:active:not(:disabled) .controlGlyphSVG {
+  transform: scale(0.82);
+  transition-duration: var(--motion-duration-fast);
+}
+
+.runtimeControlButton[data-busy="true"] {
+  isolation: isolate;
+}
+
+.activeServerStrip.runtimeFeedback-start,
+.activeServerStrip.runtimeFeedback-restart {
+  animation: sentinelRuntimeIgnition 850ms var(--motion-ease-spring) both;
+}
+
+.activeServerStrip.runtimeFeedback-start .serverStripIcon,
+.activeServerStrip.runtimeFeedback-restart .serverStripIcon {
+  animation: sentinelCubeIgnition 700ms var(--motion-ease-spring) both;
+}
+
+/* Navigation ------------------------------------------------------------ */
+.sideNav button {
+  position: relative;
+}
+
+.sideNav button .sideIcon {
+  transform-origin: center;
+  transition: transform var(--motion-duration-base) var(--motion-ease-spring), filter var(--motion-duration-base) ease;
+}
+
+.sideNav button:hover:not(:disabled) .sideIcon {
+  transform: translateX(2px) scale(1.04);
+}
+
+.sideNav button.active .sideIcon {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+.sideNav button.active::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 20%, rgb(255 255 255 / 0.22) 43%, transparent 66%);
+  opacity: 0;
+  transform: translateX(-65%);
+  animation: sentinelNavGlint var(--motion-duration-slow) var(--motion-ease-standard) both;
+  pointer-events: none;
+}
+
+/* Page arrival ---------------------------------------------------------- */
+.workspace > .tabPage,
+.workspace > .pageStack,
+.workspace > .createServerPanel,
+.workspace > .settingsList {
+  animation: sentinelPageEnter var(--motion-duration-base) var(--motion-ease-standard) both;
+}
+
+/* Decorative server cube ----------------------------------------------- */
+.serverStripIcon {
+  perspective: 180px;
+  transition: border-color var(--motion-duration-base) ease, box-shadow var(--motion-duration-base) ease, transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.serverStripIcon .server-icon-cube {
+  transform-origin: center;
+  transition: transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.serverStripIcon:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.serverStripIcon:hover .server-icon-cube {
+  transform: rotateX(-8deg) rotateY(12deg) scale(1.06);
+}
+
+/* Positive feedback ---------------------------------------------------- */
+.sonnerToast[data-type="success"] {
+  animation: sentinelSuccessToast 520ms var(--motion-ease-spring) both;
+}
+
+.sonnerToast[data-type="success"] .toastSeverityIcon {
+  animation: sentinelSuccessIcon 460ms var(--motion-ease-spring) 70ms both;
+}
+
+@keyframes sentinelStatusHeartbeat {
+  0%, 68%, 100% { opacity: 0; transform: scale(0.55); }
+  76% { opacity: 0.58; }
+  90% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes sentinelRuntimeIgnition {
+  0%, 100% { filter: none; }
+  36% { filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--sentinel-success) 22%, transparent)); }
+}
+
+@keyframes sentinelCubeIgnition {
+  0% { transform: scale(1); }
+  38% { transform: translateY(-2px) scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sentinelNavGlint {
+  0% { opacity: 0; transform: translateX(-65%); }
+  32% { opacity: 0.7; }
+  100% { opacity: 0; transform: translateX(65%); }
+}
+
+@keyframes sentinelPageEnter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sentinelSuccessToast {
+  0%, 100% { filter: brightness(1); }
+  48% { filter: brightness(1.06) drop-shadow(0 7px 12px color-mix(in srgb, var(--sentinel-success) 18%, transparent)); }
+}
+
+@keyframes sentinelSuccessIcon {
+  0% { opacity: 0; transform: scale(0.72); }
+  65% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .serverCommandStatusDot.running::after,
+  .serverSwitcherStatus.running::after,
+  .serverCommandStatusDot.starting::after,
+  .serverSwitcherStatus.starting::after,
+  .activeServerStrip.runtimeAction-start .serverCommandStatusDot::after,
+  .activeServerStrip.runtimeAction-restart .serverCommandStatusDot::after {
+    animation: none;
+    opacity: 0.32;
+    transform: scale(1);
+  }
+
+  .runtimeControlButton .controlGlyphSVG,
+  .sideNav button .sideIcon,
+  .serverStripIcon,
+  .serverStripIcon .server-icon-cube {
+    transition: none;
+  }
+
+  .runtimeControlButton:hover:not(:disabled) .controlGlyphSVG,
+  .runtimeControlButton:active:not(:disabled) .controlGlyphSVG,
+  .sideNav button:hover:not(:disabled) .sideIcon,
+  .serverStripIcon:hover,
+  .serverStripIcon:hover .server-icon-cube {
+    transform: none;
+  }
+
+  .activeServerStrip.runtimeFeedback-start,
+  .activeServerStrip.runtimeFeedback-restart,
+  .activeServerStrip.runtimeFeedback-start .serverStripIcon,
+  .activeServerStrip.runtimeFeedback-restart .serverStripIcon,
+  .sideNav button.active::after,
+  .workspace > .tabPage,
+  .workspace > .pageStack,
+  .workspace > .createServerPanel,
+  .workspace > .settingsList,
+  .sonnerToast[data-type="success"],
+  .sonnerToast[data-type="success"] .toastSeverityIcon {
+    animation: none;
+  }
+}

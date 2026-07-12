@@ -39,6 +39,26 @@
   white-space: nowrap;
 }
 
+.sidebarBrandWordmark {
+  display: grid;
+  gap: 1px;
+  line-height: 0.9;
+}
+
+.sidebarBrandWordmark span {
+  display: block;
+}
+
+.sidebarBrandWordmark span:first-child {
+  font-size: 11px;
+  font-weight: var(--weight-heading);
+}
+
+.sidebarBrandWordmark span:last-child {
+  font-size: 14px;
+  letter-spacing: 0.035em;
+}
+
 .brandLogo {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
