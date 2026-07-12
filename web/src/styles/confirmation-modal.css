@@ -1,0 +1,36 @@
+.confirmationBackdrop {
+  z-index: 200;
+}
+
+.confirmationModal form {
+  display: grid;
+  max-height: min(720px, calc(100vh - 40px));
+}
+
+.confirmationModal .confirmContent > p:first-child {
+  margin: 0;
+}
+
+.confirmationWarning {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.confirmationWarning--warning {
+  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
+  color: var(--sentinel-warning) !important;
+}
+
+.confirmationWarning--danger {
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
+  color: var(--sentinel-danger) !important;
+}
+
+@media (max-width: 520px) {
+  .confirmationModal .modalFooter button {
+    flex: 1 1 0;
+  }
+}

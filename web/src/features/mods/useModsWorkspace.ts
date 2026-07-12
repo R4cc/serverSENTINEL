@@ -9,6 +9,7 @@ import { getInstallVersionHealth } from "./modHealth";
 import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
 import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
+import type { RequestConfirmation } from "../../components/ConfirmationModal";
 
 const modSearchDebounceMs = 650;
 
@@ -82,6 +83,7 @@ export type ModsWorkspaceInputs = {
   handleStaleSession: (error: unknown) => boolean;
   refreshFiles: (serverId: string, path: string) => Promise<unknown>;
   refreshServerState: () => Promise<unknown>;
+  requestConfirmation: RequestConfirmation;
 };
 
 export type ModsWorkspaceController = ReturnType<typeof useModsWorkspace>;
@@ -166,7 +168,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     activeServer, activePage, activeServerIsDemo, activeServerUsesInternalNode, activeNodeRuntimeBlocked,
     activeNodeBlockMessage, demoMode, demoInstalledMods, setDemoInstalledMods, modrinthConfigured,
     isProvisioning, canManage, modsLocked, toggleLocked, notify, setNotice,
-    setActiveJobs, handleStaleSession, refreshFiles, refreshServerState
+    setActiveJobs, handleStaleSession, refreshFiles, refreshServerState, requestConfirmation
   } = inputs;
   const demoFixture = readModsDemoFixture();
 
@@ -864,7 +866,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   async function removeMod(mod: InstalledMod) {
     if (modsLocked || !canManage || !activeServer) return;
     setNotice("");
-    if (!window.confirm(`Remove ${mod.displayName}?\n\nThis deletes ${mod.filename} from the server's mods folder.`)) return;
+    const confirmed = await requestConfirmation({
+      title: `Remove ${mod.displayName}?`,
+      description: "Remove this installed mod from the server.",
+      details: mod.filename,
+      warning: "The mod file will be deleted from the server's mods folder.",
+      confirmLabel: "Remove mod",
+      variant: "critical"
+    });
+    if (!confirmed) return;
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
       setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));

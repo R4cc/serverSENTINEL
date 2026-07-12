@@ -21,6 +21,7 @@ import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
+import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -202,6 +203,7 @@ function AppToaster({ darkMode }: { darkMode: boolean }) {
 }
 
 export default function App() {
+  const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
@@ -512,7 +514,8 @@ export default function App() {
     setActiveJobs,
     handleStaleSession,
     refreshFiles: filesWorkspace.actions.loadFiles,
-    refreshServerState: () => refreshApp({ silent: true })
+    refreshServerState: () => refreshApp({ silent: true }),
+    requestConfirmation
   });
   useEffect(() => {
     if (!activeServer || demoMode || !authSession?.authenticated) return;
@@ -1273,7 +1276,14 @@ export default function App() {
     ].filter((error): error is { field: string; message: string } => Boolean(error));
     if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
     if (authSession?.user?.id === user.id && !permissions.includes("users.manage")) {
-      if (!window.confirm("Save changes without your own Manage users permission?\n\nThe backend may reject this if it would remove the last full-access admin.")) return;
+      const confirmed = await requestConfirmation({
+        title: "Remove your own Manage users permission?",
+        description: "Saving these changes may prevent you from managing user accounts again.",
+        warning: "The backend may reject this change if it would remove the last full-access administrator.",
+        confirmLabel: "Save anyway",
+        variant: "critical"
+      });
+      if (!confirmed) return;
     }
     setUserSaving(true);
     try {
@@ -1329,7 +1339,14 @@ export default function App() {
 
   async function deleteUser(user: PublicUser) {
     if (!canManageUsers || userSaving) return;
-    if (!window.confirm(`Delete user ${user.username}?\n\nThis immediately removes their account and invalidates their sessions.`)) return;
+    const confirmed = await requestConfirmation({
+      title: `Delete ${user.username}?`,
+      description: "This immediately removes the user account and invalidates all of its active sessions.",
+      warning: "This action cannot be undone.",
+      confirmLabel: "Delete user",
+      variant: "critical"
+    });
+    if (!confirmed) return;
     setUserSaving(true);
     try {
       await api(`/api/users/${user.id}`, { method: "DELETE" });
@@ -1722,7 +1739,14 @@ export default function App() {
     const versionText = sameVersion
       ? ` to ${panelVersion}${buildText}`
       : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
-    if (!window.confirm(`Upgrade node "${node.name}"${versionText}?\n\nThe node may disconnect briefly while the container is recreated.`)) return;
+    const confirmed = await requestConfirmation({
+      title: `Upgrade ${node.name}?`,
+      description: `Upgrade this node${versionText}.`,
+      warning: "The node may disconnect briefly while its container is recreated.",
+      confirmLabel: "Upgrade node",
+      variant: "primary"
+    });
+    if (!confirmed) return;
     setNodeBusyId(node.id);
     try {
       const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
@@ -1749,11 +1773,18 @@ export default function App() {
 
   async function restartNode(node: ManagedNode) {
     if (!canManageUsers) return;
-    if (node.isInternal) {
-      if (!window.confirm(`Restart the Panel container ("${node.name}")?\n\nThis will temporarily disconnect your current session while the Panel restarts.`)) return;
-    } else {
-      if (!window.confirm(`Restart node container "${node.name}"?\n\nThe node will disconnect briefly while the container restarts.`)) return;
-    }
+    const confirmed = await requestConfirmation({
+      title: node.isInternal ? "Restart the Panel container?" : `Restart ${node.name}?`,
+      description: node.isInternal
+        ? `Restart the Panel container (${node.name}).`
+        : `Restart the node container for ${node.name}.`,
+      warning: node.isInternal
+        ? "Your current session will disconnect temporarily while the Panel restarts."
+        : "The node will disconnect briefly while its container restarts.",
+      confirmLabel: node.isInternal ? "Restart Panel" : "Restart node",
+      variant: "primary"
+    });
+    if (!confirmed) return;
     setNodeBusyId(node.id);
     try {
       const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
@@ -1782,10 +1813,18 @@ export default function App() {
     if (node.isInternal || !canManageUsers) return;
     const assignedMessage = node.servers.length
       ? force
-        ? `\n\nThis will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
-        : `\n\nThis will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
-      : "";
-    if (!window.confirm(`${force ? "Force remove" : "Remove"} node "${node.name}"?${assignedMessage}\n\nThis cannot be undone.`)) return;
+        ? `This will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
+        : `This will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
+      : undefined;
+    const confirmed = await requestConfirmation({
+      title: `${force ? "Force remove" : "Remove"} ${node.name}?`,
+      description: force ? "Force-remove this node from the Panel." : "Remove this node from the Panel.",
+      details: assignedMessage,
+      warning: "This action cannot be undone.",
+      confirmLabel: force ? "Force remove node" : "Remove node",
+      variant: "critical"
+    });
+    if (!confirmed) return;
     setNodeBusyId(node.id);
     try {
       const result = await api<{
@@ -2041,7 +2080,14 @@ export default function App() {
 
   async function deleteSchedule(schedule: ScheduledExecution) {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return;
-    if (!window.confirm(`Delete scheduled execution "${schedule.name}"?\n\nThis cannot be undone.`)) return;
+    const confirmed = await requestConfirmation({
+      title: `Delete ${schedule.name}?`,
+      description: "Delete this scheduled execution and its configured actions.",
+      warning: "This action cannot be undone.",
+      confirmLabel: "Delete schedule",
+      variant: "critical"
+    });
+    if (!confirmed) return;
     setScheduleBusy(true);
     if (activeServerIsDemo) {
       setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
@@ -2064,7 +2110,14 @@ export default function App() {
 
   async function cancelScheduleRun(run: ScheduledActiveRun) {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer || activeServerIsDemo) return false;
-    if (!window.confirm(`Cancel scheduled run "${run.scheduleName}"?\n\nRemaining scheduled actions will not execute.`)) return false;
+    const confirmed = await requestConfirmation({
+      title: `Cancel ${run.scheduleName}?`,
+      description: "Cancel the currently active scheduled run.",
+      warning: "Any remaining scheduled actions will not execute.",
+      confirmLabel: "Cancel run",
+      variant: "critical"
+    });
+    if (!confirmed) return false;
     setScheduleBusy(true);
     try {
       await api(`/api/servers/${activeServer.id}/schedules/${run.scheduleId}/runs/${run.id}/cancel`, { method: "POST" });
@@ -2808,7 +2861,7 @@ export default function App() {
                 />
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />
-                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} />
+                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} />
 
               </section>
             )}
@@ -2928,6 +2981,13 @@ export default function App() {
         )}
       </section>
       </main>
+      {confirmationOptions ? (
+        <ConfirmationModal
+          options={confirmationOptions}
+          onConfirm={() => settleConfirmation(true)}
+          onCancel={() => settleConfirmation(false)}
+        />
+      ) : null}
     </>
   );
 }

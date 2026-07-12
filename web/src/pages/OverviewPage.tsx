@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '../types';
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
-import { AppIcon } from '../components/FileTypeIcon';
 import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
+import type { RequestConfirmation } from '../components/ConfirmationModal';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -139,12 +139,14 @@ export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
   formatDate,
-  onOpenConsole
+  onOpenConsole,
+  requestConfirmation
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
   formatDate: (value: string | number | Date) => string;
   onOpenConsole: () => void;
+  requestConfirmation: RequestConfirmation;
 }) {
   const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
     try {
@@ -155,7 +157,6 @@ export function RecentEventsPanel({
       return [];
     }
   });
-  const [confirmHide, setConfirmHide] = useState<{ signature: string; text: string } | null>(null);
   const [now, setNow] = useState(() => new Date());
   const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
   const visibleEvents = useMemo(
@@ -182,6 +183,19 @@ export function RecentEventsPanel({
     setHiddenSignatures((current) => current.includes(signature) ? current : [...current, signature]);
   }
 
+  async function confirmHideEvent(event: ServerEvent) {
+    const confirmed = await requestConfirmation({
+      title: "Hide event type?",
+      description: "Hide all recent events matching this type.",
+      details: event.text,
+      warning: "You can restore hidden event types with Reset hidden events.",
+      warningTone: "warning",
+      confirmLabel: "Hide events",
+      variant: "critical"
+    });
+    if (confirmed) hideEvent(event.signature);
+  }
+
   return (
     <section className="panel eventsPanel">
       <PanelHeader
@@ -204,7 +218,7 @@ export function RecentEventsPanel({
               variant="ghost"
               iconOnly
               className="eventHideButton"
-              onClick={() => setConfirmHide({ signature: event.signature, text: event.text })}
+              onClick={() => void confirmHideEvent(event)}
               aria-label="Hide events of this type"
             >
               <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
@@ -232,33 +246,6 @@ export function RecentEventsPanel({
       </div>
       <Button variant="ghost" compact className="textLinkButton eventLogButton" onClick={onOpenConsole}>View full log</Button>
 
-      {confirmHide && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setConfirmHide(null);
-        }}>
-          <section className="modalPanel confirmModalPanel" role="dialog" aria-modal="true" aria-labelledby="confirm-hide-title">
-            <header className="modalHeader">
-              <h2 id="confirm-hide-title">Hide Event Type</h2>
-              <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setConfirmHide(null)} aria-label="Close dialog" title="Close dialog">
-                <AppIcon name="x" />
-              </Button>
-            </header>
-            <div className="modalBody confirmContent">
-              <p>Hide all recent events matching this type?</p>
-              <blockquote>
-                <strong>{confirmHide.text}</strong>
-              </blockquote>
-            </div>
-            <footer className="modalFooter">
-              <Button variant="secondary" onClick={() => setConfirmHide(null)}>Cancel</Button>
-              <Button variant="critical" onClick={() => {
-                hideEvent(confirmHide.signature);
-                setConfirmHide(null);
-              }}>Hide Events</Button>
-            </footer>
-          </section>
-        </div>
-      )}
     </section>
   );
 }
