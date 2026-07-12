@@ -17,7 +17,7 @@ export function buildModsSummary(mods: InstalledMod[]) {
 
   return [
     { label: "Total mods", value: mods.length, tone: "blue" },
-    { label: "Updates", value: updates || "Up to date", tone: "orange" },
+    { label: "Updates", value: updates || "Up to date", tone: updates > 0 ? "orange" : "green" },
     { label: "Needs attention", value: attention || "All clear", tone: "purple" }
   ];
 }

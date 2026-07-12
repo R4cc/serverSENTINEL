@@ -20,7 +20,7 @@ describe("Mods summary", () => {
   it("uses calm copy when everything is current", () => {
     const current = mod();
     const items = buildModsSummary([current]);
-    expect(items[1]).toMatchObject({ label: "Updates", value: "Up to date" });
+    expect(items[1]).toMatchObject({ label: "Updates", value: "Up to date", tone: "green" });
     expect(items[2]).toMatchObject({ label: "Needs attention", value: "All clear" });
     expect(items[1]).not.toHaveProperty("detail");
     expect(items[2]).not.toHaveProperty("detail");
@@ -42,7 +42,7 @@ describe("Mods summary", () => {
     });
     const items = buildModsSummary([current, updateAvailable]);
 
-    expect(items[1]).toMatchObject({ label: "Updates", value: 1 });
+    expect(items[1]).toMatchObject({ label: "Updates", value: 1, tone: "orange" });
     expect(items[2]).toMatchObject({ label: "Needs attention", value: "All clear" });
   });
 });
