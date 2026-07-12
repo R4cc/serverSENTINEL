@@ -266,10 +266,13 @@
     flex-direction: column;
   }
 
-  .overviewSummary,
   .activityGrid,
   .resourceRow {
     grid-template-columns: 1fr;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .resourceRows {
