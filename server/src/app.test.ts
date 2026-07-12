@@ -124,7 +124,7 @@ describe("node update image selection", () => {
   });
 
   it("falls back to the app version when no build id is available", () => {
-    expect(nodeUpdateImageForBuild(undefined, undefined, "1.0.3")).toBe("nl2109/serversentinel:1.0.3");
+    expect(nodeUpdateImageForBuild(undefined, undefined, "1.1.1")).toBe("nl2109/serversentinel:1.1.1");
   });
 
   it("preserves configured custom node images", () => {
