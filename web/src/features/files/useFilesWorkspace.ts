@@ -132,7 +132,6 @@ export function useFilesWorkspace({
   const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view");
   const canUploadToCurrentPath = !archiveContext && (activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload"));
   const canEditSelectedPath = !archiveContext
-    && !(serverRequiresStoppedForMutableConfig && isServerPropertiesPath(selectedPath))
     && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
   const selectedEntries = useMemo(() => {

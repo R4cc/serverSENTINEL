@@ -4,7 +4,8 @@ import {
   fileManagerPermissionForPath,
   hasFileManagerPermission,
   isModsPublicPath,
-  isServerPropertiesPath
+  isServerPropertiesPath,
+  permissionsForPreset
 } from "./permissions";
 
 function userWith(permissions: PublicUser["permissions"]): PublicUser {
@@ -42,5 +43,11 @@ describe("file manager permissions", () => {
     expect(fileManagerPermissionForPath("/server.properties", "edit")).toBe("servers.editSettings");
     expect(hasFileManagerPermission(userWith(["files.view", "files.edit"]), "/server.properties", "edit")).toBe(false);
     expect(hasFileManagerPermission(userWith(["servers.view", "servers.editSettings"]), "/server.properties", "edit")).toBe(true);
+  });
+
+  it("allows an admin to edit server.properties", () => {
+    const admin = { ...userWith(permissionsForPreset("admin")), rolePreset: "admin" as const };
+
+    expect(hasFileManagerPermission(admin, "/server.properties", "edit")).toBe(true);
   });
 });
