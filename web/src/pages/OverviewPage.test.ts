@@ -41,4 +41,19 @@ describe("overview summary", () => {
     expect(html).toContain(">Minecraft<");
     expect(html).toContain(">Fabric<");
   });
+
+  it("skeletonizes all six values while keeping the summary structure", () => {
+    const server = demoServer();
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status: demoStatus(server, true),
+      dockerSocketMounted: true,
+      activity: demoOverviewData(true).activity,
+      loading: true
+    }));
+
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(6);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain("Loading server summary");
+  });
 });

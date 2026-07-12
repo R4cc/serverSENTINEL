@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Button, EmptyState, StatusBadge } from './UiPrimitives';
+import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import {
   PERMISSION_DEPENDENCIES,
@@ -114,12 +114,14 @@ export function UserManagement({
   onUpdate,
   onResetPassword,
   onDelete,
-  busy = false
+  busy = false,
+  loading = false
 }: {
   users: PublicUser[];
   currentUserId?: string;
   editingUser: "create" | PublicUser | null;
   busy?: boolean;
+  loading?: boolean;
   canManageUsers?: boolean;
   onOpenEdit: (user: PublicUser) => void;
   onCloseModal: () => void;
@@ -130,10 +132,11 @@ export function UserManagement({
 }) {
   const modalUser = editingUser && editingUser !== "create" ? editingUser : null;
   const [passwordUser, setPasswordUser] = useState<PublicUser | null>(null);
+  const initialLoading = loading && users.length === 0;
 
   return (
     <div className="usersSettings">
-      <table className="usersTable">
+      <table className="usersTable" aria-busy={initialLoading}>
         <thead>
           <tr>
             <th scope="col">User</th>
@@ -142,6 +145,16 @@ export function UserManagement({
           </tr>
         </thead>
         <tbody>
+          {initialLoading && (
+            <tr className="srOnly"><td colSpan={3}><LoadingLabel>Loading users</LoadingLabel></td></tr>
+          )}
+          {initialLoading && Array.from({ length: 3 }, (_, index) => (
+            <tr className="userSkeletonRow" key={`user-skeleton-${index}`} aria-hidden="true">
+              <td><SkeletonBlock className="userNameSkeleton" /></td>
+              <td><SkeletonBlock className="uiSkeleton--badge" /></td>
+              <td><div className="userActions"><SkeletonBlock className="userActionSkeleton" /><SkeletonBlock className="userActionSkeleton short" /><SkeletonBlock className="userActionSkeleton short" /></div></td>
+            </tr>
+          ))}
           {users.map((user) => (
             <tr key={user.id}>
               <td data-label="User">
@@ -187,7 +200,7 @@ export function UserManagement({
               </td>
             </tr>
           ))}
-          {users.length === 0 && (
+          {!initialLoading && users.length === 0 && (
             <tr>
               <td colSpan={3}>
                 <EmptyState compact className="emptyInline noBorder" title="No users yet" message="Create a user to give someone access to this serverSENTINEL panel." />

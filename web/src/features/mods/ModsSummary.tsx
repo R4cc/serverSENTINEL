@@ -1,8 +1,10 @@
 import type { InstalledMod } from "../../types";
+import { LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { getInstalledModHealth } from "./modHealth";
 
 type Props = {
   mods: InstalledMod[];
+  loading?: boolean;
 };
 
 export function buildModsSummary(mods: InstalledMod[]) {
@@ -20,17 +22,19 @@ export function buildModsSummary(mods: InstalledMod[]) {
   ];
 }
 
-export function ModsSummary({ mods }: Props) {
+export function ModsSummary({ mods, loading = false }: Props) {
   const items = buildModsSummary(mods);
+  const initialLoading = loading && mods.length === 0;
 
   return (
-    <section className="modsWorkspaceSummary" aria-label="Mods status summary">
+    <section className="modsWorkspaceSummary" aria-label="Mods status summary" aria-busy={initialLoading}>
+      {initialLoading && <LoadingLabel>Loading mods summary</LoadingLabel>}
       {items.map((item) => (
         <article key={item.label} className={`modsWorkspaceMetric ${item.tone}`}>
           <span className="modsWorkspaceMetricDot" aria-hidden="true" />
           <div>
             <small>{item.label}</small>
-            <strong>{item.value}</strong>
+            <strong>{initialLoading ? <SkeletonBlock className="modsMetricValueSkeleton" /> : item.value}</strong>
           </div>
         </article>
       ))}

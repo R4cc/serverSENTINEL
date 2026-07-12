@@ -2,7 +2,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
-import { Button } from "../../components/UiPrimitives";
+import { Button, LoadingLabel } from "../../components/UiPrimitives";
 import { ModInstallVersionSkeleton } from "../../components/ModInstallVersionSkeleton";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
@@ -59,7 +59,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
           <div><strong>{title}</strong><span>For {state.data?.target.loader || "Fabric"} {state.data?.target.minecraftVersion || ""}</span></div>
         </div>
         {locked && <InlineState tone="info" title="Stop the server to install mods" message={lockedReason || "Mod changes require the server to be stopped."} />}
-        {state.loading && <ModInstallVersionSkeleton />}
+        {state.loading && <><LoadingLabel>Loading available mod versions</LoadingLabel><ModInstallVersionSkeleton /></>}
         {!state.loading && state.error && <InlineState tone="error" title="Versions unavailable" message={state.error} actionLabel="Refresh" onAction={onRetry} busy={state.loading} />}
         {!state.loading && state.data && state.step === 1 && (
           <>

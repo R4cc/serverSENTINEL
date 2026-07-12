@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '../types';
 import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
-import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
+import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
@@ -33,12 +33,14 @@ export function OverviewSummary({
   server,
   status,
   dockerSocketMounted,
-  activity
+  activity,
+  loading = false
 }: {
   server: ManagedServer;
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
+  loading?: boolean;
 }) {
   const running = Boolean(status?.docker.running);
   const state = dockerStateLabel(status, dockerSocketMounted);
@@ -50,36 +52,37 @@ export function OverviewSummary({
   const minecraftVersion = minecraftVersionInfo(server);
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
   return (
-    <section className="overviewSummary">
+    <section className="overviewSummary" aria-busy={loading}>
+      {loading && <LoadingLabel>Loading server summary</LoadingLabel>}
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
         <span>Status</span>
-        <strong className="summaryStatusText">{state}</strong>
+        <strong className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</strong>
       </div>
       <div className="summaryTile">
         <span>Minecraft</span>
-        <strong>{versionValue(minecraftVersion)}</strong>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)}</strong>
       </div>
       <div className="summaryTile">
         <span>Fabric</span>
-        <strong>{versionValue(fabricLoaderVersion)}</strong>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(fabricLoaderVersion)}</strong>
       </div>
       <div className="summaryTile">
         <span>Uptime</span>
-        <strong>{running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
       </div>
       <div className="summaryTile">
         <span>Players</span>
-        <strong>{players}</strong>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : players}</strong>
       </div>
       <div className={`summaryTile ${runtimeTone(status, dockerSocketMounted)}`}>
         <span>Container</span>
-        <strong>{runtimeLabel(status, dockerSocketMounted).replace(/^Container /, "")}</strong>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : runtimeLabel(status, dockerSocketMounted).replace(/^Container /, "")}</strong>
       </div>
     </section>
   );
 }
 
-export function ActivityHealthPanel({ activity, formatDate }: { activity: ServerActivity; formatDate: (value: string | number | Date) => string }) {
+export function ActivityHealthPanel({ activity, formatDate, loading = false }: { activity: ServerActivity; formatDate: (value: string | number | Date) => string; loading?: boolean }) {
   const items = [
     ["Last started", formatActivityDate(activity.lastStartedAt, formatDate)],
     ["Last stopped", formatActivityDate(activity.lastStoppedAt, formatDate)],
@@ -89,13 +92,14 @@ export function ActivityHealthPanel({ activity, formatDate }: { activity: Server
     ["Java", activity.javaRuntime || "Unknown"]
   ];
   return (
-    <section className="panel activityPanel">
+    <section className="panel activityPanel" aria-busy={loading}>
       <PanelHeader title="Server Activity & Health" />
+      {loading && <LoadingLabel>Loading server activity and health</LoadingLabel>}
       <div className="activityGrid">
         {items.map(([label, value]) => (
           <div className="activityItem" key={label}>
             <span>{label}</span>
-            <strong>{value}</strong>
+            <strong>{loading ? <SkeletonBlock className="activityValueSkeleton" /> : value}</strong>
           </div>
         ))}
       </div>
@@ -135,13 +139,15 @@ export function RecentEventsPanel({
   eventsStatus = "ok",
   formatDate,
   onOpenConsole,
-  requestConfirmation
+  requestConfirmation,
+  loading = false
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
   formatDate: (value: string | number | Date) => string;
   onOpenConsole: () => void;
   requestConfirmation: RequestConfirmation;
+  loading?: boolean;
 }) {
   const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
     try {
@@ -192,7 +198,7 @@ export function RecentEventsPanel({
   }
 
   return (
-    <section className="panel eventsPanel">
+    <section className="panel eventsPanel" aria-busy={loading}>
       <PanelHeader
         title="Recent Events"
         actions={hiddenSignatures.length > 0 && (
@@ -202,7 +208,14 @@ export function RecentEventsPanel({
         )}
       />
       <div className="eventList">
-        {displayEvents.length ? displayEvents.map((event) => (
+        {loading && <LoadingLabel>Loading recent events</LoadingLabel>}
+        {loading ? Array.from({ length: 5 }, (_, index) => (
+          <div className="eventRow eventSkeletonRow" key={index} aria-hidden="true">
+            <SkeletonBlock className="eventMarkerSkeleton" />
+            <SkeletonBlock className="eventTextSkeleton" />
+            <SkeletonBlock className="eventTimeSkeleton" />
+          </div>
+        )) : displayEvents.length ? displayEvents.map((event) => (
           <div className={`eventRow ${event.type}`} key={event.id}>
             <span className="eventMarker" aria-hidden="true" />
             <strong>{event.text}</strong>

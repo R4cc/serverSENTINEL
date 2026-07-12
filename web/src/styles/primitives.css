@@ -43,3 +43,64 @@
   .uiButton, .iconButton, .iconOnlyButton, .actionMenuItem, .fileBreadcrumbs button, .sideNav button { min-height: 44px; }
   .uiButton--icon, .iconButton, .iconOnlyButton, .selectionActionMenu .actionMenuTrigger { width: 44px; min-width: 44px; height: 44px; }
 }
+.uiSkeleton {
+  display: block;
+  min-width: 24px;
+  min-height: 12px;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.52) 48%, transparent 66%),
+    var(--surface-muted);
+  background-size: 260% 100%;
+  animation: skeletonSweep 1400ms ease-in-out infinite;
+}
+
+.themeDark .uiSkeleton {
+  background:
+    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.1) 48%, transparent 66%),
+    var(--surface-muted);
+  background-size: 260% 100%;
+}
+
+.uiSkeleton--text { width: min(180px, 75%); height: 13px; }
+.uiSkeleton--title { width: min(240px, 82%); height: 18px; }
+.uiSkeleton--badge { width: 76px; height: 24px; border-radius: 999px; }
+.uiSkeleton--button { width: 34px; height: 34px; }
+.uiSkeleton--icon { width: 38px; height: 38px; }
+
+@keyframes skeletonSweep {
+  from { background-position: 180% 0; }
+  to { background-position: -180% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uiSkeleton { animation: none; }
+}
+
+.authLoadingSkeleton { min-height: 420px; }
+.authSkeletonTitle { width: 190px; height: 24px; margin-bottom: var(--space-2); }
+.authSkeletonSubtitle { width: 240px; height: 13px; }
+.authSkeletonFields { display: grid; gap: var(--space-2); margin-top: var(--space-5); }
+.authSkeletonLabel { width: 80px; height: 12px; margin-top: var(--space-2); }
+.authSkeletonInput { width: 100%; height: 42px; }
+.authSkeletonButton { width: 100%; height: 42px; margin-top: var(--space-3); }
+.applicationLoadingSkeleton { display: grid; gap: var(--space-4); min-height: 420px; }
+.applicationSkeletonSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.applicationSkeletonTile { height: 82px; }
+.applicationSkeletonPanel { display: grid; align-content: start; gap: var(--space-3); min-height: 320px; border: var(--border-strong) solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--surface); }
+.applicationSkeletonHeading { width: min(240px, 45%); height: 22px; margin-bottom: var(--space-2); }
+.applicationSkeletonRow { height: 42px; }
+.codeLoadingSkeleton { width: 100%; height: 100%; min-height: 260px; overflow: hidden; padding: var(--space-4); background: var(--surface); }
+.codeLoadingSkeleton > div { display: grid; gap: 12px; }
+.codeSkeletonLine { height: 13px; }
+.terminalLoadingSkeleton { flex: 1 1 auto; min-height: 280px; overflow: hidden; padding: 18px 14px; background: var(--terminal-bg); }
+.terminalLoadingSkeleton > div { display: grid; gap: 11px; }
+.terminalSkeletonLine { display: block; height: 11px; border-radius: 3px; background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / .13) 48%, transparent 66%), color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); background-size: 260% 100%; animation: skeletonSweep 1400ms ease-in-out infinite; }
+
+@media (max-width: 760px) {
+  .applicationSkeletonSummary { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminalSkeletonLine { animation: none; }
+}

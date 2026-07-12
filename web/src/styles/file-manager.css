@@ -434,3 +434,19 @@
     width: 100%;
   }
 }
+.fileTableSkeletonRow { pointer-events: none; }
+.fileTableSkeletonRow .fileCheckboxCell { display: grid; place-items: center; }
+.fileCheckboxSkeleton { width: 14px; height: 14px; border-radius: 3px; }
+.fileTableSkeletonRow .fileNameCell { display: flex; align-items: center; gap: var(--space-3); padding-inline: var(--space-3); }
+.fileTableSkeletonRow .uiSkeleton--icon { width: 30px; height: 30px; flex: 0 0 auto; }
+.fileNameSkeleton { width: min(260px, 72%); height: 14px; }
+.fileTableSkeletonRow .fileModifiedCell .uiSkeleton--text { width: 124px; }
+.fileTableSkeletonRow .fileTypeCell .uiSkeleton--text { width: 72px; }
+.fileSizeSkeleton { width: 48px; height: 13px; }
+.fileFooterCountSkeleton { width: 54px; height: 11px; }
+.fileFooterPathSkeleton { width: min(180px, 42vw); height: 11px; }
+.filePreviewSkeleton { display: grid; gap: 10px; min-height: 210px; padding: var(--space-3); }
+.filePreviewLineSkeleton { height: 12px; }
+.zipFolderSkeleton { pointer-events: none; }
+.zipFolderSkeleton .uiSkeleton--icon { width: 28px; height: 28px; }
+.zipFolderSkeleton .uiSkeleton--text { width: min(220px, 65%); }

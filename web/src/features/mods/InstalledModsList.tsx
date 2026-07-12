@@ -1,7 +1,7 @@
 import { useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Button, EmptyState } from "../../components/UiPrimitives";
+import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { updatePlanEntryForMod } from "./modUpdatePlan";
@@ -28,6 +28,7 @@ type Props = {
 
 export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
+  const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 
   function hasFiles(event: DragEvent) {
@@ -39,12 +40,12 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
       <div className="modsWorkspaceListHeader">
         <div>
           <h3 id="installed-mods-title">Installed mods</h3>
-          <span>{mods.length} total</span>
+          <span>{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : `${mods.length} total`}</span>
         </div>
         <label className="modsWorkspaceSearch">
           <AppIcon name="search" />
           <span className="srOnly">Search</span>
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" />
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" disabled={initialLoading} />
         </label>
       </div>
 
@@ -64,7 +65,10 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
         <div className="modsWorkspaceTableHead" aria-hidden="true">
           <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
         </div>
-        {visible.length === 0 ? (
+        {initialLoading && <LoadingLabel>Loading installed mods</LoadingLabel>}
+        {initialLoading ? (
+          Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
+        ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
         ) : visible.map((mod) => {
           const health = getInstalledModHealth(mod);
@@ -114,6 +118,22 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
         })}
       </div>
     </section>
+  );
+}
+
+function InstalledModSkeletonRow() {
+  return (
+    <div className="modsWorkspaceRow modsWorkspaceSkeletonRow" aria-hidden="true">
+      <div className="modsWorkspaceIdentity">
+        <SkeletonBlock className="uiSkeleton--icon" />
+        <span><SkeletonBlock className="uiSkeleton--title" /><SkeletonBlock className="uiSkeleton--text" /></span>
+      </div>
+      <div className="modsWorkspaceStatus"><SkeletonBlock className="uiSkeleton--badge" /></div>
+      <div className="modsWorkspaceVersion"><SkeletonBlock className="uiSkeleton--text" /></div>
+      <div className="modsWorkspaceUpdate"><SkeletonBlock className="modsUpdateSkeleton" /></div>
+      <div className="modsWorkspaceEnabled"><SkeletonBlock className="modsToggleSkeleton" /></div>
+      <SkeletonBlock className="uiSkeleton--button modsActionSkeleton" />
+    </div>
   );
 }
 

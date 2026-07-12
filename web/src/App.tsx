@@ -17,6 +17,7 @@ import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetrya
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
+import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
@@ -2300,12 +2301,7 @@ export default function App() {
     return (
       <>
         <AppToaster darkMode={darkMode} />
-        <AuthPanel
-          setupRequired={false}
-          notice={authNotice || "Checking session..."}
-          onSubmit={submitAuth}
-          busy
-        />
+        <AuthLoadingSkeleton />
       </>
     );
   }
@@ -2513,11 +2509,7 @@ export default function App() {
         )}
 
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && (
-          <InlineState
-            tone="loading"
-            title="Loading application"
-            message="Loading servers, settings, and runtime availability."
-          />
+          <ApplicationLoadingSkeleton />
         )}
 
         {appLoadError && (
@@ -2687,9 +2679,6 @@ export default function App() {
                   description="Manage panel accounts and permissions."
                   actions={<Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>}
                 />
-                {usersLoading && (
-                  <InlineState tone="loading" title="Loading users" message="Loading user accounts and access settings." />
-                )}
                 {usersError && (
                   <InlineState
                     tone="error"
@@ -2705,6 +2694,7 @@ export default function App() {
                   currentUserId={authSession.user?.id}
                   editingUser={userModal}
                   busy={userSaving}
+                  loading={usersLoading}
                   canManageUsers={canManageUsers}
                   onOpenEdit={(user) => setUserModal(user)}
                   onCloseModal={() => setUserModal(null)}
@@ -2911,6 +2901,7 @@ export default function App() {
                   status={activeStatus}
                   dockerSocketMounted={activeServerDockerSocketMounted}
                   activity={overviewData.activity}
+                  loading={overviewLoading}
                 />
 
                 <ResourcePanel
@@ -2920,10 +2911,11 @@ export default function App() {
                   dockerSocketMounted={activeServerDockerSocketMounted}
                   formatNumber={formatDisplayNumber}
                   formatTime={formatDisplayTime}
+                  loading={overviewLoading && resourceSamples.length === 0}
                 />
 
-                <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} />
-                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} />
+                <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} loading={overviewLoading} />
+                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
 
               </section>
             )}
@@ -2940,17 +2932,19 @@ export default function App() {
                     </div>}
                   />
                   <div className="terminal">
-                    <Suspense fallback={<InlineState tone="loading" title="Preparing terminal" message="Loading the interactive console." />}>
-                      <MinecraftTerminal
-                        entries={logs}
-                        canSendCommands={canSendConsoleCommands}
-                        disabledReason={consoleCommandDisabledReason}
-                        commandHistory={commandHistory}
-                        onCommand={(command) => {
-                          void sendCommand(command);
-                        }}
-                      />
-                    </Suspense>
+                    {consoleLoading && logs.length === 0 ? <TerminalLoadingSkeleton /> : (
+                      <Suspense fallback={<TerminalLoadingSkeleton />}>
+                        <MinecraftTerminal
+                          entries={logs}
+                          canSendCommands={canSendConsoleCommands}
+                          disabledReason={consoleCommandDisabledReason}
+                          commandHistory={commandHistory}
+                          onCommand={(command) => {
+                            void sendCommand(command);
+                          }}
+                        />
+                      </Suspense>
+                    )}
                   </div>
                 </section>
               </section>

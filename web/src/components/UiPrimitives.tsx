@@ -95,3 +95,14 @@ export function EmptyState({
     </div>
   );
 }
+
+export function SkeletonBlock({
+  className,
+  ...props
+}: HTMLAttributes<HTMLSpanElement>) {
+  return <span {...props} className={classes("uiSkeleton", className)} aria-hidden="true" />;
+}
+
+export function LoadingLabel({ children }: { children: ReactNode }) {
+  return <span className="srOnly" role="status">{children}</span>;
+}

@@ -20,13 +20,13 @@ function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   };
 }
 
-function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePlan | null = createDemoUpdatePlan("demo", installed), restartRequiredChanges?: RestartRequiredChange[]) {
+function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePlan | null = createDemoUpdatePlan("demo", installed), restartRequiredChanges?: RestartRequiredChange[], busy = false) {
   return renderToStaticMarkup(
     <InstalledModsList
       mods={installed}
       restartRequiredChanges={restartRequiredChanges}
       query=""
-      busy={false}
+      busy={busy}
       locked={false}
       onQueryChange={noop}
       onToggle={noop}
@@ -100,5 +100,21 @@ describe("InstalledModsList", () => {
     const html = renderInstalledMods([mod()]);
 
     expect(html).toContain("modsWorkspaceTable");
+  });
+
+  it("renders five table-shaped skeleton rows without the empty state during initial loading", () => {
+    const html = renderInstalledMods([], null, undefined, true);
+
+    expect((html.match(/modsWorkspaceSkeletonRow/g) ?? []).length).toBe(5);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain("Loading installed mods");
+    expect(html).not.toContain("No mods installed yet");
+  });
+
+  it("keeps populated rows visible during background refreshes", () => {
+    const html = renderInstalledMods([mod()], null, undefined, true);
+
+    expect(html).toContain("Fabric API");
+    expect(html).not.toContain("modsWorkspaceSkeletonRow");
   });
 });

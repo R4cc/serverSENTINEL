@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ManagedServer, ResourceSample, ServerStatus } from '../types';
 import { parseMaxMemoryGb } from '../utils/format';
-import { Button, PanelHeader } from './UiPrimitives';
+import { Button, LoadingLabel, PanelHeader, SkeletonBlock } from './UiPrimitives';
 
 export function formatUptime(startedAt?: string, running?: boolean) {
   if (!running || !startedAt || /^\d{2}:\d{2}:\d{2}$/.test(startedAt)) return "Unknown";
@@ -169,7 +169,8 @@ export function ResourcePanel({
   status,
   dockerSocketMounted,
   formatNumber,
-  formatTime
+  formatTime,
+  loading = false
 }: {
   server: ManagedServer;
   samples: ResourceSample[];
@@ -177,6 +178,7 @@ export function ResourcePanel({
   dockerSocketMounted: boolean;
   formatNumber: (value: number) => string;
   formatTime: (value: string | number | Date) => string;
+  loading?: boolean;
 }) {
   const [graphScope, setGraphScope] = useState<ResourceGraphScope>("5m");
   const latest = samples.at(-1);
@@ -214,7 +216,7 @@ export function ResourcePanel({
       ? "Collecting"
       : statsUnavailableLabel;
   return (
-    <section className="panel resourcePanel">
+    <section className="panel resourcePanel" aria-busy={loading}>
       <PanelHeader
         title="Resource Usage"
         actions={<div className="resourceScopeControl" role="group" aria-label="Resource graph time range">
@@ -223,6 +225,7 @@ export function ResourcePanel({
               variant="ghost"
               compact
               key={scope.label}
+              disabled={loading}
               className={graphScope === scope.label ? "active" : ""}
               onClick={() => setGraphScope(scope.label)}
               aria-pressed={graphScope === scope.label}
@@ -232,7 +235,15 @@ export function ResourcePanel({
           ))}
         </div>}
       />
-      <div className="resourceRows">
+      {loading && <LoadingLabel>Loading resource usage</LoadingLabel>}
+      {loading ? <div className="resourceRows resourceSkeletonRows" aria-hidden="true">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div className="resourceRow" key={index}>
+            <div className="resourceMetricLabel"><SkeletonBlock className="uiSkeleton--text" /><SkeletonBlock className="uiSkeleton--title" /><SkeletonBlock className="uiSkeleton--text" /></div>
+            <SkeletonBlock className="resourceChartSkeleton" />
+          </div>
+        ))}
+      </div> : <div className="resourceRows">
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
             <span>Memory usage</span>
@@ -269,7 +280,7 @@ export function ResourcePanel({
             emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel}
           />
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

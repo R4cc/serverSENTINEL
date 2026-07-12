@@ -708,57 +708,6 @@
 
 
 
-.skeletonBlock {
-  display: block;
-  border-radius: var(--radius-sm);
-  background:
-    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.5) 48%, transparent 66%),
-    var(--surface-muted);
-  background-size: 260% 100%;
-  animation: skeletonSweep 1400ms ease-in-out infinite;
-}
-
-.themeDark .skeletonBlock {
-  background:
-    linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.1) 48%, transparent 66%),
-    var(--surface-muted);
-  background-size: 260% 100%;
-}
-
-.skeletonBlock.icon {
-  width: 52px;
-  height: 52px;
-  border: var(--border-strong) solid var(--border);
-}
-
-.skeletonBlock.title {
-  width: min(260px, 80%);
-  height: 18px;
-  margin-bottom: var(--space-2);
-}
-
-.skeletonBlock.line {
-  width: min(520px, 100%);
-  height: 13px;
-  margin-bottom: var(--space-2);
-}
-
-
-.skeletonBlock.button {
-  width: 96px;
-  height: 44px;
-}
-
-@keyframes skeletonSweep {
-  from {
-    background-position: 180% 0;
-  }
-
-  to {
-    background-position: -180% 0;
-  }
-}
-
 .dangerTextButton {
   background: var(--surface);
 }
@@ -963,7 +912,7 @@
   min-height: 54px;
 }
 
-.modInstallVersionSkeleton .skeletonBlock {
+.modInstallVersionSkeleton .uiSkeleton {
   width: min(100%, 110px);
   height: 13px;
 }

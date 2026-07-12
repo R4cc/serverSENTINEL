@@ -32,3 +32,14 @@
 .overviewPage .consolePanel {
   grid-column: 1 / -1;
 }
+
+.overviewSummaryValueSkeleton { width: min(92px, 86%); height: 17px; }
+.activityValueSkeleton { width: min(150px, 82%); height: 14px; }
+.eventSkeletonRow { pointer-events: none; }
+.eventMarkerSkeleton { width: 8px; height: 8px; border-radius: 999px; }
+.eventTextSkeleton { width: min(230px, 82%); height: 13px; }
+.eventTimeSkeleton { width: 64px; height: 11px; }
+.resourceSkeletonRows .resourceMetricLabel { display: grid; gap: var(--space-2); }
+.resourceSkeletonRows .resourceMetricLabel .uiSkeleton--text { width: 90px; }
+.resourceSkeletonRows .resourceMetricLabel .uiSkeleton--title { width: 170px; }
+.resourceChartSkeleton { width: 100%; height: 128px; }

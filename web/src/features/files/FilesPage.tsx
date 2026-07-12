@@ -3,7 +3,7 @@ import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
 import { SortHeaderButton } from "../../components/TableControls";
-import { Button } from "../../components/UiPrimitives";
+import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { DialogSurface } from "../../components/DialogSurface";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
@@ -86,6 +86,7 @@ export function FilesPage({
   const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const previousDialogOpenRef = useRef(false);
+  const initialFilesLoading = filesLoading && listing.entries.length === 0;
   const operationLabel = fileOperationBusy === "upload" ? "Uploading file…"
     : fileOperationBusy === "new-folder" ? "Creating folder…"
       : fileOperationBusy === "rename" ? "Renaming item…"
@@ -228,9 +229,6 @@ export function FilesPage({
             </div>
           </div>
 
-          {filesLoading && listing.entries.length === 0 && (
-            <InlineState tone="loading" title="Loading files" message={`Loading the contents of ${listing.path}.`} />
-          )}
           {filesError && (
             <InlineState
               tone="error"
@@ -242,7 +240,7 @@ export function FilesPage({
             />
           )}
 
-          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={sortedFileRows.length + 1} ref={fileTableRef} tabIndex={-1}>
+          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileRows.length) + 1} ref={fileTableRef} tabIndex={-1}>
             <div className="fileTableHead" role="row">
               <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={table.getIsAllRowsSelected() ? "Clear visible selection" : "Select all visible files"}>
                 <input
@@ -259,6 +257,8 @@ export function FilesPage({
                 </SortHeaderButton></span>
               ))}
             </div>
+            {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
+            {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
             {!filesLoading && !filesError && sortedFileRows.length === 0 && (
               <InlineState tone="empty" title="This folder is empty" message={archiveContext ? "There are no entries in this ZIP folder." : "There are no files or folders here yet. Upload a file or create a folder to add content."} />
             )}
@@ -308,8 +308,8 @@ export function FilesPage({
             })}
           </div>
           <div className="fileTableFooter">
-            <span>{sortedFileRows.length} items</span>
-            <span title={archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}>{selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}</span>
+            <span>{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : `${sortedFileRows.length} items`}</span>
+            <span title={archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}</span>
           </div>
           </section>
         </section>
@@ -352,7 +352,7 @@ export function FilesPage({
             </dl>
             <section className="filePreviewPanel">
               <h3>Preview</h3>
-              {filePreview.loading && <InlineState tone="loading" title="Loading preview" message="Reading a small preview of this file." />}
+              {filePreview.loading && <FilePreviewSkeleton />}
               {filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
               {!filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
                 <pre>
@@ -394,6 +394,8 @@ export function FilesPage({
             <div className="modalBody zipDestinationBody">
               <div className="zipDestinationPath">{zipDestinationListing.path}</div>
               {zipDestinationListing.path !== "/" && <button type="button" className="zipFolderChoice" onClick={() => actions.loadZipDestination(zipDestinationListing.path.split("/").slice(0, -1).join("/") || "/")}><AppIcon name="arrowUp" /> Parent folder</button>}
+              {zipDestinationLoading && <LoadingLabel>Loading extraction folders</LoadingLabel>}
+              {zipDestinationLoading && Array.from({ length: 4 }, (_, index) => <div className="zipFolderChoice zipFolderSkeleton" key={index} aria-hidden="true"><SkeletonBlock className="uiSkeleton--icon" /><SkeletonBlock className="uiSkeleton--text" /></div>)}
               {zipDestinationListing.entries.filter((entry) => entry.type === "directory").map((entry) => (
                 <button type="button" className="zipFolderChoice" key={entry.path} onClick={() => actions.loadZipDestination(entry.path)}><FileTypeIcon entry={entry} /> {entry.name}</button>
               ))}
@@ -458,6 +460,29 @@ export function FilesPage({
         onDiscardChanges={actions.discardEditorChanges}
       />
     </section>
+  );
+}
+
+function FileTableSkeletonRow() {
+  return (
+    <div className="fileTableRow fileTableSkeletonRow" role="row" aria-hidden="true">
+      <span className="fileCheckboxCell"><SkeletonBlock className="fileCheckboxSkeleton" /></span>
+      <div className="fileNameCell"><SkeletonBlock className="uiSkeleton--icon" /><SkeletonBlock className="fileNameSkeleton" /></div>
+      <span className="fileModifiedCell"><SkeletonBlock className="uiSkeleton--text" /></span>
+      <span className="fileTypeCell"><SkeletonBlock className="uiSkeleton--text" /></span>
+      <span className="fileSizeCell"><SkeletonBlock className="fileSizeSkeleton" /></span>
+    </div>
+  );
+}
+
+function FilePreviewSkeleton() {
+  return (
+    <div className="filePreviewSkeleton" aria-busy="true">
+      <LoadingLabel>Loading file preview</LoadingLabel>
+      {Array.from({ length: 10 }, (_, index) => (
+        <SkeletonBlock key={index} className="filePreviewLineSkeleton" style={{ width: `${58 + (index * 17) % 38}%` }} />
+      ))}
+    </div>
   );
 }
 

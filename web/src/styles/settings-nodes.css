@@ -2836,3 +2836,7 @@
 }
 
 
+.userSkeletonRow { pointer-events: none; }
+.userNameSkeleton { width: min(180px, 70%); height: 15px; }
+.userActionSkeleton { width: 116px; height: 32px; }
+.userActionSkeleton.short { width: 62px; }

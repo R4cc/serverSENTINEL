@@ -4,6 +4,7 @@ import { InlineState } from "./InlineState";
 import { Button } from "./UiPrimitives";
 import { parentPath } from "../utils/files";
 import { DialogSurface } from "./DialogSurface";
+import { CodeLoadingSkeleton } from "./LoadingSkeletons";
 
 type FileEditorModalProps = {
   selectedPath: string;
@@ -66,7 +67,7 @@ class EditorLoadBoundary extends Component<EditorLoadBoundaryProps, EditorLoadBo
 function EditorLoadingState() {
   return (
     <div className="fileEditorStateFill">
-      <InlineState tone="loading" title="Preparing editor" message="Loading the code editor." />
+      <CodeLoadingSkeleton label="Preparing code editor" />
     </div>
   );
 }
@@ -157,7 +158,7 @@ export function FileEditorModal({
               <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
                 {fileOpening ? (
                   <div className="fileEditorStateFill">
-                    <InlineState tone="loading" title="Opening file" message="Loading this file in the editor." />
+                    <CodeLoadingSkeleton label="Opening file" />
                   </div>
                 ) : (
                   <>

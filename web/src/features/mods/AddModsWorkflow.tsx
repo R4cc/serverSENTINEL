@@ -3,7 +3,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
-import { Button, EmptyState } from "../../components/UiPrimitives";
+import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
 import { ModIconImage } from "./ModIconImage";
@@ -84,7 +84,9 @@ export function AddModsWorkflow(props: Props) {
           />
         )}
         <div className="modsSearchResults" aria-busy={props.searching}>
-          {props.searching && Array.from({ length: 4 }, (_, index) => <div key={index} className="modsResultCard isSkeleton" aria-hidden="true" />)}
+          {props.searching && <LoadingLabel>Searching for mods</LoadingLabel>}
+          {props.loadingMore && <LoadingLabel>Loading more mods</LoadingLabel>}
+          {props.searching && Array.from({ length: 4 }, (_, index) => <ModSearchResultSkeleton key={index} />)}
           {!props.searching && props.results.map((mod) => {
             const health = getSearchResultHealth(mod);
             const installed = installedIds.has(mod.project_id);
@@ -101,10 +103,24 @@ export function AddModsWorkflow(props: Props) {
               </article>
             );
           })}
-          {props.loadingMore && <div className="modsResultCard isSkeleton" aria-hidden="true" />}
+          {props.loadingMore && <ModSearchResultSkeleton />}
           {props.results.length > 0 && props.results.length < props.total && <div ref={props.sentinelRef} className="modsSearchSentinel" />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ModSearchResultSkeleton() {
+  return (
+    <div className="modsResultCard isSkeleton" aria-hidden="true">
+      <SkeletonBlock className="uiSkeleton--icon" />
+      <div className="modsResultContent">
+        <SkeletonBlock className="modsResultTitleSkeleton" />
+        <SkeletonBlock className="modsResultDescriptionSkeleton" />
+        <SkeletonBlock className="modsResultMetaSkeleton" />
+      </div>
+      <SkeletonBlock className="modsResultButtonSkeleton" />
     </div>
   );
 }
