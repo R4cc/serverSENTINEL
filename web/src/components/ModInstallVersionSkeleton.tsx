@@ -20,7 +20,7 @@ export function ModInstallVersionSkeleton() {
           </div>
           {rowKeys.map((key) => (
             <div key={key} className="modInstallVersionRow">
-              <span><i className="skeletonRadio" /><SkeletonBlock /></span>
+              <span><SkeletonBlock className="skeletonRadio" /><SkeletonBlock /></span>
               <span><SkeletonBlock /></span>
               <span><SkeletonBlock /></span>
               <span><SkeletonBlock /></span>

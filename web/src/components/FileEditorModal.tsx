@@ -103,6 +103,7 @@ export function FileEditorModal({
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
   const editorLocation = editorFolderPath || "Root directory";
   const canCloseEditor = !fileSaving;
+  const editingRestriction = !editing ? editMessage || (editDisabled ? editDisabledReason : "") : "";
   const saveDisabledReason = fileSaving
     ? "File save is already in progress."
     : fileOpenFailed
@@ -135,7 +136,7 @@ export function FileEditorModal({
             </header>
             <div className="fileEditorBody">
               <div className="fileEditorMetaRow">
-                <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}`}>
+                <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}${editingRestriction ? " unavailable" : ""}`} title={editingRestriction || undefined}>
                   <span className="fileEditorModeDot" aria-hidden="true" />
                   {editing ? "Editing" : "Read-only"}
                 </span>
@@ -143,18 +144,16 @@ export function FileEditorModal({
                 <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
                 {dirty && <span className="dirty">Unsaved changes</span>}
                 <div className="fileEditorMetaActions">
-                  {!editing && editDisabled && editDisabledReason && <span className="fileEditorRestriction">{editDisabledReason}</span>}
+                  {editingRestriction && (
+                    <span className="fileEditorRestriction" role="status" title={editingRestriction} aria-label={`Editing unavailable: ${editingRestriction}`}>
+                      Editing unavailable
+                    </span>
+                  )}
                   <Button iconOnly compact variant="ghost" className="fileEditorCopyButton" onClick={onCopy} aria-label="Copy entire file" title="Copy entire file">
                     <AppIcon name="copy" />
                   </Button>
                 </div>
               </div>
-              {editMessage && (
-                <div className="fileLeaseNotice" role="status">
-                  <strong>Editing is unavailable</strong>
-                  <span>{editMessage}</span>
-                </div>
-              )}
               <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
                 {fileOpening ? (
                   <div className="fileEditorStateFill">

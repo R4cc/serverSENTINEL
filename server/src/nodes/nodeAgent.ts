@@ -1301,7 +1301,6 @@ async function handleCommand(command: string, payload: any) {
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
   if (command === "files.write") {
-    if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
     return writeEditableFile(server, payload?.path, payload?.content);
   }
   if (command === "files.upload") {

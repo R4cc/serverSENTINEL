@@ -50,7 +50,7 @@ export function TerminalLoadingSkeleton() {
     <div className="terminalLoadingSkeleton" aria-busy="true">
       <LoadingLabel>Connecting to live console</LoadingLabel>
       <div aria-hidden="true">
-        {Array.from({ length: 10 }, (_, index) => <span className="terminalSkeletonLine" key={index} style={{ width: `${38 + (index * 29) % 56}%` }} />)}
+        {Array.from({ length: 10 }, (_, index) => <SkeletonBlock className="terminalSkeletonLine" key={index} style={{ width: `${38 + (index * 29) % 56}%` }} />)}
       </div>
     </div>
   );

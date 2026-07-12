@@ -883,9 +883,21 @@ button:disabled,
 }
 
 .fileEditorRestriction {
+  flex: 0 1 auto;
+  max-width: min(240px, 32vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
+  font-weight: var(--weight-strong);
+}
+
+.fileEditorMode.unavailable .fileEditorModeDot {
+  background: var(--sentinel-warning);
 }
 
 .fileEditorMetaActions {
@@ -898,28 +910,6 @@ button:disabled,
 
 .fileEditorCopyButton {
   flex: 0 0 auto;
-}
-
-.fileLeaseNotice {
-  margin: 0 16px 12px;
-  padding: 10px 12px;
-  display: grid;
-  gap: 2px;
-  border: 1px solid var(--warning-border, #d6a84b);
-  border-radius: 8px;
-  background: color-mix(in srgb, #d6a84b 12%, transparent);
-  color: var(--text);
-  font-size: 0.875rem;
-}
-
-.fileLeaseNotice strong {
-  font-size: 0.8125rem;
-  font-weight: var(--weight-title);
-}
-
-.fileLeaseNotice span {
-  color: var(--text-muted);
-  line-height: 1.4;
 }
 
 .fileCodeEditor {
@@ -1314,6 +1304,10 @@ button:disabled,
 .sidebar .brandBlock,
 .sidebar .selectedServerReadout,
 .sidebar .accountChip {
+  color: var(--sidebar-foreground);
+}
+
+.sidebar .brandBlock h1 {
   color: var(--sidebar-foreground);
 }
 
@@ -1834,7 +1828,7 @@ textarea:hover:not(:disabled),
   }
 
   .fileEditorRestriction {
-    white-space: normal;
+    max-width: min(220px, 58vw);
   }
 
   .fileEditorMetaActions {

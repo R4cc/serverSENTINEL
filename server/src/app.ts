@@ -5235,7 +5235,6 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
-  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const file = await readFileWithRevision(runtime, server, target);
   if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
   const path = await fileEditLockPath(runtime, server, target);
