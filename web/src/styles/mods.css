@@ -12,7 +12,8 @@
 .modsWorkspaceMetric span:last-child { overflow: hidden; color: var(--text-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.modsWorkspaceUpdateActions { justify-content: flex-end; }
+.modsWorkspaceUpdateActions { align-items: center; justify-content: flex-end; }
+.modsWorkspaceLastChecked { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-raised); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
 .modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
