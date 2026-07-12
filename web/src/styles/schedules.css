@@ -9,6 +9,25 @@
   gap: var(--space-2);
 }
 
+.scheduleCronField {
+  align-content: start;
+}
+
+.scheduleCronFeedback {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 2px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.scheduleCronFeedback.valid {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+  line-height: 1.3;
+}
+
 .commandInputRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(140px, auto) 44px;

@@ -150,11 +150,21 @@
   overflow: visible;
 }
 
-.propertiesDisclosure summary {
+.propertiesDisclosure.advancedResourceDisclosure summary {
   min-height: 54px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  justify-content: flex-start;
+  gap: 9px;
   padding: var(--space-3) var(--space-5);
   color: var(--text);
+}
+
+.propertiesDisclosure.advancedResourceDisclosure summary::after {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-width: 0 1.5px 1.5px 0;
+  transform-origin: center;
 }
 
 .propertiesDisclosure summary:hover {
@@ -275,7 +285,7 @@
     padding: var(--space-3);
   }
 
-  .propertiesDisclosure summary {
+  .propertiesDisclosure.advancedResourceDisclosure summary {
     padding-inline: var(--space-3);
   }
 

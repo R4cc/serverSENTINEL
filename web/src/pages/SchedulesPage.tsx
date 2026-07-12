@@ -15,6 +15,7 @@ import { DialogSurface } from '../components/DialogSurface';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
+import { describeCronExpression } from '../features/schedules/cronDescription';
 
 type ScheduleFormMode =
   | { type: "create" }
@@ -49,6 +50,7 @@ export function SchedulePage({
   const [formMode, setFormMode] = useState<ScheduleFormMode | null>(null);
   const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
   const [formError, setFormError] = useState("");
+  const [cronValue, setCronValue] = useState("");
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
   const runsFeedRef = useRef<HTMLDivElement>(null);
@@ -57,11 +59,13 @@ export function SchedulePage({
     if (!formMode) {
       setCommandIds([clientId()]);
       setFormError("");
+      setCronValue("");
       return;
     }
     const commands = formMode.type === "edit" ? formMode.schedule.commands : [];
     setCommandIds(commands.length ? commands.map(() => clientId()) : [clientId()]);
     setFormError("");
+    setCronValue(formMode.type === "edit" ? formMode.schedule.cron : "");
   }, [formMode]);
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
@@ -159,6 +163,8 @@ export function SchedulePage({
   const modalSchedule = formMode?.type === "edit" ? formMode.schedule : null;
   const modalTitle = formMode?.type === "edit" ? "Edit schedule" : "Add schedule";
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
+  const cronError = cronValue.trim() ? validateCronExpression(cronValue) : null;
+  const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
 
   return (
     <section className="tabPage schedulePage scheduleManagementPage">
@@ -333,9 +339,21 @@ export function SchedulePage({
                     Name
                     <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
                   </label>
-                  <label>
+                  <label className="scheduleCronField">
                     Cron schedule
-                    <input name="cron" defaultValue={modalSchedule?.cron ?? ""} placeholder="0 4 * * *" required pattern="^\S+\s+\S+\s+\S+\s+\S+\s+\S+$" title="Use five cron fields: minute hour day month weekday." />
+                    <input
+                      name="cron"
+                      value={cronValue}
+                      onChange={(event) => setCronValue(event.target.value)}
+                      placeholder="0 4 * * *"
+                      required
+                      aria-invalid={Boolean(cronError)}
+                      aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
+                      title="Use five cron fields: minute hour day month weekday."
+                    />
+                    {cronError
+                      ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
+                      : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
                   </label>
                 </div>
                 <div className="commandStack scheduleCommandStack">
