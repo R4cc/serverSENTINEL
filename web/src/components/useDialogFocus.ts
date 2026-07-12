@@ -40,6 +40,7 @@ export function useDialogFocus<T extends HTMLElement>({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (dialogStack.at(-1) !== dialogId) return;
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

@@ -11,6 +11,7 @@ import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import type { PublicUser } from "../../types";
 import type { FileActionDialog, FilesWorkspace } from "./useFilesWorkspace";
+import { fileEntryPointerIntent } from "./fileSelection";
 
 type FilesPageProps = {
   workspace: FilesWorkspace;
@@ -273,7 +274,11 @@ export function FilesPage({
                   aria-selected={selected}
                   onClick={(event) => {
                     if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;
-                    selectFromPointer(event, entry.path);
+                    if (fileEntryPointerIntent("click").select) selectFromPointer(event, entry.path);
+                  }}
+                  onDoubleClick={(event) => {
+                    if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;
+                    if (fileEntryPointerIntent("double-click").activate) actions.activateFileEntry(entry);
                   }}
                 >
                   <label className="fileCheckboxCell" role="cell" aria-label={`Select ${entry.name}`}>
@@ -292,10 +297,10 @@ export function FilesPage({
                     onFocus={() => actions.setFocusedFilePath(entry.path)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      actions.activateFileEntry(entry);
+                      selectFromPointer(event, entry.path);
                     }}
                     onKeyDown={(event) => handleRowKeyDown(event, entry.path)}
-                    title={`${entry.path} — Click or press Enter to open`}
+                    title={`${entry.path} — Double-click or press Enter to open`}
                   >
                     <FileTypeIcon entry={entry} />
                     <span>{entry.name}</span>

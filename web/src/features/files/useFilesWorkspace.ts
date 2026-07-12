@@ -1308,7 +1308,6 @@ export function useFilesWorkspace({
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      closeEditor();
       setFileSaving(false);
       return;
     }
@@ -1328,7 +1327,6 @@ export function useFilesWorkspace({
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await loadFiles(activeServer.id, listing.path);
-      closeEditor();
     } catch (error) {
       const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
       const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"

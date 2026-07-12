@@ -9,6 +9,13 @@ export type FileSelectionResult = {
   anchorPath: string;
 };
 
+export function fileEntryPointerIntent(eventType: "click" | "double-click") {
+  return {
+    select: true,
+    activate: eventType === "double-click"
+  };
+}
+
 export function retainedFileFocus(currentPath: string, availablePaths: string[]) {
   return availablePaths.includes(currentPath) ? currentPath : "";
 }

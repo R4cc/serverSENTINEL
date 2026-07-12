@@ -934,15 +934,6 @@ button:disabled,
 .fileCodeEditor-disabled {
   background: var(--surface-muted);
   color: var(--text-muted);
-  cursor: not-allowed;
-}
-
-.fileCodeEditor-disabled .cm-editor,
-.fileCodeEditor-disabled .cm-scroller,
-.fileCodeEditor-disabled .cm-content,
-.fileCodeEditor-disabled .cm-line,
-.fileCodeEditor-disabled .cm-gutters {
-  cursor: not-allowed;
 }
 
 .fileEditorMainArea {

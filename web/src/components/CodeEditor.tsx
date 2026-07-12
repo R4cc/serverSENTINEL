@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
@@ -7,6 +7,7 @@ import { yaml } from "@codemirror/lang-yaml";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { search } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
 import { properties } from "@codemirror/legacy-modes/mode/properties";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
@@ -43,24 +44,33 @@ const serverSentinelHighlightStyle = HighlightStyle.define([
   { tag: tags.link, color: "var(--editor-link)", textDecoration: "underline" }
 ]);
 
-const lockedEditorInteraction = EditorView.domEventHandlers({
-  pointerdown(event) {
-    event.preventDefault();
-    return true;
-  },
-  mousedown(event) {
-    event.preventDefault();
-    return true;
-  },
-  click(event) {
-    event.preventDefault();
-    return true;
-  },
-  dblclick(event) {
-    event.preventDefault();
-    return true;
-  }
-});
+export const editorSearchExtension = search();
+
+const editableBasicSetup = {
+  lineNumbers: true,
+  foldGutter: true,
+  highlightActiveLine: true,
+  highlightActiveLineGutter: true,
+  bracketMatching: true,
+  closeBrackets: true,
+  history: true,
+  drawSelection: true,
+  dropCursor: true,
+  highlightSpecialChars: true,
+  rectangularSelection: true,
+  syntaxHighlighting: false
+} as const;
+
+const readOnlyBasicSetup = {
+  ...editableBasicSetup,
+  highlightActiveLine: false,
+  highlightActiveLineGutter: false,
+  bracketMatching: false,
+  closeBrackets: false,
+  history: false,
+  dropCursor: false,
+  rectangularSelection: false
+} as const;
 
 const serverSentinelEditorTheme = EditorView.theme({
   "&": {
@@ -123,10 +133,7 @@ const serverSentinelEditorTheme = EditorView.theme({
   },
   "&.cm-editor[aria-readonly='true']": {
     backgroundColor: "var(--surface-muted)",
-    cursor: "not-allowed"
-  },
-  "&.cm-editor[aria-readonly='true'] .cm-scroller, &.cm-editor[aria-readonly='true'] .cm-content, &.cm-editor[aria-readonly='true'] .cm-line, &.cm-editor[aria-readonly='true'] .cm-gutters": {
-    cursor: "not-allowed"
+    cursor: "text"
   },
   "&.cm-editor[aria-readonly='true'] .cm-content": {
     caretColor: "transparent"
@@ -140,9 +147,6 @@ const serverSentinelEditorTheme = EditorView.theme({
   "&.cm-editor[aria-readonly='true'] .cm-activeLineGutter": {
     backgroundColor: "var(--surface-muted)",
     color: "var(--text-soft)"
-  },
-  "&.cm-editor[aria-readonly='true'] .cm-selectionBackground, &.cm-editor[aria-readonly='true'].cm-focused .cm-selectionBackground": {
-    backgroundColor: "transparent"
   }
 });
 
@@ -205,49 +209,48 @@ export default function CodeEditor({
   onChange,
   onSave
 }: CodeEditorProps) {
+  const onChangeRef = useRef(onChange);
+  const onSaveRef = useRef(onSave);
+  const saveDisabledRef = useRef(saveDisabled);
+  onChangeRef.current = onChange;
+  onSaveRef.current = onSave;
+  saveDisabledRef.current = saveDisabled;
+
+  const handleChange = useCallback((nextValue: string) => {
+    onChangeRef.current(nextValue);
+  }, []);
+
   const extensions = useMemo<Extension[]>(
     () => [
       syntaxHighlighting(serverSentinelHighlightStyle, { fallback: true }),
       editorLanguage(selectedPath),
+      editorSearchExtension,
       keymap.of([
         {
           key: "Mod-s",
           preventDefault: true,
           run: () => {
-            if (!saveDisabled) onSave();
+            if (!saveDisabledRef.current) onSaveRef.current();
             return true;
           }
         }
-      ]),
-      ...(disabled ? [lockedEditorInteraction] : [])
+      ])
     ],
-    [disabled, onSave, saveDisabled, selectedPath]
+    [selectedPath]
   );
 
   return (
     <CodeMirror
       aria-label={`Edit ${fileName}`}
-      basicSetup={{
-        lineNumbers: true,
-        foldGutter: true,
-        highlightActiveLine: !disabled,
-        highlightActiveLineGutter: !disabled,
-        bracketMatching: !disabled,
-        closeBrackets: !disabled,
-        history: !disabled,
-        drawSelection: !disabled,
-        dropCursor: !disabled,
-        highlightSpecialChars: true,
-        rectangularSelection: !disabled,
-        syntaxHighlighting: false
-      }}
+      autoFocus
+      basicSetup={disabled ? readOnlyBasicSetup : editableBasicSetup}
       className={`fileCodeEditor${disabled ? " fileCodeEditor-disabled" : ""}`}
       editable={!disabled}
       extensions={extensions}
       height="100%"
       indentWithTab
       minHeight="100%"
-      onChange={onChange}
+      onChange={handleChange}
       readOnly={disabled}
       theme={serverSentinelEditorTheme}
       value={value}

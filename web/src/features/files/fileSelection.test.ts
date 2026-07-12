@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { adjacentFilePath, retainedFileFocus, updateFileSelection } from "./fileSelection";
+import { adjacentFilePath, fileEntryPointerIntent, retainedFileFocus, updateFileSelection } from "./fileSelection";
 
 const paths = ["/alpha", "/bravo", "/charlie", "/delta"];
 
 describe("file selection helpers", () => {
+  it("selects on a single click without activating the entry", () => {
+    expect(fileEntryPointerIntent("click")).toEqual({ select: true, activate: false });
+  });
+
+  it("activates an entry only for the double-click event", () => {
+    expect(fileEntryPointerIntent("double-click")).toEqual({ select: true, activate: true });
+  });
+
   it("replaces selection on a plain click", () => {
     expect(updateFileSelection(["/alpha"], paths, "/charlie", "/alpha")).toEqual({
       selectedPaths: ["/charlie"],

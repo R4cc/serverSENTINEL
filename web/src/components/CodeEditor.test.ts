@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { editorLanguageKind } from "./CodeEditor";
+import { EditorState, StateEffect } from "@codemirror/state";
+import { getSearchQuery, SearchQuery, setSearchQuery } from "@codemirror/search";
+import { editorLanguageKind, editorSearchExtension } from "./CodeEditor";
 
 describe("editorLanguageKind", () => {
   it("detects common Minecraft and config formats", () => {
@@ -19,5 +21,18 @@ describe("editorLanguageKind", () => {
   it("falls back to plain text for unknown files", () => {
     expect(editorLanguageKind("/notes/readme.txt")).toBe("plain");
     expect(editorLanguageKind("/unknown/file")).toBe("plain");
+  });
+});
+
+describe("editor search lifecycle", () => {
+  it("preserves the find and replace query when the editor is reconfigured", () => {
+    let state = EditorState.create({ doc: "alpha beta alpha", extensions: [editorSearchExtension] });
+    state = state.update({
+      effects: setSearchQuery.of(new SearchQuery({ search: "alpha", replace: "omega" }))
+    }).state;
+    state = state.update({ effects: StateEffect.reconfigure.of([editorSearchExtension]) }).state;
+
+    expect(getSearchQuery(state).search).toBe("alpha");
+    expect(getSearchQuery(state).replace).toBe("omega");
   });
 });
