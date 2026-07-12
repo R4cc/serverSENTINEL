@@ -13,6 +13,7 @@ import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
+import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { AppIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
@@ -39,28 +40,6 @@ function consoleLine(text: string) {
   return `${text}\n`;
 }
 
-function mergeConsoleLogTail(current: string[], next: string[]) {
-  if (!next.length) return current.length ? current : next;
-  if (!current.length) return next;
-
-  for (let start = Math.max(0, current.length - next.length); start < current.length; start += 1) {
-    if (next.every((line, index) => current[start + index] === line)) {
-      return current;
-    }
-  }
-
-  const maxOverlap = Math.min(current.length, next.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    const currentTail = current.slice(current.length - overlap);
-    const nextHead = next.slice(0, overlap);
-    if (currentTail.every((line, index) => line === nextHead[index])) {
-      return [...current, ...next.slice(overlap)].slice(-500);
-    }
-  }
-
-  return current;
-}
-
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
@@ -75,10 +54,6 @@ type StoredPlayerMetrics = {
   maxPlayers?: number | null;
   savedAt: number;
 };
-
-function isReconnectableConsoleUnavailable(message?: string) {
-  return /node .*offline|node disconnected|disconnected before command/i.test(message ?? "");
-}
 
 function mergeTransientPlayerMetrics(incoming: ServerActivity, previous: ServerActivity | undefined, preservePrevious: boolean): ServerActivity {
   if (!preservePrevious || incoming.playersOnline !== null && incoming.playersOnline !== undefined) return incoming;
@@ -224,6 +199,7 @@ export default function App() {
   const [statusError, setStatusError] = useState("");
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [consoleError, setConsoleError] = useState("");
+  const [consoleConnectionState, setConsoleConnectionState] = useState<ConsoleConnectionState>("connecting");
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
@@ -270,6 +246,7 @@ export default function App() {
     systemDark
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
+  const logsRef = useRef<string[]>([]);
   const fileWorkspaceServerIdRef = useRef("");
   const refreshModsAfterFileMutationRef = useRef<() => Promise<unknown> | unknown>(() => undefined);
   const activeServerIdRef = useRef("");
@@ -277,7 +254,10 @@ export default function App() {
   const provisionSubmitLockRef = useRef(false);
   const appRefreshInFlightRef = useRef(false);
   const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
+  const nodeRefreshInFlightRef = useRef(false);
   const consoleReconnectTimeoutRef = useRef<number | null>(null);
+  const consoleReconnectNoticeTimeoutRef = useRef<number | null>(null);
+  const consoleReconnectAttemptRef = useRef(0);
   const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
@@ -381,21 +361,41 @@ export default function App() {
   const canManageUsers = hasPermission(permissionUser, "users.manage");
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
-  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
+  const confirmedNodeOffline = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
+  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || confirmedNodeOffline || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
-  const serverCommandStatusLabel = serverCommandTone === "running"
+  const displayedServerCommandTone = confirmedNodeOffline ? "offline" : serverCommandTone;
+  const lastKnownRuntimeLabel = serverCommandTone === "running"
     ? "Running"
     : serverCommandTone === "starting"
       ? "Starting"
       : serverCommandTone === "stopped" || serverCommandTone === "exited"
         ? "Offline"
         : "Unavailable";
+  const serverCommandStatusLabel = confirmedNodeOffline ? "Node offline" : lastKnownRuntimeLabel;
+  const serverCommandStatusTitle = confirmedNodeOffline
+    ? `${activeNode.name} is offline. Last known server state: ${lastKnownRuntimeLabel}.`
+    : undefined;
+  const serverStripHealth = confirmedNodeOffline
+    ? { tone: "error", message: `${activeNode.name} is offline. Retrying automatically.` }
+    : statusError
+      ? { tone: "warning", message: "Status temporarily unavailable — retrying automatically." }
+      : activePage === "console" && consoleConnectionState === "reconnecting"
+        ? { tone: "warning", message: "Reconnecting console…" }
+        : activePage === "console" && consoleConnectionState === "error"
+          ? { tone: "error", message: consoleError || "Console stream is unavailable." }
+          : activePage === "console" && (consoleConnectionState === "connecting" || consoleLoading)
+            ? { tone: "loading", message: "Connecting to live console…" }
+            : !activeStatus
+              ? { tone: "loading", message: "Loading server status…" }
+              : null;
   const runtimeControlsDisabledReason = authOperationalLock
     ? "Sign in before using runtime controls."
     : !canBasic
       ? "Servers control permission is required."
-      : activeNodeRuntimeBlocked
+      : activeNodeRuntimeBlocked || confirmedNodeOffline
         ? activeNodeBlockMessage
+          || `${activeNode.name} is offline. Runtime controls will return when it reconnects.`
         : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
           ? "Docker socket is not mounted. Runtime controls are unavailable for the internal node."
           : isProvisioning
@@ -562,6 +562,9 @@ export default function App() {
       if (consoleReconnectTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectTimeoutRef.current);
       }
+      if (consoleReconnectNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
+      }
       if (consoleCommandRefreshTimeoutRef.current !== null) {
         window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
       }
@@ -571,6 +574,10 @@ export default function App() {
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
+
+  useEffect(() => {
+    logsRef.current = logs;
+  }, [logs]);
 
   useEffect(() => {
     if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
@@ -731,8 +738,17 @@ export default function App() {
     const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
     const initializeFileWorkspace = fileWorkspaceServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
-    if (serverChanged) setLogs([]);
     if (serverChanged) {
+      logsRef.current = [];
+      setLogs([]);
+      setStatusError("");
+      setConsoleError("");
+      setConsoleConnectionState("connecting");
+      consoleReconnectAttemptRef.current = 0;
+      if (consoleReconnectNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
+        consoleReconnectNoticeTimeoutRef.current = null;
+      }
       const cachedPlayerMetrics = storedPlayerMetricsActivity(activeServer.id);
       setOverviewData({ events: [], activity: cachedPlayerMetrics ?? {} });
       if (cachedPlayerMetrics) {
@@ -746,20 +762,22 @@ export default function App() {
     }
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoStatus(activeServer, demoRunning));
-      setLogs([
+      const demoLogs = [
         consoleLine("[demo] Starting minecraft server version 1.21.4"),
         consoleLine("[demo] Loading Fabric Loader 0.16.10"),
         consoleLine("[demo] Preparing spawn area: 100%"),
         consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
-      ]);
+      ];
+      logsRef.current = demoLogs;
+      setLogs(demoLogs);
+      setConsoleConnectionState("live");
       if (initializeFileWorkspace) filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
       return;
     }
     if (activeNodeRuntimeBlocked) {
       fileWorkspaceServerIdRef.current = "";
       filesWorkspace.actions.resetEditorState();
-      setStatus(null);
-      setStatusError(activeNodeBlockMessage);
+      setConsoleConnectionState(activeNode.status === "offline" ? "offline" : "error");
       setConsoleError(activeNodeBlockMessage);
       filesWorkspace.actions.setFilesError(activeNodeBlockMessage);
       setOverviewError(activeNodeBlockMessage);
@@ -770,12 +788,14 @@ export default function App() {
       return;
     }
     if (initializeFileWorkspace) {
-      void refreshStatus(activeServer.id);
       const restoredFilePath = readStoredFileLocation(activeServer.id);
       void filesWorkspace.actions.loadFiles(activeServer.id, restoredFilePath).then((loaded) => {
         if (!loaded && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
       });
     }
+
+    void refreshStatus(activeServer.id);
+    void refreshConsoleLogs(activeServer.id);
 
     if (consoleReconnectTimeoutRef.current !== null) {
       window.clearTimeout(consoleReconnectTimeoutRef.current);
@@ -788,57 +808,91 @@ export default function App() {
 
     const serverId = activeServer.id;
     let closedByCleanup = false;
+    let reconnectScheduled = false;
+    let allowReconnect = true;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}`);
-    function reconnect() {
-      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
-      setConsoleError("Live console stream disconnected. Reconnecting automatically.");
-      if (consoleReconnectTimeoutRef.current !== null) {
-        window.clearTimeout(consoleReconnectTimeoutRef.current);
+    function scheduleReconnect() {
+      if (!allowReconnect || reconnectScheduled || closedByCleanup || activeServerIdRef.current !== serverId) return;
+      reconnectScheduled = true;
+      if (consoleReconnectNoticeTimeoutRef.current === null) {
+        consoleReconnectNoticeTimeoutRef.current = window.setTimeout(() => {
+          consoleReconnectNoticeTimeoutRef.current = null;
+          if (activeServerIdRef.current === serverId) setConsoleConnectionState("reconnecting");
+        }, 3_000);
       }
+      const delay = consoleReconnectDelay(consoleReconnectAttemptRef.current);
+      consoleReconnectAttemptRef.current += 1;
       consoleReconnectTimeoutRef.current = window.setTimeout(() => {
         consoleReconnectTimeoutRef.current = null;
         if (activeServerIdRef.current === serverId) {
           setConsoleStreamVersion((version) => version + 1);
         }
-      }, 2_000);
+      }, delay);
+    }
+
+    function markConsoleLive() {
+      if (activeServerIdRef.current !== serverId) return;
+      consoleReconnectAttemptRef.current = 0;
+      if (consoleReconnectNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
+        consoleReconnectNoticeTimeoutRef.current = null;
+      }
+      setConsoleConnectionState("live");
+      setConsoleError("");
     }
 
     socket.onopen = () => {
       if (activeServerIdRef.current === serverId) {
-        setConsoleError("");
+        void refreshStatus(serverId);
       }
     };
     socket.onmessage = (event) => {
-      let message: { type?: string; source?: string; text?: string; message?: string };
+      let message: { type?: string; source?: string; text?: string; message?: string; code?: string; retryable?: boolean };
       try {
         message = JSON.parse(event.data);
       } catch {
-        setLogs([consoleLine("Console stream sent an unreadable message.")]);
+        setConsoleError("Console stream sent an unreadable message.");
+        setConsoleConnectionState("error");
         return;
       }
       if (message.type === "log") {
-        setLogs((current) => [...current.slice(-499), message.text ?? ""]);
+        markConsoleLive();
+        setLogs((current) => {
+          const next = appendConsoleEntries(current, [message.text ?? ""]);
+          logsRef.current = next;
+          return next;
+        });
         if (message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
       }
       if (message.type === "unavailable") {
         const unavailableMessage = message.message ?? "Console stream is unavailable.";
-        setLogs([consoleLine(unavailableMessage)]);
-        if (isReconnectableConsoleUnavailable(unavailableMessage)) {
-          void refreshApp({ silent: true });
-          void refreshStatus(serverId);
-          reconnect();
-          socket.close();
+        setConsoleError(unavailableMessage);
+        if (isNodeOfflineConsoleMessage(message)) {
+          allowReconnect = false;
+          setConsoleConnectionState("offline");
+          void refreshNodeConnectivity();
+        } else if (consoleUnavailableIsRetryable(message)) {
+          scheduleReconnect();
+        } else {
+          allowReconnect = false;
+          setConsoleConnectionState("error");
         }
+        socket.close();
+      }
+      if (message.type === "status") {
+        markConsoleLive();
+        void refreshStatus(serverId);
       }
       if (message.type === "empty") {
+        markConsoleLive();
         setLogs((current) => current.length ? current : []);
       }
     };
-    socket.onerror = reconnect;
-    socket.onclose = reconnect;
+    socket.onerror = () => socket.close();
+    socket.onclose = scheduleReconnect;
     return () => {
       closedByCleanup = true;
       if (consoleReconnectTimeoutRef.current !== null) {
@@ -890,6 +944,26 @@ export default function App() {
     }, 2500);
     return () => window.clearInterval(interval);
   }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
+
+  useEffect(() => {
+    if (!activeServer || activeServerUsesInternalNode || demoMode) return;
+    const refreshWhenActive = () => {
+      if (!document.hidden) void refreshNodeConnectivity();
+    };
+    const handleVisibility = () => refreshWhenActive();
+
+    void refreshNodeConnectivity();
+    const interval = window.setInterval(refreshWhenActive, 5_000);
+    window.addEventListener("focus", refreshWhenActive);
+    window.addEventListener("online", refreshWhenActive);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenActive);
+      window.removeEventListener("online", refreshWhenActive);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked) return;
@@ -1396,6 +1470,33 @@ export default function App() {
     }
   }
 
+  async function refreshNodeConnectivity() {
+    if (demoMode || nodeRefreshInFlightRef.current || !authSession?.authenticated) return;
+    nodeRefreshInFlightRef.current = true;
+    try {
+      const result = await api<{ nodes: ManagedNode[] }>("/api/nodes");
+      const currentServer = effectiveAppState.servers.find((server) => server.id === activeServerIdRef.current);
+      const currentNode = currentServer ? contextNodes.find((node) => node.id === currentServer.nodeId) : undefined;
+      const nextNode = currentServer ? result.nodes.find((node) => node.id === currentServer.nodeId) : undefined;
+      setAppState((current) => ({ ...current, nodes: result.nodes }));
+
+      if (currentServer && currentNode && nextNode && !isNodeRuntimeUsable(currentNode) && isNodeRuntimeUsable(nextNode)) {
+        await refreshApp({ silent: true });
+        if (activeServerIdRef.current !== currentServer.id) return;
+        setStatusError("");
+        setConsoleError("");
+        setConsoleConnectionState("connecting");
+        consoleReconnectAttemptRef.current = 0;
+        await Promise.allSettled([refreshStatus(currentServer.id), refreshConsoleLogs(currentServer.id)]);
+        setConsoleStreamVersion((version) => version + 1);
+      }
+    } catch (error) {
+      if (handleStaleSession(error)) return;
+    } finally {
+      nodeRefreshInFlightRef.current = false;
+    }
+  }
+
   async function refreshStatus(serverId = activeServer?.id) {
     if (isProvisioning) return;
     if (!serverId) return;
@@ -1417,6 +1518,10 @@ export default function App() {
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setStatusError(errorMessage(error, "Could not refresh server status. Existing status is preserved."));
+        if (error instanceof ApiError && error.code === "NODE_OFFLINE") {
+          setConsoleConnectionState("offline");
+          void refreshNodeConnectivity();
+        }
       }
     } finally {
       statusRefreshInFlightRef.current.delete(serverId);
@@ -1434,23 +1539,44 @@ export default function App() {
       }
       return;
     }
-    setConsoleLoading(logs.length === 0);
-    setConsoleError("");
+    const startLogs = logsRef.current;
+    setConsoleLoading(startLogs.length === 0);
     try {
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
       if (activeServerIdRef.current !== serverId) return;
       const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
       const nextLogs = lines.map((line) => consoleLine(line));
-      setLogs((current) => mergeConsoleLogTail(current, nextLogs));
+      setLogs((current) => {
+        const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, current);
+        logsRef.current = reconciled;
+        return reconciled;
+      });
     } catch (error) {
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setConsoleError(errorMessage(error, "Could not load console logs. Runtime logs may be unavailable."));
+        if (error instanceof ApiError && error.code === "NODE_OFFLINE") {
+          setConsoleConnectionState("offline");
+          void refreshNodeConnectivity();
+        }
       }
-      setConsoleStreamVersion((version) => version + 1);
     } finally {
       if (activeServerIdRef.current === serverId) setConsoleLoading(false);
     }
+  }
+
+  async function retryActiveConnection() {
+    const serverId = activeServerIdRef.current;
+    if (!serverId) return;
+    if (!confirmedNodeOffline) setConsoleConnectionState("connecting");
+    consoleReconnectAttemptRef.current = 0;
+    await Promise.allSettled([
+      refreshNodeConnectivity(),
+      refreshApp({ silent: true }),
+      refreshStatus(serverId),
+      refreshConsoleLogs(serverId)
+    ]);
+    if (activeServerIdRef.current === serverId) setConsoleStreamVersion((version) => version + 1);
   }
 
   function downloadConsoleLogs() {
@@ -2726,25 +2852,34 @@ export default function App() {
                 </div>
                 <div className="serverStripInfo">
                   <div className="serverStripTitleRow">
-                    <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
+                    <span className={`serverCommandStatusDot ${displayedServerCommandTone}`} aria-hidden="true" />
                     <strong>{activeServer.displayName}</strong>
-                    <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
+                    <StatusBadge className={`runtimeBadge ${displayedServerCommandTone}`} title={serverCommandStatusTitle}>
                       {serverCommandStatusLabel}
                     </StatusBadge>
                     {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
                   </div>
                   <div className="serverStripMetaRow">
-                    <small className="serverStripMeta">
-                      {activeNode.name}
-                    </small>
-                    <span aria-hidden="true" className="serverStripSeparator">·</span>
-                    <small className="serverStripMeta">
-                      Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
-                    </small>
-                    <span aria-hidden="true" className="serverStripSeparator">·</span>
-                    <small className="serverStripMeta">
-                      MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
-                    </small>
+                    {serverStripHealth ? (
+                      <small className={`serverStripHealth ${serverStripHealth.tone}`} role={serverStripHealth.tone === "error" ? "alert" : "status"} title={consoleError || statusError || serverStripHealth.message}>
+                        {serverStripHealth.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
+                        {serverStripHealth.message}
+                      </small>
+                    ) : (
+                      <>
+                        <small className="serverStripMeta">
+                          {activeNode.name}
+                        </small>
+                        <span aria-hidden="true" className="serverStripSeparator">·</span>
+                        <small className="serverStripMeta">
+                          Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
+                        </small>
+                        <span aria-hidden="true" className="serverStripSeparator">·</span>
+                        <small className="serverStripMeta">
+                          MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
+                        </small>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2794,13 +2929,13 @@ export default function App() {
                         variant="ghost"
                         compact
                         onClick={() => {
-                          refreshStatus();
+                          void retryActiveConnection();
                           setOverflowOpen(false);
                         }}
                         disabled={isProvisioning}
                         title={isProvisioning ? provisioningNavigationReason : "Refresh server status"}
                       >
-                        Refresh status
+                        {serverStripHealth ? "Retry connection" : "Refresh status"}
                       </Button>
                       <Button
                         variant="ghost"
@@ -2819,16 +2954,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
-            {statusError && (
-              <InlineState
-                tone="warning"
-                title="Status is not up to date"
-                message={`${statusError} The last known server information is still shown.`}
-                actionLabel="Refresh status"
-                onAction={() => void refreshStatus()}
-              />
-            )}
 
             {activePage === "overview" && (
               <section className="tabPage overviewPage">
@@ -2877,19 +3002,6 @@ export default function App() {
                       </Button>
                     </div>}
                   />
-                  {consoleLoading && (
-                    <InlineState tone="loading" title="Loading console" message="Loading recent server log output." />
-                  )}
-                  {consoleError && (
-                    <InlineState
-                      tone="warning"
-                      title="Console output is not up to date"
-                      message={`${consoleError} Existing log lines remain visible when available.`}
-                      actionLabel="Retry"
-                      onAction={() => void refreshConsoleLogs(activeServer.id)}
-                      busy={consoleLoading}
-                    />
-                  )}
                   <div className="terminal">
                     <Suspense fallback={<InlineState tone="loading" title="Preparing terminal" message="Loading the interactive console." />}>
                       <MinecraftTerminal

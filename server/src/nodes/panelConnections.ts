@@ -41,7 +41,7 @@ export class PanelNodeConnections {
     }
     connected.pending.clear();
     for (const stream of connected.streams.values()) {
-      stream.onData({ type: "unavailable", message: "Node disconnected" });
+      stream.onData({ type: "unavailable", message: "Node disconnected", code: "NODE_OFFLINE", retryable: true });
       stream.onClose?.();
     }
     connected.streams.clear();

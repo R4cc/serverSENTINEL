@@ -37,12 +37,33 @@ import {
   sanitizeCommandDelaysSeconds,
   waitForCommandDelay,
   dockerNetworkingConfigFromInspect,
-  minecraftContainerNetworkingConfig
+  minecraftContainerNetworkingConfig,
+  nodeWithLiveConnectionStatus
 } from "./app.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
+
+describe("live node connectivity", () => {
+  const remoteNode: ManagedNode = {
+    id: "remote-node",
+    name: "Remote Node",
+    type: "remote",
+    status: "online",
+    isInternal: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  };
+
+  it("overrides stale persisted online state when no socket is connected", () => {
+    expect(nodeWithLiveConnectionStatus(remoteNode, false).status).toBe("offline");
+  });
+
+  it("restores online state from an authoritative live socket", () => {
+    expect(nodeWithLiveConnectionStatus({ ...remoteNode, status: "offline" }, true).status).toBe("online");
+  });
+});
 
 function testRuntimeProfile() {
   return {

@@ -122,6 +122,8 @@ export type NodeStreamEvent =
   | {
       type: "unavailable";
       message: string;
+      code?: string;
+      retryable?: boolean;
     }
   | {
       type: "empty";

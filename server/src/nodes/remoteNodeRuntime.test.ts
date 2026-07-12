@@ -80,6 +80,32 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("sends a structured retryable event when console streaming finds the node offline", async () => {
+    const node = testNode();
+    const messages: string[] = [];
+    const connections = { isConnected: () => false } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    await runtime.streamConsole(testServer(), {
+      readyState: 1,
+      send: (message: string) => messages.push(message)
+    }, () => undefined);
+
+    expect(JSON.parse(messages[0])).toMatchObject({
+      type: "unavailable",
+      code: "NODE_OFFLINE",
+      retryable: true
+    });
+  });
+
   it("allows slow remote server provisioning commands to outlive the default request timeout", async () => {
     const server = testServer();
     const { runtime, calls } = runtimeWithRecorder(server);

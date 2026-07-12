@@ -787,12 +787,18 @@ function publicNode(node: ManagedNode): PublicNode {
   };
 }
 
+export function nodeWithLiveConnectionStatus(node: ManagedNode, connected: boolean): ManagedNode {
+  if (node.isInternal || node.type === "local") return node;
+  if (connected) return node.status === "online" ? node : { ...node, status: "online" };
+  return node.status === "online" ? { ...node, status: "offline" } : node;
+}
+
 async function publicNodes(nodes: ManagedNode[], detectedInternalTotalMemory?: number): Promise<PublicNode[]> {
   const internalTotalMemory = detectedInternalTotalMemory ?? (nodes.some((node) => node.id === localNodeId || node.isInternal)
     ? await detectedTotalMemory()
     : undefined);
   return nodes.map((node) => {
-    const publicFields = publicNode(node);
+    const publicFields = publicNode(nodeWithLiveConnectionStatus(node, panelNodeConnections.isConnected(node.id)));
     return (node.id === localNodeId || node.isInternal) && internalTotalMemory
       ? { ...publicFields, totalMemory: internalTotalMemory }
       : publicFields;
@@ -4889,7 +4895,13 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     await runtimeForServer(server).streamConsole(server, client, (cleanup) => socket.on("close", cleanup));
   } catch (error) {
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
-    client.send(JSON.stringify({ type: "unavailable", message: (error as Error).message }));
+    const streamError = error as Error & { code?: string };
+    client.send(JSON.stringify({
+      type: "unavailable",
+      message: streamError.message,
+      code: streamError.code?.toUpperCase(),
+      retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
+    }));
   }
 });
 

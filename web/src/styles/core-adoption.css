@@ -666,6 +666,11 @@
   background: var(--text-soft);
 }
 
+.serverCommandStatusDot.offline {
+  background: var(--sentinel-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-danger) 14%, transparent);
+}
+
 .activeServerStrip .runtimeBadge {
   flex: 0 0 auto;
   padding: 5px 10px;
@@ -691,6 +696,12 @@
   color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
 }
 
+.activeServerStrip .runtimeBadge.offline {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 42%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-danger) 82%, var(--text));
+}
+
 .activeServerStrip .serverStripMetaRow {
   display: flex;
   align-items: center;
@@ -698,6 +709,39 @@
   gap: 6px;
   min-width: 0;
   margin: 0;
+}
+
+.activeServerStrip .serverStripHealth {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeServerStrip .serverStripHealth.warning {
+  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
+}
+
+.activeServerStrip .serverStripHealth.error {
+  color: color-mix(in srgb, var(--sentinel-danger) 86%, var(--text));
+}
+
+.serverStripHealthSpinner {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
 }
 
 .activeServerStrip .serverStripMeta,

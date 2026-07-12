@@ -233,17 +233,18 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
     const node = await this.lookupNode(server.nodeId);
     if (!node) {
-      send({ type: "unavailable", message: `Node ${server.nodeId} not found` });
+      send({ type: "unavailable", message: `Node ${server.nodeId} not found`, code: "NODE_NOT_FOUND", retryable: false });
       return;
     }
     if (!this.connections.isConnected(node.id)) {
-      send({ type: "unavailable", message: `Node ${node.name} is offline` });
+      send({ type: "unavailable", message: `Node ${node.name} is offline`, code: "NODE_OFFLINE", retryable: true });
       return;
     }
     try {
       assertNodeSupports(node, "server.console.stream");
     } catch (error) {
-      send({ type: "unavailable", message: (error as Error).message });
+      const protocolError = error as Error & { code?: string };
+      send({ type: "unavailable", message: protocolError.message, code: protocolError.code?.toUpperCase(), retryable: false });
       return;
     }
 
@@ -251,7 +252,13 @@ export class RemoteNodeRuntime implements NodeRuntime {
       const status = await this.serverStatus(server) as { docker?: unknown };
       send({ type: "status", status: { docker: status.docker } });
     } catch (error) {
-      send({ type: "unavailable", message: (error as Error).message });
+      const statusError = error as Error & { code?: string };
+      send({
+        type: "unavailable",
+        message: statusError.message,
+        code: statusError.code?.toUpperCase(),
+        retryable: statusError.code === "node_offline" || statusError.code === "command_timeout"
+      });
     }
 
     try {
@@ -261,12 +268,26 @@ export class RemoteNodeRuntime implements NodeRuntime {
         { server },
         (event) => send(event),
         (error) => {
-          if (error) send({ type: "unavailable", message: error.message });
+          if (error) {
+            const streamError = error as Error & { code?: string };
+            send({
+              type: "unavailable",
+              message: streamError.message,
+              code: streamError.code?.toUpperCase(),
+              retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
+            });
+          }
         }
       );
       onClose(cleanup);
     } catch (error) {
-      send({ type: "unavailable", message: (error as Error).message });
+      const streamError = error as Error & { code?: string };
+      send({
+        type: "unavailable",
+        message: streamError.message,
+        code: streamError.code?.toUpperCase(),
+        retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
+      });
     }
   }
 
