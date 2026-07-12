@@ -377,6 +377,7 @@
 
   .filesPage .filesExplorer {
     height: min(640px, calc(100vh - 180px));
+    height: min(640px, calc(100dvh - 180px));
     min-height: 420px;
   }
 
@@ -389,20 +390,17 @@
   }
 
   .filesPage .fileNavButtons .uiButton {
-    width: 34px;
-    min-width: 34px;
-    min-height: 34px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
-  .filesPage .fileToolbarLabel,
-  .filesPage .selectionActionLabel {
+  .filesPage .fileToolbarLabel {
     display: none;
   }
 
   .filesPage .selectionActions .uiButton {
-    width: var(--control-height-compact);
-    min-width: var(--control-height-compact);
-    padding-inline: 0;
+    min-height: 44px;
   }
 
   .filesPage .fileTableHead,

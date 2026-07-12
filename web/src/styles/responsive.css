@@ -642,8 +642,7 @@ button:disabled,
 }
 
 .serverListItem,
-.nodeCard,
-.addNodeCardButton {
+.nodeCard {
   min-width: 0;
 }
 
@@ -1079,11 +1078,6 @@ button:disabled,
   min-height: 0;
 }
 
-.addNodeCardButton {
-  min-height: 320px;
-  border-radius: var(--radius-sm);
-}
-
 /* Unified interaction primitives */
 .buttonRow,
 .userActions,
@@ -1412,7 +1406,6 @@ button:disabled,
 .activeServerStrip,
 .modalPanel,
 .nodeCard,
-.addNodeCardButton,
 .fileCodeEditor,
 .fileEditorStateFill,
 .installSnippetShell,
@@ -1426,7 +1419,6 @@ button:disabled,
 .themeDark .activeServerStrip,
 .themeDark .modalPanel,
 .themeDark .nodeCard,
-.themeDark .addNodeCardButton,
 .themeDark .fileCodeEditor,
 .themeDark .fileEditorStateFill,
 .themeDark .installSnippetShell,
@@ -1439,7 +1431,6 @@ button:disabled,
 .nodeModalBody .panel,
 .fileEditorBody .panel,
 .settingsGroup,
-.permissionsCategory,
 .presetSummary,
 .secretPreview,
 .addNodeStatusCard,
@@ -1621,12 +1612,9 @@ textarea:hover:not(:disabled),
 .resourceRow,
 .activityGrid,
 .activityItem,
-.resourceMessage,
 .usersTable,
 .fileTable,
-.scheduleCommands,
-.propertiesGroup,
-.deletePanel {
+.scheduleTableFrame {
   border-color: var(--border-row);
 }
 
@@ -1659,10 +1647,6 @@ textarea:hover:not(:disabled),
 
 .resourceChart,
 .resourceChartEmpty,
-.resourceMessage,
-.commandHelp,
-.modDropzone,
-.uploadDropzone,
 .permissionWarning,
 .permissionGroup,
 .nodeCapabilitiesPanel,
@@ -1818,5 +1802,129 @@ textarea:hover:not(:disabled),
     width: 100%;
     margin-left: 0;
     justify-content: space-between;
+  }
+}
+
+/* Authoritative compact shell: the existing labeled disclosure is used through tablet widths. */
+@media (max-width: 1100px) {
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3) !important;
+    height: auto;
+    padding: var(--space-3) !important;
+    overflow: visible;
+    background: var(--surface);
+  }
+
+  .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size) !important;
+    align-items: center;
+    width: 100%;
+    padding: 0 !important;
+    border: 0;
+  }
+
+  .brandBlock .iconButton,
+  .sidebarCollapsed .brandBlock .iconButton {
+    display: inline-flex !important;
+    position: static !important;
+  }
+
+  .sideNav,
+  .sidebarCollapsed .sideNav,
+  .sideNavBottom,
+  .sidebarCollapsed .sideNavBottom {
+    display: grid;
+    width: 100%;
+    gap: var(--space-1);
+    overflow: visible;
+  }
+
+  .sideNav button,
+  .sidebarCollapsed .sideNav button {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: var(--space-3) !important;
+    padding-inline: var(--space-3);
+  }
+
+  .navLabel,
+  .settingsVersionText,
+  .accountName,
+  .accountLogoutButton,
+  .selectedServerReadout {
+    display: flex !important;
+    opacity: 1 !important;
+    max-width: none !important;
+    visibility: visible !important;
+  }
+
+  .sidebarCollapsed .sideNav,
+  .sidebarCollapsed .sideNavBottom {
+    display: none;
+  }
+
+  .sidebarCollapsed .sidebar {
+    gap: 0 !important;
+  }
+
+  .modalBackdrop {
+    padding-top: max(var(--space-2), env(safe-area-inset-top));
+    padding-right: max(var(--space-2), env(safe-area-inset-right));
+    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    padding-left: max(var(--space-2), env(safe-area-inset-left));
+  }
+
+  .modalPanel,
+  .fileEditorModal {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .fileEditorModal {
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+  }
+}
+
+.settingsGroupHeader.uiPanelHeader,
+.settingsGroupHeader.uiPanelHeader.usersGroupHeader {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.settingsGroupHeader .uiPanelHeaderCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.settingsGroupHeader .uiPanelHeaderActions {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .settingsGroupHeader.uiPanelHeader,
+  .settingsGroupHeader.uiPanelHeader.usersGroupHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsGroupHeader .uiPanelHeaderActions,
+  .settingsGroupHeader .uiPanelHeaderActions .uiButton {
+    width: 100%;
+    margin-left: 0;
   }
 }

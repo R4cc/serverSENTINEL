@@ -2,10 +2,11 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
+import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
 import { formatBytes } from "../utils/format";
-import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeStatusLabel, nodeWarnings } from "../utils/nodes";
+import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
 
 type AddNodeInput = {
   name: string;
@@ -427,7 +428,7 @@ function AddNodeModal({
     <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && canClose) onClose();
     }}>
-      <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="add-node-title">
+      <DialogSurface className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
         <header className="nodeModalHeader">
           <div>
             <h2 id="add-node-title">Add node</h2>
@@ -482,12 +483,11 @@ function AddNodeModal({
             <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
             {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
             <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-              {!isSuccess && <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Close and finish later" : "Node creation is still in progress"}>Cancel</Button>}
-              <Button onClick={isSuccess ? onDone : onClose}>Done</Button>
+              <Button onClick={isSuccess ? onDone : onClose} disabled={!canClose} title={canClose ? (isSuccess ? "Finish node setup" : "Close and finish later") : "Node creation is still in progress"}>{isSuccess ? "Done" : "Finish later"}</Button>
             </div>
           </div>
         )}
-      </section>
+      </DialogSurface>
     </div>
   );
 }
@@ -624,6 +624,7 @@ export function NodesPage({
             <p className="muted">Manage nodes and the servers they host.</p>
           </div>
           <div className="buttonRow">
+            <Button onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</Button>
             <Button variant="secondary" iconOnly className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
               <AppIcon name="refresh" />
             </Button>
@@ -646,13 +647,11 @@ export function NodesPage({
           const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
           const canAddServer = isNodeRuntimeUsable(node);
           const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
-          const placeholderRows = expanded ? 0 : Math.max(0, collapsedServerLimit - visibleServers.length);
           return (
             <article key={node.id} className={`panel nodeCard ${node.status}`}>
               <header className="nodeCardHeader">
                 <div className="nodeCardTopLine">
                   <div className="nodeCardTitle">
-                    <span className={`nodeStatusDot ${node.status}`} title={nodeStatusLabel(node.status)} aria-label={nodeStatusLabel(node.status)} />
                     <h3>{node.name}</h3>
                   </div>
                   <div className="nodeStatusPills">
@@ -710,9 +709,6 @@ export function NodesPage({
                     <span className="nodeServerName">Add server</span>
                     <span className="nodeAddServerHint">{canAddServer ? "Create on this node" : "Node unavailable"}</span>
                   </button>
-                  {Array.from({ length: placeholderRows }, (_, index) => (
-                    <div key={`placeholder-${index}`} className="nodeServerPlaceholder" aria-hidden="true" />
-                  ))}
                   {hiddenServerCount > 0 && (
                     <button type="button" className="nodeServerMoreRow" onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: true }))}>
                       Show all {node.servers.length} servers
@@ -728,28 +724,13 @@ export function NodesPage({
             </article>
           );
         })}
-        {sortedNodes.length > 0 && (
-          <button
-            type="button"
-            className="panel nodeCard addNodeCardButton"
-            onClick={onOpenAddNode}
-            disabled={busy || !canManageNodes}
-            aria-label="Add a remote node"
-            title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
-          >
-            <div className="addNodeCardInner">
-              <span className="addNodeIcon"><AppIcon name="plus" /></span>
-              <span>Add node</span>
-            </div>
-          </button>
-        )}
       </section>
 
       {selectedDetailsNode && (
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onCloseDetails();
         }}>
-          <section className="modalPanel nodeModalPanel nodeDetailsPanel" role="dialog" aria-modal="true" aria-labelledby="node-details-title">
+          <DialogSurface className="modalPanel nodeModalPanel nodeDetailsPanel" labelledBy="node-details-title" onClose={onCloseDetails}>
             <header className="nodeModalHeader nodeDetailsHeader">
               <div className="nodeDetailsTitleBlock">
                 <NodeDetailIcon name="node" />
@@ -911,7 +892,7 @@ export function NodesPage({
                 </div>
               </div>
             </div>
-          </section>
+          </DialogSurface>
         </div>
       )}
 
@@ -919,7 +900,7 @@ export function NodesPage({
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClearInstall();
         }}>
-          <section className="modalPanel nodeModalPanel" role="dialog" aria-modal="true" aria-labelledby="install-node-title">
+          <DialogSurface className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
             <header className="nodeModalHeader">
               <div>
                 <h2 id="install-node-title">Node Install</h2>
@@ -930,7 +911,7 @@ export function NodesPage({
             <div className="nodeModalBody">
               <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />
             </div>
-          </section>
+          </DialogSurface>
         </div>
       )}
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { eventDate, formatRelativeEventTime } from "./OverviewPage";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { demoOverviewData, demoServer, demoStatus } from "../demo";
+import { eventDate, formatRelativeEventTime, OverviewSummary } from "./OverviewPage";
 
 describe("recent event timestamps", () => {
   const now = new Date("2026-07-11T12:00:00.000Z");
@@ -20,5 +23,22 @@ describe("recent event timestamps", () => {
     const date = eventDate("13:00:00", localNow);
     expect(date?.getDate()).toBe(10);
     expect(date?.getHours()).toBe(13);
+  });
+});
+
+describe("overview summary", () => {
+  it("keeps six non-overlapping operational facts", () => {
+    const server = demoServer();
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status: demoStatus(server, true),
+      dockerSocketMounted: true,
+      activity: demoOverviewData(true).activity
+    }));
+
+    expect((html.match(/summaryTile/g) ?? []).length).toBe(6);
+    expect(html).not.toContain(">Runtime<");
+    expect(html).toContain(">Minecraft<");
+    expect(html).toContain(">Fabric<");
   });
 });

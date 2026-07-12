@@ -49,7 +49,6 @@ export function OverviewSummary({
       : String(activity.playersOnline);
   const minecraftVersion = minecraftVersionInfo(server);
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
-  const runtimeProfile = server.runtimeProfile;
   return (
     <section className="overviewSummary">
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
@@ -63,10 +62,6 @@ export function OverviewSummary({
       <div className="summaryTile">
         <span>Fabric</span>
         <strong>{versionValue(fabricLoaderVersion)}</strong>
-      </div>
-      <div className="summaryTile">
-        <span>Runtime</span>
-        <strong>{`${runtimeProfile.minecraftVersion} Fabric`}</strong>
       </div>
       <div className="summaryTile">
         <span>Uptime</span>

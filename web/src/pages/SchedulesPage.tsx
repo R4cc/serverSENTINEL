@@ -11,6 +11,7 @@ import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
 import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
+import { DialogSurface } from '../components/DialogSurface';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
@@ -181,7 +182,7 @@ export function SchedulePage({
           <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
         )}
 
-        <div className="scheduleTableFrame">
+        <div className="scheduleTableFrame" role="table" aria-label="Schedules">
           <div className="scheduleTableHeader" role="row">
             {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
               <span key={header.id}>
@@ -203,22 +204,22 @@ export function SchedulePage({
               </span>
             ))}
           </div>
-          <div className="scheduleTableBody">
+          <div className="scheduleTableBody" role="rowgroup">
             {scheduleRows.length ? scheduleRows.map((row) => {
               const schedule = row.original;
               return (
-              <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}>
-                <div className="scheduleNameCell" data-label="Name">
+              <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`} role="row">
+                <div className="scheduleNameCell" data-label="Name" role="cell">
                   <div>
                     <strong>{schedule.name}</strong>
                     <small>{scheduleDescription(schedule)}</small>
                   </div>
                 </div>
-                <div className="scheduleCell" data-label="Schedule">
+                <div className="scheduleCell" data-label="Schedule" role="cell">
                   <code>{schedule.cron}</code>
                   <small>{cronSummary(schedule.cron)}</small>
                 </div>
-                <div className="scheduleCell" data-label="Last run">
+                <div className="scheduleCell" data-label="Last run" role="cell">
                   {schedule.lastRunAt ? (
                     <>
                       <span>{formatScheduleTime(schedule.lastRunAt, formatDate)}</span>
@@ -238,7 +239,7 @@ export function SchedulePage({
                     </>
                   )}
                 </div>
-                <div className="scheduleCell" data-label="Next run">
+                <div className="scheduleCell" data-label="Next run" role="cell">
                   {schedule.enabled && schedule.nextRunAt ? (
                     <>
                       <span>{formatScheduleTime(schedule.nextRunAt, formatDate)}</span>
@@ -251,13 +252,14 @@ export function SchedulePage({
                     </>
                   )}
                 </div>
-                <div className="scheduleEnabledCell" data-label="Enabled">
+                <div className="scheduleEnabledCell" data-label="Enabled" role="cell">
                   <label className="switch">
                     <input
                       type="checkbox"
                       checked={schedule.enabled}
                       onChange={() => onToggle(schedule)}
                       disabled={disabled}
+                      aria-label={`${schedule.enabled ? "Disable" : "Enable"} ${schedule.name}`}
                     />
                     <span className="slider"></span>
                     <span className={`switchStateLabel ${schedule.enabled ? "enabled" : ""}`}>
@@ -265,7 +267,7 @@ export function SchedulePage({
                     </span>
                   </label>
                 </div>
-                <div className="scheduleRowActions" data-label="Actions">
+                <div className="scheduleRowActions" data-label="Actions" role="cell">
                   <Button variant="secondary" compact onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</Button>
                   <Button variant="critical" compact onClick={() => onDelete(schedule)} disabled={disabled}>Delete</Button>
                 </div>
@@ -277,9 +279,6 @@ export function SchedulePage({
           </div>
         </div>
 
-        <div className="scheduleTableFooter">
-          <span>Showing {schedules.length} of {schedules.length} schedules</span>
-        </div>
       </section>
 
       <aside className="panel scheduledRunsCard">
@@ -319,7 +318,7 @@ export function SchedulePage({
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !saveRunning) setFormMode(null);
         }}>
-          <section className="modalPanel userModalPanel scheduleModalPanel" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+          <DialogSurface className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => { if (!saveRunning) setFormMode(null); }}>
             <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
               <div className="userModalHeader">
                 <h2 id="schedule-modal-title">{modalTitle}</h2>
@@ -403,7 +402,7 @@ export function SchedulePage({
                 <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
               </div>
             </form>
-          </section>
+          </DialogSurface>
         </div>
       )}
     </section>

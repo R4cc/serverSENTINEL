@@ -313,12 +313,6 @@ textarea,
   text-transform: none;
 }
 
-.settingsGroupHeader > span {
-  font-size: 18px;
-  font-weight: var(--weight-heading);
-  letter-spacing: 0;
-}
-
 .settingsGroupHeader p,
 .settingsRow span,
 .permissionsHeader span,

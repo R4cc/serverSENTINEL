@@ -6,6 +6,7 @@ import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { ModIconImage } from "./ModIconImage";
+import { DialogSurface } from "../../components/DialogSurface";
 
 function technicalValue(value?: string) {
   if (!value) return "Unknown";
@@ -77,7 +78,7 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, form
   }
 
   return (
-    <aside className="modsDetailsDrawer" role="dialog" aria-modal="true" aria-labelledby="mod-details-title">
+    <DialogSurface className="modsDetailsDrawer" labelledBy="mod-details-title" onClose={onClose}>
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
           <ModIconImage src={icon} fallback="JAR" />
@@ -162,6 +163,6 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, form
         <Button variant="secondary" onClick={() => onToggle(mod, !mod.enabled)} disabled={locked}>{mod.enabled ? "Disable" : "Enable"}</Button>
         <Button variant="critical" onClick={() => onRemove(mod)} disabled={locked}>Remove</Button>
       </div>
-    </aside>
+    </DialogSurface>
   );
 }

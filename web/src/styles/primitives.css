@@ -1,0 +1,45 @@
+/* Shared component behavior. Feature styles should only add contextual modifiers. */
+.actionMenu { position: relative; display: inline-flex; }
+.actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: currentColor; }
+.actionMenuPopover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + var(--space-2));
+  display: grid;
+  min-width: 190px;
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+.actionMenuPopover--end { right: 0; }
+.actionMenuPopover--start { left: 0; }
+.actionMenuItem {
+  display: flex;
+  min-height: 40px;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: 0;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--type-button-size);
+  text-align: left;
+  box-shadow: none;
+}
+.actionMenuItem:hover:not(:disabled), .actionMenuItem:focus-visible { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
+.actionMenuItem--critical { color: var(--sentinel-danger); }
+.actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--sentinel-danger); }
+.actionMenuItem svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; }
+.visuallyHidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
+.settingsGroupHeader.uiPanelHeader { margin: 0; }
+.selectionActionMenu .actionMenuTrigger { width: var(--control-height-compact); min-width: var(--control-height-compact); height: var(--control-height-compact); min-height: var(--control-height-compact); }
+
+@media (hover: none), (pointer: coarse) {
+  .uiButton, .iconButton, .iconOnlyButton, .actionMenuItem, .fileBreadcrumbs button, .sideNav button { min-height: 44px; }
+  .uiButton--icon, .iconButton, .iconOnlyButton, .selectionActionMenu .actionMenuTrigger { width: 44px; min-width: 44px; height: 44px; }
+}

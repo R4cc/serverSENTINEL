@@ -519,15 +519,6 @@
   grid-template-columns: 44px minmax(0, 1fr) auto;
 }
 
-.settingsGroupHeader > span {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border-row);
-  border-radius: 8px;
-}
-
 .settingsRow {
   min-height: 56px;
   padding: var(--space-3) var(--space-4);
@@ -617,15 +608,9 @@
   gap: var(--space-2);
 }
 
-.nodeServerRow,
-.nodeServerPlaceholder {
+.nodeServerRow {
   min-height: 52px;
   padding: var(--space-3);
-}
-
-.addNodeCardButton {
-  min-height: 220px;
-  padding: var(--space-4);
 }
 
 .appForm,
@@ -728,7 +713,6 @@
   padding: 0;
 }
 
-.modInstallStep,
 .modInstallReview,
 .modInstallVersionTable,
 .nodeInfoCard,
@@ -737,7 +721,6 @@
   border-radius: 8px;
 }
 
-.modInstallStep,
 .modInstallReview,
 .nodeInfoCard,
 .addNodeStatusCard {

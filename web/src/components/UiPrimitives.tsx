@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -7,7 +7,12 @@ function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  compact?: boolean;
+  iconOnly?: boolean;
+  reserveLabel?: ReactNode;
+}>(function Button({
   variant = "primary",
   compact = false,
   iconOnly = false,
@@ -16,16 +21,12 @@ export function Button({
   children,
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: ButtonVariant;
-  compact?: boolean;
-  iconOnly?: boolean;
-  reserveLabel?: ReactNode;
-}) {
+}, ref) {
   const reserveContent = Boolean(reserveLabel) && !iconOnly;
 
   return (
     <button
+      ref={ref}
       {...props}
       type={type}
       className={classes("uiButton", `uiButton--${variant}`, compact && "uiButton--compact", iconOnly && "uiButton--icon", reserveContent && "uiButton--reserved", className)}
@@ -38,7 +39,7 @@ export function Button({
       ) : children}
     </button>
   );
-}
+});
 
 export function StatusBadge({
   tone = "neutral",

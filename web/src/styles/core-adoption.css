@@ -88,7 +88,6 @@
 }
 
 .eventRow small,
-.scheduleTableFooter,
 .scheduledRunTime {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -296,20 +295,6 @@
   grid-template-columns: 44px minmax(0, 1fr);
 }
 
-.settingsGroupHeader > span {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border-row);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: 0;
-}
-
 .settingsGroupHeader > div {
   display: grid;
   gap: 2px;
@@ -463,10 +448,6 @@
   .keyForm fieldset,
   .keyFormConfigured {
     grid-template-columns: 1fr;
-  }
-
-  .settingsGroupHeader > span {
-    display: none;
   }
 
   .usersGroupHeader .uiButton,
@@ -1044,14 +1025,6 @@
   color: var(--accent);
 }
 
-.modsWorkspaceDetailsButton.uiButton {
-  width: var(--control-height-compact);
-  min-width: var(--control-height-compact);
-  height: var(--control-height-compact);
-  min-height: var(--control-height-compact);
-  padding: 0;
-}
-
 .modsStatusChip.ready {
   border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent);
   background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
@@ -1190,8 +1163,7 @@
 }
 
 .nodeServerRow,
-.nodeServerMoreRow,
-.nodeServerPlaceholder {
+.nodeServerMoreRow {
   border-color: var(--border-row);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1349,8 +1321,7 @@
 .modsWorkspaceUpdate button:hover:not(:disabled),
 .modsWorkspaceIdentity:hover:not(:disabled),
 .modsVersionList button:hover:not(:disabled),
-.modInstallVersionRow:hover:not(:disabled),
-.addNodeCardButton:hover:not(:disabled) {
+.modInstallVersionRow:hover:not(:disabled) {
   transform: none;
 }
 
@@ -1404,7 +1375,6 @@
 .propertiesSettingsCard,
 .activityGrid,
 .activityItem,
-.resourceMessage,
 .summaryTile {
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
@@ -1645,138 +1615,6 @@
   }
 }
 
-@media (min-width: 721px) and (max-width: 1100px) {
-  .appShell,
-  .sidebarCollapsed {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .sidebar,
-  .sidebarCollapsed .sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--space-2) !important;
-    width: 100% !important;
-    height: auto;
-    padding: var(--space-2) var(--space-3) !important;
-    overflow: visible;
-    border-right: 0;
-    border-bottom: var(--border-heavy) solid var(--border);
-  }
-
-  .brandBlock,
-  .sidebarCollapsed .brandBlock {
-    display: flex !important;
-    width: auto;
-    min-width: 0;
-    padding: 0 !important;
-    border: 0;
-  }
-
-  .brandLockup,
-  .sidebarCollapsed .brandLockup {
-    min-width: 0;
-    max-width: clamp(116px, 17vw, 180px);
-    gap: var(--space-2) !important;
-  }
-
-  .brandLockup h1 {
-    overflow: hidden;
-    font-size: 17px;
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .brandBlock p,
-  .brandBlock .iconButton,
-  .sidebarCollapsed .brandBlock .iconButton,
-  .selectedServerReadout,
-  .sidebarDivider,
-  .navLabel,
-  .settingsVersionText,
-  .accountName,
-  .accountLogoutButton {
-    display: none !important;
-  }
-
-  .sideNav,
-  .sidebarCollapsed .sideNav,
-  .sideNavBottom,
-  .sidebarCollapsed .sideNavBottom {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    margin: 0;
-    gap: 6px;
-  }
-
-  .sideNav:not(.sideNavBottom) {
-    justify-content: center;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-block: 2px;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: thin;
-  }
-
-  .sideNav button,
-  .sidebarCollapsed .sideNav button,
-  .accountChip,
-  .sidebarCollapsed .accountChip {
-    width: var(--sidebar-rail-size);
-    min-width: var(--sidebar-rail-size);
-    height: var(--sidebar-rail-size);
-    min-height: var(--sidebar-rail-size);
-    padding: 0;
-    flex: 0 0 var(--sidebar-rail-size);
-    justify-content: center;
-    gap: 0 !important;
-  }
-
-  .sideNav button.active,
-  .sidebarCollapsed .sideNav button.active {
-    border-color: color-mix(in srgb, var(--accent) 44%, var(--border-row));
-    background: var(--sentinel-accent-soft);
-    color: var(--sentinel-accent-strong);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
-  }
-
-  .sideNavBottom,
-  .sidebarCollapsed .sideNavBottom {
-    justify-content: flex-end;
-    overflow: visible;
-    flex: 0 0 auto;
-  }
-
-  .accountChip,
-  .sidebarCollapsed .accountChip {
-    display: flex;
-  }
-
-  .workspace {
-    padding: var(--space-4);
-  }
-
-  .workspaceHeader {
-    align-items: center;
-    flex-direction: row;
-  }
-
-  .workspaceActions {
-    width: auto;
-    justify-content: flex-end;
-  }
-
-  .overviewSummary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (min-width: 721px) and (max-width: 980px) {
   .brandLockup,
   .sidebarCollapsed .brandLockup {
@@ -1899,10 +1737,6 @@
     gap: var(--space-2);
     margin: 0;
     padding: var(--space-3);
-  }
-
-  .settingsGroupHeader > span {
-    display: none;
   }
 
   .settingsGroupHeader > div {

@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
 import { Button, EmptyState, StatusBadge } from './UiPrimitives';
+import { DialogSurface } from './DialogSurface';
 import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_GROUPS,
@@ -279,7 +280,7 @@ function UserPermissionModal({
 
   return (
     <div className="modalBackdrop" role="presentation">
-      <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+      <DialogSurface className="modalPanel userModalPanel" labelledBy="user-modal-title" onClose={() => { if (!busy) onClose(); }}>
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="user-modal-title">{user ? "Edit user" : "New user"}</h2>
@@ -380,7 +381,7 @@ function UserPermissionModal({
             </Button>
           </div>
         </form>
-      </section>
+      </DialogSurface>
     </div>
   );
 }
@@ -398,7 +399,7 @@ function ResetPasswordModal({
 }) {
   return (
     <div className="modalBackdrop" role="presentation">
-      <section className="modalPanel userModalPanel" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+      <DialogSurface className="modalPanel userModalPanel" labelledBy="reset-password-title" onClose={() => { if (!busy) onClose(); }}>
         <form onSubmit={onSubmit} className="userModalForm">
           <div className="userModalHeader">
             <h2 id="reset-password-title">Reset password</h2>
@@ -435,7 +436,7 @@ function ResetPasswordModal({
             <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving..." : "Reset password"}</Button>
           </div>
         </form>
-      </section>
+      </DialogSurface>
     </div>
   );
 }

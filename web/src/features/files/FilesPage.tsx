@@ -4,6 +4,8 @@ import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
 import { SortHeaderButton } from "../../components/TableControls";
 import { Button } from "../../components/UiPrimitives";
+import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
+import { DialogSurface } from "../../components/DialogSurface";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
@@ -132,6 +134,24 @@ export function FilesPage({
     });
   }
 
+  const secondarySelectionActions: ActionMenuItem[] = [];
+  if (selectedZipEntry) {
+    secondarySelectionActions.push(
+      { id: "extract-here", label: "Extract here", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipHere, disabled: !canExtractSelectedZip, title: "Extract all contents beside the ZIP" },
+      { id: "extract-folder", label: "Extract to folder", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipToFolder, disabled: !canExtractSelectedZip, title: `Extract to ${selectedZipEntry.name.replace(/\.zip$/i, "") || "archive"}/` },
+      { id: "extract-choose", label: "Choose extract folder", icon: <AppIcon name="folderPlus" />, onSelect: actions.openZipDestinationPicker, disabled: !canExtractSelectedZip, title: "Choose a server folder" }
+    );
+  }
+  if (!archiveContext && selectedEntry?.type === "file") {
+    secondarySelectionActions.push({ id: "duplicate", label: "Duplicate", icon: <AppIcon name="copy" />, onSelect: actions.openDuplicateDialog, disabled: !canDuplicateSelectedFile, title: fileActionBlockedReason || "Duplicate selected file" });
+  }
+  if (!archiveContext && selectedEntry) {
+    secondarySelectionActions.push({ id: "rename", label: "Rename", icon: <AppIcon name="rename" />, onSelect: actions.openRenameDialog, disabled: !canRenameSelectedItem, title: fileActionBlockedReason || "Rename selected item" });
+  }
+  if (!archiveContext && selectedEntries.length > 0) {
+    secondarySelectionActions.push({ id: "delete", label: "Delete", icon: <AppIcon name="trash" />, onSelect: actions.openDeleteDialog, disabled: !canDeleteSelectedItems, critical: true, title: fileActionBlockedReason || "Delete selected items" });
+  }
+
   return (
     <section className="tabPage filesPage">
       <section className="filesExplorer">
@@ -190,9 +210,6 @@ export function FilesPage({
             <div className="selectionActions">
               {selectedZipEntry && <>
                 <Button variant="secondary" compact onClick={actions.openSelectedZip} disabled={!canOpenSelectedZip} title="Open this ZIP as a read-only folder"><AppIcon name="archive" /><span className="selectionActionLabel">Open ZIP</span></Button>
-                <Button variant="secondary" compact onClick={actions.extractSelectedZipHere} disabled={!canExtractSelectedZip} title="Extract all contents beside the ZIP"><AppIcon name="extract" /><span className="selectionActionLabel">Extract here</span></Button>
-                <Button variant="secondary" compact onClick={actions.extractSelectedZipToFolder} disabled={!canExtractSelectedZip} title={`Extract to ${selectedZipEntry.name.replace(/\.zip$/i, "") || "archive"}/`}><AppIcon name="extract" /><span className="selectionActionLabel">Extract to folder</span></Button>
-                <Button variant="secondary" compact onClick={actions.openZipDestinationPicker} disabled={!canExtractSelectedZip} title="Choose a server folder"><AppIcon name="folderPlus" /><span className="selectionActionLabel">Extract…</span></Button>
               </>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
@@ -202,18 +219,12 @@ export function FilesPage({
                 <AppIcon name="download" />
                 <span className="selectionActionLabel">Download</span>
               </Button>}
-              {!archiveContext && selectedEntry?.type === "file" && <Button variant="secondary" compact aria-label="Duplicate selected file" onClick={actions.openDuplicateDialog} disabled={!canDuplicateSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate") && !activeServerIsDemo ? "Upload files permission is required to duplicate here." : "Duplicate selected file")}>
-                <AppIcon name="copy" />
-                <span className="selectionActionLabel">Duplicate</span>
-              </Button>}
-              {!archiveContext && selectedEntry && <Button variant="secondary" compact aria-label="Rename selected item" onClick={actions.openRenameDialog} disabled={!canRenameSelectedItem} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "rename") && !activeServerIsDemo ? "Edit files permission is required to rename this item." : "Rename selected item")}>
-                <AppIcon name="rename" />
-                <span className="selectionActionLabel">Rename</span>
-              </Button>}
-              {!archiveContext && selectedEntries.length > 0 && <Button variant="critical" compact aria-label="Delete selected items" onClick={actions.openDeleteDialog} disabled={!canDeleteSelectedItems} title={fileActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "delete")) && !activeServerIsDemo ? "Delete files permission is required for every selected item." : "Delete selected items")}>
-                <AppIcon name="trash" />
-                <span className="selectionActionLabel">Delete</span>
-              </Button>}
+              {secondarySelectionActions.length > 0 && <ActionMenu
+                label="More file actions"
+                className="selectionActionMenu"
+                items={secondarySelectionActions}
+                trigger={<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>}
+              />}
             </div>
           </div>
 
@@ -264,10 +275,6 @@ export function FilesPage({
                     if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;
                     selectFromPointer(event, entry.path);
                   }}
-                  onDoubleClick={(event) => {
-                    if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;
-                    actions.activateFileEntry(entry);
-                  }}
                 >
                   <label className="fileCheckboxCell" role="cell" aria-label={`Select ${entry.name}`}>
                     <input
@@ -283,8 +290,12 @@ export function FilesPage({
                     ref={(node) => { if (node) rowButtonRefs.current.set(entry.path, node); else rowButtonRefs.current.delete(entry.path); }}
                     tabIndex={focusedFilePath === entry.path || (!focusedFilePath && sortedFileRows[0]?.original.path === entry.path) ? 0 : -1}
                     onFocus={() => actions.setFocusedFilePath(entry.path)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      actions.activateFileEntry(entry);
+                    }}
                     onKeyDown={(event) => handleRowKeyDown(event, entry.path)}
-                    title={`${entry.path} — Double-click or press Enter to open`}
+                    title={`${entry.path} — Click or press Enter to open`}
                   >
                     <FileTypeIcon entry={entry} />
                     <span>{entry.name}</span>
@@ -375,7 +386,7 @@ export function FilesPage({
         <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) actions.setZipDestinationListing(null);
         }}>
-          <section className="modalPanel zipDestinationModal" role="dialog" aria-modal="true" aria-labelledby="zip-destination-title">
+          <DialogSurface className="modalPanel zipDestinationModal" labelledBy="zip-destination-title" onClose={() => actions.setZipDestinationListing(null)}>
             <header className="modalHeader">
               <div><h2 id="zip-destination-title">Choose extraction folder</h2><p>Extract into {zipDestinationListing.path}</p></div>
               <Button iconOnly variant="secondary" onClick={() => actions.setZipDestinationListing(null)} aria-label="Close destination picker"><AppIcon name="x" /></Button>
@@ -392,13 +403,13 @@ export function FilesPage({
               <Button variant="secondary" onClick={() => actions.setZipDestinationListing(null)}>Cancel</Button>
               <Button onClick={actions.confirmZipDestination} disabled={zipDestinationLoading}>{zipDestinationLoading ? "Loading" : "Extract here"}</Button>
             </footer>
-          </section>
+          </DialogSurface>
         </div>
       )}
 
       {zipConflictPlan && (
         <div className="modalBackdrop" role="presentation">
-          <section className="modalPanel zipConflictModal" role="dialog" aria-modal="true" aria-labelledby="zip-conflict-title">
+          <DialogSurface className="modalPanel zipConflictModal" labelledBy="zip-conflict-title" onClose={() => actions.setZipConflictPlan(null)}>
             <header className="modalHeader"><h2 id="zip-conflict-title">Files already exist</h2></header>
             <div className="modalBody">
               <p>{zipConflictPlan.conflicts.length} file{zipConflictPlan.conflicts.length === 1 ? "" : "s"} already exist in {zipConflictPlan.destinationPath}.</p>
@@ -408,9 +419,9 @@ export function FilesPage({
             <footer className="modalFooter zipConflictActions">
               <Button variant="secondary" onClick={() => actions.setZipConflictPlan(null)}>Cancel</Button>
               <Button variant="secondary" onClick={() => actions.startZipExtraction(zipConflictPlan, "skip")}>Skip all</Button>
-              <Button onClick={() => actions.startZipExtraction(zipConflictPlan, "replace")}>Replace all</Button>
+              <Button variant="critical" onClick={() => actions.startZipExtraction(zipConflictPlan, "replace")}>Replace all</Button>
             </footer>
-          </section>
+          </DialogSurface>
         </div>
       )}
 
@@ -463,7 +474,6 @@ export function FileActionModal({
   onCancel: () => void;
   onSubmit: () => void;
 }) {
-  const modalRef = useRef<HTMLElement>(null);
   const title = dialog.kind === "create" ? "Create a new folder"
     : dialog.kind === "rename" ? `Rename ${dialog.entry.name}`
       : dialog.kind === "duplicate" ? `Duplicate ${dialog.entry.name}`
@@ -476,21 +486,6 @@ export function FileActionModal({
     : dialog.kind === "rename" ? "Renaming…"
       : dialog.kind === "duplicate" ? "Duplicating…"
         : "Deleting…";
-
-  useEffect(() => {
-    if (dialog.kind === "delete") modalRef.current?.focus();
-  }, [dialog.kind]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) {
-        event.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onCancel]);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -505,7 +500,7 @@ export function FileActionModal({
     <div className="modalBackdrop fileActionBackdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !busy) onCancel();
     }}>
-      <section className="modalPanel fileActionModal" role="dialog" aria-modal="true" aria-labelledby="file-action-title" aria-describedby="file-action-description" tabIndex={-1} ref={modalRef}>
+      <DialogSurface className="modalPanel fileActionModal" labelledBy="file-action-title" describedBy="file-action-description" onClose={() => { if (!busy) onCancel(); }}>
         <form onSubmit={handleSubmit}>
           <header className="modalHeader">
             <div>
@@ -546,7 +541,7 @@ export function FileActionModal({
             <Button variant={dialog.kind === "delete" ? "critical" : "primary"} type="submit" disabled={busy || (dialog.kind !== "delete" && !dialog.value.trim())} reserveLabel={busyLabel}>{busy ? busyLabel : submitLabel}</Button>
           </footer>
         </form>
-      </section>
+      </DialogSurface>
     </div>
   );
 }

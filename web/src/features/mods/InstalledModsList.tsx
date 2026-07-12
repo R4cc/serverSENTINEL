@@ -62,7 +62,7 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
       >
         {draggingFiles && <div className="modsWorkspaceDropOverlay" role="status"><AppIcon name="fileUp" /><strong>Drop JAR files to upload</strong></div>}
         <div className="modsWorkspaceTableHead" aria-hidden="true">
-          <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span /><span />
+          <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
         </div>
         {visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
@@ -78,14 +78,11 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
             <article
               key={mod.filename}
               className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}
-              onClick={(event) => {
-                const target = event.target as HTMLElement;
-                if (!target.closest("button, input, label, a, summary, details")) onDetails(mod);
-              }}
             >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} aria-label={`Open details for ${mod.displayName}`}>
                 <ModIconImage src={icon} fallback="JAR" />
                 <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
+                <AppIcon name="chevronRight" />
               </button>
               <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
@@ -112,7 +109,6 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
                 </label>
               </div>
               <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => onSwitchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : "Only Modrinth-managed mods can switch versions"}><AppIcon name="switch" /></Button>
-              <Button variant="ghost" iconOnly className="modsWorkspaceDetailsButton" onClick={() => onDetails(mod)} aria-label={`More options for ${mod.displayName}`}><AppIcon name="chevronRight" /></Button>
             </article>
           );
         })}

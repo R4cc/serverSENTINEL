@@ -1,8 +1,9 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Component, lazy, Suspense, useMemo, type ReactNode } from "react";
 import { AppIcon } from "./FileTypeIcon";
 import { InlineState } from "./InlineState";
 import { Button } from "./UiPrimitives";
 import { parentPath } from "../utils/files";
+import { DialogSurface } from "./DialogSurface";
 
 type FileEditorModalProps = {
   selectedPath: string;
@@ -97,9 +98,6 @@ export function FileEditorModal({
   onKeepEditing,
   onDiscardChanges
 }: FileEditorModalProps) {
-  const modalRef = useRef<HTMLElement>(null);
-  const canCloseEditorRef = useRef(true);
-  const onRequestCloseRef = useRef(onRequestClose);
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
   const editorLocation = editorFolderPath || "Root directory";
@@ -116,31 +114,6 @@ export function FileEditorModal({
           ? "There are no changes to save."
           : "";
 
-  useEffect(() => {
-    canCloseEditorRef.current = canCloseEditor;
-  }, [canCloseEditor]);
-
-  useEffect(() => {
-    onRequestCloseRef.current = onRequestClose;
-  }, [onRequestClose]);
-
-  useEffect(() => {
-    if (!selectedPath || discardRequestOpen) return;
-    modalRef.current?.focus();
-  }, [discardRequestOpen, selectedPath]);
-
-  useEffect(() => {
-    if (!selectedPath || discardRequestOpen) return;
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (canCloseEditorRef.current) onRequestCloseRef.current();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [discardRequestOpen, selectedPath]);
-
   if (!selectedPath && !discardRequestOpen) return null;
 
   return (
@@ -149,7 +122,7 @@ export function FileEditorModal({
         <div className="modalBackdrop fileEditorBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && canCloseEditor) onRequestClose();
         }}>
-          <section className="modalPanel fileEditorModal" role="dialog" aria-modal="true" aria-labelledby="file-editor-title" tabIndex={-1} ref={modalRef}>
+          <DialogSurface className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={() => { if (canCloseEditor) onRequestClose(); }}>
             <header className="fileEditorHeader">
               <div>
                 <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
@@ -230,7 +203,7 @@ export function FileEditorModal({
                 </Button>
               )}
             </footer>
-          </section>
+          </DialogSurface>
         </div>
       )}
 
@@ -238,7 +211,7 @@ export function FileEditorModal({
         <div className="modalBackdrop discardEditorBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onKeepEditing();
         }}>
-          <section className="modalPanel discardEditorModal" role="dialog" aria-modal="true" aria-labelledby="discard-editor-title">
+          <DialogSurface className="modalPanel discardEditorModal" labelledBy="discard-editor-title" onClose={onKeepEditing}>
             <header className="modalHeader">
               <h2 id="discard-editor-title">Discard unsaved changes?</h2>
               <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
@@ -252,7 +225,7 @@ export function FileEditorModal({
               <Button variant="secondary" onClick={onKeepEditing}>Keep Editing</Button>
               <Button variant="critical" onClick={onDiscardChanges}>Discard Changes</Button>
             </footer>
-          </section>
+          </DialogSurface>
         </div>
       )}
     </>

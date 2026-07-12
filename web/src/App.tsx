@@ -15,7 +15,7 @@ import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValida
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
-import { AppIcon, SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
+import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
@@ -23,6 +23,7 @@ import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
+import { ActionMenu } from "./components/ActionMenu";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SchedulePage } from "./pages/SchedulesPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -215,8 +216,7 @@ export default function App() {
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
   const [nodeUpdatingSince, setNodeUpdatingSince] = useState<Record<string, number>>({});
@@ -659,11 +659,11 @@ export default function App() {
   }, [activePage, contextNodes, demoMode, demoRunning]);
 
   useEffect(() => {
-    if (!overflowOpen) return;
-    const handleOutsideClick = () => setOverflowOpen(false);
-    window.addEventListener("click", handleOutsideClick);
-    return () => window.removeEventListener("click", handleOutsideClick);
-  }, [overflowOpen]);
+    const compactLayout = window.matchMedia("(max-width: 1100px)");
+    const synchronizeSidebar = (event: MediaQueryListEvent) => setSidebarCollapsed(event.matches);
+    compactLayout.addEventListener("change", synchronizeSidebar);
+    return () => compactLayout.removeEventListener("change", synchronizeSidebar);
+  }, []);
 
   useEffect(() => {
     if (Object.keys(nodeUpdatingSince).length === 0) return;
@@ -2390,43 +2390,16 @@ export default function App() {
   };
   const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
 
-  function resetPageToDefault(page: ActivePage) {
-    if (page === "mods") {
-      modsWorkspace.actions.resetPageState();
-      return;
-    }
-    if (page === "files") {
-      filesWorkspace.actions.resetPageState();
-      return;
-    }
-    if (page === "console") {
-      return;
-    }
-    if (page === "nodes") {
-      setNodeDetails(null);
-      setAddNodeOpen(false);
-      return;
-    }
-    if (page === "settings") {
-      setUserModal(null);
-    }
-  }
-
   function openSidebarPage(page: ActivePage) {
     setActivePage(page);
-    if (window.matchMedia("(max-width: 720px)").matches) setSidebarCollapsed(true);
-  }
-
-  function resetActiveSidebarPage(page: ActivePage) {
-    if (activePage !== page) return;
-    resetPageToDefault(page);
+    if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true);
   }
 
   return (
     <>
       <AppToaster darkMode={darkMode} />
       <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
-        <aside className="sidebar">
+        <aside className="sidebar" id="application-sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
             <img className="brandLogo" src="/logo.png" alt="" />
@@ -2434,12 +2407,12 @@ export default function App() {
               <h1>serverSENTINEL</h1>
             </div>
           </div>
-          <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Toggle sidebar"}>
+          <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
             <SidebarToggleIcon collapsed={sidebarCollapsed} />
           </Button>
         </div>
-        <nav className="sideNav">
-          <button className={activePage === "nodes" ? "active" : ""} onClick={() => openSidebarPage("nodes")} onDoubleClick={() => resetActiveSidebarPage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
+        <nav className="sideNav" id="primary-navigation" aria-label="Infrastructure navigation">
+          <button className={activePage === "nodes" ? "active" : ""} onClick={() => openSidebarPage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
             <SidebarIcon name="nodes" />
             <span className="navLabel">Nodes</span>
           </button>
@@ -2447,33 +2420,33 @@ export default function App() {
           <div className="selectedServerReadout" aria-label="Selected server" title={activeServer?.displayName ?? "No server selected"}>
             {activeServer?.displayName ?? "No server selected"}
           </div>
-          <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} onDoubleClick={() => resetActiveSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
+          <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
             <SidebarIcon name="overview" />
             <span className="navLabel">Overview</span>
           </button>
-          <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} onDoubleClick={() => resetActiveSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
+          <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
             <SidebarIcon name="console" />
             <span className="navLabel">Console</span>
           </button>
-          <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} onDoubleClick={() => resetActiveSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
+          <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
             <SidebarIcon name="files" />
             <span className="navLabel">Files</span>
           </button>
-          <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} onDoubleClick={() => resetActiveSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
+          <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
             <SidebarIcon name="mods" />
             <span className="navLabel">Mods</span>
           </button>
-          <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} onDoubleClick={() => resetActiveSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
+          <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
             <SidebarIcon name="schedule" />
             <span className="navLabel">Schedules</span>
           </button>
-          <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} onDoubleClick={() => resetActiveSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
+          <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
             <SidebarIcon name="properties" />
             <span className="navLabel">Properties</span>
           </button>
         </nav>
-        <nav className="sideNav sideNavBottom">
-          <button className={activePage === "settings" ? "active" : ""} onClick={() => openSidebarPage("settings")} onDoubleClick={() => resetActiveSidebarPage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
+        <nav className="sideNav sideNavBottom" id="account-navigation" aria-label="Account and settings navigation">
+          <button className={activePage === "settings" ? "active" : ""} onClick={() => openSidebarPage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
             <SidebarIcon name="settings" />
             <span className="navLabel settingsNavLabel">
               <span>Settings</span>
@@ -2637,12 +2610,7 @@ export default function App() {
         {activePage === "settings" && (
           <section className="settingsList">
             <section className="panel settingsGroup">
-              <div className="settingsGroupHeader">
-                <span>01</span>
-                <div>
-                  <h2>Interface</h2>
-                </div>
-              </div>
+              <PanelHeader className="settingsGroupHeader" title="Interface" />
               <label className="settingsRow">
                 <div>
                   <strong>Theme</strong>
@@ -2701,12 +2669,7 @@ export default function App() {
             </section>
 
             <section className="panel settingsGroup">
-              <div className="settingsGroupHeader">
-                <span>02</span>
-                <div>
-                  <h2>Integrations</h2>
-                </div>
-              </div>
+              <PanelHeader className="settingsGroupHeader" title="Integrations" />
               <div className="settingsRow">
                 <div>
                   <strong>Modrinth API key</strong>
@@ -2718,14 +2681,12 @@ export default function App() {
 
             {canAdmin && (
               <section className="panel settingsGroup">
-                <div className="settingsGroupHeader usersGroupHeader">
-                  <span>03</span>
-                  <div>
-                    <h2>Users</h2>
-                    <p>Manage panel accounts and permissions.</p>
-                  </div>
-                  <Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>
-                </div>
+                <PanelHeader
+                  className="settingsGroupHeader usersGroupHeader"
+                  title="Users"
+                  description="Manage panel accounts and permissions."
+                  actions={<Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>}
+                />
                 {usersLoading && (
                   <InlineState tone="loading" title="Loading users" message="Loading user accounts and access settings." />
                 )}
@@ -2756,13 +2717,7 @@ export default function App() {
             )}
 
             <section className={`panel settingsGroup ${panelOnlyMode ? "panelModeDisabled" : ""}`}>
-              <div className="settingsGroupHeader">
-                <span>{canAdmin ? "04" : "03"}</span>
-                <div>
-                  <h2>Container</h2>
-                  {panelOnlyMode && <p className="panelModeWarning">Panel mode does not support local Docker socket connection.</p>}
-                </div>
-              </div>
+              <PanelHeader className="settingsGroupHeader" title="Container" description={panelOnlyMode ? "Panel mode does not support local Docker socket connection." : undefined} />
               <div className="settingsRow readOnly">
                 <div>
                   <strong>Docker socket</strong>
@@ -2905,53 +2860,35 @@ export default function App() {
                   </svg>
                   <span>Console</span>
                 </Button>
-                <div className="overflowMenuContainer">
-                  <Button
-                    variant="secondary"
-                    iconOnly
-                    className="iconButton overflowButton"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOverflowOpen((prev) => !prev);
-                    }}
-                    title="More actions"
-                    aria-label="More actions"
-                  >
+                <ActionMenu
+                  label="More server actions"
+                  className="overflowMenuContainer"
+                  triggerClassName="iconButton overflowButton"
+                  menuClassName="overflowDropdown"
+                  items={[
+                    {
+                      id: "refresh",
+                      label: serverStripHealth ? "Retry connection" : "Refresh status",
+                      onSelect: () => { void retryActiveConnection(); },
+                      disabled: isProvisioning,
+                      title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
+                    },
+                    {
+                      id: "download-log",
+                      label: "Download log",
+                      onSelect: downloadConsoleLogs,
+                      disabled: logs.length === 0,
+                      title: logs.length === 0 ? "No console log lines are available to download." : "Download console log"
+                    }
+                  ]}
+                  trigger={
                     <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
                       <circle cx="12" cy="5" r="1.5" fill="currentColor" />
                       <circle cx="12" cy="12" r="1.5" fill="currentColor" />
                       <circle cx="12" cy="19" r="1.5" fill="currentColor" />
                     </svg>
-                  </Button>
-                  {overflowOpen && (
-                    <div className="overflowDropdown" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        compact
-                        onClick={() => {
-                          void retryActiveConnection();
-                          setOverflowOpen(false);
-                        }}
-                        disabled={isProvisioning}
-                        title={isProvisioning ? provisioningNavigationReason : "Refresh server status"}
-                      >
-                        {serverStripHealth ? "Retry connection" : "Refresh status"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        compact
-                        onClick={() => {
-                          downloadConsoleLogs();
-                          setOverflowOpen(false);
-                        }}
-                        disabled={logs.length === 0}
-                        title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}
-                      >
-                        Download log
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                  }
+                />
               </div>
             </div>
 
