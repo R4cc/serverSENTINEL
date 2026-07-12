@@ -167,7 +167,7 @@ export function SchedulePage({
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
 
   return (
-    <section className="tabPage schedulePage scheduleManagementPage">
+    <section className="tabPage schedulePage scheduleManagementPage layoutWide">
       <section className="panel scheduleTableCard">
         <PanelHeader
           className="scheduleCardHeader"

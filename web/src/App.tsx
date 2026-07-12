@@ -2532,7 +2532,7 @@ export default function App() {
         )}
 
         {activePage === "servers" && applicationReady && (
-          <section className="pageStack">
+          <section className="pageStack layoutBalanced">
             {effectiveAppState.servers.length > 0 ? (
               <section className="serverList">
                 {effectiveAppState.servers.map((server) => {
@@ -2608,7 +2608,7 @@ export default function App() {
         )}
 
         {activePage === "settings" && (
-          <section className="settingsList">
+          <section className="settingsList layoutReadable">
             <section className="panel settingsGroup">
               <PanelHeader className="settingsGroupHeader" title="Interface" />
               <label className="settingsRow">
@@ -2894,7 +2894,7 @@ export default function App() {
             </div>
 
             {activePage === "overview" && (
-              <section className="tabPage overviewPage">
+              <section className="tabPage overviewPage layoutDashboard">
                 {overviewError && (
                   <InlineState
                     tone="warning"
@@ -2932,7 +2932,7 @@ export default function App() {
             )}
 
             {activePage === "console" && (
-              <section className="tabPage">
+              <section className="tabPage layoutWide">
                 <section className="panel consolePanel">
                   <PanelHeader
                     title="Console"
@@ -3012,7 +3012,7 @@ export default function App() {
             )}
 
             {activePage === "properties" && (
-              <section className="tabPage settingsPage">
+              <section className="tabPage settingsPage layoutReadable">
                 <ServerEditForm
                   server={activeServer}
                   versions={fabricVersions}

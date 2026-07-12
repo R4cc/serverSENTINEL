@@ -515,7 +515,8 @@
 
 /* Responsive application layout */
 .workspace {
-  max-width: 1680px;
+  max-width: var(--workspace-max-width);
+  justify-self: center;
 }
 
 .workspaceHeader {

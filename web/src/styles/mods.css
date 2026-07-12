@@ -28,7 +28,7 @@
 .modsWorkspaceTable.isDragTarget { outline: 2px solid var(--sentinel-accent); outline-offset: -2px; }
 .modsWorkspaceDropOverlay { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 150px; color: var(--text); background: color-mix(in srgb, var(--surface-raised) 88%, transparent); pointer-events: none; }
 .modsWorkspaceDropOverlay svg { width: 28px; height: 28px; color: var(--sentinel-accent); }
-.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(125px, .75fr) minmax(120px, .75fr) minmax(150px, 1fr) 72px 40px; align-items: center; gap: 14px; }
+.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(125px, 180px) minmax(120px, 170px) minmax(150px, 220px) 72px 40px; align-items: center; gap: 14px; }
 .modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; color: var(--text-muted); background: var(--surface-muted); font-size: .72rem; font-weight: var(--weight-strong); }
 .modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); transition: background .15s ease; }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }

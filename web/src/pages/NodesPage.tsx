@@ -616,7 +616,7 @@ export function NodesPage({
   const selectedCapabilities = selectedDetailsNode?.capabilities?.length ? selectedDetailsNode.capabilities : [];
 
   return (
-    <section className="pageStack nodesPage">
+    <section className="pageStack nodesPage layoutBalanced">
       {sortedNodes.length > 0 && (
         <section className="panel nodesToolbar">
           <div>

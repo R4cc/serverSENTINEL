@@ -1,6 +1,6 @@
 /* Canonical file-manager layout and interaction rules. Keep this import last. */
 .filesPage {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
   align-items: stretch;
   gap: var(--space-4);
   height: max(560px, calc(100vh - 238px));
@@ -115,7 +115,7 @@
 .filesPage .fileTableHead,
 .filesPage .fileTableRow {
   display: grid;
-  grid-template-columns: 42px minmax(220px, 1.6fr) minmax(150px, 0.8fr) minmax(115px, 0.6fr) minmax(86px, 0.4fr);
+  grid-template-columns: 42px minmax(280px, 1fr) minmax(150px, 220px) minmax(115px, 160px) minmax(86px, 120px);
   min-width: 680px;
   padding-inline: var(--space-2);
 }

@@ -1,7 +1,12 @@
 /* Canonical application layout */
 :root {
-  --page-max-width: 1440px;
+  --workspace-max-width: 1920px;
+  --page-max-width: 1600px;
   --content-max-width: 1180px;
+  --balanced-content-max-width: 1440px;
+  --side-rail-min-width: 320px;
+  --side-rail-max-width: 400px;
+  --page-gutter: var(--space-5);
   --panel-gap: var(--space-4);
   --toolbar-min-height: 44px;
   --control-height: 40px;
@@ -16,8 +21,9 @@
 .workspace {
   width: 100%;
   min-width: 0;
-  max-width: none;
-  padding: var(--space-4) var(--space-5);
+  max-width: var(--workspace-max-width);
+  justify-self: center;
+  padding: var(--space-4) var(--page-gutter);
   display: grid;
   gap: var(--space-4);
   align-content: start;
@@ -125,6 +131,7 @@
 .nodesPage {
   width: 100%;
   max-width: var(--page-max-width);
+  margin-inline: auto;
   display: grid;
   gap: var(--panel-gap);
   align-content: start;
@@ -132,6 +139,24 @@
 
 .tabPage {
   min-width: 0;
+}
+
+/* Shared page-width contracts for responsive workspace composition. */
+.layoutWide {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.layoutDashboard {
+  max-width: var(--page-max-width);
+}
+
+.layoutBalanced {
+  max-width: var(--balanced-content-max-width);
+}
+
+.layoutReadable {
+  max-width: var(--content-max-width);
 }
 
 .panel,
@@ -353,7 +378,7 @@
 }
 
 .filesPage {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
   gap: var(--space-4);
   height: max(560px, calc(100vh - 238px));
   max-height: none;
@@ -472,7 +497,7 @@
 
 
 .scheduleManagementPage {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
   gap: var(--space-4);
   align-items: stretch;
   align-content: stretch;

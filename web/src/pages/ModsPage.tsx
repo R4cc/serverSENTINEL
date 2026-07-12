@@ -51,7 +51,7 @@ export function ModsPage({ workspace, restartRequiredChanges, serverContext, acc
   const visibleUpdatePlanError = state.updatePlanError && !isTransientModrinthError(state.updatePlanError) ? state.updatePlanError : "";
 
   return (
-    <section className="tabPage modsWorkspacePage">
+    <section className="tabPage modsWorkspacePage layoutWide">
       {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed mod management still works. Add an API key in Settings to search and install mods.</span></section>}
       <ModsSummary mods={data.installedMods} loading={state.modsLoading} />
       <div className="modsWorkspaceToolbar">

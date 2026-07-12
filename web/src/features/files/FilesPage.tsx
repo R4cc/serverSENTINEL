@@ -155,7 +155,7 @@ export function FilesPage({
   }
 
   return (
-    <section className="tabPage filesPage">
+    <section className="tabPage filesPage layoutWide">
       <section className="filesExplorer">
         <section className="panel filesPanel">
           <div className="fileNavBar">
