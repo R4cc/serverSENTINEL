@@ -799,6 +799,31 @@
   line-height: 1.45;
 }
 
+.activeServerStrip .serverRuntimeAlert.compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: auto;
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertCopy {
+  display: inline-flex;
+}
+
 .activeServerStrip .runtimeControlsCompact {
   display: flex;
   align-items: center;

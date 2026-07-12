@@ -45,6 +45,7 @@ function consoleLine(text: string) {
 
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
+const nodeOfflineNoticeDelayMs = 3_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 const activePageStorageKey = "serversentinel-active-page";
@@ -203,6 +204,7 @@ export default function App() {
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [consoleError, setConsoleError] = useState("");
   const [consoleConnectionState, setConsoleConnectionState] = useState<ConsoleConnectionState>("connecting");
+  const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
@@ -390,10 +392,10 @@ export default function App() {
   const canManageUsers = hasPermission(permissionUser, "users.manage");
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
-  const confirmedNodeOffline = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
-  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || confirmedNodeOffline || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
+  const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
+  const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
+  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || nodeOfflineDetected || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
-  const displayedServerCommandTone = confirmedNodeOffline ? "offline" : serverCommandTone;
   const lastKnownRuntimeLabel = serverCommandTone === "running"
     ? "Running"
     : serverCommandTone === "starting"
@@ -401,24 +403,15 @@ export default function App() {
       : serverCommandTone === "stopped" || serverCommandTone === "exited"
         ? "Offline"
         : "Unavailable";
-  const serverCommandStatusLabel = confirmedNodeOffline ? "Node offline" : lastKnownRuntimeLabel;
-  const serverCommandStatusTitle = confirmedNodeOffline
-    ? `${activeNode.name} is offline. Last known server state: ${lastKnownRuntimeLabel}.`
-    : undefined;
   const activeNodeBlockDetail = activeNodeBlockReason && activeNodeBlockMessage.startsWith(`${activeNodeBlockReason}. `)
     ? activeNodeBlockMessage.slice(activeNodeBlockReason.length + 2)
     : activeNodeBlockMessage;
-  const serverStripAlert = activeNodeRuntimeBlocked
+  const serverStripAlert = activeNodeRuntimeBlocked && activeNode.status !== "offline"
     ? {
         title: activeNodeBlockReason || "Node unavailable",
         message: activeNodeBlockDetail
       }
-    : confirmedNodeOffline
-      ? {
-          title: "Node offline",
-          message: `${activeNode.name} is offline. Runtime actions and file access are unavailable until the node reconnects.`
-        }
-      : null;
+    : null;
   const serverStripHealth = serverStripAlert
     ? null
     : statusError
@@ -436,7 +429,7 @@ export default function App() {
     ? "Sign in before using runtime controls."
     : !canBasic
       ? "Servers control permission is required."
-      : activeNodeRuntimeBlocked || confirmedNodeOffline
+      : activeNodeRuntimeBlocked || nodeOfflineDetected
         ? activeNodeBlockMessage
           || `${activeNode.name} is offline. Runtime controls will return when it reconnects.`
         : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
@@ -458,6 +451,20 @@ export default function App() {
       || (activeDockerState && !["created", "dead", "exited"].includes(activeDockerState) && !activeDockerUnknownStopped)
     )
   );
+
+  useEffect(() => {
+    if (!nodeOfflineDetected) {
+      setNodeOfflineNoticeVisible(false);
+      return;
+    }
+
+    setNodeOfflineNoticeVisible(false);
+    const timeout = window.setTimeout(() => {
+      setNodeOfflineNoticeVisible(true);
+    }, nodeOfflineNoticeDelayMs);
+    return () => window.clearTimeout(timeout);
+  }, [activeServer?.id, nodeOfflineDetected]);
+
   const serverSettingsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canEditServerSettings;
   const deleteServerLocked = isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running);
   const serverSettingsLockedReason = isProvisioning
@@ -1611,7 +1618,7 @@ export default function App() {
   async function retryActiveConnection() {
     const serverId = activeServerIdRef.current;
     if (!serverId) return;
-    if (!confirmedNodeOffline) setConsoleConnectionState("connecting");
+    if (!nodeOfflineDetected) setConsoleConnectionState("connecting");
     consoleReconnectAttemptRef.current = 0;
     await Promise.allSettled([
       refreshNodeConnectivity(),
@@ -2884,10 +2891,10 @@ export default function App() {
                   </div>
                   <div className="serverStripInfo">
                     <div className="serverStripTitleRow">
-                      <span className={`serverCommandStatusDot ${displayedServerCommandTone}`} aria-hidden="true" />
+                      <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
                       <strong>{activeServer.displayName}</strong>
-                      <StatusBadge className={`runtimeBadge ${displayedServerCommandTone}`} title={serverCommandStatusTitle}>
-                        {serverCommandStatusLabel}
+                      <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
+                        {lastKnownRuntimeLabel}
                       </StatusBadge>
                       {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
                     </div>
@@ -2916,6 +2923,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="serverStripRight">
+                  {confirmedNodeOffline && <ServerRuntimeAlert title="Node offline" compact />}
                   <RuntimeControls
                     status={activeStatus}
                     controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
