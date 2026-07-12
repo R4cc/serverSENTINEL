@@ -108,7 +108,7 @@
   width: 100%;
   overflow: auto;
   border: 0;
-  padding: 0 var(--space-2) var(--space-2);
+  padding: 0 0 var(--space-2);
   scrollbar-gutter: stable;
 }
 
