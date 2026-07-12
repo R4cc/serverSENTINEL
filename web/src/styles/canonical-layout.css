@@ -673,8 +673,15 @@
 
 
 .fileEditorModal {
-  width: min(1120px, calc(100vw - 32px));
-  height: min(760px, calc(100vh - 48px));
+  width: 90vw;
+  height: 90vh;
+  height: 90dvh;
+  max-height: 90vh;
+  max-height: 90dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: 0;
+  overflow: hidden;
 }
 
 .modalHeader,
@@ -711,6 +718,7 @@
 
 .fileEditorBody {
   padding: 0;
+  overflow: hidden;
 }
 
 .modInstallReview,
@@ -885,13 +893,8 @@
 .confirmModalPanel,
 .discardEditorModal,
 .userModalPanel,
-.nodeModalPanel,
-.fileEditorModal {
+.nodeModalPanel {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
-  }
-
-  .fileEditorModal {
-    height: calc(100vh - 16px);
   }
 }

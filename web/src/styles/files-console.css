@@ -526,17 +526,7 @@
 }
 
 .fileEditorBackdrop {
-  z-index: 35;
-}
-
-.fileEditorModal {
-  width: min(980px, calc(100vw - 32px));
-  height: min(780px, calc(100vh - 48px));
-  max-height: calc(100vh - 48px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: 0;
-  overflow: hidden;
+  z-index: 50;
 }
 
 .fileEditorHeader,
@@ -573,7 +563,8 @@
 }
 
 .fileEditorBody {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
   overflow: hidden;
   padding: var(--space-4);
@@ -595,7 +586,7 @@
 }
 
 .discardEditorBackdrop {
-  z-index: 45;
+  z-index: 55;
 }
 
 .discardEditorModal {

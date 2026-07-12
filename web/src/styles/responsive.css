@@ -835,13 +835,7 @@ button:disabled,
 
 }
 
-.fileEditorModal {
-  height: min(820px, calc(100vh - 80px));
-  max-height: calc(100vh - 80px);
-}
-
 .fileEditorBody {
-  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -952,8 +946,9 @@ button:disabled,
 }
 
 .fileEditorMainArea {
+  flex: 1 1 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   gap: var(--space-3);
@@ -963,6 +958,7 @@ button:disabled,
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.fileCodeEditor.cm-theme,
 .fileCodeEditor .cm-theme,
 .fileCodeEditor .cm-editor {
   height: 100%;
@@ -970,7 +966,9 @@ button:disabled,
 }
 
 .fileCodeEditor .cm-scroller {
+  height: 100%;
   min-height: 0;
+  overflow: auto;
 }
 
 .fileCodeEditor .cm-line {
@@ -1756,10 +1754,6 @@ textarea:hover:not(:disabled),
     flex-wrap: wrap;
   }
 
-  .fileEditorModal {
-    height: calc(100vh - 40px);
-    max-height: calc(100vh - 40px);
-  }
 }
 
 @media (max-width: 720px) {
@@ -1883,15 +1877,17 @@ textarea:hover:not(:disabled),
     padding-left: max(var(--space-2), env(safe-area-inset-left));
   }
 
-  .modalPanel,
-  .fileEditorModal {
+  .modalPanel {
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
 
   .fileEditorModal {
+    width: calc(100vw - 16px);
     height: calc(100vh - 16px);
     height: calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 }
 
