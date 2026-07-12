@@ -3,11 +3,12 @@ import { Button } from "./UiPrimitives";
 
 export type ActionMenuItem = {
   id: string;
-  label: string;
+  label: ReactNode;
   icon?: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
   critical?: boolean;
+  active?: boolean;
   title?: string;
 };
 
@@ -99,8 +100,9 @@ export function ActionMenu({
               ref={(node) => { itemRefs.current[index] = node; }}
               type="button"
               role="menuitem"
-              className={`actionMenuItem ${item.critical ? "actionMenuItem--critical" : ""}`.trim()}
+              className={`actionMenuItem ${item.critical ? "actionMenuItem--critical" : ""} ${item.active ? "actionMenuItem--active" : ""}`.trim()}
               disabled={item.disabled}
+              aria-current={item.active ? "true" : undefined}
               title={item.title}
               onClick={() => {
                 item.onSelect();
@@ -109,7 +111,7 @@ export function ActionMenu({
               }}
             >
               {item.icon}
-              <span>{item.label}</span>
+              {typeof item.label === "string" ? <span>{item.label}</span> : item.label}
             </button>
           ))}
         </div>

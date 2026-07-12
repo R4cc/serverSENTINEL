@@ -2428,33 +2428,79 @@ export default function App() {
             <span className="navLabel">Nodes</span>
           </button>
           <div className="sidebarDivider" />
-          <div className="selectedServerReadout" aria-label="Selected server" title={activeServer?.displayName ?? "No server selected"}>
-            {activeServer?.displayName ?? "No server selected"}
+          <div className="serverNavigationGroup">
+            <div className="serverSwitcher">
+              <ActionMenu
+                label={activeServer ? `Switch server. Current server: ${activeServer.displayName}` : "Select server"}
+                className="serverSwitcherAction"
+                triggerClassName="serverSwitcherTrigger"
+                menuClassName="serverSwitcherMenu"
+                align="start"
+                disabled={isProvisioning || effectiveAppState.servers.length === 0}
+                items={effectiveAppState.servers.map((server) => {
+                  const selected = server.id === activeServer?.id;
+                  const lockedByDemo = demoMode && server.id !== demoServerId;
+                  const minecraftVersion = versionValue(minecraftVersionInfo(server));
+                  return {
+                    id: server.id,
+                    active: selected,
+                    disabled: lockedByDemo,
+                    title: lockedByDemo ? "Exit demo mode to access this server." : `Switch to ${server.displayName}`,
+                    onSelect: () => openServerFromNode(server.id),
+                    label: (
+                      <span className="serverSwitcherOption">
+                        <span className={`serverSwitcherOptionDot ${selected ? serverCommandTone : "unknown"}`} aria-hidden="true" />
+                        <span className="serverSwitcherOptionCopy">
+                          <strong>{server.displayName}</strong>
+                          <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
+                        </span>
+                        {selected && <span className="serverSwitcherCurrent">Current</span>}
+                      </span>
+                    )
+                  };
+                })}
+                trigger={(
+                  <>
+                    <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} aria-hidden="true" />
+                    <span className="serverSwitcherCopy">
+                      <small>Managed server</small>
+                      <strong>{activeServer?.displayName ?? "Select a server"}</strong>
+                      <span>{activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
+                    </span>
+                    <svg className="serverSwitcherChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden="true">
+                      <path d="m7 9 5 5 5-5" />
+                    </svg>
+                  </>
+                )}
+              />
+            </div>
+            <div className="serverSubNav">
+              <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
+                <SidebarIcon name="overview" />
+                <span className="navLabel">Overview</span>
+              </button>
+              <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
+                <SidebarIcon name="console" />
+                <span className="navLabel">Console</span>
+              </button>
+              <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
+                <SidebarIcon name="files" />
+                <span className="navLabel">Files</span>
+              </button>
+              <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
+                <SidebarIcon name="mods" />
+                <span className="navLabel">Mods</span>
+              </button>
+              <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
+                <SidebarIcon name="schedule" />
+                <span className="navLabel">Schedules</span>
+              </button>
+              <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
+                <SidebarIcon name="properties" />
+                <span className="navLabel">Properties</span>
+              </button>
+            </div>
           </div>
-          <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
-            <SidebarIcon name="overview" />
-            <span className="navLabel">Overview</span>
-          </button>
-          <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
-            <SidebarIcon name="console" />
-            <span className="navLabel">Console</span>
-          </button>
-          <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
-            <SidebarIcon name="files" />
-            <span className="navLabel">Files</span>
-          </button>
-          <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
-            <SidebarIcon name="mods" />
-            <span className="navLabel">Mods</span>
-          </button>
-          <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
-            <SidebarIcon name="schedule" />
-            <span className="navLabel">Schedules</span>
-          </button>
-          <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
-            <SidebarIcon name="properties" />
-            <span className="navLabel">Properties</span>
-          </button>
         </nav>
         <nav className="sideNav sideNavBottom" id="account-navigation" aria-label="Account and settings navigation">
           <button className={activePage === "settings" ? "active" : ""} onClick={() => openSidebarPage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>

@@ -1361,6 +1361,239 @@ button:disabled,
   color: var(--sentinel-accent-strong);
 }
 
+/* The active server is the parent heading for its workspace navigation. */
+.serverNavigationGroup,
+.serverSwitcher,
+.serverSwitcherAction {
+  width: 100%;
+  min-width: 0;
+}
+
+.serverNavigationGroup {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.serverSwitcherAction {
+  display: block;
+}
+
+.sidebar .serverSwitcherTrigger {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 18px;
+  gap: 10px;
+  align-items: center;
+  justify-content: stretch;
+  padding: 10px 11px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+  color: var(--sidebar-foreground);
+  text-align: left;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.sidebar .serverSwitcherTrigger:hover:not(:disabled),
+.sidebar .serverSwitcherTrigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--sidebar-foreground));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 64%),
+    color-mix(in srgb, var(--sidebar-foreground) 9%, transparent);
+  color: var(--sidebar-foreground);
+  transform: none;
+}
+
+.serverSwitcherStatus,
+.serverSwitcherOptionDot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--text-soft);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-soft) 13%, transparent);
+}
+
+.serverSwitcherStatus.running,
+.serverSwitcherOptionDot.running {
+  background: var(--sentinel-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 14%, transparent);
+}
+
+.serverSwitcherStatus.starting,
+.serverSwitcherOptionDot.starting {
+  background: var(--sentinel-warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
+}
+
+.serverSwitcherStatus.stopped,
+.serverSwitcherStatus.exited,
+.serverSwitcherOptionDot.stopped,
+.serverSwitcherOptionDot.exited {
+  background: var(--sentinel-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-danger) 13%, transparent);
+}
+
+.serverSwitcherCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.serverSwitcherCopy small {
+  color: color-mix(in srgb, var(--sidebar-foreground) 60%, transparent);
+  font-size: 9px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.09em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.serverSwitcherCopy strong {
+  overflow: hidden;
+  color: var(--sidebar-foreground);
+  font-size: 14px;
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverSwitcherCopy > span {
+  overflow: hidden;
+  color: var(--sidebar-foreground-muted);
+  font-size: 11px;
+  font-weight: var(--weight-body);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverSwitcherChevron {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  transition: transform 150ms ease;
+}
+
+.serverSwitcherTrigger[aria-expanded="true"] .serverSwitcherChevron {
+  transform: rotate(180deg);
+}
+
+.sidebar .serverSwitcherMenu {
+  left: 0;
+  right: auto;
+  width: 100%;
+  min-width: 100%;
+  padding: 5px;
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar-background) 94%, white);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 32%);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem {
+  min-height: 54px;
+  display: flex;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem:hover:not(:disabled),
+.sidebar .serverSwitcherMenu .actionMenuItem:focus-visible {
+  background: color-mix(in srgb, var(--sidebar-foreground) 9%, transparent);
+  color: var(--sidebar-foreground);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem--active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--sidebar-foreground);
+}
+
+.serverSwitcherOption {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.serverSwitcherOptionCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.serverSwitcherOptionCopy strong,
+.serverSwitcherOptionCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverSwitcherOptionCopy strong {
+  color: inherit;
+  font-size: 12px;
+  font-weight: var(--weight-heading);
+}
+
+.serverSwitcherOptionCopy small {
+  color: var(--sidebar-foreground-muted);
+  font-size: 10px;
+  font-weight: var(--weight-body);
+}
+
+.serverSwitcherCurrent {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: color-mix(in srgb, var(--accent) 38%, white);
+  font-size: 9px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.serverSubNav {
+  display: grid;
+  gap: 3px;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--sidebar-foreground) 15%, transparent);
+}
+
+.serverSubNav .sideIcon {
+  opacity: 0.86;
+}
+
+.sidebarCollapsed .serverSwitcher {
+  display: none;
+}
+
+.sidebarCollapsed .serverNavigationGroup {
+  gap: 0;
+}
+
+.sidebarCollapsed .serverSubNav {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+
 .brandBlock,
 .workspaceHeader,
 .modalHeader,

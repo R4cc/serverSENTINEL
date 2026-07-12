@@ -32,6 +32,7 @@
   box-shadow: none;
 }
 .actionMenuItem:hover:not(:disabled), .actionMenuItem:focus-visible { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
+.actionMenuItem--active { background: color-mix(in srgb, var(--accent) 9%, var(--surface-raised)); color: var(--sentinel-accent-strong); }
 .actionMenuItem--critical { color: var(--sentinel-danger); }
 .actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--sentinel-danger); }
 .actionMenuItem svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; }
