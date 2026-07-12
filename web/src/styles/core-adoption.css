@@ -493,9 +493,8 @@
 
 /* Compact contextual server command header */
 .activeServerStrip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   width: 100%;
   min-width: 0;
@@ -505,6 +504,15 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
   box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+}
+
+.activeServerStrip .serverStripPrimary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .themeDark .activeServerStrip {
@@ -743,6 +751,54 @@
   min-width: 0;
 }
 
+.serverRuntimeAlert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--sentinel-danger) 58%, var(--border-row));
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface-raised));
+  color: var(--text);
+}
+
+.activeServerStrip .serverRuntimeAlertIcon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sentinel-danger) 15%, transparent);
+  color: var(--sentinel-danger);
+}
+
+.activeServerStrip .serverRuntimeAlertIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.serverRuntimeAlertCopy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.serverRuntimeAlertCopy strong {
+  color: var(--sentinel-danger);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 1.3;
+}
+
+.serverRuntimeAlertCopy span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .activeServerStrip .runtimeControlsCompact {
   display: flex;
   align-items: center;
@@ -801,7 +857,7 @@
 }
 
 @media (max-width: 980px) {
-  .activeServerStrip {
+  .activeServerStrip .serverStripPrimary {
     align-items: stretch;
   }
 
@@ -832,6 +888,10 @@
 
   .activeServerStrip .overflowMenuContainer {
     margin-left: auto;
+  }
+
+  .serverRuntimeAlert {
+    padding: var(--space-3);
   }
 }
 

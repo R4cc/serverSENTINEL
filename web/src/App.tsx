@@ -21,6 +21,7 @@ import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, TerminalLoadingSkeleto
 import { ResourcePanel } from "./components/ResourcePanel";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
+import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
 import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
@@ -377,8 +378,22 @@ export default function App() {
   const serverCommandStatusTitle = confirmedNodeOffline
     ? `${activeNode.name} is offline. Last known server state: ${lastKnownRuntimeLabel}.`
     : undefined;
-  const serverStripHealth = confirmedNodeOffline
-    ? { tone: "error", message: `${activeNode.name} is offline. Retrying automatically.` }
+  const activeNodeBlockDetail = activeNodeBlockReason && activeNodeBlockMessage.startsWith(`${activeNodeBlockReason}. `)
+    ? activeNodeBlockMessage.slice(activeNodeBlockReason.length + 2)
+    : activeNodeBlockMessage;
+  const serverStripAlert = activeNodeRuntimeBlocked
+    ? {
+        title: activeNodeBlockReason || "Node unavailable",
+        message: activeNodeBlockDetail
+      }
+    : confirmedNodeOffline
+      ? {
+          title: "Node offline",
+          message: `${activeNode.name} is offline. Runtime actions and file access are unavailable until the node reconnects.`
+        }
+      : null;
+  const serverStripHealth = serverStripAlert
+    ? null
     : statusError
       ? { tone: "warning", message: "Status temporarily unavailable — retrying automatically." }
       : activePage === "console" && consoleConnectionState === "reconnecting"
@@ -2479,7 +2494,7 @@ export default function App() {
           </div>
         </header>
 
-        {appStateLoaded && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && (
+        {appStateLoaded && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
             <span>Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready.</span>
@@ -2500,13 +2515,6 @@ export default function App() {
         )}
 
         {notice && activePage !== "files" && <div className="notice">{notice}</div>}
-
-        {isServerWorkspacePage(activePage) && activeServer && activeNodeRuntimeBlocked && (
-          <section className="systemBanner error" role="alert">
-            <strong>{activeNodeBlockReason || "Node unavailable"}</strong>
-            <span>{activeNodeBlockMessage}</span>
-          </section>
-        )}
 
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && (
           <ApplicationLoadingSkeleton />
@@ -2787,99 +2795,102 @@ export default function App() {
         {isServerWorkspacePage(activePage) && activeServer && (
           <>
             <div className="activeServerStrip">
-              <div className="serverStripLeft">
-                <div className="serverStripIcon">
-                  <svg className="server-icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                    <line x1="12" y1="22.08" x2="12" y2="12" />
-                  </svg>
-                </div>
-                <div className="serverStripInfo">
-                  <div className="serverStripTitleRow">
-                    <span className={`serverCommandStatusDot ${displayedServerCommandTone}`} aria-hidden="true" />
-                    <strong>{activeServer.displayName}</strong>
-                    <StatusBadge className={`runtimeBadge ${displayedServerCommandTone}`} title={serverCommandStatusTitle}>
-                      {serverCommandStatusLabel}
-                    </StatusBadge>
-                    {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
-                  </div>
-                  <div className="serverStripMetaRow">
-                    {serverStripHealth ? (
-                      <small className={`serverStripHealth ${serverStripHealth.tone}`} role={serverStripHealth.tone === "error" ? "alert" : "status"} title={consoleError || statusError || serverStripHealth.message}>
-                        {serverStripHealth.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
-                        {serverStripHealth.message}
-                      </small>
-                    ) : (
-                      <>
-                        <small className="serverStripMeta">
-                          {activeNode.name}
-                        </small>
-                        <span aria-hidden="true" className="serverStripSeparator">·</span>
-                        <small className="serverStripMeta">
-                          Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
-                        </small>
-                        <span aria-hidden="true" className="serverStripSeparator">·</span>
-                        <small className="serverStripMeta">
-                          MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
-                        </small>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="serverStripRight">
-                <RuntimeControls
-                  status={activeStatus}
-                  controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
-                  isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
-                  disabledReason={runtimeControlsDisabledReason}
-                  busyAction={runtimeAction}
-                  onAction={runContainerAction}
-                  className="runtimeControlsCompact"
-                />
-                <Button
-                  variant="secondary"
-                  className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
-                  onClick={() => setActivePage("console")}
-                  title="Open console"
-                >
-                  <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="4 17 10 11 4 5" />
-                    <line x1="12" y1="19" x2="20" y2="19" />
-                  </svg>
-                  <span>Console</span>
-                </Button>
-                <ActionMenu
-                  label="More server actions"
-                  className="overflowMenuContainer"
-                  triggerClassName="iconButton overflowButton"
-                  menuClassName="overflowDropdown"
-                  items={[
-                    {
-                      id: "refresh",
-                      label: serverStripHealth ? "Retry connection" : "Refresh status",
-                      onSelect: () => { void retryActiveConnection(); },
-                      disabled: isProvisioning,
-                      title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
-                    },
-                    {
-                      id: "download-log",
-                      label: "Download log",
-                      onSelect: downloadConsoleLogs,
-                      disabled: logs.length === 0,
-                      title: logs.length === 0 ? "No console log lines are available to download." : "Download console log"
-                    }
-                  ]}
-                  trigger={
-                    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                      <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+              <div className="serverStripPrimary">
+                <div className="serverStripLeft">
+                  <div className="serverStripIcon">
+                    <svg className="server-icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
                     </svg>
-                  }
-                />
+                  </div>
+                  <div className="serverStripInfo">
+                    <div className="serverStripTitleRow">
+                      <span className={`serverCommandStatusDot ${displayedServerCommandTone}`} aria-hidden="true" />
+                      <strong>{activeServer.displayName}</strong>
+                      <StatusBadge className={`runtimeBadge ${displayedServerCommandTone}`} title={serverCommandStatusTitle}>
+                        {serverCommandStatusLabel}
+                      </StatusBadge>
+                      {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
+                    </div>
+                    <div className="serverStripMetaRow">
+                      {serverStripHealth ? (
+                        <small className={`serverStripHealth ${serverStripHealth.tone}`} role={serverStripHealth.tone === "error" ? "alert" : "status"} title={consoleError || statusError || serverStripHealth.message}>
+                          {serverStripHealth.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
+                          {serverStripHealth.message}
+                        </small>
+                      ) : (
+                        <>
+                          <small className="serverStripMeta">
+                            {activeNode.name}
+                          </small>
+                          <span aria-hidden="true" className="serverStripSeparator">·</span>
+                          <small className="serverStripMeta">
+                            Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
+                          </small>
+                          <span aria-hidden="true" className="serverStripSeparator">·</span>
+                          <small className="serverStripMeta">
+                            MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
+                          </small>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="serverStripRight">
+                  <RuntimeControls
+                    status={activeStatus}
+                    controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
+                    isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
+                    disabledReason={runtimeControlsDisabledReason}
+                    busyAction={runtimeAction}
+                    onAction={runContainerAction}
+                    className="runtimeControlsCompact"
+                  />
+                  <Button
+                    variant="secondary"
+                    className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
+                    onClick={() => setActivePage("console")}
+                    title="Open console"
+                  >
+                    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="4 17 10 11 4 5" />
+                      <line x1="12" y1="19" x2="20" y2="19" />
+                    </svg>
+                    <span>Console</span>
+                  </Button>
+                  <ActionMenu
+                    label="More server actions"
+                    className="overflowMenuContainer"
+                    triggerClassName="iconButton overflowButton"
+                    menuClassName="overflowDropdown"
+                    items={[
+                      {
+                        id: "refresh",
+                        label: serverStripHealth || serverStripAlert ? "Retry connection" : "Refresh status",
+                        onSelect: () => { void retryActiveConnection(); },
+                        disabled: isProvisioning,
+                        title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
+                      },
+                      {
+                        id: "download-log",
+                        label: "Download log",
+                        onSelect: downloadConsoleLogs,
+                        disabled: logs.length === 0,
+                        title: logs.length === 0 ? "No console log lines are available to download." : "Download console log"
+                      }
+                    ]}
+                    trigger={
+                      <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                        <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+                        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                        <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+                      </svg>
+                    }
+                  />
+                </div>
               </div>
+              {serverStripAlert && <ServerRuntimeAlert title={serverStripAlert.title} message={serverStripAlert.message} />}
             </div>
 
             {activePage === "overview" && (
