@@ -184,6 +184,7 @@ export function FilesPage({
             </div>
           )}
 
+          <section className="fileListSurface" aria-label="File list">
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
@@ -299,6 +300,7 @@ export function FilesPage({
             <span>{sortedFileRows.length} items</span>
             <span title={archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}>{selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}</span>
           </div>
+          </section>
         </section>
       </section>
 

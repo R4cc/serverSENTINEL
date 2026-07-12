@@ -17,6 +17,8 @@
 
 .filesPage .filesPanel {
   overflow: hidden;
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
 .filesPage .fileNavBar {
@@ -25,10 +27,9 @@
   gap: var(--space-2);
   min-height: var(--toolbar-min-height);
   padding: var(--space-2) var(--space-3);
-  border: 0;
-  border-bottom: var(--border-strong) solid var(--border-row);
-  border-radius: 0;
-  background: var(--surface-raised);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--surface-muted));
 }
 
 .filesPage .fileNavButtons,
@@ -56,15 +57,34 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
+.filesPage .zipReadOnlyBanner {
+  flex: 0 0 auto;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 30%, var(--border-row));
+  border-radius: var(--radius-md);
+}
+
+.filesPage .fileListSurface {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
 .filesPage .selectionActionBar {
   display: grid;
   grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
   min-height: 52px;
   padding: var(--space-2) var(--space-3);
+  flex: 0 0 auto;
   border: 0;
   border-bottom: var(--border-subtle) solid var(--border-row);
   border-radius: 0;
-  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
+  background: color-mix(in srgb, var(--surface-raised) 68%, var(--surface-muted));
 }
 
 .filesPage .selectionActions {
@@ -88,6 +108,8 @@
   width: 100%;
   overflow: auto;
   border: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  scrollbar-gutter: stable;
 }
 
 .filesPage .fileTableHead,
@@ -96,6 +118,10 @@
   grid-template-columns: 42px minmax(220px, 1.6fr) minmax(150px, 0.8fr) minmax(115px, 0.6fr) minmax(86px, 0.4fr);
   min-width: 680px;
   padding-inline: var(--space-2);
+}
+
+.filesPage .fileTableHead {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
 }
 
 .filesPage .fileColumnHeader {
@@ -109,11 +135,13 @@
 
 .filesPage .fileTableRow {
   cursor: default;
+  border-radius: var(--radius-sm);
 }
 
 .filesPage .fileTableRow[aria-selected="true"] {
-  background: var(--sentinel-accent-soft);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 88%, var(--surface-raised));
   color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .filesPage .fileNameCell {
@@ -140,6 +168,8 @@
 .filesPage .fileTableFooter {
   min-width: 0;
   padding: var(--space-2) var(--space-3);
+  border-top: var(--border-subtle) solid var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
 }
 
 .filesPage .fileTableFooter span {
@@ -156,14 +186,59 @@
 .filesPage .fileDetailsPanel {
   overflow: auto;
   padding: var(--space-4);
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
+}
+
+.filesPage .fileDetailsEmpty {
+  height: 100%;
+  min-height: 220px;
+  border-radius: var(--radius-md);
+}
+
+.filesPage .fileDetailsContent {
+  gap: var(--space-3);
+}
+
+.filesPage .fileDetailsTitle {
+  grid-template-columns: 42px minmax(0, 1fr);
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
 }
 
 .filesPage .fileDetailsContent dl {
-  grid-template-columns: 1fr;
+  padding: 0 var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
 }
 
 .filesPage .fileDetailsContent dl div {
   grid-template-columns: 88px minmax(0, 1fr);
+  padding-block: 9px;
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.filesPage .fileDetailsContent dl div:last-child {
+  border-bottom: 0;
+}
+
+.filesPage .filePreviewPanel {
+  gap: var(--space-3);
+  border-top: 0;
+  padding-top: 0;
+}
+
+.filesPage .filePreviewPanel h3 {
+  padding-inline: var(--space-1);
+}
+
+.filesPage .filePreviewPanel pre,
+.filesPage .previewUnavailable {
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
 }
 
 .fileActionBackdrop {
@@ -295,6 +370,11 @@
 }
 
 @media (max-width: 720px) {
+  .filesPage .filesPanel {
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
   .filesPage .filesExplorer {
     height: min(640px, calc(100vh - 180px));
     min-height: 420px;
@@ -329,6 +409,10 @@
   .filesPage .fileTableRow {
     grid-template-columns: 38px minmax(150px, 1fr) minmax(78px, auto);
     min-width: 0;
+    padding-inline: var(--space-1);
+  }
+
+  .filesPage .fileTable {
     padding-inline: var(--space-1);
   }
 
