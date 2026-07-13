@@ -111,6 +111,8 @@ describe("NodeDetailsDrawer", () => {
     expect(html).toContain("0:09 elapsed");
     expect(html).toContain("Last reported status: offline");
     expect(html).toContain("Updating…");
+    expect(html).toContain('class="nodeOperationBadgeSpinner"');
+    expect(html).toContain('class="nodeOperationSpinner"');
     expect(html).not.toContain("<li>Node is offline.</li>");
   });
 

@@ -551,9 +551,10 @@ export function NodesPage({
                   </div>
                   <div className="nodeStatusPills">
                     <StatusBadge
-                      tone={operation?.phase === "waiting" ? "warning" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
+                      tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
                       className={`settingsStatus ${operation ? operation.phase : statusTone(node.status)}`}
                     >
+                      {operation?.phase === "waiting" && <span className="nodeOperationBadgeSpinner" aria-hidden="true" />}
                       {operationLabel || node.status}
                     </StatusBadge>
                     {nodePanelUpdateRequired(node) && (

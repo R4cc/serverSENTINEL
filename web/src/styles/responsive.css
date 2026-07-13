@@ -1390,6 +1390,13 @@ button:disabled,
     overflow: hidden;
   }
 
+  .workspacePage-console > .workspaceHeader,
+  .workspacePage-files > .workspaceHeader,
+  .workspacePage-mods > .workspaceHeader,
+  .workspacePage-schedule > .workspaceHeader {
+    flex: 0 0 auto;
+  }
+
   .workspacePage-console > .tabPage,
   .workspacePage-files > .tabPage,
   .workspacePage-mods > .tabPage,

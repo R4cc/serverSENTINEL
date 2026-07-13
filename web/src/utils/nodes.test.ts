@@ -54,11 +54,32 @@ describe("advanceNodeOperation", () => {
     )).toEqual({ outcome: "completed" });
   });
 
-  it("reports a mismatch when the node reconnects on the old target", () => {
+  it("keeps waiting when the first report after reconnect still has the old target", () => {
     expect(advanceNodeOperation(
       operation({ observedOffline: true }),
       node({ connectedAt: "after" }),
       10_000,
+      graceMs
+    )).toEqual({
+      operation: { ...operation({ observedOffline: true }), reconnectedAt: 10_000 },
+      outcome: "pending"
+    });
+  });
+
+  it("completes when the refreshed target arrives during reconnect reconciliation", () => {
+    expect(advanceNodeOperation(
+      operation({ observedOffline: true, reconnectedAt: 10_000 }),
+      node({ connectedAt: "after", agentVersion: "1.2.0", buildId: "new-build" }),
+      15_000,
+      graceMs
+    )).toEqual({ outcome: "completed" });
+  });
+
+  it("reports a mismatch when the old target remains after reconnect reconciliation", () => {
+    expect(advanceNodeOperation(
+      operation({ observedOffline: true, reconnectedAt: 10_000 }),
+      node({ connectedAt: "after" }),
+      25_000,
       graceMs
     )).toEqual({ outcome: "mismatch" });
   });

@@ -147,6 +147,7 @@ export type NodeOperation = {
   startedAt: number;
   startedConnectedAt?: string;
   observedOffline?: boolean;
+  reconnectedAt?: number;
   targetVersion?: string;
   targetBuildId?: string;
 };

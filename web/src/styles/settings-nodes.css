@@ -3025,6 +3025,16 @@
   animation: nodeUpdatingSpin 800ms linear infinite;
 }
 
+.nodeOperationBadgeSpinner {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: nodeUpdatingSpin 700ms linear infinite;
+}
+
 .nodeOperationStatus strong {
   display: block;
   color: var(--text);
@@ -3314,7 +3324,8 @@
 @media (prefers-reduced-motion: reduce) {
   .nodeDrawerBackdrop,
   .nodeDetailsDrawer,
-  .nodeOperationSpinner {
+  .nodeOperationSpinner,
+  .nodeOperationBadgeSpinner {
     animation: none;
   }
 }

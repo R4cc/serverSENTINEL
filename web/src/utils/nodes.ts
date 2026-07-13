@@ -9,11 +9,13 @@ export function advanceNodeOperation(
   operation: NodeOperation,
   node: ManagedNode | undefined,
   now: number,
-  graceMs: number
+  graceMs: number,
+  reconnectSettleMs = 15_000
 ): NodeOperationAdvanceResult {
   const observedOffline = Boolean(operation.observedOffline || (node && node.status !== "online"));
   const connectionChanged = Boolean(node?.connectedAt && operation.startedConnectedAt && node.connectedAt !== operation.startedConnectedAt);
   const reconnected = Boolean(node?.status === "online" && (observedOffline || connectionChanged));
+  const reconnectedAt = operation.reconnectedAt ?? (reconnected ? now : undefined);
   const targetMatches = operation.kind === "update"
     && Boolean(operation.targetVersion)
     && node?.agentVersion === operation.targetVersion
@@ -23,14 +25,19 @@ export function advanceNodeOperation(
     return { outcome: "completed" };
   }
   if (reconnected) {
-    return operation.kind === "update" ? { outcome: "mismatch" } : { outcome: "completed" };
+    if (operation.kind === "restart") return { outcome: "completed" };
+    if (reconnectedAt !== undefined && now - reconnectedAt >= reconnectSettleMs) return { outcome: "mismatch" };
   }
 
   const phase = now - operation.startedAt >= graceMs ? "timed-out" : operation.phase;
-  if (phase === operation.phase && observedOffline === Boolean(operation.observedOffline)) {
+  if (
+    phase === operation.phase
+    && observedOffline === Boolean(operation.observedOffline)
+    && reconnectedAt === operation.reconnectedAt
+  ) {
     return { operation, outcome: "pending" };
   }
-  return { operation: { ...operation, phase, observedOffline }, outcome: "pending" };
+  return { operation: { ...operation, phase, observedOffline, reconnectedAt }, outcome: "pending" };
 }
 
 export function nodeStatusLabel(status: ManagedNode["status"]) {

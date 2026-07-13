@@ -247,7 +247,8 @@ export function NodeDetailsDrawer({
           <div>
             <div className="nodeDrawerTitleLine">
               <h2 id="node-details-title">{node.name}</h2>
-              <StatusBadge tone={operation?.phase === "waiting" ? "warning" : operation?.phase === "timed-out" ? "danger" : node.status === "online" ? "success" : node.status === "offline" ? "danger" : "neutral"}>
+              <StatusBadge tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : node.status === "online" ? "success" : node.status === "offline" ? "danger" : "neutral"}>
+                {operation?.phase === "waiting" && <span className="nodeOperationBadgeSpinner" aria-hidden="true" />}
                 {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating" : "Restarting" : operation?.phase === "timed-out" ? "Attention" : node.status}
               </StatusBadge>
             </div>
