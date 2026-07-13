@@ -2,9 +2,7 @@
 
 serverSENTINEL is a web panel for running Minecraft servers with Docker. It gives you a browser-based place to create servers, start and stop them, view the live console, send commands, manage files, install mods, schedule actions, and manage users.
 
-serverSENTINEL 1.0 is intended for self-hosted administrative use. Keep regular backups, test upgrades before applying them to important worlds, and review Docker and network access before exposing the panel to other users.
-
-Do not expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
+It's not recommended to expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
 
 ## Screenshots
 
