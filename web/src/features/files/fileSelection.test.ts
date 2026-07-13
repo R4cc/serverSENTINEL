@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjacentFilePath, fileEntryPointerIntent, retainedFileFocus, updateFileSelection } from "./fileSelection";
+import { adjacentFilePath, fileContextSelectionIntent, fileEntryPointerIntent, retainedFileFocus, updateFileSelection } from "./fileSelection";
 
 const paths = ["/alpha", "/bravo", "/charlie", "/delta"];
 
@@ -44,5 +44,17 @@ describe("file selection helpers", () => {
     expect(adjacentFilePath(paths, "/charlie", 1)).toBe("/delta");
     expect(retainedFileFocus("/bravo", paths)).toBe("/bravo");
     expect(retainedFileFocus("/missing", paths)).toBe("");
+  });
+
+  it("preserves a multi-selection when its selected row opens a context menu", () => {
+    expect(fileContextSelectionIntent(["/alpha", "/charlie"], "/charlie")).toBe("preserve");
+  });
+
+  it("replaces selection when an unselected row opens a context menu", () => {
+    expect(fileContextSelectionIntent(["/alpha", "/charlie"], "/bravo")).toBe("replace");
+  });
+
+  it("clears selection when blank space opens a context menu", () => {
+    expect(fileContextSelectionIntent(["/alpha", "/charlie"])).toBe("clear");
   });
 });

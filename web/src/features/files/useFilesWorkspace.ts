@@ -208,6 +208,12 @@ export function useFilesWorkspace({
     setFocusedFilePath(path);
   }
 
+  function clearFileSelection() {
+    setSelectedFilePaths([]);
+    setSelectionAnchorPath("");
+    setFocusedFilePath("");
+  }
+
   function moveFileFocus(path: string, direction: -1 | 1, extendSelection = false) {
     const nextPath = adjacentFilePath(sortedFilePaths, path, direction);
     if (!nextPath) return "";
@@ -1469,6 +1475,7 @@ export function useFilesWorkspace({
       navigateFilesUp,
       activateFileEntry,
       selectFileEntry,
+      clearFileSelection,
       moveFileFocus,
       openFile,
       openCreateFolderDialog,

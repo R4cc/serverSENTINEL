@@ -1,4 +1,37 @@
-import type { ManagedNode } from "../types";
+import type { ManagedNode, NodeOperation } from "../types";
+
+export type NodeOperationAdvanceResult = {
+  operation?: NodeOperation;
+  outcome: "pending" | "completed" | "mismatch";
+};
+
+export function advanceNodeOperation(
+  operation: NodeOperation,
+  node: ManagedNode | undefined,
+  now: number,
+  graceMs: number
+): NodeOperationAdvanceResult {
+  const observedOffline = Boolean(operation.observedOffline || (node && node.status !== "online"));
+  const connectionChanged = Boolean(node?.connectedAt && operation.startedConnectedAt && node.connectedAt !== operation.startedConnectedAt);
+  const reconnected = Boolean(node?.status === "online" && (observedOffline || connectionChanged));
+  const targetMatches = operation.kind === "update"
+    && Boolean(operation.targetVersion)
+    && node?.agentVersion === operation.targetVersion
+    && (!operation.targetBuildId || node?.buildId === operation.targetBuildId);
+
+  if (operation.kind === "update" && targetMatches && (reconnected || now - operation.startedAt >= 3_000)) {
+    return { outcome: "completed" };
+  }
+  if (reconnected) {
+    return operation.kind === "update" ? { outcome: "mismatch" } : { outcome: "completed" };
+  }
+
+  const phase = now - operation.startedAt >= graceMs ? "timed-out" : operation.phase;
+  if (phase === operation.phase && observedOffline === Boolean(operation.observedOffline)) {
+    return { operation, outcome: "pending" };
+  }
+  return { operation: { ...operation, phase, observedOffline }, outcome: "pending" };
+}
 
 export function nodeStatusLabel(status: ManagedNode["status"]) {
   if (status === "online") return "Node online";

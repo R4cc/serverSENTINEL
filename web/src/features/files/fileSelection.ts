@@ -9,6 +9,13 @@ export type FileSelectionResult = {
   anchorPath: string;
 };
 
+export type FileContextSelectionIntent = "preserve" | "replace" | "clear";
+
+export function fileContextSelectionIntent(currentPaths: string[], targetPath?: string): FileContextSelectionIntent {
+  if (!targetPath) return "clear";
+  return currentPaths.includes(targetPath) ? "preserve" : "replace";
+}
+
 export function fileEntryPointerIntent(eventType: "click" | "double-click") {
   return {
     select: true,

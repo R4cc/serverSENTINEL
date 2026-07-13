@@ -9,6 +9,10 @@ export type MinecraftQueryMetrics = {
   diagnostics?: string[];
 };
 
+export function normalizePlayerNames(names?: string[]) {
+  return names ? Array.from(new Set(names.map((name) => name.trim()).filter(Boolean))) : undefined;
+}
+
 function readNullTerminated(buffer: Buffer, start: number) {
   const end = buffer.indexOf(0, start);
   if (end === -1) return { value: buffer.subarray(start).toString("utf8"), next: buffer.length };
@@ -35,15 +39,16 @@ function parsePlayers(payload: Buffer, offset: number) {
   if (markerIndex === -1) return undefined;
   const label = readNullTerminated(payload, markerIndex + marker.length);
   if (label.value !== "player_") return undefined;
-  const players: string[] = [];
+  const players = new Set<string>();
   let cursor = label.next;
   while (cursor < payload.length) {
     const player = readNullTerminated(payload, cursor);
     cursor = player.next;
     if (!player.value) break;
-    players.push(player.value);
+    const name = player.value.trim();
+    if (name) players.add(name);
   }
-  return players;
+  return normalizePlayerNames(Array.from(players));
 }
 
 export function parseMinecraftQueryResponse(packet: Buffer, expectedSessionId?: Buffer): MinecraftQueryMetrics {

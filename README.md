@@ -12,15 +12,15 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
   <tr>
     <td valign="top" width="50%">
       <p align="center"><strong>Overview</strong></p>
-      <a href="https://github.com/user-attachments/assets/46d25af8-015b-470c-8154-8b80cde05edc" target="_blank">
-        <img width="2579" height="1973" alt="Screenshot 2026-07-06 123724" src="https://github.com/user-attachments/assets/46d25af8-015b-470c-8154-8b80cde05edc"  style="max-width: 100%;" />
+      <a href="docs/screenshots/overview.png">
+        <img width="1440" height="1000" alt="serverSENTINEL server overview" src="docs/screenshots/overview.png" style="max-width: 100%;" />
       </a>
       <p align="center">Server list, status, and high-level controls.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>Console</strong></p>
-      <a href="https://github.com/user-attachments/assets/928a1022-7c9c-4c1b-aa4a-9d7fd011c484" target="_blank">
-        <img width="2586" height="1977" alt="Screenshot 2026-07-06 115234" src="https://github.com/user-attachments/assets/928a1022-7c9c-4c1b-aa4a-9d7fd011c484" style="max-width: 100%;"/>
+      <a href="docs/screenshots/console.png">
+        <img width="1440" height="1000" alt="serverSENTINEL live server console" src="docs/screenshots/console.png" style="max-width: 100%;" />
       </a>
       <p align="center">Live output and command input.</p>
     </td>
@@ -28,49 +28,49 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
   <tr>
     <td valign="top" width="50%">
       <p align="center"><strong>File Manager</strong></p>
-      <a href="https://github.com/user-attachments/assets/599d04df-9eca-4d33-bb7d-7f356c0209a1" target="_blank">
-        <img width="2582" height="1978" alt="Screenshot 2026-07-06 115258" src="https://github.com/user-attachments/assets/599d04df-9eca-4d33-bb7d-7f356c0209a1"  style="max-width: 100%;" />
+      <a href="docs/screenshots/files.png">
+        <img width="1440" height="1000" alt="serverSENTINEL file manager" src="docs/screenshots/files.png" style="max-width: 100%;" />
       </a>
-      <p align="center">Edit text/config files in the browser.</p>
+      <p align="center">Browse and manage server files.</p>
     </td>
     <td valign="top" width="50%">
       <p align="center"><strong>File Editor</strong></p>
-      <a href="https://github.com/user-attachments/assets/611a927c-b96f-4fa7-bd4d-afc4d9cbdacd" target="_blank">
-        <img width="1289" height="992" alt="image" src="https://github.com/user-attachments/assets/611a927c-b96f-4fa7-bd4d-afc4d9cbdacd" style="max-width: 100%;"/>
+      <a href="docs/screenshots/file-editor.png">
+        <img width="1440" height="1000" alt="serverSENTINEL file editor" src="docs/screenshots/file-editor.png" style="max-width: 100%;" />
       </a>
       <p align="center">Edit server configuration and text files safely.</p>
     </td>
   </tr>
   <tr>
     <td valign="top" width="50%">
-      <p align="center"><strong>Schedules</strong></p>
-      <a href="https://github.com/user-attachments/assets/a3c37784-5d60-4f58-91ad-b3bdb555589c" target="_blank">
-        <img width="2581" height="1974" alt="Screenshot 2026-07-06 115631" src="https://github.com/user-attachments/assets/a3c37784-5d60-4f58-91ad-b3bdb555589c"  style="max-width: 100%;" />
+      <p align="center"><strong>Mod Management</strong></p>
+      <a href="docs/screenshots/mods.png">
+        <img width="1440" height="1000" alt="serverSENTINEL mod management" src="docs/screenshots/mods.png" style="max-width: 100%;" />
       </a>
-      <p align="center">Create and edit scheduled server actions.</p>
+      <p align="center">Manage server mods and updates.</p>
     </td>
     <td valign="top" width="50%">
-      <p align="center"><strong>Settings</strong></p>
-      <a href="https://github.com/user-attachments/assets/9aa875b5-b50a-45a8-a9ab-f8c660843c04" target="_blank">
-        <img width="2580" height="1976" alt="Screenshot 2026-07-06 115454" src="https://github.com/user-attachments/assets/9aa875b5-b50a-45a8-a9ab-f8c660843c04" style="max-width: 100%;" />
+      <p align="center"><strong>Schedules</strong></p>
+      <a href="docs/screenshots/schedules.png">
+        <img width="1440" height="1000" alt="serverSENTINEL schedules" src="docs/screenshots/schedules.png" style="max-width: 100%;" />
       </a>
-      <p align="center">Configure panel settings.</p>
+      <p align="center">Create and edit scheduled server actions.</p>
     </td>
   </tr>
   <tr>
     <td valign="top" width="50%">
-      <p align="center"><strong>User Management</strong></p>
-      <a href="https://github.com/user-attachments/assets/94534c65-07b5-4e2a-b0da-3ab49259c362" target="_blank">
-        <img width="2590" height="1972" alt="Screenshot 2026-07-06 115443" src="https://github.com/user-attachments/assets/94534c65-07b5-4e2a-b0da-3ab49259c362" style="max-width: 100%;"/>
+      <p align="center"><strong>Server Properties</strong></p>
+      <a href="docs/screenshots/properties.png">
+        <img width="1440" height="1000" alt="serverSENTINEL server properties" src="docs/screenshots/properties.png" style="max-width: 100%;" />
       </a>
-      <p align="center">Manage local users, roles, and permissions.</p>
+      <p align="center">Review and update server configuration.</p>
     </td>
     <td valign="top" width="50%">
-      <p align="center"><strong>Mod Management</strong></p>
-      <a href="https://github.com/user-attachments/assets/d6d4f8ed-2235-444d-b767-dcb7cf6af975" target="_blank">
-        <img width="2586" height="1968" alt="Screenshot 2026-07-06 115419" src="https://github.com/user-attachments/assets/d6d4f8ed-2235-444d-b767-dcb7cf6af975" style="max-width: 100%;"/>
+      <p align="center"><strong>Settings</strong></p>
+      <a href="docs/screenshots/settings.png">
+        <img width="1440" height="1000" alt="serverSENTINEL settings" src="docs/screenshots/settings.png" style="max-width: 100%;" />
       </a>
-      <p align="center">Manage server mods and updates.</p>
+      <p align="center">Configure panel settings.</p>
     </td>
   </tr>
 </table>

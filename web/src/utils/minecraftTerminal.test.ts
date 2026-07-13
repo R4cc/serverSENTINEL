@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCommandHistory,
+  consumeTerminalTouchScroll,
   deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWord,
   deletePreviousTerminalWordAtCursor,
@@ -40,6 +41,12 @@ describe("Minecraft terminal helpers", () => {
     expect(deletePreviousTerminalWord("say hello   ")).toBe("say ");
     expect(deletePreviousTerminalWord("single")).toBe("");
     expect(deletePreviousTerminalWord("   ")).toBe("");
+  });
+
+  it("accumulates touch movement into terminal row scrolls", () => {
+    expect(consumeTerminalTouchScroll(0, 8, 20)).toEqual({ lines: 0, remainder: 8 });
+    expect(consumeTerminalTouchScroll(8, 17, 20)).toEqual({ lines: 1, remainder: 5 });
+    expect(consumeTerminalTouchScroll(-8, -17, 20)).toEqual({ lines: -1, remainder: -5 });
   });
 
   it("deletes the word before the cursor without changing text after it", () => {

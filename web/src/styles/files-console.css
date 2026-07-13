@@ -27,12 +27,15 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .minecraftTerminal .xterm {
   height: 100%;
   padding: 8px 10px;
   background: var(--terminal-bg);
+  overscroll-behavior: contain;
+  touch-action: pan-x pinch-zoom;
 }
 
 .minecraftTerminal .xterm-screen,
@@ -40,9 +43,11 @@
   background: var(--terminal-bg) !important;
 }
 
-.minecraftTerminal .xterm-viewport {
+.minecraftTerminal .xterm-viewport,
+.minecraftTerminal .xterm-scrollable-element {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--terminal-text) 28%, var(--terminal-bg)) var(--terminal-bg);
+  overscroll-behavior: contain;
 }
 
 .minecraftTerminal .xterm-viewport::-webkit-scrollbar-corner,

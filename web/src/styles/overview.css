@@ -1,32 +1,279 @@
-.overviewPage {
+.overviewPage.layoutDashboard {
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-4);
 }
 
-.overviewPage > .inlineState {
+.overviewPage > .inlineState,
+.overviewPage > .overviewDashboardGrid {
   grid-column: 1 / -1;
 }
 
-.overviewSummary {
-  grid-column: 1 / -1;
+.overviewDashboardGrid {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-areas:
+    "summary summary summary summary summary summary summary summary summary summary summary summary"
+    "resource resource resource resource resource resource resource resource players players players players"
+    "resource resource resource resource resource resource resource resource mods mods mods mods"
+    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "events events events events events events events events events events events events";
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.overviewDashboardGrid > .overviewSummary { grid-area: summary; }
+.overviewDashboardGrid > .resourcePanel { grid-area: resource; align-self: stretch; }
+.overviewDashboardGrid > .playersPanel { grid-area: players; }
+.overviewDashboardGrid > .modsHealthPanel { grid-area: mods; }
+.overviewDashboardGrid > .automationPanel { grid-area: automation; }
+.overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
+
+.overviewDashboardGrid > .overviewSummary {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: stretch;
+  gap: var(--space-2);
 }
 
-.overviewPage > .resourcePanel {
-  grid-column: 1 / span 8;
-  grid-row: span 2;
+.overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
+  display: none;
 }
 
-.overviewPage > .activityPanel {
-  grid-column: 9 / -1;
-  align-self: start;
+.overviewSummary .summaryTile.modSummaryTile.healthy {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
 }
 
-.overviewPage > .eventsPanel {
-  grid-column: 9 / -1;
-  align-self: stretch;
+.overviewSummary .summaryTile.modSummaryTile.warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 40%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.overviewOperationsPanel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.overviewOperationsPanel .uiPanelHeader,
+.overviewOperationsPanel .uiEmptyState {
+  margin: 0;
+}
+
+.overviewOperationsPanel .uiEmptyState {
+  min-height: 112px;
+  padding: var(--space-4);
+}
+
+.overviewPanelSkeleton {
+  min-height: 116px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.playerNameSkeleton {
+  width: 100%;
+  height: 40px;
+}
+
+.activePlayerRoster {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.activePlayerGrid {
+  max-height: 188px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-right: 2px;
+}
+
+.activePlayer {
+  min-width: 0;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: 8px 10px;
+}
+
+.activePlayerDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sentinel-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-success) 14%, transparent);
+}
+
+.activePlayer strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activePlayerRoster > small,
+.overviewMetricLead > small,
+.pendingRestartSummary small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.modHealthContent {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.overviewMetricLead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.overviewStatGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.overviewStatGrid > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-left: var(--border-subtle) solid var(--border-muted);
+}
+
+.overviewStatGrid > div:first-child {
+  border-left: 0;
+}
+
+.overviewStatGrid span,
+.automationSummaryRow > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.overviewStatGrid strong {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.overviewPanelNotice {
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.overviewPanelNotice.warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
+}
+
+.pendingRestartSummary {
+  min-height: 0;
+  display: grid;
+  gap: var(--space-2);
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-muted));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
+  padding: 10px 12px;
+}
+
+.pendingRestartSummary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pendingRestartSummary ul {
+  max-height: 88px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pendingRestartSummary b {
+  color: var(--text);
+}
+
+.automationSummaryList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.automationSummaryRow {
+  min-width: 0;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px var(--space-2);
+  align-items: center;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: 10px 12px;
+}
+
+.automationSummaryRow.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-muted));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-raised));
+}
+
+.automationSummaryRow > span {
+  grid-column: 1 / -1;
+}
+
+.automationSummaryRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automationSummaryRow small {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.automationSummaryRow small .uiStatusBadge {
+  margin-right: 4px;
 }
 
 .overviewPage .consolePanel {
@@ -34,7 +281,6 @@
 }
 
 .overviewSummaryValueSkeleton { width: min(92px, 86%); height: 17px; }
-.activityValueSkeleton { width: min(150px, 82%); height: 14px; }
 .eventSkeletonRow { pointer-events: none; }
 .eventMarkerSkeleton { width: 8px; height: 8px; border-radius: 999px; }
 .eventTextSkeleton { width: min(230px, 82%); height: 13px; }
@@ -43,3 +289,110 @@
 .resourceSkeletonRows .resourceMetricLabel .uiSkeleton--text { width: 90px; }
 .resourceSkeletonRows .resourceMetricLabel .uiSkeleton--title { width: 170px; }
 .resourceChartSkeleton { width: 100%; height: 128px; }
+
+@media (min-width: 981px) and (max-width: 1320px) {
+  .overviewDashboardGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "summary"
+      "resource"
+      "players"
+      "mods"
+      "automation"
+      "events";
+  }
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+  .overviewDashboardGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "summary"
+      "resource"
+      "players"
+      "mods"
+      "automation"
+      "events";
+  }
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .overviewDashboardGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "summary"
+      "resource"
+      "players"
+      "mods"
+      "automation"
+      "events";
+  }
+
+  .overviewDashboardGrid > .overviewSummary,
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overviewStatGrid {
+    grid-template-columns: repeat(3, minmax(72px, 1fr));
+  }
+}
+
+@media (min-width: 2560px) {
+  .workspace.workspacePage-overview {
+    max-width: none;
+  }
+
+  .workspacePage-overview > .workspaceHeader,
+  .workspacePage-overview > .activeServerStrip,
+  .workspacePage-overview > .overviewPage.layoutDashboard {
+    width: 100%;
+    max-width: 3200px;
+    margin-inline: auto;
+  }
+
+  .overviewDashboardGrid {
+    grid-template-columns: repeat(16, minmax(0, 1fr));
+    grid-template-areas:
+      "summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary"
+      "resource resource resource resource resource resource resource resource resource resource resource resource events events events events"
+      "players players players players players mods mods mods mods mods automation automation automation automation automation automation";
+  }
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
+    display: grid;
+  }
+
+  .workspacePage-overview .resourcePanel .resourceRows {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .workspacePage-overview .resourcePanel .resourceRow {
+    min-height: 226px;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+
+  .workspacePage-overview .resourcePanel .resourceChart,
+  .workspacePage-overview .resourcePanel .resourceChartEmpty {
+    height: 132px;
+  }
+
+  .workspacePage-overview .activePlayerGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

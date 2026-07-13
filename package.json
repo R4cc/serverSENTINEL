@@ -15,7 +15,11 @@
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run typecheck --workspaces",
     "demo:reset": "npm --workspace server run demo:reset",
+    "screenshots:update": "node scripts/update-readme-screenshots.mjs",
     "start": "npm --workspace server run start"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
   },
   "overrides": {
     "vite": "^8.1.3",

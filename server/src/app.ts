@@ -61,7 +61,7 @@ import {
 } from "./runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "./runtime/terminal.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
-import { queryMinecraftServer } from "./minecraftQuery.js";
+import { normalizePlayerNames, queryMinecraftServer } from "./minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
 import {
   ROLE_PRESETS,
@@ -2996,8 +2996,8 @@ async function serverOverviewData(server: ManagedServer) {
     ? validDockerTimestamp(dockerInspect.value?.State?.FinishedAt)
     : undefined;
   const queryMetrics = dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
-    ? await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }))
-    : { responding: false, playersOnline: null, maxPlayers: null };
+    ? await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined }))
+    : { responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined };
   const activity: ServerActivity = {
     lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
     lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
@@ -3006,7 +3006,8 @@ async function serverOverviewData(server: ManagedServer) {
     eulaAccepted,
     javaRuntime: normalizeJavaRuntime(server),
     playersOnline: queryMetrics.playersOnline,
-    maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null)
+    maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
+    playerNames: normalizePlayerNames(queryMetrics.playerNames)
   };
   return { events, eventsStatus, activity };
 }

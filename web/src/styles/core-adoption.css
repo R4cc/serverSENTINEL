@@ -1122,20 +1122,19 @@
 }
 
 .modsWorkspaceUpdate .modsUpdateAction {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  border-color: var(--sentinel-success);
-  color: var(--surface);
-  background: var(--sentinel-success);
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 4px 0 9px;
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  color: var(--sentinel-accent-strong);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface));
 }
 
 .modsWorkspaceUpdate .modsUpdateAction:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text));
-  color: var(--surface);
-  background: color-mix(in srgb, var(--sentinel-success) 86%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+  color: var(--sentinel-accent-strong);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 92%, var(--surface));
 }
 
 .modsReviewAction {

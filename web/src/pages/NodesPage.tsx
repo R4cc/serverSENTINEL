@@ -3,10 +3,10 @@ import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
-import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, ServerActivity } from "../types";
+import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, ServerActivity } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
-import { formatBytes } from "../utils/format";
-import { isNodeRuntimeUsable, nodeBlockReason, nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
+import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
+import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
 
 type AddNodeInput = {
   name: string;
@@ -32,13 +32,6 @@ function sharedStatusTone(value?: string): "success" | "danger" | "neutral" {
   return tone === "ready" ? "success" : tone === "limited" ? "danger" : "neutral";
 }
 
-function formatElapsedTime(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
 function shortBuildId(value?: string) {
   return value ? value.slice(0, 12) : undefined;
 }
@@ -59,100 +52,6 @@ function PlayerIcon() {
       <circle cx="12" cy="8" r="3" />
       <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
     </svg>
-  );
-}
-
-function NodeDetailIcon({ name }: { name: "node" | "status" | "type" | "id" | "agent" | "panel" | "protocol" | "compatibility" | "docker" | "data" | "memory" | "created" | "updated" | "seen" | "capabilities" | "warning" }) {
-  return (
-    <span className={`nodeDetailIcon ${name}`} aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {name === "node" && (
-          <>
-            <rect x="6" y="4" width="12" height="4" rx="1" />
-            <rect x="6" y="10" width="12" height="4" rx="1" />
-            <rect x="6" y="16" width="12" height="4" rx="1" />
-            <path d="M9 6h.1M9 12h.1M9 18h.1" />
-          </>
-        )}
-        {name === "status" && (
-          <>
-            <path d="M5 12a7 7 0 0 1 14 0" />
-            <path d="M8 12a4 4 0 0 1 8 0" />
-            <path d="M11 12a1 1 0 0 1 2 0" />
-          </>
-        )}
-        {name === "type" && (
-          <>
-            <rect x="6" y="5" width="12" height="10" rx="1.5" />
-            <path d="M9 19h6M12 15v4" />
-          </>
-        )}
-        {name === "id" && (
-          <>
-            <rect x="5" y="5" width="14" height="14" rx="3" />
-            <path d="M9 9h6M9 12h6M9 15h4" />
-          </>
-        )}
-        {name === "agent" && (
-          <>
-            <path d="M12 4v4M8 8h8M7 20v-5l5-3 5 3v5" />
-            <path d="M9 20v-4h6v4" />
-          </>
-        )}
-        {name === "panel" && (
-          <>
-            <rect x="4" y="4" width="6" height="6" rx="1" />
-            <rect x="14" y="4" width="6" height="6" rx="1" />
-            <rect x="4" y="14" width="6" height="6" rx="1" />
-            <rect x="14" y="14" width="6" height="6" rx="1" />
-          </>
-        )}
-        {name === "protocol" && <path d="M7 17 17 7M10 7h7v7" />}
-        {name === "compatibility" && (
-          <>
-            <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
-            <path d="m9 12 2 2 4-5" />
-          </>
-        )}
-        {name === "docker" && (
-          <>
-            <path d="M4 13h15l-2 5H7l-3-5Z" />
-            <path d="M7 10h3v3H7zM10 10h3v3h-3zM13 10h3v3h-3zM10 7h3v3h-3z" />
-          </>
-        )}
-        {name === "data" && (
-          <>
-            <path d="M3 8h7l2 2h9v9H3z" />
-            <path d="M3 8V5h7l2 3" />
-          </>
-        )}
-        {name === "memory" && (
-          <>
-            <rect x="5" y="6" width="14" height="12" rx="2" />
-            <path d="M8 3v3M12 3v3M16 3v3M8 18v3M12 18v3M16 18v3M3 9h2M3 15h2M19 9h2M19 15h2" />
-            <path d="M9 10h6v4H9z" />
-          </>
-        )}
-        {(name === "created" || name === "updated" || name === "seen") && (
-          <>
-            <circle cx="12" cy="12" r="8" />
-            <path d="M12 7v5l4 2" />
-          </>
-        )}
-        {name === "capabilities" && (
-          <>
-            <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" />
-            <path d="m19 13 .1-1-.1-1 2-1.5-2-3.5-2.5 1a8 8 0 0 0-2-1.2L14 3h-4l-.5 2.8a8 8 0 0 0-2 1.2L5 6 3 9.5 5 11l-.1 1 .1 1-2 1.5L5 18l2.5-1a8 8 0 0 0 2 1.2L10 21h4l.5-2.8a8 8 0 0 0 2-1.2l2.5 1 2-3.5L19 13Z" />
-          </>
-        )}
-        {name === "warning" && (
-          <>
-            <path d="M12 4 3 20h18L12 4Z" />
-            <path d="M12 9v5M12 17h.1" />
-          </>
-        )}
-      </svg>
-    </span>
   );
 }
 
@@ -501,9 +400,10 @@ export function NodesPage({
   busyNodeId,
   defaultPanelUrl,
   selectedNode,
-  nodeUpdatingSince,
-  nodeUpdateNow,
+  nodeOperations,
+  nodeOperationNow,
   nodeUpdateGraceMs,
+  nodeManualRecoveryById,
   installResult,
   addNodeOpen,
   addNodeResult,
@@ -537,9 +437,10 @@ export function NodesPage({
   busyNodeId: string;
   defaultPanelUrl: string;
   selectedNode: ManagedNode | null;
-  nodeUpdatingSince: Record<string, number>;
-  nodeUpdateNow: number;
+  nodeOperations: Record<string, NodeOperation>;
+  nodeOperationNow: number;
   nodeUpdateGraceMs: number;
+  nodeManualRecoveryById: Record<string, NodeManualRecovery>;
   installResult: NodeInstallResponse | CreateNodeResponse | null;
   addNodeOpen: boolean;
   addNodeResult: CreateNodeResponse | null;
@@ -602,18 +503,8 @@ export function NodesPage({
   }, [externalNodes, internalNode]);
   const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
   const selectedDetailsNode = selectedContextNode ?? selectedNode;
-  const selectedUpdateStartedAt = selectedDetailsNode ? nodeUpdatingSince[selectedDetailsNode.id] : undefined;
-  const selectedUpdateElapsedMs = selectedUpdateStartedAt ? Math.max(0, nodeUpdateNow - selectedUpdateStartedAt) : 0;
-  const selectedNodeUpdating = Boolean(
-    selectedDetailsNode
-    && selectedDetailsNode.status === "offline"
-    && selectedUpdateStartedAt
-    && selectedUpdateElapsedMs < nodeUpdateGraceMs
-  );
-  const selectedWarnings = selectedDetailsNode
-    ? nodeWarnings(selectedDetailsNode).filter((warning) => !(selectedNodeUpdating && warning === "Node is offline."))
-    : [];
-  const selectedCapabilities = selectedDetailsNode?.capabilities?.length ? selectedDetailsNode.capabilities : [];
+  const selectedOperation = selectedDetailsNode ? nodeOperations[selectedDetailsNode.id] : undefined;
+  const selectedManualRecovery = selectedDetailsNode ? nodeManualRecoveryById[selectedDetailsNode.id] : undefined;
 
   return (
     <section className="pageStack nodesPage layoutBalanced">
@@ -642,6 +533,10 @@ export function NodesPage({
           />
         )}
         {sortedNodes.map((node) => {
+          const operation = nodeOperations[node.id];
+          const operationLabel = operation?.phase === "waiting"
+            ? operation.kind === "update" ? "Updating" : "Restarting"
+            : operation?.phase === "timed-out" ? "Attention" : "";
           const expanded = Boolean(expandedNodeIds[node.id]);
           const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
           const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
@@ -655,7 +550,12 @@ export function NodesPage({
                     <h3>{node.name}</h3>
                   </div>
                   <div className="nodeStatusPills">
-                    <StatusBadge tone={sharedStatusTone(node.status)} className={`settingsStatus ${statusTone(node.status)}`}>{node.status}</StatusBadge>
+                    <StatusBadge
+                      tone={operation?.phase === "waiting" ? "warning" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
+                      className={`settingsStatus ${operation ? operation.phase : statusTone(node.status)}`}
+                    >
+                      {operationLabel || node.status}
+                    </StatusBadge>
                     {nodePanelUpdateRequired(node) && (
                       <StatusBadge tone="warning" className="settingsStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</StatusBadge>
                     )}
@@ -671,10 +571,10 @@ export function NodesPage({
                       compact
                       className="nodeUpgradeButton"
                       onClick={() => onUpdateNode(node)}
-                      disabled={busyNodeId === node.id || !canManageNodes || !nodeCanPanelUpdate(node)}
+                      disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
                       title={nodeUpdateTitle(node)}
                     >
-                      {nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
+                      {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
                     </Button>
                   )}
                   <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
@@ -727,172 +627,36 @@ export function NodesPage({
       </section>
 
       {selectedDetailsNode && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+        <div className="nodeDrawerBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onCloseDetails();
         }}>
-          <DialogSurface className="modalPanel nodeModalPanel nodeDetailsPanel" labelledBy="node-details-title" onClose={onCloseDetails}>
-            <header className="nodeModalHeader nodeDetailsHeader">
-              <div className="nodeDetailsTitleBlock">
-                <NodeDetailIcon name="node" />
-                <div>
-                  <h2 id="node-details-title">{selectedDetailsNode.name}</h2>
-                  <p>Technical node details and maintenance actions.</p>
-                </div>
-              </div>
-              <Button variant="secondary" iconOnly className="iconButton modalCloseButton polishedCloseButton" onClick={onCloseDetails} aria-label="Close node details"><AppIcon name="x" /></Button>
-            </header>
-            <div className="nodeModalBody nodeDetailsBody">
-              <dl className="nodeInfoGrid">
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="status" />
-                  <div><dt>Status</dt><dd className={statusTone(selectedDetailsNode.status)}><span className={`nodeStatusDot ${selectedDetailsNode.status}`} aria-hidden="true" />{selectedDetailsNode.status}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="type" />
-                  <div><dt>Type</dt><dd>{selectedDetailsNode.type}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="agent" />
-                  <div><dt>Agent</dt><dd>{selectedDetailsNode.agentVersion || "Unknown"}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="agent" />
-                  <div><dt>Build</dt><dd>{shortBuildId(selectedDetailsNode.buildId) || "Unknown"}</dd></div>
-                </div>
-                <div className="nodeInfoCard wide">
-                  <NodeDetailIcon name="id" />
-                  <div><dt>ID</dt><dd className="technicalValue">{selectedDetailsNode.id}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="panel" />
-                  <div><dt>Panel</dt><dd>{panelVersion}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="protocol" />
-                  <div><dt>Protocol</dt><dd>{selectedDetailsNode.protocolVersion || "Unknown"}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="compatibility" />
-                  <div><dt>Compatibility</dt><dd className={statusTone(selectedDetailsNode.compatibility)}>{nodeCompatibilityLabel(selectedDetailsNode)}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="docker" />
-                  <div><dt>Docker</dt><dd className={statusTone(selectedDetailsNode.dockerStatus)}>{nodeDockerLabel(selectedDetailsNode)}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="data" />
-                  <div><dt>Data path</dt><dd className={statusTone(selectedDetailsNode.dataPathStatus)}>{nodeDataPathLabel(selectedDetailsNode)}</dd></div>
-                </div>
-                <div className="nodeInfoCard">
-                  <NodeDetailIcon name="memory" />
-                  <div><dt>Host memory</dt><dd>{selectedDetailsNode.totalMemory ? formatBytes(selectedDetailsNode.totalMemory) : "Unknown"}</dd></div>
-                </div>
-                <div className="nodeInfoCard secondary">
-                  <NodeDetailIcon name="created" />
-                  <div><dt>Created</dt><dd>{formatNodeDate(selectedDetailsNode.createdAt, formatDate)}</dd></div>
-                </div>
-                <div className="nodeInfoCard secondary">
-                  <NodeDetailIcon name="updated" />
-                  <div><dt>Updated</dt><dd>{formatNodeDate(selectedDetailsNode.updatedAt, formatDate)}</dd></div>
-                </div>
-                <div className="nodeInfoCard secondary">
-                  <NodeDetailIcon name="seen" />
-                  <div><dt>Last seen</dt><dd>{formatNodeDate(selectedDetailsNode.lastSeenAt ?? selectedDetailsNode.connectedAt, formatDate)}</dd></div>
-                </div>
-              </dl>
-
-              <details className="nodeCapabilitiesPanel">
-                <summary>
-                  <span><NodeDetailIcon name="capabilities" />Capabilities</span>
-                  <span className="capabilityCount">{selectedCapabilities.length || "None"}</span>
-                </summary>
-                <div className="nodeCapabilityList">
-                  {selectedCapabilities.length > 0 ? selectedCapabilities.map((capability) => (
-                    <code key={capability}>{capability}</code>
-                  )) : <span className="emptyCapabilityText">None advertised</span>}
-                </div>
-              </details>
-
-              {selectedDetailsNode.hasPendingJoinToken && (
-                <div className="nodeAlert joinTokenAlert">
-                  <NodeDetailIcon name="warning" />
-                  <span>{nodeJoinTokenExpired(selectedDetailsNode) ? "Join token expired. Rotate the token, copy the new install command, and run it on the node host." : `Join token pending${selectedDetailsNode.joinTokenExpiresAt ? ` until ${formatNodeDate(selectedDetailsNode.joinTokenExpiresAt, formatDate)}` : ""}. Run the install command on the node host to finish connecting this node.`}</span>
-                </div>
-              )}
-              {selectedNodeUpdating && (
-                <div className="nodeAlert nodeUpdatingAlert">
-                  <span className="nodeUpdatingSpinner" aria-hidden="true" />
-                  <span>Node is updating. Waiting for it to reconnect. Elapsed {formatElapsedTime(selectedUpdateElapsedMs)}.</span>
-                </div>
-              )}
-              {selectedWarnings.length > 0 && (
-                <div className="nodeWarnings nodeDetailsWarnings">
-                  {selectedWarnings.map((warning) => <span key={warning}>{warning}</span>)}
-                </div>
-              )}
-              {nodePanelUpdateRequired(selectedDetailsNode) && (
-                <div className="nodeWarnings nodeDetailsWarnings">
-                  <span>Node agent {selectedDetailsNode.agentVersion} is newer than this panel ({panelVersion}). Update the panel before updating or managing this node image.</span>
-                </div>
-              )}
-              {nodeVersionMismatch(selectedDetailsNode) && (
-                <div className="nodeWarnings nodeDetailsWarnings">
-                  <span>Node agent {selectedDetailsNode.agentVersion} cannot be safely compared with this panel ({panelVersion}). Update the panel and node to matching release versions.</span>
-                </div>
-              )}
-              <div className="nodeActions nodeDetailsActions">
-                <div className="nodeActionGroup maintenance">
-                  <Button variant="secondary" compact onClick={() => onShowInstall(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id}><AppIcon name="download" />Install instructions</Button>
-                  <Button
-                    variant="secondary"
-                    compact
-                    onClick={() => onUpdateNode(selectedDetailsNode)}
-                    disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || !nodeUpdateAvailable(selectedDetailsNode) || !nodeCanPanelUpdate(selectedDetailsNode)}
-                    title={nodeUpdateTitle(selectedDetailsNode)}
-                  >
-                    <AppIcon name="arrowUp" />{nodeBuildUpdateAvailable(selectedDetailsNode) ? "Update" : "Upgrade"}
-                  </Button>
-                  <Button variant="secondary" compact onClick={() => onRotateToken(selectedDetailsNode)} disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes} title={selectedDetailsNode.isInternal ? "Internal node tokens cannot be rotated" : ""}><AppIcon name="refresh" />Rotate token</Button>
-                  <Button variant="secondary" compact onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Refresh node</Button>
-                  <Button
-                    variant="secondary"
-                    compact
-                    onClick={() => onRestartNode(selectedDetailsNode)}
-                    disabled={busyNodeId === selectedDetailsNode.id || !canManageNodes || (!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online")}
-                    title={!selectedDetailsNode.isInternal && selectedDetailsNode.status !== "online" ? "Bring the node online before restarting" : "Restart the node container"}
-                  >
-                    <AppIcon name="refresh" />Restart node
-                  </Button>
-                </div>
-                <div className="nodeActionGroup destructive">
-                  <Button
-                    variant="critical"
-                    compact
-                    className="nodeRemoveButton"
-                    onClick={() => {
-                      if (selectedContextNode) onRemoveNode(selectedContextNode);
-                    }}
-                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !canManageNodes}
-                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove managed server containers and panel records for this node" : ""}
-                  >
-                    <AppIcon name="trash" />Remove node
-                  </Button>
-                  <Button
-                    variant="critical"
-                    compact
-                    className="forceRemoveButton"
-                    onClick={() => {
-                      if (selectedContextNode) onRemoveNode(selectedContextNode, true);
-                    }}
-                    disabled={busyNodeId === selectedDetailsNode.id || selectedDetailsNode.isInternal || !Boolean(selectedContextNode?.servers.length) || !canManageNodes}
-                    title={selectedDetailsNode.isInternal ? "Internal node cannot be deleted" : selectedContextNode?.servers.length ? "Remove this stale node and assigned records even if container cleanup cannot finish" : "Force remove is only available when server records are assigned"}
-                  >
-                    <NodeDetailIcon name="warning" />Force remove node
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </DialogSurface>
+          <NodeDetailsDrawer
+            node={selectedDetailsNode}
+            contextNode={selectedContextNode}
+            panelVersion={panelVersion}
+            panelBuildId={panelBuildId}
+            canManageNodes={canManageNodes}
+            busy={busy}
+            busyNodeId={busyNodeId}
+            operation={selectedOperation}
+            operationNow={nodeOperationNow}
+            operationGraceMs={nodeUpdateGraceMs}
+            manualRecovery={selectedManualRecovery}
+            updateAvailable={nodeUpdateAvailable(selectedDetailsNode)}
+            buildUpdateAvailable={nodeBuildUpdateAvailable(selectedDetailsNode)}
+            panelUpdateRequired={nodePanelUpdateRequired(selectedDetailsNode)}
+            versionMismatch={nodeVersionMismatch(selectedDetailsNode)}
+            updateTitle={nodeUpdateTitle(selectedDetailsNode)}
+            formatDate={formatDate}
+            onClose={onCloseDetails}
+            onShowInstall={onShowInstall}
+            onRotateToken={onRotateToken}
+            onUpdateNode={onUpdateNode}
+            onRefresh={onRefresh}
+            onRestartNode={onRestartNode}
+            onRemoveNode={onRemoveNode}
+            onCopy={onCopy}
+          />
         </div>
       )}
 

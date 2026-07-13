@@ -1,17 +1,26 @@
-import { useEffect, useRef, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
 import { SortHeaderButton } from "../../components/TableControls";
 import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
+import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import type { PublicUser } from "../../types";
 import type { FileActionDialog, FilesWorkspace } from "./useFilesWorkspace";
-import { fileEntryPointerIntent } from "./fileSelection";
+import { fileContextSelectionIntent, fileEntryPointerIntent } from "./fileSelection";
+
+type FileContextMenuState = {
+  invocationId: number;
+  kind: "selection" | "background";
+  x: number;
+  y: number;
+  returnFocus: HTMLElement | null;
+};
 
 type FilesPageProps = {
   workspace: FilesWorkspace;
@@ -85,8 +94,10 @@ export function FilesPage({
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const fileTableRef = useRef<HTMLDivElement>(null);
   const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const contextMenuInvocationRef = useRef(0);
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const previousDialogOpenRef = useRef(false);
+  const [fileContextMenu, setFileContextMenu] = useState<FileContextMenuState | null>(null);
   const initialFilesLoading = filesLoading && listing.entries.length === 0;
   const operationLabel = fileOperationBusy === "upload" ? "Uploading file…"
     : fileOperationBusy === "new-folder" ? "Creating folder…"
@@ -97,6 +108,7 @@ export function FilesPage({
 
   useEffect(() => {
     breadcrumbRef.current?.querySelector<HTMLElement>(".active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    setFileContextMenu(null);
   }, [listing.path, archiveContext?.archivePath]);
 
   useEffect(() => {
@@ -110,6 +122,17 @@ export function FilesPage({
   }, [fileActionDialog]);
 
   function handleRowKeyDown(event: KeyboardEvent<HTMLButtonElement>, entryPath: string) {
+    if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+      event.preventDefault();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      openEntryContextMenu(
+        entryPath,
+        Math.min(bounds.left + 48, bounds.right - 8),
+        Math.min(bounds.top + 28, bounds.bottom - 4),
+        event.currentTarget
+      );
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const nextPath = actions.moveFileFocus(entryPath, event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
@@ -136,6 +159,37 @@ export function FilesPage({
     });
   }
 
+  function openContextMenu(next: Omit<FileContextMenuState, "invocationId">) {
+    contextMenuInvocationRef.current += 1;
+    setFileContextMenu({ ...next, invocationId: contextMenuInvocationRef.current });
+  }
+
+  function applyContextMenuSelection(path?: string) {
+    const intent = fileContextSelectionIntent(selectedEntries.map((entry) => entry.path), path);
+    if (intent === "clear") actions.clearFileSelection();
+    else if (intent === "replace" && path) actions.selectFileEntry(path);
+    else if (path) actions.setFocusedFilePath(path);
+  }
+
+  function openEntryContextMenu(path: string, x: number, y: number, returnFocus: HTMLElement | null) {
+    applyContextMenuSelection(path);
+    openContextMenu({ kind: "selection", x, y, returnFocus });
+  }
+
+  function handleEntryContextMenu(event: MouseEvent<HTMLDivElement>, path: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    openEntryContextMenu(path, event.clientX, event.clientY, rowButtonRefs.current.get(path) ?? event.currentTarget);
+  }
+
+  function handleFileTableContextMenu(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest(".fileTableHead, .fileTableRow")) return;
+    event.preventDefault();
+    applyContextMenuSelection();
+    openContextMenu({ kind: "background", x: event.clientX, y: event.clientY, returnFocus: fileTableRef.current });
+  }
+
   const secondarySelectionActions: ActionMenuItem[] = [];
   if (selectedZipEntry) {
     secondarySelectionActions.push(
@@ -153,6 +207,86 @@ export function FilesPage({
   if (!archiveContext && selectedEntries.length > 0) {
     secondarySelectionActions.push({ id: "delete", label: "Delete", icon: <AppIcon name="trash" />, onSelect: actions.openDeleteDialog, disabled: !canDeleteSelectedItems, critical: true, title: fileActionBlockedReason || "Delete selected items" });
   }
+
+  const selectionContextActions: ActionMenuItem[] = [];
+  if (selectedEntry?.type === "directory") {
+    const permissionPath = archiveContext?.archivePath ?? selectedEntry.path;
+    const canOpenFolder = !isProvisioning
+      && !dockerOperationalLock
+      && !filesLoading
+      && (activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view"));
+    selectionContextActions.push({
+      id: "open-folder",
+      label: "Open",
+      icon: <AppIcon name="chevronRight" />,
+      onSelect: () => actions.activateFileEntry(selectedEntry),
+      disabled: !canOpenFolder,
+      title: fileReadActionBlockedReason || (canOpenFolder ? "Open folder" : "View files permission is required.")
+    });
+  } else if (selectedZipEntry) {
+    selectionContextActions.push({ id: "open-zip", label: "Open ZIP", icon: <AppIcon name="archive" />, onSelect: actions.openSelectedZip, disabled: !canOpenSelectedZip, title: "Open this ZIP as a read-only folder" });
+  } else if (selectedEntry?.type === "file" && isEditableFile(selectedEntry)) {
+    selectionContextActions.push({
+      id: "open-file",
+      label: "Open",
+      icon: <AppIcon name="edit" />,
+      onSelect: () => actions.openFile(selectedEntry.path),
+      disabled: !canOpenSelectedFile,
+      title: fileActionBlockedReason || "Open selected file read-only"
+    });
+  }
+  if (selectedEntries.length > 0) {
+    selectionContextActions.push({
+      id: "download",
+      label: "Download",
+      icon: <AppIcon name="download" />,
+      onSelect: actions.downloadSelectedItems,
+      disabled: !canDownloadSelectedItems,
+      separatorBefore: selectionContextActions.length > 0,
+      title: fileReadActionBlockedReason || "Download selected items"
+    });
+  }
+  const extractionActions = secondarySelectionActions.filter((item) => item.id.startsWith("extract-"));
+  const mutationActions = secondarySelectionActions.filter((item) => !item.id.startsWith("extract-"));
+  extractionActions.forEach((item, index) => selectionContextActions.push({
+    ...item,
+    separatorBefore: index === 0 && selectionContextActions.length > 0
+  }));
+  mutationActions.forEach((item, index) => selectionContextActions.push({
+    ...item,
+    separatorBefore: index === 0 && selectionContextActions.length > 0
+  }));
+
+  const backgroundContextActions: ActionMenuItem[] = [];
+  if (!archiveContext) {
+    backgroundContextActions.push(
+      {
+        id: "upload",
+        label: "Upload file",
+        icon: <AppIcon name="fileUp" />,
+        onSelect: () => refs.fileUploadRef.current?.click(),
+        disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+        title: fileActionBlockedReason || "Upload a file to this folder"
+      },
+      {
+        id: "new-folder",
+        label: "New folder",
+        icon: <AppIcon name="folderPlus" />,
+        onSelect: actions.openCreateFolderDialog,
+        disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+        title: fileActionBlockedReason || "Create a folder here"
+      }
+    );
+  }
+  backgroundContextActions.push({
+    id: "refresh",
+    label: filesLoading ? "Refreshing" : "Refresh",
+    icon: <AppIcon name="refresh" />,
+    onSelect: () => void actions.refreshCurrentFiles(),
+    disabled: isProvisioning || filesLoading || !canViewCurrentFiles,
+    separatorBefore: backgroundContextActions.length > 0,
+    title: canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"
+  });
 
   return (
     <section className="tabPage filesPage layoutWide">
@@ -241,7 +375,7 @@ export function FilesPage({
             />
           )}
 
-          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileRows.length) + 1} ref={fileTableRef} tabIndex={-1}>
+          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileRows.length) + 1} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
             <div className="fileTableHead" role="row">
               <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={table.getIsAllRowsSelected() ? "Clear visible selection" : "Select all visible files"}>
                 <input
@@ -272,6 +406,7 @@ export function FilesPage({
                   className={`fileTableRow ${selected ? "selected" : ""}`}
                   role="row"
                   aria-selected={selected}
+                  onContextMenu={(event) => handleEntryContextMenu(event, entry.path)}
                   onClick={(event) => {
                     if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;
                     if (fileEntryPointerIntent("click").select) selectFromPointer(event, entry.path);
@@ -376,6 +511,18 @@ export function FilesPage({
           </div>
         )}
       </aside>
+
+      {fileContextMenu && (
+        <ContextMenu
+          key={fileContextMenu.invocationId}
+          label={fileContextMenu.kind === "selection" ? "File actions" : "Folder actions"}
+          items={fileContextMenu.kind === "selection" ? selectionContextActions : backgroundContextActions}
+          x={fileContextMenu.x}
+          y={fileContextMenu.y}
+          returnFocus={fileContextMenu.returnFocus}
+          onClose={() => setFileContextMenu(null)}
+        />
+      )}
 
       {fileActionDialog && (
         <FileActionModal

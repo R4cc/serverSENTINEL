@@ -40,14 +40,18 @@ function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePla
 }
 
 describe("InstalledModsList", () => {
-  it("renders the installed version once and the target with a download action", () => {
+  it("renders the installed version once and the target inside an integrated update action", () => {
     const html = renderInstalledMods([mod()]);
+    const updateAction = html.match(/<button[^>]*modsUpdateAction[^>]*>[\s\S]*?<\/button>/)?.[0];
 
     expect(html.match(/0\.154\.0\+26\.2/g)).toHaveLength(1);
     expect(html).toContain("→");
     expect(html).toContain("0.155.0+26.2");
     expect(html).toContain('aria-label="Update Fabric API to 0.155.0+26.2"');
     expect(html).toContain("modsUpdateAction");
+    expect(html).toContain("modsUpdateActionLabel");
+    expect(html).toContain(">Update<");
+    expect(updateAction).not.toContain("<svg");
     expect(html).not.toContain("update to");
   });
 
@@ -73,7 +77,7 @@ describe("InstalledModsList", () => {
     const html = renderInstalledMods([installed], updatePlan);
 
     expect(html).toContain("0.154.0+26.2");
-    expect(html).toContain("Update available");
+    expect(html).toContain(">Available<");
   });
 
   it("renders a switch version button for Modrinth-managed mods", () => {

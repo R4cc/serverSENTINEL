@@ -91,11 +91,13 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {plannedUpdate?.status === "safe_update" && (
-                  <ModUpdateCell targetVersion={targetVersion} actionTone="update">
-                    <Button variant="secondary" compact iconOnly className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
-                      <AppIcon name="download" />
-                    </Button>
-                  </ModUpdateCell>
+                  <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
+                    <span className="modsUpdateTransition" aria-hidden="true">
+                      <span className="modsUpdateArrow">→</span>
+                      <strong>{targetVersion || "Available"}</strong>
+                    </span>
+                    <span className="modsUpdateActionLabel">Update</span>
+                  </Button>
                 )}
                 {plannedUpdate?.status === "needs_review" && (
                   <ModUpdateCell targetVersion={targetVersion} actionTone="review">

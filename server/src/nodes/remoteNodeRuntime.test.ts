@@ -80,6 +80,63 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("normalizes the player roster returned by a remote node overview", async () => {
+    const node = testNode();
+    const connections = {
+      request: async (_node: ManagedNode, command: string) => {
+        if (command === "server.inspect") return { docker: { running: true, startedAt: "2026-07-11T10:00:00.000Z" } };
+        if (command === "server.logs.recent") return { text: "", source: "docker" };
+        if (command === "server.queryMetrics") return { playersOnline: 3, maxPlayers: 20, playerNames: [" Alex ", "", "Steve", "Alex"] };
+        if (command === "files.read") return { content: "max-players=20\nlevel-name=world" };
+        return {};
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    const overview = await runtime.serverOverview(testServer());
+
+    expect(overview.activity).toMatchObject({
+      playersOnline: 3,
+      maxPlayers: 20,
+      playerNames: ["Alex", "Steve"]
+    });
+  });
+
+  it("clears remote player names when the server is stopped or the fresh query fails", async () => {
+    for (const inspect of [{ docker: { running: false } }, { docker: { running: true } }]) {
+      const node = testNode();
+      const connections = {
+        request: async (_node: ManagedNode, command: string) => {
+          if (command === "server.inspect") return inspect;
+          if (command === "server.logs.recent") return { text: "", source: "docker" };
+          if (command === "server.queryMetrics") throw new Error("query unavailable");
+          if (command === "files.read") return { content: "max-players=20" };
+          return {};
+        }
+      } as unknown as PanelNodeConnections;
+      const runtime = new RemoteNodeRuntime(
+        node.id,
+        async () => node,
+        connections,
+        async (server) => server as never,
+        async () => undefined,
+        async () => undefined,
+        async () => undefined
+      );
+
+      const overview = await runtime.serverOverview(testServer());
+      expect(overview.activity.playerNames).toBeUndefined();
+    }
+  });
+
   it("sends a structured retryable event when console streaming finds the node offline", async () => {
     const node = testNode();
     const messages: string[] = [];

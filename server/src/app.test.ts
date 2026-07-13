@@ -563,7 +563,7 @@ describe("Minecraft Query metrics parsing", () => {
       Buffer.from("3\0maxplayers\0", "utf8"),
       Buffer.from("20\0", "utf8"),
       Buffer.from([0, 1, 0]),
-      Buffer.from("player_\0Alex\0Steve\0Sam\0\0", "utf8")
+      Buffer.from("player_\0 Alex \0Steve\0Alex\0\0", "utf8")
     ]);
     const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
 
@@ -571,7 +571,7 @@ describe("Minecraft Query metrics parsing", () => {
       responding: true,
       playersOnline: 3,
       maxPlayers: 20,
-      playerNames: ["Alex", "Steve", "Sam"]
+      playerNames: ["Alex", "Steve"]
     });
   });
 });

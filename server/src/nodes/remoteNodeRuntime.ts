@@ -7,6 +7,7 @@ import { assertNodeSupports } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
+import { normalizePlayerNames } from "../minecraftQuery.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -322,8 +323,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     const status = statusResult.status === "fulfilled" ? statusResult.value : {};
     const props = parseProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
     const queryMetrics = status.docker?.running
-      ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null })) as { playersOnline?: number | null; maxPlayers?: number | null }
-      : { playersOnline: null, maxPlayers: null };
+      ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null, playerNames: undefined })) as { playersOnline?: number | null; maxPlayers?: number | null; playerNames?: string[] }
+      : { playersOnline: null, maxPlayers: null, playerNames: undefined };
     const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
@@ -334,7 +335,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
       eulaAccepted,
       javaRuntime: javaRuntimeLabel(server),
       playersOnline: queryMetrics.playersOnline ?? null,
-      maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null)
+      maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
+      playerNames: normalizePlayerNames(queryMetrics.playerNames)
     };
     return {
       events: compactRecentEvents(parsedEvents, 10),

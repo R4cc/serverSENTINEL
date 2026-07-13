@@ -534,8 +534,8 @@
 }
 
 .workspaceHeader {
-  min-height: 104px;
-  align-items: end;
+  min-height: 0;
+  align-items: center;
 }
 
 .workspaceHeader > div {

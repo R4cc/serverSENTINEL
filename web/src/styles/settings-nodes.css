@@ -2854,3 +2854,467 @@
 .userNameSkeleton { width: min(180px, 70%); height: 15px; }
 .userActionSkeleton { width: 116px; height: 32px; }
 .userActionSkeleton.short { width: 62px; }
+
+/* Node details drawer ---------------------------------------------------- */
+
+.nodeDrawerBackdrop {
+  position: fixed;
+  z-index: 150;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(15 23 42 / 38%);
+  backdrop-filter: blur(2px);
+  animation: nodeDrawerFadeIn 150ms ease-out;
+}
+
+.nodeDetailsDrawer {
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100vw);
+  height: 100dvh;
+  min-height: 0;
+  border-left: 1px solid var(--border-row);
+  background: var(--surface-raised);
+  box-shadow: -18px 0 50px rgb(15 23 42 / 15%);
+  animation: nodeDrawerSlideIn 200ms ease-out;
+}
+
+.nodeDetailsDrawer:focus {
+  outline: none;
+}
+
+.nodeDrawerHeader,
+.nodeDrawerFooter {
+  flex: 0 0 auto;
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.nodeDrawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 84px;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-row);
+}
+
+.nodeDrawerTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.nodeDrawerTitle > div {
+  min-width: 0;
+}
+
+.nodeDrawerTitleLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nodeDrawerTitleLine h2 {
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeDrawerTitleLine .uiStatusBadge {
+  flex: 0 0 auto;
+}
+
+.nodeDrawerTitle p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+}
+
+.nodeDrawerGlyph {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  color: var(--accent);
+}
+
+.nodeDrawerGlyph svg {
+  width: 23px;
+  height: 23px;
+}
+
+.nodeDrawerClose {
+  flex: 0 0 auto;
+}
+
+.nodeDrawerBody {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5);
+  background: var(--surface-raised);
+}
+
+.nodeOperationStatus {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  min-height: 112px;
+  padding: var(--space-4);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.nodeOperationStatus.online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.nodeOperationStatus.working {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+}
+
+.nodeOperationStatus.offline,
+.nodeOperationStatus.attention {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 40%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.nodeOperationStatusIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, var(--surface-raised));
+}
+
+.nodeOperationStatus .nodeStatusDot {
+  width: 11px;
+  height: 11px;
+}
+
+.nodeOperationSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid color-mix(in srgb, var(--accent) 20%, var(--surface));
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: nodeUpdatingSpin 800ms linear infinite;
+}
+
+.nodeOperationStatus strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.nodeOperationStatus p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.nodeOperationStatus small {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.nodeDrawerNotice,
+.nodeManualCommand {
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 35%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
+  padding: var(--space-4);
+}
+
+.nodeDrawerNotice > strong,
+.nodeManualCommand strong {
+  color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--text));
+  font-size: 0.82rem;
+}
+
+.nodeDrawerNotice ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.nodeManualCommand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+
+.nodeManualCommand > div,
+.nodeManualCommand code {
+  grid-column: 1 / -1;
+}
+
+.nodeManualCommand > div {
+  display: grid;
+  gap: 3px;
+}
+
+.nodeManualCommand > div span {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.nodeManualCommand code {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-3);
+  color: var(--text);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.nodeManualCommand .uiButton {
+  grid-column: 2;
+}
+
+.nodeDrawerSection {
+  border-top: 1px solid var(--border-row);
+  padding-top: var(--space-4);
+}
+
+.nodeDrawerSection h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.nodeDrawerFacts {
+  display: grid;
+  margin: 0;
+}
+
+.nodeDrawerFacts > div {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--space-4);
+  min-height: 42px;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-row);
+}
+
+.nodeDrawerFacts dt {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: var(--weight-strong);
+}
+
+.nodeDrawerFacts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.nodeDrawerFacts dd.ready {
+  color: var(--sentinel-success);
+}
+
+.nodeDrawerFacts dd.limited {
+  color: var(--sentinel-danger);
+}
+
+.nodeDrawerFacts dd.neutral {
+  color: var(--text-muted);
+}
+
+.nodeDrawerFacts code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.nodeTechnicalDetails {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-row);
+}
+
+.nodeTechnicalDetails summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 40px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: var(--weight-strong);
+  list-style: none;
+}
+
+.nodeTechnicalDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeTechnicalDetails summary span:last-child {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: var(--weight-body);
+}
+
+.nodeTechnicalDetails[open] summary {
+  margin-bottom: var(--space-2);
+}
+
+.nodeCapabilityDetails {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.nodeCapabilityDetails > strong {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.nodeCapabilityDetails > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.nodeCapabilityDetails code {
+  border: 1px solid var(--border-row);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 4px 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+}
+
+.nodeCapabilityDetails span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.nodeDrawerFooter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border-row);
+}
+
+.nodeDrawerPrimaryAction {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.nodeDrawerPrimaryAction .uiButton {
+  min-width: 132px;
+}
+
+.nodeDrawerActionMenu .actionMenuPopover {
+  top: auto;
+  bottom: calc(100% + 8px);
+  max-height: min(420px, calc(100dvh - 110px));
+  overflow-y: auto;
+}
+
+@keyframes nodeDrawerFadeIn {
+  from { opacity: 0; }
+}
+
+@keyframes nodeDrawerSlideIn {
+  from { transform: translateX(20px); opacity: 0.72; }
+}
+
+@media (max-width: 600px) {
+  .nodeDetailsDrawer {
+    width: 100vw;
+    border-left: 0;
+  }
+
+  .nodeDrawerHeader {
+    min-height: 76px;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .nodeDrawerBody {
+    padding: var(--space-4);
+  }
+
+  .nodeDrawerFooter {
+    min-height: 68px;
+    padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  }
+
+  .nodeDrawerHeader .uiButton.nodeDrawerClose,
+  .nodeDrawerFooter .uiButton {
+    min-height: 44px;
+  }
+
+  .nodeDrawerHeader .uiButton.nodeDrawerClose,
+  .nodeDrawerActionMenu .actionMenuTrigger {
+    height: 44px;
+    width: 44px;
+    min-width: 44px;
+  }
+
+  .nodeTechnicalDetails summary,
+  .nodeDrawerActionMenu .actionMenuItem {
+    min-height: 44px;
+  }
+
+  .nodeDrawerFacts > div {
+    grid-template-columns: minmax(105px, 0.75fr) minmax(0, 1.25fr);
+    gap: var(--space-3);
+  }
+
+  .nodeDrawerPrimaryAction .uiButton {
+    min-width: 124px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nodeDrawerBackdrop,
+  .nodeDetailsDrawer,
+  .nodeOperationSpinner {
+    animation: none;
+  }
+}

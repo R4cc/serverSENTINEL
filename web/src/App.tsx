@@ -2,12 +2,12 @@ import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
-import { isNodeRuntimeUsable } from "./utils/nodes";
+import { advanceNodeOperation, isNodeRuntimeUsable } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
@@ -26,7 +26,7 @@ import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
-import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
+import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
@@ -227,8 +227,9 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
-  const [nodeUpdatingSince, setNodeUpdatingSince] = useState<Record<string, number>>({});
-  const [nodeUpdateNow, setNodeUpdateNow] = useState(() => Date.now());
+  const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
+  const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
+  const [nodeManualRecoveryById, setNodeManualRecoveryById] = useState<Record<string, NodeManualRecovery>>({});
   const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
@@ -390,7 +391,9 @@ export default function App() {
   const canEditServerSettings = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings");
   const canDeleteServers = activeServerIsDemo || hasPermission(permissionUser, "servers.delete");
   const canInstallMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install");
+  const canViewMods = activeServerIsDemo || hasPermission(permissionUser, "mods.view");
   const canManageMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update");
+  const canViewSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.view");
   const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
@@ -734,30 +737,60 @@ export default function App() {
     return () => compactLayout.removeEventListener("change", synchronizeSidebar);
   }, []);
 
+  const hasWaitingNodeOperation = Object.values(nodeOperations).some((operation) => operation.phase === "waiting");
+
   useEffect(() => {
-    if (Object.keys(nodeUpdatingSince).length === 0) return;
-    const interval = window.setInterval(() => setNodeUpdateNow(Date.now()), 1000);
+    if (!hasWaitingNodeOperation) return;
+    const interval = window.setInterval(() => setNodeOperationNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
-  }, [nodeUpdatingSince]);
+  }, [hasWaitingNodeOperation]);
 
   useEffect(() => {
-    setNodeUpdatingSince((current) => {
-      const now = Date.now();
-      const next = { ...current };
-      let changed = false;
-      for (const [nodeId, startedAt] of Object.entries(current)) {
-        const node = contextNodes.find((candidate) => candidate.id === nodeId);
-        if (node?.status === "online" || now - startedAt >= nodeUpdateGraceMs) {
-          delete next[nodeId];
-          changed = true;
-        }
+    if (Object.keys(nodeOperations).length === 0) return;
+    const next = { ...nodeOperations };
+    const completed: Array<{ node: ManagedNode; operation: NodeOperation }> = [];
+    const mismatched: Array<{ node: ManagedNode; operation: NodeOperation }> = [];
+    let changed = false;
+
+    for (const [nodeId, operation] of Object.entries(nodeOperations)) {
+      const node = contextNodes.find((candidate) => candidate.id === nodeId);
+      const result = advanceNodeOperation(operation, node, nodeOperationNow, nodeUpdateGraceMs);
+      if (result.outcome === "completed" || result.outcome === "mismatch") {
+        delete next[nodeId];
+        changed = true;
+        if (node) (result.outcome === "completed" ? completed : mismatched).push({ node, operation });
+        continue;
       }
-      return changed ? next : current;
-    });
-  }, [contextNodes, nodeUpdateNow]);
+      if (result.operation !== operation && result.operation) {
+        next[nodeId] = result.operation;
+        changed = true;
+      }
+    }
+
+    if (changed) setNodeOperations(next);
+    for (const { node, operation } of completed) {
+      setNodeManualRecoveryById((current) => {
+        if (!current[node.id]) return current;
+        const updated = { ...current };
+        delete updated[node.id];
+        return updated;
+      });
+      notify("success", operation.kind === "update"
+        ? `${node.name} updated${operation.targetVersion ? ` to ${operation.targetVersion}` : ""}.`
+        : `${node.name} restarted and reconnected.`);
+    }
+    for (const { node, operation } of mismatched) {
+      const expected = [operation.targetVersion, operation.targetBuildId?.slice(0, 12)].filter(Boolean).join(" build ");
+      setNodeManualRecoveryById((current) => ({
+        ...current,
+        [node.id]: { message: `${node.name} reconnected but still reports its previous release${expected ? `. Expected ${expected}` : ""}. Refresh or retry the update.` }
+      }));
+      notify("warning", `${node.name} reconnected without the expected update.`);
+    }
+  }, [contextNodes, nodeOperationNow, nodeOperations]);
 
   useEffect(() => {
-    if (Object.keys(nodeUpdatingSince).length === 0 || demoMode) return;
+    if (!hasWaitingNodeOperation || demoMode) return;
     let inFlight = false;
     const interval = window.setInterval(() => {
       if (inFlight || document.hidden) return;
@@ -767,7 +800,25 @@ export default function App() {
       });
     }, 5_000);
     return () => window.clearInterval(interval);
-  }, [nodeUpdatingSince, demoMode]);
+  }, [hasWaitingNodeOperation, demoMode]);
+
+  useEffect(() => {
+    setNodeManualRecoveryById((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const nodeId of Object.keys(current)) {
+        const node = contextNodes.find((candidate) => candidate.id === nodeId);
+        const targetCurrent = node?.status === "online"
+          && node.agentVersion === panelVersion
+          && (!panelBuildId || node.buildId === panelBuildId);
+        if (targetCurrent) {
+          delete next[nodeId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [contextNodes, panelBuildId, panelVersion]);
 
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
@@ -977,16 +1028,16 @@ export default function App() {
     clearStoredPlayerMetrics(activeServer.id);
     setServerActivities((current) => {
       const activity = current[activeServer.id];
-      if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return current;
+      if (!activity || (activity.playersOnline === null || activity.playersOnline === undefined) && !activity.playerNames?.length) return current;
       return {
         ...current,
-        [activeServer.id]: { ...activity, playersOnline: null }
+        [activeServer.id]: { ...activity, playersOnline: null, playerNames: [] }
       };
     });
     if (activeServerIdRef.current === activeServer.id) {
       setOverviewData((current) => {
-        if (current.activity.playersOnline === null || current.activity.playersOnline === undefined) return current;
-        return { ...current, activity: { ...current.activity, playersOnline: null } };
+        if ((current.activity.playersOnline === null || current.activity.playersOnline === undefined) && !current.activity.playerNames?.length) return current;
+        return { ...current, activity: { ...current.activity, playersOnline: null, playerNames: [] } };
       });
     }
   }, [activeServer?.id, activeServerIsDemo, activeStatus?.docker.running]);
@@ -1887,6 +1938,8 @@ export default function App() {
   }
 
   async function viewNodeDetails(node: ManagedNode) {
+    setNodeDetails(node);
+    if (demoMode) return;
     setNodeBusyId(node.id);
     try {
       const details = await api<ManagedNode>(`/api/nodes/${node.id}`);
@@ -1934,14 +1987,15 @@ export default function App() {
     if (node.isInternal || !canManageUsers) return;
     const buildText = panelBuildId ? ` build ${panelBuildId.slice(0, 12)}` : "";
     const sameVersion = node.agentVersion === panelVersion;
+    const actionLabel = sameVersion ? "Update" : "Upgrade";
     const versionText = sameVersion
       ? ` to ${panelVersion}${buildText}`
       : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
     const confirmed = await requestConfirmation({
-      title: `Upgrade ${node.name}?`,
-      description: `Upgrade this node${versionText}.`,
+      title: `${actionLabel} ${node.name}?`,
+      description: `${actionLabel} this node${versionText}.`,
       warning: "The node may disconnect briefly while its container is recreated.",
-      confirmLabel: "Upgrade node",
+      confirmLabel: `${actionLabel} node`,
       variant: "primary"
     });
     if (!confirmed) return;
@@ -1951,15 +2005,41 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({})
       });
-      notify(result.ok ? "success" : "info", result.message || `Node ${node.name} update started.`);
-      if (result.ok && result.mode === "self") {
-        setNodeUpdatingSince((current) => ({ ...current, [node.id]: Date.now() }));
-        setNodeUpdateNow(Date.now());
-        setAppState((current) => ({
+      if (result.mode === "offline") {
+        setNodeManualRecoveryById((current) => ({
           ...current,
-          nodes: current.nodes?.map((candidate) => candidate.id === node.id ? { ...candidate, status: "offline" } : candidate)
+          [node.id]: { message: result.message, command: result.command, image: result.image }
         }));
-        setNodeDetails((current) => current?.id === node.id ? { ...current, status: "offline" } : current);
+        setNodeDetails((current) => current?.id === node.id ? current : node);
+        notify("info", result.message);
+        return;
+      }
+      if (result.mode === "current") {
+        notify("success", result.message || `${node.name} is already current.`);
+        await refreshApp({ silent: true });
+        return;
+      }
+      notify("info", result.message || `Node ${node.name} update started.`);
+      if (result.ok && result.mode === "self") {
+        const startedAt = Date.now();
+        setNodeManualRecoveryById((current) => {
+          if (!current[node.id]) return current;
+          const next = { ...current };
+          delete next[node.id];
+          return next;
+        });
+        setNodeOperations((current) => ({
+          ...current,
+          [node.id]: {
+            kind: "update",
+            phase: "waiting",
+            startedAt,
+            startedConnectedAt: node.connectedAt,
+            targetVersion: panelVersion,
+            targetBuildId: panelBuildId
+          }
+        }));
+        setNodeOperationNow(startedAt);
       }
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
@@ -1988,17 +2068,20 @@ export default function App() {
       const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
         method: "POST"
       });
-      notify(result.ok ? "success" : "info", result.message || `Node ${node.name} restart started.`);
-      
-      const now = Date.now();
-      setNodeUpdatingSince((current) => ({ ...current, [node.id]: now }));
-      setNodeUpdateNow(now);
-      setAppState((current) => ({
-        ...current,
-        nodes: current.nodes?.map((candidate) => candidate.id === node.id ? { ...candidate, status: "offline" } : candidate)
-      }));
-      setNodeDetails((current) => current?.id === node.id ? { ...current, status: "offline" } : current);
-      
+      notify("info", result.message || `Node ${node.name} restart started.`);
+      if (result.ok) {
+        const startedAt = Date.now();
+        setNodeOperations((current) => ({
+          ...current,
+          [node.id]: {
+            kind: "restart",
+            phase: "waiting",
+            startedAt,
+            startedConnectedAt: node.connectedAt
+          }
+        }));
+        setNodeOperationNow(startedAt);
+      }
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
       notify("error", errorMessage(error, "Could not restart the node container."));
@@ -2047,6 +2130,18 @@ export default function App() {
       notify(cleanupWarning ? "warning" : "success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${cleanupWarning}${selfStopSuffix}`);
       if (nodeDetails?.id === node.id) setNodeDetails(null);
       if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
+      setNodeOperations((current) => {
+        if (!current[node.id]) return current;
+        const next = { ...current };
+        delete next[node.id];
+        return next;
+      });
+      setNodeManualRecoveryById((current) => {
+        if (!current[node.id]) return current;
+        const next = { ...current };
+        delete next[node.id];
+        return next;
+      });
       await refreshApp();
     } catch (error) {
       notify("error", errorMessage(error, "Could not remove the node."));
@@ -2861,9 +2956,10 @@ export default function App() {
             busyNodeId={nodeBusyId}
             defaultPanelUrl={currentPanelUrl()}
             selectedNode={nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null}
-            nodeUpdatingSince={nodeUpdatingSince}
-            nodeUpdateNow={nodeUpdateNow}
+            nodeOperations={nodeOperations}
+            nodeOperationNow={nodeOperationNow}
             nodeUpdateGraceMs={nodeUpdateGraceMs}
+            nodeManualRecoveryById={nodeManualRecoveryById}
             installResult={nodeInstallResult}
             addNodeOpen={addNodeOpen}
             addNodeResult={addNodeResult}
@@ -3031,28 +3127,50 @@ export default function App() {
                     busy={overviewLoading}
                   />
                 )}
-                <OverviewSummary
-                  server={activeServer}
-                  status={activeStatus}
-                  dockerSocketMounted={activeServerDockerSocketMounted}
-                  activity={overviewData.activity}
-                  loading={overviewLoading}
-                />
-
-                <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
-                  <ResourcePanel
+                <div className="overviewDashboardGrid">
+                  <OverviewSummary
                     server={activeServer}
-                    samples={resourceSamples}
                     status={activeStatus}
                     dockerSocketMounted={activeServerDockerSocketMounted}
+                    activity={overviewData.activity}
+                    updatePlan={modsWorkspace.data.updatePlan}
+                    updatePlanLoading={modsWorkspace.state.updatePlanLoading}
+                    updatePlanError={modsWorkspace.state.updatePlanError}
+                    canViewMods={canViewMods}
+                    latestResourceSample={resourceSamples.at(-1)}
                     formatNumber={formatDisplayNumber}
-                    formatTime={formatDisplayTime}
-                    loading={overviewLoading && resourceSamples.length === 0}
+                    loading={overviewLoading}
                   />
-                </Suspense>
 
-                <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} loading={overviewLoading} />
-                <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
+                  <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
+                    <ResourcePanel
+                      server={activeServer}
+                      samples={resourceSamples}
+                      status={activeStatus}
+                      dockerSocketMounted={activeServerDockerSocketMounted}
+                      formatNumber={formatDisplayNumber}
+                      formatTime={formatDisplayTime}
+                      loading={overviewLoading && resourceSamples.length === 0}
+                    />
+                  </Suspense>
+
+                  <ActivePlayersPanel activity={overviewData.activity} running={Boolean(activeStatus?.docker.running)} loading={overviewLoading} />
+                  <ModHealthPanel
+                    updatePlan={modsWorkspace.data.updatePlan}
+                    loading={modsWorkspace.state.updatePlanLoading}
+                    error={modsWorkspace.state.updatePlanError}
+                    canView={canViewMods}
+                    restartRequiredChanges={activeServer.restartRequiredChanges}
+                    onOpenMods={() => setActivePage("mods")}
+                  />
+                  <AutomationPanel
+                    schedules={activeServer.schedules ?? []}
+                    canView={canViewSchedules}
+                    formatDate={formatDisplayDate}
+                    onOpenSchedules={() => setActivePage("schedule")}
+                  />
+                  <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
+                </div>
 
               </section>
             )}

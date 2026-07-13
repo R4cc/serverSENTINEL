@@ -63,9 +63,11 @@
 .modsUpdateCell.review .modsUpdateVersions strong { color: #7440d9; }
 .modsWorkspaceUpdate button { padding: 5px 10px; border: 1px solid color-mix(in srgb, currentColor 34%, var(--border)); background: color-mix(in srgb, currentColor 7%, transparent); box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: color-mix(in srgb, currentColor 11%, transparent); }
-.modsWorkspaceUpdate .modsUpdateAction { width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border-color: var(--sentinel-success); color: var(--surface); background: var(--sentinel-success); }
-.modsWorkspaceUpdate .modsUpdateAction:hover:not(:disabled) { border-color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text)); color: var(--surface); background: color-mix(in srgb, var(--sentinel-success) 86%, var(--text)); }
-.modsUpdateAction .buttonIcon { width: 16px; height: 16px; }
+.modsWorkspaceUpdate .modsUpdateAction { width: 100%; min-width: 0; justify-content: space-between; overflow: hidden; }
+.modsUpdateTransition { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.modsUpdateTransition .modsUpdateArrow { color: var(--accent); }
+.modsUpdateTransition strong { overflow: hidden; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
+.modsUpdateActionLabel { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 26px; padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: var(--weight-button); }
 .modsReviewAction { color: #7440d9; }
 .modsWorkspaceSwitch { justify-content: center; }
 .modsWorkspaceSwitch .switchStateLabel { display: none; }

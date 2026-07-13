@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
+  consumeTerminalTouchScroll,
   deleteNextTerminalWordAtCursor,
   deletePreviousTerminalWordAtCursor,
   MinecraftLogStreamDecoder,
@@ -91,6 +92,39 @@ export function MinecraftTerminal({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    let previousTouchY: number | null = null;
+    let touchScrollRemainder = 0;
+    const handleTouchStart = (event: TouchEvent) => {
+      previousTouchY = event.touches.length === 1 ? event.touches[0].clientY : null;
+      touchScrollRemainder = 0;
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      if (previousTouchY === null || event.touches.length !== 1) return;
+      const currentTouchY = event.touches[0].clientY;
+      const pixelDelta = previousTouchY - currentTouchY;
+      previousTouchY = currentTouchY;
+
+      const screen = terminal.element?.querySelector<HTMLElement>(".xterm-screen");
+      const rowHeight = screen?.clientHeight ? screen.clientHeight / terminal.rows : 1;
+      const scroll = consumeTerminalTouchScroll(touchScrollRemainder, pixelDelta, rowHeight);
+      touchScrollRemainder = scroll.remainder;
+      if (scroll.lines !== 0) {
+        terminal.scrollLines(scroll.lines);
+      }
+
+      // xterm's rendered screen is not a native scroll container. Claim the
+      // gesture so the page cannot scroll or trigger pull-to-refresh instead.
+      if (event.cancelable) event.preventDefault();
+    };
+    const handleTouchEnd = () => {
+      previousTouchY = null;
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: true });
+    container.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+
     const fit = () => {
       try {
         fitAddon.fit();
@@ -113,6 +147,10 @@ export function MinecraftTerminal({
 
     return () => {
       resizeObserver.disconnect();
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchEnd);
       disposables.forEach((disposable) => disposable.dispose());
       fitAddonRef.current = null;
       terminalRef.current = null;

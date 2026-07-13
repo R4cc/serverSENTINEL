@@ -33,6 +33,16 @@ export function deletePreviousTerminalWord(value: string) {
   return deletePreviousTerminalWordAtCursor(value, value.length).value;
 }
 
+export function consumeTerminalTouchScroll(remainder: number, pixelDelta: number, rowHeight: number) {
+  const nextRemainder = remainder + pixelDelta;
+  if (rowHeight <= 0 || !Number.isFinite(rowHeight)) return { lines: 0, remainder: nextRemainder };
+  const lines = Math.trunc(nextRemainder / rowHeight);
+  return {
+    lines,
+    remainder: nextRemainder - lines * rowHeight
+  };
+}
+
 export function deletePreviousTerminalWordAtCursor(value: string, cursor: number) {
   const beforeCursor = value.slice(0, cursor);
   const afterCursor = value.slice(cursor);

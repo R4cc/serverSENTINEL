@@ -385,4 +385,5 @@ export type ServerActivity = {
   autosaveStatus?: string;
   playersOnline?: number | null;
   maxPlayers?: number | null;
+  playerNames?: string[];
 };

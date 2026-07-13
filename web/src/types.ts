@@ -134,11 +134,27 @@ export type NodeInstallResponse = {
 
 export type NodeUpdateResponse = {
   ok: boolean;
-  mode: "self" | "offline";
+  mode: "self" | "offline" | "current";
   message: string;
   image?: string;
   command?: string;
   planPath?: string;
+};
+
+export type NodeOperation = {
+  kind: "update" | "restart";
+  phase: "waiting" | "timed-out";
+  startedAt: number;
+  startedConnectedAt?: string;
+  observedOffline?: boolean;
+  targetVersion?: string;
+  targetBuildId?: string;
+};
+
+export type NodeManualRecovery = {
+  message: string;
+  command?: string;
+  image?: string;
 };
 
 export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";
@@ -323,6 +339,7 @@ export type ServerActivity = {
   autosaveStatus?: string;
   playersOnline?: number | null;
   maxPlayers?: number | null;
+  playerNames?: string[];
 };
 
 export type ServerOverviewData = {

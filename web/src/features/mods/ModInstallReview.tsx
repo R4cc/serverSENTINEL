@@ -50,7 +50,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
   return (
     <div className="modsInstallReview">
       <div className="modsDrawerHeader">
-        <div><Button variant="ghost" compact className="modsBackButton" onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : switchMode ? "Installed mods" : "Search"}</Button><h2>{state.step === 2 ? switchMode ? "Review switch" : "Review installation" : "Choose a version"}</h2></div>
+        <div><Button variant="ghost" compact onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : switchMode ? "Installed mods" : "Search"}</Button><h2>{state.step === 2 ? switchMode ? "Review switch" : "Review installation" : "Choose a version"}</h2></div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review"><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
@@ -71,7 +71,7 @@ export function ModInstallReview({ state, selected, requiredDependencies, canCon
               <summary>Advanced options</summary>
               <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
-                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant="ghost" compact className={state.channel === channel ? "active" : ""} onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
+                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant={state.channel === channel ? "primary" : "secondary"} compact onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
               </div>
               <div className="modsVersionList">
                 {[...versions, ...otherVersions].map((version) => {

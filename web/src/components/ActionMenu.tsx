@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./UiPrimitives";
 
 export type ActionMenuItem = {
@@ -10,6 +10,7 @@ export type ActionMenuItem = {
   critical?: boolean;
   active?: boolean;
   title?: string;
+  separatorBefore?: boolean;
 };
 
 export function ActionMenu({
@@ -48,6 +49,7 @@ export function ActionMenu({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation();
         setOpen(false);
         triggerRef.current?.focus({ preventScroll: true });
         return;
@@ -68,10 +70,10 @@ export function ActionMenu({
     };
 
     document.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [open]);
 
@@ -95,24 +97,26 @@ export function ActionMenu({
       {open && (
         <div id={menuId} className={`actionMenuPopover actionMenuPopover--${align} ${menuClassName}`.trim()} role="menu" aria-label={label}>
           {items.map((item, index) => (
-            <button
-              key={item.id}
-              ref={(node) => { itemRefs.current[index] = node; }}
-              type="button"
-              role="menuitem"
-              className={`actionMenuItem ${item.critical ? "actionMenuItem--critical" : ""} ${item.active ? "actionMenuItem--active" : ""}`.trim()}
-              disabled={item.disabled}
-              aria-current={item.active ? "true" : undefined}
-              title={item.title}
-              onClick={() => {
-                item.onSelect();
-                setOpen(false);
-                triggerRef.current?.focus({ preventScroll: true });
-              }}
-            >
-              {item.icon}
-              {typeof item.label === "string" ? <span>{item.label}</span> : item.label}
-            </button>
+            <Fragment key={item.id}>
+              {item.separatorBefore && index > 0 && <div className="actionMenuSeparator" role="separator" />}
+              <button
+                ref={(node) => { itemRefs.current[index] = node; }}
+                type="button"
+                role="menuitem"
+                className={`actionMenuItem ${item.critical ? "actionMenuItem--critical" : ""} ${item.active ? "actionMenuItem--active" : ""}`.trim()}
+                disabled={item.disabled}
+                aria-current={item.active ? "true" : undefined}
+                title={item.title}
+                onClick={() => {
+                  item.onSelect();
+                  setOpen(false);
+                  triggerRef.current?.focus({ preventScroll: true });
+                }}
+              >
+                {item.icon}
+                {typeof item.label === "string" ? <span>{item.label}</span> : item.label}
+              </button>
+            </Fragment>
           ))}
         </div>
       )}

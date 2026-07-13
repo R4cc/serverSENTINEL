@@ -16,7 +16,8 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
   updatedAt: new Date(demoStartedAt - 3_600_000).toISOString(),
   lastRunAt: new Date(demoStartedAt - 18_000_000).toISOString(),
   lastStatus: "succeeded",
-  lastMessage: "Demo execution completed"
+  lastMessage: "Demo execution completed",
+  nextRunAt: new Date(demoStartedAt + 10_800_000).toISOString()
 }];
 
 export const initialDemoMods: InstalledMod[] = [
@@ -280,6 +281,14 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     dockerImage: "simulated-runtime",
     dockerPorts: "25565:25565/tcp",
     javaArgs: "-Xms2G -Xmx4G",
+    restartRequiredSince: new Date(demoStartedAt - 1_800_000).toISOString(),
+    restartRequiredChanges: [{
+      type: "mod",
+      identity: "sodium",
+      displayName: "Sodium",
+      filename: "sodium-fabric-0.5.8+mc26.1.2.jar",
+      action: "updated"
+    }],
     schedules,
     hasDockerContainer: true,
     resolvedVersions: {
@@ -351,8 +360,9 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
       eulaAccepted: true,
       javaRuntime: "Temurin 21",
       autosaveStatus: running ? "Recently saved" : "Unavailable",
-      playersOnline: running ? 8 : 0,
-      maxPlayers: 20
+      playersOnline: running ? 14 : 0,
+      maxPlayers: 20,
+      playerNames: running ? ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"] : []
     },
     events: [
       demoEvent({ id: "demo-join-steve", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: "13:46:00", signature: "player_joined:steve", source: "logs/latest.log" }),
