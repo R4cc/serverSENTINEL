@@ -159,6 +159,10 @@ try {
     executablePath: process.env.SERVERSENTINEL_SCREENSHOT_BROWSER || undefined
   });
   const context = await browser.newContext({
+    // The screenshot harness injects repository-pinned fonts as data URLs for
+    // deterministic rendering. Keep that test-only behavior isolated here
+    // instead of weakening the production Content Security Policy.
+    bypassCSP: true,
     viewport: { width: 1440, height: 1000 },
     deviceScaleFactor: 1,
     locale: "en-US",
