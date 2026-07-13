@@ -2,9 +2,9 @@ import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
-import { formatTimestampForFilename, minecraftVersionInfo, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
@@ -18,8 +18,7 @@ import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
-import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
-import { ResourcePanel } from "./components/ResourcePanel";
+import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ResourcePanelLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
@@ -28,17 +27,20 @@ import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPri
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
 import { ActivityHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
-import { SchedulePage } from "./pages/SchedulesPage";
-import { NodesPage } from "./pages/NodesPage";
-import { DeleteServerPanel, ManagedServerForm, ServerEditForm } from "./pages/ServerSettingsPage";
-import { ModsPage } from "./pages/ModsPage";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
-import { FilesPage } from "./features/files/FilesPage";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { scheduleDelayToSeconds } from "./features/schedules/scheduleDelays";
 
 const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
+const ResourcePanel = lazy(() => import("./components/ResourcePanel").then((module) => ({ default: module.ResourcePanel })));
+const SchedulePage = lazy(() => import("./pages/SchedulesPage").then((module) => ({ default: module.SchedulePage })));
+const NodesPage = lazy(() => import("./pages/NodesPage").then((module) => ({ default: module.NodesPage })));
+const ManagedServerForm = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.ManagedServerForm })));
+const ServerEditForm = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.ServerEditForm })));
+const DeleteServerPanel = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.DeleteServerPanel })));
+const ModsPage = lazy(() => import("./pages/ModsPage").then((module) => ({ default: module.ModsPage })));
+const FilesPage = lazy(() => import("./features/files/FilesPage").then((module) => ({ default: module.FilesPage })));
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -241,6 +243,8 @@ export default function App() {
     setDateLocalePreference,
     numberLocalePreference,
     setNumberLocalePreference,
+    displayTimeZonePreference,
+    setDisplayTimeZonePreference,
     demoRunning,
     setDemoRunning,
     demoFiles,
@@ -522,9 +526,11 @@ export default function App() {
               : "Upload a local Fabric mod file.";
   const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
   const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
-  const runtimeTimeZone = effectiveAppState.timeZone || "UTC";
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: runtimeTimeZone }), [resolvedDateLocale, runtimeTimeZone]);
+  const panelTimeZone = effectiveAppState.timeZone || "UTC";
+  const browserTimeZone = useMemo(() => detectedBrowserTimeZone(), []);
+  const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
 
   function formatDisplayDate(value: string | number | Date) {
@@ -1651,7 +1657,7 @@ export default function App() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "server";
-    const timestamp = formatTimestampForFilename(new Date(), runtimeTimeZone);
+    const timestamp = formatTimestampForFilename(new Date(), displayTimeZone);
     const filename = `${safeServerName}-console-${timestamp}.log`;
     const blob = new Blob([logs.join("")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -2696,16 +2702,18 @@ export default function App() {
                 }}>Clear error</Button>
               </section>
             )}
-            <ManagedServerForm
-              nodes={contextNodes}
-              preferredNodeId={preferredCreateNodeId}
-              versions={fabricVersions}
-              totalMemory={effectiveAppState.totalMemory}
-              provisioning={isProvisioning || !canCreateServers}
-              disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
-              onRefreshNodes={refreshNodes}
-              onSubmit={createServer}
-            />
+            <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server form" />}>
+              <ManagedServerForm
+                nodes={contextNodes}
+                preferredNodeId={preferredCreateNodeId}
+                versions={fabricVersions}
+                totalMemory={effectiveAppState.totalMemory}
+                provisioning={isProvisioning || !canCreateServers}
+                disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+                onRefreshNodes={refreshNodes}
+                onSubmit={createServer}
+              />
+            </Suspense>
           </section>
         )}
 
@@ -2736,6 +2744,17 @@ export default function App() {
                   <option value="de-DE">Deutsch (Deutschland)</option>
                   <option value="fr-FR">Français (France)</option>
                   <option value="ja-JP">日本語 (日本)</option>
+                </select>
+              </label>
+              <label className="settingsRow">
+                <div>
+                  <strong>Display time zone</strong>
+                  <span>Show timestamps in {displayTimeZone}. Cron schedules continue to use {panelTimeZone}.</span>
+                </div>
+                <select value={displayTimeZonePreference} onChange={(event) => setDisplayTimeZonePreference(event.target.value as DisplayTimeZonePreference)}>
+                  <option value="panel">Panel default ({panelTimeZone})</option>
+                  <option value="browser">Browser local ({browserTimeZone})</option>
+                  <option value="utc">UTC</option>
                 </select>
               </label>
               <label className="settingsRow">
@@ -2832,7 +2851,8 @@ export default function App() {
         )}
 
         {activePage === "nodes" && (
-          <NodesPage
+          <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" />}>
+            <NodesPage
             nodes={contextNodes}
             panelVersion={panelVersion}
             panelBuildId={panelBuildId}
@@ -2878,8 +2898,9 @@ export default function App() {
             onCopy={(text) => void copyText(text)}
             serverStateLabel={nodeServerStateLabel}
             serverActivities={serverActivities}
-            formatDate={formatDisplayDate}
-          />
+              formatDate={formatDisplayDate}
+            />
+          </Suspense>
         )}
 
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length === 0 && (
@@ -3018,15 +3039,17 @@ export default function App() {
                   loading={overviewLoading}
                 />
 
-                <ResourcePanel
-                  server={activeServer}
-                  samples={resourceSamples}
-                  status={activeStatus}
-                  dockerSocketMounted={activeServerDockerSocketMounted}
-                  formatNumber={formatDisplayNumber}
-                  formatTime={formatDisplayTime}
-                  loading={overviewLoading && resourceSamples.length === 0}
-                />
+                <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
+                  <ResourcePanel
+                    server={activeServer}
+                    samples={resourceSamples}
+                    status={activeStatus}
+                    dockerSocketMounted={activeServerDockerSocketMounted}
+                    formatNumber={formatDisplayNumber}
+                    formatTime={formatDisplayTime}
+                    loading={overviewLoading && resourceSamples.length === 0}
+                  />
+                </Suspense>
 
                 <ActivityHealthPanel activity={overviewData.activity} formatDate={formatDisplayDate} loading={overviewLoading} />
                 <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
@@ -3065,19 +3088,22 @@ export default function App() {
             )}
 
             {activePage === "files" && (
-              <FilesPage
-                workspace={filesWorkspace}
-                activeServerIsDemo={activeServerIsDemo}
-                permissionUser={permissionUser}
-                isProvisioning={isProvisioning}
-                dockerOperationalLock={dockerOperationalLock}
-                dateTimeFormatter={dateTimeFormatter}
-                onCopyText={(text) => void copyText(text)}
-              />
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading files" />}>
+                <FilesPage
+                  workspace={filesWorkspace}
+                  activeServerIsDemo={activeServerIsDemo}
+                  permissionUser={permissionUser}
+                  isProvisioning={isProvisioning}
+                  dockerOperationalLock={dockerOperationalLock}
+                  dateTimeFormatter={dateTimeFormatter}
+                  onCopyText={(text) => void copyText(text)}
+                />
+              </Suspense>
             )}
 
             {activePage === "mods" && (
-              <ModsPage
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading mods" />}>
+                <ModsPage
                 workspace={modsWorkspace}
                 restartRequiredChanges={activeServer.restartRequiredChanges}
                 serverContext={{
@@ -3096,41 +3122,47 @@ export default function App() {
                   uploadDisabled: uploadModDisabled,
                   uploadDisabledReason: uploadModDisabledReason
                 }}
-                formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
-              />
+                  formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
+                />
+              </Suspense>
             )}
 
             {activePage === "schedule" && (
-              <SchedulePage
-                schedules={activeServer.schedules ?? []}
-                formatDate={formatDisplayDate}
-                onCreate={createSchedule}
-                onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
-                onUpdate={updateSchedule}
-                onDelete={deleteSchedule}
-                onCancelRun={cancelScheduleRun}
-                disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
-                disabledReason={scheduleDisabledReason}
-              />
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" />}>
+                <SchedulePage
+                  schedules={activeServer.schedules ?? []}
+                  formatDate={formatDisplayDate}
+                  scheduleTimeZone={panelTimeZone}
+                  onCreate={createSchedule}
+                  onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
+                  onUpdate={updateSchedule}
+                  onDelete={deleteSchedule}
+                  onCancelRun={cancelScheduleRun}
+                  disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
+                  disabledReason={scheduleDisabledReason}
+                />
+              </Suspense>
             )}
 
             {activePage === "properties" && (
               <section className="tabPage settingsPage layoutReadable">
-                <ServerEditForm
-                  server={activeServer}
-                  versions={fabricVersions}
-                  totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
-                  onSubmit={updateServer}
-                  disabled={serverSettingsLocked || serverSettingsSaving}
-                  disabledReason={serverSettingsLockedReason}
-                  dangerZone={
-                    <DeleteServerPanel
-                      server={activeServer}
-                      onSubmit={deleteServer}
-                      disabled={deleteServerLocked || serverSettingsSaving}
-                    />
-                  }
-                />
+                <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" />}>
+                  <ServerEditForm
+                    server={activeServer}
+                    versions={fabricVersions}
+                    totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
+                    onSubmit={updateServer}
+                    disabled={serverSettingsLocked || serverSettingsSaving}
+                    disabledReason={serverSettingsLockedReason}
+                    dangerZone={
+                      <DeleteServerPanel
+                        server={activeServer}
+                        onSubmit={deleteServer}
+                        disabled={deleteServerLocked || serverSettingsSaving}
+                      />
+                    }
+                  />
+                </Suspense>
               </section>
             )}
 

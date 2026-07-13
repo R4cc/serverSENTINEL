@@ -167,6 +167,7 @@ import {
   parseDockerPorts,
   safeInstalledModFilename,
   safeModFilename,
+  timeZoneMinuteKey,
   validateExistingInsideServer,
   validateExistingResolvedInsideServer,
   validateCron,
@@ -2774,7 +2775,7 @@ function cleanModName(value: string) {
   return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
 }
 
-export function parseLogEvent(line: string, source: ServerEvent["source"], index: number): ServerEvent | null {
+export function parseLogEvent(line: string, source: ServerEvent["source"], index: number, referenceDate = new Date()): ServerEvent | null {
   const ansiStripped = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!ansiStripped) return null;
 
@@ -2785,7 +2786,14 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
   if (tsMatch) {
     const rawTime = tsMatch.groups!.time;
     if (/^\d{2}:\d{2}:\d{2}$/.test(rawTime)) {
-      timestamp = rawTime;
+      const [hours, minutes, seconds] = rawTime.split(":").map(Number);
+      const date = new Date(referenceDate);
+      date.setHours(hours, minutes, seconds, 0);
+      // Minecraft's time-only log lines refer to the most recent occurrence in
+      // the configured runtime zone. Canonicalize that wall time before it
+      // crosses the API boundary so browsers in another zone see one instant.
+      if (date.getTime() > referenceDate.getTime()) date.setDate(date.getDate() - 1);
+      timestamp = date.toISOString();
     } else {
       const normalized = rawTime.replace(" ", "T");
       const date = new Date(normalized);
@@ -2972,8 +2980,9 @@ async function serverOverviewData(server: ManagedServer) {
   if (fileLog.status === "fulfilled") logSources.push({ source: "logs/latest.log", text: fileLog.value });
   if (dockerLog.status === "fulfilled" && dockerConfigured) logSources.push({ source: "docker", text: dockerLog.value });
   const eventsStatus = fileLog.status === "fulfilled" || (dockerConfigured && dockerLog.status === "fulfilled") ? "ok" : "unavailable";
+  const parsedAt = new Date();
   const parsedEvents = logSources
-    .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index)).filter((event): event is ServerEvent => Boolean(event)));
+    .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index, parsedAt)).filter((event): event is ServerEvent => Boolean(event)));
   const reversedEvents = [...parsedEvents].reverse();
   const events = compactRecentEvents(parsedEvents, 10);
   const props = properties.status === "fulfilled" ? parseProperties(properties.value) : {};
@@ -3759,7 +3768,10 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
   };
   activeScheduleExecutions.set(runId, active);
   const result = await runScheduledExecution(server, schedule, active);
-  const ranAt = new Date().toISOString();
+  // Run history represents the invocation instant, not the completion instant.
+  // Keeping this aligned with the matched cron minute also makes the durable
+  // duplicate guard correct for long-running actions and DST overlaps.
+  const ranAt = active.startedAt;
   const run: ScheduledRun = {
     id: runId,
     scheduleId: schedule.id,
@@ -3794,13 +3806,17 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
 
 async function tickSchedules() {
   const now = new Date();
-  const runKey = now.toISOString().slice(0, 16);
+  const runKey = timeZoneMinuteKey(now, config.timeZone);
   const servers = await listManagedServers();
   for (const server of servers) {
     for (const schedule of server.schedules ?? []) {
       if (!schedule.enabled) continue;
       const key = `${server.id}:${schedule.id}`;
-      if (runningSchedules.has(key) || schedule.lastRunAt?.startsWith(runKey)) continue;
+      const lastRun = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
+      const alreadyRanThisWallMinute = lastRun && !Number.isNaN(lastRun.getTime())
+        ? timeZoneMinuteKey(lastRun, config.timeZone) === runKey
+        : false;
+      if (runningSchedules.has(key) || alreadyRanThisWallMinute) continue;
       try {
         if (!cronMatches(schedule.cron, now)) continue;
       } catch {

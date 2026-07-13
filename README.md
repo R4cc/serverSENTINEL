@@ -171,23 +171,23 @@ The included compose file uses `serversentinel-data` for panel state and `server
 
 ## Release Notes
 
-See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_NOTES.md](RELEASE_NOTES.md) for 1.0 changes and upgrade notes from 0.8.x.
+See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_NOTES.md](RELEASE_NOTES.md) for current release and upgrade notes from 0.8.x.
 
 ## Deployment
 
-The pinned 1.0 image is:
+The pinned stable image is:
 
 ```text
-nl2109/serversentinel:1.0.3
+nl2109/serversentinel:1.2.0
 ```
 
-`nl2109/serversentinel:latest` tracks the newest stable image published from `main`. Use the pinned `1.0.3` tag when you want repeatable panel and node deployments.
+`nl2109/serversentinel:latest` tracks the newest stable image published from `main`. Use the pinned `1.2.0` tag when you want repeatable panel and node deployments.
 
 The panel listens on port `8080` inside the container.
 
 Recommended production setup:
 
-- Use the pinned `nl2109/serversentinel:1.0.3` tag for panel and node agents.
+- Use the pinned `nl2109/serversentinel:1.2.0` tag for panel and node agents.
 - Put the panel behind a VPN, private network, Cloudflare Tunnel, or reverse proxy with TLS and strong authentication.
 - Use all-in-one mode only on a trusted single Docker host. Use panel plus node agents when Minecraft servers run on separate hosts.
 - Keep panel state and managed server directories on persistent storage and back them up together before updates.
@@ -213,7 +213,7 @@ docker run -d \
   -v serversentinel-data:/data \
   -v serversentinel-minecraft-servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:1.0.3
+  nl2109/serversentinel:1.2.0
 ```
 
 Open:
@@ -227,7 +227,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:1.0.3
+    image: nl2109/serversentinel:1.2.0
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -271,7 +271,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_DATA_DIR=/data \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:1.0.3
+  nl2109/serversentinel:1.2.0
 ```
 
 ### Panel-Only With Docker Compose
@@ -279,7 +279,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:1.0.3
+    image: nl2109/serversentinel:1.2.0
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -312,7 +312,7 @@ docker run -d \
   --env SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume /opt/serversentinel/data:/data \
-  nl2109/serversentinel:1.0.3
+  nl2109/serversentinel:1.2.0
 ```
 
 The node does not publish a web port. It connects outbound to the panel, advertises protocol `2.0`, and is rejected if required handshake fields or capabilities are missing.
@@ -322,7 +322,7 @@ The node does not publish a web port. It connects outbound to the panel, adverti
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:1.0.3
+    image: nl2109/serversentinel:1.2.0
     container_name: serversentinel-node
     restart: unless-stopped
     environment:
@@ -347,7 +347,7 @@ services:
 | `PORT` | `8080` | backend | HTTP port inside the panel container. |
 | `SERVERSENTINEL_DATA_DIR` | `/data` | backend/node | Runtime data root. SQLite is stored as `serversentinel.sqlite` under this path. |
 | `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` | `serversentinel-minecraft-servers` in Docker images | backend | All-in-one server-file volume mounted into sibling Minecraft containers. Leave empty only for advanced host-bind setups where host and panel paths match. |
-| `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.0.3` | backend | Image tag shown in generated node install/update instructions. |
+| `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.2.0` | backend | Image tag shown in generated node install/update instructions. |
 | `SERVERSENTINEL_ENABLE_DEMO` | `false` | backend | Enables the isolated demo user and simulated demo UI only when set to `true`. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES` | `536870912` | backend | Maximum total source bytes allowed in one file-manager download action. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES` | `134217728` | backend | Selected individual files at or above this total source size are downloaded as one zip. |
@@ -360,7 +360,7 @@ services:
 | `MCJARS_API_KEY` | empty | backend/node | Optional bearer token for the MCJars provider. |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | backend/node | Docker socket path inside all-in-one or node containers. |
 | `LOG_LEVEL` | `info` | backend | Fastify logger level. |
-| `TZ` | `UTC` | backend/node/runtime | Runtime time zone used for scheduling, every timestamp display, remote-node installers, and managed Minecraft containers. Invalid values fall back to UTC. |
+| `TZ` | `UTC` | backend/node/runtime | IANA time zone used for cron scheduling, the panel's default timestamp display, remote-node installers, and managed Minecraft containers. Invalid values fall back to UTC. |
 | `SS_PANEL_URL` | none | node | Required in `SS_MODE=node`; panel URL the node connects to. |
 | `SS_NODE_NAME` | empty | node | Optional node display name used during registration. |
 | `SS_JOIN_TOKEN` | empty | node | Short-lived bootstrap token generated by the panel Add Node flow. |
@@ -377,6 +377,8 @@ SERVERSENTINEL_ENABLE_DEMO=true SERVERSENTINEL_DATA_DIR=/path/to/demo-data npm r
 
 Signing out and signing back in resets the browser-only demo fixtures to their defaults.
 
+Timestamps stored by serverSENTINEL are instants serialized as ISO 8601 UTC values. Set `TZ` to an IANA zone such as `Europe/Vienna` when schedules should follow local wall-clock time and daylight-saving rules. Each browser can independently display timestamps in the panel zone, its own local zone, or UTC under Settings > Interface; this display preference does not change cron execution. During the repeated hour at the end of daylight saving time, a matching wall-clock minute runs once.
+
 Join tokens generated by the panel are short-lived bootstrap secrets. Rotate the token from the Nodes page if a generated command is exposed, expires, or is no longer needed.
 
 ## Updates And Rollback
@@ -387,7 +389,7 @@ Recommended update process:
 
 1. Stop managed Minecraft servers from the panel.
 2. Back up `serversentinel-data` and `serversentinel-minecraft-servers`, or the equivalent host bind mounts.
-3. Pull the target image, for example `docker pull nl2109/serversentinel:1.0.3`.
+3. Pull the target image, for example `docker pull nl2109/serversentinel:1.2.0`.
 4. Update the panel container image tag and start the panel.
 5. In multi-node deployments, update node agents to the same tag shown by `SERVERSENTINEL_NODE_IMAGE`.
 6. Run the release smoke path in [scripts/release-smoke.md](scripts/release-smoke.md).
@@ -456,7 +458,7 @@ npm run typecheck
 Build the Docker image locally:
 
 ```bash
-docker build -t nl2109/serversentinel:1.0.3 -t nl2109/serversentinel:latest -f docker/Dockerfile .
+docker build -t nl2109/serversentinel:1.2.0 -t nl2109/serversentinel:latest -f docker/Dockerfile .
 ```
 
 The standard image supports demo mode at runtime. Run a disposable container with `SERVERSENTINEL_ENABLE_DEMO=true` and a dedicated data volume; do not enable it in production.

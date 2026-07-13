@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ManagedServer, ServerActivity, ServerEvent, ServerStatus } from '../types';
-import { formatActivityDate, formatUptime } from '../components/ResourcePanel';
+import { formatActivityDate, formatUptime } from '../utils/resourceFormatting';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, runtimeLabel, runtimeTone, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';

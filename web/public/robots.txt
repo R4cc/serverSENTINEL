@@ -1,0 +1,3 @@
+# serverSENTINEL is a private administration interface and should not be indexed.
+User-agent: *
+Disallow: /

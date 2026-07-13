@@ -1,4 +1,4 @@
-import type { ManagedServer, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
+import type { DisplayTimeZonePreference, ManagedServer, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
 
 export const defaultServerPort = 25565;
 
@@ -27,6 +27,20 @@ export function formatTimestampForFilename(value: string | number | Date, timeZo
   }).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value ?? "00";
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}-${part("minute")}-${part("second")}`;
+}
+
+export function detectedBrowserTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+export function resolveDisplayTimeZone(
+  preference: DisplayTimeZonePreference,
+  panelTimeZone: string,
+  browserTimeZone = detectedBrowserTimeZone()
+) {
+  if (preference === "browser") return browserTimeZone;
+  if (preference === "utc") return "UTC";
+  return panelTimeZone;
 }
 
 export function formatBytes(value: number) {
@@ -169,5 +183,14 @@ export function readLocalePreference(key: "serversentinel-date-locale" | "server
       : "user";
   } catch {
     return "user";
+  }
+}
+
+export function readDisplayTimeZonePreference(): DisplayTimeZonePreference {
+  try {
+    const saved = window.localStorage.getItem("serversentinel-display-time-zone");
+    return saved === "browser" || saved === "utc" || saved === "panel" ? saved : "panel";
+  } catch {
+    return "panel";
   }
 }

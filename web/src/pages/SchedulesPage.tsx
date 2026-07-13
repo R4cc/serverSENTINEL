@@ -35,10 +35,12 @@ export function SchedulePage({
   onCancelRun,
   disabled,
   disabledReason,
-  formatDate
+  formatDate,
+  scheduleTimeZone
 }: {
   schedules: ScheduledExecution[];
   formatDate: (value: string | number | Date) => string;
+  scheduleTimeZone: string;
   onCreate: (event: FormEvent<HTMLFormElement>) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
@@ -172,7 +174,7 @@ export function SchedulePage({
         <PanelHeader
           className="scheduleCardHeader"
           title="Schedules"
-          description="Manage automated console commands for this server."
+          description={`Manage automated console commands for this server. Cron expressions use ${scheduleTimeZone}.`}
           actions={<Button
             className="scheduleAddButton"
             onClick={() => setFormMode({ type: "create" })}
@@ -349,7 +351,7 @@ export function SchedulePage({
                       required
                       aria-invalid={Boolean(cronError)}
                       aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
-                      title="Use five cron fields: minute hour day month weekday."
+                      title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
                     />
                     {cronError
                       ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>

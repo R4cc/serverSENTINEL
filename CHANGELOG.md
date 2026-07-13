@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 - 2026-07-13
+
+- Bumped package, panel, node image, Docker, and release-facing version metadata to 1.2.0.
+
 ## 1.0.3 - 2026-07-09
 
 - Bumped the panel, node image defaults, and release-facing UI metadata to 1.0.3.

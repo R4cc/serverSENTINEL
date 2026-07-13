@@ -35,6 +35,34 @@ export function ApplicationLoadingSkeleton() {
   );
 }
 
+export function FeaturePageLoadingSkeleton({ label }: { label: string }) {
+  return (
+    <section className="tabPage featurePageLoadingSkeleton layoutWide" aria-busy="true">
+      <LoadingLabel>{label}</LoadingLabel>
+      <div className="applicationSkeletonPanel" aria-hidden="true">
+        <SkeletonBlock className="applicationSkeletonHeading" />
+        {Array.from({ length: 6 }, (_, index) => <SkeletonBlock className="applicationSkeletonRow" key={index} style={{ width: `${88 - (index % 3) * 9}%` }} />)}
+      </div>
+    </section>
+  );
+}
+
+export function ResourcePanelLoadingSkeleton() {
+  return (
+    <section className="panel resourcePanel" aria-busy="true">
+      <LoadingLabel>Loading resource usage</LoadingLabel>
+      <div className="resourceRows resourceSkeletonRows" aria-hidden="true">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div className="resourceRow" key={index}>
+            <div className="resourceMetricLabel"><SkeletonBlock className="uiSkeleton--text" /><SkeletonBlock className="uiSkeleton--title" /><SkeletonBlock className="uiSkeleton--text" /></div>
+            <SkeletonBlock className="resourceChartSkeleton" />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function CodeLoadingSkeleton({ label = "Loading content" }: { label?: string }) {
   return (
     <div className="codeLoadingSkeleton" aria-busy="true">

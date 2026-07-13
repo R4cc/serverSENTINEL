@@ -134,7 +134,7 @@ describe("node update image selection", () => {
   });
 
   it("falls back to the app version when no build id is available", () => {
-    expect(nodeUpdateImageForBuild(undefined, undefined, "1.1.1")).toBe("nl2109/serversentinel:1.1.1");
+    expect(nodeUpdateImageForBuild(undefined, undefined, "1.2.0")).toBe("nl2109/serversentinel:1.2.0");
   });
 
   it("preserves configured custom node images", () => {
@@ -419,9 +419,12 @@ describe("mutable server configuration guard", () => {
 describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
     const line = "[12:34:56] [Server thread/INFO]: Antigravity joined the game";
-    const event = parseLogEvent(line, "logs/latest.log", 1);
+    const reference = new Date(2026, 4, 29, 13, 0, 0);
+    const expected = new Date(reference);
+    expected.setHours(12, 34, 56, 0);
+    const event = parseLogEvent(line, "logs/latest.log", 1, reference);
     expect(event).not.toBeNull();
-    expect(event!.timestamp).toBe("12:34:56");
+    expect(event!.timestamp).toBe(expected.toISOString());
     expect(event!.type).toBe("success");
     expect(event!.text).toBe("Antigravity joined");
     expect(event!.eventType).toBe("player_joined");
@@ -436,6 +439,17 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event!.type).toBe("info");
     expect(event!.text).toBe("Antigravity left");
     expect(event!.eventType).toBe("player_left");
+  });
+
+  it("treats a future time-only log entry as the previous local day", () => {
+    const reference = new Date(2026, 4, 29, 12, 0, 0);
+    const expected = new Date(reference);
+    expected.setDate(expected.getDate() - 1);
+    expected.setHours(13, 0, 0, 0);
+
+    const event = parseLogEvent("[13:00:00] [Server thread/INFO]: Alex joined the game", "logs/latest.log", 3, reference);
+
+    expect(event?.timestamp).toBe(expected.toISOString());
   });
 
   it("correctly identifies server start events", () => {
@@ -456,13 +470,18 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
   });
 
   it("compacts duplicate same-second recent events", () => {
+    const reference = new Date(2026, 4, 29, 15, 0, 0);
     const events = [
-      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "logs/latest.log", 1),
-      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 2),
-      parseLogEvent("[14:15:02] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 3)
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "logs/latest.log", 1, reference),
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 2, reference),
+      parseLogEvent("[14:15:02] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 3, reference)
     ].filter((event): event is ServerEvent => Boolean(event));
     const compacted = compactRecentEvents(events, 10);
-    expect(compacted.map((event) => event.timestamp)).toEqual(["14:15:02", "14:15:01"]);
+    const first = new Date(reference);
+    first.setHours(14, 15, 1, 0);
+    const second = new Date(reference);
+    second.setHours(14, 15, 2, 0);
+    expect(compacted.map((event) => event.timestamp)).toEqual([second.toISOString(), first.toISOString()]);
   });
 
   it("correctly identifies server stopped events from shutdown lines", () => {

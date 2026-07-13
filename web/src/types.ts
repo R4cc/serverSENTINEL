@@ -619,3 +619,5 @@ export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview
 export type ThemePreference = "light" | "dark" | "system";
 
 export type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
+
+export type DisplayTimeZonePreference = "panel" | "browser" | "utc";

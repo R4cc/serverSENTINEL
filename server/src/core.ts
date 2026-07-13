@@ -188,6 +188,20 @@ export function cronMatches(cron: string, date: Date) {
     && (days.has(normalizedDay) || (normalizedDay === 0 && days.has(7)));
 }
 
+export function timeZoneMinuteKey(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value ?? "00";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
 export function nextCronRun(cron: string, from = new Date(), maxDays = 366) {
   validateCron(cron);
   const cursor = new Date(from);

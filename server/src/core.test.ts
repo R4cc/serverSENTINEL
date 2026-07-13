@@ -10,6 +10,7 @@ import {
   normalizePublicFilePath,
   parseDockerPorts,
   safeInstalledModFilename,
+  timeZoneMinuteKey,
   validateExistingInsideServer,
   validateCron
 } from "./core.js";
@@ -93,6 +94,15 @@ describe("cron parsing and matching", () => {
     expect(nextToday && [nextToday.getDate(), nextToday.getHours(), nextToday.getMinutes()]).toEqual([6, 4, 0]);
     const nextTomorrow = nextCronRun("0 4 * * *", new Date(2026, 5, 6, 4, 0, 0));
     expect(nextTomorrow && [nextTomorrow.getDate(), nextTomorrow.getHours(), nextTomorrow.getMinutes()]).toEqual([7, 4, 0]);
+  });
+
+  it("identifies the same configured wall-clock minute across a DST overlap", () => {
+    const firstOccurrence = new Date("2026-10-25T00:30:00.000Z");
+    const repeatedOccurrence = new Date("2026-10-25T01:30:00.000Z");
+
+    expect(timeZoneMinuteKey(firstOccurrence, "Europe/Vienna")).toBe("2026-10-25T02:30");
+    expect(timeZoneMinuteKey(repeatedOccurrence, "Europe/Vienna")).toBe("2026-10-25T02:30");
+    expect(timeZoneMinuteKey(firstOccurrence, "UTC")).not.toBe(timeZoneMinuteKey(repeatedOccurrence, "UTC"));
   });
 });
 
