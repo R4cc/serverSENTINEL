@@ -213,9 +213,10 @@ const serverJarProvider: ServerJarProvider = defaultServerJarProvider;
 
 type DockerContainerInspect = {
   Id?: string;
-  State?: { Status?: DockerState; Running?: boolean; StartedAt?: string; FinishedAt?: string };
+  State?: { Status?: DockerState; Running?: boolean; ExitCode?: number; OOMKilled?: boolean; StartedAt?: string; FinishedAt?: string };
   Name?: string;
   Config?: { Labels?: Record<string, string>; OpenStdin?: boolean; AttachStdin?: boolean; Tty?: boolean };
+  HostConfig?: { RestartPolicy?: { Name?: string } };
   Mounts?: Array<{ Type?: string; Name?: string; Source?: string; Destination?: string }>;
   NetworkSettings?: { Networks?: Record<string, DockerNetworkAttachment> };
 };
@@ -1239,6 +1240,9 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerPorts,
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
+    desiredRuntimeState: server.desiredRuntimeState === "running" || server.desiredRuntimeState === "stopped"
+      ? server.desiredRuntimeState
+      : undefined,
     restartRequiredSince: optionalString(server.restartRequiredSince, "server.restartRequiredSince"),
     restartRequiredChanges,
     restartRequiredModBaseline,
@@ -2246,7 +2250,7 @@ async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
-function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean }) {
+function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" }) {
   const targetRuntime = runtimeTarget(server);
   return {
     image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
@@ -2256,12 +2260,26 @@ function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeT
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
     ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
-    restartPolicy: "unless-stopped"
+    restartPolicy: options.restartPolicy
   };
 }
 
-function dockerRuntimeConfigHash(server: ManagedServer, options = { includeTerminal: false }) {
+function dockerRuntimeConfigHash(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" } = { includeTerminal: false, restartPolicy: "no" }) {
   return createHash("sha256").update(JSON.stringify(dockerRuntimeConfigHashInput(server, options))).digest("hex");
+}
+
+async function reconcileDockerRestartPolicy(server: ManagedServer, details: DockerContainerInspect) {
+  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") return;
+  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
+  if (!restartPolicy || restartPolicy === "no") return;
+  await dockerJsonRequest(
+    "POST",
+    `/containers/${encodeURIComponent(dockerContainerName(server))}/update`,
+    { RestartPolicy: { Name: "no" } },
+    200
+  );
+  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
+  logInfo({ ...serverLogFields(server), previousRestartPolicy: restartPolicy }, "Updated Minecraft runtime restart policy");
 }
 
 async function detectedTotalMemory() {
@@ -2310,7 +2328,10 @@ async function currentContainerNetworkingConfig() {
 
 async function ensureDockerContainer(server: ManagedServer, preferredNetworkingConfig?: DockerNetworkingConfig) {
   const expectedConfigHash = dockerRuntimeConfigHash(server);
-  const legacyConfigHash = dockerRuntimeConfigHash(server, { includeTerminal: true });
+  const legacyConfigHashes = new Set([
+    dockerRuntimeConfigHash(server, { includeTerminal: false, restartPolicy: "unless-stopped" }),
+    dockerRuntimeConfigHash(server, { includeTerminal: true, restartPolicy: "unless-stopped" })
+  ]);
   const existing = await inspectDockerContainer(server);
   let networkingConfig = preferredNetworkingConfig;
   if (existing) {
@@ -2318,8 +2339,9 @@ async function ensureDockerContainer(server: ManagedServer, preferredNetworkingC
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
       throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
     }
+    await reconcileDockerRestartPolicy(server, existing);
     const existingConfigHash = existing.Config?.Labels?.["serversentinel.config-hash"];
-    const compatibleConfigHash = existingConfigHash === expectedConfigHash || existingConfigHash === legacyConfigHash;
+    const compatibleConfigHash = existingConfigHash === expectedConfigHash || legacyConfigHashes.has(existingConfigHash || "");
     if (dockerContainerMountValid(server, existing) && compatibleConfigHash && existing.Config?.OpenStdin && existing.Config?.AttachStdin) {
       return;
     }
@@ -2361,7 +2383,7 @@ async function ensureDockerContainer(server: ManagedServer, preferredNetworkingC
         HostConfig: {
           Privileged: false,
           PortBindings: portBindings,
-          RestartPolicy: { Name: "unless-stopped" },
+          RestartPolicy: { Name: "no" },
           Mounts: [
             {
               Type: serverDockerMountSource(server) === config.serversDockerVolume ? "volume" : "bind",
@@ -2422,6 +2444,7 @@ async function dockerStatus(server: ManagedServer) {
     };
   }
   const managed = details.Config?.Labels?.["serversentinel.managed"] === "true";
+  if (managed) await reconcileDockerRestartPolicy(server, details);
   const mountValid = dockerContainerMountValid(server, details);
   return {
     configured: true,

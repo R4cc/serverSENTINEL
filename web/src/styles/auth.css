@@ -68,12 +68,15 @@
   --surface: #1b1d22;
   --surface-raised: #22252b;
   --surface-muted: #2a2e36;
+  --surface-read-only: #202329;
+  --surface-disabled: #252931;
   --sidebar-background: #050b17;
   --sidebar-foreground: #f4f7ff;
   --sidebar-foreground-muted: #aeb9cc;
   --text: #e6e8ee;
   --text-muted: #b8becb;
-  --text-soft: #929baa;
+  --text-soft: #9da6b5;
+  --text-disabled: #aab2c0;
   --border: #596170;
   --border-muted: color-mix(in srgb, var(--border) 34%, var(--surface) 66%);
   --border-panel: color-mix(in srgb, var(--border) 46%, var(--surface) 54%);
@@ -86,6 +89,10 @@
   --sentinel-info: #8fb4ff;
   --sentinel-warning: #f6c177;
   --sentinel-danger: #dc2626;
+  --status-success-foreground: #8dd6c3;
+  --status-warning-foreground: #f6c177;
+  --status-danger-foreground: #ff8a8a;
+  --status-neutral-foreground: #b8becb;
   --terminal-bg: #1d2027;
   --terminal-text: #dfe3eb;
   --editor-comment: #c08a45;

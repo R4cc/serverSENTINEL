@@ -484,17 +484,17 @@
 
 .uiStatusBadge--success {
   background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
-  color: var(--sentinel-success);
+  color: var(--status-success-foreground);
 }
 
 .uiStatusBadge--warning {
   background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
-  color: var(--sentinel-warning);
+  color: var(--status-warning-foreground);
 }
 
 .uiStatusBadge--danger {
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
 }
 
 .switch {

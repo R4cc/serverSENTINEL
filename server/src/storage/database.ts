@@ -270,6 +270,16 @@ const migrations: readonly Migration[] = [
         ALTER TABLE servers ADD COLUMN restart_required_mod_baseline_json TEXT
       `);
     }
+  },
+  {
+    version: 13,
+    name: "server-desired-runtime-state",
+    up(database) {
+      database.exec(`
+        ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT
+          CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'))
+      `);
+    }
   }
 ];
 

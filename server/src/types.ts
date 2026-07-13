@@ -276,6 +276,7 @@ export type ManagedServer = {
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
+  desiredRuntimeState?: "running" | "stopped";
   restartRequiredSince?: string;
   restartRequiredChanges?: RestartRequiredChange[];
   restartRequiredModBaseline?: RestartRequiredModSnapshot[];

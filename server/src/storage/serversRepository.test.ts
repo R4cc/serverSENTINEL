@@ -225,6 +225,20 @@ describe("ServersRepository", () => {
     expect(servers.list()[0].restartRequiredModBaseline).toBeUndefined();
   });
 
+  it("defaults, updates, and preserves desired runtime state", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+
+    expect(servers.list()[0].desiredRuntimeState).toBe("stopped");
+    expect(servers.setDesiredRuntimeState(server.id, "running", "2026-01-02T00:00:00.000Z")).toBe(true);
+    expect(servers.setDesiredRuntimeState(server.id, "running", "2026-01-03T00:00:00.000Z")).toBe(false);
+
+    const running = servers.list()[0];
+    servers.replaceMetadata({ ...running, displayName: "Renamed", desiredRuntimeState: "stopped" });
+    expect(servers.list()[0]).toMatchObject({ displayName: "Renamed", desiredRuntimeState: "running" });
+  });
+
   it("renames display names without changing immutable identity or dependent state", async () => {
     const { storage, servers } = await createRepositories();
     const original = managedServer("00000000-0000-4000-8000-000000000001");

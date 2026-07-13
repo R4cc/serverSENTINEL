@@ -1212,14 +1212,14 @@ button:disabled,
 .nodeServerState.running {
   border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
-  color: var(--sentinel-success);
+  color: var(--status-success-foreground);
 }
 
 .settingsStatus.warning,
 .runtimeBadge.starting {
   border-color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
-  color: var(--sentinel-warning);
+  color: var(--status-warning-foreground);
 }
 
 .settingsStatus.limited,
@@ -1228,14 +1228,14 @@ button:disabled,
 .nodeServerState.stopped {
   border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
 }
 
 .runtimeBadge.neutral,
 .settingsStatus.neutral {
   border-color: var(--border-muted);
   background: var(--surface-muted);
-  color: var(--text-muted);
+  color: var(--status-neutral-foreground);
 }
 
 .nodeServerRow,
@@ -1250,7 +1250,7 @@ button:disabled,
 .nodeServerMoreRow:hover:not(:disabled),
 .fileTableRow:hover,
 .eventRow:hover,
-.settingsRow:hover {
+.settingsRow:not(.readOnly):hover {
   background: var(--sentinel-accent-soft);
 }
 
@@ -1373,6 +1373,42 @@ button:disabled,
   border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+/* Fill the desktop viewport from the shell instead of approximating the
+   remaining page height with per-feature 100vh offsets. */
+@media (min-width: 721px) {
+  .workspacePage-console,
+  .workspacePage-files,
+  .workspacePage-mods,
+  .workspacePage-schedule {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    flex-direction: column;
+    align-content: normal;
+    overflow: hidden;
+  }
+
+  .workspacePage-console > .tabPage,
+  .workspacePage-files > .tabPage,
+  .workspacePage-mods > .tabPage,
+  .workspacePage-schedule > .tabPage {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+@media (min-width: 1181px) {
+  .workspacePage-schedule > .scheduleManagementPage {
+    overflow: hidden;
+  }
+
+  .workspacePage-schedule > .scheduleManagementPage > .scheduleTableCard {
+    min-height: 0;
+  }
 }
 
 /* Mobile workspaces reserve the viewport for the active page rather than the shell. */

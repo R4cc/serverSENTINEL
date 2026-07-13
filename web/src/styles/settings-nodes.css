@@ -13,8 +13,22 @@
 }
 
 .settingsGroup.panelModeDisabled .settingsRow {
-  opacity: 0.45;
-  filter: grayscale(100%);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--text-disabled) 5%, transparent) 10px 11px),
+    var(--surface-disabled);
+  color: var(--text-disabled);
+  filter: none;
+  opacity: 1;
+}
+
+.settingsGroup.panelModeDisabled .settingsRow strong,
+.settingsGroup.panelModeDisabled .settingsRow span {
+  color: var(--text-disabled);
+}
+
+.settingsRow.readOnly {
+  background: var(--surface-read-only);
+  cursor: default;
 }
 
 .panelModeWarning {
@@ -95,17 +109,17 @@
 
 .settingsStatus.ready {
   border-color: var(--sentinel-success);
-  color: var(--sentinel-success);
+  color: var(--status-success-foreground);
 }
 
 .settingsStatus.limited {
   border-color: var(--sentinel-danger);
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
 }
 
 .settingsStatus.warning {
   border-color: var(--sentinel-warning);
-  color: var(--sentinel-warning);
+  color: var(--status-warning-foreground);
 }
 
 .nodesToolbar {

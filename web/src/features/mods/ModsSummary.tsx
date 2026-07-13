@@ -1,18 +1,26 @@
-import type { InstalledMod } from "../../types";
+import type { InstalledMod, ModUpdatePlan } from "../../types";
 import { LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { getInstalledModHealth } from "./modHealth";
+import { updatePlanEntryForMod } from "./modUpdatePlan";
 
 type Props = {
   mods: InstalledMod[];
+  updatePlan: ModUpdatePlan | null;
   loading?: boolean;
 };
 
-export function buildModsSummary(mods: InstalledMod[]) {
+export function buildModsSummary(mods: InstalledMod[], updatePlan: ModUpdatePlan | null = null) {
   const health = mods.map(getInstalledModHealth);
-  // Keep the summary aligned with the status badges shown for these same mods.
-  // The update plan is loaded independently and can briefly be stale or contain
-  // incomplete classifications while the installed-mod list is already current.
-  const updates = health.filter((item) => item.hasSafeUpdate || item.hasReviewUpdate).length;
+  // The update plan is the authoritative result of an update check. Installed-mod
+  // metadata may come from a separate cache and omit latest-version information
+  // after returning to this page. Fall back to that metadata only for mods that
+  // are not represented in the current plan.
+  const updates = mods.filter((mod, index) => {
+    const plannedStatus = updatePlanEntryForMod(updatePlan, mod)?.status;
+    return plannedStatus
+      ? plannedStatus === "safe_update" || plannedStatus === "needs_review"
+      : health[index].hasSafeUpdate || health[index].hasReviewUpdate;
+  }).length;
   const attention = health.filter((item) => item.needsAttention).length;
 
   return [
@@ -22,8 +30,8 @@ export function buildModsSummary(mods: InstalledMod[]) {
   ];
 }
 
-export function ModsSummary({ mods, loading = false }: Props) {
-  const items = buildModsSummary(mods);
+export function ModsSummary({ mods, updatePlan, loading = false }: Props) {
+  const items = buildModsSummary(mods, updatePlan);
   const initialLoading = loading && mods.length === 0;
 
   return (

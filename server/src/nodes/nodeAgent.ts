@@ -34,7 +34,7 @@ type NodeUpdateRequest = {
 type NodeContainerInspect = {
   Id: string;
   Name?: string;
-  State?: { Status?: string; Running?: boolean; StartedAt?: string; FinishedAt?: string; Health?: { Status?: string } };
+  State?: { Status?: string; Running?: boolean; ExitCode?: number; OOMKilled?: boolean; StartedAt?: string; FinishedAt?: string; Health?: { Status?: string } };
   Config?: Record<string, unknown> & {
     Image?: string;
     Env?: string[];
@@ -42,7 +42,7 @@ type NodeContainerInspect = {
     OpenStdin?: boolean;
     AttachStdin?: boolean;
   };
-  HostConfig?: Record<string, unknown>;
+  HostConfig?: Record<string, unknown> & { RestartPolicy?: { Name?: string } };
   NetworkSettings?: {
     Networks?: Record<string, NodeNetworkAttachment>;
   };
@@ -215,7 +215,7 @@ function containerName(server: ManagedServer) {
   return validateDockerContainerName(server.dockerContainer?.trim() || defaultServerContainerName(server.id));
 }
 
-function runtimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean }) {
+function runtimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; includeRestartPolicy: boolean }) {
   const targetRuntime = runtimeTarget(server);
   return {
     image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
@@ -223,12 +223,26 @@ function runtimeConfigHashInput(server: ManagedServer, options: { includeTermina
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || "fabric-server-launch.jar"),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
     timeZone: config.timeZone,
-    ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {})
+    ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
+    ...(options.includeRestartPolicy ? { restartPolicy: "no" } : {})
   };
 }
 
-function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: false }) {
+function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: false, includeRestartPolicy: true }) {
   return createHash("sha256").update(JSON.stringify(runtimeConfigHashInput(server, options))).digest("hex");
+}
+
+async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
+  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") return;
+  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
+  if (!restartPolicy || restartPolicy === "no") return;
+  await dockerJsonRequest(
+    "POST",
+    `/containers/${encodeURIComponent(containerName(server))}/update`,
+    { RestartPolicy: { Name: "no" } },
+    200
+  );
+  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
 }
 
 function minecraftContainerEnvironment() {
@@ -348,7 +362,7 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     ...terminalConfig,
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
-    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "unless-stopped" } },
+    HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
     NetworkingConfig: networkingConfig ?? createNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
     Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
   }, [201, 409]);
@@ -393,8 +407,11 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
   if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
+  await reconcileRestartPolicy(server, details);
   const configHash = details.Config?.Labels?.["serversentinel.config-hash"];
-  const compatibleConfigHash = configHash === runtimeConfigHash(server) || configHash === runtimeConfigHash(server, { includeTerminal: true });
+  const compatibleConfigHash = configHash === runtimeConfigHash(server)
+    || configHash === runtimeConfigHash(server, { includeTerminal: false, includeRestartPolicy: false })
+    || configHash === runtimeConfigHash(server, { includeTerminal: true, includeRestartPolicy: false });
   if (!compatibleConfigHash || !details.Config?.OpenStdin || !details.Config?.AttachStdin) {
     const networkingConfig = minecraftContainerNetworkingConfig(details) ?? preferredNetworkingConfig;
     await removeManagedContainer(server);
@@ -578,6 +595,7 @@ async function runtimeStatus(server: ManagedServer) {
   const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
   const running = Boolean(details?.State?.Running);
   const managed = details?.Config?.Labels?.["serversentinel.managed"] === "true";
+  if (details && managed) await reconcileRestartPolicy(server, details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   return {
     server,
