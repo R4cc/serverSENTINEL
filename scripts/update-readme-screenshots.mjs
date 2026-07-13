@@ -184,13 +184,9 @@ try {
   await openPage(page, "settings", "Settings");
   await capture(page, "settings.png");
 
-  await page.evaluate(() => {
-    localStorage.setItem("serversentinel-theme", "dark");
-    localStorage.setItem("serversentinel-active-page", "overview");
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByLabel("Theme").selectOption("dark");
   await page.locator(".appShell.themeDark").waitFor();
-  await page.locator(".workspaceHeader").getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await openPage(page, "overview", "Overview");
   await capture(page, "overview-dark.png");
 
   console.log(`Updated README screenshots in ${outputDirectory}`);
