@@ -20,12 +20,14 @@ export function AuthPanel({
   setupRequired,
   notice,
   onSubmit,
-  busy = false
+  busy = false,
+  demoEnabled = false
 }: {
   setupRequired: boolean;
   notice: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   busy?: boolean;
+  demoEnabled?: boolean;
 }) {
   return (
     <main className="authShell">
@@ -38,6 +40,12 @@ export function AuthPanel({
           </div>
         </div>
         {notice && <div className="notice">{notice}</div>}
+        {demoEnabled && (
+          <div className="authSetupBanner" data-testid="demo-credentials">
+            <strong>Demo environment.</strong>
+            <span>Sign in with username <code>demo</code> and password <code>demo</code>. Do not create another user.</span>
+          </div>
+        )}
         {setupRequired && (
           <div className="authSetupBanner">
             <strong>First-run setup.</strong>

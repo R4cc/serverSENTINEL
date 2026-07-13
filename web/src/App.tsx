@@ -8,7 +8,7 @@ import { formatTimestampForFilename, minecraftVersionInfo, resourceHistorySample
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, demoModeEnabled, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -248,6 +248,7 @@ export default function App() {
     setDemoInstalledMods,
     demoSchedules,
     setDemoSchedules,
+    resetDemoState,
     systemDark
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
@@ -388,8 +389,8 @@ export default function App() {
   const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
-  const canViewUsers = hasPermission(permissionUser, "users.view");
-  const canManageUsers = hasPermission(permissionUser, "users.manage");
+  const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
+  const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
   const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
@@ -771,7 +772,7 @@ export default function App() {
         installer: []
       });
     });
-    if (canViewUsers) {
+    if (canViewUsers && !demoMode) {
       void loadUsers();
     }
   }, [authSession?.authenticated, authSession?.user?.rolePreset, canViewUsers, demoMode]);
@@ -1220,7 +1221,7 @@ export default function App() {
     writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthNotice("Sign in again to continue.");
-    setAuthSession({ authenticated: false, setupRequired: false, user: null });
+    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: authSession?.demoEnabled, user: null });
     setAppState(emptyApp);
     setAppStateLoaded(false);
     setAppLoadError("");
@@ -1244,11 +1245,17 @@ export default function App() {
   async function refreshAuth() {
     try {
       const session = await api<AuthSession>("/api/auth/session");
+      const nextDemoMode = Boolean(session.authenticated && session.demo);
+      writeStoredDemoMode(nextDemoMode);
+      setDemoMode(nextDemoMode);
+      if (nextDemoMode) resetDemoState();
       setAuthNotice("");
       setAuthSession(session);
     } catch (error) {
+      writeStoredDemoMode(false);
+      setDemoMode(false);
       setAuthNotice("");
-      setAuthSession({ authenticated: false, setupRequired: false, user: null });
+      setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: false, user: null });
       setAppStateLoaded(false);
     }
   }
@@ -1262,7 +1269,7 @@ export default function App() {
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
     const setupRequired = authSession?.setupRequired ?? false;
-    const demoLogin = demoModeEnabled && username === "demo" && password === "demo";
+    const demoLogin = Boolean(authSession?.demoEnabled) && username === "demo" && password === "demo";
     setAuthNotice("");
     if (!demoLogin) {
       const errors = [
@@ -1288,12 +1295,9 @@ export default function App() {
       });
       loginSucceeded = true;
       resetSessionRequestGuards();
-      if (session.demo && !demoModeEnabled) {
-        setAuthNotice("Demo mode is not enabled in this build.");
-        return;
-      }
       if (session.demo) {
         writeStoredDemoMode(true);
+        resetDemoState();
         setAuthNotice("");
         setNotice("");
         setAppStateLoaded(false);
@@ -1327,7 +1331,7 @@ export default function App() {
     resetSessionRequestGuards();
     writeStoredDemoMode(false);
     setDemoMode(false);
-    setAuthSession({ authenticated: false, setupRequired: false, user: null });
+    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: authSession?.demoEnabled, user: null });
     setAppState(emptyApp);
     setAppStateLoaded(false);
     setActiveServerId("");
@@ -2334,7 +2338,7 @@ export default function App() {
         notify("error", "Type the demo server name to confirm");
         return;
       }
-      setDemoMode(false);
+      await logout();
       notify("success", "Demo mode disabled");
       return;
     }
@@ -2374,6 +2378,7 @@ export default function App() {
         <AppToaster darkMode={darkMode} />
         <AuthPanel
           setupRequired={authSession.setupRequired}
+          demoEnabled={authSession.demoEnabled}
           notice={authNotice}
           onSubmit={submitAuth}
           busy={authSubmitting}

@@ -3,7 +3,7 @@ import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -15,6 +15,8 @@ import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
+import { hashPassword, verifyPassword } from "./auth/passwords.js";
+import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
@@ -354,7 +356,6 @@ let storageDatabase: StorageDatabase;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
-const passwordHashKeyLength = 64;
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
@@ -619,17 +620,6 @@ function sizeLimitTransform(maxBytes: number) {
       callback(null, chunk);
     }
   });
-}
-
-function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
-  const hash = scryptSync(password, salt, passwordHashKeyLength).toString("hex");
-  return { salt, passwordHash: hash };
-}
-
-function verifyPassword(password: string, user: StoredUser) {
-  const attempted = Buffer.from(hashPassword(password, user.salt).passwordHash, "hex");
-  const stored = Buffer.from(user.passwordHash, "hex");
-  return attempted.length === stored.length && timingSafeEqual(attempted, stored);
 }
 
 function hashNodeSecret(secret: string) {
@@ -3972,6 +3962,10 @@ const app = Fastify({
 appLogger = app.log;
 storageDatabase = openStorageDatabase();
 usersRepository = new UsersRepository(storageDatabase);
+if (config.enableDemo) {
+  const demoUser = ensureDemoUser(usersRepository, hashPassword);
+  app.log.info({ userId: demoUser.id, username: demoUser.username }, "Demo user is ready");
+}
 nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
 sessionsRepository = new SessionsRepository(storageDatabase);
@@ -4073,12 +4067,14 @@ registerAuthRoutes(app, {
   verifyPassword,
   publicUser,
   demoEnabled: config.enableDemo,
+  isDemoUser,
   logInfo,
   logWarn
 });
 
-function isDemoModeRequest(request: { headers: Record<string, unknown> }) {
-  return config.enableDemo && request.headers["x-serversentinel-demo-mode"] === "true";
+async function isDemoModeRequest(request: { headers: { cookie?: string } }) {
+  if (!config.enableDemo) return false;
+  return isDemoUser(await currentUserFromCookie(request.headers.cookie));
 }
 
 app.addHook("preHandler", async (request) => {
@@ -4088,7 +4084,7 @@ app.addHook("preHandler", async (request) => {
   if (request.raw.url.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }
-  const demoMode = isDemoModeRequest(request);
+  const demoMode = await isDemoModeRequest(request);
   if (demoMode) {
     if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/fabric/"))) {
       return;
@@ -4101,8 +4097,21 @@ app.addHook("preHandler", async (request) => {
 });
 
 app.get("/api/app", async (request) => {
-  const demoMode = isDemoModeRequest(request);
+  const demoMode = await isDemoModeRequest(request);
   const user = demoMode ? null : await requireRequestPermission(request, "servers.view");
+  if (demoMode) {
+    return {
+      servers: [],
+      nodes: [],
+      appVersion,
+      buildId: appBuildId,
+      runtimeMode: config.runtimeMode,
+      timeZone: config.timeZone,
+      modrinthApiConfigured: false,
+      dockerSocketMounted: false,
+      totalMemory: 0
+    };
+  }
   const servers = await listManagedServers();
   const nodes = await readNodes();
   const totalMemory = await detectedTotalMemory();

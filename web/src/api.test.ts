@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
-import { demoLocalStorageKey, demoRequestHeaders, readStoredDemoMode, writeStoredDemoMode } from "./app/appConfig";
+import { demoLocalStorageKey, readStoredDemoMode, writeStoredDemoMode } from "./app/appConfig";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
@@ -88,28 +88,25 @@ describe("api error contract", () => {
   });
 });
 
-describe("api demo mode headers", () => {
-  it("does not send demo headers and clears stale demo state when demo is disabled", async () => {
+describe("runtime-controlled demo mode", () => {
+  it("never sends a client-controlled demo header", async () => {
     const storage = mockWindow(fakeStorage({ [demoLocalStorageKey]: "true" }));
     mockFetch(Response.json({ ok: true }));
 
     await api("/api/test");
 
-    expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
+    expect(storage.removeItem).not.toHaveBeenCalled();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/test", expect.objectContaining({
       headers: expect.not.objectContaining({ "X-serverSENTINEL-Demo-Mode": "true" })
     }));
   });
 
-  it("returns the demo header only when the build flag is enabled and stored demo state is active", () => {
+  it("allows the authenticated session flow to persist or clear runtime demo state", () => {
     const storage = fakeStorage({ [demoLocalStorageKey]: "true" });
 
     expect(readStoredDemoMode(storage, false)).toBe(false);
     expect(storage.removeItem).toHaveBeenCalledWith(demoLocalStorageKey);
-    expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "true" }), true)).toEqual({
-      "X-serverSENTINEL-Demo-Mode": "true"
-    });
-    expect(demoRequestHeaders(fakeStorage({ [demoLocalStorageKey]: "false" }), true)).toEqual({});
+    expect(readStoredDemoMode(fakeStorage({ [demoLocalStorageKey]: "true" }), true)).toBe(true);
   });
 
   it("keeps demo mode off when browser storage is unavailable", () => {

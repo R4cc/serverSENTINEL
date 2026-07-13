@@ -13,7 +13,7 @@ serverSENTINEL 1.0.3 is the current stable release line for the Docker-based Min
 ## Notable 1.0 Behavior
 
 - The runtime data root is controlled by `SERVERSENTINEL_DATA_DIR`; the default container path is `/data`.
-- Demo mode is off by default and requires both `VITE_ENABLE_DEMO=true` at frontend build time and `SERVERSENTINEL_ENABLE_DEMO=true` at backend runtime.
+- Demo mode is off by default and is enabled only with `SERVERSENTINEL_ENABLE_DEMO=true` at backend runtime. Startup seeds and repairs the fixed `demo` / `demo` account before listening.
 - `SS_MODE` selects the runtime role: `all-in-one`, `panel`, or `node`.
 - Node agents require `SS_PANEL_URL` and `SERVERSENTINEL_DOCKER_DATA_DIR` so sibling Minecraft containers can mount the correct host-side data path.
 - The published Docker workflow tags main builds as `latest`, `1.0.3`, and the commit SHA.

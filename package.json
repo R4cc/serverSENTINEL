@@ -14,6 +14,7 @@
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run typecheck --workspaces",
+    "demo:reset": "npm --workspace server run demo:reset",
     "start": "npm --workspace server run start"
   },
   "overrides": {

@@ -4,7 +4,6 @@ export const appVersion = "1.1.1";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
-export const demoModeEnabled = import.meta.env.VITE_ENABLE_DEMO === "true";
 
 export const emptyApp: AppState = {
   servers: [],
@@ -36,12 +35,11 @@ export const emptyPanelContextNode: ManagedNode = {
 export function isServerWorkspacePage(page: ActivePage) {
   return serverWorkspacePages.includes(page);
 }
-
 export function shouldShowApplicationLoadingSkeleton(page: ActivePage) {
   return page !== "settings";
 }
 
-export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = demoModeEnabled) {
+export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = true) {
   if (!enabled) {
     try {
       storage.removeItem(demoLocalStorageKey);
@@ -57,7 +55,7 @@ export function readStoredDemoMode(storage: Storage = window.localStorage, enabl
   }
 }
 
-export function writeStoredDemoMode(value: boolean, storage: Storage = window.localStorage, enabled = demoModeEnabled) {
+export function writeStoredDemoMode(value: boolean, storage: Storage = window.localStorage, enabled = true) {
   try {
     if (!enabled) {
       storage.removeItem(demoLocalStorageKey);
@@ -67,8 +65,4 @@ export function writeStoredDemoMode(value: boolean, storage: Storage = window.lo
   } catch {
     // Ignore unavailable browser storage; in-memory state still reflects the toggle.
   }
-}
-
-export function demoRequestHeaders(storage: Storage = window.localStorage, enabled = demoModeEnabled): Record<string, string> {
-  return readStoredDemoMode(storage, enabled) ? { "X-serverSENTINEL-Demo-Mode": "true" } : {};
 }

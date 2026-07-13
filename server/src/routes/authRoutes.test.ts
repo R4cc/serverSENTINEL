@@ -5,16 +5,29 @@ import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "..
 
 function authContext(demoEnabled: boolean) {
   const users: StoredUser[] = [];
+  if (demoEnabled) {
+    users.push({
+      id: "demo-user",
+      username: "demo",
+      passwordHash: "demo-hash",
+      salt: "demo-salt",
+      rolePreset: "admin",
+      permissions: ["servers.view", "users.view", "users.manage"],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+  }
   const calls = {
     cookies: [] as Array<{ sessionId: string; maxAgeSeconds: number; secure?: boolean }>,
-    deletedExpired: [] as string[]
+    deletedExpired: [] as string[],
+    sessions: [] as Session[]
   };
   return {
     calls,
     authRateLimit: {},
     destructiveRateLimit: {},
     sessions: {
-      create(_session: Session) {},
+      create(session: Session) { calls.sessions.push(session); },
       delete(_id: string) {},
       deleteExpired(cutoffCreatedAt: string) {
         calls.deletedExpired.push(cutoffCreatedAt);
@@ -53,7 +66,7 @@ function authContext(demoEnabled: boolean) {
     normalizeRolePreset: (rolePreset?: unknown) => rolePreset as RolePreset | undefined,
     buildUserPermissions: () => ({ rolePreset: "admin" as RolePreset, permissions: [] as Permission[] }),
     hashPassword: () => ({ salt: "salt", passwordHash: "hash" }),
-    verifyPassword: () => false,
+    verifyPassword: (password: string, user: StoredUser) => demoEnabled && user.username === "demo" && password === "demo",
     publicUser: (user: StoredUser): PublicUser => ({
       id: user.id,
       username: user.username,
@@ -63,6 +76,7 @@ function authContext(demoEnabled: boolean) {
       updatedAt: user.updatedAt
     }),
     demoEnabled,
+    isDemoUser: (user: Pick<StoredUser, "username"> | null | undefined) => user?.username.toLowerCase() === "demo",
     logInfo() {},
     logWarn() {}
   };
@@ -82,9 +96,10 @@ describe("auth demo login", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("returns a demo session when demo mode is explicitly enabled", async () => {
+  it("creates a real authenticated demo session when demo mode is explicitly enabled", async () => {
     const app = Fastify();
-    registerAuthRoutes(app, authContext(true));
+    const context = authContext(true);
+    registerAuthRoutes(app, context);
 
     const response = await app.inject({
       method: "POST",
@@ -94,11 +109,14 @@ describe("auth demo login", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
-      authenticated: false,
-      setupRequired: true,
+      authenticated: true,
+      setupRequired: false,
+      demoEnabled: true,
       demo: true,
-      user: null
+      user: { id: "demo-user", username: "demo", rolePreset: "admin" }
     });
+    expect(context.calls.sessions).toHaveLength(1);
+    expect(response.headers["set-cookie"]).toContain("ss=");
   });
 
   it("prunes expired sessions when checking the current auth session", async () => {

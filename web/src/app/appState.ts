@@ -3,7 +3,7 @@ import { initialDemoFiles, initialDemoSchedules } from "../demo";
 import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 import type { InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
 import { readLocalePreference, readThemePreference } from "../utils/format";
-import { demoModeEnabled, readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
+import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 
 function writePreference(key: string, value: string) {
   try {
@@ -19,9 +19,9 @@ export function usePreferencesState() {
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
   const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [demoRunning, setDemoRunning] = useState(true);
-  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => demoModeEnabled ? initialDemoFiles : {});
-  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => demoModeEnabled ? modsForDemoFixture(readModsDemoFixture()) : []);
-  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => demoModeEnabled ? initialDemoSchedules : []);
+  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => ({ ...initialDemoFiles }));
+  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
+  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules.map((schedule) => ({ ...schedule })));
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
 
   useEffect(() => {
@@ -49,6 +49,13 @@ export function usePreferencesState() {
     writePreference("serversentinel-number-locale", numberLocalePreference);
   }, [numberLocalePreference]);
 
+  function resetDemoState() {
+    setDemoRunning(true);
+    setDemoFiles({ ...initialDemoFiles });
+    setDemoInstalledMods(modsForDemoFixture(readModsDemoFixture()));
+    setDemoSchedules(initialDemoSchedules.map((schedule) => ({ ...schedule })));
+  }
+
   return {
     themePreference,
     setThemePreference,
@@ -66,6 +73,7 @@ export function usePreferencesState() {
     setDemoInstalledMods,
     demoSchedules,
     setDemoSchedules,
+    resetDemoState,
     systemDark
   };
 }

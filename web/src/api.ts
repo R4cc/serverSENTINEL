@@ -1,5 +1,3 @@
-import { demoRequestHeaders } from "./app/appConfig";
-
 type ApiPayload = {
   error?: {
     code?: unknown;
@@ -45,7 +43,6 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
     ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
-    ...demoRequestHeaders(),
     ...(init?.headers as Record<string, string> | undefined)
   };
   let response: Response;

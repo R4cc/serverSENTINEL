@@ -12,7 +12,6 @@ import { ApiError, api, apiErrorFromResponse } from "../../api";
 import { demoListing, demoServerId } from "../../demo";
 import type { FileEditLease, FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser, ZipArchiveListing, ZipExtractionPlan } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
-import { demoRequestHeaders } from "../../app/appConfig";
 import { bufferToBase64, fileDisplayType, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
 import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
@@ -948,8 +947,7 @@ export function useFilesWorkspace({
   async function downloadUrl(url: string, filename: string) {
     const response = await fetch(url, {
       headers: {
-        "X-Requested-With": "XMLHttpRequest",
-        ...(demoMode ? demoRequestHeaders() : {})
+        "X-Requested-With": "XMLHttpRequest"
       },
       credentials: "same-origin"
     });

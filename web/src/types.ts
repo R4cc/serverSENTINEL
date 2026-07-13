@@ -255,6 +255,7 @@ export type PublicUser = {
 export type AuthSession = {
   authenticated: boolean;
   setupRequired: boolean;
+  demoEnabled?: boolean;
   demo?: boolean;
   user: PublicUser | null;
 };

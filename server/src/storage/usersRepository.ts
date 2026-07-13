@@ -109,6 +109,52 @@ export class UsersRepository {
     });
   }
 
+  /**
+   * Repairs an application-owned account without first parsing its stored row.
+   * This deliberately tolerates stale hashes and malformed role/permission JSON
+   * so demo-mode startup can recover an interrupted or manually modified seed.
+   */
+  repairSystemUser(value: StoredUser): StoredUser {
+    const desired = normalizeStoredUser(value);
+    return this.storage.transaction((database) => {
+      const byUsername = database.prepare<[string], { id: string; created_at: string }>(
+        "SELECT id, created_at FROM users WHERE username = ? COLLATE NOCASE"
+      ).get(desired.username);
+      const byId = byUsername
+        ? undefined
+        : database.prepare<[string], { id: string; created_at: string }>(
+            "SELECT id, created_at FROM users WHERE id = ?"
+          ).get(desired.id);
+      const existing = byUsername ?? byId;
+      const repaired = normalizeStoredUser({
+        ...desired,
+        id: existing?.id ?? desired.id,
+        createdAt: existing?.created_at?.trim() || desired.createdAt
+      });
+
+      if (existing) {
+        database.prepare(`
+          UPDATE users SET username = ?, password_hash = ?, salt = ?, role_preset = ?,
+            permissions_json = ?, server_access_json = ?, created_at = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          repaired.username,
+          repaired.passwordHash,
+          repaired.salt,
+          repaired.rolePreset,
+          JSON.stringify(repaired.permissions),
+          repaired.serverAccess ? JSON.stringify(repaired.serverAccess) : null,
+          repaired.createdAt,
+          repaired.updatedAt,
+          repaired.id
+        );
+      } else {
+        this.save(database, repaired, false);
+      }
+      return repaired;
+    });
+  }
+
   updateById(id: string, updater: (user: StoredUser) => StoredUser): StoredUser {
     return this.storage.transaction((database) => {
       const current = this.findById(id);

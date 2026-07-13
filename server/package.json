@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo:reset": "tsx src/demo/resetDemo.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {

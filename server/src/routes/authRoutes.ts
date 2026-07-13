@@ -37,6 +37,7 @@ type AuthRoutesContext = {
   verifyPassword(password: string, user: StoredUser): boolean;
   publicUser(user: StoredUser): PublicUser;
   demoEnabled: boolean;
+  isDemoUser(user: Pick<StoredUser, "username"> | null | undefined): boolean;
   logInfo(fields: Record<string, unknown>, message: string): void;
   logWarn(fields: Record<string, unknown>, message: string): void;
 };
@@ -63,6 +64,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     return {
       authenticated: Boolean(user),
       setupRequired: users.length === 0,
+      demoEnabled: context.demoEnabled,
+      demo: context.demoEnabled && context.isDemoUser(user),
       user: user ? context.publicUser(user) : null
     };
   });
@@ -88,17 +91,13 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const isSecure = requestIsSecure(request);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
-    return { authenticated: true, setupRequired: false, user: context.publicUser(user) };
+    return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo: false, user: context.publicUser(user) };
   });
 
   app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", context.authRateLimit, async (request, reply) => {
     const body = request.body ?? {};
     const username = body.username?.trim() ?? "";
     const password = body.password ?? "";
-    if (context.demoEnabled && username === "demo" && password === "demo") {
-      context.logInfo({ username: "demo", action: "login_demo" }, "Demo login requested");
-      return { authenticated: false, setupRequired: context.users.list().length === 0, demo: true, user: null };
-    }
     const users = context.users.list();
     const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
     if (!user || !context.verifyPassword(password, user)) {
@@ -114,7 +113,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const isSecure = requestIsSecure(request);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
-    return { authenticated: true, setupRequired: false, user: context.publicUser(user) };
+    const demo = context.demoEnabled && context.isDemoUser(user);
+    return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo, user: context.publicUser(user) };
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
@@ -155,6 +155,12 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
 
   app.put<{ Params: { id: string }; Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", context.destructiveRateLimit, async (request) => {
     await context.requireRequestPermission(request, "users.manage");
+    const target = context.users.list().find((user) => user.id === request.params.id);
+    if (context.demoEnabled && context.isDemoUser(target)) {
+      const error = new Error("The demo user is managed by demo-mode startup and cannot be changed") as Error & { statusCode?: number };
+      error.statusCode = 403;
+      throw error;
+    }
     const body = request.body ?? {};
     const updatedUser = context.users.updateById(request.params.id, (current) => {
       const username = body.username === undefined ? current.username : context.validateUsername(body.username);
@@ -179,6 +185,12 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
 
   app.delete<{ Params: { id: string } }>("/api/users/:id", context.destructiveRateLimit, async (request) => {
     await context.requireRequestPermission(request, "users.manage");
+    const target = context.users.list().find((user) => user.id === request.params.id);
+    if (context.demoEnabled && context.isDemoUser(target)) {
+      const error = new Error("The demo user is managed by demo-mode startup and cannot be deleted") as Error & { statusCode?: number };
+      error.statusCode = 403;
+      throw error;
+    }
     const deletedUser = context.users.delete(request.params.id);
     context.logInfo({ userId: deletedUser.id, username: deletedUser.username, action: "delete_user" }, "User deleted");
     return { ok: true };

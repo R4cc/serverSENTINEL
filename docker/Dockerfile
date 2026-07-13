@@ -1,9 +1,6 @@
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
-ARG VITE_ENABLE_DEMO=false
-ENV VITE_ENABLE_DEMO=${VITE_ENABLE_DEMO}
-
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
