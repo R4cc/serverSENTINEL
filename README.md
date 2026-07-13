@@ -356,6 +356,8 @@ services:
 | `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` | `serversentinel-minecraft-servers` in Docker images | backend | All-in-one server-file volume mounted into sibling Minecraft containers. Leave empty only for advanced host-bind setups where host and panel paths match. |
 | `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.2.0` | backend | Image tag shown in generated node install/update instructions. |
 | `SERVERSENTINEL_ENABLE_DEMO` | `false` | backend | Enables the isolated demo user and simulated demo UI only when set to `true`. |
+| `SERVERSENTINEL_TRUST_PROXY` | `false` | backend | Trust reverse-proxy client, host, and protocol headers. Enable only behind a proxy that overwrites inbound `Forwarded`/`X-Forwarded-*` headers. |
+| `SERVERSENTINEL_SETUP_TOKEN` | random at first startup | backend | Optional fixed 16-256 character token required to create the first administrator. When empty, the generated token is printed to the panel startup log. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES` | `536870912` | backend | Maximum total source bytes allowed in one file-manager download action. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES` | `134217728` | backend | Selected individual files at or above this total source size are downloaded as one zip. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT` | `10` | backend | Selected individual files at or above this count are downloaded as one zip. |
@@ -420,10 +422,13 @@ Node update behavior:
 ## First Run
 
 1. Start the panel.
-2. Open `http://localhost:8080` or your configured panel URL.
-3. Create the initial admin user when prompted.
-4. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
-5. Create a managed server and start it from the panel.
+2. Copy the one-time setup token from the panel startup log. You can instead set `SERVERSENTINEL_SETUP_TOKEN` before the first startup.
+3. Open `http://localhost:8080` or your configured panel URL.
+4. Enter the setup token and create the initial admin user when prompted.
+5. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
+6. Create a managed server and start it from the panel.
+
+When TLS terminates at a reverse proxy, set `SERVERSENTINEL_TRUST_PROXY=true` only if that proxy overwrites untrusted forwarded headers. This lets serverSENTINEL validate the public origin and mark session cookies `Secure`. Do not expose the plain HTTP listener to the internet; terminate HTTPS in front of it and restrict direct access to port 8080.
 
 ## Development
 

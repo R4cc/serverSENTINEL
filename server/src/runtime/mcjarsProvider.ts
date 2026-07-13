@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { appUserAgentFor } from "../buildInfo.js";
+import { assertMcJarsArtifactUrl } from "../http/outboundUrls.js";
 import type { ServerRuntimeProfile } from "../types.js";
 import {
   minecraftJavaMajorVersion,
@@ -100,7 +101,7 @@ export class McJarsProvider implements ServerJarProvider {
         wantedLoader ? `Fabric loader ${wantedLoader} is not available for Minecraft ${minecraftVersion}` : `MCJars has no Fabric server artifact for Minecraft ${minecraftVersion}`
       );
     }
-    const downloadUrl = this.fabricDownloadUrl(selected);
+    const downloadUrl = assertMcJarsArtifactUrl(this.fabricDownloadUrl(selected), this.baseUrl);
     const loaderVersion = stringValue(selected.projectVersionId ?? selected.name, "MCJars Fabric loader version");
     const javaMajorVersion = minecraftJavaMajorVersion(minecraftVersion);
     const artifactId = selected.uuid ?? (selected.id === undefined ? undefined : String(selected.id));
@@ -181,7 +182,11 @@ export class McJarsProvider implements ServerJarProvider {
     if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
     let response: Response;
     try {
-      response = await this.fetchImpl(url.toString(), { headers });
+      response = await this.fetchImpl(url.toString(), {
+        headers,
+        signal: AbortSignal.timeout(15_000),
+        redirect: "error"
+      });
     } catch (error) {
       throw withDetails(
         new RuntimeResolutionError("provider_unavailable", mcjarsReachabilityMessage),

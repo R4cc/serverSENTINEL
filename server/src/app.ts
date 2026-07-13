@@ -73,6 +73,7 @@ import {
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
+import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
@@ -367,7 +368,7 @@ const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: 
 const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
 const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
 const modFileSizeLimit = 128 * 1024 * 1024;
-const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+const authRateLimit = { bodyLimit: 16 * 1024, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 const nodeJoinRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
 const provisionRateLimit = { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } };
 const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
@@ -482,14 +483,17 @@ function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields
   };
 }
 
-export function assertSameOriginRequest(request: FastifyRequest) {
+export function assertSameOriginRequest(request: FastifyRequest, trustProxy = config.trustProxy, requireOrigin = false) {
   const origin = request.headers.origin;
-  if (!origin) return;
-  const host = firstHeaderToken(request.headers["x-forwarded-host"]) || firstHeaderToken(request.headers.host);
+  if (!origin) {
+    if (requireOrigin) forbidden("CSRF protection: missing request origin");
+    return;
+  }
+  const host = (trustProxy ? firstHeaderToken(request.headers["x-forwarded-host"]) : "") || firstHeaderToken(request.headers.host);
   if (!host || /[\r\n]/.test(host)) {
     forbidden("CSRF protection: invalid request host");
   }
-  const forwardedProtocol = firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase();
+  const forwardedProtocol = trustProxy ? firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase() : "";
   if (forwardedProtocol && forwardedProtocol !== "http" && forwardedProtocol !== "https") {
     forbidden("CSRF protection: invalid request protocol");
   }
@@ -572,8 +576,8 @@ function buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: un
 }
 
 function validatePassword(password?: string) {
-  if (!password || password.length < 8) {
-    const error = new Error("Password must be at least 8 characters") as Error & { statusCode?: number };
+  if (!password || password.length < 8 || password.length > 256) {
+    const error = new Error("Password must be 8-256 characters") as Error & { statusCode?: number };
     error.statusCode = 400;
     throw error;
   }
@@ -1693,10 +1697,17 @@ function iconContentType(filename: string) {
 }
 
 async function persistModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
-  if (!iconUrl || !iconUrl.startsWith("https://")) return;
-  const response = await fetch(iconUrl, {
+  if (!iconUrl) return;
+  let safeIconUrl: string;
+  try {
+    safeIconUrl = assertModrinthUrl(iconUrl);
+  } catch {
+    return;
+  }
+  const response = await fetch(safeIconUrl, {
     headers: { "User-Agent": appUserAgentFor("Fabric mod manager") },
-    signal: AbortSignal.timeout(modrinthAssetTimeoutMs)
+    signal: AbortSignal.timeout(modrinthAssetTimeoutMs),
+    redirect: "error"
   });
   if (!response.ok || !response.body) return;
   const contentType = response.headers.get("content-type") ?? "";
@@ -1708,7 +1719,7 @@ async function persistModIcon(server: ManagedServer, filename: string, iconUrl?:
   await mkdir(iconsDir, { recursive: true });
   await validateExistingInsideServer(server, "mods/.serversentinel-icons");
   await deleteModIcon(server, filename);
-  const iconPath = await ensureWritableResolvedInsideServer(server, join(iconsDir, `${modIconKey(filename)}${iconExtension(iconUrl, response.headers.get("content-type"))}`));
+  const iconPath = await ensureWritableResolvedInsideServer(server, join(iconsDir, `${modIconKey(filename)}${iconExtension(safeIconUrl, response.headers.get("content-type"))}`));
   await writeFile(iconPath, bytes);
 }
 
@@ -1778,7 +1789,8 @@ async function loadModrinthIcon(normalizedUrl: string) {
   try {
     response = await fetch(normalizedUrl, {
       headers: { "User-Agent": appUserAgentFor("Fabric mod manager") },
-      signal: AbortSignal.timeout(modrinthAssetTimeoutMs)
+      signal: AbortSignal.timeout(modrinthAssetTimeoutMs),
+      redirect: "error"
     });
   } catch {
     const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
@@ -3146,17 +3158,17 @@ async function downloadFabricServerJar(server: ManagedServer) {
   if (!downloadUrl) {
     throw new Error("The runtime profile does not include a Fabric server jar download URL");
   }
-  if (!downloadUrl.startsWith("https://")) {
-    throw new Error("Refusing to download a non-HTTPS Fabric server jar");
-  }
+  const safeDownloadUrl = assertMcJarsArtifactUrl(downloadUrl, config.mcjarsBaseUrl);
 
   const target = ensureInsideServer(server, filename);
   const startedAt = Date.now();
   logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
-  const response = await fetch(downloadUrl, {
+  const response = await fetch(safeDownloadUrl, {
     headers: {
       "User-Agent": appUserAgentFor("Fabric runtime downloader")
-    }
+    },
+    signal: AbortSignal.timeout(60_000),
+    redirect: "error"
   });
   if (!response.ok || !response.body) {
     const body = !response.ok ? await response.text().catch(() => "") : "";
@@ -4045,6 +4057,7 @@ async function localServerLogs(server: ManagedServer) {
 export async function startServer() {
 initializeRuntimeDataRoot(config.paths);
 const app = Fastify({
+  trustProxy: config.trustProxy,
   logger: {
     level: config.logLevel,
     redact: [
@@ -4064,6 +4077,12 @@ usersRepository = new UsersRepository(storageDatabase);
 if (config.enableDemo) {
   const demoUser = ensureDemoUser(usersRepository, hashPassword);
   app.log.info({ userId: demoUser.id, username: demoUser.username }, "Demo user is ready");
+}
+const initialSetupToken = usersRepository.list().length === 0
+  ? config.setupToken ?? randomBytes(24).toString("base64url")
+  : undefined;
+if (initialSetupToken) {
+  app.log.warn({ setupToken: initialSetupToken }, "Initial admin registration requires this one-time setup token");
 }
 nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
@@ -4105,7 +4124,7 @@ await app.register(helmet, {
   },
   crossOriginOpenerPolicy: false,
   originAgentCluster: false,
-  strictTransportSecurity: false,
+  strictTransportSecurity: { maxAge: 31_536_000, includeSubDomains: false, preload: false },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   xFrameOptions: { action: "deny" }
 });
@@ -4117,6 +4136,10 @@ await app.register(rateLimit, {
 await app.register(websocket);
 
 app.addHook("onRequest", async (request, reply) => {
+  if (request.url.startsWith("/ws/")) {
+    assertSameOriginRequest(request, config.trustProxy, true);
+    return;
+  }
   if (request.method === "GET" && !request.url.startsWith("/api/")) {
     return;
   }
@@ -4126,16 +4149,12 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && request.url.startsWith("/api/modrinth/icon")) {
     return;
   }
-  if (request.url.startsWith("/ws/")) {
-    assertSameOriginRequest(request);
-    return;
-  }
   if (request.raw.url?.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }
   if (request.url.startsWith("/api/")) {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-      assertSameOriginRequest(request);
+      assertSameOriginRequest(request, config.trustProxy);
     }
     const requestedWith = request.headers["x-requested-with"];
     if (requestedWith !== "XMLHttpRequest") {
@@ -4156,6 +4175,13 @@ registerAuthRoutes(app, {
   sessionMaxAgeSeconds,
   parseCookies,
   sessionCookie,
+  trustProxy: config.trustProxy,
+  verifySetupToken: (value) => {
+    if (!initialSetupToken || typeof value !== "string") return false;
+    const attempted = createHash("sha256").update(value).digest();
+    const expected = createHash("sha256").update(initialSetupToken).digest();
+    return timingSafeEqual(attempted, expected);
+  },
   currentUserFromCookie,
   requireRequestPermission,
   validateUsername,
@@ -4490,13 +4516,26 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
 
 app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (socket) => {
   const ws = socket as any;
+  let helloTimer: NodeJS.Timeout | undefined;
   const reject = (message: string) => {
+    if (helloTimer) clearTimeout(helloTimer);
     const response: PanelWelcome = { type: "welcome", nodeId: "", protocolVersion: nodeProtocolVersion, accepted: false, compatibility: "incompatible", error: message };
     ws.send(JSON.stringify(response));
     ws.close();
   };
 
+  helloTimer = setTimeout(() => reject("Node hello timed out"), 10_000);
+  helloTimer.unref();
+  ws.once("close", () => {
+    if (helloTimer) clearTimeout(helloTimer);
+  });
+
   ws.once("message", async (raw: Buffer) => {
+    if (helloTimer) clearTimeout(helloTimer);
+    if (raw.byteLength > 64 * 1024) {
+      reject("Node hello is too large");
+      return;
+    }
     let hello: NodeHello;
     try {
       hello = normalizeNodeHello(JSON.parse(raw.toString()));
@@ -4532,8 +4571,9 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       }
 
       if (hello.joinToken) {
-        const tokenHash = hashNodeSecret(hello.joinToken);
-        const node = nodes.find((candidate) => candidate.joinTokenHash === tokenHash && candidate.joinTokenExpiresAt && new Date(candidate.joinTokenExpiresAt).getTime() > Date.now());
+        const node = nodes.find((candidate) => verifyNodeSecret(hello.joinToken, candidate.joinTokenHash)
+          && candidate.joinTokenExpiresAt
+          && new Date(candidate.joinTokenExpiresAt).getTime() > Date.now());
         if (!node) return;
         issuedSecret = newNodeSecret();
         acceptedNode = {

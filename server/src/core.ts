@@ -1,4 +1,4 @@
-import { realpath } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 
 export type ServerPathScope = {
@@ -61,6 +61,14 @@ async function ensureWritableTargetInsideServer(server: ServerPathScope, target:
   }
   if (normalizedPath(realParent) !== normalizedPath(serverDir)) {
     assertPathInside(serverDir, realParent, "Path escapes the managed server directory through a symlink");
+  }
+  try {
+    const targetStat = await lstat(target);
+    if (targetStat.isSymbolicLink()) {
+      throw pathSafetyError("Refusing to write through a symbolic link inside the managed server directory");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
   return target;
 }

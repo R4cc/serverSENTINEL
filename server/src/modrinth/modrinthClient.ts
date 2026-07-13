@@ -1,5 +1,6 @@
 import { fetch } from "undici";
 import { appUserAgentFor } from "../buildInfo.js";
+import { assertModrinthUrl } from "../http/outboundUrls.js";
 
 let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
 const defaultModrinthTimeoutMs = 15_000;
@@ -55,7 +56,7 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   timeout.unref?.();
   try {
-    return await fetch(url, { headers, signal: controller.signal });
+    return await fetch(url, { headers, signal: controller.signal, redirect: "error" });
   } catch (error) {
     if (controller.signal.aborted) {
       throw modrinthPublicError(`Modrinth request timed out after ${timeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
@@ -162,7 +163,7 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
         const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
         timeout.unref?.();
         try {
-          response = await fetch(url, { method: options.method ?? "POST", headers, body: options.json === undefined ? undefined : JSON.stringify(options.json), signal: controller.signal });
+          response = await fetch(url, { method: options.method ?? "POST", headers, body: options.json === undefined ? undefined : JSON.stringify(options.json), signal: controller.signal, redirect: "error" });
         } catch (error) {
           if (controller.signal.aborted) throw modrinthPublicError(`Modrinth request timed out after ${attemptTimeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
           throw error;
@@ -214,6 +215,7 @@ export function resetModrinthClientStateForTests() {
 }
 
 export async function modrinthFetch(url: string, options: ModrinthFetchOptions = {}) {
+  url = assertModrinthUrl(url);
   const isGet = (options.method ?? "GET") === "GET" && options.json === undefined;
   if (!isGet) return executeModrinthFetch(url, options);
   const pending = inFlightGetRequests.get(url);

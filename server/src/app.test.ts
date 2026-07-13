@@ -198,7 +198,7 @@ describe("CSRF origin checks", () => {
       host: "127.0.0.1:8080",
       "x-forwarded-host": "panel.example.com, 127.0.0.1:8080",
       "x-forwarded-proto": "https,http"
-    }))).not.toThrow();
+    }), true)).not.toThrow();
   });
 
   it("rejects malformed or cross-origin proxy metadata", () => {
@@ -207,12 +207,25 @@ describe("CSRF origin checks", () => {
       host: "127.0.0.1:8080",
       "x-forwarded-host": "panel.example.com",
       "x-forwarded-proto": "https"
-    }))).toThrow("cross-origin");
+    }), true)).toThrow("cross-origin");
     expect(() => assertSameOriginRequest(request({
       origin: "https://panel.example.com",
       host: "panel.example.com",
       "x-forwarded-proto": "javascript"
-    }))).toThrow("invalid request protocol");
+    }), true)).toThrow("invalid request protocol");
+  });
+
+  it("ignores spoofed forwarded headers unless proxy trust is explicitly enabled", () => {
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://panel.example.com",
+      host: "127.0.0.1:8080",
+      "x-forwarded-host": "panel.example.com",
+      "x-forwarded-proto": "https"
+    }), false)).toThrow("cross-origin");
+  });
+
+  it("requires an Origin header for browser WebSocket upgrades", () => {
+    expect(() => assertSameOriginRequest(request({ host: "panel.example.com" }), false, true)).toThrow("missing request origin");
   });
 });
 

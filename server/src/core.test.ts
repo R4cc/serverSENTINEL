@@ -70,6 +70,21 @@ describe("path safety", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("rejects writes through an existing final-component symlink", async () => {
+    const root = await mkdtemp(join(tmpdir(), "serversentinel-final-link-"));
+    try {
+      const serverDir = join(root, "server");
+      const outsideTarget = join(root, "outside-target");
+      await mkdir(serverDir);
+      await mkdir(outsideTarget);
+      await symlink(outsideTarget, join(serverDir, "server.properties"), process.platform === "win32" ? "junction" : "dir");
+
+      await expect(ensureWritableInsideServer({ serverDir }, "server.properties")).rejects.toThrow("symbolic link");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("cron parsing and matching", () => {

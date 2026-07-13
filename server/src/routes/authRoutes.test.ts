@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { registerAuthRoutes } from "./authRoutes.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 
-function authContext(demoEnabled: boolean) {
+function authContext(demoEnabled: boolean, permissionGranted = false) {
   const users: StoredUser[] = [];
   if (demoEnabled) {
     users.push({
@@ -20,7 +20,8 @@ function authContext(demoEnabled: boolean) {
   const calls = {
     cookies: [] as Array<{ sessionId: string; maxAgeSeconds: number; secure?: boolean }>,
     deletedExpired: [] as string[],
-    sessions: [] as Session[]
+    sessions: [] as Session[],
+    deletedForUsers: [] as string[]
   };
   return {
     calls,
@@ -29,6 +30,10 @@ function authContext(demoEnabled: boolean) {
     sessions: {
       create(session: Session) { calls.sessions.push(session); },
       delete(_id: string) {},
+      deleteForUser(userId: string) {
+        calls.deletedForUsers.push(userId);
+        return 1;
+      },
       deleteExpired(cutoffCreatedAt: string) {
         calls.deletedExpired.push(cutoffCreatedAt);
         return 0;
@@ -52,6 +57,8 @@ function authContext(demoEnabled: boolean) {
     },
     sessionCookieName: "ss",
     sessionMaxAgeSeconds: 3600,
+    trustProxy: true,
+    verifySetupToken: (token: unknown) => token === "test-setup-token",
     parseCookies: () => new Map<string, string>(),
     sessionCookie: (sessionId: string, maxAgeSeconds: number, secure?: boolean) => {
       calls.cookies.push({ sessionId, maxAgeSeconds, secure });
@@ -59,6 +66,7 @@ function authContext(demoEnabled: boolean) {
     },
     currentUserFromCookie: async () => null,
     requireRequestPermission: async () => {
+      if (permissionGranted && users[0]) return users[0];
       throw new Error("Authentication required");
     },
     validateUsername: (username?: string) => username?.trim() || "admin",
@@ -83,6 +91,55 @@ function authContext(demoEnabled: boolean) {
 }
 
 describe("auth demo login", () => {
+  it("requires the one-time setup token before creating the first administrator", async () => {
+    const app = Fastify();
+    const context = authContext(false);
+    registerAuthRoutes(app, context);
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-first",
+      payload: { username: "admin", password: "password123", setupToken: "wrong" }
+    });
+    expect(rejected.statusCode).toBe(403);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-first",
+      payload: { username: "admin", password: "password123", setupToken: "test-setup-token" }
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ authenticated: true, user: { username: "admin" } });
+
+    const repeated = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-first",
+      payload: { username: "other-admin", password: "password123", setupToken: "test-setup-token" }
+    });
+    expect(repeated.statusCode).toBe(409);
+  });
+
+  it("revokes a user's existing sessions when their password changes", async () => {
+    const app = Fastify();
+    const context = authContext(false, true);
+    registerAuthRoutes(app, context);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-first",
+      payload: { username: "admin", password: "password123", setupToken: "test-setup-token" }
+    });
+    const userId = created.json().user.id as string;
+
+    const updated = await app.inject({
+      method: "PUT",
+      url: `/api/users/${userId}`,
+      payload: { password: "new-password-123" }
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(context.calls.deletedForUsers).toEqual([userId]);
+  });
+
   it("rejects demo credentials when demo mode is disabled", async () => {
     const app = Fastify();
     registerAuthRoutes(app, authContext(false));

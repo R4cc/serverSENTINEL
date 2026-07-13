@@ -50,7 +50,7 @@ export function AuthPanel({
         {setupRequired && (
           <div className="authSetupBanner">
             <strong>First-run setup.</strong>
-            <span>Create this admin account first. After sign-in, serverSENTINEL will show Docker, node, server, and Modrinth setup actions as needed.</span>
+            <span>Enter the one-time setup token printed in the panel startup log, then create the admin account.</span>
           </div>
         )}
         <form
@@ -62,6 +62,22 @@ export function AuthPanel({
           aria-busy={busy}
         >
           <fieldset>
+            {setupRequired && (
+              <label htmlFor="auth-setup-token">
+                Setup token
+                <input
+                  id="auth-setup-token"
+                  name="setupToken"
+                  type="password"
+                  autoComplete="off"
+                  required
+                  minLength={16}
+                  maxLength={256}
+                  placeholder="Token from the panel log"
+                  spellCheck={false}
+                />
+              </label>
+            )}
             <label htmlFor="auth-username">
               Username
               <input
@@ -87,6 +103,7 @@ export function AuthPanel({
                 autoComplete={setupRequired ? "new-password" : "current-password"}
                 required
                 minLength={setupRequired ? 8 : 1}
+                maxLength={256}
                 placeholder={setupRequired ? "At least 8 characters" : "Password"}
               />
             </label>
@@ -100,6 +117,7 @@ export function AuthPanel({
                   autoComplete="new-password"
                   required
                   minLength={8}
+                  maxLength={256}
                   placeholder="Repeat password"
                 />
               </label>
@@ -331,7 +349,7 @@ function UserPermissionModal({
               {!user && (
                 <label>
                   Password
-                  <input name="password" type="password" autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
+                  <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
                 </label>
               )}
               <label>
@@ -445,11 +463,11 @@ function ResetPasswordModal({
               </label>
               <label>
                 New password
-                <input name="password" type="password" autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
+                <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
               </label>
               <label>
                 Confirm password
-                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} placeholder="Repeat password" />
+                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="Repeat password" />
               </label>
             </div>
           </fieldset>

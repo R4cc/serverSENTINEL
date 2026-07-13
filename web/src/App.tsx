@@ -1357,6 +1357,7 @@ export default function App() {
     const username = String(form.get("username") || "").trim();
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
+    const setupToken = String(form.get("setupToken") || "");
     const setupRequired = authSession?.setupRequired ?? false;
     const demoLogin = Boolean(authSession?.demoEnabled) && username === "demo" && password === "demo";
     setAuthNotice("");
@@ -1380,7 +1381,7 @@ export default function App() {
     try {
       const session = await api<AuthSession>(setupRequired && !demoLogin ? "/api/auth/register-first" : "/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, ...(setupRequired && !demoLogin ? { setupToken } : {}) })
       });
       loginSucceeded = true;
       resetSessionRequestGuards();

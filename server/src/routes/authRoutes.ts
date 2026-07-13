@@ -14,6 +14,7 @@ type AuthRoutesContext = {
   sessions: {
     create(session: Session): void;
     delete(id: string): void;
+    deleteForUser(userId: string): number;
     deleteExpired?(cutoffCreatedAt: string): number;
   };
   users: {
@@ -27,6 +28,8 @@ type AuthRoutesContext = {
   sessionMaxAgeSeconds: number;
   parseCookies(cookieHeader?: string): Map<string, string>;
   sessionCookie(sessionId: string, maxAgeSeconds: number, secure?: boolean): string;
+  trustProxy: boolean;
+  verifySetupToken(token: unknown): boolean;
   currentUserFromCookie(cookieHeader?: string): Promise<StoredUser | null>;
   requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission): Promise<StoredUser>;
   validateUsername(username?: string): string;
@@ -47,8 +50,8 @@ function firstHeaderToken(value: unknown) {
   return typeof raw === "string" ? raw.split(",", 1)[0]?.trim() ?? "" : "";
 }
 
-function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }) {
-  const forwardedProto = firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase();
+function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }, trustProxy: boolean) {
+  const forwardedProto = trustProxy ? firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase() : "";
   return forwardedProto === "https" || (!forwardedProto && request.protocol === "https");
 }
 
@@ -70,8 +73,18 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     };
   });
 
-  app.post<{ Body: { username?: string; password?: string } }>("/api/auth/register-first", context.authRateLimit, async (request, reply) => {
+  app.post<{ Body: { username?: string; password?: string; setupToken?: string } }>("/api/auth/register-first", context.authRateLimit, async (request, reply) => {
     const body = request.body ?? {};
+    if (!context.verifySetupToken(body.setupToken)) {
+      const error = new Error("Invalid initial setup token") as Error & { statusCode?: number };
+      error.statusCode = 403;
+      throw error;
+    }
+    if (context.users.list().length !== 0) {
+      const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
+      error.statusCode = 409;
+      throw error;
+    }
     const username = context.validateUsername(body.username);
     const password = context.validatePassword(body.password);
     const now = new Date().toISOString();
@@ -88,7 +101,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const sessionId = randomBytes(32).toString("base64url");
     context.users.createFirst(user, { id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
-    const isSecure = requestIsSecure(request);
+    const isSecure = requestIsSecure(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
     return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo: false, user: context.publicUser(user) };
@@ -96,8 +109,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
 
   app.post<{ Body: { username?: string; password?: string } }>("/api/auth/login", context.authRateLimit, async (request, reply) => {
     const body = request.body ?? {};
-    const username = body.username?.trim() ?? "";
-    const password = body.password ?? "";
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const password = typeof body.password === "string" && body.password.length <= 256 ? body.password : "";
     const users = context.users.list();
     const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
     if (!user || !context.verifyPassword(password, user)) {
@@ -110,7 +123,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const now = new Date().toISOString();
     context.sessions.create({ id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
-    const isSecure = requestIsSecure(request);
+    const isSecure = requestIsSecure(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
     const demo = context.demoEnabled && context.isDemoUser(user);
@@ -122,7 +135,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     if (sessionId) {
       context.sessions.delete(sessionId);
     }
-    reply.header("Set-Cookie", context.sessionCookie("", 0, requestIsSecure(request)));
+    reply.header("Set-Cookie", context.sessionCookie("", 0, requestIsSecure(request, context.trustProxy)));
     context.logInfo({ action: "logout" }, "User logged out");
     return { ok: true };
   });
@@ -169,7 +182,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         rolePreset,
         permissions: body.permissions
       }, current);
-      const password = body.password?.trim() ? context.validatePassword(body.password) : undefined;
+      const password = typeof body.password === "string" && body.password.trim() ? context.validatePassword(body.password) : undefined;
       return {
         ...current,
         username,
@@ -179,6 +192,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         ...(password ? context.hashPassword(password) : {})
       };
     });
+    if (typeof body.password === "string" && body.password.trim()) {
+      context.sessions.deleteForUser(updatedUser.id);
+    }
     context.logInfo({ userId: updatedUser.id, username: updatedUser.username, rolePreset: updatedUser.rolePreset, action: "update_user" }, "User updated");
     return context.publicUser(updatedUser);
   });

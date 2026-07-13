@@ -15,6 +15,12 @@ beforeEach(() => {
 });
 
 describe("Modrinth client", () => {
+  it("rejects non-Modrinth and non-HTTPS outbound URLs before fetching", async () => {
+    await expect(modrinthFetch("https://127.0.0.1/internal")).rejects.toThrow("modrinth.com host");
+    await expect(modrinthFetch("http://api.modrinth.com/v2/search")).rejects.toThrow("HTTPS");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("only sends the API key to the Modrinth API host", () => {
     expect(modrinthRequestHeaders("https://api.modrinth.com/v2/project/fabric-api", "secret")).toMatchObject({
       Authorization: "secret"

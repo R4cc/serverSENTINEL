@@ -30,6 +30,18 @@ describe("runtime role configuration", () => {
       SS_PANEL_URL: "http://panel:8080",
       SERVERSENTINEL_DOCKER_DATA_DIR: undefined
     })).rejects.toThrow("SERVERSENTINEL_DOCKER_DATA_DIR is required");
+
+    await expect(loadConfig({
+      SS_MODE: "node",
+      SS_PANEL_URL: "ftp://panel.example.com",
+      SERVERSENTINEL_DOCKER_DATA_DIR: "/srv/serversentinel"
+    })).rejects.toThrow("credential-free http or https");
+
+    await expect(loadConfig({
+      SS_MODE: "node",
+      SS_PANEL_URL: "https://user:password@panel.example.com",
+      SERVERSENTINEL_DOCKER_DATA_DIR: "/srv/serversentinel"
+    })).rejects.toThrow("credential-free http or https");
   });
 
   it("keeps panel mode independent from node-only Docker data settings", async () => {
@@ -52,6 +64,16 @@ describe("runtime role configuration", () => {
     });
     await expect(loadConfig({ SERVERSENTINEL_ENABLE_DEMO: "true" })).resolves.toMatchObject({
       config: { enableDemo: true }
+    });
+    await expect(loadConfig({ SERVERSENTINEL_ENABLE_DEMO: "yes" })).rejects.toThrow("must be true or false");
+  });
+
+  it("requires explicit proxy trust and validates fixed setup tokens", async () => {
+    await expect(loadConfig({ SERVERSENTINEL_TRUST_PROXY: undefined })).resolves.toMatchObject({ config: { trustProxy: false } });
+    await expect(loadConfig({ SERVERSENTINEL_TRUST_PROXY: "true" })).resolves.toMatchObject({ config: { trustProxy: true } });
+    await expect(loadConfig({ SERVERSENTINEL_SETUP_TOKEN: "too-short" })).rejects.toThrow("16-256 characters");
+    await expect(loadConfig({ SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef" })).resolves.toMatchObject({
+      config: { setupToken: "0123456789abcdef" }
     });
   });
 

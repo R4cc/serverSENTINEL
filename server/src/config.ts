@@ -70,6 +70,23 @@ function parseCountLimitEnv(name: string, defaultValue: number) {
   return value;
 }
 
+function parseBooleanEnv(name: string, defaultValue = false) {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return defaultValue;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function optionalSecretEnv(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value) return undefined;
+  if (value.length < 16 || value.length > 256 || /[\r\n\u0000]/.test(value)) {
+    throw new Error(`${name} must be 16-256 characters without control characters`);
+  }
+  return value;
+}
+
 const paths = runtimeDataPaths(process.env.SERVERSENTINEL_DATA_DIR);
 const panelUrl = process.env.SS_PANEL_URL?.trim();
 const nodeDockerDataDir = process.env.SERVERSENTINEL_DOCKER_DATA_DIR?.trim();
@@ -79,6 +96,15 @@ if (runtimeMode === "node") {
   }
   if (!nodeDockerDataDir) {
     throw new Error("SERVERSENTINEL_DOCKER_DATA_DIR is required when SS_MODE=node so sibling Minecraft containers can mount the host data root");
+  }
+  let parsedPanelUrl: URL;
+  try {
+    parsedPanelUrl = new URL(panelUrl);
+  } catch {
+    throw new Error("SS_PANEL_URL must be a valid http or https URL");
+  }
+  if (!["http:", "https:"].includes(parsedPanelUrl.protocol) || parsedPanelUrl.username || parsedPanelUrl.password) {
+    throw new Error("SS_PANEL_URL must be a credential-free http or https URL");
   }
 }
 
@@ -103,7 +129,9 @@ export const config = {
   nodeDataDir: paths.dataDir,
   nodeDockerDataDir: nodeDockerDataDir || paths.dataDir,
   nodeImage: process.env.SERVERSENTINEL_NODE_IMAGE?.trim(),
-  enableDemo: process.env.SERVERSENTINEL_ENABLE_DEMO === "true",
+  enableDemo: parseBooleanEnv("SERVERSENTINEL_ENABLE_DEMO"),
+  trustProxy: parseBooleanEnv("SERVERSENTINEL_TRUST_PROXY"),
+  setupToken: optionalSecretEnv("SERVERSENTINEL_SETUP_TOKEN"),
   fileDownloadMaxBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES", 512 * 1024 * 1024),
   fileDownloadZipThresholdBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES", 128 * 1024 * 1024),
   fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),

@@ -87,6 +87,19 @@ describe("SQLite repositories", () => {
     expect(sessions.find("fresh-session")).toBeDefined();
   });
 
+  it("revokes every session for a user after a password reset", async () => {
+    const storage = await createStorage();
+    const users = new UsersRepository(storage);
+    const sessions = new SessionsRepository(storage);
+    const admin = storedUser();
+    users.createFirst(admin, { id: "session-one", userId: admin.id, createdAt: "2026-01-01T00:00:00.000Z" });
+    sessions.create({ id: "session-two", userId: admin.id, createdAt: "2026-01-02T00:00:00.000Z" });
+
+    expect(sessions.deleteForUser(admin.id)).toBe(2);
+    expect(sessions.find("session-one")).toBeUndefined();
+    expect(sessions.find("session-two")).toBeUndefined();
+  });
+
   it("stores complete node records and applies metadata updates", async () => {
     const storage = await createStorage();
     const nodes = new NodesRepository(storage);

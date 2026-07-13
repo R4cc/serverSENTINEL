@@ -12,6 +12,7 @@ import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedI
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
+import { assertMcJarsArtifactUrl } from "../http/outboundUrls.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
@@ -423,9 +424,11 @@ async function downloadFabricJar(server: ManagedServer) {
   const profile = runtimeProfileForServer(server);
   const artifact = profile?.jarArtifact;
   if (!artifact?.downloadUrl) throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
-  if (!artifact.downloadUrl.startsWith("https://")) throw new Error("Refusing to download a non-HTTPS Fabric server jar");
-  const res = await fetch(artifact.downloadUrl, {
-    headers: { "User-Agent": appUserAgentFor("node Fabric runtime downloader") }
+  const safeDownloadUrl = assertMcJarsArtifactUrl(artifact.downloadUrl, config.mcjarsBaseUrl);
+  const res = await fetch(safeDownloadUrl, {
+    headers: { "User-Agent": appUserAgentFor("node Fabric runtime downloader") },
+    signal: AbortSignal.timeout(60_000),
+    redirect: "error"
   });
   if (!res.ok || !res.body) {
     const body = !res.ok ? await res.text().catch(() => "") : "";
