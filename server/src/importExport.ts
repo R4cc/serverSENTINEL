@@ -269,6 +269,7 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
     "dockerPorts",
     "managedPorts",
     "javaArgs",
+    "desiredRuntimeState",
     "restartRequiredSince",
     "restartRequiredChanges",
     "restartRequiredModBaseline",
@@ -288,6 +289,9 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
   optionalStringValue(server.dockerMountSource, `${label}.dockerMountSource`);
   optionalStringValue(server.dockerWorkingDir, `${label}.dockerWorkingDir`);
   optionalStringValue(server.javaArgs, `${label}.javaArgs`);
+  if (server.desiredRuntimeState !== undefined && server.desiredRuntimeState !== "running" && server.desiredRuntimeState !== "stopped") {
+    throw new Error(`${label}.desiredRuntimeState must be running or stopped`);
+  }
   optionalStringValue(server.restartRequiredSince, `${label}.restartRequiredSince`);
   if (server.restartRequiredChanges !== undefined && !Array.isArray(server.restartRequiredChanges)) throw new Error(`${label}.restartRequiredChanges must be an array`);
   if (server.restartRequiredModBaseline !== undefined && !Array.isArray(server.restartRequiredModBaseline)) throw new Error(`${label}.restartRequiredModBaseline must be an array`);

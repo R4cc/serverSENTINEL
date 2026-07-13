@@ -38,7 +38,8 @@ import {
   waitForCommandDelay,
   dockerNetworkingConfigFromInspect,
   minecraftContainerNetworkingConfig,
-  nodeWithLiveConnectionStatus
+  nodeWithLiveConnectionStatus,
+  isMinecraftStopCommand
 } from "./app.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
@@ -62,6 +63,15 @@ describe("live node connectivity", () => {
 
   it("restores online state from an authoritative live socket", () => {
     expect(nodeWithLiveConnectionStatus({ ...remoteNode, status: "offline" }, true).status).toBe("online");
+  });
+});
+
+describe("Minecraft stop command intent", () => {
+  it("matches only exact stop commands", () => {
+    expect(isMinecraftStopCommand("stop")).toBe(true);
+    expect(isMinecraftStopCommand(" /STOP ")).toBe(true);
+    expect(isMinecraftStopCommand("say stop")).toBe(false);
+    expect(isMinecraftStopCommand("stop now")).toBe(false);
   });
 });
 

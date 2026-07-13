@@ -340,7 +340,7 @@ export type ScheduledActiveRun = {
   message?: string;
 };
 
-export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
+export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir" | "desiredRuntimeState"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
   nodeName?: string;

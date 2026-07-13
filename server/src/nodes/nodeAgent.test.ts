@@ -239,9 +239,49 @@ describe("remote node Docker container recreation", () => {
       }),
       [201, 409]
     );
-    const createBody = mockDockerJsonRequest.mock.calls.find((call) => call[1] === "/containers/create?name=serversentinel-survival")?.[2] as { NetworkingConfig?: unknown };
+    const createBody = mockDockerJsonRequest.mock.calls.find((call) => call[1] === "/containers/create?name=serversentinel-survival")?.[2] as { NetworkingConfig?: unknown; HostConfig?: { RestartPolicy?: { Name?: string } } };
     expect(JSON.stringify(createBody.NetworkingConfig)).not.toContain("EndpointID");
     expect(JSON.stringify(createBody.NetworkingConfig)).not.toContain("172.30.0.12");
+    expect(createBody.HostConfig?.RestartPolicy).toEqual({ Name: "no" });
+  });
+
+  it("updates a legacy restart policy in place before starting", async () => {
+    mockDockerAvailable = true;
+    mockDockerJsonRequest.mockResolvedValue({});
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    let running = false;
+    const inspect = {
+      Id: "minecraft-container-id",
+      State: { get Running() { return running; }, get Status() { return running ? "running" : "exited"; } },
+      Config: {
+        Labels: {
+          "serversentinel.managed": "true",
+          "serversentinel.serverId": server.id,
+          "serversentinel.config-hash": hooks.runtimeConfigHash(server, { includeTerminal: false, includeRestartPolicy: false })
+        },
+        OpenStdin: true,
+        AttachStdin: true
+      },
+      HostConfig: { RestartPolicy: { Name: "unless-stopped" } }
+    };
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/serversentinel-survival/json") return inspect;
+      if (method === "POST" && path === "/containers/serversentinel-survival/start") {
+        running = true;
+        return {};
+      }
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    await hooks.handleCommand("server.start", { server });
+
+    expect(mockDockerJsonRequest).toHaveBeenCalledWith(
+      "POST",
+      "/containers/serversentinel-survival/update",
+      { RestartPolicy: { Name: "no" } },
+      200
+    );
+    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", expect.any(String), expect.anything());
   });
 });
 

@@ -1436,6 +1436,7 @@ export const __nodeAgentTestHooks = {
   minecraftContainerNetworkingConfig,
   minecraftContainerEnvironment,
   minecraftContainerCommand,
+  runtimeConfigHash,
   selfUpdateContainer
 };
 

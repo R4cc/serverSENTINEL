@@ -180,7 +180,7 @@ describe("export/import artifacts", () => {
     await mkdir(join(root, "config"), { recursive: true });
     await writeFile(join(root, "server.properties"), "server-port=25565\n", "utf8");
     await writeFile(join(root, "config", "fabric-api.properties"), "enabled=true\n", "utf8");
-    const server = managedServer({ serverDir: root });
+    const server = managedServer({ serverDir: root, desiredRuntimeState: "running" });
     const result = await createExportArtifact({
       appVersion: "0.8.0",
       settings: { modrinthApiKey: "secret" },
@@ -192,6 +192,7 @@ describe("export/import artifacts", () => {
     expect(result.schemaVersion).toBe(exportArtifactSchemaVersion);
     expect(result.manifest.content.servers).toBe(1);
     expect(result.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");
+    expect(result.servers[0].server.desiredRuntimeState).toBe("running");
     expect(result.servers[0].server.managedPorts?.[0]).toMatchObject({ externalPort: 25565, protocol: "tcp" });
     expect(result.servers[0].modPreferences).toEqual({ "fabric-api.jar": { channel: "release" } });
     expect(result.instance.nodes[0]).not.toHaveProperty("secretHash");

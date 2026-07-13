@@ -1,0 +1,187 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
+import type { ManagedServer } from "./types.js";
+
+function server(desiredRuntimeState?: "running" | "stopped"): ManagedServer {
+  return {
+    id: "server-1",
+    nodeId: "node-1",
+    displayName: "Survival",
+    serverDir: "/data/servers/server-1",
+    runtimeProfile: {
+      minecraftVersion: "1.21.4",
+      loader: "fabric",
+      loaderVersion: "0.16.10",
+      javaMajorVersion: 21,
+      jarProvider: "mcjars",
+      jarArtifact: { filename: "fabric-server-launch.jar" },
+      compatibilityStatus: "compatible",
+      resolvedAt: "2026-01-01T00:00:00.000Z"
+    },
+    desiredRuntimeState,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  };
+}
+
+function status(running: boolean) {
+  return { docker: { available: true, configured: true, controllable: true, running, state: running ? "running" : "exited" } };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("RuntimeStateCoordinator", () => {
+  it("initializes legacy desired state from an authoritative runtime", async () => {
+    const running = server();
+    const stopped = { ...server(), id: "server-2" };
+    const states: Array<[string, string]> = [];
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [running, stopped],
+      serverStatus: async (candidate) => status(candidate.id === running.id),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      setDesiredState: (id, state) => states.push([id, state])
+    });
+
+    await coordinator.poll();
+
+    expect(states).toEqual([[running.id, "running"], [stopped.id, "stopped"]]);
+  });
+
+  it("restores desired-running servers once and stops retrying after failure", async () => {
+    const managed = server("running");
+    const restoreServer = vi.fn().mockRejectedValue(new Error("mod crashed"));
+    const states: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(false),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer,
+      setDesiredState: (_id, state) => {
+        states.push(state);
+        managed.desiredRuntimeState = state;
+      }
+    });
+
+    await coordinator.poll();
+    await coordinator.poll();
+
+    expect(restoreServer).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(["stopped"]);
+  });
+
+  it("keeps intentionally stopped servers stopped after a new connection epoch", async () => {
+    const managed = server("stopped");
+    const restoreServer = vi.fn(async () => status(true));
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(false),
+      connectionEpoch: async () => "epoch-2",
+      restoreServer,
+      setDesiredState: () => undefined
+    });
+
+    await coordinator.poll();
+
+    expect(restoreServer).not.toHaveBeenCalled();
+  });
+
+  it("adopts a manually started container as desired-running", async () => {
+    const managed = server("stopped");
+    const states: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(true),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      setDesiredState: (_id, state) => states.push(state)
+    });
+
+    await coordinator.poll();
+
+    expect(states).toEqual(["running"]);
+  });
+
+  it("persists a continuous-runtime exit only after confirmation", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const managed = server("running");
+    let running = true;
+    const states: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      exitConfirmationMs: 5_000,
+      readServers: async () => [managed],
+      serverStatus: async () => status(running),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      setDesiredState: (_id, state) => {
+        states.push(state);
+        managed.desiredRuntimeState = state;
+      }
+    });
+
+    await coordinator.poll();
+    running = false;
+    await coordinator.poll();
+    expect(states).toEqual([]);
+    vi.advanceTimersByTime(5_000);
+    await coordinator.poll();
+
+    expect(states).toEqual(["stopped"]);
+  });
+
+  it("does not reinterpret a delayed post-start crash as a recovery opportunity", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const managed = server("running");
+    const restoreServer = vi.fn(async () => status(true));
+    const states: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      exitConfirmationMs: 5_000,
+      readServers: async () => [managed],
+      serverStatus: async () => status(false),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer,
+      setDesiredState: (_id, state) => states.push(state)
+    });
+    coordinator.noteRunning(managed.id);
+
+    await coordinator.poll();
+    vi.advanceTimersByTime(5_000);
+    await coordinator.poll();
+
+    expect(restoreServer).not.toHaveBeenCalled();
+    expect(states).toEqual(["stopped"]);
+  });
+
+  it("retains running intent across an outage and restores after reconnect", async () => {
+    const managed = server("running");
+    let mode: "running" | "offline" | "stopped" = "running";
+    let epoch = "epoch-1";
+    const restoreServer = vi.fn(async () => status(true));
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => {
+        if (mode === "offline") throw new Error("node offline");
+        return status(mode === "running");
+      },
+      connectionEpoch: async () => epoch,
+      restoreServer,
+      setDesiredState: (_id, state) => {
+        managed.desiredRuntimeState = state;
+      }
+    });
+
+    await coordinator.poll();
+    mode = "offline";
+    await coordinator.poll();
+    mode = "stopped";
+    epoch = "epoch-2";
+    await coordinator.poll();
+
+    expect(managed.desiredRuntimeState).toBe("running");
+    expect(restoreServer).toHaveBeenCalledTimes(1);
+  });
+});

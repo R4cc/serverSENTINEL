@@ -93,6 +93,8 @@ Supported modes:
 
 Minecraft itself does not run inside the panel container. Managed Minecraft servers run as separate Docker containers created and controlled by serverSENTINEL.
 
+Minecraft runtime containers do not use Docker process-exit restart loops. serverSENTINEL records whether each server should be running: a Minecraft crash or `stop` command leaves it stopped, while servers that were running are restored after the panel and node agents return from a host or Docker daemon restart.
+
 ## Features
 
 - Server overview with status and runtime information

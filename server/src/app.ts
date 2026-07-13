@@ -74,6 +74,7 @@ import {
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
+import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
@@ -889,6 +890,7 @@ async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
 
 let runtimeRegistry: NodeRuntimeRegistry | undefined;
 let resourceStatsCollector: ResourceStatsCollector | undefined;
+let runtimeStateCoordinator: RuntimeStateCoordinator | undefined;
 
 function runtimeForServer(server: ManagedServer): NodeRuntime {
   if (!runtimeRegistry) {
@@ -3391,6 +3393,63 @@ function runtimeResultRunning(value: unknown) {
   return result.running === true || result.docker?.running === true;
 }
 
+function runtimeStatusRunning(value: unknown): boolean | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const status = value as { running?: unknown; docker?: { available?: unknown; running?: unknown; state?: unknown; message?: unknown } };
+  if (status.running === true || status.docker?.running === true) return true;
+  if (status.docker?.available === false) return undefined;
+  if (status.docker?.state === "unknown") {
+    const message = typeof status.docker.message === "string" ? status.docker.message : "";
+    return /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(message) ? false : undefined;
+  }
+  if (status.running === false || status.docker?.running === false) return false;
+  return undefined;
+}
+
+function setDesiredRuntimeState(server: ManagedServer, state: "running" | "stopped") {
+  serversRepository.setDesiredRuntimeState(server.id, state);
+  server.desiredRuntimeState = state;
+}
+
+async function lifecycleWithDesiredState(server: ManagedServer, action: "start" | "stop" | "restart") {
+  const previous = server.desiredRuntimeState;
+  const desired = action === "stop" ? "stopped" : "running";
+  setDesiredRuntimeState(server, desired);
+  if (desired === "stopped") runtimeStateCoordinator?.noteStopped(server.id);
+  try {
+    const result = await runtimeForServer(server).lifecycle(server, action);
+    if (desired === "running") runtimeStateCoordinator?.noteRunning(server.id);
+    return result;
+  } catch (error) {
+    const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous ?? desired;
+    setDesiredRuntimeState(server, fallback);
+    if (fallback === "running") runtimeStateCoordinator?.noteRunning(server.id);
+    else runtimeStateCoordinator?.noteStopped(server.id);
+    throw error;
+  }
+}
+
+export function isMinecraftStopCommand(command: unknown) {
+  return typeof command === "string" && /^\/?stop$/i.test(command.trim());
+}
+
+async function sendConsoleCommandWithDesiredState(server: ManagedServer, command: unknown) {
+  if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
+  const previous = server.desiredRuntimeState;
+  setDesiredRuntimeState(server, "stopped");
+  runtimeStateCoordinator?.noteStopped(server.id);
+  try {
+    return await runtimeForServer(server).sendConsoleCommand(server, command);
+  } catch (error) {
+    const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous ?? "running";
+    setDesiredRuntimeState(server, fallback);
+    if (fallback === "running") runtimeStateCoordinator?.noteRunning(server.id);
+    throw error;
+  }
+}
+
 async function startProvisionOperation(input: CreateServerInput, createdBy: string) {
   const nodeId = input.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) {
@@ -3660,7 +3719,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       active.waitingUntil = undefined;
       active.message = `Sending command ${index + 1} of ${schedule.commands.length}`;
       throwIfScheduleCancelled(active.controller.signal);
-      await runtime.sendConsoleCommand(server, command);
+      await sendConsoleCommandWithDesiredState(server, command);
       active.message = `Sent command ${index + 1} of ${schedule.commands.length}`;
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
@@ -4823,7 +4882,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
     task: "Starting server",
     successTask: "Server started",
     restartEffect: (status) => !wasRunning && runtimeResultRunning(status) ? "clear" : undefined
-  }, () => runtime.lifecycle(server, "start"));
+  }, () => lifecycleWithDesiredState(server, "start"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
@@ -4837,7 +4896,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     createdBy: user.id,
     task: "Stopping server",
     successTask: "Server stopped"
-  }, () => runtimeForServer(server).lifecycle(server, "stop"));
+  }, () => lifecycleWithDesiredState(server, "stop"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
@@ -4852,13 +4911,13 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     task: "Restarting server",
     successTask: "Server restarted",
     restartEffect: "clear"
-  }, () => runtimeForServer(server).lifecycle(server, "restart"));
+  }, () => lifecycleWithDesiredState(server, "restart"));
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
   await requireRequestPermission(request, "console.command");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).sendConsoleCommand(server, request.body.command);
+  return sendConsoleCommandWithDesiredState(server, request.body.command);
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
@@ -7561,6 +7620,34 @@ runtimeRegistry = new NodeRuntimeRegistry(
     }
   )
 );
+runtimeStateCoordinator = new RuntimeStateCoordinator({
+  pollMs: 5_000,
+  exitConfirmationMs: 5_000,
+  readServers: readServers,
+  serverStatus: (server) => runtimeForServer(server).serverStatus(server),
+  connectionEpoch: async (server) => {
+    if (server.nodeId === localNodeId) return "local";
+    const node = (await readNodes()).find((candidate) => candidate.id === server.nodeId);
+    if (!node || !panelNodeConnections.isConnected(node.id)) throw new Error(`Node ${server.nodeId} is offline`);
+    return `${node.id}:${node.connectedAt || "connected"}`;
+  },
+  canRestore: (server) => blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id),
+  restoreServer: (server) => recordOperation({
+    type: "server.start",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    task: "Restoring server after runtime reconnect",
+    successTask: "Server runtime restored",
+    restartEffect: (status) => runtimeResultRunning(status) ? "clear" : undefined
+  }, () => runtimeForServer(server).lifecycle(server, "start")),
+  setDesiredState: (serverId, state) => {
+    serversRepository.setDesiredRuntimeState(serverId, state);
+  },
+  onError: (error, server) => {
+    logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "runtime_state" }, "Runtime state reconciliation deferred");
+  }
+});
+runtimeStateCoordinator.start();
 resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
@@ -7570,6 +7657,7 @@ resourceStatsCollector = new ResourceStatsCollector({
 });
 resourceStatsCollector.start();
 app.addHook("onClose", async () => {
+  runtimeStateCoordinator?.stop();
   resourceStatsCollector?.stop();
 });
 
