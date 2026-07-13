@@ -1,4 +1,5 @@
 import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
+import { BrandLogo } from "./BrandLogo";
 
 export function AuthLoadingSkeleton() {
   return (
@@ -6,7 +7,7 @@ export function AuthLoadingSkeleton() {
       <section className="authPanel authLoadingSkeleton" aria-busy="true">
         <LoadingLabel>Checking session</LoadingLabel>
         <div className="brandLockup" aria-hidden="true">
-          <img className="brandLogo" src="/logo.png" alt="" />
+          <BrandLogo />
           <div><SkeletonBlock className="authSkeletonTitle" /><SkeletonBlock className="authSkeletonSubtitle" /></div>
         </div>
         <div className="authSkeletonFields" aria-hidden="true">

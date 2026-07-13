@@ -3,6 +3,7 @@ import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
 import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
+import { BrandLogo } from './BrandLogo';
 import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_GROUPS,
@@ -33,7 +34,7 @@ export function AuthPanel({
     <main className="authShell">
       <section className="authPanel">
         <div className="brandLockup">
-          <img className="brandLogo" src="/logo.png" alt="" />
+          <BrandLogo />
           <div>
             <h1>serverSENTINEL</h1>
             <p>{setupRequired ? "Create the first admin account" : "Sign in to manage servers"}</p>

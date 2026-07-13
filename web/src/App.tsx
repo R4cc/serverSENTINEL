@@ -15,6 +15,7 @@ import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValida
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel, UserManagement } from "./components/AuthPanel";
+import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
 import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
@@ -2465,7 +2466,7 @@ export default function App() {
         <aside className="sidebar" id="application-sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
-            <img className="brandLogo" src="/logo.png" alt="" />
+            <BrandLogo />
             <div>
               <h1 className="sidebarBrandWordmark" aria-label="serverSENTINEL">
                 <span aria-hidden="true">server</span>
