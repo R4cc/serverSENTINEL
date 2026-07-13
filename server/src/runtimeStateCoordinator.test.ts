@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
+import { __runtimeStateCoordinatorTestHooks, RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import type { ManagedServer } from "./types.js";
 
 function server(desiredRuntimeState?: "running" | "stopped"): ManagedServer {
@@ -33,6 +33,19 @@ afterEach(() => {
 });
 
 describe("RuntimeStateCoordinator", () => {
+  it("treats a missing but recreatable container as authoritatively stopped", () => {
+    expect(__runtimeStateCoordinatorTestHooks.authoritativeStatus({
+      docker: {
+        available: true,
+        configured: true,
+        controllable: true,
+        running: false,
+        state: "unknown",
+        message: "Managed container is missing and will be recreated from persistent server files on start."
+      }
+    })).toEqual({ available: true, running: false, stopped: true });
+  });
+
   it("initializes legacy desired state from an authoritative runtime", async () => {
     const running = server();
     const stopped = { ...server(), id: "server-2" };

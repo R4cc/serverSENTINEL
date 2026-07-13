@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
 import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
 
 describe("loading skeletons", () => {
@@ -13,8 +13,9 @@ describe("loading skeletons", () => {
   });
 
   it("renders stable bootstrap, code, and terminal surfaces without loading banners", () => {
-    const html = renderToStaticMarkup(<><AuthLoadingSkeleton /><ApplicationLoadingSkeleton /><CodeLoadingSkeleton /><TerminalLoadingSkeleton /></>);
+    const html = renderToStaticMarkup(<><AuthLoadingSkeleton /><ActiveServerStripLoadingSkeleton /><ApplicationLoadingSkeleton /><CodeLoadingSkeleton /><TerminalLoadingSkeleton /></>);
     expect(html).toContain("authLoadingSkeleton");
+    expect(html).toContain("activeServerStripLoadingSkeleton");
     expect(html).toContain("applicationLoadingSkeleton");
     expect(html).toContain("codeLoadingSkeleton");
     expect(html).toContain("terminalLoadingSkeleton");

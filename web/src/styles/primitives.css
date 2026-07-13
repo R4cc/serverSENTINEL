@@ -106,6 +106,13 @@
 .authSkeletonInput { width: 100%; height: 42px; }
 .authSkeletonButton { width: 100%; height: 42px; margin-top: var(--space-3); }
 .applicationLoadingSkeleton { display: grid; gap: var(--space-4); min-height: 420px; }
+.workspaceServerPage > .tabPage.applicationLoadingSkeleton { flex: 1 1 0; height: auto; min-height: 0; overflow: hidden; }
+.activeServerStripLoadingSkeleton .serverStripLoadingIcon { flex: 0 0 40px; width: 40px; height: 40px; }
+.activeServerStripLoadingSkeleton .serverStripLoadingTitle { width: min(180px, 48vw); height: 16px; }
+.activeServerStripLoadingSkeleton .serverStripLoadingBadge { width: 64px; height: 22px; border-radius: 999px; }
+.activeServerStripLoadingSkeleton .serverStripLoadingMeta { width: min(240px, 54vw); height: 11px; }
+.activeServerStripLoadingSkeleton .serverStripLoadingButton { display: block; width: 86px; height: 36px; }
+.activeServerStripLoadingSkeleton .serverStripLoadingOverflow { display: block; width: 36px; height: 36px; }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
 .featurePageLoadingSkeleton .applicationSkeletonPanel { height: 100%; }
 .applicationSkeletonSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }

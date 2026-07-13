@@ -1,4 +1,5 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import '../styles/server-properties.css';
 import { api } from '../api';
 import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from '../types';
 import { defaultDockerImageForMinecraftVersion, defaultQueryPort, defaultServerPort, fabricLoaderVersionInfo, formatBytes, isValidServerPort, javaMajorVersionForMinecraft, maxServerPort, memoryArgs, minecraftVersionInfo, minServerPort, parseJavaMemoryArgs, parseMaxMemoryGb, totalMemoryGb, versionSourceLabel, versionValue } from '../utils/format';

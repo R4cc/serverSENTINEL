@@ -49,7 +49,10 @@ function authoritativeStatus(value: unknown) {
   const state = typeof docker.state === "string" ? docker.state : "";
   const message = typeof docker.message === "string" ? docker.message : "";
   const stopped = stoppedStates.has(state)
-    || (state === "unknown" && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(message));
+    || (state === "unknown" && (
+      (docker.configured === true && docker.controllable === true)
+      || /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(message)
+    ));
   return { available: true, running: false, stopped };
 }
 

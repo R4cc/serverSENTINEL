@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import '../styles/schedules.css';
 import {
   getCoreRowModel,
   getSortedRowModel,

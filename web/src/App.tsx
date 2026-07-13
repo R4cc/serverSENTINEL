@@ -1,4 +1,4 @@
-import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
@@ -7,7 +7,7 @@ import { clientId } from "./utils/files";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
-import { advanceNodeOperation, isNodeRuntimeUsable } from "./utils/nodes";
+import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
@@ -18,7 +18,7 @@ import { AuthPanel, UserManagement } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
-import { ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ResourcePanelLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ResourcePanelLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
@@ -32,15 +32,34 @@ import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { scheduleDelayToSeconds } from "./features/schedules/scheduleDelays";
 
-const MinecraftTerminal = lazy(() => import("./components/MinecraftTerminal").then((module) => ({ default: module.MinecraftTerminal })));
-const ResourcePanel = lazy(() => import("./components/ResourcePanel").then((module) => ({ default: module.ResourcePanel })));
-const SchedulePage = lazy(() => import("./pages/SchedulesPage").then((module) => ({ default: module.SchedulePage })));
-const NodesPage = lazy(() => import("./pages/NodesPage").then((module) => ({ default: module.NodesPage })));
-const ManagedServerForm = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.ManagedServerForm })));
-const ServerEditForm = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.ServerEditForm })));
-const DeleteServerPanel = lazy(() => import("./pages/ServerSettingsPage").then((module) => ({ default: module.DeleteServerPanel })));
-const ModsPage = lazy(() => import("./pages/ModsPage").then((module) => ({ default: module.ModsPage })));
-const FilesPage = lazy(() => import("./features/files/FilesPage").then((module) => ({ default: module.FilesPage })));
+const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
+const loadResourcePanel = () => import("./components/ResourcePanel");
+const loadSchedulePage = () => import("./pages/SchedulesPage");
+const loadNodesPage = () => import("./pages/NodesPage");
+const loadServerSettingsPage = () => import("./pages/ServerSettingsPage");
+const loadModsPage = () => import("./pages/ModsPage");
+const loadFilesPage = () => import("./features/files/FilesPage");
+
+const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
+const ResourcePanel = lazy(() => loadResourcePanel().then((module) => ({ default: module.ResourcePanel })));
+const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
+const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
+const ManagedServerForm = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.ManagedServerForm })));
+const ServerEditForm = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.ServerEditForm })));
+const DeleteServerPanel = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.DeleteServerPanel })));
+const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
+const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
+
+function preloadActivePage(page: ActivePage) {
+  if (page === "console") return loadMinecraftTerminal();
+  if (page === "overview") return loadResourcePanel();
+  if (page === "files") return loadFilesPage();
+  if (page === "mods") return loadModsPage();
+  if (page === "schedule") return loadSchedulePage();
+  if (page === "nodes") return loadNodesPage();
+  if (page === "create" || page === "properties") return loadServerSettingsPage();
+  return Promise.resolve();
+}
 
 function consoleLine(text: string) {
   return `${text}\n`;
@@ -590,11 +609,11 @@ export default function App() {
     requestConfirmation
   });
   useEffect(() => {
-    if (!activeServer || demoMode || !authSession?.authenticated) return;
+    if (!activeServer || activePage !== "files" || demoMode || !authSession?.authenticated) return;
     void api<{ operations: OperationRecord[] }>(`/api/operations?serverId=${encodeURIComponent(activeServer.id)}&limit=25`)
       .then(({ operations }) => operations.filter((operation) => operation.type === "file.extract" && (operation.status === "queued" || operation.status === "running")).forEach(filesWorkspace.actions.resumeZipOperation))
       .catch(() => undefined);
-  }, [activeServer?.id, authSession?.authenticated, demoMode]);
+  }, [activeServer?.id, activePage, authSession?.authenticated, demoMode]);
   useEffect(() => {
     refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
   }, [modsWorkspace.actions]);
@@ -628,6 +647,11 @@ export default function App() {
   useEffect(() => {
     void refreshAuth();
   }, []);
+
+  useEffect(() => {
+    if (!authSession?.authenticated) return;
+    void preloadActivePage(activePage);
+  }, [activePage, authSession?.authenticated]);
 
   useEffect(() => {
     return () => {
@@ -830,10 +854,12 @@ export default function App() {
         installer: []
       });
     });
-    if (canViewUsers && !demoMode) {
-      void loadUsers();
-    }
-  }, [authSession?.authenticated, authSession?.user?.rolePreset, canViewUsers, demoMode]);
+  }, [authSession?.authenticated, authSession?.user?.rolePreset, demoMode]);
+
+  useEffect(() => {
+    if (activePage !== "settings" || !authSession?.authenticated || !canViewUsers || demoMode) return;
+    void loadUsers();
+  }, [activePage, authSession?.authenticated, canViewUsers, demoMode]);
 
   useEffect(() => {
     if (demoMode) {
@@ -856,7 +882,6 @@ export default function App() {
     }
     setActiveServerId(activeServer.id);
     const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
-    const initializeFileWorkspace = fileWorkspaceServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
     if (serverChanged) {
       logsRef.current = [];
@@ -874,10 +899,6 @@ export default function App() {
       if (cachedPlayerMetrics) {
         setServerActivities((current) => ({ ...current, [activeServer.id]: cachedPlayerMetrics }));
       }
-    }
-    if (initializeFileWorkspace) {
-      fileWorkspaceServerIdRef.current = activeServer.id;
-      filesWorkspace.actions.resetEditorState();
       setResourceSamples([]);
     }
     if (demoMode && activeServer.id === demoServerId) {
@@ -891,7 +912,6 @@ export default function App() {
       logsRef.current = demoLogs;
       setLogs(demoLogs);
       setConsoleConnectionState("live");
-      if (initializeFileWorkspace) filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
       return;
     }
     if (activeNodeRuntimeBlocked) {
@@ -907,14 +927,11 @@ export default function App() {
       filesWorkspace.actions.setListing({ path: "/", entries: [] });
       return;
     }
-    if (initializeFileWorkspace) {
-      const restoredFilePath = readStoredFileLocation(activeServer.id);
-      void filesWorkspace.actions.loadFiles(activeServer.id, restoredFilePath).then((loaded) => {
-        if (!loaded && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
-      });
-    }
-
     void refreshStatus(activeServer.id);
+    if (activePage !== "console") {
+      setConsoleLoading(false);
+      return;
+    }
     void refreshConsoleLogs(activeServer.id);
 
     if (consoleReconnectTimeoutRef.current !== null) {
@@ -962,11 +979,7 @@ export default function App() {
       setConsoleError("");
     }
 
-    socket.onopen = () => {
-      if (activeServerIdRef.current === serverId) {
-        void refreshStatus(serverId);
-      }
-    };
+    socket.onopen = () => undefined;
     socket.onmessage = (event) => {
       let message: { type?: string; source?: string; text?: string; message?: string; code?: string; retryable?: boolean };
       try {
@@ -1021,7 +1034,22 @@ export default function App() {
       }
       socket.close();
     };
-  }, [activeServer?.id, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
+  }, [activeServer?.id, activePage, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
+
+  useEffect(() => {
+    if (!activeServer || activePage !== "files" || activeNodeRuntimeBlocked) return;
+    if (fileWorkspaceServerIdRef.current === activeServer.id) return;
+    fileWorkspaceServerIdRef.current = activeServer.id;
+    filesWorkspace.actions.resetEditorState();
+    if (demoMode && activeServer.id === demoServerId) {
+      filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
+      return;
+    }
+    const restoredFilePath = readStoredFileLocation(activeServer.id);
+    void filesWorkspace.actions.loadFiles(activeServer.id, restoredFilePath).then((loaded) => {
+      if (!loaded && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
+    });
+  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode]);
 
   useEffect(() => {
     if (!activeServer || activeServerIsDemo || !activeStatus || activeStatus.docker.running) return;
@@ -1086,7 +1114,7 @@ export default function App() {
   }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
-    if (!activeServer || activeNodeRuntimeBlocked) return;
+    if (!activeServer || activePage !== "overview" || activeNodeRuntimeBlocked) return;
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples([demoStats(demoRunning)]);
       const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-resourceHistorySampleLimit)), resourcePollMs);
@@ -1127,7 +1155,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, demoMode, demoRunning]);
+  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
@@ -1306,7 +1334,10 @@ export default function App() {
       const nextDemoMode = Boolean(session.authenticated && session.demo);
       writeStoredDemoMode(nextDemoMode);
       setDemoMode(nextDemoMode);
-      if (nextDemoMode) resetDemoState();
+      if (nextDemoMode) {
+        resetDemoState();
+        setActivePage("overview");
+      }
       setAuthNotice("");
       setAuthSession(session);
     } catch (error) {
@@ -1994,6 +2025,7 @@ export default function App() {
     const confirmed = await requestConfirmation({
       title: `${actionLabel} ${node.name}?`,
       description: `${actionLabel} this node${versionText}.`,
+      details: nodeRestartImpactMessage(node),
       warning: "The node may disconnect briefly while its container is recreated.",
       confirmLabel: `${actionLabel} node`,
       variant: "primary"
@@ -2056,6 +2088,7 @@ export default function App() {
       description: node.isInternal
         ? `Restart the Panel container (${node.name}).`
         : `Restart the node container for ${node.name}.`,
+      details: nodeRestartImpactMessage(node),
       warning: node.isInternal
         ? "Your current session will disconnect temporarily while the Panel restarts."
         : "The node will disconnect briefly while its container restarts.",
@@ -2686,7 +2719,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <section className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && activeServer ? "workspaceServerPage" : ""}`.trim()}>
+      <section className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
@@ -2720,7 +2753,10 @@ export default function App() {
         {notice && activePage !== "files" && <div className="notice">{notice}</div>}
 
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
-          <ApplicationLoadingSkeleton />
+          <Fragment key="application-loading">
+            {isServerWorkspacePage(activePage) && <ActiveServerStripLoadingSkeleton />}
+            <ApplicationLoadingSkeleton />
+          </Fragment>
         )}
 
         {appLoadError && (
@@ -3012,7 +3048,7 @@ export default function App() {
         )}
 
         {isServerWorkspacePage(activePage) && activeServer && (
-          <>
+          <Fragment key={`server-workspace-${activeServer.id}`}>
             <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
               <div className="serverStripPrimary">
                 <div className="serverStripLeft">
@@ -3187,19 +3223,17 @@ export default function App() {
                     </div>}
                   />
                   <div className="terminal">
-                    {consoleLoading && logs.length === 0 ? <TerminalLoadingSkeleton /> : (
-                      <Suspense fallback={<TerminalLoadingSkeleton />}>
-                        <MinecraftTerminal
-                          entries={logs}
-                          canSendCommands={canSendConsoleCommands}
-                          disabledReason={consoleCommandDisabledReason}
-                          commandHistory={commandHistory}
-                          onCommand={(command) => {
-                            void sendCommand(command);
-                          }}
-                        />
-                      </Suspense>
-                    )}
+                    <Suspense fallback={<TerminalLoadingSkeleton />}>
+                      <MinecraftTerminal
+                        entries={logs}
+                        canSendCommands={canSendConsoleCommands}
+                        disabledReason={consoleCommandDisabledReason}
+                        commandHistory={commandHistory}
+                        onCommand={(command) => {
+                          void sendCommand(command);
+                        }}
+                      />
+                    </Suspense>
                   </div>
                 </section>
               </section>
@@ -3284,7 +3318,7 @@ export default function App() {
               </section>
             )}
 
-          </>
+          </Fragment>
         )}
       </section>
       </main>

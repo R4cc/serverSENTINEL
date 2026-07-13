@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,10 @@ const port = Number(process.env.SERVERSENTINEL_SCREENSHOT_PORT || 4173);
 const baseUrl = `http://127.0.0.1:${port}`;
 const fixedTime = new Date("2026-01-15T12:00:00.000Z");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const [sansFontData, monoFontData] = await Promise.all([
+  readFile(join(repositoryRoot, "node_modules", "@fontsource-variable", "inter", "files", "inter-latin-wght-normal.woff2"), "base64"),
+  readFile(join(repositoryRoot, "node_modules", "@fontsource-variable", "cascadia-code", "files", "cascadia-code-latin-wght-normal.woff2"), "base64")
+]);
 
 let server;
 let browser;
@@ -82,6 +86,41 @@ async function capture(page, filename) {
   });
 }
 
+async function installScreenshotFonts(page) {
+  await page.addStyleTag({
+    content: `
+      @font-face {
+        font-family: "serverSENTINEL Screenshot Sans";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+        src: url("data:font/woff2;base64,${sansFontData}") format("woff2-variations");
+      }
+      @font-face {
+        font-family: "serverSENTINEL Screenshot Mono";
+        font-style: normal;
+        font-weight: 200 700;
+        font-display: block;
+        src: url("data:font/woff2;base64,${monoFontData}") format("woff2-variations");
+      }
+      :root {
+        --font-sans: "serverSENTINEL Screenshot Sans", sans-serif;
+        --font-mono: "serverSENTINEL Screenshot Mono", monospace;
+      }
+    `
+  });
+  const loadedFontCounts = await page.evaluate(async () => {
+    const [sans, mono] = await Promise.all([
+      document.fonts.load('450 14px "serverSENTINEL Screenshot Sans"', "serverSENTINEL"),
+      document.fonts.load('400 14px "serverSENTINEL Screenshot Mono"', "serverSENTINEL")
+    ]);
+    return { sans: sans.length, mono: mono.length };
+  });
+  if (!loadedFontCounts.sans || !loadedFontCounts.mono) {
+    throw new Error(`Could not load deterministic screenshot fonts: ${JSON.stringify(loadedFontCounts)}`);
+  }
+}
+
 async function openPage(page, title, heading) {
   await page.locator(`.sideNav button[title="Open ${title}"]`).click();
   await page.locator(".workspaceHeader").getByRole("heading", { name: heading, exact: true }).waitFor();
@@ -137,6 +176,7 @@ try {
     localStorage.setItem("serversentinel-active-page", "overview");
   });
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await installScreenshotFonts(page);
   await page.addStyleTag({
     content: "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }"
   });

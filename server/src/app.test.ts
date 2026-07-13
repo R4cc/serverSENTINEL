@@ -562,8 +562,8 @@ describe("Minecraft Query metrics parsing", () => {
       Buffer.from("hostname\0Test Server\0numplayers\0", "utf8"),
       Buffer.from("3\0maxplayers\0", "utf8"),
       Buffer.from("20\0", "utf8"),
-      Buffer.from([0, 1, 0]),
-      Buffer.from("player_\0 Alex \0Steve\0Alex\0\0", "utf8")
+      Buffer.from("\0\x01player_\0\0", "latin1"),
+      Buffer.from(" Alex \0Steve\0Alex\0\0", "utf8")
     ]);
     const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
 
@@ -572,6 +572,24 @@ describe("Minecraft Query metrics parsing", () => {
       playersOnline: 3,
       maxPlayers: 20,
       playerNames: ["Alex", "Steve"]
+    });
+  });
+
+  it("parses an empty player roster from a full query response", () => {
+    const sessionId = Buffer.from([1, 2, 3, 4]);
+    const payload = Buffer.concat([
+      Buffer.from("numplayers\0", "utf8"),
+      Buffer.from("0\0maxplayers\0", "utf8"),
+      Buffer.from("20\0", "utf8"),
+      Buffer.from("\0\x01player_\0\0\0", "latin1")
+    ]);
+    const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
+
+    expect(parseMinecraftQueryResponse(packet, sessionId)).toEqual({
+      responding: true,
+      playersOnline: 0,
+      maxPlayers: 20,
+      playerNames: []
     });
   });
 });

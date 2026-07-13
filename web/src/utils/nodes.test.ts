@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedNode, NodeOperation } from "../types";
-import { advanceNodeOperation } from "./nodes";
+import { advanceNodeOperation, nodeRestartImpactMessage } from "./nodes";
 
 const graceMs = 5 * 60 * 1000;
 
@@ -77,5 +77,22 @@ describe("advanceNodeOperation", () => {
       operation: { ...operation(), observedOffline: true, phase: "timed-out" },
       outcome: "pending"
     });
+  });
+});
+
+describe("nodeRestartImpactMessage", () => {
+  it("explains that remote-node servers remain available during reconnect", () => {
+    const message = nodeRestartImpactMessage(node());
+
+    expect(message).toContain("not restarted");
+    expect(message).toContain("stay online and reachable");
+    expect(message).toContain("status and controls in the Panel will be temporarily unavailable");
+  });
+
+  it("explains the temporary Panel outage for the internal node", () => {
+    const message = nodeRestartImpactMessage(node({ type: "local", isInternal: true }));
+
+    expect(message).toContain("stay online and reachable");
+    expect(message).toContain("Panel and its controls will be temporarily unavailable");
   });
 });

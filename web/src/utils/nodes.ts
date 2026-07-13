@@ -69,6 +69,12 @@ export function isNodeRuntimeUsable(node: ManagedNode) {
   return node.status === "online" && isNodeCompatible(node) && isNodeDockerUsable(node);
 }
 
+export function nodeRestartImpactMessage(node: ManagedNode) {
+  return node.isInternal
+    ? "Running servers are not restarted. They stay online and reachable, but the Panel and its controls will be temporarily unavailable."
+    : "Running servers on this node are not restarted. They stay online and reachable, but their status and controls in the Panel will be temporarily unavailable until the node reconnects.";
+}
+
 export function nodeJoinTokenExpired(node: ManagedNode) {
   return Boolean(node.hasPendingJoinToken && node.joinTokenExpiresAt && new Date(node.joinTokenExpiresAt).getTime() <= Date.now());
 }

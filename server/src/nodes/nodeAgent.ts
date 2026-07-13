@@ -597,21 +597,35 @@ async function runtimeStatus(server: ManagedServer) {
   const managed = details?.Config?.Labels?.["serversentinel.managed"] === "true";
   if (details && managed) await reconcileRestartPolicy(server, details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
+  const configured = Boolean(server.dockerContainer);
+  const available = dockerAvailable();
+  const serverJar = runtimeTarget(server).serverJar;
+  const serverJarAvailable = Boolean(serverJar && existsSync(await inside(server, serverJar, false)));
+  const recreatable = !details && configured && available && serverJarAvailable;
+  const controllable = details ? managed : recreatable;
   return {
     server,
     docker: {
-      configured: Boolean(server.dockerContainer),
-      available: dockerAvailable(),
-      controllable: Boolean(details),
+      configured,
+      available,
+      controllable,
       state: details?.State?.Status ?? "unknown",
       running,
       container: containerName(server),
       startedAt: details?.State?.StartedAt,
       finishedAt: details?.State?.FinishedAt,
-      message: details ? "" : "Container not found on remote node"
+      message: details
+        ? managed ? "" : "A same-named container exists but is not managed by serverSENTINEL"
+        : recreatable
+          ? "Managed container is missing and will be recreated from persistent server files on start."
+          : !available
+            ? "Docker is unavailable on the remote node"
+            : !configured
+              ? "Docker container is not configured for this server"
+              : "Managed container is missing and cannot be recreated because the server jar is unavailable"
     },
     fileLogsAvailable: existsSync(await inside(server, "logs/latest.log", false)),
-    controlAvailable: Boolean(details),
+    controlAvailable: controllable,
     commandInputAvailable: running && managed && stdinReady,
     commandInputMessage: !running
       ? "Start the server before sending console commands."

@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
+import "../styles/files-console.css";
 import "@xterm/xterm/css/xterm.css";
 import {
   consumeTerminalTouchScroll,

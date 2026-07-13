@@ -185,6 +185,81 @@ describe("remote node Docker container recreation", () => {
     };
   }
 
+  it("offers Start when a deleted container can be recreated from persistent server files", async () => {
+    mockDockerAvailable = true;
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    const serverDir = join(tempRoot, "servers", server.storageName!);
+    await mkdir(serverDir, { recursive: true });
+    await writeFile(join(serverDir, "fabric-server-launch.jar"), "jar");
+    mockDockerRequest.mockRejectedValue(new Error("No such container"));
+
+    const status = await hooks.handleCommand("server.inspect", { server }) as {
+      docker: { controllable: boolean; message: string };
+      controlAvailable: boolean;
+    };
+
+    expect(status.docker.controllable).toBe(true);
+    expect(status.controlAvailable).toBe(true);
+    expect(status.docker.message).toContain("will be recreated");
+  });
+
+  it("recreates and starts a deleted container with the existing server directory mounted", async () => {
+    mockDockerAvailable = true;
+    mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    const serverDir = join(tempRoot, "servers", server.storageName!);
+    await mkdir(serverDir, { recursive: true });
+    await writeFile(join(serverDir, "fabric-server-launch.jar"), "jar");
+    let created = false;
+    let running = false;
+    mockDockerJsonRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === "/containers/create?name=serversentinel-survival") {
+        created = true;
+        return {};
+      }
+      throw new Error(`Unexpected Docker JSON request ${path}`);
+    });
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/serversentinel-survival/json") {
+        if (!created) throw new Error("No such container");
+        return {
+          Id: "recreated-container-id",
+          State: { Running: running, Status: running ? "running" : "created" },
+          Config: {
+            Labels: {
+              "serversentinel.managed": "true",
+              "serversentinel.serverId": server.id
+            },
+            OpenStdin: true,
+            AttachStdin: true
+          },
+          HostConfig: { RestartPolicy: { Name: "no" } }
+        };
+      }
+      if (method === "GET" && path.startsWith("/containers/") && path.endsWith("/json")) {
+        throw new Error("No such container");
+      }
+      if (method === "POST" && path === "/containers/serversentinel-survival/start") {
+        running = true;
+        return {};
+      }
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    const status = await hooks.handleCommand("server.start", { server }) as { docker: { running: boolean } };
+
+    expect(status.docker.running).toBe(true);
+    expect(mockDockerJsonRequest).toHaveBeenCalledWith(
+      "POST",
+      "/containers/create?name=serversentinel-survival",
+      expect.objectContaining({
+        HostConfig: expect.objectContaining({ Binds: [`${join(tempRoot, "servers", server.storageName!)}:/data`] })
+      }),
+      [201, 409]
+    );
+    expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-survival/start", [204, 304]);
+  });
+
   it("carries custom networks across a stopped port-edit recreate", async () => {
     mockDockerAvailable = true;
     mockDockerJsonRequest.mockResolvedValue({});

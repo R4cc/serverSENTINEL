@@ -345,8 +345,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setUpdatePlanError(activeNodeBlockMessage);
       return;
     }
-    void refreshUpdates(false);
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
+    if (activePage === "mods") {
+      void refreshUpdates(false);
+    } else if (activePage === "overview") {
+      void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false });
+    }
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activeNodeBlockMessage, activePage]);
 
   useEffect(() => {
     if (activeServerIsDemo) {

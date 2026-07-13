@@ -22,7 +22,7 @@ export function AuthLoadingSkeleton() {
 
 export function ApplicationLoadingSkeleton() {
   return (
-    <section className="applicationLoadingSkeleton" aria-busy="true">
+    <section className="tabPage applicationLoadingSkeleton" aria-busy="true">
       <LoadingLabel>Loading application</LoadingLabel>
       <div className="applicationSkeletonSummary" aria-hidden="true">
         {Array.from({ length: 3 }, (_, index) => <SkeletonBlock className="applicationSkeletonTile" key={index} />)}
@@ -32,6 +32,35 @@ export function ApplicationLoadingSkeleton() {
         {Array.from({ length: 6 }, (_, index) => <SkeletonBlock className="applicationSkeletonRow" key={index} style={{ width: `${88 - (index % 3) * 9}%` }} />)}
       </div>
     </section>
+  );
+}
+
+export function ActiveServerStripLoadingSkeleton() {
+  return (
+    <div className="activeServerStrip activeServerStripLoadingSkeleton" aria-hidden="true">
+      <div className="serverStripPrimary">
+        <div className="serverStripLeft">
+          <SkeletonBlock className="serverStripIcon serverStripLoadingIcon" />
+          <div className="serverStripInfo">
+            <div className="serverStripTitleRow">
+              <SkeletonBlock className="serverStripLoadingTitle" />
+              <SkeletonBlock className="serverStripLoadingBadge" />
+            </div>
+            <div className="serverStripMetaRow">
+              <SkeletonBlock className="serverStripLoadingMeta" />
+            </div>
+          </div>
+        </div>
+        <div className="serverStripRight">
+          <div className="runtimeControls runtimeControlsCompact">
+            <SkeletonBlock className="runtimeControlButton serverStripLoadingButton" />
+            <SkeletonBlock className="runtimeControlButton serverStripLoadingButton" />
+          </div>
+          <SkeletonBlock className="quickActionButton consoleLink serverStripLoadingButton" />
+          <SkeletonBlock className="overflowButton serverStripLoadingOverflow" />
+        </div>
+      </div>
+    </div>
   );
 }
 

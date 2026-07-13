@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import "../../styles/files-console.css";
+import "../../styles/file-manager.css";
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";

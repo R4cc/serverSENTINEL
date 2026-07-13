@@ -34,13 +34,11 @@ function parseKeyValuePayload(payload: Buffer) {
 }
 
 function parsePlayers(payload: Buffer, offset: number) {
-  const marker = Buffer.from([0, 1, 0]);
-  const markerIndex = payload.indexOf(marker, Math.max(0, offset - 1));
+  const marker = Buffer.from("\0\0\x01player_\0\0", "latin1");
+  const markerIndex = payload.indexOf(marker, Math.max(0, offset - 2));
   if (markerIndex === -1) return undefined;
-  const label = readNullTerminated(payload, markerIndex + marker.length);
-  if (label.value !== "player_") return undefined;
   const players = new Set<string>();
-  let cursor = label.next;
+  let cursor = markerIndex + marker.length;
   while (cursor < payload.length) {
     const player = readNullTerminated(payload, cursor);
     cursor = player.next;
