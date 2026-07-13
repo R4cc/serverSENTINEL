@@ -1375,6 +1375,268 @@ button:disabled,
   color: var(--sentinel-accent-strong);
 }
 
+/* Mobile workspaces reserve the viewport for the active page rather than the shell. */
+@media (max-width: 720px) {
+  .appShell {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    padding: 8px 12px !important;
+  }
+
+  .workspaceServerPage {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 8px 12px 12px;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .workspaceServerPage > .workspaceHeader {
+    display: none;
+  }
+
+  .workspaceServerPage > .activeServerStrip {
+    flex: 0 0 auto;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripPrimary {
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripLeft {
+    width: 100%;
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripIcon,
+  .workspaceServerPage > .activeServerStrip .serverStripMetaRow,
+  .workspaceServerPage > .activeServerStrip .consoleLink {
+    display: none;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripInfo,
+  .workspaceServerPage > .activeServerStrip .serverStripTitleRow {
+    width: 100%;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripTitleRow {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripTitleRow strong {
+    flex: 1 1 auto;
+    font-size: 14px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .runtimeBadge {
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripRight {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .runtimeControls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: auto;
+    gap: 6px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .runtimeControlButton,
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    width: auto;
+    min-width: 0;
+    height: 32px;
+    min-height: 32px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    width: 32px;
+    padding: 0;
+  }
+
+  .workspaceServerPage > .activeServerStrip > .serverRuntimeAlert {
+    padding: 8px;
+  }
+
+  .workspaceServerPage > .tabPage,
+  .workspaceServerPage > .filesPage {
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspacePage-console > .tabPage:has(.consolePanel) {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspacePage-console .consolePanel {
+    min-height: 0;
+    padding: 6px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspacePage-console .consolePanel > .uiPanelHeader {
+    display: none;
+  }
+
+  .workspacePage-console .consolePanel .terminal,
+  .workspacePage-console .minecraftTerminal {
+    height: auto;
+    min-height: 0;
+  }
+
+  .workspacePage-files > .filesPage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    height: auto;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .workspacePage-files .filesExplorer,
+  .workspacePage-files .filesPanel {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workspacePage-files .filesPanel {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .workspacePage-files .fileDetailsPanel {
+    display: none;
+  }
+
+  .workspacePage-files .fileNavBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "navigation actions"
+      "breadcrumbs breadcrumbs";
+    min-height: 0;
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .workspacePage-files .fileNavButtons {
+    grid-area: navigation;
+  }
+
+  .workspacePage-files .fileBreadcrumbs {
+    grid-area: breadcrumbs;
+    min-height: 32px;
+  }
+
+  .workspacePage-files .fileToolbar {
+    grid-area: actions;
+  }
+
+  .workspacePage-files .fileNavButtons,
+  .workspacePage-files .fileToolbar {
+    gap: 4px;
+  }
+
+  .workspacePage-files .fileNavButtons .uiButton,
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
+  .workspacePage-files .fileBreadcrumbs button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex: 0 0 32px;
+  }
+
+  .workspacePage-files .fileBreadcrumbs button {
+    width: auto;
+    max-width: 160px;
+    padding-inline: 8px;
+  }
+
+  .workspacePage-files .selectionActionBar {
+    display: flex;
+    min-height: 36px;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .workspacePage-files .selectionSummary {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspacePage-files .selectionActions {
+    margin-left: auto;
+  }
+
+  .workspacePage-files .selectionActions:empty::after {
+    display: none;
+  }
+
+  .workspacePage-files .fileTableHead,
+  .workspacePage-files .fileTableRow {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 4px;
+  }
+
+  .workspacePage-files .fileColumnHeader--modifiedAt,
+  .workspacePage-files .fileColumnHeader--type,
+  .workspacePage-files .fileColumnHeader--size,
+  .workspacePage-files .fileModifiedCell,
+  .workspacePage-files .fileTypeCell,
+  .workspacePage-files .fileSizeCell {
+    display: none;
+  }
+
+  .workspacePage-files .fileTableFooter {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+
+  .workspacePage-overview > .overviewPage {
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+}
+
 /* The active server is the parent heading for its workspace navigation. */
 .serverNavigationGroup,
 .serverSwitcher,

@@ -2585,7 +2585,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <section className="workspace">
+      <section className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && activeServer ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
