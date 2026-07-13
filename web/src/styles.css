@@ -2,10 +2,15 @@
 @import "./styles/auth.css";
 @import "./styles/layout.css";
 @import "./styles/overview.css";
+@import "./styles/server-properties.css";
 @import "./styles/settings-nodes.css";
+@import "./styles/files-console.css";
+@import "./styles/schedules.css";
 @import "./styles/typography.css";
 @import "./styles/canonical-layout.css";
+@import "./styles/mods.css";
 @import "./styles/core-adoption.css";
+@import "./styles/file-manager.css";
 @import "./styles/confirmation-modal.css";
 @import "./styles/primitives.css";
 @import "./styles/responsive.css";

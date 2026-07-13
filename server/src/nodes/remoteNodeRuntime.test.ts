@@ -80,6 +80,33 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("sends file moves to remote nodes with normalized source and destination paths", async () => {
+    const node = testNode();
+    const calls: Array<{ command: string; payload: unknown }> = [];
+    const connections = {
+      request: async (_node: ManagedNode, command: string, payload: unknown) => {
+        calls.push({ command, payload });
+        return { ok: true };
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    await runtime.moveFile(testServer(), "/config/app.yml", "/archive");
+
+    expect(calls).toEqual([{
+      command: "files.move",
+      payload: expect.objectContaining({ path: "config/app.yml", destinationPath: "archive" })
+    }]);
+  });
+
   it("normalizes the player roster returned by a remote node overview", async () => {
     const node = testNode();
     const connections = {

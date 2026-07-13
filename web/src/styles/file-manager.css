@@ -57,6 +57,13 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
+.filesPage .fileBreadcrumbs button.fileDropTarget,
+.filesPage .fileTableRow.fileDropTarget {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 .filesPage .zipReadOnlyBanner {
   flex: 0 0 auto;
   border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 30%, var(--border-row));
@@ -136,6 +143,14 @@
 .filesPage .fileTableRow {
   cursor: default;
   border-radius: var(--radius-sm);
+}
+
+.filesPage .fileTableRow[draggable="true"] .fileNameCell {
+  cursor: grab;
+}
+
+.filesPage .fileTableRow.fileDragging {
+  opacity: 0.52;
 }
 
 .filesPage .fileTableRow[aria-selected="true"] {

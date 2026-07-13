@@ -59,6 +59,7 @@ describe("node protocol v2", () => {
     expect(hello.buildId).toBe("commit-sha");
     expect(hello.runtimeMode).toBe("node");
     expect(hello.operations.server).toContain("server.create");
+    expect(hello.operations.files).toContain("files.move");
     expect(hello.dataRoot.dockerRoot).toBe("/srv/serversentinel");
   });
 

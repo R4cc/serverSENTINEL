@@ -456,6 +456,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "files.rename", { path: normalizeRemotePath(source), name });
   }
 
+  moveFile(server: ManagedServer, source: string, destinationParent: string) {
+    return this.command(server, "files.move", { path: normalizeRemotePath(source), destinationPath: normalizeRemotePath(destinationParent) });
+  }
+
   duplicateFile(server: ManagedServer, source: string, name: unknown) {
     return this.command(server, "files.copy", { path: normalizeRemotePath(source), name, parent: normalizeRemotePath(dirname(source)) });
   }

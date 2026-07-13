@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -5450,6 +5450,24 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   return touchesMods ? withTrackedModMutation(server, renameEntry) : renameEntry();
 });
 
+app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string } }>("/api/servers/:id/file/move", destructiveRateLimit, async (request) => {
+  const server = await getServer(request.params.id);
+  requireNoRunningFileExtraction(server.id);
+  const runtime = runtimeForServer(server);
+  const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  if (resolve(source) === resolve(server.serverDir)) throw new Error("Refusing to move the server root directory");
+  const destination = await runtime.resolveExistingPath(server, request.body.destinationPath ?? ".");
+  const targetInput = destination === "." ? basename(source) : `${destination.replace(/[\\/]+$/, "")}/${basename(source)}`;
+  const target = await runtime.resolveWritableResolvedPath(server, targetInput);
+  await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, source));
+  await requireFilePathPermission(request, server, target, runtime.fileRenamePermission(server, target, target));
+  const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
+  const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
+  if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
+  const moveEntry = () => runtime.moveFile(server, source, destination);
+  return touchesMods ? withTrackedModMutation(server, moveEntry) : moveEntry();
+});
+
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
   requireNoRunningFileExtraction(server.id);
@@ -5681,6 +5699,22 @@ async function localRenameFile(server: ManagedServer, source: string, name: unkn
   }
   await rename(source, target);
   logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "rename_file" }, "Server file renamed");
+  return { ok: true, path: toPublicPath(server, target) };
+}
+
+async function localMoveFile(server: ManagedServer, source: string, destinationParent: string) {
+  if (resolve(source) === resolve(server.serverDir)) throw new Error("Refusing to move the server root directory");
+  const destinationStat = await stat(destinationParent);
+  if (!destinationStat.isDirectory()) throw new Error("Move destination is not a directory");
+  const target = await ensureWritableResolvedInsideServer(server, join(destinationParent, basename(source)));
+  const targetRelativeToSource = relative(source, target);
+  if (!targetRelativeToSource) throw new Error("Item is already in that folder");
+  if (!isAbsolute(targetRelativeToSource) && targetRelativeToSource !== ".." && !targetRelativeToSource.startsWith(`..${sep}`)) {
+    throw new Error("A folder cannot be moved into itself");
+  }
+  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+  await rename(source, target);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "move_file" }, "Server file moved");
   return { ok: true, path: toPublicPath(server, target) };
 }
 
@@ -7610,6 +7644,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   createFolder: localCreateFolder,
   uploadFile: localUploadFile,
   renameFile: localRenameFile,
+  moveFile: localMoveFile,
   duplicateFile: localDuplicateFile,
   deleteFile: localDeleteFile,
   listMods: localListMods,

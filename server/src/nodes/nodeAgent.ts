@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
 import http from "node:http";
@@ -1359,6 +1359,26 @@ async function handleCommand(command: string, payload: any) {
     if (resolve(source) === resolve(root)) throw new Error("Refusing to rename the server root directory");
     const target = await writableResolvedInside(server, join(dirname(source), safeName(payload?.name)));
     if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+    await rename(source, target);
+    return { ok: true, path: publicPath(root, target) };
+  }
+  if (command === "files.move") {
+    const root = await serverRoot(server);
+    const source = await inside(server, payload?.path);
+    if (resolve(source) === resolve(root)) throw new Error("Refusing to move the server root directory");
+    const destination = await inside(server, payload?.destinationPath);
+    const destinationStat = await stat(destination);
+    if (!destinationStat.isDirectory()) throw new Error("Move destination is not a directory");
+    const target = await writableResolvedInside(server, join(destination, basename(source)));
+    const targetRelativeToSource = relative(source, target);
+    if (!targetRelativeToSource) throw new Error("Item is already in that folder");
+    if (!isAbsolute(targetRelativeToSource) && targetRelativeToSource !== ".." && !targetRelativeToSource.startsWith(`..${sep}`)) {
+      throw new Error("A folder cannot be moved into itself");
+    }
+    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+    if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(safeRelative(payload?.destinationPath), basename(source)))) {
+      await requireStoppedForMutableConfiguration(server);
+    }
     await rename(source, target);
     return { ok: true, path: publicPath(root, target) };
   }

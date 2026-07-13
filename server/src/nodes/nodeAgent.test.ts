@@ -361,6 +361,50 @@ describe("remote node Docker container recreation", () => {
 });
 
 describe("remote node file operation safety", () => {
+  it("moves files and complete folders into another server folder", async () => {
+    const server = testServer();
+    const serverDir = join(tempRoot, "servers", server.storageName!);
+    await mkdir(join(serverDir, "source", "nested"), { recursive: true });
+    await mkdir(join(serverDir, "destination"), { recursive: true });
+    await writeFile(join(serverDir, "source", "nested", "value.txt"), "value");
+    await writeFile(join(serverDir, "loose.txt"), "loose");
+
+    await hooks.handleCommand("files.move", {
+      server,
+      path: "source",
+      destinationPath: "destination"
+    });
+
+    expect(existsSync(join(serverDir, "source"))).toBe(false);
+    expect(await readFile(join(serverDir, "destination", "source", "nested", "value.txt"), "utf8")).toBe("value");
+
+    await hooks.handleCommand("files.move", {
+      server,
+      path: "loose.txt",
+      destinationPath: "destination"
+    });
+    expect(await readFile(join(serverDir, "destination", "loose.txt"), "utf8")).toBe("loose");
+
+    await hooks.handleCommand("files.move", {
+      server,
+      path: "destination/loose.txt",
+      destinationPath: "."
+    });
+    expect(await readFile(join(serverDir, "loose.txt"), "utf8")).toBe("loose");
+  });
+
+  it("rejects moving a folder into itself or one of its descendants", async () => {
+    const server = testServer();
+    const serverDir = join(tempRoot, "servers", server.storageName!);
+    await mkdir(join(serverDir, "source", "nested"), { recursive: true });
+
+    await expect(hooks.handleCommand("files.move", {
+      server,
+      path: "source",
+      destinationPath: "source/nested"
+    })).rejects.toThrow("cannot be moved into itself");
+  });
+
   it("allows copies into the mods directory when runtime status is unavailable", async () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     await mkdir(join(tempRoot, "servers", server.storageName!, "safe"), { recursive: true });

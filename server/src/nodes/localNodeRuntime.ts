@@ -37,6 +37,7 @@ export type LocalNodeRuntimeHandlers = {
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;
   uploadFile(server: ManagedServer, parent: string, filename: unknown, contentBase64: unknown): Promise<unknown>;
   renameFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
+  moveFile(server: ManagedServer, source: string, destinationParent: string): Promise<unknown>;
   duplicateFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
   deleteFile(server: ManagedServer, target: string, recursive: unknown): Promise<unknown>;
   listMods(server: ManagedServer, options?: { forceRefresh?: boolean }): Promise<unknown>;
@@ -182,6 +183,10 @@ export class LocalNodeRuntime implements NodeRuntime {
 
   renameFile(server: ManagedServer, source: string, name: unknown) {
     return this.handlers.renameFile(server, source, name);
+  }
+
+  moveFile(server: ManagedServer, source: string, destinationParent: string) {
+    return this.handlers.moveFile(server, source, destinationParent);
   }
 
   duplicateFile(server: ManagedServer, source: string, name: unknown) {

@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
-import "../../styles/files-console.css";
-import "../../styles/file-manager.css";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
@@ -97,13 +95,17 @@ export function FilesPage({
   const fileTableRef = useRef<HTMLDivElement>(null);
   const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const contextMenuInvocationRef = useRef(0);
+  const draggedFilePathRef = useRef("");
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const previousDialogOpenRef = useRef(false);
   const [fileContextMenu, setFileContextMenu] = useState<FileContextMenuState | null>(null);
+  const [draggedFilePath, setDraggedFilePath] = useState("");
+  const [fileDropTargetPath, setFileDropTargetPath] = useState("");
   const initialFilesLoading = filesLoading && listing.entries.length === 0;
   const operationLabel = fileOperationBusy === "upload" ? "Uploading file…"
     : fileOperationBusy === "new-folder" ? "Creating folder…"
       : fileOperationBusy === "rename" ? "Renaming item…"
+        : fileOperationBusy === "move" ? "Moving item…"
         : fileOperationBusy === "duplicate" ? "Duplicating file…"
           : fileOperationBusy === "delete" ? "Deleting items…"
             : "";
@@ -190,6 +192,50 @@ export function FilesPage({
     event.preventDefault();
     applyContextMenuSelection();
     openContextMenu({ kind: "background", x: event.clientX, y: event.clientY, returnFocus: fileTableRef.current });
+  }
+
+  function draggedEntry() {
+    return listing.entries.find((entry) => entry.path === draggedFilePathRef.current);
+  }
+
+  function clearFileDrag() {
+    draggedFilePathRef.current = "";
+    setDraggedFilePath("");
+    setFileDropTargetPath("");
+  }
+
+  function handleFileDragStart(event: DragEvent<HTMLDivElement>, entry: (typeof listing.entries)[number]) {
+    if ((event.target as HTMLElement).closest("input") || !actions.canDragFileEntry(entry)) {
+      event.preventDefault();
+      return;
+    }
+    actions.selectFileEntry(entry.path);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-serversentinel-file", entry.path);
+    draggedFilePathRef.current = entry.path;
+    setDraggedFilePath(entry.path);
+  }
+
+  function handleFileDragOver(event: DragEvent<HTMLElement>, destinationPath: string) {
+    const entry = draggedEntry();
+    if (!entry || !actions.canMoveFileEntry(entry, destinationPath)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (fileDropTargetPath !== destinationPath) setFileDropTargetPath(destinationPath);
+  }
+
+  function handleFileDragLeave(event: DragEvent<HTMLElement>, destinationPath: string) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    if (fileDropTargetPath === destinationPath) setFileDropTargetPath("");
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLElement>, destinationPath: string) {
+    const entry = draggedEntry();
+    if (!entry || !actions.canMoveFileEntry(entry, destinationPath)) return;
+    event.preventDefault();
+    clearFileDrag();
+    void actions.moveFileEntry(entry, destinationPath);
   }
 
   const secondarySelectionActions: ActionMenuItem[] = [];
@@ -311,7 +357,16 @@ export function FilesPage({
             </div>
             <div className="fileBreadcrumbs" aria-label="Current folder" ref={breadcrumbRef}>
               {fileBreadcrumbs.map((crumb) => (
-                <button key={`${crumb.kind}:${crumb.path}`} type="button" onClick={() => void (crumb.kind === "archive" ? actions.navigateArchive(crumb.path) : actions.navigateFiles(crumb.path))} className={crumb.path === listing.path && ((archiveContext && crumb.kind === "archive") || (!archiveContext && crumb.kind === "filesystem")) ? "active" : ""} title={crumb.kind === "archive" && archiveContext ? `${archiveContext.archivePath}!${crumb.path}` : crumb.path}>
+                <button
+                  key={`${crumb.kind}:${crumb.path}`}
+                  type="button"
+                  onClick={() => void (crumb.kind === "archive" ? actions.navigateArchive(crumb.path) : actions.navigateFiles(crumb.path))}
+                  className={`${crumb.path === listing.path && ((archiveContext && crumb.kind === "archive") || (!archiveContext && crumb.kind === "filesystem")) ? "active" : ""} ${crumb.kind === "filesystem" && fileDropTargetPath === crumb.path ? "fileDropTarget" : ""}`.trim()}
+                  title={crumb.kind === "archive" && archiveContext ? `${archiveContext.archivePath}!${crumb.path}` : draggedFilePath && crumb.kind === "filesystem" ? `Move to ${crumb.path}` : crumb.path}
+                  onDragOver={crumb.kind === "filesystem" ? (event) => handleFileDragOver(event, crumb.path) : undefined}
+                  onDragLeave={crumb.kind === "filesystem" ? (event) => handleFileDragLeave(event, crumb.path) : undefined}
+                  onDrop={crumb.kind === "filesystem" ? (event) => handleFileDrop(event, crumb.path) : undefined}
+                >
                   {crumb.label}
                 </button>
               ))}
@@ -405,9 +460,15 @@ export function FilesPage({
               return (
                 <div
                   key={entry.path}
-                  className={`fileTableRow ${selected ? "selected" : ""}`}
+                  className={`fileTableRow ${selected ? "selected" : ""} ${draggedFilePath === entry.path ? "fileDragging" : ""} ${entry.type === "directory" && fileDropTargetPath === entry.path ? "fileDropTarget" : ""}`.trim()}
                   role="row"
                   aria-selected={selected}
+                  draggable={actions.canDragFileEntry(entry)}
+                  onDragStart={(event) => handleFileDragStart(event, entry)}
+                  onDragEnd={clearFileDrag}
+                  onDragOver={entry.type === "directory" ? (event) => handleFileDragOver(event, entry.path) : undefined}
+                  onDragLeave={entry.type === "directory" ? (event) => handleFileDragLeave(event, entry.path) : undefined}
+                  onDrop={entry.type === "directory" ? (event) => handleFileDrop(event, entry.path) : undefined}
                   onContextMenu={(event) => handleEntryContextMenu(event, entry.path)}
                   onClick={(event) => {
                     if ((event.target as HTMLElement).closest(".fileCheckboxCell")) return;

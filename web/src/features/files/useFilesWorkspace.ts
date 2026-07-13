@@ -19,6 +19,7 @@ import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameVali
 import { formatBytes } from "../../utils/format";
 import { adjacentFilePath, retainedFileFocus, updateFileSelection, type FileSelectionModifiers } from "./fileSelection";
 import { writeStoredFileLocation } from "./fileLocationStorage";
+import { fileMoveTargetPath, isFileMoveDestination, moveDemoFileTree } from "./fileMove";
 
 type DownloadIntent =
   | {
@@ -238,6 +239,22 @@ export function useFilesWorkspace({
   const canDuplicateSelectedFile = Boolean(!archiveContext && selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
   const canRenameSelectedItem = Boolean(!archiveContext && selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
   const canDeleteSelectedItems = Boolean(!archiveContext && selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
+
+  function canDragFileEntry(entry: FileEntry) {
+    return !archiveContext
+      && !fileRuntimeLocked
+      && !fileOperationBusy
+      && !zipOperationId
+      && !(serverRequiresStoppedForMutableConfig && isServerPropertiesPath(entry.path))
+      && (activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "rename"));
+  }
+
+  function canMoveFileEntry(entry: FileEntry, destinationPath: string) {
+    if (!canDragFileEntry(entry) || !isFileMoveDestination(entry, destinationPath)) return false;
+    const targetPath = fileMoveTargetPath(entry, destinationPath);
+    if (serverRequiresStoppedForMutableConfig && isServerPropertiesPath(targetPath)) return false;
+    return activeServerIsDemo || hasFileManagerPermission(permissionUser, targetPath, "rename");
+  }
   const fileActionBlockedReason = isProvisioning
     ? "Server setup is still running."
     : dockerOperationalLock
@@ -1243,6 +1260,51 @@ export function useFilesWorkspace({
     }
   }
 
+  async function moveFileEntry(entry: FileEntry, destinationPath: string) {
+    if (!activeServer || fileOperationBusy || !canMoveFileEntry(entry, destinationPath)) return;
+    if (dirty && selectedPath && publicPathContains(entry.path, selectedPath)) {
+      const message = "Save or discard the open editor changes before moving this item.";
+      setNotice(message);
+      notify("warning", message);
+      return;
+    }
+    const targetPath = fileMoveTargetPath(entry, destinationPath);
+    setFileOperationBusy("move");
+    try {
+      if (activeServerIsDemo) {
+        let nextFiles = moveDemoFileTree(demoFiles, entry.path, targetPath);
+        const movedDemoMod = demoInstalledMods.find((mod) => `/mods/${mod.filename}` === entry.path);
+        if (movedDemoMod) {
+          nextFiles = { ...nextFiles, [targetPath]: `Demo mod file: ${movedDemoMod.displayName || movedDemoMod.filename}` };
+          setDemoInstalledMods((current) => current.filter((mod) => mod.filename !== movedDemoMod.filename));
+        }
+        setDemoFiles(nextFiles);
+        setListing(demoListing(listing.path, nextFiles, movedDemoMod ? demoInstalledMods.filter((mod) => mod.filename !== movedDemoMod.filename) : demoInstalledMods));
+      } else {
+        await api(`/api/servers/${activeServer.id}/file/move`, {
+          method: "POST",
+          body: JSON.stringify({ path: entry.path, destinationPath })
+        });
+        await loadFiles(activeServer.id, listing.path);
+        await refreshModsAfterFilesChange();
+      }
+      setSelectedFilePaths([]);
+      setFocusedFilePath("");
+      setSelectionAnchorPath("");
+      if (selectedPath && publicPathContains(entry.path, selectedPath)) {
+        resetEditorState();
+      }
+      if (filePreview.path && publicPathContains(entry.path, filePreview.path)) {
+        setFilePreview({ path: "", loading: false, data: null, error: "" });
+      }
+      notify("success", `Moved ${entry.name} to ${destinationPath}`);
+    } catch (error) {
+      notify("error", errorMessage(error, `Could not move ${entry.name}.`));
+    } finally {
+      setFileOperationBusy("");
+    }
+  }
+
   async function duplicateSelectedFile(name: string, entry = selectedEntry) {
     if (!activeServer || !entry || fileOperationBusy) return;
     if (!canDuplicateSelectedFile) return;
@@ -1477,6 +1539,9 @@ export function useFilesWorkspace({
       selectFileEntry,
       clearFileSelection,
       moveFileFocus,
+      canDragFileEntry,
+      canMoveFileEntry,
+      moveFileEntry,
       openFile,
       openCreateFolderDialog,
       uploadFile,

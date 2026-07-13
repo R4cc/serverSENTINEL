@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import "../styles/mods.css";
 import { AppIcon } from "../components/FileTypeIcon";
 import { InlineState } from "../components/InlineState";
 import { Button } from "../components/UiPrimitives";
