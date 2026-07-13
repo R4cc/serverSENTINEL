@@ -372,6 +372,10 @@
   max-width: 720px;
 }
 
+.settingsIntegrationRow {
+  min-height: 88px;
+}
+
 .keyForm fieldset,
 .keyFormConfigured {
   display: grid;
@@ -427,7 +431,18 @@
   flex: 0 0 auto;
 }
 
+.keyFormPending .integrationKeySkeleton {
+  width: min(180px, 52%);
+  height: 14px;
+}
+
+.keyFormPending .integrationActionSkeleton {
+  width: 112px;
+  height: var(--control-height);
+}
+
 .usersSettings {
+  min-height: 232px;
   padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
@@ -479,6 +494,10 @@
 
   .usersSettings {
     padding: var(--space-3);
+  }
+
+  .settingsIntegrationRow {
+    min-height: 196px;
   }
 }
 
@@ -1102,8 +1121,21 @@
   background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
-.modsUpdateAction {
-  color: var(--sentinel-warning);
+.modsWorkspaceUpdate .modsUpdateAction {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: var(--sentinel-success);
+  color: var(--surface);
+  background: var(--sentinel-success);
+}
+
+.modsWorkspaceUpdate .modsUpdateAction:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text));
+  color: var(--surface);
+  background: color-mix(in srgb, var(--sentinel-success) 86%, var(--text));
 }
 
 .modsReviewAction {

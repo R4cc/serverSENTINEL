@@ -40,13 +40,15 @@ function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePla
 }
 
 describe("InstalledModsList", () => {
-  it("renders current and target versions in the update column", () => {
+  it("renders the installed version once and the target with a download action", () => {
     const html = renderInstalledMods([mod()]);
 
-    expect(html).toContain("0.154.0+26.2");
-    expect(html).toContain("update to");
+    expect(html.match(/0\.154\.0\+26\.2/g)).toHaveLength(1);
+    expect(html).toContain("→");
     expect(html).toContain("0.155.0+26.2");
-    expect(html).toContain("Update");
+    expect(html).toContain('aria-label="Update Fabric API to 0.155.0+26.2"');
+    expect(html).toContain("modsUpdateAction");
+    expect(html).not.toContain("update to");
   });
 
   it("falls back when the target update version is missing", () => {

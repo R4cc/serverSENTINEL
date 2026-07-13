@@ -8,7 +8,7 @@ import { formatTimestampForFilename, minecraftVersionInfo, resourceHistorySample
 import { hasPermission, normalizePermissions } from "./utils/permissions";
 import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, demoModeEnabled, emptyApp, isServerWorkspacePage, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, demoModeEnabled, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -478,6 +478,17 @@ export default function App() {
           : serverSettingsSaving
             ? "Server settings are saving."
             : "";
+  const settingsDataLoading = !appStateLoaded && !appLoadError;
+  const usersInitialLoading = canViewUsers && users.length === 0 && !usersError && (settingsDataLoading || usersLoading);
+  const containerStatusLabel = settingsDataLoading
+    ? "Checking"
+    : panelOnlyMode
+      ? "Unsupported"
+      : demoMode
+        ? "Demo override"
+        : effectiveAppState.dockerSocketMounted
+          ? "Connected"
+          : "Not mounted";
   const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
@@ -2579,7 +2590,7 @@ export default function App() {
           </div>
         </header>
 
-        {appStateLoaded && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
+        {appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
           <section className="systemBanner error">
             <strong>Docker integration is not connected.</strong>
             <span>Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready.</span>
@@ -2601,7 +2612,7 @@ export default function App() {
 
         {notice && activePage !== "files" && <div className="notice">{notice}</div>}
 
-        {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && (
+        {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
           <ApplicationLoadingSkeleton />
         )}
 
@@ -2693,7 +2704,7 @@ export default function App() {
         )}
 
         {activePage === "settings" && (
-          <section className="settingsList layoutReadable">
+          <section className="settingsList layoutReadable" aria-busy={settingsDataLoading}>
             <section className="panel settingsGroup">
               <PanelHeader className="settingsGroupHeader" title="Interface" />
               <label className="settingsRow">
@@ -2755,12 +2766,12 @@ export default function App() {
 
             <section className="panel settingsGroup">
               <PanelHeader className="settingsGroupHeader" title="Integrations" />
-              <div className="settingsRow">
+              <div className="settingsRow settingsIntegrationRow">
                 <div>
                   <strong>Modrinth API key</strong>
                   <span>Enable mod search, compatibility checks, and installs.</span>
                 </div>
-                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageIntegrations} />
+                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageIntegrations} loading={settingsDataLoading} />
               </div>
             </section>
 
@@ -2787,7 +2798,7 @@ export default function App() {
                   currentUserId={authSession.user?.id}
                   editingUser={userModal}
                   busy={userSaving}
-                  loading={usersLoading}
+                  loading={usersInitialLoading}
                   canManageUsers={canManageUsers}
                   onOpenEdit={(user) => setUserModal(user)}
                   onCloseModal={() => setUserModal(null)}
@@ -2799,15 +2810,15 @@ export default function App() {
               </section>
             )}
 
-            <section className={`panel settingsGroup ${panelOnlyMode ? "panelModeDisabled" : ""}`}>
-              <PanelHeader className="settingsGroupHeader" title="Container" description={panelOnlyMode ? "Panel mode does not support local Docker socket connection." : undefined} />
+            <section className={`panel settingsGroup settingsContainerGroup ${appStateLoaded && panelOnlyMode ? "panelModeDisabled" : ""}`}>
+              <PanelHeader className="settingsGroupHeader" title="Container" description="Local container control availability." />
               <div className="settingsRow readOnly">
                 <div>
                   <strong>Docker socket</strong>
                   <span>Local container control availability.</span>
                 </div>
-                <StatusBadge className={`settingsStatus ${panelOnlyMode ? "" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
-                  {panelOnlyMode ? "Unsupported" : (demoMode ? "Demo override" : effectiveAppState.dockerSocketMounted ? "Connected" : "Not mounted")}
+                <StatusBadge className={`settingsStatus ${settingsDataLoading || panelOnlyMode ? "neutral" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
+                  {containerStatusLabel}
                 </StatusBadge>
               </div>
             </section>

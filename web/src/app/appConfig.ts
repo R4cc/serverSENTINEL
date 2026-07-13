@@ -37,6 +37,10 @@ export function isServerWorkspacePage(page: ActivePage) {
   return serverWorkspacePages.includes(page);
 }
 
+export function shouldShowApplicationLoadingSkeleton(page: ActivePage) {
+  return page !== "settings";
+}
+
 export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = demoModeEnabled) {
   if (!enabled) {
     try {

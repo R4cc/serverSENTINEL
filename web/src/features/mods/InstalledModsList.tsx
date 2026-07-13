@@ -73,7 +73,6 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
         ) : visible.map((mod) => {
           const health = getInstalledModHealth(mod);
           const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
-          const currentVersion = plannedUpdate?.currentVersion || modVersion(mod);
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
           const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${mod.filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase()}`;
@@ -92,14 +91,14 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {plannedUpdate?.status === "safe_update" && (
-                  <ModUpdateCell currentVersion={currentVersion} targetVersion={targetVersion} actionTone="update">
-                    <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={health.shortDescription}>
-                      {health.primaryActionLabel}
+                  <ModUpdateCell targetVersion={targetVersion} actionTone="update">
+                    <Button variant="secondary" compact iconOnly className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
+                      <AppIcon name="download" />
                     </Button>
                   </ModUpdateCell>
                 )}
                 {plannedUpdate?.status === "needs_review" && (
-                  <ModUpdateCell currentVersion={currentVersion} targetVersion={targetVersion} actionTone="review">
+                  <ModUpdateCell targetVersion={targetVersion} actionTone="review">
                     <Button variant="secondary" compact className="modsReviewAction" onClick={() => onDetails(mod)} disabled={locked} title={health.shortDescription}>
                       {health.primaryActionLabel}
                     </Button>
@@ -138,12 +137,10 @@ function InstalledModSkeletonRow() {
 }
 
 function ModUpdateCell({
-  currentVersion,
   targetVersion,
   actionTone,
   children
 }: {
-  currentVersion: string;
   targetVersion?: string;
   actionTone: "update" | "review";
   children: ReactNode;
@@ -151,8 +148,7 @@ function ModUpdateCell({
   return (
     <div className={`modsUpdateCell ${actionTone}`}>
       <div className="modsUpdateVersions">
-        <span className="modsUpdateCurrent">{currentVersion || "Unknown"}</span>
-        <span className="modsUpdateTo">update to</span>
+        <span className="modsUpdateArrow" aria-hidden="true">→</span>
         <strong>{targetVersion || "Update available"}</strong>
       </div>
       {children}
