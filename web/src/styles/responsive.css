@@ -1365,7 +1365,7 @@ button:disabled,
 .sidebar .serverListItem.active:hover {
   background:
     linear-gradient(135deg, rgb(255 255 255 / 8%) 0 25%, transparent 25% 50%, rgb(255 255 255 / 4%) 50% 75%, transparent 75%) 0 0 / 8px 8px,
-    linear-gradient(180deg, color-mix(in srgb, var(--sentinel-accent-strong) 90%, white), var(--sentinel-accent-strong));
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, white), color-mix(in srgb, var(--accent) 88%, black));
   color: var(--swiss-white);
 }
 
@@ -2531,7 +2531,7 @@ textarea:hover:not(:disabled),
 .sidebar .serverListItem.active:hover {
   background:
     linear-gradient(135deg, rgb(255 255 255 / 8%) 0 25%, transparent 25% 50%, rgb(255 255 255 / 4%) 50% 75%, transparent 75%) 0 0 / 8px 8px,
-    linear-gradient(180deg, color-mix(in srgb, var(--sentinel-accent-strong) 90%, white), var(--sentinel-accent-strong));
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, white), color-mix(in srgb, var(--accent) 88%, black));
   color: var(--swiss-white);
 }
 

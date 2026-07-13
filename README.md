@@ -73,6 +73,15 @@ Do not expose the panel directly to the public internet. Use it on a LAN, behind
       <p align="center">Configure panel settings.</p>
     </td>
   </tr>
+  <tr>
+    <td valign="top" colspan="2">
+      <p align="center"><strong>Dark Mode</strong></p>
+      <a href="docs/screenshots/overview-dark.png">
+        <img width="1440" height="1000" alt="serverSENTINEL server overview in dark mode" src="docs/screenshots/overview-dark.png" style="max-width: 100%;" />
+      </a>
+      <p align="center">The full interface is also available in dark mode.</p>
+    </td>
+  </tr>
 </table>
 
 
