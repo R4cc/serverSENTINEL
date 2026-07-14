@@ -198,7 +198,7 @@ button .buttonIcon {
 .sideNav button.active:hover,
 .serverListItem.active:hover {
   background: var(--accent);
-  color: var(--swiss-white);
+  color: var(--surface-raised);
 }
 
 .serverListItem {

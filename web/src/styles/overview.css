@@ -381,15 +381,24 @@
     gap: var(--space-3);
   }
 
+  .workspacePage-overview .resourcePanel:not([aria-busy="true"]) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
   .workspacePage-overview .resourcePanel .resourceRow {
     min-height: 226px;
+    height: 100%;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(132px, 1fr);
     align-content: start;
   }
 
   .workspacePage-overview .resourcePanel .resourceChart,
   .workspacePage-overview .resourcePanel .resourceChartEmpty {
-    height: 132px;
+    height: 100%;
+    min-height: 132px;
   }
 
   .workspacePage-overview .activePlayerGrid {
