@@ -210,6 +210,15 @@ describe("CSRF origin checks", () => {
     }), true)).not.toThrow();
   });
 
+  it("accepts a host-preserving HTTPS tunnel without enabling proxy trust", () => {
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://panel.example.com",
+      host: "panel.example.com",
+      "x-forwarded-host": "spoofed.example.com",
+      "x-forwarded-proto": "javascript"
+    }), false, true)).not.toThrow();
+  });
+
   it("rejects malformed or cross-origin proxy metadata", () => {
     expect(() => assertSameOriginRequest(request({
       origin: "https://evil.example.com",

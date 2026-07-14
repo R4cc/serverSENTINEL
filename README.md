@@ -356,7 +356,7 @@ services:
 | `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` | `serversentinel-minecraft-servers` in Docker images | backend | All-in-one server-file volume mounted into sibling Minecraft containers. Leave empty only for advanced host-bind setups where host and panel paths match. |
 | `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.2.0` | backend | Image tag shown in generated node install/update instructions. |
 | `SERVERSENTINEL_ENABLE_DEMO` | `false` | backend | Enables the isolated demo user and simulated demo UI only when set to `true`. |
-| `SERVERSENTINEL_TRUST_PROXY` | `false` | backend | Trust reverse-proxy client, host, and protocol headers. Enable only behind a proxy that overwrites inbound `Forwarded`/`X-Forwarded-*` headers. |
+| `SERVERSENTINEL_TRUST_PROXY` | `false` | backend | Trust rewritten proxy host/protocol headers and forwarded client addresses. Not required for a TLS-terminating proxy or Cloudflare Tunnel that preserves the public `Host` header. |
 | `SERVERSENTINEL_SETUP_TOKEN` | random at first startup | backend | Optional fixed 16-256 character token required to create the first administrator. When empty, the generated token is printed to the panel startup log. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES` | `536870912` | backend | Maximum total source bytes allowed in one file-manager download action. |
 | `SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES` | `134217728` | backend | Selected individual files at or above this total source size are downloaded as one zip. |
@@ -428,7 +428,7 @@ Node update behavior:
 5. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
 6. Create a managed server and start it from the panel.
 
-When TLS terminates at a reverse proxy or Cloudflare Tunnel, set `SERVERSENTINEL_TRUST_PROXY=true` only if that proxy overwrites untrusted forwarded headers. This lets serverSENTINEL validate the public origin and mark session cookies `Secure`. The backend listener itself can remain plain HTTP; for example, Cloudflared may route the public HTTPS hostname to `http://serversentinel:8080` or a host-mapped HTTP port such as `http://host.docker.internal:8085`. In that setup, keep the mapped panel port reachable only from the host or tunnel network and do not expose it directly to the public internet.
+Cloudflare Tunnel and other TLS-terminating proxies work with `SERVERSENTINEL_TRUST_PROXY=false` when they preserve the browser-facing `Host` header on the request to serverSENTINEL. The panel validates that raw host against the browser's HTTPS `Origin` and marks session cookies `Secure` without trusting forwarded headers. The backend listener itself can remain plain HTTP; for example, Cloudflared may route the public HTTPS hostname to `http://serversentinel:8080` or a host-mapped HTTP port such as `http://host.docker.internal:8085`. Set `SERVERSENTINEL_TRUST_PROXY=true` only when the proxy rewrites `Host` and reliably overwrites inbound `Forwarded`/`X-Forwarded-*` headers, or when forwarded client addresses are required. In either setup, keep the mapped panel port reachable only from the host or tunnel network and do not expose it directly to the public internet.
 
 ## Development
 

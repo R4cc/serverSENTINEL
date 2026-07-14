@@ -77,6 +77,7 @@ import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./http/outboundUrls.
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
+import { sameOriginFailure } from "./http/requestOrigin.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { initializeRuntimeDataRoot } from "./storage/runtimePaths.js";
 import { defaultServerContainerName, isInsideServersDirectory, newServerId, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
@@ -484,35 +485,8 @@ function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields
 }
 
 export function assertSameOriginRequest(request: FastifyRequest, trustProxy = config.trustProxy, requireOrigin = false) {
-  const origin = request.headers.origin;
-  if (!origin) {
-    if (requireOrigin) forbidden("CSRF protection: missing request origin");
-    return;
-  }
-  const host = (trustProxy ? firstHeaderToken(request.headers["x-forwarded-host"]) : "") || firstHeaderToken(request.headers.host);
-  if (!host || /[\r\n]/.test(host)) {
-    forbidden("CSRF protection: invalid request host");
-  }
-  const forwardedProtocol = trustProxy ? firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase() : "";
-  if (forwardedProtocol && forwardedProtocol !== "http" && forwardedProtocol !== "https") {
-    forbidden("CSRF protection: invalid request protocol");
-  }
-  const protocol = forwardedProtocol || (request.protocol === "https" ? "https" : "http");
-  const expected = `${protocol}://${host}`;
-  let actualOrigin: string;
-  try {
-    actualOrigin = new URL(origin).origin;
-  } catch {
-    forbidden("CSRF protection: invalid request origin");
-  }
-  if (actualOrigin !== expected) {
-    forbidden("CSRF protection: cross-origin request rejected");
-  }
-}
-
-function firstHeaderToken(value: unknown) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return typeof raw === "string" ? raw.split(",", 1)[0]?.trim() ?? "" : "";
+  const failure = sameOriginFailure(request, trustProxy, requireOrigin);
+  if (failure) forbidden(`CSRF protection: ${failure}`);
 }
 
 function serverLogFields(server: ManagedServer): LogFields {

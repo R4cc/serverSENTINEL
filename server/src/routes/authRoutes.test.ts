@@ -207,4 +207,27 @@ describe("auth demo login", () => {
     expect(context.calls.cookies.at(-1)).toMatchObject({ sessionId: "", maxAgeSeconds: 0, secure: true });
     expect(response.headers["set-cookie"]).toContain("Secure");
   });
+
+  it("sets Secure cookies for a host-preserving HTTPS tunnel without proxy trust", async () => {
+    const app = Fastify();
+    const context = authContext(true);
+    context.trustProxy = false;
+    registerAuthRoutes(app, context);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: {
+        host: "panel.example.com",
+        origin: "https://panel.example.com",
+        "x-forwarded-host": "spoofed.example.com",
+        "x-forwarded-proto": "javascript"
+      },
+      payload: { username: "demo", password: "demo" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(context.calls.cookies.at(-1)).toMatchObject({ secure: true });
+    expect(response.headers["set-cookie"]).toContain("Secure");
+  });
 });

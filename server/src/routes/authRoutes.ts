@@ -2,6 +2,7 @@ import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import { randomBytes, randomUUID } from "node:crypto";
 import { ROLE_PRESETS, normalizePermissions } from "../permissions.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
+import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 
 type UserPermissionData = {
   permissions: Permission[];
@@ -45,14 +46,8 @@ type AuthRoutesContext = {
   logWarn(fields: Record<string, unknown>, message: string): void;
 };
 
-function firstHeaderToken(value: unknown) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return typeof raw === "string" ? raw.split(",", 1)[0]?.trim() ?? "" : "";
-}
-
 function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }, trustProxy: boolean) {
-  const forwardedProto = trustProxy ? firstHeaderToken(request.headers["x-forwarded-proto"]).toLowerCase() : "";
-  return forwardedProto === "https" || (!forwardedProto && request.protocol === "https");
+  return requestUsesPublicHttps(request, trustProxy);
 }
 
 function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
