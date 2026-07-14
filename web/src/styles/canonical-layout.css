@@ -496,27 +496,6 @@
 
 
 
-.scheduleManagementPage {
-  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
-  gap: var(--space-4);
-  align-items: stretch;
-  align-content: stretch;
-  width: 100%;
-  max-width: none;
-  height: max(640px, calc(100vh - 238px));
-  min-height: 0;
-}
-
-.scheduleTableCard,
-.scheduledRunsCard {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-  padding: 0;
-}
-
 .scheduleEditOptions {
   align-items: flex-start;
 }

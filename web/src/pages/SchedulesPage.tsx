@@ -102,6 +102,7 @@ export function SchedulePage({
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
   const activeRunCount = runItems.filter((run) => run.kind === "active").length;
+  const enabledScheduleCount = schedules.filter((schedule) => schedule.enabled).length;
   const recentRunsKey = runItems.map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`).join("|");
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
@@ -206,211 +207,235 @@ export function SchedulePage({
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
 
   return (
-    <section className="tabPage schedulePage scheduleManagementPage layoutWide">
-      <section className="panel scheduleTableCard">
-        <PanelHeader
-          className="scheduleCardHeader"
-          title="Schedules"
-          description={`Manage automated commands and lifecycle actions for this server. Cron expressions use ${scheduleTimeZone}.`}
-          actions={<Button
-            className="scheduleAddButton"
-            onClick={() => setFormMode({ type: "create" })}
-            disabled={disabled}
-            title={disabled ? disabledReason || "Schedule creation is unavailable right now." : "Add schedule"}
-          >
-            <AppIcon name="plus" />
-            <span>Add schedule</span>
-          </Button>}
-        />
-
-        {disabled && disabledReason && !saveRunning && (
-          <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
-        )}
-
-        <div className="scheduleTableFrame" role="table" aria-label="Schedules">
-          <div className="scheduleTableHeader" role="row">
-            {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
-              <span key={header.id}>
-                {header.id === "actions" ? (
-                  "Actions"
-                ) : (
-                  <SortHeaderButton header={header}>
-                    {header.id === "name"
-                      ? "Name"
-                      : header.id === "cron"
-                        ? "Schedule"
-                        : header.id === "lastRunAt"
-                          ? "Last run"
-                          : header.id === "nextRunAt"
-                            ? "Next run"
-                            : "Enabled"}
-                  </SortHeaderButton>
-                )}
-              </span>
-            ))}
-          </div>
-          <div className="scheduleTableBody" role="rowgroup">
-            {scheduleRows.length ? scheduleRows.map((row) => {
-              const schedule = row.original;
-              return (
-              <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`} role="row">
-                <div className="scheduleNameCell" data-label="Name" role="cell">
-                  <div>
-                    <strong>{schedule.name}</strong>
-                    <small>{scheduleDescription(schedule)}</small>
-                  </div>
-                </div>
-                <div className="scheduleCell" data-label="Schedule" role="cell">
-                  <code>{schedule.cron}</code>
-                  <small>{cronSummary(schedule.cron)}</small>
-                </div>
-                <div className="scheduleCell" data-label="Last run" role="cell">
-                  {schedule.lastRunAt ? (
-                    <>
-                      <time
-                        className="scheduleRelativeTime"
-                        dateTime={schedule.lastRunAt}
-                        title={relativeTimestamps ? formatScheduleTime(schedule.lastRunAt, formatDate) : undefined}
-                      >
-                        {relativeTimestamps ? lastRunRelativeTime(schedule.lastRunAt, relativeNow) : formatScheduleTime(schedule.lastRunAt, formatDate)}
-                      </time>
-                      <span
-                        className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
-                        role="img"
-                        aria-label={statusLabel(schedule.lastStatus)}
-                        title={statusLabel(schedule.lastStatus)}
-                      >
-                        <AppIcon name={statusTone(schedule.lastStatus) === "success" ? "check" : "x"} />
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Never run</span>
-                      <small>No execution yet</small>
-                    </>
-                  )}
-                </div>
-                <div className="scheduleCell" data-label="Next run" role="cell">
-                  {schedule.enabled && schedule.nextRunAt ? (
-                    <time
-                      className="scheduleRelativeTime"
-                      dateTime={schedule.nextRunAt}
-                      title={relativeTimestamps ? formatScheduleTime(schedule.nextRunAt, formatDate) : undefined}
-                    >
-                      {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
-                    </time>
-                  ) : (
-                    <>
-                      <span>{schedule.enabled ? "Not available" : "Disabled"}</span>
-                      <small>{schedule.enabled ? "Waiting for a valid cron match" : "Enable to resume"}</small>
-                    </>
-                  )}
-                </div>
-                <div className="scheduleEnabledCell" data-label="Enabled" role="cell">
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={schedule.enabled}
-                      onChange={() => onToggle(schedule)}
-                      disabled={disabled}
-                      aria-label={`${schedule.enabled ? "Disable" : "Enable"} ${schedule.name}`}
-                    />
-                    <span className="slider"></span>
-                    <span className={`switchStateLabel ${schedule.enabled ? "enabled" : ""}`}>
-                      {schedule.enabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </label>
-                </div>
-                <div className="scheduleRowActions" data-label="Actions" role="cell">
-                  <ActionMenu
-                    label={`Actions for ${schedule.name}`}
-                    className="scheduleActionMenu"
-                    triggerClassName="scheduleActionMenuTrigger"
-                    disabled={disabled}
-                    items={[
-                      {
-                        id: "test-now",
-                        label: "Test now",
-                        icon: <AppIcon name="refresh" />,
-                        onSelect: () => { void onRunNow(schedule); },
-                        disabled,
-                        title: disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
-                      },
-                      {
-                        id: "edit",
-                        label: "Edit",
-                        icon: <AppIcon name="edit" />,
-                        onSelect: () => setFormMode({ type: "edit", schedule }),
-                        disabled
-                      },
-                      {
-                        id: "delete",
-                        label: "Delete",
-                        icon: <AppIcon name="trash" />,
-                        onSelect: () => onDelete(schedule),
-                        disabled,
-                        critical: true,
-                        separatorBefore: true
-                      }
-                    ]}
-                    trigger={
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="5" r="1.7" />
-                        <circle cx="12" cy="12" r="1.7" />
-                        <circle cx="12" cy="19" r="1.7" />
-                      </svg>
-                    }
-                  />
-                </div>
-              </article>
-              );
-            }) : (
-              <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
-            )}
-          </div>
-        </div>
-
+    <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
+      <section className="scheduleWorkspaceSummary" aria-label="Schedules status summary">
+        <article className="scheduleWorkspaceMetric total">
+          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
+          <div><small>Total schedules</small><strong>{schedules.length}</strong></div>
+        </article>
+        <article className="scheduleWorkspaceMetric enabled">
+          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
+          <div><small>Enabled</small><strong>{enabledScheduleCount}</strong></div>
+        </article>
+        <article className={`scheduleWorkspaceMetric active ${activeRunCount ? "hasActive" : ""}`}>
+          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
+          <div><small>Active runs</small><strong>{activeRunCount}</strong></div>
+        </article>
       </section>
 
-      <aside className="panel scheduledRunsCard">
-        <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : "Most recent scheduled executions."} />
-        {runItems.length ? (
-          <div ref={runsFeedRef} className="scheduledRunsFeed">
-            {runItems.map((run) => (
-              <article key={`${run.kind}:${run.id}`} className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}>
-                <span className="scheduledRunMarker" aria-hidden="true"></span>
-                <div className="scheduledRunDetails">
-                  <strong>{run.scheduleName}</strong>
-                  <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
-                  {run.kind === "active" && run.currentStep && (
-                    <small className="scheduledRunAction">Step {(run.currentStepIndex ?? 0) + 1} of {run.stepCount}: {run.currentStep}</small>
+      <div className="scheduleWorkspaceToolbar">
+        <Button
+          className="scheduleAddButton"
+          onClick={() => setFormMode({ type: "create" })}
+          disabled={disabled}
+          title={disabled ? disabledReason || "Schedule creation is unavailable right now." : "Add schedule"}
+        >
+          <AppIcon name="plus" />
+          <span>Add schedule</span>
+        </Button>
+        <div className="scheduleWorkspaceContext">
+          <span>Cron timezone</span>
+          <strong>{scheduleTimeZone}</strong>
+        </div>
+      </div>
+
+      {disabled && disabledReason && !saveRunning && (
+        <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
+      )}
+
+      <div className="scheduleWorkspaceGrid">
+        <section className="panel scheduleTableCard">
+          <PanelHeader
+            className="scheduleCardHeader"
+            title="Configured schedules"
+            description={`${schedules.length} schedule${schedules.length === 1 ? "" : "s"} for this server.`}
+          />
+
+          <div className="scheduleTableFrame" role="table" aria-label="Schedules">
+            <div className="scheduleTableHeader" role="row">
+              {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
+                <span key={header.id}>
+                  {header.id === "actions" ? (
+                    "Actions"
+                  ) : (
+                    <SortHeaderButton header={header}>
+                      {header.id === "name"
+                        ? "Name"
+                        : header.id === "cron"
+                          ? "Schedule"
+                          : header.id === "lastRunAt"
+                            ? "Last run"
+                            : header.id === "nextRunAt"
+                              ? "Next run"
+                              : "Enabled"}
+                    </SortHeaderButton>
                   )}
-                </div>
-                <div className="scheduledRunTime">
-                  <span>
-                    {run.kind === "active"
-                      ? relativeTimestamps ? relativeTime(run.startedAt, relativeNow) : `Started ${formatScheduleTime(run.startedAt, formatDate)}`
-                      : relativeTimestamps ? relativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}
-                  </span>
-                  {relativeTimestamps && <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>}
-                </div>
-                {run.kind === "active" && (
-                  <div className="scheduledRunActions">
-                    <Button variant="critical" iconOnly compact className="scheduledRunCancelButton" onClick={() => void onCancelRun(run)} disabled={disabled || !run.cancellable} aria-label={`Cancel ${run.scheduleName}`} title={!run.cancellable ? "Restart is in progress and must finish." : disabled ? disabledReason || "Schedule cancellation is unavailable right now." : `Cancel ${run.scheduleName}`}>
-                      <AppIcon name="x" />
-                    </Button>
+                </span>
+              ))}
+            </div>
+            <div className="scheduleTableBody" role="rowgroup">
+              {scheduleRows.length ? scheduleRows.map((row) => {
+                const schedule = row.original;
+                return (
+                <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`} role="row">
+                  <div className="scheduleNameCell" data-label="Name" role="cell">
+                    <div className="scheduleCellValue scheduleNameValue">
+                      <strong>{schedule.name}</strong>
+                      <small>{scheduleDescription(schedule)}</small>
+                    </div>
                   </div>
-                )}
-              </article>
-            ))}
+                  <div className="scheduleCell" data-label="Schedule" role="cell">
+                    <div className="scheduleCellValue">
+                      <code>{schedule.cron}</code>
+                      <small>{cronSummary(schedule.cron)}</small>
+                    </div>
+                  </div>
+                  <div className="scheduleCell" data-label="Last run" role="cell">
+                    <div className="scheduleCellValue scheduleRunValue">
+                      {schedule.lastRunAt ? (
+                        <div className="scheduleStatusLine">
+                          <time
+                            className="scheduleRelativeTime"
+                            dateTime={schedule.lastRunAt}
+                            title={relativeTimestamps ? formatScheduleTime(schedule.lastRunAt, formatDate) : undefined}
+                          >
+                            {relativeTimestamps ? lastRunRelativeTime(schedule.lastRunAt, relativeNow) : formatScheduleTime(schedule.lastRunAt, formatDate)}
+                          </time>
+                          <span
+                            className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
+                            role="img"
+                            aria-label={statusLabel(schedule.lastStatus)}
+                            title={statusLabel(schedule.lastStatus)}
+                          >
+                            <AppIcon name={statusTone(schedule.lastStatus) === "success" ? "check" : "x"} />
+                          </span>
+                        </div>
+                      ) : (
+                        <><span>Never run</span><small>No execution yet</small></>
+                      )}
+                    </div>
+                  </div>
+                  <div className="scheduleCell" data-label="Next run" role="cell">
+                    <div className="scheduleCellValue">
+                      {schedule.enabled && schedule.nextRunAt ? (
+                        <time
+                          className="scheduleRelativeTime"
+                          dateTime={schedule.nextRunAt}
+                          title={relativeTimestamps ? formatScheduleTime(schedule.nextRunAt, formatDate) : undefined}
+                        >
+                          {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
+                        </time>
+                      ) : (
+                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span><small>{schedule.enabled ? "Waiting for a valid cron match" : "Enable to resume"}</small></>
+                      )}
+                    </div>
+                  </div>
+                  <div className="scheduleEnabledCell" data-label="Enabled" role="cell">
+                    <div className="scheduleCellValue">
+                      <label className="switch scheduleTableSwitch">
+                        <input
+                          type="checkbox"
+                          checked={schedule.enabled}
+                          onChange={() => onToggle(schedule)}
+                          disabled={disabled}
+                          aria-label={`${schedule.enabled ? "Disable" : "Enable"} ${schedule.name}`}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="scheduleRowActions" data-label="Actions" role="cell">
+                    <div className="scheduleCellValue">
+                      <ActionMenu
+                        label={`Actions for ${schedule.name}`}
+                        className="scheduleActionMenu"
+                        triggerClassName="scheduleActionMenuTrigger"
+                        disabled={disabled}
+                        items={[
+                          {
+                            id: "test-now",
+                            label: "Test now",
+                            icon: <AppIcon name="refresh" />,
+                            onSelect: () => { void onRunNow(schedule); },
+                            disabled,
+                            title: disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
+                          },
+                          {
+                            id: "edit",
+                            label: "Edit",
+                            icon: <AppIcon name="edit" />,
+                            onSelect: () => setFormMode({ type: "edit", schedule }),
+                            disabled
+                          },
+                          {
+                            id: "delete",
+                            label: "Delete",
+                            icon: <AppIcon name="trash" />,
+                            onSelect: () => onDelete(schedule),
+                            disabled,
+                            critical: true,
+                            separatorBefore: true
+                          }
+                        ]}
+                        trigger={
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="5" r="1.7" />
+                            <circle cx="12" cy="12" r="1.7" />
+                            <circle cx="12" cy="19" r="1.7" />
+                          </svg>
+                        }
+                      />
+                    </div>
+                  </div>
+                </article>
+                );
+              }) : (
+                <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
+              )}
+            </div>
           </div>
-        ) : (
-          <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
-        )}
-      </aside>
+        </section>
+
+        <aside className="panel scheduledRunsCard">
+          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : "Most recent scheduled executions."} />
+          {runItems.length ? (
+            <div ref={runsFeedRef} className="scheduledRunsFeed">
+              {runItems.map((run) => (
+                <article key={`${run.kind}:${run.id}`} className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}>
+                  <span className="scheduledRunMarker" aria-hidden="true"></span>
+                  <div className="scheduledRunDetails">
+                    <strong>{run.scheduleName}</strong>
+                    <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
+                    {run.kind === "active" && run.currentStep && (
+                      <small className="scheduledRunAction">Step {(run.currentStepIndex ?? 0) + 1} of {run.stepCount}: {run.currentStep}</small>
+                    )}
+                  </div>
+                  <div className="scheduledRunTime">
+                    <span>
+                      {run.kind === "active"
+                        ? relativeTimestamps ? relativeTime(run.startedAt, relativeNow) : `Started ${formatScheduleTime(run.startedAt, formatDate)}`
+                        : relativeTimestamps ? relativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}
+                    </span>
+                    {relativeTimestamps && <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>}
+                  </div>
+                  {run.kind === "active" && (
+                    <div className="scheduledRunActions">
+                      <Button variant="critical" iconOnly compact className="scheduledRunCancelButton" onClick={() => void onCancelRun(run)} disabled={disabled || !run.cancellable} aria-label={`Cancel ${run.scheduleName}`} title={!run.cancellable ? "Restart is in progress and must finish." : disabled ? disabledReason || "Schedule cancellation is unavailable right now." : `Cancel ${run.scheduleName}`}>
+                        <AppIcon name="x" />
+                      </Button>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
+          )}
+        </aside>
+      </div>
 
       {formMode && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+        <div className="modalBackdrop scheduleModalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !saveRunning) setFormMode(null);
         }}>
           <DialogSurface className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => { if (!saveRunning) setFormMode(null); }}>
@@ -423,85 +448,110 @@ export function SchedulePage({
               </div>
               <fieldset disabled={disabled} className="userModalBody scheduleEditBody">
                 {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
-                <div className="userModalFields scheduleEditFields">
-                  <label>
-                    Name
-                    <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
-                  </label>
-                  <label className="scheduleCronField">
-                    Cron schedule
-                    <input
-                      name="cron"
-                      value={cronValue}
-                      onChange={(event) => setCronValue(event.target.value)}
-                      placeholder="0 4 * * *"
-                      required
-                      aria-invalid={Boolean(cronError)}
-                      aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
-                      title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
-                    />
-                    {cronError
-                      ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                      : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
-                  </label>
-                </div>
-                <div className="commandStack scheduleCommandStack">
-                  <span className="fieldLabel">Steps</span>
-                  <div className="scheduleCommandList">
-                    {stepDrafts.map((draft, index) => (
-                      <div key={draft.id} className="commandInputRow scheduleStepRow">
-                        <label className="scheduleStepType">
-                          <span>Type</span>
-                          <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
-                            <option value="command">Command</option>
-                            <option value="action">Action</option>
-                          </select>
-                        </label>
-                        {draft.type === "command" ? (
-                          <label className="scheduleStepValue">
-                            <span>Command</span>
-                            <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
-                          </label>
-                        ) : (
-                          <label className="scheduleStepValue">
-                            <span>Procedure</span>
-                            <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
-                              <option value="restart">Restart</option>
-                            </select>
-                          </label>
-                        )}
-                        <label className="scheduleCommandDelay">
-                          <span>Delay</span>
-                          <input type="number" min="0" max="604800" step="1" value={draft.delayValue} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayValue: Number(event.target.value) } : step))} required aria-label={`Delay before step ${index + 1}`} />
-                          <select value={draft.delayUnit} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayUnit: event.target.value as StepDraft["delayUnit"] } : step))} aria-label={`Delay unit before step ${index + 1}`}>
-                            <option value="seconds">Seconds</option>
-                            <option value="minutes">Minutes</option>
-                            <option value="hours">Hours</option>
-                          </select>
-                        </label>
-                        {stepDrafts.length > 1 && (
-                          <Button variant="ghost" iconOnly className="iconDangerButton" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label="Remove step">
-                            <AppIcon name="x" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+
+                <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
+                  <div className="scheduleEditorSectionHeader">
+                    <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
+                    <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
                   </div>
-                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
-                    <AppIcon name="plus" />
-                    <span>Additional step</span>
-                  </Button>
-                </div>
-                <div className="scheduleEditOptions">
-                  <label className="scheduleOptionToggle">
-                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
-                    <span>Only run when no players are online</span>
-                  </label>
-                  <label className="scheduleOptionToggle">
-                    <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
-                    <span>Enabled</span>
-                  </label>
-                </div>
+                  <div className="userModalFields scheduleEditFields">
+                    <label>
+                      Name
+                      <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
+                    </label>
+                    <label className="scheduleCronField">
+                      Cron schedule
+                      <input
+                        name="cron"
+                        value={cronValue}
+                        onChange={(event) => setCronValue(event.target.value)}
+                        placeholder="0 4 * * *"
+                        required
+                        aria-invalid={Boolean(cronError)}
+                        aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
+                        title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
+                      />
+                      {cronError
+                        ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
+                        : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
+                    </label>
+                  </div>
+                </section>
+
+                <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
+                  <div className="scheduleEditorSectionHeader">
+                    <div><h3 id="schedule-steps-heading">Steps</h3><p>Commands and lifecycle actions run from top to bottom.</p></div>
+                  </div>
+                  <div className="commandStack scheduleCommandStack">
+                    <div className="scheduleCommandList">
+                      {stepDrafts.map((draft, index) => (
+                        <div key={draft.id} className="scheduleStepCard">
+                          <div className="scheduleStepHeader">
+                            <strong>Step {index + 1}</strong>
+                            {stepDrafts.length > 1 && (
+                              <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
+                                <AppIcon name="x" />
+                              </Button>
+                            )}
+                          </div>
+                          <div className="scheduleStepFields">
+                            <label className="scheduleStepType">
+                              <span>Type</span>
+                              <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
+                                <option value="command">Command</option>
+                                <option value="action">Action</option>
+                              </select>
+                            </label>
+                            {draft.type === "command" ? (
+                              <label className="scheduleStepValue">
+                                <span>Command</span>
+                                <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
+                              </label>
+                            ) : (
+                              <label className="scheduleStepValue">
+                                <span>Procedure</span>
+                                <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
+                                  <option value="restart">Restart</option>
+                                </select>
+                              </label>
+                            )}
+                            <label className="scheduleCommandDelay">
+                              <span>Delay before step</span>
+                              <span className="scheduleDelayControls">
+                                <input type="number" min="0" max="604800" step="1" value={draft.delayValue} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayValue: Number(event.target.value) } : step))} required aria-label={`Delay before step ${index + 1}`} />
+                                <select value={draft.delayUnit} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayUnit: event.target.value as StepDraft["delayUnit"] } : step))} aria-label={`Delay unit before step ${index + 1}`}>
+                                  <option value="seconds">Seconds</option>
+                                  <option value="minutes">Minutes</option>
+                                  <option value="hours">Hours</option>
+                                </select>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
+                      <AppIcon name="plus" />
+                      <span>Additional step</span>
+                    </Button>
+                  </div>
+                </section>
+
+                <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
+                  <div className="scheduleEditorSectionHeader">
+                    <div><h3 id="schedule-options-heading">Options</h3><p>Control when this automation is allowed to start.</p></div>
+                  </div>
+                  <div className="scheduleEditOptions">
+                    <label className="scheduleOptionToggle">
+                      <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
+                      <span className="scheduleOptionCopy"><strong>Only run when no players are online</strong><small>Skip this schedule while players are connected.</small></span>
+                    </label>
+                    <label className="scheduleOptionToggle">
+                      <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
+                      <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
+                    </label>
+                  </div>
+                </section>
               </fieldset>
               <div className="userModalFooter">
                 <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>

@@ -108,15 +108,6 @@
   pointer-events: none;
 }
 
-/* Page arrival ---------------------------------------------------------- */
-/* Keep this opacity-only: a transformed page traps fixed dialogs inside it. */
-.workspace > .tabPage,
-.workspace > .pageStack,
-.workspace > .createServerPanel,
-.workspace > .settingsList {
-  animation: sentinelPageEnter var(--motion-duration-base) var(--motion-ease-standard) both;
-}
-
 /* Decorative server cube ----------------------------------------------- */
 .serverStripIcon {
   perspective: 180px;
@@ -170,11 +161,6 @@
   100% { opacity: 0; transform: translateX(65%); }
 }
 
-@keyframes sentinelPageEnter {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @keyframes sentinelSuccessToast {
   0%, 100% { filter: brightness(1); }
   48% { filter: brightness(1.06) drop-shadow(0 7px 12px color-mix(in srgb, var(--sentinel-success) 18%, transparent)); }
@@ -218,10 +204,6 @@
   .activeServerStrip.runtimeFeedback-start .serverStripIcon,
   .activeServerStrip.runtimeFeedback-restart .serverStripIcon,
   .sideNav button.active::after,
-  .workspace > .tabPage,
-  .workspace > .pageStack,
-  .workspace > .createServerPanel,
-  .workspace > .settingsList,
   .sonnerToast[data-type="success"],
   .sonnerToast[data-type="success"] .toastSeverityIcon {
     animation: none;

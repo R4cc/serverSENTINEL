@@ -1408,16 +1408,6 @@ button:disabled,
   }
 }
 
-@media (min-width: 1181px) {
-  .workspacePage-schedule > .scheduleManagementPage {
-    overflow: hidden;
-  }
-
-  .workspacePage-schedule > .scheduleManagementPage > .scheduleTableCard {
-    min-height: 0;
-  }
-}
-
 /* Mobile workspaces reserve the viewport for the active page rather than the shell. */
 @media (max-width: 720px) {
   .appShell {
@@ -1533,20 +1523,6 @@ button:disabled,
     flex: 1 1 auto;
     overflow: auto;
     overscroll-behavior: contain;
-  }
-
-  /* Schedule cards use visible overflow at the stacked breakpoint so their
-     table rows can grow naturally. Keep those rows intrinsic on phones;
-     otherwise the viewport-sized grid shrinks the table card and its final
-     controls spill over the recent-runs card. */
-  .workspacePage-schedule > .scheduleManagementPage {
-    grid-template-rows: max-content max-content;
-    align-content: start;
-  }
-
-  .workspacePage-schedule .scheduleTableFrame,
-  .workspacePage-schedule .scheduleTableBody {
-    flex: 0 0 auto;
   }
 
   .workspacePage-console > .tabPage:has(.consolePanel) {

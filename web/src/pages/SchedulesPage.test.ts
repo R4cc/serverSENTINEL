@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ScheduledActiveRun, ScheduledExecution } from "../types";
@@ -21,6 +21,24 @@ function schedule(steps: ScheduledExecution["steps"]): ScheduledExecution {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"
   };
+}
+
+function renderSchedulePage(schedules: ScheduledExecution[], overrides: Partial<ComponentProps<typeof SchedulePage>> = {}) {
+  const props: ComponentProps<typeof SchedulePage> = {
+    schedules,
+    relativeTimestamps: true,
+    formatDate: (timestamp) => new Date(timestamp).toISOString(),
+    scheduleTimeZone: "UTC",
+    onCreate: () => undefined,
+    onToggle: () => undefined,
+    onUpdate: () => true,
+    onDelete: () => undefined,
+    onRunNow: () => true,
+    onCancelRun: () => true,
+    disabled: false,
+    ...overrides
+  };
+  return renderToStaticMarkup(createElement(SchedulePage, props));
 }
 
 describe("schedule step summaries", () => {
@@ -52,6 +70,48 @@ describe("active schedule status", () => {
     };
 
     expect(activeRunStatus(run)).toBe("Restarting server");
+  });
+});
+
+describe("schedule workspace rendering", () => {
+  it("summarizes schedules and keeps disabled and active states accessible", () => {
+    const activeRun: ScheduledActiveRun = {
+      id: "run-active",
+      scheduleId: "schedule-1",
+      scheduleName: "Nightly maintenance",
+      status: "running",
+      startedAt: "2026-07-14T11:55:00.000Z",
+      stepCount: 2,
+      currentStepIndex: 0,
+      currentStep: "save-all",
+      cancellable: true
+    };
+    const enabled = { ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), activeRuns: [activeRun] };
+    const disabled = {
+      ...schedule([{ type: "command", command: "say hello", delaySeconds: 0 }]),
+      id: "schedule-2",
+      name: "Disabled maintenance",
+      enabled: false
+    };
+    const html = renderSchedulePage([enabled, disabled]);
+
+    expect(html).toContain('aria-label="Schedules status summary"');
+    expect(html).toContain("<small>Total schedules</small><strong>2</strong>");
+    expect(html).toContain("<small>Enabled</small><strong>1</strong>");
+    expect(html).toContain("<small>Active runs</small><strong>1</strong>");
+    expect(html).toContain("scheduleTableRow disabled");
+    expect(html).toContain('aria-label="Enable Disabled maintenance"');
+    expect(html).toContain('aria-label="Cancel Nightly maintenance"');
+  });
+
+  it("renders cohesive empty states with zeroed summary metrics", () => {
+    const html = renderSchedulePage([]);
+
+    expect(html).toContain("<small>Total schedules</small><strong>0</strong>");
+    expect(html).toContain("<small>Enabled</small><strong>0</strong>");
+    expect(html).toContain("<small>Active runs</small><strong>0</strong>");
+    expect(html).toContain("No schedules added");
+    expect(html).toContain("No runs yet");
   });
 });
 
@@ -107,6 +167,7 @@ describe("schedule timestamp preference", () => {
 
     expect(html).toContain("FULL 2026-07-14T06:40:00.000Z");
     expect(html).toContain("FULL 2026-07-14T22:31:00.000Z");
+    expect(html).toContain('role="img" aria-label="Succeeded"');
     expect(html).not.toContain("hours ago");
     expect(html).not.toContain("in 10h");
   });

@@ -17,10 +17,8 @@ describe("global stylesheet entry point", () => {
     expect(stylesheet).toContain(`@import "./styles/${fileName}";`);
   });
 
-  it("keeps page entry motion from containing fixed dialogs", () => {
-    const pageEnterKeyframes = motionStyles.match(/@keyframes sentinelPageEnter\s*\{([\s\S]*?)\n\}/)?.[1];
-
-    expect(pageEnterKeyframes).toBeDefined();
-    expect(pageEnterKeyframes).not.toContain("transform");
+  it("does not animate page containers that host fixed dialogs", () => {
+    expect(motionStyles).not.toContain("sentinelPageEnter");
+    expect(motionStyles).not.toMatch(/\.workspace\s*>\s*\.(?:tabPage|pageStack|createServerPanel|settingsList)[^{]*\{[^}]*animation\s*:/s);
   });
 });
