@@ -1,8 +1,29 @@
 # serverSENTINEL
 
-serverSENTINEL is a web panel for running Minecraft servers with Docker. It gives you a browser-based place to create servers, start and stop them, view the live console, send commands, manage files, install mods, schedule actions, and manage users.
+serverSENTINEL is a web panel for running and managing Minecraft servers and their mods with Docker. It provides a browser-based interface for handling the parts of server administration that would normally require SSH, Docker commands, editing configuration files manually, or separate tools like FileZilla and other file transfer clients.
 
-It's not recommended to expose the panel directly to the public internet. Use it on a LAN, behind a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication. Treat panel access, node secrets, Docker access, console access, and file manager access as administrative control over the machines and servers involved.
+## Features
+
+* Create and configure Minecraft servers
+* Start, stop, and restart servers
+* Search for and install mods through the Modrinth API
+* Get notified when a *compatible* mod update is available and update in one click
+* View the live console and send commands
+* Browse, upload, edit, and manage server files
+* Add existing mod files and manage installed mods
+* Schedule commands and server actions
+* Manage multiple nodes from one panel
+* Manage users, roles, and permissions
+* Monitor server status and resource usage
+
+A large part of serverSENTINEL was written with the help of AI, which made it possible to scale the project and accelerate development far beyond what I could have done on my own. The AI-generated code has gone through extensive cleanup, testing, review, and polish passes. The priority throughout development has been to make the underlying systems work reliably and predictably.
+
+## Security
+
+serverSENTINEL should be treated as an administrative tool. Access to the panel may provide control over Docker containers, server consoles, files, node secrets, and the machines hosting them.
+
+I recommend to keep the panel isolated and not make it directly exposed to the public internet. If you want to use remote access, I would access it using a VPN, through Cloudflare Tunnel, or behind a reverse proxy with strong authentication.
+
 
 ## Screenshots
 
