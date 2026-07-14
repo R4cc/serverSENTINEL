@@ -3638,6 +3638,10 @@ type ActiveScheduleExecution = ScheduledActiveRun & {
 const runningSchedules = new Set<string>();
 const activeScheduleExecutions = new Map<string, ActiveScheduleExecution>();
 
+function scheduleExecutionKey(serverId: string, scheduleId: string) {
+  return `${serverId}:${scheduleId}`;
+}
+
 function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
   return {
     id: run.id,
@@ -3791,6 +3795,20 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
   }
 }
 
+function startScheduleExecution(server: ManagedServer, schedule: ScheduledExecution) {
+  const key = scheduleExecutionKey(server.id, schedule.id);
+  if (runningSchedules.has(key)) return undefined;
+
+  runningSchedules.add(key);
+  void executeMatchedSchedule(server, schedule)
+    .catch((error) => {
+      logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
+    })
+    .finally(() => runningSchedules.delete(key));
+
+  return activeScheduledRunsFor(server.id, schedule.id)[0];
+}
+
 async function tickSchedules() {
   const now = new Date();
   const runKey = timeZoneMinuteKey(now, config.timeZone);
@@ -3798,7 +3816,7 @@ async function tickSchedules() {
   for (const server of servers) {
     for (const schedule of server.schedules ?? []) {
       if (!schedule.enabled) continue;
-      const key = `${server.id}:${schedule.id}`;
+      const key = scheduleExecutionKey(server.id, schedule.id);
       const lastRun = schedule.lastRunAt ? new Date(schedule.lastRunAt) : null;
       const alreadyRanThisWallMinute = lastRun && !Number.isNaN(lastRun.getTime())
         ? timeZoneMinuteKey(lastRun, config.timeZone) === runKey
@@ -3811,12 +3829,7 @@ async function tickSchedules() {
         continue;
       }
 
-      runningSchedules.add(key);
-      void executeMatchedSchedule(server, schedule)
-        .catch((error) => {
-          logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
-        })
-        .finally(() => runningSchedules.delete(key));
+      startScheduleExecution(server, schedule);
     }
   }
 }
@@ -4991,6 +5004,22 @@ app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/sch
   serversRepository.deleteSchedule(server.id, scheduleId, new Date().toISOString());
   logInfo({ ...serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
   return { ok: true };
+});
+
+app.post<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId/run", destructiveRateLimit, async (request, reply) => {
+  await requireRequestPermission(request, "schedules.manage");
+  const server = await getServer(request.params.id);
+  const scheduleId = validateScheduleId(request.params.scheduleId);
+  const schedule = server.schedules?.find((candidate) => candidate.id === scheduleId);
+  if (!schedule) {
+    return reply.code(404).send(apiErrorResponse("SCHEDULE_NOT_FOUND", "Schedule not found"));
+  }
+  const run = startScheduleExecution(server, schedule);
+  if (!run) {
+    return reply.code(409).send(apiErrorResponse("SCHEDULE_ALREADY_RUNNING", "Schedule is already running"));
+  }
+  logInfo({ ...serverLogFields(server), scheduleId, runId: run.id, action: "run_schedule_now" }, "Schedule test run started");
+  return reply.code(202).send({ run });
 });
 
 app.post<{ Params: { id: string; scheduleId: string; runId: string } }>("/api/servers/:id/schedules/:scheduleId/runs/:runId/cancel", destructiveRateLimit, async (request, reply) => {

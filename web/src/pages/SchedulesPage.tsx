@@ -12,6 +12,7 @@ import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
 import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
 import { DialogSurface } from '../components/DialogSurface';
+import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
@@ -32,6 +33,7 @@ export function SchedulePage({
   onToggle,
   onUpdate,
   onDelete,
+  onRunNow,
   onCancelRun,
   disabled,
   disabledReason,
@@ -45,6 +47,7 @@ export function SchedulePage({
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
   onDelete: (schedule: ScheduledExecution) => void;
+  onRunNow: (schedule: ScheduledExecution) => boolean | Promise<boolean>;
   onCancelRun: (run: ScheduledActiveRun) => boolean | Promise<boolean>;
   disabled: boolean;
   disabledReason?: string;
@@ -276,8 +279,45 @@ export function SchedulePage({
                   </label>
                 </div>
                 <div className="scheduleRowActions" data-label="Actions" role="cell">
-                  <Button variant="secondary" compact onClick={() => setFormMode({ type: "edit", schedule })} disabled={disabled}>Edit</Button>
-                  <Button variant="critical" compact onClick={() => onDelete(schedule)} disabled={disabled}>Delete</Button>
+                  <ActionMenu
+                    label={`Actions for ${schedule.name}`}
+                    className="scheduleActionMenu"
+                    triggerClassName="scheduleActionMenuTrigger"
+                    disabled={disabled}
+                    items={[
+                      {
+                        id: "test-now",
+                        label: "Test now",
+                        icon: <AppIcon name="refresh" />,
+                        onSelect: () => { void onRunNow(schedule); },
+                        disabled,
+                        title: disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
+                      },
+                      {
+                        id: "edit",
+                        label: "Edit",
+                        icon: <AppIcon name="edit" />,
+                        onSelect: () => setFormMode({ type: "edit", schedule }),
+                        disabled
+                      },
+                      {
+                        id: "delete",
+                        label: "Delete",
+                        icon: <AppIcon name="trash" />,
+                        onSelect: () => onDelete(schedule),
+                        disabled,
+                        critical: true,
+                        separatorBefore: true
+                      }
+                    ]}
+                    trigger={
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="5" r="1.7" />
+                        <circle cx="12" cy="12" r="1.7" />
+                        <circle cx="12" cy="19" r="1.7" />
+                      </svg>
+                    }
+                  />
                 </div>
               </article>
               );

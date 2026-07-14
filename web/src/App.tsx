@@ -2,7 +2,7 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -2437,6 +2437,51 @@ export default function App() {
     }
   }
 
+  async function runScheduleNow(schedule: ScheduledExecution) {
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
+    setScheduleBusy(true);
+    if (activeServerIsDemo) {
+      const ranAt = new Date().toISOString();
+      const status = demoRunning ? "success" : "skipped";
+      const message = demoRunning
+        ? `Sent ${schedule.commands.length} command${schedule.commands.length === 1 ? "" : "s"}`
+        : "Skipped because Minecraft server is stopped";
+      const run: ScheduledRun = {
+        id: clientId(),
+        scheduleId: schedule.id,
+        scheduleName: schedule.name,
+        status,
+        message,
+        ranAt
+      };
+      setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id
+        ? {
+            ...candidate,
+            lastRunAt: ranAt,
+            lastStatus: status,
+            lastMessage: message,
+            recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25)
+          }
+        : candidate));
+      notify(demoRunning ? "success" : "info", demoRunning ? `Tested ${schedule.name}` : `${schedule.name} was skipped`);
+      setScheduleBusy(false);
+      return true;
+    }
+    try {
+      await api<{ run: ScheduledActiveRun }>(`/api/servers/${activeServer.id}/schedules/${schedule.id}/run`, { method: "POST" });
+      notify("success", `Started ${schedule.name}`);
+      await refreshApp();
+      return true;
+    } catch (error) {
+      const message = errorMessage(error, "Could not start the schedule. It may already be running.");
+      setNotice(message);
+      notify("error", message);
+      return false;
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
   async function cancelScheduleRun(run: ScheduledActiveRun) {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer || activeServerIsDemo) return false;
     const confirmed = await requestConfirmation({
@@ -3290,6 +3335,7 @@ export default function App() {
                   onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
                   onUpdate={updateSchedule}
                   onDelete={deleteSchedule}
+                  onRunNow={runScheduleNow}
                   onCancelRun={cancelScheduleRun}
                   disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
                   disabledReason={scheduleDisabledReason}

@@ -1817,11 +1817,11 @@
   }
 
   .scheduleRowActions {
-    grid-template-columns: minmax(86px, .34fr) repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(86px, .34fr) minmax(0, 1fr);
   }
 
   .scheduleRowActions .uiButton {
-    width: 100%;
+    width: var(--control-height-compact);
   }
 
   .scheduledRunsFeed {
