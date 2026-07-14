@@ -1,0 +1,694 @@
+.settingsHub {
+  width: min(100%, 1280px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.settingsHubIntro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-row));
+  border-radius: calc(var(--radius-md) + 4px);
+  background:
+    radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%), var(--surface-raised));
+  padding: clamp(var(--space-4), 2.5vw, var(--space-6));
+  box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
+}
+
+.settingsHubIntro > div {
+  min-width: 0;
+}
+
+.settingsHubEyebrow {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.settingsHubIntro h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.08;
+  letter-spacing: var(--tracking-tight);
+}
+
+.settingsHubIntro p {
+  max-width: 680px;
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.settingsHubIntro > .uiStatusBadge {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding-inline: var(--space-3);
+}
+
+.settingsHubShell {
+  display: grid;
+  grid-template-columns: 238px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.settingsHubCategories {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border-row);
+  border-radius: calc(var(--radius-md) + 2px);
+  background: color-mix(in srgb, var(--surface-raised) 92%, var(--surface-muted));
+  padding: 7px;
+  box-shadow: 0 10px 26px rgb(15 23 42 / 5%);
+}
+
+.settingsHubCategories > button {
+  width: 100%;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 9px 10px;
+  text-align: left;
+  box-shadow: none;
+  transform: none;
+}
+
+.settingsHubCategories > button:hover:not(:disabled) {
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+  transform: none;
+}
+
+.settingsHubCategories > button.active {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-raised));
+  color: var(--text);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.settingsHubCategories > button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.settingsHubCategoryIcon,
+.settingsHubSectionIcon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: 11px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.settingsHubCategoryIcon {
+  width: 36px;
+  height: 36px;
+}
+
+.settingsHubCategories > button.active .settingsHubCategoryIcon {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface-raised));
+  color: var(--accent);
+}
+
+.settingsHubCategoryIcon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.settingsHubCategories button > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settingsHubCategories strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: var(--weight-title);
+}
+
+.settingsHubCategories small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settingsHubContent {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-row);
+  border-radius: calc(var(--radius-md) + 2px);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
+}
+
+.settingsHubContent:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.settingsHubSectionHeader {
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 58%, var(--surface-raised));
+  padding: var(--space-4) var(--space-5);
+}
+
+.settingsHubSectionIcon {
+  width: 46px;
+  height: 46px;
+  color: var(--accent);
+}
+
+.settingsHubSectionIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.settingsHubSectionHeader h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.settingsHubSectionHeader p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settingsHubSectionActions,
+.settingsHubSystemActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settingsHubSystemActions .uiButton {
+  gap: 7px;
+}
+
+.settingsHubSystemActions svg {
+  width: 17px;
+  height: 17px;
+}
+
+.settingsHubRows {
+  display: grid;
+}
+
+.settingsHubRow {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(260px, 1.15fr);
+  align-items: center;
+  gap: clamp(var(--space-4), 4vw, var(--space-7));
+  padding: var(--space-4) var(--space-5);
+}
+
+.settingsHubRow + .settingsHubRow {
+  border-top: 1px solid var(--border-row);
+}
+
+.settingsHubRow:hover {
+  background: color-mix(in srgb, var(--surface-muted) 38%, transparent);
+}
+
+.settingsHubRowCopy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.settingsHubRowCopy strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-title);
+}
+
+.settingsHubRowCopy span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settingsHubControl {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settingsHubControl > select {
+  width: min(100%, 310px);
+  min-height: 44px;
+}
+
+.settingsHubControl > .uiButton {
+  min-height: 44px;
+}
+
+.settingsHubToggle {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.settingsHubToggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.settingsHubToggleTrack {
+  width: 46px;
+  height: 26px;
+  flex: 0 0 46px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-row);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 3px;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.settingsHubToggleTrack > span {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  box-shadow: 0 2px 5px rgb(15 23 42 / 18%);
+  transition: transform 150ms ease;
+}
+
+.settingsHubToggle input:checked + .settingsHubToggleTrack {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settingsHubToggle input:checked + .settingsHubToggleTrack > span {
+  transform: translateX(20px);
+}
+
+.settingsHubToggle input:focus-visible + .settingsHubToggleTrack {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.settingsHubToggle > span:last-child {
+  min-width: 105px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-title);
+}
+
+.settingsHubToggle > span:last-child.enabled {
+  color: var(--accent);
+}
+
+.settingsHubIntegrationRow {
+  align-items: start;
+}
+
+.settingsHubIntegrationRow .settingsHubRowCopy {
+  padding-top: 6px;
+}
+
+.settingsHubControl .keyForm {
+  width: min(100%, 620px);
+}
+
+.settingsHubControl .keyForm fieldset,
+.settingsHubControl .keyFormConfigured {
+  width: 100%;
+}
+
+.settingsHubUsers {
+  min-width: 0;
+  overflow-x: auto;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+.settingsHubUsers .usersSettings {
+  min-width: 0;
+}
+
+.settingsHubSystemOverview {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.settingsHubHealth {
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.settingsHubHealth.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 32%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.settingsHubHealth.limited {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.settingsHubHealthDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--sentinel-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 16%, transparent);
+}
+
+.settingsHubHealth.limited .settingsHubHealthDot {
+  background: var(--sentinel-warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-warning) 16%, transparent);
+}
+
+.settingsHubHealth div,
+.settingsHubFacts dd,
+.settingsHubTechnical > div,
+.settingsHubPrivacyNote,
+.settingsHubDemoCallout > div {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsHubHealth strong,
+.settingsHubPrivacyNote strong,
+.settingsHubDemoCallout strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settingsHubHealth span,
+.settingsHubPrivacyNote span,
+.settingsHubDemoCallout span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settingsHubFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.settingsHubFacts > div {
+  min-width: 0;
+  min-height: 112px;
+  display: grid;
+  align-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-muted) 42%, var(--surface-raised));
+  padding: var(--space-3);
+}
+
+.settingsHubFacts dt {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settingsHubFacts dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.settingsHubFacts dd strong {
+  color: var(--text);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.settingsHubFacts dd > span:not(.uiStatusBadge) {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.settingsHubFacts .uiStatusBadge {
+  justify-self: start;
+}
+
+.settingsHubTechnical {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.settingsHubTechnical > div {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.settingsHubTechnical > div + div {
+  border-left: 1px solid var(--border-row);
+}
+
+.settingsHubTechnical strong {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.settingsHubTechnical span,
+.settingsHubTechnical code {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.settingsHubTechnical code {
+  font-family: var(--font-mono);
+}
+
+.settingsHubPrivacyNote,
+.settingsHubDemoCallout {
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-raised));
+  padding: var(--space-3) var(--space-4);
+}
+
+.settingsHubDemoCallout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-color: color-mix(in srgb, var(--sentinel-warning) 30%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
+}
+
+@media (max-width: 1120px) {
+  .settingsHubFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .settingsHubShell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settingsHubCategories {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: thin;
+  }
+
+  .settingsHubCategories > button {
+    width: auto;
+    min-width: 155px;
+    min-height: 58px;
+    flex: 0 0 auto;
+    grid-template-columns: 34px auto;
+    scroll-snap-align: start;
+  }
+
+  .settingsHubCategories > button.active {
+    box-shadow: inset 0 -3px 0 var(--accent);
+  }
+
+  .settingsHubCategoryIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settingsHubCategories small {
+    display: none;
+  }
+
+  .settingsHubTechnical {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settingsHubTechnical > div + div {
+    border-top: 1px solid var(--border-row);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .settingsHub {
+    gap: var(--space-3);
+  }
+
+  .settingsHubIntro {
+    align-items: flex-start;
+    padding: var(--space-4);
+  }
+
+  .settingsHubIntro > .uiStatusBadge {
+    display: none;
+  }
+
+  .settingsHubIntro h2 {
+    font-size: 22px;
+  }
+
+  .settingsHubSectionHeader {
+    min-height: 82px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .settingsHubSectionIcon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .settingsHubSectionActions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .settingsHubSectionActions > .uiButton,
+  .settingsHubSystemActions,
+  .settingsHubSystemActions > .uiButton {
+    width: 100%;
+  }
+
+  .settingsHubRow {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .settingsHubControl {
+    justify-content: stretch;
+  }
+
+  .settingsHubControl > select,
+  .settingsHubControl > .uiButton,
+  .settingsHubControl .keyForm,
+  .settingsHubControl .keyFormActions .uiButton,
+  .settingsHubControl .keyFormConfigured .uiButton {
+    width: 100%;
+    max-width: none;
+  }
+
+  .settingsHubToggle {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .settingsHubToggle > span:last-child {
+    min-width: 0;
+  }
+
+  .settingsHubIntegrationRow .settingsHubRowCopy {
+    padding-top: 0;
+  }
+
+  .settingsHubUsers,
+  .settingsHubSystemOverview {
+    padding: var(--space-4);
+  }
+
+  .settingsHubFacts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settingsHubFacts > div {
+    min-height: 92px;
+  }
+
+  .settingsHubDemoCallout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsHubDemoCallout .uiButton {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settingsHubToggleTrack,
+  .settingsHubToggleTrack > span {
+    transition: none;
+  }
+}

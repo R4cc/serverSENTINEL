@@ -228,7 +228,7 @@ try {
   await openPage(page, "settings", "Settings");
   await capture(page, "settings.png");
 
-  await page.getByLabel("Theme").selectOption("dark");
+  await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await page.locator(".appShell.themeDark").waitFor();
   await openPage(page, "overview", "Overview");
   await capture(page, "overview-dark.png");

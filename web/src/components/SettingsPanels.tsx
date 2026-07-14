@@ -39,7 +39,7 @@ export function ModrinthKeyForm({
       <div className="keyForm keyFormConfigured">
         <div className="secretPreview" aria-label="Stored Modrinth API key">
           <code aria-hidden="true">**** **** **** ****</code>
-          <StatusBadge tone="success" className="settingsStatus ready">Configured</StatusBadge>
+          <StatusBadge tone="success">Configured</StatusBadge>
         </div>
         <div className="keyFormActions">
           <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</Button>
@@ -50,7 +50,7 @@ export function ModrinthKeyForm({
 
   return (
     <form onSubmit={submitKey} className="keyForm">
-      <fieldset disabled={disabled}>
+      <fieldset disabled={disabled} title={disabled ? "Manage integrations permission is required" : undefined}>
         <label>
           {configured ? "New Modrinth API key" : "Modrinth API key"}
           <input

@@ -2,7 +2,8 @@ import type { FileEntry } from "../types";
 import type { FilePreviewState } from "../app/uiState";
 import { applyFormErrors, trimFormValue, validateDisplayName, validateDockerContainerName, validateDockerPorts, validateJavaArgs, validateRuntimeJarFilename, validateServerPort } from "./validation";
 
-export function readCommandHistory() {
+export function readCommandHistory(enabled = true) {
+  if (!enabled) return [];
   try {
     const raw = window.localStorage.getItem("serversentinel-command-history");
     const parsed = raw ? JSON.parse(raw) : [];

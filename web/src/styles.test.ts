@@ -11,7 +11,8 @@ describe("global stylesheet entry point", () => {
     "files-console.css",
     "schedules.css",
     "mods.css",
-    "file-manager.css"
+    "file-manager.css",
+    "settings.css"
   ])("loads %s before lazy pages render", (fileName) => {
     expect(stylesheet).toContain(`@import "./styles/${fileName}";`);
   });

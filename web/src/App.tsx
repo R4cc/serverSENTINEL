@@ -2,7 +2,7 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, DisplayTimeZonePreference, FabricVersions, LocalePreference, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ServerActivity, ServerOverviewData, ServerStatus, ThemePreference, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ServerActivity, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
 import { clientId } from "./utils/files";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission, normalizePermissions } from "./utils/permissions";
@@ -14,7 +14,7 @@ import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
-import { AuthPanel, UserManagement } from "./components/AuthPanel";
+import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
@@ -22,11 +22,12 @@ import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadi
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
-import { ModrinthKeyForm } from "./components/SettingsPanels";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
 import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
@@ -230,7 +231,7 @@ export default function App() {
   const [usersError, setUsersError] = useState("");
   const [userSaving, setUserSaving] = useState(false);
   const [commandSending, setCommandSending] = useState(false);
-  const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory());
+  const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory(readConsoleHistoryEnabled()));
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
@@ -267,6 +268,12 @@ export default function App() {
     setDisplayTimeZonePreference,
     relativeTimestamps,
     setRelativeTimestamps,
+    rememberConsoleHistory,
+    setRememberConsoleHistory,
+    consoleFontSize,
+    setConsoleFontSize,
+    consoleScrollback,
+    setConsoleScrollback,
     demoRunning,
     setDemoRunning,
     demoFiles,
@@ -513,15 +520,6 @@ export default function App() {
             : "";
   const settingsDataLoading = !appStateLoaded && !appLoadError;
   const usersInitialLoading = canViewUsers && users.length === 0 && !usersError && (settingsDataLoading || usersLoading);
-  const containerStatusLabel = settingsDataLoading
-    ? "Checking"
-    : panelOnlyMode
-      ? "Unsupported"
-      : demoMode
-        ? "Demo override"
-        : effectiveAppState.dockerSocketMounted
-          ? "Connected"
-          : "Not mounted";
   const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
@@ -1077,8 +1075,8 @@ export default function App() {
   }, [activeServer?.id, activeServerIsDemo, activeStatus?.docker.running]);
 
   useEffect(() => {
-    window.localStorage.setItem("serversentinel-command-history", JSON.stringify(commandHistory.slice(-50)));
-  }, [commandHistory]);
+    persistCommandHistory(window.localStorage, commandHistory, rememberConsoleHistory);
+  }, [commandHistory, rememberConsoleHistory]);
 
   useEffect(() => {
     try {
@@ -1968,6 +1966,21 @@ export default function App() {
     } catch {
       notify("error", "Could not copy to clipboard");
     }
+  }
+
+  async function clearConsoleHistory() {
+    if (commandHistory.length === 0) return;
+    const confirmed = await requestConfirmation({
+      title: "Clear command history?",
+      description: "Remove every command currently available for console history recall.",
+      warning: "This cannot be undone. Console log output is not affected.",
+      confirmLabel: "Clear history",
+      variant: "critical"
+    });
+    if (!confirmed) return;
+    setCommandHistory([]);
+    clearStoredCommandHistory();
+    notify("success", "Console command history cleared");
   }
 
   async function refreshNodes() {
@@ -2925,154 +2938,70 @@ export default function App() {
         )}
 
         {activePage === "settings" && (
-          <section className="settingsList layoutReadable" aria-busy={settingsDataLoading}>
-            <section className="panel settingsGroup">
-              <PanelHeader className="settingsGroupHeader" title="Interface" />
-              <label className="settingsRow">
-                <div>
-                  <strong>Theme</strong>
-                  <span>Choose the panel color mode.</span>
-                </div>
-                <select value={themePreference} onChange={(event) => setThemePreference(event.target.value as ThemePreference)}>
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="system">System</option>
-                </select>
-              </label>
-              <div className="settingsRow">
-                <div>
-                  <strong>Relative timestamps</strong>
-                  <span>Show times as “2 hours ago” instead of the full date and time.</span>
-                </div>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={relativeTimestamps}
-                    onChange={(event) => setRelativeTimestamps(event.target.checked)}
-                    aria-label="Use relative timestamps"
-                  />
-                  <span className="slider" />
-                  <span className={`switchStateLabel ${relativeTimestamps ? "enabled" : ""}`}>
-                    {relativeTimestamps ? "Relative" : "Full date and time"}
-                  </span>
-                </label>
-              </div>
-              <label className="settingsRow">
-                <div>
-                  <strong>Date format</strong>
-                  <span>Control how dates and times are displayed.</span>
-                </div>
-                <select value={dateLocalePreference} onChange={(event) => setDateLocalePreference(event.target.value as LocalePreference)}>
-                  <option value="user">Use browser default</option>
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="de-DE">Deutsch (Deutschland)</option>
-                  <option value="fr-FR">Français (France)</option>
-                  <option value="ja-JP">日本語 (日本)</option>
-                </select>
-              </label>
-              <label className="settingsRow">
-                <div>
-                  <strong>Display time zone</strong>
-                  <span>Show timestamps in {displayTimeZone}. Cron schedules continue to use {panelTimeZone}.</span>
-                </div>
-                <select value={displayTimeZonePreference} onChange={(event) => setDisplayTimeZonePreference(event.target.value as DisplayTimeZonePreference)}>
-                  <option value="panel">Panel default ({panelTimeZone})</option>
-                  <option value="browser">Browser local ({browserTimeZone})</option>
-                  <option value="utc">UTC</option>
-                </select>
-              </label>
-              <label className="settingsRow">
-                <div>
-                  <strong>Number format</strong>
-                  <span>Control numeric formatting across metrics.</span>
-                </div>
-                <select value={numberLocalePreference} onChange={(event) => setNumberLocalePreference(event.target.value as LocalePreference)}>
-                  <option value="user">Use browser default</option>
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="de-DE">Deutsch (Deutschland)</option>
-                  <option value="fr-FR">Français (France)</option>
-                  <option value="ja-JP">日本語 (日本)</option>
-                </select>
-              </label>
-              <div className="settingsRow readOnly">
-                <div>
-                  <strong>Version</strong>
-                  <span>Current serverSENTINEL panel build.</span>
-                </div>
-                <StatusBadge className="settingsStatus">v{panelVersion}</StatusBadge>
-              </div>
-              {demoMode && (
-                <div className="settingsRow">
-                <div>
-                  <strong>Demo mode</strong>
-                  <span>Leave the sample workspace and return to sign-in.</span>
-                </div>
-                <Button variant="secondary" onClick={logout} disabled={isProvisioning}>Exit demo mode</Button>
-                </div>
-              )}
-            </section>
-
-            <section className="panel settingsGroup">
-              <PanelHeader className="settingsGroupHeader" title="Integrations" />
-              <div className="settingsRow settingsIntegrationRow">
-                <div>
-                  <strong>Modrinth API key</strong>
-                  <span>Enable mod search, compatibility checks, and installs.</span>
-                </div>
-                <ModrinthKeyForm onSubmit={updateModrinthKey} configured={appState.modrinthApiConfigured} disabled={!canManageIntegrations} loading={settingsDataLoading} />
-              </div>
-            </section>
-
-            {canAdmin && (
-              <section className="panel settingsGroup">
-                <PanelHeader
-                  className="settingsGroupHeader usersGroupHeader"
-                  title="Users"
-                  description="Manage panel accounts and permissions."
-                  actions={<Button onClick={() => setUserModal("create")} disabled={userSaving || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Create user"}>New user</Button>}
-                />
-                {usersError && (
-                  <InlineState
-                    tone="error"
-                    title="Could not load users"
-                    message={`${usersError} Check that your account can manage users, then try again.`}
-                    actionLabel="Retry"
-                    onAction={() => void loadUsers()}
-                    busy={usersLoading}
-                  />
-                )}
-                <UserManagement
-                  users={users}
-                  currentUserId={authSession.user?.id}
-                  editingUser={userModal}
-                  busy={userSaving}
-                  loading={usersInitialLoading}
-                  canManageUsers={canManageUsers}
-                  onOpenEdit={(user) => setUserModal(user)}
-                  onCloseModal={() => setUserModal(null)}
-                  onCreate={createUser}
-                  onUpdate={updateUser}
-                  onResetPassword={resetUserPassword}
-                  onDelete={deleteUser}
-                />
-              </section>
-            )}
-
-            <section className={`panel settingsGroup settingsContainerGroup ${appStateLoaded && panelOnlyMode ? "panelModeDisabled" : ""}`}>
-              <PanelHeader className="settingsGroupHeader" title="Container" description="Local container control availability." />
-              <div className="settingsRow readOnly">
-                <div>
-                  <strong>Docker socket</strong>
-                  <span>Local container control availability.</span>
-                </div>
-                <StatusBadge className={`settingsStatus ${settingsDataLoading || panelOnlyMode ? "neutral" : (effectiveAppState.dockerSocketMounted ? "ready" : "limited")}`}>
-                  {containerStatusLabel}
-                </StatusBadge>
-              </div>
-            </section>
-          </section>
+          <SettingsPage
+            loading={settingsDataLoading}
+            themePreference={themePreference}
+            relativeTimestamps={relativeTimestamps}
+            dateLocalePreference={dateLocalePreference}
+            numberLocalePreference={numberLocalePreference}
+            displayTimeZonePreference={displayTimeZonePreference}
+            panelTimeZone={panelTimeZone}
+            browserTimeZone={browserTimeZone}
+            displayTimeZone={displayTimeZone}
+            onThemeChange={setThemePreference}
+            onRelativeTimestampsChange={setRelativeTimestamps}
+            onDateLocaleChange={setDateLocalePreference}
+            onNumberLocaleChange={setNumberLocalePreference}
+            onDisplayTimeZoneChange={setDisplayTimeZonePreference}
+            rememberConsoleHistory={rememberConsoleHistory}
+            consoleFontSize={consoleFontSize}
+            consoleScrollback={consoleScrollback}
+            commandHistoryCount={commandHistory.length}
+            onRememberConsoleHistoryChange={setRememberConsoleHistory}
+            onConsoleFontSizeChange={setConsoleFontSize}
+            onConsoleScrollbackChange={setConsoleScrollback}
+            onClearConsoleHistory={() => void clearConsoleHistory()}
+            modrinthConfigured={effectiveAppState.modrinthApiConfigured}
+            canManageIntegrations={canManageIntegrations}
+            onSubmitModrinthKey={updateModrinthKey}
+            canViewUsers={canAdmin}
+            userState={{
+              users,
+              currentUserId: authSession.user?.id,
+              editingUser: userModal,
+              busy: userSaving,
+              loading: usersInitialLoading,
+              error: usersError,
+              canManage: canManageUsers,
+              onOpenCreate: () => setUserModal("create"),
+              onOpenEdit: setUserModal,
+              onCloseModal: () => setUserModal(null),
+              onCreate: createUser,
+              onUpdate: updateUser,
+              onResetPassword: resetUserPassword,
+              onDelete: deleteUser,
+              onRetry: () => void loadUsers()
+            }}
+            systemInfo={{
+              panelVersion,
+              buildId: panelBuildId,
+              runtimeMode: effectiveAppState.runtimeMode,
+              panelTimeZone,
+              displayTimeZone,
+              dockerSocketMounted: effectiveAppState.dockerSocketMounted,
+              panelOnlyMode,
+              demoMode,
+              serverCount: effectiveAppState.servers.length,
+              nodes: contextNodes,
+              totalMemory: effectiveAppState.totalMemory,
+              modrinthConfigured: effectiveAppState.modrinthApiConfigured
+            }}
+            refreshingSystemInfo={appRefreshing}
+            onRefreshSystemInfo={() => void refreshApp()}
+            onCopyDiagnostics={(value) => void copyText(value)}
+            onExitDemo={() => void logout()}
+            exitDemoDisabled={isProvisioning}
+          />
         )}
 
         {activePage === "nodes" && (
@@ -3324,6 +3253,8 @@ export default function App() {
                         canSendCommands={canSendConsoleCommands}
                         disabledReason={consoleCommandDisabledReason}
                         commandHistory={commandHistory}
+                        fontSize={consoleFontSize}
+                        scrollback={consoleScrollback}
                         onCommand={(command) => {
                           void sendCommand(command);
                         }}

@@ -4,6 +4,15 @@ import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDe
 import type { DisplayTimeZonePreference, InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
 import { readDisplayTimeZonePreference, readLocalePreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
+import {
+  clearStoredCommandHistory,
+  consoleFontSizeStorageKey,
+  consoleHistoryStorageKey,
+  consoleScrollbackStorageKey,
+  readConsoleFontSize,
+  readConsoleHistoryEnabled,
+  readConsoleScrollback
+} from "../features/settings/settingsPreferences";
 
 function writePreference(key: string, value: string) {
   try {
@@ -20,6 +29,9 @@ export function usePreferencesState() {
   const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [displayTimeZonePreference, setDisplayTimeZonePreference] = useState<DisplayTimeZonePreference>(() => readDisplayTimeZonePreference());
   const [relativeTimestamps, setRelativeTimestamps] = useState(() => readRelativeTimestampsPreference());
+  const [rememberConsoleHistory, setRememberConsoleHistory] = useState(() => readConsoleHistoryEnabled());
+  const [consoleFontSize, setConsoleFontSize] = useState(() => readConsoleFontSize());
+  const [consoleScrollback, setConsoleScrollback] = useState(() => readConsoleScrollback());
   const [demoRunning, setDemoRunning] = useState(true);
   const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => ({ ...initialDemoFiles }));
   const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
@@ -59,6 +71,19 @@ export function usePreferencesState() {
     writePreference("serversentinel-relative-timestamps", String(relativeTimestamps));
   }, [relativeTimestamps]);
 
+  useEffect(() => {
+    writePreference(consoleHistoryStorageKey, String(rememberConsoleHistory));
+    if (!rememberConsoleHistory) clearStoredCommandHistory();
+  }, [rememberConsoleHistory]);
+
+  useEffect(() => {
+    writePreference(consoleFontSizeStorageKey, String(consoleFontSize));
+  }, [consoleFontSize]);
+
+  useEffect(() => {
+    writePreference(consoleScrollbackStorageKey, String(consoleScrollback));
+  }, [consoleScrollback]);
+
   function resetDemoState() {
     setDemoRunning(true);
     setDemoFiles({ ...initialDemoFiles });
@@ -79,6 +104,12 @@ export function usePreferencesState() {
     setDisplayTimeZonePreference,
     relativeTimestamps,
     setRelativeTimestamps,
+    rememberConsoleHistory,
+    setRememberConsoleHistory,
+    consoleFontSize,
+    setConsoleFontSize,
+    consoleScrollback,
+    setConsoleScrollback,
     demoRunning,
     setDemoRunning,
     demoFiles,

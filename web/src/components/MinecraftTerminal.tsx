@@ -4,6 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { terminalPreferenceOptions, type ConsoleFontSize, type ConsoleScrollback } from "../features/settings/settingsPreferences";
 import {
   consumeTerminalTouchScroll,
   deleteNextTerminalWordAtCursor,
@@ -21,6 +22,8 @@ type MinecraftTerminalProps = {
   canSendCommands: boolean;
   disabledReason: string;
   commandHistory: string[];
+  fontSize: ConsoleFontSize;
+  scrollback: ConsoleScrollback;
   onCommand(command: string): void;
 };
 
@@ -36,6 +39,8 @@ export function MinecraftTerminal({
   canSendCommands,
   disabledReason,
   commandHistory,
+  fontSize,
+  scrollback,
   onCommand
 }: MinecraftTerminalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -76,11 +81,10 @@ export function MinecraftTerminal({
       cursorBlink: true,
       cursorStyle: "bar",
       fontFamily: styles.getPropertyValue("--font-mono") || "ui-monospace, SFMono-Regular, Consolas, monospace",
-      fontSize: 13,
       lineHeight: 1.35,
-      scrollback: 5000,
       tabStopWidth: 2,
-      theme: terminalTheme(styles)
+      theme: terminalTheme(styles),
+      ...terminalPreferenceOptions(fontSize, scrollback)
     });
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
@@ -191,6 +195,25 @@ export function MinecraftTerminal({
     if (!container || !terminal) return;
     terminal.options.theme = terminalTheme(window.getComputedStyle(container));
   });
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.fontSize = fontSize;
+    window.requestAnimationFrame(() => {
+      try {
+        fitAddonRef.current?.fit();
+      } catch {
+        // xterm cannot fit while hidden or zero-sized; the resize observer will retry.
+      }
+    });
+  }, [fontSize]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.scrollback = scrollback;
+  }, [scrollback]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
