@@ -175,8 +175,9 @@ export type ScheduledExecution = {
   id: string;
   name: string;
   cron: string;
-  commands: string[];
-  commandDelaysSeconds: number[];
+  steps: ScheduleStep[];
+  commands?: string[];
+  commandDelaysSeconds?: number[];
   commandDelaysMinutes?: number[];
   onlyWhenNoPlayers: boolean;
   enabled: boolean;
@@ -190,6 +191,10 @@ export type ScheduledExecution = {
   activeRuns?: ScheduledActiveRun[];
 };
 
+export type ScheduleStep =
+  | { type: "command"; command: string; delaySeconds: number }
+  | { type: "action"; procedure: "restart"; delaySeconds: number };
+
 export type ScheduledRun = {
   id: string;
   scheduleId: string;
@@ -197,6 +202,12 @@ export type ScheduledRun = {
   status: string;
   message?: string;
   ranAt: string;
+  details?: {
+    stepCount: number;
+    completedStepCount: number;
+    terminalStepIndex?: number;
+    terminalStep?: string;
+  };
 };
 
 export type ScheduledActiveRun = {
@@ -205,9 +216,10 @@ export type ScheduledActiveRun = {
   scheduleName: string;
   status: "running";
   startedAt: string;
-  actionCount: number;
-  currentActionIndex?: number;
-  currentAction?: string;
+  stepCount: number;
+  currentStepIndex?: number;
+  currentStep?: string;
+  cancellable: boolean;
   waitingUntil?: string;
   waitingDelaySeconds?: number;
   waitingDelayMinutes?: number;
@@ -294,6 +306,17 @@ export type ServerStatus = {
   controlAvailable: boolean;
   commandInputAvailable: boolean;
   commandInputMessage: string;
+  lifecycle: RuntimeLifecycleStatus;
+};
+
+export type RuntimeLifecycleStatus = {
+  intent: "stopped" | "running" | "restarting";
+  state: "running" | "stopped" | "stopping" | "starting" | "recovering" | "crash-loop";
+  recoveryAttempt?: number;
+  recoveryLimit?: number;
+  nextRetryAt?: string;
+  crashLoopSince?: string;
+  message?: string;
 };
 
 export type ResourceStats = {

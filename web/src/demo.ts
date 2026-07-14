@@ -8,8 +8,10 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
   id: "demo-schedule-backup",
   name: "Nightly backup",
   cron: "0 4 * * *",
-  commands: ["save-all", "say Backup complete"],
-  commandDelaysSeconds: [0, 0],
+  steps: [
+    { type: "command", command: "say Restarting for nightly maintenance", delaySeconds: 0 },
+    { type: "action", procedure: "restart", delaySeconds: 300 }
+  ],
   onlyWhenNoPlayers: true,
   enabled: true,
   createdAt: new Date(demoStartedAt - 86_400_000).toISOString(),
@@ -321,7 +323,11 @@ export function demoStatus(server: ManagedServer, running: boolean): ServerStatu
     fileLogsAvailable: true,
     controlAvailable: true,
     commandInputAvailable: running,
-    commandInputMessage: running ? "" : "Start the demo server to enable simulated console input."
+    commandInputMessage: running ? "" : "Start the demo server to enable simulated console input.",
+    lifecycle: {
+      intent: running ? "running" : "stopped",
+      state: running ? "running" : "stopped"
+    }
   };
 }
 

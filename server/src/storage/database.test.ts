@@ -78,7 +78,10 @@ describe("SQLite storage", () => {
         { version: 10, name: "schedule-command-delays" },
         { version: 11, name: "schedule-command-delay-seconds" },
         { version: 12, name: "server-restart-required-mods" },
-        { version: 13, name: "server-desired-runtime-state" }
+        { version: 13, name: "server-desired-runtime-state" },
+        { version: 14, name: "schedule-steps" },
+        { version: 15, name: "runtime-lifecycle-intent" },
+        { version: 16, name: "scheduled-run-details" }
       ]);
   });
 
@@ -96,6 +99,33 @@ describe("SQLite storage", () => {
       storage.close();
       openDatabases.pop();
     }
+  });
+
+  it("backfills legacy command schedules into ordered canonical steps", async () => {
+    const path = await temporaryDatabasePath();
+    seedSchema(path, 13);
+    const legacy = new Database(path);
+    legacy.pragma("foreign_keys = ON");
+    legacy.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run("node-1", "Node", "remote", "online", 0, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    legacy.prepare(`
+      INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at, desired_runtime_state)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("server-1", "node-1", "Server", "/data/server-1", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "running");
+    legacy.prepare(`
+      INSERT INTO schedules (server_id, id, name, cron, commands_json, command_delays_json, command_delays_seconds_json, only_when_no_players, enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("server-1", "schedule-1", "Restart warning", "0 4 * * *", '["say warning","save-all"]', '[0,5]', '[0,300]', 0, 1, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    legacy.close();
+
+    const storage = openStorageDatabase(path);
+    openDatabases.push(storage);
+    const row = storage.connection.prepare("SELECT steps_json FROM schedules WHERE id = 'schedule-1'").get() as { steps_json: string };
+    expect(JSON.parse(row.steps_json)).toEqual([
+      { type: "command", command: "say warning", delaySeconds: 0 },
+      { type: "command", command: "save-all", delaySeconds: 300 }
+    ]);
+    expect(storage.connection.prepare("SELECT runtime_intent FROM servers WHERE id = 'server-1'").get()).toEqual({ runtime_intent: "running" });
   });
 
   it("rejects newer or unsupported schema histories", async () => {

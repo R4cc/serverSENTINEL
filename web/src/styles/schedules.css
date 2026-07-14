@@ -39,6 +39,34 @@
   grid-template-columns: 1fr;
 }
 
+.commandInputRow.scheduleStepRow,
+.commandInputRow.scheduleStepRow:first-of-type {
+  grid-template-columns: minmax(110px, 0.45fr) minmax(220px, 1fr) minmax(260px, auto) 44px;
+  align-items: end;
+}
+
+.scheduleStepType,
+.scheduleStepValue {
+  display: grid !important;
+  gap: var(--space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.scheduleStepType span,
+.scheduleStepValue span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scheduleStepValue input,
+.scheduleStepValue select,
+.scheduleStepType select {
+  width: 100%;
+  min-width: 0;
+}
+
 .scheduleCommandDelay {
   display: grid !important;
   grid-template-columns: auto 72px 104px;
@@ -715,14 +743,19 @@
 }
 
 @media (max-width: 600px) {
-  .scheduleCommandList .commandInputRow:not(:first-of-type) {
+  .scheduleCommandList .commandInputRow.scheduleStepRow,
+  .scheduleCommandList .commandInputRow.scheduleStepRow:first-of-type {
     grid-template-columns: minmax(0, 1fr) 44px;
   }
 
   .scheduleCommandList .scheduleCommandDelay {
     grid-column: 1 / -1;
-    grid-row: 2;
     justify-content: start;
+  }
+
+  .scheduleStepType,
+  .scheduleStepValue {
+    grid-column: 1;
   }
 }
 

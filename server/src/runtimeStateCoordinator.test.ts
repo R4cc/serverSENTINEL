@@ -101,20 +101,44 @@ describe("RuntimeStateCoordinator", () => {
     expect(restoreServer).not.toHaveBeenCalled();
   });
 
-  it("adopts a manually started container as desired-running", async () => {
-    const managed = server("stopped");
-    const states: string[] = [];
+  it("resumes a persisted intentional restart through one lifecycle owner", async () => {
+    const managed = { ...server("running"), runtimeIntent: "restarting" as const, restartPhase: "stopping" as const };
+    const restartServer = vi.fn(async () => status(true));
     const coordinator = new RuntimeStateCoordinator({
       readServers: async () => [managed],
       serverStatus: async () => status(true),
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => status(true),
+      restartServer,
+      setDesiredState: () => undefined,
+      setLifecycle: (_id, patch) => Object.assign(managed, patch)
+    });
+
+    await coordinator.poll();
+    await coordinator.poll();
+
+    expect(restartServer).toHaveBeenCalledTimes(1);
+    expect(managed.runtimeIntent).toBe("running");
+    expect(managed.restartPhase).toBeUndefined();
+  });
+
+  it("does not let an externally started container override intentional stop", async () => {
+    const managed = server("stopped");
+    const states: string[] = [];
+    const stopServer = vi.fn(async () => status(false));
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(true),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      stopServer,
       setDesiredState: (_id, state) => states.push(state)
     });
 
     await coordinator.poll();
 
-    expect(states).toEqual(["running"]);
+    expect(states).toEqual([]);
+    expect(stopServer).toHaveBeenCalledTimes(1);
   });
 
   it("persists a continuous-runtime exit only after confirmation", async () => {
@@ -142,7 +166,60 @@ describe("RuntimeStateCoordinator", () => {
     vi.advanceTimersByTime(5_000);
     await coordinator.poll();
 
-    expect(states).toEqual(["stopped"]);
+    expect(states).toEqual([]);
+  });
+
+  it("restarts unexpected crashes with persisted bounded backoff", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const managed = { ...server("running"), runtimeIntent: "running" as const, crashAttemptTimestamps: [] };
+    let running = true;
+    const restoreServer = vi.fn(async () => status(true));
+    const coordinator = new RuntimeStateCoordinator({
+      exitConfirmationMs: 0,
+      readServers: async () => [managed],
+      serverStatus: async () => status(running),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer,
+      setDesiredState: () => undefined,
+      setLifecycle: (_id, patch) => Object.assign(managed, patch)
+    });
+
+    await coordinator.poll();
+    running = false;
+    await coordinator.poll();
+    await coordinator.poll();
+    expect(managed.crashNextRetryAt).toBe("2026-01-01T00:00:05.000Z");
+
+    vi.advanceTimersByTime(5_000);
+    await coordinator.poll();
+    expect(restoreServer).toHaveBeenCalledTimes(1);
+    expect(managed.crashAttemptTimestamps).toHaveLength(1);
+  });
+
+  it("enters crash-loop protection after the third recovery attempt fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:01:00.000Z"));
+    const managed = {
+      ...server("running"),
+      runtimeIntent: "running" as const,
+      crashAttemptTimestamps: ["2026-01-01T00:00:10.000Z", "2026-01-01T00:00:30.000Z"],
+      crashNextRetryAt: "2026-01-01T00:01:00.000Z"
+    };
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(false),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => { throw new Error("still crashing"); },
+      setDesiredState: () => undefined,
+      setLifecycle: (_id, patch) => Object.assign(managed, patch)
+    });
+
+    await coordinator.poll();
+
+    expect(managed.crashAttemptTimestamps).toHaveLength(3);
+    expect(managed.crashLoopSince).toBe("2026-01-01T00:01:00.000Z");
+    expect(managed.crashNextRetryAt).toBeUndefined();
   });
 
   it("does not reinterpret a delayed post-start crash as a recovery opportunity", async () => {
@@ -166,7 +243,7 @@ describe("RuntimeStateCoordinator", () => {
     await coordinator.poll();
 
     expect(restoreServer).not.toHaveBeenCalled();
-    expect(states).toEqual(["stopped"]);
+    expect(states).toEqual([]);
   });
 
   it("retains running intent across an outage and restores after reconnect", async () => {

@@ -30,10 +30,15 @@ export type RuntimeStateCoordinatorOptions = {
   canRestore?: (server: ManagedServer) => boolean;
   restoreServer: (server: ManagedServer) => Promise<unknown>;
   setDesiredState: (serverId: string, state: "running" | "stopped") => void;
+  setLifecycle?: (serverId: string, patch: Partial<ManagedServer>) => void;
+  restartServer?: (server: ManagedServer) => Promise<unknown>;
+  stopServer?: (server: ManagedServer) => Promise<unknown>;
   onError?: (error: unknown, server?: ManagedServer) => void;
 };
 
 const stoppedStates = new Set(["created", "dead", "exited"]);
+export const crashRetryDelaysMs = [5_000, 15_000, 30_000] as const;
+export const crashRetryWindowMs = 10 * 60_000;
 
 function runningFromStatus(value: unknown) {
   if (!value || typeof value !== "object") return false;
@@ -166,24 +171,75 @@ export class RuntimeStateCoordinator {
       observation.explicitObservation = false;
     }
 
+    const intent = server.runtimeIntent ?? server.desiredRuntimeState ?? undefined;
     if (actual.running) {
-      if (server.desiredRuntimeState !== "running") this.options.setDesiredState(server.id, "running");
+      if (intent === "restarting") {
+        if (server.restartPhase === "stopping" && !observation.restoreAttempted && this.options.restartServer && this.options.canRestore?.(server) !== false) {
+          observation.restoreAttempted = true;
+          const result = await this.options.restartServer(server);
+          if (!runningFromStatus(result)) throw new Error("Resumed restart did not remain running");
+          this.persistLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
+        } else if (server.restartPhase === "starting") {
+          this.persistLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
+        }
+        observation.observedRunning = true;
+        observation.pendingExitAt = undefined;
+        return;
+      }
+      if (intent === "stopped") {
+        if (!observation.restoreAttempted && this.options.stopServer && this.options.canRestore?.(server) !== false) {
+          observation.restoreAttempted = true;
+          await this.options.stopServer(server);
+        }
+        observation.observedRunning = false;
+        observation.pendingExitAt = undefined;
+        return;
+      }
+      if (intent !== "running") {
+        this.persistLifecycle(server, { runtimeIntent: "running" });
+      }
+      const stableSince = server.crashStableSince ? Date.parse(server.crashStableSince) : Date.now();
+      if (!server.crashStableSince) this.persistLifecycle(server, { crashStableSince: new Date().toISOString() });
+      if ((server.crashAttemptTimestamps?.length || server.crashNextRetryAt || server.crashLoopSince) && Date.now() - stableSince >= crashRetryWindowMs) {
+        this.persistLifecycle(server, { crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: new Date().toISOString() });
+      }
       observation.observedRunning = true;
       observation.restoreAttempted = true;
       observation.pendingExitAt = undefined;
       return;
     }
 
-    if (!server.desiredRuntimeState) {
-      this.options.setDesiredState(server.id, "stopped");
+    if (!intent) {
+      this.persistLifecycle(server, { runtimeIntent: "stopped" });
       observation.observedRunning = false;
       observation.restoreAttempted = true;
       return;
     }
-    if (server.desiredRuntimeState === "stopped") {
+    if (intent === "stopped") {
       observation.observedRunning = false;
       observation.restoreAttempted = true;
       observation.pendingExitAt = undefined;
+      return;
+    }
+
+    if (intent === "restarting") {
+      if (observation.restoreAttempted || this.options.canRestore?.(server) === false || !this.options.restartServer) return;
+      observation.restoreAttempted = true;
+      const result = await this.options.restartServer(server);
+      if (!runningFromStatus(result)) throw new Error("Resumed restart did not remain running");
+      this.persistLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
+      observation.observedRunning = true;
+      return;
+    }
+
+    if (server.crashLoopSince) {
+      observation.observedRunning = false;
+      observation.restoreAttempted = true;
+      return;
+    }
+
+    if (server.crashNextRetryAt || (server.crashAttemptTimestamps?.length ?? 0) > 0) {
+      await this.recoverCrash(server, observation);
       return;
     }
 
@@ -196,7 +252,7 @@ export class RuntimeStateCoordinator {
         observation.observedRunning = true;
         observation.pendingExitAt = undefined;
       } catch (error) {
-        this.options.setDesiredState(server.id, "stopped");
+        this.persistLifecycle(server, { runtimeIntent: "stopped" });
         observation.observedRunning = false;
         this.options.onError?.(error, server);
       }
@@ -209,10 +265,64 @@ export class RuntimeStateCoordinator {
       return;
     }
     if (now - observation.pendingExitAt < this.exitConfirmationMs) return;
-    this.options.setDesiredState(server.id, "stopped");
+    const attempts = this.recentCrashAttempts(server);
+    if (attempts.length >= crashRetryDelaysMs.length) {
+      this.persistLifecycle(server, { crashAttemptTimestamps: attempts, crashNextRetryAt: undefined, crashLoopSince: new Date(now).toISOString(), crashStableSince: undefined });
+    } else {
+      this.persistLifecycle(server, {
+        crashAttemptTimestamps: attempts,
+        crashNextRetryAt: new Date(now + crashRetryDelaysMs[attempts.length]).toISOString(),
+        crashStableSince: undefined
+      });
+    }
     observation.observedRunning = false;
-    observation.restoreAttempted = true;
+    observation.restoreAttempted = false;
     observation.pendingExitAt = undefined;
+  }
+
+  private recentCrashAttempts(server: ManagedServer) {
+    const threshold = Date.now() - crashRetryWindowMs;
+    return (server.crashAttemptTimestamps ?? []).filter((value) => {
+      const at = Date.parse(value);
+      return Number.isFinite(at) && at >= threshold;
+    });
+  }
+
+  private async recoverCrash(server: ManagedServer, observation: RuntimeObservation) {
+    const attempts = this.recentCrashAttempts(server);
+    if (attempts.length >= crashRetryDelaysMs.length && !server.crashNextRetryAt) {
+      this.persistLifecycle(server, { crashAttemptTimestamps: attempts, crashLoopSince: new Date().toISOString(), crashStableSince: undefined });
+      observation.restoreAttempted = true;
+      return;
+    }
+    const retryAt = server.crashNextRetryAt ? Date.parse(server.crashNextRetryAt) : Date.now() + crashRetryDelaysMs[Math.min(attempts.length, crashRetryDelaysMs.length - 1)];
+    if (!server.crashNextRetryAt) this.persistLifecycle(server, { crashNextRetryAt: new Date(retryAt).toISOString() });
+    if (Date.now() < retryAt || this.options.canRestore?.(server) === false) return;
+
+    const nextAttempts = [...attempts, new Date().toISOString()];
+    this.persistLifecycle(server, { crashAttemptTimestamps: nextAttempts, crashNextRetryAt: undefined });
+    try {
+      const result = await this.options.restoreServer(server);
+      if (!runningFromStatus(result)) throw new Error("Crash recovery did not remain running");
+      this.persistLifecycle(server, { crashStableSince: new Date().toISOString() });
+      observation.observedRunning = true;
+      observation.restoreAttempted = false;
+      observation.pendingExitAt = undefined;
+    } catch (error) {
+      if (nextAttempts.length >= crashRetryDelaysMs.length) {
+        this.persistLifecycle(server, { crashLoopSince: new Date().toISOString(), crashNextRetryAt: undefined, crashStableSince: undefined });
+      } else {
+        this.persistLifecycle(server, { crashNextRetryAt: new Date(Date.now() + crashRetryDelaysMs[nextAttempts.length]).toISOString() });
+      }
+      this.options.onError?.(error, server);
+    }
+  }
+
+  private persistLifecycle(server: ManagedServer, patch: Partial<ManagedServer>) {
+    Object.assign(server, patch);
+    if (patch.runtimeIntent) server.desiredRuntimeState = patch.runtimeIntent === "stopped" ? "stopped" : "running";
+    if (this.options.setLifecycle) this.options.setLifecycle(server.id, patch);
+    else if (patch.runtimeIntent) this.options.setDesiredState(server.id, patch.runtimeIntent === "stopped" ? "stopped" : "running");
   }
 }
 

@@ -41,6 +41,7 @@ const schedule = (overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
   id: "schedule-1",
   name: "Nightly restart",
   cron: "0 4 * * *",
+  steps: [{ type: "command", command: "stop", delaySeconds: 0 }],
   commands: ["stop"],
   commandDelaysSeconds: [0],
   onlyWhenNoPlayers: true,
@@ -160,7 +161,7 @@ describe("automation summary", () => {
     const snapshot = buildAutomationSnapshot([
       schedule({
         nextRunAt: "2026-07-11T15:00:00.000Z",
-        activeRuns: [{ id: "active", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "running", startedAt: "2026-07-11T11:58:00.000Z", actionCount: 2 }],
+        activeRuns: [{ id: "active", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "running", startedAt: "2026-07-11T11:58:00.000Z", stepCount: 2, cancellable: true }],
         recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "failed", ranAt: "2026-07-11T10:00:00.000Z" }]
       }),
       schedule({ id: "schedule-2", name: "Sooner", nextRunAt: "2026-07-11T13:00:00.000Z" }),

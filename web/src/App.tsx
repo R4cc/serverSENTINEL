@@ -30,7 +30,6 @@ import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, R
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
-import { scheduleDelayToSeconds } from "./features/schedules/scheduleDelays";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
 const loadResourcePanel = () => import("./components/ResourcePanel");
@@ -238,6 +237,7 @@ export default function App() {
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
   const [scheduleBusy, setScheduleBusy] = useState(false);
+  const demoScheduleControllersRef = useRef(new Map<string, AbortController>());
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
@@ -422,7 +422,8 @@ export default function App() {
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
-  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || nodeOfflineDetected || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
+  const lifecycleTransitionRunning = activeStatus?.lifecycle.state === "stopping" || activeStatus?.lifecycle.state === "starting";
+  const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || nodeOfflineDetected || lifecycleTransitionRunning || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
   const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
   const lastKnownRuntimeLabel = serverCommandTone === "running"
     ? "Running"
@@ -457,11 +458,13 @@ export default function App() {
     ? "Sign in before using runtime controls."
     : !canBasic
       ? "Servers control permission is required."
-      : activeNodeRuntimeBlocked || nodeOfflineDetected
+    : activeNodeRuntimeBlocked || nodeOfflineDetected
         ? activeNodeBlockMessage
           || `${activeNode.name} is offline. Runtime controls will return when it reconnects.`
         : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
           ? "Docker socket is not mounted. Runtime controls are unavailable for the internal node."
+          : lifecycleTransitionRunning
+            ? activeStatus?.lifecycle.message || "A server restart is already in progress."
           : isProvisioning
             ? "Server setup is still running."
             : "";
@@ -2292,32 +2295,22 @@ export default function App() {
     }
   }
 
-  async function createSchedule(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createSchedule(patch: Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "enabled">) {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
     setNotice("");
     setScheduleBusy(true);
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const scheduleName = trimFormValue(form, "name");
-    const cron = trimFormValue(form, "cron");
-    const delayValues = form.getAll("commandDelayValues").map(Number);
-    const delayUnits = form.getAll("commandDelayUnits").map(String);
-    const commandRows = form.getAll("commands").map(String).map((command, index) => ({
-      command: command.trim(),
-      delaySeconds: scheduleDelayToSeconds(delayValues[index] ?? 0, delayUnits[index] ?? "seconds")
-    })).filter((row) => Boolean(row.command));
-    const commands = commandRows.map((row) => row.command);
-    const commandDelaysSeconds = commandRows.map((row) => row.delaySeconds);
+    const scheduleName = patch.name;
+    const cron = patch.cron;
+    const commands = patch.steps.filter((step) => step.type === "command").map((step) => step.command);
     const scheduleErrors = [
       scheduleName ? null : { field: "name", message: "Schedule name is required." },
       validateCronExpression(cron) ? { field: "cron", message: validateCronExpression(cron)! } : null,
-      validateCommandList(commands) ? { field: "commands", message: validateCommandList(commands)! } : null
+      commands.length && validateCommandList(commands) ? { field: "commands", message: validateCommandList(commands)! } : null
     ].filter((error): error is { field: string; message: string } => Boolean(error));
-    if (setValidationNotice(formElement, scheduleErrors, (message) => {
+    if (scheduleErrors.length) {
+      const message = scheduleErrors[0]!.message;
       setNotice(message);
       notify("error", message);
-    })) {
       setScheduleBusy(false);
       return false;
     }
@@ -2326,16 +2319,15 @@ export default function App() {
         id: clientId(),
         name: scheduleName,
         cron,
-        commands,
-        commandDelaysSeconds,
-        onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
-        enabled: form.get("enabled") === "on",
+        steps: patch.steps,
+        ...(patch.steps.every((step) => step.type === "command") ? { commands, commandDelaysSeconds: patch.steps.map((step) => step.delaySeconds) } : {}),
+        onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
+        enabled: patch.enabled,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastMessage: "Not run in demo session"
       };
       setDemoSchedules((current) => [schedule, ...current]);
-      formElement.reset();
       notify("success", "Demo scheduled execution created");
       setScheduleBusy(false);
       return true;
@@ -2344,15 +2336,13 @@ export default function App() {
       await api<ScheduledExecution>(`/api/servers/${activeServer.id}/schedules`, {
         method: "POST",
         body: JSON.stringify({
-          name: form.get("name"),
+          name: scheduleName,
           cron,
-          commands,
-          commandDelaysSeconds,
-          onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
-          enabled: form.get("enabled") === "on"
+          steps: patch.steps,
+          onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
+          enabled: patch.enabled
         })
       });
-      formElement.reset();
       notify("success", "Scheduled execution created");
       await refreshApp();
       return true;
@@ -2389,8 +2379,7 @@ export default function App() {
         body: JSON.stringify({
           name: next.name,
           cron: next.cron,
-          commands: next.commands,
-          commandDelaysSeconds: next.commandDelaysSeconds,
+          steps: next.steps,
           onlyWhenNoPlayers: next.onlyWhenNoPlayers,
           enabled: next.enabled
         })
@@ -2442,30 +2431,63 @@ export default function App() {
     if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
     setScheduleBusy(true);
     if (activeServerIsDemo) {
-      const ranAt = new Date().toISOString();
-      const status = demoRunning ? "success" : "skipped";
-      const message = demoRunning
-        ? `Sent ${schedule.commands.length} command${schedule.commands.length === 1 ? "" : "s"}`
-        : "Skipped because Minecraft server is stopped";
-      const run: ScheduledRun = {
-        id: clientId(),
-        scheduleId: schedule.id,
-        scheduleName: schedule.name,
-        status,
-        message,
-        ranAt
-      };
-      setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id
-        ? {
-            ...candidate,
-            lastRunAt: ranAt,
-            lastStatus: status,
-            lastMessage: message,
-            recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25)
-          }
-        : candidate));
-      notify(demoRunning ? "success" : "info", demoRunning ? `Tested ${schedule.name}` : `${schedule.name} was skipped`);
+      const runId = clientId();
+      const startedAt = new Date().toISOString();
+      if (!demoRunning) {
+        const message = "Skipped because Minecraft server is stopped";
+        const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "skipped", message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount: 0 } };
+        setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, lastRunAt: startedAt, lastStatus: "skipped", lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
+        notify("info", `${schedule.name} was skipped`);
+        setScheduleBusy(false);
+        return true;
+      }
+      const controller = new AbortController();
+      demoScheduleControllersRef.current.set(runId, controller);
+      const activeRun: ScheduledActiveRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt, stepCount: schedule.steps.length, cancellable: true, message: "Starting" };
+      setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [activeRun] } : candidate));
+      notify("success", `Started ${schedule.name}`);
       setScheduleBusy(false);
+      void (async () => {
+        let completedStepCount = 0;
+        let terminalStep = "";
+        let terminalStepIndex: number | undefined;
+        let outcome: "success" | "cancelled" | "failed" = "success";
+        let message = "";
+        try {
+          for (const [index, step] of schedule.steps.entries()) {
+            terminalStepIndex = index;
+            terminalStep = step.type === "command" ? step.command : "Restart";
+            const delayMs = Math.min(step.delaySeconds * 1000, 5_000);
+            const update = (patch: Partial<ScheduledActiveRun>) => setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [{ ...activeRun, currentStepIndex: index, currentStep: terminalStep, ...patch }] } : candidate));
+            if (delayMs) {
+              update({ waitingUntil: new Date(Date.now() + delayMs).toISOString(), waitingDelaySeconds: delayMs / 1000, message: `Waiting before step ${index + 1}` });
+              await new Promise<void>((resolve, reject) => {
+                const timer = window.setTimeout(resolve, delayMs);
+                controller.signal.addEventListener("abort", () => { window.clearTimeout(timer); reject(new DOMException("Cancelled", "AbortError")); }, { once: true });
+              });
+            }
+            if (step.type === "action") {
+              update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: "Restarting server" });
+              setDemoRunning(false);
+              setStatus(demoStatus(activeServer, false));
+              await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+              setDemoRunning(true);
+              setStatus(demoStatus(activeServer, true));
+            } else {
+              update({ waitingUntil: undefined, waitingDelaySeconds: undefined, message: `Sent command ${index + 1}` });
+            }
+            completedStepCount += 1;
+          }
+          message = `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`;
+        } catch (error) {
+          outcome = error instanceof DOMException && error.name === "AbortError" ? "cancelled" : "failed";
+          message = outcome === "cancelled" ? "Cancelled by user" : errorMessage(error, "Demo schedule failed");
+        } finally {
+          demoScheduleControllersRef.current.delete(runId);
+          const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: outcome, message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
+          setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [], lastRunAt: startedAt, lastStatus: outcome, lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
+        }
+      })();
       return true;
     }
     try {
@@ -2484,7 +2506,7 @@ export default function App() {
   }
 
   async function cancelScheduleRun(run: ScheduledActiveRun) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer || activeServerIsDemo) return false;
+    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
     const confirmed = await requestConfirmation({
       title: `Cancel ${run.scheduleName}?`,
       description: "Cancel the currently active scheduled run.",
@@ -2493,6 +2515,11 @@ export default function App() {
       variant: "critical"
     });
     if (!confirmed) return false;
+    if (activeServerIsDemo) {
+      demoScheduleControllersRef.current.get(run.id)?.abort();
+      notify("success", `Cancelled ${run.scheduleName}`);
+      return true;
+    }
     setScheduleBusy(true);
     try {
       await api(`/api/servers/${activeServer.id}/schedules/${run.scheduleId}/runs/${run.id}/cancel`, { method: "POST" });

@@ -23,6 +23,10 @@ function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: bool
   if (!status) return "Unknown";
   if (!status.docker.configured) return "Unconfigured";
   if (!status.docker.available) return "Unavailable";
+  if (status.lifecycle.state === "crash-loop") return "Crash loop";
+  if (status.lifecycle.state === "recovering") return `Recovering (${Math.min((status.lifecycle.recoveryAttempt ?? 0) + 1, 3)}/3)`;
+  if (status.lifecycle.state === "stopping") return status.lifecycle.intent === "restarting" ? "Stopping for restart" : "Stopping";
+  if (status.lifecycle.state === "starting") return "Starting after restart";
   if (status.docker.running) return "Running";
   if (status.docker.state === "created") return "Created";
   if (status.docker.state === "restarting") return "Restarting";
@@ -35,6 +39,8 @@ function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: bool
 
 function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!dockerSocketMounted || !status || !status.docker.available || !status.docker.configured) return "neutral";
+  if (status.lifecycle.state === "crash-loop") return "danger";
+  if (["recovering", "stopping", "starting"].includes(status.lifecycle.state)) return "warning";
   if (status.docker.running) return "running";
   if (status.docker.state === "dead") return "danger";
   return "stopped";
@@ -317,8 +323,8 @@ function scheduleStatus(status?: string) {
 
 function activeRunDetail(run: ScheduledActiveRun) {
   if (run.waitingUntil) return `Waiting ${formatRelativeScheduleTime(run.waitingUntil)}`;
-  if (run.currentAction) return run.currentAction;
-  if (run.currentActionIndex !== undefined) return `Action ${run.currentActionIndex + 1} of ${run.actionCount}`;
+  if (run.currentStep) return run.currentStep;
+  if (run.currentStepIndex !== undefined) return `Step ${run.currentStepIndex + 1} of ${run.stepCount}`;
   return run.message || "In progress";
 }
 

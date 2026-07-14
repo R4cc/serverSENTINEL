@@ -100,6 +100,10 @@ export function isValidServerPort(port: string) {
 
 export function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!status) return "Checking container";
+  if (status.lifecycle.state === "crash-loop") return "Crash loop protection active";
+  if (status.lifecycle.state === "recovering") return `Recovering from crash${status.lifecycle.recoveryAttempt !== undefined ? ` (${Math.min(status.lifecycle.recoveryAttempt + 1, 3)}/3)` : ""}`;
+  if (status.lifecycle.state === "stopping") return status.lifecycle.intent === "restarting" ? "Stopping for restart" : "Stopping server";
+  if (status.lifecycle.state === "starting") return "Starting after restart";
   if (status.docker.container === "serversentinel-demo") return status.docker.running ? "Demo server running" : "Demo server stopped";
   if (!dockerSocketMounted) return "Docker socket not mounted";
   if (!status.docker.configured) return "Container control not configured";
@@ -119,6 +123,8 @@ export function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: b
 
 export function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!status || !dockerSocketMounted || !status.docker.configured || !status.docker.available) return "neutral";
+  if (status.lifecycle.state === "crash-loop") return "exited";
+  if (["recovering", "stopping", "starting"].includes(status.lifecycle.state)) return "starting";
 
   const state = status.docker.state?.toLowerCase();
   if (state === "running") return "running";

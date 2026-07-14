@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 - 2026-07-14
+
+- Bumped package, panel, node image, Docker, and release-facing version metadata to 1.2.1.
+- Added typed schedule steps with delayed commands and a first-class Restart procedure.
+- Added persisted lifecycle intent, graceful Minecraft restarts, bounded crash recovery, and crash-loop status reporting.
+- Fixed page-entry motion trapping the file editor and other fixed dialogs inside page content.
+
 ## 1.2.0 - 2026-07-13
 
 - Bumped package, panel, node image, Docker, and release-facing version metadata to 1.2.0.

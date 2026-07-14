@@ -35,6 +35,7 @@ import {
   dedupeDownloadSelections,
   sanitizeCommandDelays,
   sanitizeCommandDelaysSeconds,
+  sanitizeScheduleSteps,
   waitForCommandDelay,
   dockerNetworkingConfigFromInspect,
   minecraftContainerNetworkingConfig,
@@ -92,6 +93,25 @@ function testRuntimeProfile() {
 }
 
 describe("scheduled command delays", () => {
+  it("normalizes legacy commands into canonical command steps", () => {
+    expect(sanitizeScheduleSteps(undefined, ["say warning", "save-all"], [0, 30])).toEqual([
+      { type: "command", command: "say warning", delaySeconds: 0 },
+      { type: "command", command: "save-all", delaySeconds: 30 }
+    ]);
+  });
+
+  it("accepts one final Restart action and rejects unsafe action layouts", () => {
+    expect(sanitizeScheduleSteps([
+      { type: "command", command: "say restarting", delaySeconds: 0 },
+      { type: "action", procedure: "restart", delaySeconds: 300 }
+    ])).toHaveLength(2);
+    expect(() => sanitizeScheduleSteps([
+      { type: "action", procedure: "restart", delaySeconds: 0 },
+      { type: "command", command: "say online", delaySeconds: 0 }
+    ])).toThrow(/final schedule step/);
+    expect(() => sanitizeScheduleSteps([{ type: "action", procedure: "reload", delaySeconds: 0 }])).toThrow(/Unsupported/);
+  });
+
   it("defaults legacy schedules to immediate commands", () => {
     expect(sanitizeCommandDelays(undefined, 2)).toEqual([0, 0]);
   });
@@ -375,7 +395,16 @@ describe("public server status DTO", () => {
       fileLogsAvailable: true,
       controlAvailable: true,
       commandInputAvailable: true,
-      commandInputMessage: "ready"
+      commandInputMessage: "ready",
+      lifecycle: {
+        intent: "running",
+        state: "running",
+        recoveryAttempt: undefined,
+        recoveryLimit: undefined,
+        nextRetryAt: undefined,
+        crashLoopSince: undefined,
+        message: undefined
+      }
     });
     expect(JSON.stringify(status)).not.toContain("/srv/private");
     expect(JSON.stringify(status)).not.toContain("startedAt");

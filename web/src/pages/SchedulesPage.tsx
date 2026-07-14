@@ -6,7 +6,7 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
-import type { ScheduledActiveRun, ScheduledExecution, ScheduledRun } from '../types';
+import type { ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
@@ -22,10 +22,34 @@ type ScheduleFormMode =
   | { type: "create" }
   | { type: "edit"; schedule: ScheduledExecution };
 
-type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "commands" | "commandDelaysSeconds" | "onlyWhenNoPlayers" | "enabled">;
+type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "enabled">;
+type StepDraft = {
+  id: string;
+  type: "command" | "action";
+  command: string;
+  procedure: "restart";
+  delayValue: number;
+  delayUnit: "seconds" | "minutes" | "hours";
+};
 type ScheduledRunPanelItem =
   | (ScheduledActiveRun & { kind: "active"; sortAt: string })
   | (ScheduledRun & { kind: "completed"; sortAt: string });
+
+function emptyStepDraft(): StepDraft {
+  return { id: clientId(), type: "command", command: "", procedure: "restart", delayValue: 0, delayUnit: "seconds" };
+}
+
+function stepDraftFromStep(step: ScheduleStep): StepDraft {
+  const delay = scheduleDelayParts(step.delaySeconds);
+  return {
+    id: clientId(),
+    type: step.type,
+    command: step.type === "command" ? step.command : "",
+    procedure: "restart",
+    delayValue: delay.value,
+    delayUnit: delay.unit
+  };
+}
 
 export function SchedulePage({
   schedules,
@@ -43,7 +67,7 @@ export function SchedulePage({
   schedules: ScheduledExecution[];
   formatDate: (value: string | number | Date) => string;
   scheduleTimeZone: string;
-  onCreate: (event: FormEvent<HTMLFormElement>) => boolean | void | Promise<boolean | void>;
+  onCreate: (patch: SchedulePatch) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
   onDelete: (schedule: ScheduledExecution) => void;
@@ -53,7 +77,7 @@ export function SchedulePage({
   disabledReason?: string;
 }) {
   const [formMode, setFormMode] = useState<ScheduleFormMode | null>(null);
-  const [commandIds, setCommandIds] = useState<string[]>(() => [clientId()]);
+  const [stepDrafts, setStepDrafts] = useState<StepDraft[]>(() => [emptyStepDraft()]);
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
@@ -62,13 +86,13 @@ export function SchedulePage({
 
   useEffect(() => {
     if (!formMode) {
-      setCommandIds([clientId()]);
+      setStepDrafts([emptyStepDraft()]);
       setFormError("");
       setCronValue("");
       return;
     }
-    const commands = formMode.type === "edit" ? formMode.schedule.commands : [];
-    setCommandIds(commands.length ? commands.map(() => clientId()) : [clientId()]);
+    const steps = formMode.type === "edit" ? formMode.schedule.steps : [];
+    setStepDrafts(steps.length ? steps.map(stepDraftFromStep) : [emptyStepDraft()]);
     setFormError("");
     setCronValue(formMode.type === "edit" ? formMode.schedule.cron : "");
   }, [formMode]);
@@ -120,29 +144,30 @@ export function SchedulePage({
   }, [schedules, recentRunsKey]);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
-    const delayValues = form.getAll("commandDelayValues").map(Number);
-    const delayUnits = form.getAll("commandDelayUnits").map(String);
-    const commandRows = form.getAll("commands").map(String).map((command, index) => ({
-      command: command.trim(),
-      delaySeconds: scheduleDelayToSeconds(delayValues[index] ?? 0, delayUnits[index] ?? "seconds")
-    })).filter((row) => Boolean(row.command));
+    const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
+      ? { type: "command", command: draft.command.trim(), delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) }
+      : { type: "action", procedure: "restart", delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
     return {
       name: String(form.get("name") ?? "").trim(),
       cron: String(form.get("cron") ?? "").trim(),
-      commands: commandRows.map((row) => row.command),
-      commandDelaysSeconds: commandRows.map((row) => row.delaySeconds),
+      steps,
       onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
       enabled: form.get("enabled") === "on"
     };
   }
 
   function validatePatch(patch: SchedulePatch) {
+    const commands = patch.steps.filter((step) => step.type === "command").map((step) => step.command);
+    const restartIndexes = patch.steps.flatMap((step, index) => step.type === "action" ? [index] : []);
     return !patch.name
       ? "Schedule name is required."
       : validateCronExpression(patch.cron)
-        || validateCommandList(patch.commands)
-        || (patch.commandDelaysSeconds.some((delay) => !Number.isInteger(delay) || delay < 0 || delay > 604_800)
-          ? "Command delays must be whole values no longer than 7 days."
+        || (!patch.steps.length ? "At least one schedule step is required." : "")
+        || (commands.length ? validateCommandList(commands) : "")
+        || (restartIndexes.length > 1 ? "A schedule can contain at most one Restart action." : "")
+        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "Restart must be the final schedule step." : "")
+        || (patch.steps.some((step) => !Number.isInteger(step.delaySeconds) || step.delaySeconds < 0 || step.delaySeconds > 604_800)
+          ? "Step delays must be whole values no longer than 7 days."
           : "");
   }
 
@@ -157,7 +182,7 @@ export function SchedulePage({
     }
     setFormError("");
     if (formMode.type === "create") {
-      const created = await onCreate(event);
+      const created = await onCreate(patch);
       if (created !== false) setFormMode(null);
       return;
     }
@@ -177,7 +202,7 @@ export function SchedulePage({
         <PanelHeader
           className="scheduleCardHeader"
           title="Schedules"
-          description={`Manage automated console commands for this server. Cron expressions use ${scheduleTimeZone}.`}
+          description={`Manage automated commands and lifecycle actions for this server. Cron expressions use ${scheduleTimeZone}.`}
           actions={<Button
             className="scheduleAddButton"
             onClick={() => setFormMode({ type: "create" })}
@@ -322,7 +347,7 @@ export function SchedulePage({
               </article>
               );
             }) : (
-              <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create an automated console command." />
+              <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
             )}
           </div>
         </div>
@@ -339,8 +364,8 @@ export function SchedulePage({
                 <div className="scheduledRunDetails">
                   <strong>{run.scheduleName}</strong>
                   <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
-                  {run.kind === "active" && run.currentAction && (
-                    <small className="scheduledRunAction">Action {(run.currentActionIndex ?? 0) + 1} of {run.actionCount}: {run.currentAction}</small>
+                  {run.kind === "active" && run.currentStep && (
+                    <small className="scheduledRunAction">Step {(run.currentStepIndex ?? 0) + 1} of {run.stepCount}: {run.currentStep}</small>
                   )}
                 </div>
                 <div className="scheduledRunTime">
@@ -349,7 +374,7 @@ export function SchedulePage({
                 </div>
                 {run.kind === "active" && (
                   <div className="scheduledRunActions">
-                    <Button variant="critical" iconOnly compact className="scheduledRunCancelButton" onClick={() => void onCancelRun(run)} disabled={disabled} aria-label={`Cancel ${run.scheduleName}`} title={disabled ? disabledReason || "Schedule cancellation is unavailable right now." : `Cancel ${run.scheduleName}`}>
+                    <Button variant="critical" iconOnly compact className="scheduledRunCancelButton" onClick={() => void onCancelRun(run)} disabled={disabled || !run.cancellable} aria-label={`Cancel ${run.scheduleName}`} title={!run.cancellable ? "Restart is in progress and must finish." : disabled ? disabledReason || "Schedule cancellation is unavailable right now." : `Cancel ${run.scheduleName}`}>
                       <AppIcon name="x" />
                     </Button>
                   </div>
@@ -399,51 +424,50 @@ export function SchedulePage({
                   </label>
                 </div>
                 <div className="commandStack scheduleCommandStack">
-                  <span className="fieldLabel">Commands</span>
+                  <span className="fieldLabel">Steps</span>
                   <div className="scheduleCommandList">
-                    {commandIds.map((id, index) => (
-                      <div key={id} className="commandInputRow">
-                        <input name="commands" defaultValue={modalSchedule?.commands[index] ?? ""} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required={index === 0} title="Use one console command per line." />
-                        {index === 0 ? (
-                          <>
-                            <input name="commandDelayValues" type="hidden" value="0" />
-                            <input name="commandDelayUnits" type="hidden" value="seconds" />
-                          </>
+                    {stepDrafts.map((draft, index) => (
+                      <div key={draft.id} className="commandInputRow scheduleStepRow">
+                        <label className="scheduleStepType">
+                          <span>Type</span>
+                          <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
+                            <option value="command">Command</option>
+                            <option value="action">Action</option>
+                          </select>
+                        </label>
+                        {draft.type === "command" ? (
+                          <label className="scheduleStepValue">
+                            <span>Command</span>
+                            <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
+                          </label>
                         ) : (
-                          <label className="scheduleCommandDelay">
-                            <span>Delay</span>
-                            <input
-                              name="commandDelayValues"
-                              type="number"
-                              min="0"
-                              max="604800"
-                              step="1"
-                              defaultValue={scheduleDelayParts(modalSchedule?.commandDelaysSeconds[index] ?? 0).value}
-                              required
-                              aria-label={`Delay before command ${index + 1}`}
-                            />
-                            <select
-                              name="commandDelayUnits"
-                              defaultValue={scheduleDelayParts(modalSchedule?.commandDelaysSeconds[index] ?? 0).unit}
-                              aria-label={`Delay unit before command ${index + 1}`}
-                            >
-                              <option value="seconds">Seconds</option>
-                              <option value="minutes">Minutes</option>
-                              <option value="hours">Hours</option>
+                          <label className="scheduleStepValue">
+                            <span>Procedure</span>
+                            <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
+                              <option value="restart">Restart</option>
                             </select>
                           </label>
                         )}
-                        {index > 0 && (
-                          <Button variant="ghost" iconOnly className="iconDangerButton" onClick={() => setCommandIds((ids) => ids.filter((candidate) => candidate !== id))} aria-label="Remove command">
+                        <label className="scheduleCommandDelay">
+                          <span>Delay</span>
+                          <input type="number" min="0" max="604800" step="1" value={draft.delayValue} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayValue: Number(event.target.value) } : step))} required aria-label={`Delay before step ${index + 1}`} />
+                          <select value={draft.delayUnit} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayUnit: event.target.value as StepDraft["delayUnit"] } : step))} aria-label={`Delay unit before step ${index + 1}`}>
+                            <option value="seconds">Seconds</option>
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                          </select>
+                        </label>
+                        {stepDrafts.length > 1 && (
+                          <Button variant="ghost" iconOnly className="iconDangerButton" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label="Remove step">
                             <AppIcon name="x" />
                           </Button>
                         )}
                       </div>
                     ))}
                   </div>
-                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setCommandIds((ids) => [...ids, clientId()])}>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
                     <AppIcon name="plus" />
-                    <span>Additional command</span>
+                    <span>Additional step</span>
                   </Button>
                 </div>
                 <div className="scheduleEditOptions">
@@ -498,12 +522,15 @@ function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelIte
   return [...active, ...completed.slice(0, Math.max(8 - active.length, 0))];
 }
 
-function scheduleDescription(schedule: ScheduledExecution) {
-  if (schedule.commands.length > 1) {
-    const delayedCommands = schedule.commandDelaysSeconds.filter((delay) => delay > 0).length;
-    return `${schedule.commands.length} console commands${delayedCommands ? `, ${delayedCommands} delayed` : ""}`;
+export function scheduleDescription(schedule: ScheduledExecution) {
+  const commands = schedule.steps.filter((step) => step.type === "command");
+  const actions = schedule.steps.filter((step) => step.type === "action");
+  const delayed = schedule.steps.filter((step) => step.delaySeconds > 0).length;
+  if (schedule.steps.length > 1 || actions.length) {
+    const parts = [commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "", actions.length ? `${actions.length} Restart action` : ""].filter(Boolean);
+    return `${parts.join(", ")}${delayed ? `, ${delayed} delayed` : ""}`;
   }
-  if (schedule.commands[0]) return schedule.commands[0];
+  if (commands[0]?.type === "command") return commands[0].command;
   return schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Console command automation";
 }
 
@@ -540,10 +567,11 @@ function statusTone(status?: string) {
   return "unknown";
 }
 
-function activeRunStatus(run: ScheduledActiveRun) {
+export function activeRunStatus(run: ScheduledActiveRun) {
   if (run.message === "Cancellation requested") return run.message;
   if (run.waitingUntil) return `Waiting ${remainingDelayLabel(run.waitingUntil)}`;
-  if (run.currentActionIndex !== undefined) return `Action ${run.currentActionIndex + 1} of ${run.actionCount}`;
+  if (!run.cancellable && run.message) return run.message;
+  if (run.currentStepIndex !== undefined) return `Step ${run.currentStepIndex + 1} of ${run.stepCount}`;
   return run.message || "In progress";
 }
 

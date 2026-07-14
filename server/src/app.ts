@@ -153,6 +153,7 @@ import type {
   ResolvedServerVersions,
   ServerActivity,
   ServerEvent,
+  ScheduleStep,
   ScheduledActiveRun,
   ScheduledExecution,
   ScheduledRun,
@@ -1029,15 +1030,41 @@ function publicDockerStatus(value: unknown) {
   };
 }
 
-export function publicServerStatus(status: unknown, server: Pick<ManagedServer, "id">) {
+export function publicServerStatus(status: unknown, server: Pick<ManagedServer, "id"> & Partial<ManagedServer>) {
   const source = status && typeof status === "object" ? status as Record<string, unknown> : {};
+  const docker = publicDockerStatus(source.docker);
+  const intent = server.runtimeIntent ?? server.desiredRuntimeState ?? (docker.running ? "running" : "stopped");
+  const lifecycleState = server.crashLoopSince
+    ? "crash-loop" as const
+    : server.crashNextRetryAt
+      ? "recovering" as const
+      : intent === "restarting"
+        ? server.restartPhase === "starting" ? "starting" as const : "stopping" as const
+        : intent === "stopped" && docker.running ? "stopping" as const
+        : docker.running ? "running" as const : "stopped" as const;
+  const attempts = server.crashAttemptTimestamps?.length ?? 0;
   return {
     server: { id: server.id },
-    docker: publicDockerStatus(source.docker),
+    docker,
     fileLogsAvailable: source.fileLogsAvailable === true,
     controlAvailable: source.controlAvailable === true,
     commandInputAvailable: source.commandInputAvailable === true,
-    commandInputMessage: typeof source.commandInputMessage === "string" ? source.commandInputMessage : ""
+    commandInputMessage: typeof source.commandInputMessage === "string" ? source.commandInputMessage : "",
+    lifecycle: {
+      intent,
+      state: lifecycleState,
+      recoveryAttempt: lifecycleState === "recovering" || lifecycleState === "crash-loop" ? attempts : undefined,
+      recoveryLimit: lifecycleState === "recovering" || lifecycleState === "crash-loop" ? 3 : undefined,
+      nextRetryAt: server.crashNextRetryAt,
+      crashLoopSince: server.crashLoopSince,
+      message: lifecycleState === "crash-loop"
+        ? "Automatic restart stopped after three attempts within 10 minutes"
+        : lifecycleState === "recovering"
+          ? `Unexpected crash; automatic restart attempt ${Math.min(attempts + 1, 3)} of 3 is scheduled`
+          : lifecycleState === "stopping" ? intent === "restarting" ? "Gracefully stopping Minecraft for restart" : "Stopping Minecraft to honor intentional stop"
+          : lifecycleState === "starting" ? "Starting Minecraft after intentional restart"
+          : undefined
+    }
   };
 }
 
@@ -1079,13 +1106,14 @@ export function publicInstalledModsResult(result: unknown) {
 
 function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
-  const commands = sanitizeCommands(asArray(schedule.commands, "schedule.commands"));
+  const steps = sanitizeScheduleSteps(schedule.steps, schedule.commands, schedule.commandDelaysSeconds, schedule.commandDelaysMinutes);
+  const legacy = legacyScheduleFields(steps);
   return {
     id: validateScheduleId(schedule.id),
     name: requiredString(schedule.name, "schedule.name"),
     cron: requiredString(schedule.cron, "schedule.cron"),
-    commands,
-    commandDelaysSeconds: sanitizeCommandDelaysSeconds(schedule.commandDelaysSeconds, commands.length, schedule.commandDelaysMinutes),
+    steps,
+    ...legacy,
     onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
     enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
     createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
@@ -1100,13 +1128,20 @@ function normalizeSchedule(value: unknown): ScheduledExecution {
 
 function normalizeScheduledRun(value: unknown): ScheduledRun {
   const run = asObject(value, "scheduled run");
+  const details = run.details === undefined ? undefined : asObject(run.details, "run.details");
   return {
     id: requiredString(run.id, "run.id"),
     scheduleId: validateScheduleId(run.scheduleId),
     scheduleName: requiredString(run.scheduleName, "run.scheduleName"),
     status: requiredString(run.status, "run.status"),
     message: optionalString(run.message, "run.message"),
-    ranAt: requiredString(run.ranAt, "run.ranAt")
+    ranAt: requiredString(run.ranAt, "run.ranAt"),
+    details: details ? {
+      stepCount: typeof details.stepCount === "number" ? details.stepCount : 0,
+      completedStepCount: typeof details.completedStepCount === "number" ? details.completedStepCount : 0,
+      terminalStepIndex: typeof details.terminalStepIndex === "number" ? details.terminalStepIndex : undefined,
+      terminalStep: optionalString(details.terminalStep, "run.details.terminalStep")
+    } : undefined
   };
 }
 
@@ -1118,9 +1153,10 @@ function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
     scheduleName: requiredString(run.scheduleName, "activeRun.scheduleName"),
     status: "running",
     startedAt: requiredString(run.startedAt, "activeRun.startedAt"),
-    actionCount: typeof run.actionCount === "number" ? run.actionCount : 0,
-    currentActionIndex: typeof run.currentActionIndex === "number" ? run.currentActionIndex : undefined,
-    currentAction: optionalString(run.currentAction, "activeRun.currentAction"),
+    stepCount: typeof run.stepCount === "number" ? run.stepCount : typeof run.actionCount === "number" ? run.actionCount : 0,
+    currentStepIndex: typeof run.currentStepIndex === "number" ? run.currentStepIndex : typeof run.currentActionIndex === "number" ? run.currentActionIndex : undefined,
+    currentStep: optionalString(run.currentStep ?? run.currentAction, "activeRun.currentStep"),
+    cancellable: run.cancellable !== false,
     waitingUntil: optionalString(run.waitingUntil, "activeRun.waitingUntil"),
     waitingDelaySeconds: typeof run.waitingDelaySeconds === "number"
       ? run.waitingDelaySeconds
@@ -1225,6 +1261,16 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     desiredRuntimeState: server.desiredRuntimeState === "running" || server.desiredRuntimeState === "stopped"
       ? server.desiredRuntimeState
       : undefined,
+    runtimeIntent: server.runtimeIntent === "running" || server.runtimeIntent === "stopped" || server.runtimeIntent === "restarting"
+      ? server.runtimeIntent
+      : server.desiredRuntimeState === "running" || server.desiredRuntimeState === "stopped" ? server.desiredRuntimeState : undefined,
+    restartPhase: server.restartPhase === "stopping" || server.restartPhase === "starting" ? server.restartPhase : undefined,
+    crashAttemptTimestamps: server.crashAttemptTimestamps === undefined
+      ? []
+      : asArray(server.crashAttemptTimestamps, "server.crashAttemptTimestamps").map((value, index) => requiredString(value, `server.crashAttemptTimestamps[${index}]`)),
+    crashNextRetryAt: optionalString(server.crashNextRetryAt, "server.crashNextRetryAt"),
+    crashLoopSince: optionalString(server.crashLoopSince, "server.crashLoopSince"),
+    crashStableSince: optionalString(server.crashStableSince, "server.crashStableSince"),
     restartRequiredSince: optionalString(server.restartRequiredSince, "server.restartRequiredSince"),
     restartRequiredChanges,
     restartRequiredModBaseline,
@@ -2102,6 +2148,42 @@ export function sanitizeCommandDelaysSeconds(delays: unknown, commandCount: numb
     }
     return delay;
   });
+}
+
+export function sanitizeScheduleSteps(steps: unknown, legacyCommands?: unknown, legacyDelaySeconds?: unknown, legacyDelayMinutes?: unknown): ScheduleStep[] {
+  if (steps === undefined) {
+    const commands = sanitizeCommands(legacyCommands);
+    const delays = sanitizeCommandDelaysSeconds(legacyDelaySeconds, commands.length, legacyDelayMinutes);
+    return commands.map((command, index) => ({ type: "command", command, delaySeconds: delays[index] ?? 0 }));
+  }
+  if (!Array.isArray(steps) || steps.length === 0) throw new Error("At least one schedule step is required");
+  const normalized = steps.map((raw, index): ScheduleStep => {
+    const step = asObject(raw, `steps[${index}]`);
+    const delaySeconds = step.delaySeconds;
+    if (!Number.isInteger(delaySeconds) || (delaySeconds as number) < 0 || (delaySeconds as number) > maximumCommandDelaySeconds) {
+      throw new Error(`Step ${index + 1} delay must be a whole number of seconds between 0 and ${maximumCommandDelaySeconds}`);
+    }
+    if (step.type === "command") {
+      const [command] = sanitizeCommands([step.command]);
+      return { type: "command", command, delaySeconds: delaySeconds as number };
+    }
+    if (step.type === "action") {
+      if (step.procedure !== "restart") throw new Error(`Unsupported schedule action procedure at step ${index + 1}`);
+      return { type: "action", procedure: "restart", delaySeconds: delaySeconds as number };
+    }
+    throw new Error(`Step ${index + 1} type must be command or action`);
+  });
+  const restartIndexes = normalized.flatMap((step, index) => step.type === "action" ? [index] : []);
+  if (restartIndexes.length > 1) throw new Error("A schedule can contain at most one Restart action");
+  if (restartIndexes.length === 1 && restartIndexes[0] !== normalized.length - 1) throw new Error("Restart must be the final schedule step");
+  return normalized;
+}
+
+function legacyScheduleFields(steps: ScheduleStep[]) {
+  if (steps.some((step) => step.type === "action")) return {};
+  const commands = steps.map((step) => step.type === "command" ? step.command : "");
+  const commandDelaysSeconds = steps.map((step) => step.delaySeconds);
+  return { commands, commandDelaysSeconds };
 }
 
 class ScheduleCancellationError extends Error {
@@ -3408,23 +3490,120 @@ function setDesiredRuntimeState(server: ManagedServer, state: "running" | "stopp
   server.desiredRuntimeState = state;
 }
 
-async function lifecycleWithDesiredState(server: ManagedServer, action: "start" | "stop" | "restart") {
-  const previous = server.desiredRuntimeState;
-  const desired = action === "stop" ? "stopped" : "running";
-  setDesiredRuntimeState(server, desired);
-  if (desired === "stopped") runtimeStateCoordinator?.noteStopped(server.id);
+const activeLifecycleActions = new Set<string>();
+
+function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<ManagedServer, "runtimeIntent" | "restartPhase" | "crashAttemptTimestamps" | "crashNextRetryAt" | "crashLoopSince" | "crashStableSince">>) {
+  Object.assign(server, patch);
+  server.runtimeIntent ??= server.desiredRuntimeState ?? "stopped";
+  server.desiredRuntimeState = server.runtimeIntent === "stopped" ? "stopped" : "running";
+  serversRepository.setRuntimeLifecycle(server.id, server);
+}
+
+async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>) {
+  if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
+  activeLifecycleActions.add(server.id);
   try {
-    const result = await runtimeForServer(server).lifecycle(server, action);
-    if (desired === "running") runtimeStateCoordinator?.noteRunning(server.id);
-    return result;
-  } catch (error) {
-    const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
-    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous ?? desired;
-    setDesiredRuntimeState(server, fallback);
-    if (fallback === "running") runtimeStateCoordinator?.noteRunning(server.id);
-    else runtimeStateCoordinator?.noteStopped(server.id);
-    throw error;
+    return await operation();
+  } finally {
+    activeLifecycleActions.delete(server.id);
   }
+}
+
+async function waitForRuntimeState(server: ManagedServer, running: boolean, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+    if (observed === running) return true;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  return false;
+}
+
+async function startServerWithIntent(server: ManagedServer) {
+  return withLifecycleLock(server, async () => {
+    const previous = server.runtimeIntent ?? server.desiredRuntimeState ?? "stopped";
+    setRuntimeLifecycle(server, {
+      runtimeIntent: "running",
+      restartPhase: undefined,
+      crashAttemptTimestamps: [],
+      crashNextRetryAt: undefined,
+      crashLoopSince: undefined,
+      crashStableSince: undefined
+    });
+    try {
+      const result = await runtimeForServer(server).lifecycle(server, "start");
+      runtimeStateCoordinator?.noteRunning(server.id);
+      return result;
+    } catch (error) {
+      const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+      setRuntimeLifecycle(server, { runtimeIntent: observed === true ? "running" : previous === "restarting" ? "running" : previous });
+      if (observed === true) runtimeStateCoordinator?.noteRunning(server.id);
+      else runtimeStateCoordinator?.noteStopped(server.id);
+      throw error;
+    }
+  });
+}
+
+async function stopServerWithIntent(server: ManagedServer) {
+  return withLifecycleLock(server, async () => {
+    setRuntimeLifecycle(server, {
+      runtimeIntent: "stopped",
+      restartPhase: undefined,
+      crashAttemptTimestamps: [],
+      crashNextRetryAt: undefined,
+      crashLoopSince: undefined,
+      crashStableSince: undefined
+    });
+    runtimeStateCoordinator?.noteStopped(server.id);
+    return runtimeForServer(server).lifecycle(server, "stop");
+  });
+}
+
+async function restartServerGracefully(server: ManagedServer) {
+  return withLifecycleLock(server, async () => {
+    setRuntimeLifecycle(server, {
+      runtimeIntent: "restarting",
+      restartPhase: "stopping",
+      crashAttemptTimestamps: [],
+      crashNextRetryAt: undefined,
+      crashLoopSince: undefined,
+      crashStableSince: undefined
+    });
+    runtimeStateCoordinator?.noteStopped(server.id);
+
+    const running = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+    if (running === true) {
+      await runtimeForServer(server).sendConsoleCommand(server, "stop").catch((error) => {
+        logWarn({ ...serverLogFields(server), ...errorLogFields(error), action: "graceful_restart" }, "Minecraft stop command failed; Docker stop fallback will be used");
+      });
+    }
+    let stopped = running === false || await waitForRuntimeState(server, false, 60_000);
+    if (!stopped) {
+      await runtimeForServer(server).lifecycle(server, "stop");
+      stopped = await waitForRuntimeState(server, false, 10_000);
+    }
+    if (!stopped) {
+      setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined });
+      throw new Error("Minecraft did not stop within the graceful restart timeout");
+    }
+
+    setRuntimeLifecycle(server, { runtimeIntent: "restarting", restartPhase: "starting" });
+    const result = await runtimeForServer(server).lifecycle(server, "start");
+    if (!runtimeResultRunning(result) && !await waitForRuntimeState(server, true, 10_000)) {
+      setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined });
+      throw new Error("Minecraft did not remain running after restart");
+    }
+    setRuntimeLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
+    runtimeStateCoordinator?.noteRunning(server.id);
+    serversRepository.clearRestartRequired(server.id);
+    return result;
+  });
+}
+
+async function lifecycleWithDesiredState(server: ManagedServer, action: "start" | "stop" | "restart") {
+  if (action === "start") return startServerWithIntent(server);
+  if (action === "stop") return stopServerWithIntent(server);
+  return restartServerGracefully(server);
 }
 
 export function isMinecraftStopCommand(command: unknown) {
@@ -3433,16 +3612,17 @@ export function isMinecraftStopCommand(command: unknown) {
 
 async function sendConsoleCommandWithDesiredState(server: ManagedServer, command: unknown) {
   if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
-  const previous = server.desiredRuntimeState;
-  setDesiredRuntimeState(server, "stopped");
+  if (activeLifecycleActions.has(server.id)) throw new Error("A lifecycle action is already running for this server");
+  const previous = server.runtimeIntent ?? server.desiredRuntimeState ?? "running";
+  setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined, crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: undefined });
   runtimeStateCoordinator?.noteStopped(server.id);
   try {
     return await runtimeForServer(server).sendConsoleCommand(server, command);
   } catch (error) {
     const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
-    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous ?? "running";
-    setDesiredRuntimeState(server, fallback);
-    if (fallback === "running") runtimeStateCoordinator?.noteRunning(server.id);
+    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous;
+    setRuntimeLifecycle(server, { runtimeIntent: fallback === "restarting" ? "running" : fallback });
+    if (fallback !== "stopped") runtimeStateCoordinator?.noteRunning(server.id);
     throw error;
   }
 }
@@ -3599,6 +3779,7 @@ function scheduleFromBody(body: {
   commands?: unknown;
   commandDelaysSeconds?: unknown;
   commandDelaysMinutes?: unknown;
+  steps?: unknown;
   onlyWhenNoPlayers?: boolean;
   enabled?: boolean;
 }, existing?: ScheduledExecution): ScheduledExecution {
@@ -3611,14 +3792,17 @@ function scheduleFromBody(body: {
     throw new Error("Cron schedule is required");
   }
   validateCron(cron);
-  const commands = sanitizeCommands(body.commands);
+  if (body.steps === undefined && existing?.steps.some((step) => step.type === "action")) {
+    throw new Error("This schedule contains actions and must be updated with steps");
+  }
+  const steps = sanitizeScheduleSteps(body.steps, body.commands, body.commandDelaysSeconds, body.commandDelaysMinutes);
   const now = new Date().toISOString();
   return {
     id: existing?.id ?? randomUUID(),
     name,
     cron,
-    commands,
-    commandDelaysSeconds: sanitizeCommandDelaysSeconds(body.commandDelaysSeconds, commands.length, body.commandDelaysMinutes),
+    steps,
+    ...legacyScheduleFields(steps),
     onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
     enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
@@ -3650,10 +3834,12 @@ function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveR
     scheduleName: run.scheduleName,
     status: "running",
     startedAt: run.startedAt,
-    actionCount: run.actionCount,
-    currentActionIndex: run.currentActionIndex,
-    currentAction: run.currentAction,
+    stepCount: run.stepCount,
+    currentStepIndex: run.currentStepIndex,
+    currentStep: run.currentStep,
+    cancellable: run.cancellable,
     waitingUntil: run.waitingUntil,
+    waitingDelaySeconds: run.waitingDelaySeconds,
     waitingDelayMinutes: run.waitingDelayMinutes,
     message: run.message
   };
@@ -3668,8 +3854,10 @@ function activeScheduledRunsFor(serverId: string, scheduleId: string) {
 function cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: string) {
   const active = activeScheduleExecutions.get(runId);
   if (!active || active.serverId !== serverId || active.scheduleId !== scheduleId) return undefined;
+  if (!active.cancellable) return null;
   if (!active.controller.signal.aborted) {
     active.message = "Cancellation requested";
+    active.waitingDelaySeconds = undefined;
     active.waitingDelayMinutes = undefined;
     active.waitingUntil = undefined;
     active.controller.abort();
@@ -3680,6 +3868,9 @@ function cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: st
 
 async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution, active: ActiveScheduleExecution) {
   const startedAt = Date.now();
+  let completedStepCount = 0;
+  let terminalStepIndex: number | undefined;
+  let terminalStep: string | undefined;
   try {
     const runtime = runtimeForServer(server);
     throwIfScheduleCancelled(active.controller.signal);
@@ -3694,49 +3885,59 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       active.message = "Checking online players";
       const count = await runtime.onlinePlayerCount(server);
       if (count === null) {
-        logWarn({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, reason: "player_count_unknown" }, "Schedule skipped");
+        logWarn({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, reason: "player_count_unknown" }, "Schedule skipped");
         return { status: "skipped", message: "Skipped because online player count could not be determined" };
       }
       if (count > 0) {
-        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, playersOnline: count, reason: "players_online" }, "Schedule skipped");
+        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, playersOnline: count, reason: "players_online" }, "Schedule skipped");
         return { status: "skipped", message: `Skipped because ${count} player${count === 1 ? "" : "s"} are online` };
       }
     }
 
-    for (const [index, command] of schedule.commands.entries()) {
+    for (const [index, step] of schedule.steps.entries()) {
       throwIfScheduleCancelled(active.controller.signal);
-      const delaySeconds = schedule.commandDelaysSeconds[index] ?? 0;
-      active.currentActionIndex = index;
-      active.currentAction = command;
+      const delaySeconds = step.delaySeconds;
+      const label = step.type === "command" ? step.command : "Restart";
+      terminalStepIndex = index;
+      terminalStep = label;
+      active.currentStepIndex = index;
+      active.currentStep = label;
       active.waitingDelaySeconds = delaySeconds || undefined;
       active.waitingDelayMinutes = delaySeconds && delaySeconds % 60 === 0 ? delaySeconds / 60 : undefined;
       active.waitingUntil = delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : undefined;
       active.message = delaySeconds
-        ? `Waiting before command ${index + 1} of ${schedule.commands.length}`
-        : `Sending command ${index + 1} of ${schedule.commands.length}`;
+        ? `Waiting before step ${index + 1} of ${schedule.steps.length}`
+        : step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
       await waitForCommandDelay(delaySeconds, active.controller.signal);
       active.waitingDelaySeconds = undefined;
       active.waitingDelayMinutes = undefined;
       active.waitingUntil = undefined;
-      active.message = `Sending command ${index + 1} of ${schedule.commands.length}`;
+      active.message = step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
       throwIfScheduleCancelled(active.controller.signal);
-      await sendConsoleCommandWithDesiredState(server, command);
-      active.message = `Sent command ${index + 1} of ${schedule.commands.length}`;
+      if (step.type === "command") {
+        await sendConsoleCommandWithDesiredState(server, step.command);
+        active.message = `Sent command ${index + 1} of ${schedule.steps.length}`;
+      } else {
+        active.cancellable = false;
+        await restartServerGracefully(server);
+        active.message = "Server restarted";
+      }
+      completedStepCount += 1;
     }
-    logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
-    return { status: "success", message: `Sent ${schedule.commands.length} command${schedule.commands.length === 1 ? "" : "s"}` };
+    logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
+    return { status: "success", message: `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
   } catch (error) {
     if (error instanceof ScheduleCancellationError || active.controller.signal.aborted) {
-      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
-      return { status: "cancelled", message: "Cancelled by user" };
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
+      return { status: "cancelled", message: "Cancelled by user", details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
     }
-    logError({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
-    return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed" };
+    logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
+    return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
   }
 }
 
 async function executeMatchedSchedule(server: ManagedServer, schedule: ScheduledExecution) {
-  logInfo({ ...serverLogFields(server), scheduleId: schedule.id, commandsCount: schedule.commands.length }, "Schedule matched");
+  logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length }, "Schedule matched");
   const operation = operationsRepository.create({
     type: "schedule.run",
     serverId: server.id,
@@ -3753,7 +3954,8 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
     scheduleName: schedule.name,
     status: "running",
     startedAt: new Date().toISOString(),
-    actionCount: schedule.commands.length,
+    stepCount: schedule.steps.length,
+    cancellable: true,
     message: "Starting",
     operationId: operation.id,
     controller: new AbortController()
@@ -3770,7 +3972,8 @@ async function executeMatchedSchedule(server: ManagedServer, schedule: Scheduled
     scheduleName: schedule.name,
     status: result.status,
     message: result.message,
-    ranAt
+    ranAt,
+    details: result.details
   };
   serversRepository.recordScheduledRun(server.id, schedule.id, run);
   activeScheduleExecutions.delete(runId);
@@ -4973,7 +5176,7 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request
 
 app.post<{
   Params: { id: string };
-  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; steps?: unknown; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);
@@ -4985,7 +5188,7 @@ app.post<{
 
 app.put<{
   Params: { id: string; scheduleId: string };
-  Body: { name?: string; cron?: string; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
+  Body: { name?: string; cron?: string; steps?: unknown; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
 }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "schedules.manage");
   const server = await getServer(request.params.id);
@@ -5029,6 +5232,9 @@ app.post<{ Params: { id: string; scheduleId: string; runId: string } }>("/api/se
   const scheduleId = validateScheduleId(request.params.scheduleId);
   const runId = validateOperationId(request.params.runId);
   const cancelled = cancelActiveScheduleRun(server.id, scheduleId, runId);
+  if (cancelled === null) {
+    return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "The Restart step has started and must finish before this run can end"));
+  }
   if (!cancelled) {
     return reply.code(404).send(apiErrorResponse("SCHEDULE_RUN_NOT_FOUND", "Active schedule run not found"));
   }
@@ -7829,7 +8035,7 @@ runtimeStateCoordinator = new RuntimeStateCoordinator({
     if (!node || !panelNodeConnections.isConnected(node.id)) throw new Error(`Node ${server.nodeId} is offline`);
     return `${node.id}:${node.connectedAt || "connected"}`;
   },
-  canRestore: (server) => blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id),
+  canRestore: (server) => blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id) && !activeLifecycleActions.has(server.id),
   restoreServer: (server) => recordOperation({
     type: "server.start",
     serverId: server.id,
@@ -7837,7 +8043,27 @@ runtimeStateCoordinator = new RuntimeStateCoordinator({
     task: "Restoring server after runtime reconnect",
     successTask: "Server runtime restored",
     restartEffect: (status) => runtimeResultRunning(status) ? "clear" : undefined
-  }, () => runtimeForServer(server).lifecycle(server, "start")),
+  }, () => withLifecycleLock(server, () => runtimeForServer(server).lifecycle(server, "start"))),
+  restartServer: (server) => recordOperation({
+    type: "server.restart",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    task: "Resuming intentional restart",
+    successTask: "Server restart completed",
+    restartEffect: "clear"
+  }, () => restartServerGracefully(server)),
+  stopServer: (server) => recordOperation({
+    type: "server.stop",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    task: "Enforcing intentional stop",
+    successTask: "Server stopped"
+  }, () => stopServerWithIntent(server)),
+  setLifecycle: (serverId, patch) => {
+    const server = serversRepository.list().find((candidate) => candidate.id === serverId);
+    if (!server) return;
+    setRuntimeLifecycle(server, patch);
+  },
   setDesiredState: (serverId, state) => {
     serversRepository.setDesiredRuntimeState(serverId, state);
   },

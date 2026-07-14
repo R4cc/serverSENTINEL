@@ -11,7 +11,7 @@ import type { SettingsRepository } from "./storage/settingsRepository.js";
 import { parseDockerPorts } from "./core.js";
 
 export const exportArtifactType = "serversentinel.export";
-export const exportArtifactSchemaVersion = 1;
+export const exportArtifactSchemaVersion = 2;
 const maxExportedConfigFileBytes = 2 * 1024 * 1024;
 const excludedServerFileRoots = new Set([
   "backups",
@@ -136,8 +136,20 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
   const servers: ExportServerEntry[] = [];
   for (const [index, server] of selectedServers.entries()) {
     input.report?.(20 + Math.floor((index / Math.max(selectedServers.length, 1)) * 60), `Collecting ${server.displayName}`);
+    const {
+      runtimeIntent,
+      restartPhase: _restartPhase,
+      crashAttemptTimestamps: _crashAttemptTimestamps,
+      crashNextRetryAt: _crashNextRetryAt,
+      crashLoopSince: _crashLoopSince,
+      crashStableSince: _crashStableSince,
+      ...exportedServer
+    } = server;
     servers.push({
-      server,
+      server: {
+        ...exportedServer,
+        desiredRuntimeState: runtimeIntent === "stopped" ? "stopped" : runtimeIntent ? "running" : server.desiredRuntimeState
+      },
       modPreferences: input.modPreferencesForServer(server.id),
       files: await collectServerConfigFiles(server.serverDir)
     });
@@ -214,7 +226,7 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (!isPlainObject(value)) throw new Error("Import artifact must be an object");
   rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "instance", "servers"], "artifact");
   if (value.artifactType !== exportArtifactType) throw new Error("Unsupported import artifact type");
-  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error("Unsupported import schema version");
+  if (value.schemaVersion !== 1 && value.schemaVersion !== exportArtifactSchemaVersion) throw new Error("Unsupported import schema version");
   if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
   if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
@@ -357,11 +369,24 @@ function assertSchedules(value: unknown, label: string) {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const [index, schedule] of value.entries()) {
     if (!isPlainObject(schedule)) throw new Error(`${label}[${index}] must be a JSON object`);
-    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "commands", "commandDelaysSeconds", "commandDelaysMinutes", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
+    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "steps", "commands", "commandDelaysSeconds", "commandDelaysMinutes", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
     stringValue(schedule.id, `${label}[${index}].id`);
     stringValue(schedule.name, `${label}[${index}].name`);
     stringValue(schedule.cron, `${label}[${index}].cron`);
-    stringArray(schedule.commands, `${label}[${index}].commands`);
+    if (schedule.steps !== undefined) {
+      if (!Array.isArray(schedule.steps) || schedule.steps.length === 0) throw new Error(`${label}[${index}].steps must be a non-empty array`);
+      for (const [stepIndex, step] of schedule.steps.entries()) {
+        if (!isPlainObject(step)) throw new Error(`${label}[${index}].steps[${stepIndex}] must be a JSON object`);
+        const allowed = step.type === "command" ? ["type", "command", "delaySeconds"] : ["type", "procedure", "delaySeconds"];
+        rejectUnsupportedKeys(step, allowed, `${label}[${index}].steps[${stepIndex}]`);
+        if (step.type !== "command" && step.type !== "action") throw new Error(`${label}[${index}].steps[${stepIndex}].type must be command or action`);
+        if (step.type === "command") stringValue(step.command, `${label}[${index}].steps[${stepIndex}].command`);
+        if (step.type === "action" && step.procedure !== "restart") throw new Error(`${label}[${index}].steps[${stepIndex}].procedure must be restart`);
+        if (!Number.isInteger(step.delaySeconds) || (step.delaySeconds as number) < 0 || (step.delaySeconds as number) > 604_800) throw new Error(`${label}[${index}].steps[${stepIndex}].delaySeconds must be a whole number from 0 to 604800`);
+      }
+    } else {
+      stringArray(schedule.commands, `${label}[${index}].commands`);
+    }
     if (schedule.commandDelaysMinutes !== undefined) {
       const commandCount = Array.isArray(schedule.commands) ? schedule.commands.length : 0;
       if (!Array.isArray(schedule.commandDelaysMinutes) || schedule.commandDelaysMinutes.length !== commandCount) {
@@ -400,7 +425,7 @@ function assertScheduledRuns(value: unknown, label: string) {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const [index, run] of value.entries()) {
     if (!isPlainObject(run)) throw new Error(`${label}[${index}] must be a JSON object`);
-    rejectUnsupportedKeys(run, ["id", "scheduleId", "scheduleName", "status", "message", "ranAt"], `${label}[${index}]`);
+    rejectUnsupportedKeys(run, ["id", "scheduleId", "scheduleName", "status", "message", "ranAt", "details"], `${label}[${index}]`);
     stringValue(run.id, `${label}[${index}].id`);
     stringValue(run.scheduleId, `${label}[${index}].scheduleId`);
     stringValue(run.scheduleName, `${label}[${index}].scheduleName`);
@@ -713,7 +738,7 @@ function remapImportedServer(server: ManagedServer, input: {
         ...schedule,
         commandDelaysSeconds: schedule.commandDelaysSeconds
           ?? schedule.commandDelaysMinutes?.map((minutes) => minutes * 60)
-          ?? schedule.commands.map(() => 0),
+          ?? (schedule.commands ?? []).map(() => 0),
         commandDelaysMinutes: undefined,
         id: scheduleId,
         createdAt: input.now,

@@ -280,6 +280,46 @@ const migrations: readonly Migration[] = [
           CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'))
       `);
     }
+  },
+  {
+    version: 14,
+    name: "schedule-steps",
+    up(database) {
+      database.exec(`ALTER TABLE schedules ADD COLUMN steps_json TEXT NOT NULL DEFAULT '[]'`);
+      const rows = database.prepare(`
+        SELECT server_id, id, commands_json, command_delays_json, command_delays_seconds_json FROM schedules
+      `).all() as Array<{ server_id: string; id: string; commands_json: string; command_delays_json: string; command_delays_seconds_json: string }>;
+      const update = database.prepare("UPDATE schedules SET steps_json = ? WHERE server_id = ? AND id = ?");
+      for (const row of rows) {
+        const commands = JSON.parse(row.commands_json) as string[];
+        const seconds = JSON.parse(row.command_delays_seconds_json) as number[];
+        const minutes = JSON.parse(row.command_delays_json) as number[];
+        const delays = seconds.length ? seconds : minutes.length ? minutes.map((value) => value * 60) : commands.map(() => 0);
+        update.run(JSON.stringify(commands.map((command, index) => ({ type: "command", command, delaySeconds: delays[index] ?? 0 }))), row.server_id, row.id);
+      }
+    }
+  },
+  {
+    version: 15,
+    name: "runtime-lifecycle-intent",
+    up(database) {
+      database.exec(`
+        ALTER TABLE servers ADD COLUMN runtime_intent TEXT CHECK (runtime_intent IS NULL OR runtime_intent IN ('stopped', 'running', 'restarting'));
+        ALTER TABLE servers ADD COLUMN restart_phase TEXT CHECK (restart_phase IS NULL OR restart_phase IN ('stopping', 'starting'));
+        ALTER TABLE servers ADD COLUMN crash_attempts_json TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE servers ADD COLUMN crash_next_retry_at TEXT;
+        ALTER TABLE servers ADD COLUMN crash_loop_since TEXT;
+        ALTER TABLE servers ADD COLUMN crash_stable_since TEXT;
+        UPDATE servers SET runtime_intent = COALESCE(desired_runtime_state, 'stopped');
+      `);
+    }
+  },
+  {
+    version: 16,
+    name: "scheduled-run-details",
+    up(database) {
+      database.exec(`ALTER TABLE scheduled_runs ADD COLUMN details_json TEXT`);
+    }
   }
 ];
 

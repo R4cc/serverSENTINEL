@@ -85,10 +85,16 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
       }
     ],
     javaArgs: "-Xms2G -Xmx4G",
+    runtimeIntent: "stopped",
+    crashAttemptTimestamps: [],
     schedules: [{
       id: "schedule-id",
       name: "Backup notice",
       cron: "0 * * * *",
+      steps: [
+        { type: "command", command: "say Backup starting", delaySeconds: 0 },
+        { type: "command", command: "save-all", delaySeconds: 300 }
+      ],
       commands: ["say Backup starting", "save-all"],
       commandDelaysSeconds: [0, 300],
       onlyWhenNoPlayers: false,
@@ -143,6 +149,26 @@ describe("ServersRepository", () => {
 
     expect(servers.list()).toEqual([updated]);
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
+  });
+
+  it("round-trips mixed command and action steps with run details", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    const schedule = server.schedules![0];
+    schedule.steps = [
+      { type: "command", command: "say restarting", delaySeconds: 0 },
+      { type: "action", procedure: "restart", delaySeconds: 300 }
+    ];
+    schedule.commands = undefined;
+    schedule.commandDelaysSeconds = undefined;
+    schedule.recentRuns![0].details = { stepCount: 2, completedStepCount: 2, terminalStepIndex: 1, terminalStep: "Restart" };
+
+    servers.create(server);
+
+    expect(servers.list()[0].schedules![0]).toMatchObject({
+      steps: schedule.steps,
+      recentRuns: [{ details: schedule.recentRuns![0].details }]
+    });
   });
 
   it("enforces per-node port uniqueness transactionally", async () => {
@@ -237,6 +263,29 @@ describe("ServersRepository", () => {
     const running = servers.list()[0];
     servers.replaceMetadata({ ...running, displayName: "Renamed", desiredRuntimeState: "stopped" });
     expect(servers.list()[0]).toMatchObject({ displayName: "Renamed", desiredRuntimeState: "running" });
+  });
+
+  it("persists restart phases and crash-loop recovery metadata", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+
+    servers.setRuntimeLifecycle(server.id, {
+      runtimeIntent: "restarting",
+      restartPhase: "starting",
+      crashAttemptTimestamps: ["2026-01-02T00:00:00.000Z"],
+      crashNextRetryAt: "2026-01-02T00:00:15.000Z",
+      crashLoopSince: undefined,
+      crashStableSince: undefined
+    });
+
+    expect(servers.list()[0]).toMatchObject({
+      desiredRuntimeState: "running",
+      runtimeIntent: "restarting",
+      restartPhase: "starting",
+      crashAttemptTimestamps: ["2026-01-02T00:00:00.000Z"],
+      crashNextRetryAt: "2026-01-02T00:00:15.000Z"
+    });
   });
 
   it("renames display names without changing immutable identity or dependent state", async () => {

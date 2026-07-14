@@ -175,6 +175,12 @@ async function createRepositories(root: string) {
 }
 
 describe("export/import artifacts", () => {
+  it("continues to accept schema-v1 command-only exports", () => {
+    const legacy = artifact();
+    (legacy as { schemaVersion: number }).schemaVersion = 1;
+    expect(assertExportArtifact(legacy).schemaVersion).toBe(1);
+  });
+
   it("creates a manifest with canonical server models, mod metadata, and selected config files", async () => {
     const root = await tempRoot("serversentinel-export-");
     await mkdir(join(root, "config"), { recursive: true });

@@ -289,6 +289,12 @@ export type ManagedServer = {
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
   desiredRuntimeState?: "running" | "stopped";
+  runtimeIntent?: RuntimeIntent;
+  restartPhase?: RestartPhase;
+  crashAttemptTimestamps?: string[];
+  crashNextRetryAt?: string;
+  crashLoopSince?: string;
+  crashStableSince?: string;
   restartRequiredSince?: string;
   restartRequiredChanges?: RestartRequiredChange[];
   restartRequiredModBaseline?: RestartRequiredModSnapshot[];
@@ -297,12 +303,20 @@ export type ManagedServer = {
   updatedAt: string;
 };
 
+export type RuntimeIntent = "stopped" | "running" | "restarting";
+export type RestartPhase = "stopping" | "starting";
+
+export type ScheduleStep =
+  | { type: "command"; command: string; delaySeconds: number }
+  | { type: "action"; procedure: "restart"; delaySeconds: number };
+
 export type ScheduledExecution = {
   id: string;
   name: string;
   cron: string;
-  commands: string[];
-  commandDelaysSeconds: number[];
+  steps: ScheduleStep[];
+  commands?: string[];
+  commandDelaysSeconds?: number[];
   commandDelaysMinutes?: number[];
   onlyWhenNoPlayers: boolean;
   enabled: boolean;
@@ -335,6 +349,14 @@ export type ScheduledRun = {
   status: string;
   message?: string;
   ranAt: string;
+  details?: ScheduledRunDetails;
+};
+
+export type ScheduledRunDetails = {
+  stepCount: number;
+  completedStepCount: number;
+  terminalStepIndex?: number;
+  terminalStep?: string;
 };
 
 export type ScheduledActiveRun = {
@@ -343,12 +365,23 @@ export type ScheduledActiveRun = {
   scheduleName: string;
   status: "running";
   startedAt: string;
-  actionCount: number;
-  currentActionIndex?: number;
-  currentAction?: string;
+  stepCount: number;
+  currentStepIndex?: number;
+  currentStep?: string;
+  cancellable: boolean;
   waitingUntil?: string;
   waitingDelaySeconds?: number;
   waitingDelayMinutes?: number;
+  message?: string;
+};
+
+export type RuntimeLifecycleStatus = {
+  intent: RuntimeIntent;
+  state: "running" | "stopped" | "stopping" | "starting" | "recovering" | "crash-loop";
+  recoveryAttempt?: number;
+  recoveryLimit?: number;
+  nextRetryAt?: string;
+  crashLoopSince?: string;
   message?: string;
 };
 

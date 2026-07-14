@@ -100,7 +100,7 @@ Supported modes:
 
 Minecraft itself does not run inside the panel container. Managed Minecraft servers run as separate Docker containers created and controlled by serverSENTINEL.
 
-Minecraft runtime containers do not use Docker process-exit restart loops. serverSENTINEL records whether each server should be running: a Minecraft crash or `stop` command leaves it stopped, while servers that were running are restored after the panel and node agents return from a host or Docker daemon restart.
+Minecraft runtime containers do not use Docker process-exit restart loops. serverSENTINEL owns lifecycle intent: deliberate stops remain stopped, deliberate restarts complete one stop/start cycle, and unexpected crashes retry after 5, 15, and 30 seconds. A fourth failure within 10 minutes activates crash-loop protection until an operator starts or stops the server. Servers that were running are also restored after the panel and node agents return from a host or Docker daemon restart.
 
 ## Features
 
@@ -113,7 +113,7 @@ Minecraft runtime containers do not use Docker process-exit restart loops. serve
 - Browser file editor with read-only viewing, exclusive edit leases, revision checks, line numbers, and syntax highlighting
 - Modrinth search and install flow
 - Mod upload and management
-- Schedules
+- Schedules with delayed console commands and lifecycle actions such as Restart
 - Settings
 - Local user management and permissions
 - Multi-node management
@@ -185,16 +185,16 @@ See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASE_NOTES.md](RELE
 The pinned stable image is:
 
 ```text
-nl2109/serversentinel:1.2.0
+nl2109/serversentinel:1.2.1
 ```
 
-`nl2109/serversentinel:latest` tracks the newest stable image published from `main`. Use the pinned `1.2.0` tag when you want repeatable panel and node deployments.
+`nl2109/serversentinel:latest` tracks the newest stable image published from `main`. Use the pinned `1.2.1` tag when you want repeatable panel and node deployments.
 
 The panel listens on port `8080` inside the container.
 
 Recommended production setup:
 
-- Use the pinned `nl2109/serversentinel:1.2.0` tag for panel and node agents.
+- Use the pinned `nl2109/serversentinel:1.2.1` tag for panel and node agents.
 - Put the panel behind a VPN, private network, Cloudflare Tunnel, or reverse proxy with TLS and strong authentication.
 - Use all-in-one mode only on a trusted single Docker host. Use panel plus node agents when Minecraft servers run on separate hosts.
 - Keep panel state and managed server directories on persistent storage and back them up together before updates.
@@ -220,7 +220,7 @@ docker run -d \
   -v serversentinel-data:/data \
   -v serversentinel-minecraft-servers:/data/servers \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  nl2109/serversentinel:1.2.0
+  nl2109/serversentinel:1.2.1
 ```
 
 Open:
@@ -234,7 +234,7 @@ http://localhost:8080
 ```yaml
 services:
   serversentinel:
-    image: nl2109/serversentinel:1.2.0
+    image: nl2109/serversentinel:1.2.1
     container_name: serversentinel
     restart: unless-stopped
     ports:
@@ -278,7 +278,7 @@ docker run -d \
   -e PORT=8080 \
   -e SERVERSENTINEL_DATA_DIR=/data \
   -v /opt/serversentinel/data:/data \
-  nl2109/serversentinel:1.2.0
+  nl2109/serversentinel:1.2.1
 ```
 
 ### Panel-Only With Docker Compose
@@ -286,7 +286,7 @@ docker run -d \
 ```yaml
 services:
   serversentinel-panel:
-    image: nl2109/serversentinel:1.2.0
+    image: nl2109/serversentinel:1.2.1
     container_name: serversentinel-panel
     restart: unless-stopped
     ports:
@@ -319,7 +319,7 @@ docker run -d \
   --env SERVERSENTINEL_DOCKER_DATA_DIR=/opt/serversentinel/data \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume /opt/serversentinel/data:/data \
-  nl2109/serversentinel:1.2.0
+  nl2109/serversentinel:1.2.1
 ```
 
 The node does not publish a web port. It connects outbound to the panel, advertises protocol `2.0`, and is rejected if required handshake fields or capabilities are missing.
@@ -329,7 +329,7 @@ The node does not publish a web port. It connects outbound to the panel, adverti
 ```yaml
 services:
   serversentinel-node:
-    image: nl2109/serversentinel:1.2.0
+    image: nl2109/serversentinel:1.2.1
     container_name: serversentinel-node
     restart: unless-stopped
     environment:
@@ -354,7 +354,7 @@ services:
 | `PORT` | `8080` | backend | HTTP port inside the panel container. |
 | `SERVERSENTINEL_DATA_DIR` | `/data` | backend/node | Runtime data root. SQLite is stored as `serversentinel.sqlite` under this path. |
 | `SERVERSENTINEL_SERVERS_DOCKER_VOLUME` | `serversentinel-minecraft-servers` in Docker images | backend | All-in-one server-file volume mounted into sibling Minecraft containers. Leave empty only for advanced host-bind setups where host and panel paths match. |
-| `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.2.0` | backend | Image tag shown in generated node install/update instructions. |
+| `SERVERSENTINEL_NODE_IMAGE` | `nl2109/serversentinel:1.2.1` | backend | Image tag shown in generated node install/update instructions. |
 | `SERVERSENTINEL_ENABLE_DEMO` | `false` | backend | Enables the isolated demo user and simulated demo UI only when set to `true`. |
 | `SERVERSENTINEL_TRUST_PROXY` | `false` | backend | Trust rewritten proxy host/protocol headers and forwarded client addresses. Not required for a TLS-terminating proxy or Cloudflare Tunnel that preserves the public `Host` header. |
 | `SERVERSENTINEL_SETUP_TOKEN` | random at first startup | backend | Optional fixed 16-256 character token required to create the first administrator. When empty, the generated token is printed to the panel startup log. |
@@ -398,7 +398,7 @@ Recommended update process:
 
 1. Stop managed Minecraft servers from the panel.
 2. Back up `serversentinel-data` and `serversentinel-minecraft-servers`, or the equivalent host bind mounts.
-3. Pull the target image, for example `docker pull nl2109/serversentinel:1.2.0`.
+3. Pull the target image, for example `docker pull nl2109/serversentinel:1.2.1`.
 4. Update the panel container image tag and start the panel.
 5. In multi-node deployments, update node agents to the same tag shown by `SERVERSENTINEL_NODE_IMAGE`.
 6. Run the release smoke path in [scripts/release-smoke.md](scripts/release-smoke.md).
@@ -470,7 +470,7 @@ npm run typecheck
 Build the Docker image locally:
 
 ```bash
-docker build -t nl2109/serversentinel:1.2.0 -t nl2109/serversentinel:latest -f docker/Dockerfile .
+docker build -t nl2109/serversentinel:1.2.1 -t nl2109/serversentinel:latest -f docker/Dockerfile .
 ```
 
 The standard image supports demo mode at runtime. Run a disposable container with `SERVERSENTINEL_ENABLE_DEMO=true` and a dedicated data volume; do not enable it in production.
