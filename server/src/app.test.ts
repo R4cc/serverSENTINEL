@@ -201,6 +201,15 @@ describe("CSRF origin checks", () => {
     }), true)).not.toThrow();
   });
 
+  it("supports Cloudflare Tunnel terminating HTTPS while connecting to the container over plain HTTP", () => {
+    expect(() => assertSameOriginRequest(request({
+      origin: "https://panel.example.com",
+      host: "serversentinel:8085",
+      "x-forwarded-host": "panel.example.com",
+      "x-forwarded-proto": "https"
+    }), true)).not.toThrow();
+  });
+
   it("rejects malformed or cross-origin proxy metadata", () => {
     expect(() => assertSameOriginRequest(request({
       origin: "https://evil.example.com",
