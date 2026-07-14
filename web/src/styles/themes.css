@@ -1,0 +1,208 @@
+:root.themeXanderGreen,
+.appShell.themeXanderGreen,
+:root.themeMint,
+.appShell.themeMint,
+:root.themeNightlight,
+.appShell.themeNightlight,
+:root.themePeach,
+.appShell.themePeach {
+  --accent: var(--sentinel-accent);
+}
+
+:root.themeXanderGreen,
+.appShell.themeXanderGreen,
+:root.themeNightlight,
+.appShell.themeNightlight {
+  --border-muted: color-mix(in srgb, var(--border) 34%, var(--surface) 66%);
+  --border-panel: color-mix(in srgb, var(--border) 46%, var(--surface) 54%);
+  --border-row: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
+}
+
+:root.themeMint,
+.appShell.themeMint,
+:root.themePeach,
+.appShell.themePeach {
+  --border-muted: color-mix(in srgb, var(--border) 18%, var(--surface) 82%);
+  --border-panel: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
+  --border-row: color-mix(in srgb, var(--border) 12%, var(--surface) 88%);
+}
+
+:root.themeXanderGreen,
+.appShell.themeXanderGreen {
+  --surface: #0d1711;
+  --surface-raised: #14231a;
+  --surface-muted: #1b3023;
+  --surface-read-only: #112019;
+  --surface-disabled: #1b2921;
+  --sidebar-background: #07150d;
+  --sidebar-foreground: #eef9f1;
+  --sidebar-foreground-muted: #aac4b1;
+  --text: #e3f2e7;
+  --text-muted: #aac4b1;
+  --text-soft: #8daa97;
+  --text-disabled: #93a99b;
+  --border: #486652;
+  --sentinel-accent: #53d486;
+  --sentinel-accent-strong: #8cf0ad;
+  --sentinel-accent-soft: #183c26;
+  --sentinel-accent-muted: #3b9b60;
+  --sentinel-success: #72dc98;
+  --sentinel-info: #82c7dd;
+  --sentinel-warning: #efc66f;
+  --sentinel-danger: #ff7373;
+  --status-success-foreground: #72dc98;
+  --status-warning-foreground: #efc66f;
+  --status-danger-foreground: #ff8f8f;
+  --status-neutral-foreground: #aac4b1;
+  --terminal-bg: #08120d;
+  --terminal-text: #d9f8e2;
+  --editor-comment: #b8a267;
+  --editor-keyword: #7fe3a2;
+  --editor-property: #82c7dd;
+  --editor-string: #a5e69c;
+  --editor-constant: #f2cc75;
+  --editor-punctuation: #a9c3b0;
+  --editor-heading: #eef9f1;
+  --editor-link: #9adbb1;
+  --overlay: rgb(0 8 3 / 0.7);
+  --shadow-elevated: 0 18px 52px rgb(0 8 3 / 0.46);
+  background:
+    radial-gradient(circle at 12% 8%, rgb(83 212 134 / 0.08), transparent 28%),
+    radial-gradient(circle at 1px 1px, rgb(225 255 235 / 0.018) 1px, transparent 0) 0 0 / 20px 20px,
+    var(--surface);
+}
+
+:root.themeMint,
+.appShell.themeMint {
+  --surface: #f6fbf7;
+  --surface-raised: #ffffff;
+  --surface-muted: #e8f5ec;
+  --surface-read-only: #f0f8f2;
+  --surface-disabled: #e3ece6;
+  --sidebar-background: #0e3b27;
+  --sidebar-foreground: #f5fff8;
+  --sidebar-foreground-muted: #c6e7d1;
+  --text: #102117;
+  --text-muted: #385947;
+  --text-soft: #51715e;
+  --text-disabled: #66786c;
+  --border: #244b34;
+  --sentinel-accent: #147a45;
+  --sentinel-accent-strong: #0a4e2a;
+  --sentinel-accent-soft: #d8f2e1;
+  --sentinel-accent-muted: #8bcfa3;
+  --sentinel-success: #176a40;
+  --sentinel-info: #286c86;
+  --sentinel-warning: #9a6512;
+  --sentinel-danger: #c92f2f;
+  --status-success-foreground: #145d38;
+  --status-warning-foreground: #80500d;
+  --status-danger-foreground: #aa2424;
+  --status-neutral-foreground: #385947;
+  --terminal-bg: #0b1c12;
+  --terminal-text: #e7f9ed;
+  --editor-comment: #736322;
+  --editor-keyword: #0d6637;
+  --editor-property: #1c667e;
+  --editor-string: #287543;
+  --editor-constant: #875b12;
+  --editor-punctuation: #385947;
+  --editor-heading: #102117;
+  --editor-link: #147a45;
+  --overlay: rgb(4 24 12 / 0.5);
+  --shadow-elevated: 0 18px 46px rgb(23 75 43 / 0.16);
+  background:
+    radial-gradient(circle at 90% 4%, rgb(20 122 69 / 0.08), transparent 30%),
+    radial-gradient(circle at 1px 1px, rgb(20 70 38 / 0.025) 1px, transparent 0) 0 0 / 20px 20px,
+    var(--surface);
+}
+
+:root.themeNightlight,
+.appShell.themeNightlight {
+  --surface: #17131d;
+  --surface-raised: #201925;
+  --surface-muted: #2a2131;
+  --surface-read-only: #1d1723;
+  --surface-disabled: #251e2b;
+  --sidebar-background: #100a18;
+  --sidebar-foreground: #fbf6ff;
+  --sidebar-foreground-muted: #cbb8d8;
+  --text: #f1e9f6;
+  --text-muted: #cbb8d8;
+  --text-soft: #ad96bb;
+  --text-disabled: #b5a4bf;
+  --border: #6a5975;
+  --sentinel-accent: #c28cf4;
+  --sentinel-accent-strong: #dfbcff;
+  --sentinel-accent-soft: #352341;
+  --sentinel-accent-muted: #9062b1;
+  --sentinel-success: #7ed6b2;
+  --sentinel-info: #9ab4ff;
+  --sentinel-warning: #edc479;
+  --sentinel-danger: #ff747f;
+  --status-success-foreground: #7ed6b2;
+  --status-warning-foreground: #edc479;
+  --status-danger-foreground: #ff929a;
+  --status-neutral-foreground: #cbb8d8;
+  --terminal-bg: #100b15;
+  --terminal-text: #f1e9f6;
+  --editor-comment: #c99b65;
+  --editor-keyword: #d2a4ff;
+  --editor-property: #9ab4ff;
+  --editor-string: #8bddbb;
+  --editor-constant: #edc479;
+  --editor-punctuation: #cbb8d8;
+  --editor-heading: #fbf6ff;
+  --editor-link: #d9b2ff;
+  --overlay: rgb(9 3 14 / 0.72);
+  --shadow-elevated: 0 18px 52px rgb(9 3 14 / 0.5);
+  background:
+    radial-gradient(circle at 88% 12%, rgb(194 140 244 / 0.1), transparent 30%),
+    radial-gradient(circle at 1px 1px, rgb(250 235 255 / 0.018) 1px, transparent 0) 0 0 / 20px 20px,
+    var(--surface);
+}
+
+:root.themePeach,
+.appShell.themePeach {
+  --surface: #fff8f3;
+  --surface-raised: #fffdfa;
+  --surface-muted: #f7e7dc;
+  --surface-read-only: #fcf1e9;
+  --surface-disabled: #eee2db;
+  --sidebar-background: #4a1f1a;
+  --sidebar-foreground: #fff9f5;
+  --sidebar-foreground-muted: #f0cfc4;
+  --text: #2b1712;
+  --text-muted: #65483f;
+  --text-soft: #7b5d53;
+  --text-disabled: #806d66;
+  --border: #5b3d32;
+  --sentinel-accent: #c44f2d;
+  --sentinel-accent-strong: #7f2d19;
+  --sentinel-accent-soft: #fee3d6;
+  --sentinel-accent-muted: #e6aa91;
+  --sentinel-success: #39705b;
+  --sentinel-info: #416b9b;
+  --sentinel-warning: #9b6215;
+  --sentinel-danger: #c92f2f;
+  --status-success-foreground: #315f4e;
+  --status-warning-foreground: #80500d;
+  --status-danger-foreground: #aa2424;
+  --status-neutral-foreground: #65483f;
+  --terminal-bg: #24130f;
+  --terminal-text: #fff2eb;
+  --editor-comment: #806116;
+  --editor-keyword: #9f351c;
+  --editor-property: #365f91;
+  --editor-string: #39705b;
+  --editor-constant: #8b5812;
+  --editor-punctuation: #65483f;
+  --editor-heading: #2b1712;
+  --editor-link: #b44125;
+  --overlay: rgb(42 15 8 / 0.5);
+  --shadow-elevated: 0 18px 46px rgb(92 42 26 / 0.17);
+  background:
+    radial-gradient(circle at 90% 4%, rgb(196 79 45 / 0.09), transparent 30%),
+    radial-gradient(circle at 1px 1px, rgb(90 45 30 / 0.025) 1px, transparent 0) 0 0 / 20px 20px,
+    var(--surface);
+}

@@ -28,6 +28,7 @@ import { ActionMenu } from "./components/ActionMenu";
 import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
+import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
@@ -388,7 +389,14 @@ export default function App() {
     triggerOverviewRefreshRef.current = triggerOverviewRefresh;
   }, [triggerOverviewRefresh]);
 
-  const darkMode = themePreference === "dark" || (themePreference === "system" && systemDark);
+  const darkMode = resolveDarkTheme(themePreference, systemDark);
+  const themeClassName = resolvedThemeClassName(themePreference, systemDark);
+  useEffect(() => {
+    const root = document.documentElement;
+    const classes = themeClassName.split(" ");
+    root.classList.add(...classes);
+    return () => root.classList.remove(...classes);
+  }, [themeClassName]);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
@@ -2685,7 +2693,7 @@ export default function App() {
   return (
     <>
       <AppToaster darkMode={darkMode} />
-      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${darkMode ? "themeDark" : "themeLight"}`}>
+      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${themeClassName}`}>
         <aside className="sidebar" id="application-sidebar">
         <div className="brandBlock">
           <div className="brandLockup">

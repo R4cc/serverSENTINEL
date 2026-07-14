@@ -5,57 +5,6 @@
   gap: var(--space-4);
 }
 
-.settingsHubIntro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-row));
-  border-radius: calc(var(--radius-md) + 4px);
-  background:
-    radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%), var(--surface-raised));
-  padding: clamp(var(--space-4), 2.5vw, var(--space-6));
-  box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
-}
-
-.settingsHubIntro > div {
-  min-width: 0;
-}
-
-.settingsHubEyebrow {
-  display: block;
-  margin-bottom: var(--space-2);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.settingsHubIntro h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: clamp(22px, 2.4vw, 32px);
-  line-height: 1.08;
-  letter-spacing: var(--tracking-tight);
-}
-
-.settingsHubIntro p {
-  max-width: 680px;
-  margin: var(--space-2) 0 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.settingsHubIntro > .uiStatusBadge {
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding-inline: var(--space-3);
-}
-
 .settingsHubShell {
   display: grid;
   grid-template-columns: 238px minmax(0, 1fr);
@@ -592,19 +541,6 @@
 @media (max-width: 640px) {
   .settingsHub {
     gap: var(--space-3);
-  }
-
-  .settingsHubIntro {
-    align-items: flex-start;
-    padding: var(--space-4);
-  }
-
-  .settingsHubIntro > .uiStatusBadge {
-    display: none;
-  }
-
-  .settingsHubIntro h2 {
-    font-size: 22px;
   }
 
   .settingsHubSectionHeader {

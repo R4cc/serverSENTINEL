@@ -76,6 +76,12 @@ describe("SettingsPage", () => {
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain("Relative timestamps");
     expect(html).toContain("This browser");
+    expect(html).toContain("Xander Green");
+    expect(html).toContain(">mint</option>");
+    expect(html).toContain("Nightlight");
+    expect(html).toContain(">peach</option>");
+    expect(html).not.toContain("Make serverSENTINEL work your way");
+    expect(html).not.toContain("Personal + panel settings");
   });
 
   it("only exposes user management when the permission-backed category is available", () => {

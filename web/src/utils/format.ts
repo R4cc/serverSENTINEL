@@ -1,4 +1,5 @@
 import type { DisplayTimeZonePreference, ManagedServer, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
+import { isThemePreference } from "../features/settings/themePreferences";
 
 export const defaultServerPort = 25565;
 
@@ -175,7 +176,7 @@ export function versionSourceLabel(source: VersionSource) {
 export function readThemePreference(): ThemePreference {
   try {
     const saved = window.localStorage.getItem("serversentinel-theme");
-    return saved === "dark" || saved === "system" || saved === "light" ? saved : "light";
+    return isThemePreference(saved) ? saved : "light";
   } catch {
     return "light";
   }

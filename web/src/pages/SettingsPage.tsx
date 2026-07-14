@@ -3,6 +3,7 @@ import type { DisplayTimeZonePreference, LocalePreference, PublicUser, ThemePref
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
+import { themeOptions } from "../features/settings/themePreferences";
 import { ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/AuthPanel";
 import { InlineState } from "../components/InlineState";
@@ -146,9 +147,14 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="appearance" actions={<StatusBadge tone="neutral">This browser</StatusBadge>} />
         <div className="settingsHubRows">
-          <PreferenceRow title="Theme" description="Choose the panel color mode.">
+          <PreferenceRow title="Theme" description="Choose a panel palette. This preference stays in this browser.">
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
-              <option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option>
+              <optgroup label="Classics">
+                {themeOptions.filter((option) => option.family === "classic").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
+              <optgroup label="Color commentary">
+                {themeOptions.filter((option) => option.family === "color").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
             </select>
           </PreferenceRow>
           <PreferenceRow title="Relative timestamps" description="Show times as “2 hours ago” instead of the full date and time.">
@@ -259,7 +265,6 @@ export function SettingsPage(props: SettingsPageProps) {
 
   return (
     <section className="settingsHub layoutWide" aria-busy={props.loading}>
-      <div className="settingsHubIntro"><div><span className="settingsHubEyebrow">Panel configuration</span><h2>Make serverSENTINEL work your way</h2><p>Personalize the interface, tune the console, and manage panel-wide services from one place.</p></div><StatusBadge tone="accent">Personal + panel settings</StatusBadge></div>
       <div className="settingsHubShell">
         <nav className="settingsHubCategories" aria-label="Settings categories" role="tablist">
           {categories.map((category, index) => {

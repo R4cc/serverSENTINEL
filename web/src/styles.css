@@ -1,5 +1,6 @@
 @import "./styles/tokens.css";
 @import "./styles/auth.css";
+@import "./styles/themes.css";
 @import "./styles/layout.css";
 @import "./styles/overview.css";
 @import "./styles/server-properties.css";

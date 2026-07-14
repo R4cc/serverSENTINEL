@@ -63,6 +63,7 @@
   line-height: 1.5;
 }
 
+:root.themeDark,
 .appShell.themeDark {
   color-scheme: dark;
   --surface: #1b1d22;
