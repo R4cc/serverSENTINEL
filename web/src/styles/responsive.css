@@ -1534,6 +1534,20 @@ button:disabled,
     overscroll-behavior: contain;
   }
 
+  /* Schedule cards use visible overflow at the stacked breakpoint so their
+     table rows can grow naturally. Keep those rows intrinsic on phones;
+     otherwise the viewport-sized grid shrinks the table card and its final
+     controls spill over the recent-runs card. */
+  .workspacePage-schedule > .scheduleManagementPage {
+    grid-template-rows: max-content max-content;
+    align-content: start;
+  }
+
+  .workspacePage-schedule .scheduleTableFrame,
+  .workspacePage-schedule .scheduleTableBody {
+    flex: 0 0 auto;
+  }
+
   .workspacePage-console > .tabPage:has(.consolePanel) {
     display: flex;
     height: auto;
