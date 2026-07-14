@@ -265,6 +265,8 @@ export default function App() {
     setNumberLocalePreference,
     displayTimeZonePreference,
     setDisplayTimeZonePreference,
+    relativeTimestamps,
+    setRelativeTimestamps,
     demoRunning,
     setDemoRunning,
     demoFiles,
@@ -2937,6 +2939,24 @@ export default function App() {
                   <option value="system">System</option>
                 </select>
               </label>
+              <div className="settingsRow">
+                <div>
+                  <strong>Relative timestamps</strong>
+                  <span>Show times as “2 hours ago” instead of the full date and time.</span>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={relativeTimestamps}
+                    onChange={(event) => setRelativeTimestamps(event.target.checked)}
+                    aria-label="Use relative timestamps"
+                  />
+                  <span className="slider" />
+                  <span className={`switchStateLabel ${relativeTimestamps ? "enabled" : ""}`}>
+                    {relativeTimestamps ? "Relative" : "Full date and time"}
+                  </span>
+                </label>
+              </div>
               <label className="settingsRow">
                 <div>
                   <strong>Date format</strong>
@@ -3277,9 +3297,10 @@ export default function App() {
                     schedules={activeServer.schedules ?? []}
                     canView={canViewSchedules}
                     formatDate={formatDisplayDate}
+                    relativeTimestamps={relativeTimestamps}
                     onOpenSchedules={() => setActivePage("schedule")}
                   />
-                  <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
+                  <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
                 </div>
 
               </section>
@@ -3358,6 +3379,7 @@ export default function App() {
                 <SchedulePage
                   schedules={activeServer.schedules ?? []}
                   formatDate={formatDisplayDate}
+                  relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
                   onCreate={createSchedule}
                   onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}

@@ -253,8 +253,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return null;
-    setUpdatePlanLoading(true);
-    setUpdatePlanError("");
+    const showLoading = options.forceRefresh === true;
+    if (showLoading) {
+      setUpdatePlanLoading(true);
+      setUpdatePlanError("");
+    }
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
       const fixtureError = demoFixtureFailureMessage(demoFixture, "update-plan");
       if (fixtureError) {
@@ -262,17 +265,20 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           setUpdatePlan(null);
           setUpdatePlanError(fixtureError);
         }
-        setUpdatePlanLoading(false);
+        if (showLoading) setUpdatePlanLoading(false);
         return null;
       }
       const plan = createDemoUpdatePlan(serverId, demoInstalledMods);
       if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
-      setUpdatePlanLoading(false);
+      if (showLoading) setUpdatePlanLoading(false);
       return plan;
     }
     try {
-      const plan = await api<ModUpdatePlan>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`);
-      if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
+      const plan = await api<ModUpdatePlan | null>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`);
+      if (activeServerIdRef.current === serverId) {
+        setUpdatePlan(plan);
+        setUpdatePlanError("");
+      }
       return plan;
     } catch (error) {
       if (handleStaleSession(error)) return null;
@@ -281,7 +287,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (options.notifyOnError) notify("error", message);
       return null;
     } finally {
-      if (activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
+      if (showLoading && activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
     }
   }
 
@@ -352,6 +358,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false });
     }
   }, [activeServer?.id, activeNodeRuntimeBlocked, activeNodeBlockMessage, activePage]);
+
+  useEffect(() => {
+    if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "mods" && activePage !== "overview")) return;
+    const interval = window.setInterval(() => {
+      void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false });
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage]);
 
   useEffect(() => {
     if (activeServerIsDemo) {

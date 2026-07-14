@@ -200,3 +200,15 @@ export function readDisplayTimeZonePreference(): DisplayTimeZonePreference {
     return "panel";
   }
 }
+
+export function relativeTimestampsFromStoredValue(value: string | null) {
+  return value !== "false";
+}
+
+export function readRelativeTimestampsPreference() {
+  try {
+    return relativeTimestampsFromStoredValue(window.localStorage.getItem("serversentinel-relative-timestamps"));
+  } catch {
+    return true;
+  }
+}

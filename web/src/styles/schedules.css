@@ -344,6 +344,10 @@
   overflow-wrap: anywhere;
 }
 
+.scheduleRelativeTime {
+  white-space: nowrap;
+}
+
 .scheduleStatusIcon {
   display: inline-grid;
   place-items: center;

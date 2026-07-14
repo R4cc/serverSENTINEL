@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstalledMod, ModUpdatePlan } from "../../types";
-import { canUpdateAllSafe, createDemoUpdatePlan, safeUpdateRequestGroups, updatePlanEntryForMod } from "./modUpdatePlan";
+import { applyUpdatePlanEntry, canUpdateAllSafe, createDemoUpdatePlan, safeUpdateRequestGroups, updatePlanEntryForMod } from "./modUpdatePlan";
 
 function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   return {
@@ -26,6 +26,16 @@ describe("frontend mod update plan helpers", () => {
     const installed = mod();
     const plan = createDemoUpdatePlan("demo", [installed]);
     expect(updatePlanEntryForMod(plan, installed)?.status).toBe("safe_update");
+  });
+
+  it("uses a cached plan as the installed row's update metadata", () => {
+    const installed = mod({ versionInfo: null });
+    const entry = createDemoUpdatePlan("demo", [mod()]).updates[0];
+    expect(applyUpdatePlanEntry(installed, entry).versionInfo).toMatchObject({
+      currentVersion: "1",
+      latestVersion: "2",
+      upToDate: false
+    });
   });
 
   it("keeps plan entries matched when an installed jar is toggled disabled", () => {

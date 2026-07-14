@@ -4,7 +4,7 @@ import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
-import { updatePlanEntryForMod } from "./modUpdatePlan";
+import { applyUpdatePlanEntry, updatePlanEntryForMod } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 import { ModStatusBadge } from "./ModStatusBadge";
@@ -73,8 +73,8 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
         ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
         ) : visible.map((mod) => {
-          const health = getInstalledModHealth(mod);
           const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
+          const health = getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate));
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
           const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${mod.filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase()}`;

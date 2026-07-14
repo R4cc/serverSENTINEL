@@ -62,10 +62,12 @@ export function SchedulePage({
   disabled,
   disabledReason,
   formatDate,
+  relativeTimestamps = true,
   scheduleTimeZone
 }: {
   schedules: ScheduledExecution[];
   formatDate: (value: string | number | Date) => string;
+  relativeTimestamps?: boolean;
   scheduleTimeZone: string;
   onCreate: (patch: SchedulePatch) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
@@ -81,6 +83,7 @@ export function SchedulePage({
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
   const runsFeedRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +145,12 @@ export function SchedulePage({
   useEffect(() => {
     runsFeedRef.current?.scrollTo({ top: 0 });
   }, [schedules, recentRunsKey]);
+
+  useEffect(() => {
+    setRelativeNow(Date.now());
+    const interval = window.setInterval(() => setRelativeNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
     const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
@@ -258,7 +267,13 @@ export function SchedulePage({
                 <div className="scheduleCell" data-label="Last run" role="cell">
                   {schedule.lastRunAt ? (
                     <>
-                      <span>{formatScheduleTime(schedule.lastRunAt, formatDate)}</span>
+                      <time
+                        className="scheduleRelativeTime"
+                        dateTime={schedule.lastRunAt}
+                        title={relativeTimestamps ? formatScheduleTime(schedule.lastRunAt, formatDate) : undefined}
+                      >
+                        {relativeTimestamps ? lastRunRelativeTime(schedule.lastRunAt, relativeNow) : formatScheduleTime(schedule.lastRunAt, formatDate)}
+                      </time>
                       <span
                         className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
                         role="img"
@@ -277,10 +292,13 @@ export function SchedulePage({
                 </div>
                 <div className="scheduleCell" data-label="Next run" role="cell">
                   {schedule.enabled && schedule.nextRunAt ? (
-                    <>
-                      <span>{formatScheduleTime(schedule.nextRunAt, formatDate)}</span>
-                      <small>{relativeTime(schedule.nextRunAt)}</small>
-                    </>
+                    <time
+                      className="scheduleRelativeTime"
+                      dateTime={schedule.nextRunAt}
+                      title={relativeTimestamps ? formatScheduleTime(schedule.nextRunAt, formatDate) : undefined}
+                    >
+                      {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
+                    </time>
                   ) : (
                     <>
                       <span>{schedule.enabled ? "Not available" : "Disabled"}</span>
@@ -369,8 +387,12 @@ export function SchedulePage({
                   )}
                 </div>
                 <div className="scheduledRunTime">
-                  <span>{run.kind === "active" ? relativeTime(run.startedAt) : relativeTime(run.ranAt)}</span>
-                  <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>
+                  <span>
+                    {run.kind === "active"
+                      ? relativeTimestamps ? relativeTime(run.startedAt, relativeNow) : `Started ${formatScheduleTime(run.startedAt, formatDate)}`
+                      : relativeTimestamps ? relativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}
+                  </span>
+                  {relativeTimestamps && <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>}
                 </div>
                 {run.kind === "active" && (
                   <div className="scheduledRunActions">
@@ -581,10 +603,43 @@ function formatScheduleTime(value: string, formatDate: (value: string | number |
   return formatDate(date);
 }
 
-function relativeTime(value: string) {
+function pluralizedTime(value: number, unit: "minute" | "hour" | "day") {
+  return `${value} ${unit}${value === 1 ? "" : "s"}`;
+}
+
+export function lastRunRelativeTime(value: string, now = Date.now()) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  const diffMs = date.getTime() - Date.now();
+  const elapsedMs = Math.max(0, now - date.getTime());
+  const minutes = Math.round(elapsedMs / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${pluralizedTime(minutes, "minute")} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${pluralizedTime(hours, "hour")} ago`;
+  return `${pluralizedTime(Math.round(hours / 24), "day")} ago`;
+}
+
+export function nextRunRelativeTime(value: string, now = Date.now()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const remainingMs = date.getTime() - now;
+  if (remainingMs <= 0) return "Due now";
+  const totalMinutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  const days = Math.floor(totalMinutes / 1_440);
+  const hours = Math.floor((totalMinutes % 1_440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [
+    days > 0 ? `${days}d` : "",
+    hours > 0 ? `${hours}h` : "",
+    minutes > 0 || (days === 0 && hours === 0) ? `${minutes}m` : ""
+  ].filter(Boolean);
+  return `in ${parts.join(" ")}`;
+}
+
+function relativeTime(value: string, now = Date.now()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const diffMs = date.getTime() - now;
   const absMs = Math.abs(diffMs);
   const minutes = Math.max(1, Math.round(absMs / 60_000));
   const hours = Math.floor(minutes / 60);

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { initialDemoFiles, initialDemoSchedules } from "../demo";
 import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 import type { DisplayTimeZonePreference, InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
-import { readDisplayTimeZonePreference, readLocalePreference, readThemePreference } from "../utils/format";
+import { readDisplayTimeZonePreference, readLocalePreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 
 function writePreference(key: string, value: string) {
@@ -19,6 +19,7 @@ export function usePreferencesState() {
   const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
   const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
   const [displayTimeZonePreference, setDisplayTimeZonePreference] = useState<DisplayTimeZonePreference>(() => readDisplayTimeZonePreference());
+  const [relativeTimestamps, setRelativeTimestamps] = useState(() => readRelativeTimestampsPreference());
   const [demoRunning, setDemoRunning] = useState(true);
   const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => ({ ...initialDemoFiles }));
   const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
@@ -54,6 +55,10 @@ export function usePreferencesState() {
     writePreference("serversentinel-display-time-zone", displayTimeZonePreference);
   }, [displayTimeZonePreference]);
 
+  useEffect(() => {
+    writePreference("serversentinel-relative-timestamps", String(relativeTimestamps));
+  }, [relativeTimestamps]);
+
   function resetDemoState() {
     setDemoRunning(true);
     setDemoFiles({ ...initialDemoFiles });
@@ -72,6 +77,8 @@ export function usePreferencesState() {
     setNumberLocalePreference,
     displayTimeZonePreference,
     setDisplayTimeZonePreference,
+    relativeTimestamps,
+    setRelativeTimestamps,
     demoRunning,
     setDemoRunning,
     demoFiles,

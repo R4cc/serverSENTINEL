@@ -332,11 +332,13 @@ export function AutomationPanel({
   schedules,
   canView = true,
   formatDate,
+  relativeTimestamps = true,
   onOpenSchedules
 }: {
   schedules: ScheduledExecution[];
   canView?: boolean;
   formatDate: (value: string | number | Date) => string;
+  relativeTimestamps?: boolean;
   onOpenSchedules: () => void;
 }) {
   const snapshot = buildAutomationSnapshot(schedules);
@@ -364,14 +366,21 @@ export function AutomationPanel({
             <div className="automationSummaryRow">
               <span>Next run</span>
               <strong>{snapshot.next.name}</strong>
-              <small title={snapshot.next.nextRunAt ? formatDate(snapshot.next.nextRunAt) : undefined}>{snapshot.next.nextRunAt ? formatRelativeScheduleTime(snapshot.next.nextRunAt) : "Not scheduled"}</small>
+              <small title={relativeTimestamps && snapshot.next.nextRunAt ? formatDate(snapshot.next.nextRunAt) : undefined}>
+                {snapshot.next.nextRunAt
+                  ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.next.nextRunAt) : formatDate(snapshot.next.nextRunAt)
+                  : "Not scheduled"}
+              </small>
             </div>
           )}
           {snapshot.recent && (
             <div className="automationSummaryRow">
               <span>Latest run</span>
               <strong>{snapshot.recent.scheduleName}</strong>
-              <small><StatusBadge tone={recentStatus.tone}>{recentStatus.label}</StatusBadge> {formatRelativeScheduleTime(snapshot.recent.ranAt)}</small>
+              <small title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>
+                <StatusBadge tone={recentStatus.tone}>{recentStatus.label}</StatusBadge>{" "}
+                {relativeTimestamps ? formatRelativeScheduleTime(snapshot.recent.ranAt) : formatDate(snapshot.recent.ranAt)}
+              </small>
             </div>
           )}
           {!snapshot.active && !snapshot.next && !snapshot.recent && <EmptyState compact title="No automation activity yet" message="Enabled schedules will appear here when they run." />}
@@ -411,6 +420,7 @@ export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
   formatDate,
+  relativeTimestamps = true,
   onOpenConsole,
   requestConfirmation,
   loading = false
@@ -418,6 +428,7 @@ export function RecentEventsPanel({
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
   formatDate: (value: string | number | Date) => string;
+  relativeTimestamps?: boolean;
   onOpenConsole: () => void;
   requestConfirmation: RequestConfirmation;
   loading?: boolean;
@@ -477,21 +488,26 @@ export function RecentEventsPanel({
             <SkeletonBlock className="eventTextSkeleton" />
             <SkeletonBlock className="eventTimeSkeleton" />
           </div>
-        )) : displayEvents.length ? displayEvents.map((event) => (
-          <div className={`eventRow ${event.type}`} key={event.id}>
-            <span className="eventMarker" aria-hidden="true" />
-            <strong>{event.text}</strong>
-            <small title={eventDate(event.timestamp, now) ? formatDate(eventDate(event.timestamp, now)!) : undefined}>{formatRelativeEventTime(event.timestamp, now)}</small>
-            <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(event)} aria-label="Hide events of this type">
-              <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
-                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                <line x1="2" y1="2" x2="22" y2="22" />
-              </svg>
-            </Button>
-          </div>
-        )) : (
+        )) : displayEvents.length ? displayEvents.map((event) => {
+          const timestamp = eventDate(event.timestamp, now);
+          return (
+            <div className={`eventRow ${event.type}`} key={event.id}>
+              <span className="eventMarker" aria-hidden="true" />
+              <strong>{event.text}</strong>
+              <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
+                {relativeTimestamps ? formatRelativeEventTime(event.timestamp, now) : timestamp ? formatDate(timestamp) : event.timestamp ? "Unknown" : "No timestamp"}
+              </small>
+              <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(event)} aria-label="Hide events of this type">
+                <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" y1="2" x2="22" y2="22" />
+                </svg>
+              </Button>
+            </div>
+          );
+        }) : (
           <EmptyState
             compact
             className="eventEmpty"

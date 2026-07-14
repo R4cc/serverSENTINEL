@@ -41,6 +41,7 @@ import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modri
 import { assessRequiredModDependencies } from "./modrinth/dependencyHealth.js";
 import { searchModrinth } from "./modrinth/searchCache.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
+import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -360,6 +361,7 @@ let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
 let operationsRepository: OperationsRepository;
 let storageDatabase: StorageDatabase;
+let modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
@@ -380,6 +382,7 @@ const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minu
 const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
 const resourceStatsPollMs = 5_000;
 const resourceStatsHistoryWindowMs = 60 * 60 * 1000;
+const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
 
@@ -6547,7 +6550,9 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
 
         await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
         let versionInfo: any = null;
-        try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata, options); } catch { versionInfo = null; }
+        if (options.forceRefresh) {
+          try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata, options); } catch { versionInfo = null; }
+        }
         return {
           filename: entry.name,
           displayName: entry.name.replace(/\.jar\.disabled$/, ".jar"),
@@ -7370,7 +7375,10 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
-  return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel: optionalReleaseChannel(request.query.channel) });
+  const channel = optionalReleaseChannel(request.query.channel);
+  if (channel) return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel });
+  if (request.query.forceRefresh === "true") return modUpdatePlanCoordinator.refresh(server);
+  return modUpdatePlanCoordinator.get(server.id);
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string; v?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
@@ -8072,6 +8080,15 @@ runtimeStateCoordinator = new RuntimeStateCoordinator({
   }
 });
 runtimeStateCoordinator.start();
+modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
+  intervalMs: modUpdateCheckIntervalMs,
+  readServers,
+  buildPlan: (server, options) => buildModUpdatePlan(server, options),
+  onError: (error, server) => {
+    logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
+  }
+});
+modUpdatePlanCoordinator.start();
 resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
@@ -8082,6 +8099,7 @@ resourceStatsCollector = new ResourceStatsCollector({
 resourceStatsCollector.start();
 app.addHook("onClose", async () => {
   runtimeStateCoordinator?.stop();
+  modUpdatePlanCoordinator?.stop();
   resourceStatsCollector?.stop();
 });
 

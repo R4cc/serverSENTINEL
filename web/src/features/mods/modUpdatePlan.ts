@@ -10,6 +10,20 @@ export function updatePlanEntryForMod(plan: ModUpdatePlan | null, mod: Installed
   return plan?.updates.find((entry) => modFilenameIdentity(entry.filename) === filename || modFilenameIdentity(entry.currentFilename) === filename) ?? null;
 }
 
+export function applyUpdatePlanEntry(mod: InstalledMod, entry: ModUpdatePlanEntry | null) {
+  if (!entry || entry.status === "unknown") return mod;
+  return {
+    ...mod,
+    versionInfo: {
+      currentVersion: entry.currentVersion,
+      latestVersion: entry.targetVersion,
+      latestFilename: entry.targetFilename,
+      latestChannel: entry.channel,
+      upToDate: entry.status === "up_to_date"
+    }
+  };
+}
+
 export function canUpdateAllSafe(plan: ModUpdatePlan | null, changesAllowed: boolean, batchRunning: boolean) {
   return Boolean(plan && plan.counts.safeUpdates > 0 && changesAllowed && !batchRunning);
 }

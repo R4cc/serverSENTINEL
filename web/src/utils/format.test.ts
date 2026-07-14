@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTimestampForFilename, resolveDisplayTimeZone } from "./format";
+import { formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone } from "./format";
 
 describe("configured time zone formatting", () => {
   it("uses the requested zone for timestamped filenames", () => {
@@ -15,5 +15,13 @@ describe("display time zone preference", () => {
     expect(resolveDisplayTimeZone("panel", "Europe/Vienna", "America/New_York")).toBe("Europe/Vienna");
     expect(resolveDisplayTimeZone("browser", "Europe/Vienna", "America/New_York")).toBe("America/New_York");
     expect(resolveDisplayTimeZone("utc", "Europe/Vienna", "America/New_York")).toBe("UTC");
+  });
+});
+
+describe("relative timestamp preference", () => {
+  it("defaults to relative timestamps and only disables them explicitly", () => {
+    expect(relativeTimestampsFromStoredValue(null)).toBe(true);
+    expect(relativeTimestampsFromStoredValue("true")).toBe(true);
+    expect(relativeTimestampsFromStoredValue("false")).toBe(false);
   });
 });

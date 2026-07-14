@@ -145,12 +145,13 @@
   border-radius: var(--radius-sm);
 }
 
-.filesPage .fileTableRow[draggable="true"] .fileNameCell {
-  cursor: grab;
-}
-
 .filesPage .fileTableRow.fileDragging {
   opacity: 0.52;
+  cursor: grabbing;
+}
+
+.filesPage .fileTableRow.fileDragging .fileNameCell {
+  cursor: grabbing;
 }
 
 .filesPage .fileTableRow[aria-selected="true"] {
@@ -160,7 +161,13 @@
 }
 
 .filesPage .fileNameCell {
-  cursor: default;
+  cursor: pointer;
+}
+
+.filesPage .fileTableRow.fileDropTarget,
+.filesPage .fileTableRow.fileDropTarget .fileNameCell,
+.filesPage .fileBreadcrumbs button.fileDropTarget {
+  cursor: move;
 }
 
 .filesPage .fileNameCell:focus-visible {

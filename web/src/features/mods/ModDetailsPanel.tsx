@@ -5,6 +5,7 @@ import { Button } from "../../components/UiPrimitives";
 import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
+import { applyUpdatePlanEntry } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { DialogSurface } from "../../components/DialogSurface";
 
@@ -33,7 +34,7 @@ type Props = {
 };
 
 export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
-  const health = getInstalledModHealth(mod);
+  const health = getInstalledModHealth(applyUpdatePlanEntry(mod, updatePlanEntry ?? null));
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);

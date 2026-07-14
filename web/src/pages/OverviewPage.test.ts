@@ -188,4 +188,21 @@ describe("automation summary", () => {
     expect(renderToStaticMarkup(createElement(AutomationPanel, props))).toContain("No schedules configured");
     expect(renderToStaticMarkup(createElement(AutomationPanel, { ...props, canView: false }))).toContain("View schedules permission is required");
   });
+
+  it("uses the full configured date and time when relative timestamps are disabled", () => {
+    const value = schedule({
+      nextRunAt: "2099-07-11T13:00:00.000Z",
+      recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "success", ranAt: "2026-07-11T10:00:00.000Z" }]
+    });
+    const html = renderToStaticMarkup(createElement(AutomationPanel, {
+      schedules: [value],
+      formatDate: (timestamp) => `FULL ${new Date(timestamp).toISOString()}`,
+      relativeTimestamps: false,
+      onOpenSchedules: () => undefined
+    }));
+
+    expect(html).toContain("FULL 2099-07-11T13:00:00.000Z");
+    expect(html).toContain("FULL 2026-07-11T10:00:00.000Z");
+    expect(html).not.toContain(" ago");
+  });
 });
