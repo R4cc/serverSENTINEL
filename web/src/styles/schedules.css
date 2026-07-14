@@ -3,6 +3,7 @@
 .tabPage.scheduleWorkspacePage {
   width: 100%;
   max-width: none;
+  height: max(560px, calc(100vh - 238px));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -101,17 +102,20 @@
 }
 
 .scheduleWorkspaceGrid {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 380px);
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
 }
 
 .scheduleWorkspaceGrid > .scheduleTableCard,
 .scheduleWorkspaceGrid > .scheduledRunsCard {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -129,7 +133,9 @@
 }
 
 .scheduleTableFrame {
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -171,9 +177,13 @@
 }
 
 .scheduleTableBody {
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 560px;
   overflow: auto;
+}
+
+.scheduleTableBody:has(.scheduleNoRows) {
+  display: grid;
 }
 
 .scheduleTableRow {
@@ -308,7 +318,7 @@
 }
 
 .scheduleNoRows {
-  min-height: 140px;
+  min-height: 0;
   place-content: center;
   justify-items: center;
   padding: var(--space-5);
@@ -319,8 +329,8 @@
 /* Scheduled run history -------------------------------------------------- */
 
 .scheduledRunsFeed {
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 560px;
   display: grid;
   align-content: start;
   gap: var(--space-2);
@@ -444,7 +454,8 @@
 }
 
 .scheduledRunsEmpty {
-  min-height: 180px;
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
   place-content: center;
   justify-items: center;
@@ -763,12 +774,42 @@
 }
 
 @media (max-width: 1180px) {
+  .tabPage.scheduleWorkspacePage {
+    height: auto;
+  }
+
   .scheduleWorkspaceGrid {
+    flex: 0 0 auto;
     grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .scheduleWorkspaceGrid > .scheduleTableCard,
+  .scheduleWorkspaceGrid > .scheduledRunsCard {
+    height: auto;
+  }
+
+  .scheduleTableFrame,
+  .scheduleTableBody {
+    flex: 0 1 auto;
+  }
+
+  .scheduleTableBody {
+    max-height: 560px;
+  }
+
+  .scheduleNoRows {
+    min-height: 140px;
   }
 
   .scheduledRunsFeed {
+    flex: 0 1 auto;
     max-height: 420px;
+  }
+
+  .scheduledRunsEmpty {
+    flex: 0 0 auto;
+    min-height: 180px;
   }
 }
 
