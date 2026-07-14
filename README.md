@@ -428,7 +428,7 @@ Node update behavior:
 5. For panel-only deployments, add a node from the Nodes area and run the generated node command on the Docker host.
 6. Create a managed server and start it from the panel.
 
-When TLS terminates at a reverse proxy, set `SERVERSENTINEL_TRUST_PROXY=true` only if that proxy overwrites untrusted forwarded headers. This lets serverSENTINEL validate the public origin and mark session cookies `Secure`. Do not expose the plain HTTP listener to the internet; terminate HTTPS in front of it and restrict direct access to port 8080.
+When TLS terminates at a reverse proxy or Cloudflare Tunnel, set `SERVERSENTINEL_TRUST_PROXY=true` only if that proxy overwrites untrusted forwarded headers. This lets serverSENTINEL validate the public origin and mark session cookies `Secure`. The backend listener itself can remain plain HTTP; for example, Cloudflared may route the public HTTPS hostname to `http://serversentinel:8080` or a host-mapped HTTP port such as `http://host.docker.internal:8085`. In that setup, keep the mapped panel port reachable only from the host or tunnel network and do not expose it directly to the public internet.
 
 ## Development
 
