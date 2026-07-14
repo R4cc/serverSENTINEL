@@ -16,6 +16,7 @@ function cloneMod(mod: InstalledMod): InstalledMod {
   return {
     ...mod,
     compatibility: mod.compatibility ? { ...mod.compatibility } : undefined,
+    dependencyHealth: mod.dependencyHealth ? { ...mod.dependencyHealth, missing: mod.dependencyHealth.missing.map((dependency) => ({ ...dependency })) } : undefined,
     versionInfo: mod.versionInfo ? { ...mod.versionInfo } : mod.versionInfo,
     modrinth: mod.modrinth ? { ...mod.modrinth, gameVersions: [...mod.modrinth.gameVersions], loaders: [...mod.modrinth.loaders] } : undefined
   };
@@ -66,7 +67,15 @@ function mixedHealthMods(): InstalledMod[] {
       versionInfo: { ...upToDate.versionInfo, currentVersion: "3.0.3", latestVersion: "3.1.0", latestChannel: "release", upToDate: false }
     },
     { ...manual, filename: "manual-unknown-fixture.jar", displayName: "Manual Unknown Fixture", compatibility: undefined, versionInfo: null, modrinth: undefined },
-    { ...dependency, displayName: "Up-to-date Fixture" }
+    {
+      ...dependency,
+      displayName: "Missing Dependency Fixture",
+      dependencyHealth: {
+        status: "missing",
+        requiredCount: 1,
+        missing: [{ projectId: "cloth-config", title: "Cloth Config API" }]
+      }
+    }
   ];
 }
 

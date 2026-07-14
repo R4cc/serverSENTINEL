@@ -18,9 +18,11 @@ describe("Mods demo fixtures", () => {
   });
 
   it("covers every update-plan health state deterministically", () => {
-    const plan = createDemoUpdatePlan("demo", modsForDemoFixture("mixed"), "2026-01-01T00:00:00.000Z");
+    const mods = modsForDemoFixture("mixed");
+    const plan = createDemoUpdatePlan("demo", mods, "2026-01-01T00:00:00.000Z");
     expect(plan.updates.map((entry) => entry.status)).toEqual(["safe_update", "needs_review", "blocked", "unknown", "up_to_date"]);
     expect(plan.counts).toMatchObject({ totalInstalled: 5, safeUpdates: 1, reviewUpdates: 1, blockedUpdates: 1, unknown: 1, upToDate: 1 });
+    expect(mods.find((mod) => mod.displayName === "Missing Dependency Fixture")?.dependencyHealth?.missing[0].title).toBe("Cloth Config API");
   });
 
   it("exposes missing configuration and deterministic request failures", () => {

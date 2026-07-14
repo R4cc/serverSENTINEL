@@ -42,6 +42,18 @@ describe("getInstalledModHealth", () => {
     expect(getInstalledModHealth(managedMod()).key).toBe("healthy");
   });
 
+  it("prioritizes missing required dependencies in health", () => {
+    const health = getInstalledModHealth(managedMod({
+      dependencyHealth: {
+        status: "missing",
+        requiredCount: 1,
+        missing: [{ projectId: "fabric-api", title: "Fabric API" }]
+      }
+    }));
+    expect(health).toMatchObject({ key: "missing_dependencies", label: "Missing dependency", needsAttention: true, primaryActionLabel: "Install dependencies" });
+    expect(health.detailDescription).toContain("Fabric API");
+  });
+
   it("offers a direct safe update for a compatible mod", () => {
     const health = getInstalledModHealth(managedMod({ versionInfo: { currentVersion: "1.0.0", latestVersion: "1.1.0", upToDate: false } }));
     expect(health).toMatchObject({ key: "safe_update_available", hasSafeUpdate: true, primaryActionLabel: "Update", safeToRunDirectly: true });

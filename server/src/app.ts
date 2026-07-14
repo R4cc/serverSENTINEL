@@ -38,6 +38,7 @@ import {
   versionChannel
 } from "./modrinth/compatibility.js";
 import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
+import { assessRequiredModDependencies } from "./modrinth/dependencyHealth.js";
 import { searchModrinth } from "./modrinth/searchCache.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
@@ -6224,6 +6225,52 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
   return { ...base, mods };
 }
 
+async function enrichInstalledModDependencies(result: unknown) {
+  if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
+  const base = result as { mods: Array<Record<string, unknown>> };
+  const installed = base.mods.map((mod) => ({ mod, metadata: remoteModMetadata(mod.modrinth) }));
+  const installedIdentities = installed.map(({ mod, metadata }) => ({ projectId: metadata?.projectId, versionId: metadata?.versionId, enabled: mod.enabled !== false }));
+  const resolved = await Promise.all(installed.map(async ({ metadata }) => {
+    if (!metadata) return null;
+    try {
+      const version = await resolveSelectedProjectVersion({ projectId: metadata.projectId, versionId: metadata.versionId });
+      return (version.dependencies ?? []).filter((dependency) => (dependency.dependency_type || "required") === "required");
+    } catch {
+      return undefined;
+    }
+  }));
+  const projectIds = Array.from(new Set(resolved.flatMap((dependencies) => dependencies ?? []).map((dependency) => dependency.project_id).filter((id): id is string => Boolean(id))));
+  let projects = new Map<string, ModrinthProject>();
+  try {
+    projects = await fetchProjects(projectIds) as Map<string, ModrinthProject>;
+  } catch {
+    // Project names and icons are optional; dependency identifiers remain actionable.
+  }
+  return {
+    ...base,
+    mods: base.mods.map((mod, index) => {
+      const dependencies = resolved[index];
+      if (dependencies === null) return mod;
+      if (dependencies === undefined) {
+        return { ...mod, dependencyHealth: { status: "unknown", requiredCount: 0, missing: [] } };
+      }
+      const assessment = assessRequiredModDependencies(dependencies, installedIdentities);
+      const missing = assessment.missing.map((dependency) => {
+        const project = dependency.projectId ? projects.get(dependency.projectId) : undefined;
+        return { ...dependency, title: project?.title, iconUrl: modrinthIconProxyUrl(project?.icon_url) };
+      });
+      return {
+        ...mod,
+        dependencyHealth: {
+          status: assessment.status,
+          requiredCount: assessment.requiredCount,
+          missing
+        }
+      };
+    })
+  };
+}
+
 async function listModsWithPanelMetadata(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
   const runtime = runtimeForServer(server);
   if (runtime instanceof RemoteNodeRuntime) {
@@ -6702,6 +6749,7 @@ type ModrinthInstallRequest = {
   versionId?: string;
   forceIncompatible: boolean;
   overrideMinecraftVersion: boolean;
+  dependenciesOnly: boolean;
   channel: ReleaseChannel;
 };
 
@@ -6720,6 +6768,7 @@ function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequest {
     versionId: validateModrinthVersionId(body.versionId),
     forceIncompatible: optionalStrictBoolean(body.forceIncompatible, "forceIncompatible", false),
     overrideMinecraftVersion: optionalStrictBoolean(body.overrideMinecraftVersion, "overrideMinecraftVersion", false),
+    dependenciesOnly: optionalStrictBoolean(body.dependenciesOnly, "dependenciesOnly", false),
     channel: optionalReleaseChannel(body.channel)
   };
 }
@@ -6980,6 +7029,9 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
           }],
           optionalDependencies: [] as OptionalModDependency[]
         };
+    if (install.dependenciesOnly) {
+      installPlan.installs = installPlan.installs.filter((planned) => planned.dependencyType === "required");
+    }
 
     await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
     await validateExistingInsideServer(server, "mods");
@@ -7105,7 +7157,8 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   const options = { forceRefresh: request.query.forceRefresh === "true" };
-  return publicInstalledModsResult(await listModsWithPanelMetadata(server, options));
+  const listed = await listModsWithPanelMetadata(server, options);
+  return publicInstalledModsResult(await enrichInstalledModDependencies(listed));
 });
 
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
@@ -7568,6 +7621,9 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       minecraftVersion: targetRuntime.minecraftVersion,
       channel: install.channel
     }) : { installs: [{ projectId: install.projectId, project, version: selectedVersion, file, compatibility, dependencyType: "root" as const }], optionalDependencies: [] as OptionalModDependency[] };
+    if (install.dependenciesOnly) {
+      installPlan.installs = installPlan.installs.filter((planned) => planned.dependencyType === "required");
+    }
     const listResult = await reconcileRemoteInstalledMods(server, await runtime.listMods(server, { forceRefresh: false }));
     const installedProjectIds = new Set(modsFromListResult(listResult).map((mod) => remoteModMetadata(mod.modrinth)?.projectId).filter(Boolean));
     const installedFilenames = new Set(modsFromListResult(listResult).map((mod) => typeof mod.filename === "string" ? mod.filename : undefined).filter(Boolean));
@@ -7651,6 +7707,53 @@ app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; ch
     task: "Installing mod",
     successTask: "Mod installed"
   }, () => installModWithRemoteVersionFallback(server, request.body)));
+});
+
+app.post<{ Params: { id: string }; Body: { filename?: string } }>("/api/servers/:id/mods/install-dependencies", modChangeRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "mods.install");
+  const server = await getServer(request.params.id);
+  const filename = safeInstalledModFilename(requiredString(request.body.filename, "filename"));
+  return withTrackedModMutation(server, () => recordOperation({
+    type: "mod.install",
+    serverId: server.id,
+    nodeId: server.nodeId,
+    createdBy: user.id,
+    task: "Installing mod dependencies",
+    successTask: "Mod dependencies installed"
+  }, async () => {
+    const listed = await enrichInstalledModDependencies(await listModsWithPanelMetadata(server, { forceRefresh: true }));
+    const mods = modsFromListResult(listed);
+    const current = mods.find((mod) => mod.filename === filename);
+    const metadata = remoteModMetadata(current?.modrinth);
+    if (!current || !metadata) throw new Error("Installed Modrinth metadata could not be found for that mod");
+    const health = current.dependencyHealth as { status?: string; missing?: Array<{ projectId?: string; versionId?: string; disabled?: boolean }> } | undefined;
+    if (!health || health.status === "unknown") throw new Error("Required dependencies could not be resolved from Modrinth");
+    if (health.status === "satisfied" || !health.missing?.length) return { ok: true, installed: [], enabled: [], alreadySatisfied: true };
+
+    const runtime = runtimeForServer(server);
+    const enabled: string[] = [];
+    try {
+      for (const dependency of health.missing.filter((item) => item.disabled)) {
+        const disabledMod = mods.find((mod) => {
+          const candidate = remoteModMetadata(mod.modrinth);
+          return mod.enabled === false && ((dependency.projectId && candidate?.projectId === dependency.projectId) || (dependency.versionId && candidate?.versionId === dependency.versionId));
+        });
+        if (!disabledMod || typeof disabledMod.filename !== "string") continue;
+        const toggled = await runtime.toggleMod(server, disabledMod.filename, true) as { filename?: string };
+        enabled.push(toggled.filename || disabledMod.filename.replace(/\.disabled$/, ""));
+      }
+      const result = await installModWithRemoteVersionFallback(server, {
+        projectId: metadata.projectId,
+        versionId: metadata.versionId,
+        channel: typeof current.preferredChannel === "string" ? current.preferredChannel : metadata.versionType,
+        dependenciesOnly: true
+      }) as { installed?: unknown[] };
+      return { ok: true, installed: result.installed ?? [], enabled, alreadySatisfied: false };
+    } catch (error) {
+      await Promise.allSettled(enabled.map((enabledFilename) => runtime.toggleMod(server, enabledFilename, false)));
+      throw error;
+    }
+  }));
 });
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({

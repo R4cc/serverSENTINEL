@@ -16,9 +16,11 @@ type Props = {
   busy: boolean;
   locked: boolean;
   switchLocked?: boolean;
+  dependencyInstallLocked?: boolean;
   onQueryChange: (value: string) => void;
   onToggle: (mod: InstalledMod, enabled: boolean) => void;
   onUpdate: (mod: InstalledMod) => void;
+  onInstallDependencies?: (mod: InstalledMod) => void;
   onSwitchVersion: (mod: InstalledMod) => void;
   onDetails: (mod: InstalledMod) => void;
   onDropFiles?: (files: File[]) => void;
@@ -26,7 +28,7 @@ type Props = {
   updatePlan?: ModUpdatePlan | null;
 };
 
-export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, onQueryChange, onToggle, onUpdate, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
+export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
@@ -90,6 +92,11 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
               <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
               <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
+                {health.key === "missing_dependencies" && (
+                  <Button variant="secondary" compact className="modsReviewAction" onClick={() => onInstallDependencies?.(mod)} disabled={dependencyInstallLocked} title={health.detailDescription}>
+                    Install dependencies
+                  </Button>
+                )}
                 {plannedUpdate?.status === "safe_update" && (
                   <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
                     <span className="modsUpdateTransition" aria-hidden="true">

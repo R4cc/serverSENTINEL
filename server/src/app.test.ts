@@ -412,15 +412,21 @@ describe("public installed mods DTO", () => {
           installedWithForceIncompatible: false,
           reviewAcknowledgedVersionId: "version-1",
           reviewAcknowledgedAt: "2026-01-02T00:00:00.000Z"
+        },
+        dependencyHealth: {
+          status: "missing",
+          requiredCount: 1,
+          missing: [{ projectId: "cloth-config", title: "Cloth Config", iconUrl: "/api/modrinth/icon?url=cloth" }]
         }
       }]
-    }) as { mods: Array<{ compatibility: { file?: unknown }; modrinth: Record<string, unknown> }> };
+    }) as { mods: Array<{ compatibility: { file?: unknown }; modrinth: Record<string, unknown>; dependencyHealth: { missing: Array<{ title?: string }> } }> };
 
     expect(JSON.stringify(result)).not.toContain("sha512");
     expect(JSON.stringify(result)).not.toContain("cdn.modrinth.com");
     expect(result.mods[0].compatibility.file).toEqual({ filename: "fabric-api.jar", size: 123 });
     expect(result.mods[0].modrinth.hashes).toBeUndefined();
     expect(result.mods[0].modrinth.reviewAcknowledgedVersionId).toBe("version-1");
+    expect(result.mods[0].dependencyHealth.missing[0].title).toBe("Cloth Config");
   });
 });
 

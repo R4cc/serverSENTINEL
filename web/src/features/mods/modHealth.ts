@@ -2,6 +2,7 @@ import type { InstalledMod, ModCompatibility, ModrinthHit, ModrinthInstallVersio
 
 type ModHealthKey =
   | "healthy"
+  | "missing_dependencies"
   | "safe_update_available"
   | "review_update_available"
   | "needs_review"
@@ -98,6 +99,21 @@ function hasAcknowledgedCurrentReview(mod: InstalledMod) {
 }
 
 export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
+  if (mod.dependencyHealth?.status === "missing" && mod.dependencyHealth.missing.length > 0) {
+    const count = mod.dependencyHealth.missing.length;
+    return {
+      key: "missing_dependencies",
+      label: count === 1 ? "Missing dependency" : `Missing ${count} dependencies`,
+      shortDescription: `${count} required ${count === 1 ? "dependency is" : "dependencies are"} unavailable.`,
+      detailDescription: `Install ${mod.dependencyHealth.missing.map((dependency) => dependency.title || dependency.projectId || "required dependency").join(", ")} before starting the server.`,
+      tone: "not-recommended",
+      needsAttention: true,
+      hasSafeUpdate: false,
+      hasReviewUpdate: false,
+      primaryActionLabel: "Install dependencies",
+      safeToRunDirectly: false
+    };
+  }
   const forcedRisk = hasForcedRisk(mod);
   const assessment = forcedRisk
     ? {

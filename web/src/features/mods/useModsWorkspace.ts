@@ -75,6 +75,7 @@ export type ModsWorkspaceInputs = {
   modrinthConfigured: boolean;
   isProvisioning: boolean;
   canManage: boolean;
+  canInstall: boolean;
   modsLocked: boolean;
   toggleLocked: boolean;
   notify: Notify;
@@ -165,9 +166,9 @@ function demoSearchPage(query: string, showIncompatibleResults: boolean) {
 
 export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const {
-    activeServer, activePage, activeServerIsDemo, activeServerUsesInternalNode, activeNodeRuntimeBlocked,
+    activeServer, activePage, activeServerIsDemo, activeNodeRuntimeBlocked,
     activeNodeBlockMessage, demoMode, demoInstalledMods, setDemoInstalledMods, modrinthConfigured,
-    isProvisioning, canManage, modsLocked, toggleLocked, notify, setNotice,
+    isProvisioning, canManage, canInstall, modsLocked, toggleLocked, notify, setNotice,
     setActiveJobs, handleStaleSession, refreshFiles, refreshServerState, requestConfirmation
   } = inputs;
   const demoFixture = readModsDemoFixture();
@@ -211,7 +212,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (!installState?.data || !installState.selectedVersionId) return null;
     return [...installState.data.compatibleVersions, ...installState.data.otherVersions].find((version) => version.id === installState.selectedVersionId) ?? null;
   }, [installState?.data, installState?.selectedVersionId]);
-  const pendingDependencies = useMemo(() => activeServerUsesInternalNode ? pendingRequiredDependencies(selectedVersion, installedMods) : [], [activeServerUsesInternalNode, installedMods, selectedVersion]);
+  const pendingDependencies = useMemo(() => pendingRequiredDependencies(selectedVersion, installedMods), [installedMods, selectedVersion]);
   const effectivePendingDependencies = installState?.mode === "switch" ? [] : pendingDependencies;
   const canContinueInstall = Boolean(
     selectedVersion
@@ -703,6 +704,44 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
   }
 
+  async function installMissingDependencies(mod: InstalledMod) {
+    if (modsLocked || !canInstall || !modrinthConfigured || !activeServer || mod.dependencyHealth?.status !== "missing") return;
+    const count = mod.dependencyHealth.missing.length;
+    const jobId = `dependencies-${installedModKey(mod)}-${Date.now()}`;
+    setNotice("");
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Installing dependencies", subject: mod.displayName, progress: 10, task: "Resolving required dependencies", dismissible: false }]);
+    if (activeServerIsDemo) {
+      const repair = (current: InstalledMod[]) => current.map((candidate) => installedModKey(candidate) === installedModKey(mod)
+        ? { ...candidate, dependencyHealth: { status: "satisfied" as const, requiredCount: candidate.dependencyHealth?.requiredCount ?? count, missing: [] } }
+        : candidate);
+      setDemoInstalledMods(repair);
+      setInstalledMods(repair);
+      removeJob(jobId);
+      notify("success", `Installed ${count} required ${count === 1 ? "dependency" : "dependencies"} for ${mod.displayName}`);
+      return;
+    }
+    try {
+      patchJob(jobId, { progress: 40, task: "Downloading dependencies" });
+      const result = await api<{ installed: unknown[]; enabled: string[]; alreadySatisfied?: boolean }>(`/api/servers/${activeServer.id}/mods/install-dependencies`, {
+        method: "POST",
+        body: JSON.stringify({ filename: mod.filename })
+      });
+      patchJob(jobId, { progress: 90, task: "Refreshing mod health" });
+      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+      removeJob(jobId);
+      const changed = result.installed.length + result.enabled.length;
+      notify("success", result.alreadySatisfied || changed === 0
+        ? `${mod.displayName} already has all required dependencies`
+        : `Installed ${changed} required ${changed === 1 ? "dependency" : "dependencies"} for ${mod.displayName}`);
+    } catch (error) {
+      const message = errorMessage(error, `Could not install dependencies for ${mod.displayName}.`);
+      setNotice(message);
+      notify("error", message);
+      patchJob(jobId, { status: "failed", task: "Dependency install failed", error: message, dismissible: true });
+      void loadInstalledMods(activeServer.id, { forceRefresh: true });
+    }
+  }
+
   async function uploadModFiles(files: File[]) {
     for (const file of files) await uploadModFile(file);
   }
@@ -952,7 +991,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         return { ...current, showOtherVersions, selectedVersionId: showOtherVersions ? current.selectedVersionId : current.data ? preferredInstallVersionId(current.data) : "", acknowledgeMinecraftMismatch: false };
       }),
       acknowledgeInstall: (checked: boolean) => setInstallState((current) => current ? { ...current, acknowledgeMinecraftMismatch: checked } : current),
-      uploadMod, uploadModFiles, installSelectedMod, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, acknowledgeModReview, resetPageState
+      uploadMod, uploadModFiles, installSelectedMod, installMissingDependencies, updateMod, updateAllSafe, setInstalledModEnabled, removeMod, acknowledgeModReview, resetPageState
     }
   };
 }

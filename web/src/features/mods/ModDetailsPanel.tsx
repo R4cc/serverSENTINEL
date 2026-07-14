@@ -21,16 +21,18 @@ type Props = {
   mod: InstalledMod;
   locked: boolean;
   reviewAcknowledgementLocked: boolean;
+  dependencyInstallLocked?: boolean;
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
   onToggle: (mod: InstalledMod, enabled: boolean) => void;
   onUpdate: (mod: InstalledMod) => void;
+  onInstallDependencies?: (mod: InstalledMod) => void;
   onRemove: (mod: InstalledMod) => void;
   onAcknowledgeReview: (mod: InstalledMod) => Promise<void> | void;
   updatePlanEntry?: ModUpdatePlanEntry | null;
 };
 
-export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, formatDate, onClose, onToggle, onUpdate, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
+export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
   const health = getInstalledModHealth(mod);
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
@@ -92,6 +94,17 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, form
           <strong>{health.label}</strong>
           <span>{health.detailDescription}</span>
         </section>
+        {mod.dependencyHealth?.status === "missing" && (
+          <section className="modsReviewSection" aria-labelledby="missing-dependencies-title">
+            <h3 id="missing-dependencies-title">Required dependencies</h3>
+            {mod.dependencyHealth.missing.map((dependency, index) => (
+              <div className="modsReviewLine" key={`${dependency.projectId || dependency.versionId || "dependency"}-${index}`}>
+                <strong>{dependency.title || dependency.projectId || "Required dependency"}</strong>
+                <span>{dependency.disabled ? "Disabled" : "Not installed"}</span>
+              </div>
+            ))}
+          </section>
+        )}
         <dl className="modsDetailsFacts">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
           {hasPlannedUpdate && updatePlanEntry?.targetVersion && <div><dt>Available version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}
@@ -157,6 +170,7 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, form
           </details>
       </div>
       <div className="modsDrawerFooter">
+        {health.key === "missing_dependencies" && <Button onClick={() => onInstallDependencies?.(mod)} disabled={dependencyInstallLocked}>Install dependencies</Button>}
         {updatePlanEntry?.status === "safe_update" && <Button onClick={() => onUpdate(mod)} disabled={locked}>Update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</Button>}
         {updatePlanEntry?.status === "needs_review" && !reviewingUpdate && <Button onClick={() => setReviewingUpdate(true)} disabled={locked}>Review update</Button>}
         {canAcknowledgeInstalledReview && !reviewingInstalledVersion && <Button onClick={() => setReviewingInstalledVersion(true)} disabled={reviewAcknowledgementLocked}>Acknowledge review</Button>}

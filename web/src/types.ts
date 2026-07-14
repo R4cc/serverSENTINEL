@@ -499,6 +499,17 @@ export type InstalledMod = {
   description?: string;
   preferredChannel?: ReleaseChannel;
   compatibility?: ModCompatibility;
+  dependencyHealth?: {
+    status: "satisfied" | "missing" | "unknown";
+    requiredCount: number;
+    missing: Array<{
+      projectId?: string;
+      versionId?: string;
+      title?: string;
+      iconUrl?: string;
+      disabled?: boolean;
+    }>;
+  };
   modrinth?: {
     projectId: string;
     versionId: string;

@@ -86,6 +86,13 @@ describe("InstalledModsList", () => {
     expect(html).toContain("Switch version for Fabric API");
   });
 
+  it("shows a one-click repair action when dependencies are missing", () => {
+    const html = renderInstalledMods([mod({ dependencyHealth: { status: "missing", requiredCount: 1, missing: [{ projectId: "cloth-config", title: "Cloth Config" }] } })], null);
+
+    expect(html).toContain("Missing dependency");
+    expect(html).toContain("Install dependencies");
+  });
+
   it("disables switch version for manual mods", () => {
     const html = renderInstalledMods([mod({ modrinth: undefined })], null);
 

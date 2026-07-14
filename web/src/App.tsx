@@ -598,6 +598,7 @@ export default function App() {
     modrinthConfigured: effectiveAppState.modrinthApiConfigured,
     isProvisioning,
     canManage: canManageMods,
+    canInstall: canInstallMods,
     modsLocked,
     toggleLocked: modToggleLocked,
     notify,

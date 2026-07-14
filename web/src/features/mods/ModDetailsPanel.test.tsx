@@ -67,4 +67,24 @@ describe("ModDetailsPanel", () => {
     expect(html).toContain("Healthy");
     expect(html).not.toContain("Acknowledge review");
   });
+
+  it("lists missing and disabled dependencies with a repair action", () => {
+    const html = renderPanel(mod({
+      dependencyHealth: {
+        status: "missing",
+        requiredCount: 2,
+        missing: [
+          { projectId: "fabric-api", title: "Fabric API" },
+          { projectId: "cloth-config", title: "Cloth Config", disabled: true }
+        ]
+      }
+    }));
+
+    expect(html).toContain("Required dependencies");
+    expect(html).toContain("Fabric API");
+    expect(html).toContain("Not installed");
+    expect(html).toContain("Cloth Config");
+    expect(html).toContain("Disabled");
+    expect(html).toContain("Install dependencies");
+  });
 });

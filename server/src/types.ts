@@ -128,6 +128,18 @@ export type InstalledModMetadata = {
   reviewAcknowledgedAt?: string;
 };
 
+export type InstalledModDependencyHealth = {
+  status: "satisfied" | "missing" | "unknown";
+  requiredCount: number;
+  missing: Array<{
+    projectId?: string;
+    versionId?: string;
+    title?: string;
+    iconUrl?: string;
+    disabled?: boolean;
+  }>;
+};
+
 export type RestartRequiredModAction = "added" | "removed" | "enabled" | "disabled" | "updated";
 
 export type RestartRequiredChange = {
