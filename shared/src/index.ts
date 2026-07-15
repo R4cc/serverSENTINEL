@@ -116,11 +116,25 @@ export type ScheduleStep =
   | { type: "command"; command: string; delaySeconds: number }
   | { type: "action"; procedure: "restart"; delaySeconds: number };
 
+export type ScheduledRunStepDetails = {
+  stepIndex: number;
+  type: "command" | "action";
+  command?: string;
+  procedure?: "restart";
+  delaySeconds: number;
+  status: "success" | "failed";
+  startedAt: string;
+  completedAt?: string;
+  logs?: string[];
+  logCaptureStatus?: "captured" | "empty" | "unavailable";
+};
+
 export type ScheduledRunDetails = {
   stepCount: number;
   completedStepCount: number;
   terminalStepIndex?: number;
   terminalStep?: string;
+  steps?: ScheduledRunStepDetails[];
 };
 
 export type ScheduledRun = {

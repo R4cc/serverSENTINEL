@@ -7,6 +7,7 @@ import {
   lastRunRelativeTime,
   nextRunRelativeTime,
   SchedulePage,
+  ScheduleRunDetailsDialog,
   scheduleDescription
 } from "./SchedulesPage";
 
@@ -111,6 +112,69 @@ describe("schedule workspace rendering", () => {
     expect(html).not.toContain("Active runs");
     expect(html).toContain("No schedules added");
     expect(html).toContain("No runs yet");
+  });
+});
+
+describe("scheduled run details", () => {
+  it("renders commands with expandable logs and actions without log sections", () => {
+    const html = renderToStaticMarkup(createElement(ScheduleRunDetailsDialog, {
+      run: {
+        id: "run-1",
+        scheduleId: "schedule-1",
+        scheduleName: "Nightly maintenance",
+        status: "success",
+        message: "Completed 2 steps",
+        ranAt: "2026-07-14T06:40:00.000Z",
+        details: {
+          stepCount: 2,
+          completedStepCount: 2,
+          steps: [{
+            stepIndex: 0,
+            type: "command",
+            command: "save-all",
+            delaySeconds: 0,
+            status: "success",
+            startedAt: "2026-07-14T06:40:00.000Z",
+            completedAt: "2026-07-14T06:40:01.000Z",
+            logs: ["[Server thread/INFO]: Saved the game"],
+            logCaptureStatus: "captured"
+          }, {
+            stepIndex: 1,
+            type: "action",
+            procedure: "restart",
+            delaySeconds: 300,
+            status: "success",
+            startedAt: "2026-07-14T06:45:00.000Z",
+            completedAt: "2026-07-14T06:45:10.000Z"
+          }]
+        }
+      },
+      formatDate: (timestamp) => new Date(timestamp).toISOString(),
+      onClose: () => undefined
+    }));
+
+    expect(html).toContain("Executed steps");
+    expect(html).toContain("save-all");
+    expect(html).toContain("Saved the game");
+    expect(html).toContain("Restart action");
+    expect(html.match(/<details/g)).toHaveLength(1);
+  });
+
+  it("explains when an older run has no detailed step snapshot", () => {
+    const html = renderToStaticMarkup(createElement(ScheduleRunDetailsDialog, {
+      run: {
+        id: "legacy-run",
+        scheduleId: "schedule-1",
+        scheduleName: "Nightly maintenance",
+        status: "success",
+        ranAt: "2026-07-14T06:40:00.000Z"
+      },
+      formatDate: (timestamp) => new Date(timestamp).toISOString(),
+      onClose: () => undefined
+    }));
+
+    expect(html).toContain("Step details unavailable");
+    expect(html).toContain("before detailed command history was enabled");
   });
 });
 

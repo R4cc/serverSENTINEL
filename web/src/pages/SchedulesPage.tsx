@@ -6,7 +6,7 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
-import type { ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun } from '../types';
+import type { ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
@@ -82,6 +82,7 @@ export function SchedulePage({
   const [stepDrafts, setStepDrafts] = useState<StepDraft[]>(() => [emptyStepDraft()]);
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
+  const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
@@ -145,6 +146,12 @@ export function SchedulePage({
   useEffect(() => {
     runsFeedRef.current?.scrollTo({ top: 0 });
   }, [schedules, recentRunsKey]);
+
+  useEffect(() => {
+    if (selectedRun && !runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) {
+      setSelectedRun(null);
+    }
+  }, [runItems, selectedRun]);
 
   useEffect(() => {
     setRelativeNow(Date.now());
@@ -409,6 +416,13 @@ export function SchedulePage({
                       </Button>
                     </div>
                   )}
+                  {run.kind === "completed" && (
+                    <div className="scheduledRunActions">
+                      <Button variant="secondary" compact className="scheduledRunDetailsButton" onClick={() => setSelectedRun(run)} aria-label={`View details for ${run.scheduleName}`}>
+                        Details
+                      </Button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
@@ -547,8 +561,105 @@ export function SchedulePage({
           </DialogSurface>
         </div>
       )}
+
+      {selectedRun && (
+        <ScheduleRunDetailsDialog run={selectedRun} formatDate={formatDate} onClose={() => setSelectedRun(null)} />
+      )}
     </section>
   );
+}
+
+export function ScheduleRunDetailsDialog({
+  run,
+  formatDate,
+  onClose
+}: {
+  run: ScheduledRun;
+  formatDate: (value: string | number | Date) => string;
+  onClose: () => void;
+}) {
+  const steps = run.details?.steps;
+  return (
+    <div className="modalBackdrop scheduleModalBackdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <DialogSurface className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
+        <div className="userModalHeader scheduleRunModalHeader">
+          <div>
+            <h2 id="schedule-run-modal-title">{run.scheduleName}</h2>
+            <p id="schedule-run-modal-description">Run details for {formatDate(run.ranAt)}</p>
+          </div>
+          <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run details" title="Close run details">
+            <AppIcon name="x" />
+          </Button>
+        </div>
+        <div className="scheduleRunModalBody">
+          <div className="scheduleRunSummary">
+            <div><span>Status</span><strong className={statusTone(run.status)}>{statusLabel(run.status)}</strong></div>
+            <div><span>Started</span><strong>{formatDate(run.ranAt)}</strong></div>
+            <div><span>Steps completed</span><strong>{run.details ? `${run.details.completedStepCount} of ${run.details.stepCount}` : "Not recorded"}</strong></div>
+          </div>
+          {run.message && <p className="scheduleRunMessage">{run.message}</p>}
+
+          <section className="scheduleRunSteps" aria-labelledby="schedule-run-steps-heading">
+            <div className="scheduleRunSectionHeader">
+              <h3 id="schedule-run-steps-heading">Executed steps</h3>
+              {steps && <span>{steps.length} recorded</span>}
+            </div>
+            {steps === undefined ? (
+              <EmptyState compact className="scheduleRunStepsEmpty" title="Step details unavailable" message="This run was recorded before detailed command history was enabled." />
+            ) : steps.length === 0 ? (
+              <EmptyState compact className="scheduleRunStepsEmpty" title="No steps executed" message={run.status === "skipped" ? run.message : "The run ended before its first step started."} />
+            ) : (
+              <div className="scheduleRunStepList">
+                {steps.map((step) => <ScheduleRunStep key={`${step.stepIndex}:${step.startedAt}`} step={step} />)}
+              </div>
+            )}
+          </section>
+        </div>
+        <div className="userModalFooter scheduleRunModalFooter">
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </DialogSurface>
+    </div>
+  );
+}
+
+function ScheduleRunStep({ step }: { step: ScheduledRunStepDetails }) {
+  const isCommand = step.type === "command";
+  const logs = step.logs ?? [];
+  const logMessage = step.logCaptureStatus === "empty"
+    ? "No follow-up log entries were captured."
+    : "Console logs were unavailable when this command ran.";
+  return (
+    <article className={`scheduleRunStep ${step.status}`}>
+      <header>
+        <div>
+          <span className="scheduleRunStepNumber">Step {step.stepIndex + 1}</span>
+          <strong>{isCommand ? "Command" : "Restart action"}</strong>
+        </div>
+        <span className={`scheduleRunStepStatus ${step.status}`}>{step.status === "success" ? "Completed" : "Failed"}</span>
+      </header>
+      {isCommand ? <code>{step.command || "Command not recorded"}</code> : <p>Gracefully restart the Minecraft server.</p>}
+      {step.delaySeconds > 0 && <small>Waited {formatRunDelay(step.delaySeconds)} before this step.</small>}
+      {isCommand && (
+        <details className="scheduleRunLogs">
+          <summary>
+            <span>Logs</span>
+            <small>{logs.length ? `${logs.length} ${logs.length === 1 ? "entry" : "entries"}` : "No entries"}</small>
+            <AppIcon name="chevronDown" />
+          </summary>
+          {logs.length ? <pre>{logs.join("\n")}</pre> : <p>{logMessage}</p>}
+        </details>
+      )}
+    </article>
+  );
+}
+
+function formatRunDelay(seconds: number) {
+  if (seconds % 3600 === 0) return `${seconds / 3600} ${seconds === 3600 ? "hour" : "hours"}`;
+  if (seconds % 60 === 0) return `${seconds / 60} ${seconds === 60 ? "minute" : "minutes"}`;
+  return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
 }
 
 function scheduleRuns(schedules: ScheduledExecution[]) {

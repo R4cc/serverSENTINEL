@@ -65,6 +65,7 @@ import {
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "./runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "./runtime/serverProperties.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
+import { captureScheduledCommandLogs } from "./schedules/runLogCapture.js";
 import { normalizePlayerNames, queryMinecraftServer } from "./minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
 import {
@@ -162,6 +163,8 @@ import type {
   ScheduledActiveRun,
   ScheduledExecution,
   ScheduledRun,
+  ScheduledRunDetails,
+  ScheduledRunStepDetails,
   ServerRuntimeProfile,
   Session,
   StoredUser
@@ -1145,8 +1148,41 @@ function normalizeScheduledRun(value: unknown): ScheduledRun {
       stepCount: typeof details.stepCount === "number" ? details.stepCount : 0,
       completedStepCount: typeof details.completedStepCount === "number" ? details.completedStepCount : 0,
       terminalStepIndex: typeof details.terminalStepIndex === "number" ? details.terminalStepIndex : undefined,
-      terminalStep: optionalString(details.terminalStep, "run.details.terminalStep")
+      terminalStep: optionalString(details.terminalStep, "run.details.terminalStep"),
+      steps: details.steps === undefined
+        ? undefined
+        : asArray(details.steps, "run.details.steps").map(normalizeScheduledRunStep).slice(0, 100)
     } : undefined
+  };
+}
+
+function normalizeScheduledRunStep(value: unknown, fallbackIndex: number): ScheduledRunStepDetails {
+  const step = asObject(value, `run.details.steps[${fallbackIndex}]`);
+  const type = requiredString(step.type, `run.details.steps[${fallbackIndex}].type`);
+  if (type !== "command" && type !== "action") badRequest("Scheduled run step type must be command or action");
+  const status = requiredString(step.status, `run.details.steps[${fallbackIndex}].status`);
+  if (status !== "success" && status !== "failed") badRequest("Scheduled run step status must be success or failed");
+  const procedure = optionalString(step.procedure, `run.details.steps[${fallbackIndex}].procedure`);
+  if (procedure !== undefined && procedure !== "restart") badRequest("Scheduled run action must use the restart procedure");
+  const logCaptureStatus = optionalString(step.logCaptureStatus, `run.details.steps[${fallbackIndex}].logCaptureStatus`);
+  if (logCaptureStatus !== undefined && !["captured", "empty", "unavailable"].includes(logCaptureStatus)) {
+    badRequest("Scheduled run log capture status is invalid");
+  }
+  return {
+    stepIndex: typeof step.stepIndex === "number" ? step.stepIndex : fallbackIndex,
+    type,
+    command: optionalString(step.command, `run.details.steps[${fallbackIndex}].command`),
+    procedure,
+    delaySeconds: typeof step.delaySeconds === "number" ? step.delaySeconds : 0,
+    status,
+    startedAt: requiredString(step.startedAt, `run.details.steps[${fallbackIndex}].startedAt`),
+    completedAt: optionalString(step.completedAt, `run.details.steps[${fallbackIndex}].completedAt`),
+    logs: step.logs === undefined
+      ? undefined
+      : asArray(step.logs, `run.details.steps[${fallbackIndex}].logs`)
+        .map((entry, index) => requiredString(entry, `run.details.steps[${fallbackIndex}].logs[${index}]`))
+        .slice(0, 60),
+    logCaptureStatus: logCaptureStatus as ScheduledRunStepDetails["logCaptureStatus"]
   };
 }
 
@@ -3717,6 +3753,14 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
   let completedStepCount = 0;
   let terminalStepIndex: number | undefined;
   let terminalStep: string | undefined;
+  const steps: ScheduledRunStepDetails[] = [];
+  const details = (): ScheduledRunDetails => ({
+    stepCount: schedule.steps.length,
+    completedStepCount,
+    terminalStepIndex,
+    terminalStep,
+    steps
+  });
   try {
     const runtime = runtimeForServer(server);
     throwIfScheduleCancelled(active.controller.signal);
@@ -3724,7 +3768,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
     if (!status.docker?.running) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
-      return { status: "skipped", message: "Skipped because Minecraft server is stopped" };
+      return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
     }
     if (schedule.onlyWhenNoPlayers) {
       throwIfScheduleCancelled(active.controller.signal);
@@ -3732,11 +3776,11 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       const count = await runtime.onlinePlayerCount(server);
       if (count === null) {
         logWarn({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, reason: "player_count_unknown" }, "Schedule skipped");
-        return { status: "skipped", message: "Skipped because online player count could not be determined" };
+        return { status: "skipped", message: "Skipped because online player count could not be determined", details: details() };
       }
       if (count > 0) {
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, playersOnline: count, reason: "players_online" }, "Schedule skipped");
-        return { status: "skipped", message: `Skipped because ${count} player${count === 1 ? "" : "s"} are online` };
+        return { status: "skipped", message: `Skipped because ${count} player${count === 1 ? "" : "s"} are online`, details: details() };
       }
     }
 
@@ -3758,26 +3802,79 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       active.waitingUntil = undefined;
       active.message = step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
       throwIfScheduleCancelled(active.controller.signal);
+      const stepDetails: ScheduledRunStepDetails = {
+        stepIndex: index,
+        type: step.type,
+        command: step.type === "command" ? step.command : undefined,
+        procedure: step.type === "action" ? step.procedure : undefined,
+        delaySeconds,
+        status: "success",
+        startedAt: new Date().toISOString()
+      };
+      steps.push(stepDetails);
       if (step.type === "command") {
-        await sendConsoleCommandWithIntent(server, step.command);
-        active.message = `Sent command ${index + 1} of ${schedule.steps.length}`;
+        const logsBefore = await scheduledRunLogSnapshot(runtime, server);
+        try {
+          await sendConsoleCommandWithIntent(server, step.command);
+          active.message = `Sent command ${index + 1} of ${schedule.steps.length}`;
+        } catch (error) {
+          stepDetails.status = "failed";
+          throw error;
+        } finally {
+          stepDetails.completedAt = new Date().toISOString();
+          Object.assign(stepDetails, await scheduledRunCommandLogCapture(runtime, server, logsBefore));
+        }
       } else {
         active.cancellable = false;
-        await restartServerGracefully(server);
-        active.message = "Server restarted";
+        try {
+          await restartServerGracefully(server);
+          active.message = "Server restarted";
+        } catch (error) {
+          stepDetails.status = "failed";
+          throw error;
+        } finally {
+          stepDetails.completedAt = new Date().toISOString();
+        }
       }
       completedStepCount += 1;
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
-    return { status: "success", message: `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
+    return { status: "success", message: `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`, details: details() };
   } catch (error) {
     if (error instanceof ScheduleCancellationError || active.controller.signal.aborted) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
-      return { status: "cancelled", message: "Cancelled by user", details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
+      return { status: "cancelled", message: "Cancelled by user", details: details() };
     }
     logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
-    return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
+    return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: details() };
   }
+}
+
+function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedServer) {
+  return new Promise<string | undefined>((resolveSnapshot) => {
+    const timer = setTimeout(() => resolveSnapshot(undefined), 1_500);
+    void runtime.serverLogs(server).then((result) => {
+      clearTimeout(timer);
+      const text = (result as { text?: unknown } | undefined)?.text;
+      resolveSnapshot(typeof text === "string" ? text : undefined);
+    }, () => {
+      clearTimeout(timer);
+      resolveSnapshot(undefined);
+    });
+  });
+}
+
+async function scheduledRunCommandLogCapture(runtime: NodeRuntime, server: ManagedServer, before: string | undefined) {
+  let after = await scheduledRunLogSnapshot(runtime, server);
+  for (let attempt = 0; attempt < 3 && before !== undefined && after === before; attempt += 1) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+    after = await scheduledRunLogSnapshot(runtime, server);
+  }
+  if (before !== undefined && after !== undefined && after !== before) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 75));
+    after = await scheduledRunLogSnapshot(runtime, server) ?? after;
+  }
+  return captureScheduledCommandLogs(before, after);
 }
 
 async function executeMatchedSchedule(server: ManagedServer, schedule: ScheduledExecution) {

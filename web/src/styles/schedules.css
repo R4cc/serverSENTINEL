@@ -249,6 +249,11 @@
   padding: 0;
 }
 
+.scheduledRunDetailsButton.uiButton {
+  min-height: 32px;
+  padding-inline: var(--space-2);
+}
+
 .scheduleActionMenu .actionMenuPopover {
   min-width: 170px;
 }
@@ -398,6 +403,234 @@
   padding: var(--space-5);
   border: 0;
   text-align: center;
+}
+
+/* Scheduled run details ------------------------------------------------- */
+
+.modalPanel.scheduleRunModalPanel {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: clip;
+}
+
+.scheduleRunModalHeader > div {
+  min-width: 0;
+}
+
+.scheduleRunModalHeader p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleRunModalBody {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+
+.scheduleRunSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.scheduleRunSummary > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.scheduleRunSummary span,
+.scheduleRunSectionHeader span,
+.scheduleRunStep small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleRunSummary strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleRunSummary strong.success {
+  color: var(--sentinel-success);
+}
+
+.scheduleRunSummary strong.failed {
+  color: var(--sentinel-danger);
+}
+
+.scheduleRunSummary strong.skipped,
+.scheduleRunSummary strong.cancelled {
+  color: var(--sentinel-warning);
+}
+
+.scheduleRunMessage {
+  margin: 0;
+  padding: var(--space-3);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 45%, var(--surface));
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.scheduleRunSteps,
+.scheduleRunStepList {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.scheduleRunSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.scheduleRunSectionHeader h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+}
+
+.scheduleRunStep {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.scheduleRunStep.failed {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 36%, var(--border-row));
+}
+
+.scheduleRunStep > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.scheduleRunStep > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.scheduleRunStepNumber {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-heading);
+}
+
+.scheduleRunStepStatus {
+  flex: 0 0 auto;
+  color: var(--sentinel-success);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-heading);
+}
+
+.scheduleRunStepStatus.failed {
+  color: var(--sentinel-danger);
+}
+
+.scheduleRunStep > code {
+  overflow-wrap: anywhere;
+  padding: 9px 11px;
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleRunStep > p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleRunLogs {
+  min-width: 0;
+  border-top: var(--border-subtle) solid var(--border-row);
+  padding-top: var(--space-2);
+}
+
+.scheduleRunLogs summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-heading);
+  cursor: pointer;
+  list-style: none;
+}
+
+.scheduleRunLogs summary::-webkit-details-marker {
+  display: none;
+}
+
+.scheduleRunLogs summary small {
+  justify-self: start;
+  font-weight: var(--weight-body);
+}
+
+.scheduleRunLogs summary .buttonIcon {
+  transition: transform var(--control-transition);
+}
+
+.scheduleRunLogs[open] summary .buttonIcon {
+  transform: rotate(180deg);
+}
+
+.scheduleRunLogs pre {
+  max-height: 240px;
+  overflow: auto;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-strong) 76%, #000);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.scheduleRunLogs > p {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.scheduleRunStepsEmpty {
+  min-height: 120px;
+}
+
+.scheduleRunModalFooter {
+  justify-content: flex-end;
 }
 
 /* Schedule editor -------------------------------------------------------- */
@@ -876,7 +1109,8 @@
     padding: 72px 8px 8px;
   }
 
-  .modalPanel.scheduleModalPanel {
+  .modalPanel.scheduleModalPanel,
+  .modalPanel.scheduleRunModalPanel {
     max-height: calc(100vh - 80px);
     max-height: calc(100dvh - 80px);
   }
@@ -926,8 +1160,21 @@
     align-self: start;
   }
 
-  .modalPanel.scheduleModalPanel {
+  .modalPanel.scheduleModalPanel,
+  .modalPanel.scheduleRunModalPanel {
     width: min(100%, calc(100vw - 16px));
+  }
+
+  .scheduleRunModalBody {
+    padding: var(--space-3);
+  }
+
+  .scheduleRunSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scheduleRunStep > header {
+    align-items: flex-start;
   }
 
   .scheduleEditorSectionHeader {

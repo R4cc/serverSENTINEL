@@ -157,7 +157,31 @@ describe("ServersRepository", () => {
       { type: "command", command: "say restarting", delaySeconds: 0 },
       { type: "action", procedure: "restart", delaySeconds: 300 }
     ];
-    schedule.recentRuns![0].details = { stepCount: 2, completedStepCount: 2, terminalStepIndex: 1, terminalStep: "Restart" };
+    schedule.recentRuns![0].details = {
+      stepCount: 2,
+      completedStepCount: 2,
+      terminalStepIndex: 1,
+      terminalStep: "Restart",
+      steps: [{
+        stepIndex: 0,
+        type: "command",
+        command: "say restarting",
+        delaySeconds: 0,
+        status: "success",
+        startedAt: "2026-01-02T00:00:00.000Z",
+        completedAt: "2026-01-02T00:00:01.000Z",
+        logs: ["[Server thread/INFO]: [Server] restarting"],
+        logCaptureStatus: "captured"
+      }, {
+        stepIndex: 1,
+        type: "action",
+        procedure: "restart",
+        delaySeconds: 300,
+        status: "success",
+        startedAt: "2026-01-02T00:05:00.000Z",
+        completedAt: "2026-01-02T00:05:10.000Z"
+      }]
+    };
 
     servers.create(server);
 

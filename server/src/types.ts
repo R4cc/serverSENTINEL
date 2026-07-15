@@ -31,6 +31,7 @@ export type {
   ScheduledExecution,
   ScheduledRun,
   ScheduledRunDetails,
+  ScheduledRunStepDetails,
   ServerAccess,
   ServerActivity,
   ServerEvent,

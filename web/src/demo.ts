@@ -19,7 +19,43 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
   lastRunAt: new Date(demoStartedAt - 18_000_000).toISOString(),
   lastStatus: "succeeded",
   lastMessage: "Demo execution completed",
-  nextRunAt: new Date(demoStartedAt + 10_800_000).toISOString()
+  nextRunAt: new Date(demoStartedAt + 10_800_000).toISOString(),
+  recentRuns: [{
+    id: "demo-run-nightly-backup",
+    scheduleId: "demo-schedule-backup",
+    scheduleName: "Nightly backup",
+    status: "succeeded",
+    message: "Demo execution completed",
+    ranAt: new Date(demoStartedAt - 18_000_000).toISOString(),
+    details: {
+      stepCount: 2,
+      completedStepCount: 2,
+      terminalStepIndex: 1,
+      terminalStep: "Restart",
+      steps: [{
+        stepIndex: 0,
+        type: "command",
+        command: "say Restarting for nightly maintenance",
+        delaySeconds: 0,
+        status: "success",
+        startedAt: new Date(demoStartedAt - 18_000_000).toISOString(),
+        completedAt: new Date(demoStartedAt - 17_999_500).toISOString(),
+        logs: [
+          "[Server thread/INFO]: [Server] Restarting for nightly maintenance",
+          "[Server thread/INFO]: Saved the game"
+        ],
+        logCaptureStatus: "captured"
+      }, {
+        stepIndex: 1,
+        type: "action",
+        procedure: "restart",
+        delaySeconds: 300,
+        status: "success",
+        startedAt: new Date(demoStartedAt - 17_700_000).toISOString(),
+        completedAt: new Date(demoStartedAt - 17_690_000).toISOString()
+      }]
+    }
+  }]
 }];
 
 export const initialDemoMods: InstalledMod[] = [

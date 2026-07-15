@@ -2,7 +2,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { api } from "../../api";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { demoStatus } from "../../demo";
-import type { ManagedServer, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ServerStatus } from "../../types";
+import type { ManagedServer, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails, ServerStatus } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
 import { clientId } from "../../utils/files";
 import {
@@ -222,6 +222,7 @@ export function useSchedulesWorkspace({
     let terminalStepIndex: number | undefined;
     let outcome: "success" | "cancelled" | "failed" = "success";
     let message = "";
+    const steps: ScheduledRunStepDetails[] = [];
     try {
       for (const [index, step] of schedule.steps.entries()) {
         terminalStepIndex = index;
@@ -238,6 +239,16 @@ export function useSchedulesWorkspace({
             }, { once: true });
           });
         }
+        const stepDetails: ScheduledRunStepDetails = {
+          stepIndex: index,
+          type: step.type,
+          command: step.type === "command" ? step.command : undefined,
+          procedure: step.type === "action" ? step.procedure : undefined,
+          delaySeconds: step.delaySeconds,
+          status: "success",
+          startedAt: new Date().toISOString()
+        };
+        steps.push(stepDetails);
         if (step.type === "action") {
           update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: "Restarting server" });
           setDemoRunning(false);
@@ -247,16 +258,26 @@ export function useSchedulesWorkspace({
           setStatus(demoStatus(server, true));
         } else {
           update({ waitingUntil: undefined, waitingDelaySeconds: undefined, message: `Sent command ${index + 1}` });
+          stepDetails.logs = [
+            `[Server thread/INFO]: Executing scheduled command: ${step.command}`,
+            "[Server thread/INFO]: Demo command completed successfully"
+          ];
+          stepDetails.logCaptureStatus = "captured";
         }
+        stepDetails.completedAt = new Date().toISOString();
         completedStepCount += 1;
       }
       message = `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`;
     } catch (runError) {
       outcome = runError instanceof DOMException && runError.name === "AbortError" ? "cancelled" : "failed";
       message = outcome === "cancelled" ? "Cancelled by user" : errorMessage(runError, "Demo schedule failed");
+      if (outcome === "failed" && steps.at(-1) && !steps.at(-1)?.completedAt) {
+        steps[steps.length - 1].status = "failed";
+        steps[steps.length - 1].completedAt = new Date().toISOString();
+      }
     } finally {
       demoRunControllersRef.current.delete(activeRun.id);
-      const run: ScheduledRun = { id: activeRun.id, scheduleId: schedule.id, scheduleName: schedule.name, status: outcome, message, ranAt: activeRun.startedAt, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
+      const run: ScheduledRun = { id: activeRun.id, scheduleId: schedule.id, scheduleName: schedule.name, status: outcome, message, ranAt: activeRun.startedAt, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep, steps } };
       setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [], lastRunAt: activeRun.startedAt, lastStatus: outcome, lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
     }
   }
