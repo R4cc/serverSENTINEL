@@ -62,9 +62,26 @@ function seedLegacySchema16(path: string) {
   database.exec(`
     ALTER TABLE nodes ADD COLUMN compatibility TEXT;
     ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'));
-    ALTER TABLE schedules ADD COLUMN commands_json TEXT NOT NULL DEFAULT '[]';
-    ALTER TABLE schedules ADD COLUMN command_delays_json TEXT NOT NULL DEFAULT '[]';
-    ALTER TABLE schedules ADD COLUMN command_delays_seconds_json TEXT NOT NULL DEFAULT '[]';
+    DROP TABLE schedules;
+    CREATE TABLE schedules (
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      cron TEXT NOT NULL,
+      commands_json TEXT NOT NULL,
+      only_when_no_players INTEGER NOT NULL,
+      enabled INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_run_at TEXT,
+      last_status TEXT,
+      last_message TEXT,
+      command_delays_json TEXT NOT NULL DEFAULT '[]',
+      command_delays_seconds_json TEXT NOT NULL DEFAULT '[]',
+      steps_json TEXT NOT NULL DEFAULT '[]',
+      PRIMARY KEY (server_id, id)
+    );
+    CREATE INDEX schedules_enabled_idx ON schedules(enabled);
     DELETE FROM schema_migrations;
   `);
   const insertMigration = database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)");
@@ -124,6 +141,7 @@ describe("SQLite storage", () => {
       id: "schedule-1",
       steps_json: "[{\"type\":\"command\",\"command\":\"stop\",\"delaySeconds\":60}]"
     });
+    expect(columnNames(storage.connection, "schedules").at(-1)).toBe("steps_json");
     expect(storage.connection.prepare("SELECT key, value FROM storage_metadata WHERE key = ?").get("preserved")).toEqual({ key: "preserved", value: "metadata" });
     expect(storage.connection.prepare("SELECT id, details_json FROM scheduled_runs").get()).toEqual({ id: "run-1", details_json: "{\"stepCount\":1}" });
     const indexes = storage.connection.prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all().map(({ name }) => name);

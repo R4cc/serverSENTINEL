@@ -294,9 +294,9 @@ function assertApplicationTables(database: Database.Database) {
 
 function assertCurrentSchemaLayout(database: Database.Database) {
   assertApplicationTables(database);
-  if (!sameNames(tableColumns(database, "nodes"), currentNodeColumns)
-    || !sameNames(tableColumns(database, "servers"), currentServerColumns)
-    || !sameNames(tableColumns(database, "schedules"), currentScheduleColumns)) {
+  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
+    || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
+    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
     throw new Error("Malformed SQLite schema: compact schema-17 columns do not match the supported baseline.");
   }
 }
