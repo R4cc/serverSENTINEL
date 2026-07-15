@@ -2867,7 +2867,7 @@ export default function App() {
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
           <Fragment key="application-loading">
             {isServerWorkspacePage(activePage) && <ActiveServerStripLoadingSkeleton />}
-            <ApplicationLoadingSkeleton />
+            <ApplicationLoadingSkeleton page={activePage} />
           </Fragment>
         )}
 

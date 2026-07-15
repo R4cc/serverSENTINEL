@@ -1,5 +1,6 @@
 import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
 import { BrandLogo } from "./BrandLogo";
+import type { ActivePage } from "../types";
 
 export function AuthLoadingSkeleton() {
   return (
@@ -20,13 +21,16 @@ export function AuthLoadingSkeleton() {
   );
 }
 
-export function ApplicationLoadingSkeleton() {
+export function ApplicationLoadingSkeleton({ page = "overview" }: { page?: ActivePage }) {
+  const showOverviewSummary = page === "overview";
   return (
-    <section className="tabPage applicationLoadingSkeleton" aria-busy="true">
+    <section className={`tabPage applicationLoadingSkeleton applicationLoadingSkeleton--${page}`} aria-busy="true">
       <LoadingLabel>Loading application</LoadingLabel>
-      <div className="applicationSkeletonSummary" aria-hidden="true">
-        {Array.from({ length: 3 }, (_, index) => <SkeletonBlock className="applicationSkeletonTile" key={index} />)}
-      </div>
+      {showOverviewSummary && (
+        <div className="applicationSkeletonSummary" aria-hidden="true">
+          {Array.from({ length: 6 }, (_, index) => <SkeletonBlock className="applicationSkeletonTile" key={index} />)}
+        </div>
+      )}
       <div className="applicationSkeletonPanel" aria-hidden="true">
         <SkeletonBlock className="applicationSkeletonHeading" />
         {Array.from({ length: 6 }, (_, index) => <SkeletonBlock className="applicationSkeletonRow" key={index} style={{ width: `${88 - (index % 3) * 9}%` }} />)}

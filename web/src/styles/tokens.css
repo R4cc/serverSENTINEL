@@ -119,6 +119,7 @@
 
 html {
   background: var(--surface);
+  scrollbar-gutter: stable;
 }
 
 body {

@@ -21,4 +21,14 @@ describe("loading skeletons", () => {
     expect(html).toContain("terminalLoadingSkeleton");
     expect(html).not.toContain("inlineState-loading");
   });
+
+  it("matches the overview summary geometry and omits it on unrelated pages", () => {
+    const overview = renderToStaticMarkup(<ApplicationLoadingSkeleton page="overview" />);
+    const files = renderToStaticMarkup(<ApplicationLoadingSkeleton page="files" />);
+
+    expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(6);
+    expect(overview).toContain("applicationLoadingSkeleton--overview");
+    expect(files).toContain("applicationLoadingSkeleton--files");
+    expect(files).not.toContain("applicationSkeletonSummary");
+  });
 });
