@@ -102,7 +102,6 @@ export function SchedulePage({
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
   const activeRunCount = runItems.filter((run) => run.kind === "active").length;
-  const enabledScheduleCount = schedules.filter((schedule) => schedule.enabled).length;
   const recentRunsKey = runItems.map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`).join("|");
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
@@ -208,21 +207,6 @@ export function SchedulePage({
 
   return (
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
-      <section className="scheduleWorkspaceSummary" aria-label="Schedules status summary">
-        <article className="scheduleWorkspaceMetric total">
-          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
-          <div><small>Total schedules</small><strong>{schedules.length}</strong></div>
-        </article>
-        <article className="scheduleWorkspaceMetric enabled">
-          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
-          <div><small>Enabled</small><strong>{enabledScheduleCount}</strong></div>
-        </article>
-        <article className={`scheduleWorkspaceMetric active ${activeRunCount ? "hasActive" : ""}`}>
-          <span className="scheduleWorkspaceMetricDot" aria-hidden="true" />
-          <div><small>Active runs</small><strong>{activeRunCount}</strong></div>
-        </article>
-      </section>
-
       <div className="scheduleWorkspaceToolbar">
         <Button
           className="scheduleAddButton"

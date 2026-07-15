@@ -74,7 +74,7 @@ describe("active schedule status", () => {
 });
 
 describe("schedule workspace rendering", () => {
-  it("summarizes schedules and keeps disabled and active states accessible", () => {
+  it("omits summary metrics and keeps disabled and active states accessible", () => {
     const activeRun: ScheduledActiveRun = {
       id: "run-active",
       scheduleId: "schedule-1",
@@ -95,21 +95,20 @@ describe("schedule workspace rendering", () => {
     };
     const html = renderSchedulePage([enabled, disabled]);
 
-    expect(html).toContain('aria-label="Schedules status summary"');
-    expect(html).toContain("<small>Total schedules</small><strong>2</strong>");
-    expect(html).toContain("<small>Enabled</small><strong>1</strong>");
-    expect(html).toContain("<small>Active runs</small><strong>1</strong>");
+    expect(html).not.toContain('aria-label="Schedules status summary"');
+    expect(html).not.toContain("Total schedules");
+    expect(html).not.toContain("Active runs");
     expect(html).toContain("scheduleTableRow disabled");
     expect(html).toContain('aria-label="Enable Disabled maintenance"');
     expect(html).toContain('aria-label="Cancel Nightly maintenance"');
   });
 
-  it("renders cohesive empty states with zeroed summary metrics", () => {
+  it("renders cohesive empty states without summary metrics", () => {
     const html = renderSchedulePage([]);
 
-    expect(html).toContain("<small>Total schedules</small><strong>0</strong>");
-    expect(html).toContain("<small>Enabled</small><strong>0</strong>");
-    expect(html).toContain("<small>Active runs</small><strong>0</strong>");
+    expect(html).not.toContain('aria-label="Schedules status summary"');
+    expect(html).not.toContain("Total schedules");
+    expect(html).not.toContain("Active runs");
     expect(html).toContain("No schedules added");
     expect(html).toContain("No runs yet");
   });

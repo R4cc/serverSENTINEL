@@ -10,70 +10,6 @@
   gap: var(--space-4);
 }
 
-.scheduleWorkspaceSummary {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.scheduleWorkspaceMetric {
-  min-width: 0;
-  min-height: 76px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-subtle) solid var(--border-panel);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-}
-
-.scheduleWorkspaceMetric > div {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.scheduleWorkspaceMetric small {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.scheduleWorkspaceMetric strong {
-  color: var(--text);
-  font-size: 18px;
-  font-weight: var(--weight-strong);
-  line-height: 1.2;
-}
-
-.scheduleWorkspaceMetricDot {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--accent) 6%, transparent);
-}
-
-.scheduleWorkspaceMetric.enabled .scheduleWorkspaceMetricDot {
-  background: color-mix(in srgb, var(--sentinel-success) 17%, transparent);
-  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--sentinel-success) 7%, transparent);
-}
-
-.scheduleWorkspaceMetric.active .scheduleWorkspaceMetricDot {
-  background: color-mix(in srgb, var(--text-soft) 14%, transparent);
-  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--text-soft) 6%, transparent);
-}
-
-.scheduleWorkspaceMetric.active.hasActive .scheduleWorkspaceMetricDot {
-  background: color-mix(in srgb, var(--sentinel-warning) 18%, transparent);
-  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--sentinel-warning) 7%, transparent);
-}
-
 .scheduleWorkspaceToolbar {
   flex: 0 0 auto;
   min-height: var(--toolbar-min-height);
@@ -943,16 +879,6 @@
   .modalPanel.scheduleModalPanel {
     max-height: calc(100vh - 80px);
     max-height: calc(100dvh - 80px);
-  }
-
-  .scheduleWorkspaceSummary {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-2);
-  }
-
-  .scheduleWorkspaceMetric {
-    min-height: 64px;
-    padding: var(--space-2) var(--space-3);
   }
 
   .scheduleWorkspaceToolbar {
