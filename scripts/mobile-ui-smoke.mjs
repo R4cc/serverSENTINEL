@@ -147,6 +147,31 @@ async function assertFloatingSurfaces(page, label) {
   await page.keyboard.press("Escape");
 }
 
+async function assertScheduleActionMenuVisible(page, label) {
+  const trigger = page.locator(".scheduleActionMenuTrigger").first();
+  assert(await trigger.count(), `${label}: demo schedule action trigger is missing`);
+  await trigger.click();
+  const menu = page.locator(".scheduleActionMenu .actionMenuPopover").first();
+  await menu.waitFor();
+  const geometry = await menu.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const sampleX = Math.min(innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
+    const sampleYs = [rect.top + 2, rect.bottom - 2].map((value) => Math.min(innerHeight - 1, Math.max(0, value)));
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      samplesInsideMenu: sampleYs.map((y) => element.contains(document.elementFromPoint(sampleX, y)))
+    };
+  });
+  assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth && geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, `${label}: schedule action menu leaves the viewport: ${JSON.stringify(geometry)}`);
+  assert(geometry.samplesInsideMenu.every(Boolean), `${label}: schedule action menu is clipped by its card: ${JSON.stringify(geometry)}`);
+  await page.keyboard.press("Escape");
+}
+
 async function assertPageScrollOwner(page, title, ownerSelector, label) {
   await openPage(page, title);
   await page.locator(ownerSelector).waitFor({ timeout: 10_000 });
@@ -261,6 +286,7 @@ async function runProfile(engine, profile, label) {
     await page.getByRole("button", { name: "Close add mods" }).click();
 
     await openPage(page, "schedules");
+    await assertScheduleActionMenuVisible(page, `${label} schedule row`);
     const scheduleTrigger = page.getByRole("button", { name: "Add schedule", exact: true });
     await scheduleTrigger.click();
     await page.getByRole("dialog").waitFor();
