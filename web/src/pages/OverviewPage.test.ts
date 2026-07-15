@@ -124,6 +124,12 @@ describe("active player states", () => {
   it("explains a count-only response", () => {
     expect(render(activity({ playersOnline: 2, playerNames: undefined }))).toContain("reported a count but did not provide player names");
   });
+
+  it("labels log-inferred names and preserves the unnamed remainder", () => {
+    const html = render(activity({ playersOnline: 3, playerNames: ["Alex", "Steve"], playerNamesSource: "logs" }));
+    expect(html).toContain("Inferred from recent server logs.");
+    expect(html).toContain("1 additional player did not include a name");
+  });
 });
 
 describe("mod health", () => {

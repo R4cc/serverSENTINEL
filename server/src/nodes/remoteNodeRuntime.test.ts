@@ -133,7 +133,46 @@ describe("RemoteNodeRuntime command timeouts", () => {
     expect(overview.activity).toMatchObject({
       playersOnline: 3,
       maxPlayers: 20,
-      playerNames: ["Alex", "Steve"]
+      playerNames: ["Alex", "Steve"],
+      playerNamesSource: "query"
+    });
+  });
+
+  it("infers a count-only remote roster from recent join and leave events", async () => {
+    const node = testNode();
+    const connections = {
+      request: async (_node: ManagedNode, command: string) => {
+        if (command === "server.inspect") return { docker: { running: true, startedAt: "2026-07-15T10:00:00.000Z" } };
+        if (command === "server.logs.recent") return {
+          source: "logs/latest.log",
+          text: [
+            "[12:00:00] [Server thread/INFO]: Alex joined the game",
+            "[12:01:00] [Server thread/INFO]: Steve joined the game",
+            "[12:02:00] [Server thread/INFO]: Alex left the game",
+            "[12:03:00] [Server thread/INFO]: Sam joined the game"
+          ].join("\n")
+        };
+        if (command === "server.queryMetrics") return { playersOnline: 2, maxPlayers: 20, playerNames: [] };
+        if (command === "files.read") return { content: "max-players=20\nlevel-name=world" };
+        return {};
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    const overview = await runtime.serverOverview(testServer());
+
+    expect(overview.activity).toMatchObject({
+      playersOnline: 2,
+      playerNames: ["Steve", "Sam"],
+      playerNamesSource: "logs"
     });
   });
 

@@ -66,8 +66,9 @@ import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } 
 import { parseServerProperties, serializeServerProperties } from "./runtime/serverProperties.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { captureScheduledCommandLogs } from "./schedules/runLogCapture.js";
-import { normalizePlayerNames, queryMinecraftServer } from "./minecraftQuery.js";
+import { queryMinecraftServer } from "./minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
+import { resolvePlayerNames } from "./playerRoster.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -2791,6 +2792,7 @@ type ParsedEventInput = {
   source: ServerEvent["source"];
   index: number;
   signature: string;
+  subject?: string;
 };
 
 function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
@@ -2804,7 +2806,8 @@ function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
     message: input.message,
     timestamp: input.timestamp,
     signature: input.signature,
-    source: input.source
+    source: input.source,
+    subject: input.subject
   };
 }
 
@@ -2890,7 +2893,8 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
       timestamp,
       source,
       index,
-      signature: eventSignature("player_joined", player)
+      signature: eventSignature("player_joined", player),
+      subject: player
     });
   }
 
@@ -2904,7 +2908,8 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
       timestamp,
       source,
       index,
-      signature: eventSignature("player_left", player)
+      signature: eventSignature("player_left", player),
+      subject: player
     });
   }
 
@@ -2918,7 +2923,8 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
       timestamp,
       source,
       index,
-      signature: eventSignature("player_left", player)
+      signature: eventSignature("player_left", player),
+      subject: player
     });
   }
 
@@ -2932,7 +2938,8 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
       timestamp,
       source,
       index,
-      signature: eventSignature("player_left", player)
+      signature: eventSignature("player_left", player),
+      subject: player
     });
   }
 
@@ -3047,6 +3054,7 @@ async function serverOverviewData(server: ManagedServer) {
   const queryMetrics = dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
     ? await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined }))
     : { responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined };
+  const playerRoster = resolvePlayerNames(queryMetrics.playerNames, parsedEvents, queryMetrics.playersOnline);
   const activity: ServerActivity = {
     lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
     lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
@@ -3056,7 +3064,7 @@ async function serverOverviewData(server: ManagedServer) {
     javaRuntime: normalizeJavaRuntime(server),
     playersOnline: queryMetrics.playersOnline,
     maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
-    playerNames: normalizePlayerNames(queryMetrics.playerNames)
+    ...playerRoster
   };
   return { events, eventsStatus, activity };
 }

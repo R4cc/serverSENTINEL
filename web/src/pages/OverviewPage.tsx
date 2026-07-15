@@ -157,6 +157,7 @@ export function ActivePlayersPanel({
             </div>
           ))}
         </div>
+        {activity.playerNamesSource === "logs" && <small>Inferred from recent server logs.</small>}
         {unnamedPlayers > 0 && <small>{unnamedPlayers} additional player{unnamedPlayers === 1 ? "" : "s"} did not include a name.</small>}
       </div>
     );

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
@@ -103,6 +103,7 @@ const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
 const uploadLimit = 128 * 1024 * 1024;
+const recentLogTailBytes = 128 * 1024;
 const zipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const reconnectDelayMs = 5000;
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
@@ -1022,6 +1023,28 @@ async function fileRead(server: ManagedServer, path: unknown, preview = false) {
   return preview ? { path: publicPath(root, target), preview: "text", content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() } : { path: publicPath(root, target), content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() };
 }
 
+async function readRecentServerLogs(server: ManagedServer) {
+  try {
+    const target = await inside(server, "logs/latest.log");
+    const handle = await open(target, "r");
+    try {
+      const fileStat = await handle.stat();
+      if (!fileStat.isFile()) throw new Error("logs/latest.log is not a file");
+      const length = Math.min(fileStat.size, recentLogTailBytes);
+      if (length === 0) return { text: "", source: "logs/latest.log" as const };
+      const content = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(content, 0, length, fileStat.size - length);
+      return { text: content.subarray(0, bytesRead).toString("utf8"), source: "logs/latest.log" as const };
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    const name = encodeURIComponent(containerName(server));
+    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=300`)).toString("utf8");
+    return { text, source: "docker" as const };
+  }
+}
+
 async function fileDownload(server: ManagedServer, path: unknown) {
   const target = await inside(server, path);
   const st = await stat(target);
@@ -1306,7 +1329,7 @@ async function handleCommand(command: string, payload: any) {
     const networks = Object.values(stats.networks ?? {}) as Array<{ rx_bytes?: number; tx_bytes?: number }>;
     return { available: true, running: true, cpuPercent, memoryUsageBytes: stats.memory_stats?.usage ?? 0, memoryLimitBytes: stats.memory_stats?.limit ?? 0, networkRxBytes: networks.reduce((sum, n) => sum + (n.rx_bytes ?? 0), 0), networkTxBytes: networks.reduce((sum, n) => sum + (n.tx_bytes ?? 0), 0), sampledAt: new Date().toISOString() };
   }
-  if (command === "server.logs.recent") return { text: stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=300`)).toString("utf8"), source: "docker" };
+  if (command === "server.logs.recent") return readRecentServerLogs(server);
   if (command === "server.console.send") {
     const commandText = typeof payload?.command === "string" ? payload.command.trim() : "";
     if (!commandText) throw new Error("Console command is required");

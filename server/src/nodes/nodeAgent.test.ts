@@ -156,6 +156,37 @@ describe("remote node create and Docker command safety", () => {
   });
 });
 
+describe("remote node recent server logs", () => {
+  it("prefers a bounded tail of logs/latest.log", async () => {
+    const server = testServer();
+    const logsDir = join(server.serverDir, "logs");
+    await mkdir(logsDir, { recursive: true });
+    await writeFile(join(logsDir, "latest.log"), `old-marker\n${"x".repeat(140 * 1024)}\n[12:00:00] [Server thread/INFO]: Alex joined the game\n`, "utf8");
+
+    const result = await hooks.handleCommand("server.logs.recent", { server }) as { text: string; source: string };
+
+    expect(result.source).toBe("logs/latest.log");
+    expect(Buffer.byteLength(result.text, "utf8")).toBeLessThanOrEqual(128 * 1024);
+    expect(result.text).toContain("Alex joined the game");
+    expect(result.text).not.toContain("old-marker");
+    expect(mockDockerBufferRequest).not.toHaveBeenCalled();
+  });
+
+  it("falls back to recent Docker logs when latest.log is unavailable", async () => {
+    const server = testServer();
+    mockDockerBufferRequest.mockResolvedValue(Buffer.from("[12:00:00] [Server thread/INFO]: Alex joined the game\n", "utf8"));
+
+    const result = await hooks.handleCommand("server.logs.recent", { server }) as { text: string; source: string };
+
+    expect(result).toMatchObject({ source: "docker" });
+    expect(result.text).toContain("Alex joined the game");
+    expect(mockDockerBufferRequest).toHaveBeenCalledWith(
+      "GET",
+      "/containers/serversentinel-00000000-0000-4000-8000-000000000001/logs?stdout=1&stderr=1&tail=300"
+    );
+  });
+});
+
 describe("remote node Docker container recreation", () => {
   function managedStoppedInspect(server: ManagedServer) {
     return {

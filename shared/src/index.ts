@@ -214,6 +214,7 @@ export type ServerEvent = {
   timestamp?: string;
   signature: string;
   source: "logs/latest.log" | "docker";
+  subject?: string;
 };
 
 export type ServerActivity = {
@@ -228,4 +229,5 @@ export type ServerActivity = {
   playersOnline?: number | null;
   maxPlayers?: number | null;
   playerNames?: string[];
+  playerNamesSource?: "query" | "logs";
 };

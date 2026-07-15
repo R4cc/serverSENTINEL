@@ -7,8 +7,8 @@ import { assertNodeSupports } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
-import { normalizePlayerNames } from "../minecraftQuery.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
+import { resolvePlayerNames } from "../playerRoster.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -122,7 +122,8 @@ function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index:
     message: text,
     timestamp,
     signature,
-    source
+    source,
+    subject
   };
 }
 
@@ -314,6 +315,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
     const queryMetrics = status.docker?.running
       ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null, playerNames: undefined })) as { playersOnline?: number | null; maxPlayers?: number | null; playerNames?: string[] }
       : { playersOnline: null, maxPlayers: null, playerNames: undefined };
+    const playerRoster = resolvePlayerNames(queryMetrics.playerNames, parsedEvents, queryMetrics.playersOnline);
     const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
@@ -325,7 +327,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       javaRuntime: javaRuntimeLabel(server),
       playersOnline: queryMetrics.playersOnline ?? null,
       maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
-      playerNames: normalizePlayerNames(queryMetrics.playerNames)
+      ...playerRoster
     };
     return {
       events: compactRecentEvents(parsedEvents, 10),
