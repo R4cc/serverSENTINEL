@@ -446,7 +446,8 @@ export function SchedulePage({
                   <AppIcon name="x" />
                 </Button>
               </div>
-              <fieldset disabled={disabled} className="userModalBody scheduleEditBody">
+              <div className="userModalBody scheduleEditBody">
+                <fieldset disabled={disabled} className="scheduleEditFieldset">
                 {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
 
                 <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
@@ -552,7 +553,8 @@ export function SchedulePage({
                     </label>
                   </div>
                 </section>
-              </fieldset>
+                </fieldset>
+              </div>
               <div className="userModalFooter">
                 <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
                 <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>

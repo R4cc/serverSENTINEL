@@ -466,16 +466,34 @@
 
 /* Schedule editor -------------------------------------------------------- */
 
-.scheduleModalPanel {
+.modalPanel.scheduleModalPanel {
   width: min(840px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: clip;
 }
 
-.scheduleEditBody {
+.scheduleModalPanel .scheduleModalForm {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: clip;
+}
+
+.scheduleModalPanel .scheduleEditBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.scheduleEditFieldset {
   min-width: 0;
   display: grid;
   align-content: start;
   gap: var(--space-3);
-  overflow: auto;
+  padding: 0;
   border: 0;
   margin: 0;
 }
@@ -483,11 +501,10 @@
 .scheduleEditorSection {
   min-width: 0;
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: var(--border-subtle) solid var(--border-row);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .scheduleEditorSectionHeader {
@@ -563,25 +580,29 @@
 .scheduleStepCard {
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  align-items: end;
   gap: var(--space-2);
-  padding: var(--space-3);
-  border: var(--border-subtle) solid var(--border-row);
+  padding: var(--space-2);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  background: var(--surface-muted);
 }
 
 .scheduleStepHeader {
   min-width: 0;
+  min-height: var(--control-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  justify-content: flex-start;
+  gap: var(--space-1);
 }
 
 .scheduleStepHeader strong {
   color: var(--text);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-strong);
+  white-space: nowrap;
 }
 
 .scheduleStepFields {
@@ -632,9 +653,9 @@
 }
 
 .scheduleStepRemove.iconDangerButton {
-  width: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
   border-color: transparent;
   background: transparent;
 }
@@ -886,6 +907,17 @@
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
   }
+
+  .scheduleStepCard {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .scheduleStepHeader {
+    min-height: 28px;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 640px) {
@@ -894,7 +926,8 @@
     padding: 72px 8px 8px;
   }
 
-  .scheduleModalBackdrop .scheduleModalPanel {
+  .modalPanel.scheduleModalPanel {
+    max-height: calc(100vh - 80px);
     max-height: calc(100dvh - 80px);
   }
 
@@ -953,12 +986,8 @@
     align-self: start;
   }
 
-  .scheduleModalPanel {
+  .modalPanel.scheduleModalPanel {
     width: min(100%, calc(100vw - 16px));
-  }
-
-  .scheduleEditorSection {
-    padding: var(--space-2);
   }
 
   .scheduleEditorSectionHeader {
