@@ -29,7 +29,7 @@ export type RuntimeStateCoordinatorOptions = {
   connectionEpoch: (server: ManagedServer) => Promise<string>;
   canRestore?: (server: ManagedServer) => boolean;
   restoreServer: (server: ManagedServer) => Promise<unknown>;
-  setDesiredState: (serverId: string, state: "running" | "stopped") => void;
+  setRuntimeIntent: (serverId: string, state: "running" | "stopped") => void;
   setLifecycle?: (serverId: string, patch: Partial<ManagedServer>) => void;
   restartServer?: (server: ManagedServer) => Promise<unknown>;
   stopServer?: (server: ManagedServer) => Promise<unknown>;
@@ -171,7 +171,7 @@ export class RuntimeStateCoordinator {
       observation.explicitObservation = false;
     }
 
-    const intent = server.runtimeIntent ?? server.desiredRuntimeState ?? undefined;
+    const intent = server.runtimeIntent;
     if (actual.running) {
       if (intent === "restarting") {
         if (server.restartPhase === "stopping" && !observation.restoreAttempted && this.options.restartServer && this.options.canRestore?.(server) !== false) {
@@ -320,9 +320,8 @@ export class RuntimeStateCoordinator {
 
   private persistLifecycle(server: ManagedServer, patch: Partial<ManagedServer>) {
     Object.assign(server, patch);
-    if (patch.runtimeIntent) server.desiredRuntimeState = patch.runtimeIntent === "stopped" ? "stopped" : "running";
     if (this.options.setLifecycle) this.options.setLifecycle(server.id, patch);
-    else if (patch.runtimeIntent) this.options.setDesiredState(server.id, patch.runtimeIntent === "stopped" ? "stopped" : "running");
+    else if (patch.runtimeIntent && patch.runtimeIntent !== "restarting") this.options.setRuntimeIntent(server.id, patch.runtimeIntent);
   }
 }
 

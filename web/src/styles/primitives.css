@@ -51,7 +51,6 @@
 .actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--sentinel-danger); }
 .actionMenuItem svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; }
 .visuallyHidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
-.settingsGroupHeader.uiPanelHeader { margin: 0; }
 .selectionActionMenu .actionMenuTrigger { width: var(--control-height-compact); min-width: var(--control-height-compact); height: var(--control-height-compact); min-height: var(--control-height-compact); }
 
 @media (hover: none), (pointer: coarse) {

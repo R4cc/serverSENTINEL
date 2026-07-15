@@ -142,18 +142,6 @@ button .buttonIcon {
   margin-top: auto;
 }
 
-.selectedServerReadout {
-  min-width: 0;
-  padding: 0 var(--space-1) var(--space-1);
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sideNav button,
 .serverListItem {
   width: 100%;
@@ -661,10 +649,6 @@ button .buttonIcon {
   opacity: 0;
   max-width: 0;
   visibility: hidden;
-}
-
-.sidebarCollapsed .selectedServerReadout {
-  display: none;
 }
 
 .sidebarCollapsed .accountChip {

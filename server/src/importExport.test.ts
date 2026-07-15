@@ -85,8 +85,10 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
       id: sourceScheduleId,
       name: "Restart notice",
       cron: "0 4 * * *",
-      commands: ["say restart soon", "stop"],
-      commandDelaysMinutes: [0, 5],
+      steps: [
+        { type: "command", command: "say restart soon", delaySeconds: 0 },
+        { type: "command", command: "stop", delaySeconds: 300 }
+      ],
       onlyWhenNoPlayers: false,
       enabled: true,
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -125,8 +127,8 @@ function artifact(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
     schemaVersion: exportArtifactSchemaVersion,
     manifest: {
       exportedAt: "2026-01-01T00:00:00.000Z",
-      appVersion: "0.8.0",
-      sqliteSchemaVersion: 7,
+      appVersion: "1.3.0",
+      sqliteSchemaVersion: 17,
       content: {
         instance: true,
         servers: 1,
@@ -175,10 +177,10 @@ async function createRepositories(root: string) {
 }
 
 describe("export/import artifacts", () => {
-  it("continues to accept schema-v1 command-only exports", () => {
+  it.each([1, 2])("rejects legacy schema-%s exports", (schemaVersion) => {
     const legacy = artifact();
-    (legacy as { schemaVersion: number }).schemaVersion = 1;
-    expect(assertExportArtifact(legacy).schemaVersion).toBe(1);
+    (legacy as { schemaVersion: number }).schemaVersion = schemaVersion;
+    expect(() => assertExportArtifact(legacy)).toThrow(/requires export schema 3/);
   });
 
   it("creates a manifest with canonical server models, mod metadata, and selected config files", async () => {
@@ -186,9 +188,9 @@ describe("export/import artifacts", () => {
     await mkdir(join(root, "config"), { recursive: true });
     await writeFile(join(root, "server.properties"), "server-port=25565\n", "utf8");
     await writeFile(join(root, "config", "fabric-api.properties"), "enabled=true\n", "utf8");
-    const server = managedServer({ serverDir: root, desiredRuntimeState: "running" });
+    const server = managedServer({ serverDir: root, runtimeIntent: "running" });
     const result = await createExportArtifact({
-      appVersion: "0.8.0",
+      appVersion: "1.3.0",
       settings: { modrinthApiKey: "secret" },
       nodes: [node({ secretHash: "not-exported", joinTokenHash: "not-exported" })],
       servers: [server],
@@ -198,7 +200,7 @@ describe("export/import artifacts", () => {
     expect(result.schemaVersion).toBe(exportArtifactSchemaVersion);
     expect(result.manifest.content.servers).toBe(1);
     expect(result.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");
-    expect(result.servers[0].server.desiredRuntimeState).toBe("running");
+    expect(result.servers[0].server.runtimeIntent).toBe("running");
     expect(result.servers[0].server.managedPorts?.[0]).toMatchObject({ externalPort: 25565, protocol: "tcp" });
     expect(result.servers[0].modPreferences).toEqual({ "fabric-api.jar": { channel: "release" } });
     expect(result.instance.nodes[0]).not.toHaveProperty("secretHash");
@@ -347,7 +349,7 @@ describe("export/import artifacts", () => {
     const imported = servers.find((server) => server.id === importedId)!;
     expect(imported.displayName).toBe("Survival (2)");
     expect(imported.schedules?.[0].id).not.toBe(sourceScheduleId);
-    expect(imported.schedules?.[0].commandDelaysSeconds).toEqual([0, 300]);
+    expect(imported.schedules?.[0].steps.map((step) => step.delaySeconds)).toEqual([0, 300]);
     expect(imported.schedules?.[0].recentRuns?.[0].id).not.toBe(sourceRunId);
     expect(imported.schedules?.[0].recentRuns?.[0].scheduleId).toBe(imported.schedules?.[0].id);
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");

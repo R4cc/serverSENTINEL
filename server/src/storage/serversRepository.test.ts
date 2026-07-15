@@ -95,8 +95,6 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
         { type: "command", command: "say Backup starting", delaySeconds: 0 },
         { type: "command", command: "save-all", delaySeconds: 300 }
       ],
-      commands: ["say Backup starting", "save-all"],
-      commandDelaysSeconds: [0, 300],
       onlyWhenNoPlayers: false,
       enabled: true,
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -159,8 +157,6 @@ describe("ServersRepository", () => {
       { type: "command", command: "say restarting", delaySeconds: 0 },
       { type: "action", procedure: "restart", delaySeconds: 300 }
     ];
-    schedule.commands = undefined;
-    schedule.commandDelaysSeconds = undefined;
     schedule.recentRuns![0].details = { stepCount: 2, completedStepCount: 2, terminalStepIndex: 1, terminalStep: "Restart" };
 
     servers.create(server);
@@ -251,18 +247,18 @@ describe("ServersRepository", () => {
     expect(servers.list()[0].restartRequiredModBaseline).toBeUndefined();
   });
 
-  it("defaults, updates, and preserves desired runtime state", async () => {
+  it("defaults, updates, and preserves runtime intent", async () => {
     const { servers } = await createRepositories();
-    const server = managedServer();
+    const server = { ...managedServer(), runtimeIntent: undefined };
     servers.create(server);
 
-    expect(servers.list()[0].desiredRuntimeState).toBe("stopped");
-    expect(servers.setDesiredRuntimeState(server.id, "running", "2026-01-02T00:00:00.000Z")).toBe(true);
-    expect(servers.setDesiredRuntimeState(server.id, "running", "2026-01-03T00:00:00.000Z")).toBe(false);
+    expect(servers.list()[0].runtimeIntent).toBe("stopped");
+    expect(servers.setRuntimeIntent(server.id, "running", "2026-01-02T00:00:00.000Z")).toBe(true);
+    expect(servers.setRuntimeIntent(server.id, "running", "2026-01-03T00:00:00.000Z")).toBe(false);
 
     const running = servers.list()[0];
-    servers.replaceMetadata({ ...running, displayName: "Renamed", desiredRuntimeState: "stopped" });
-    expect(servers.list()[0]).toMatchObject({ displayName: "Renamed", desiredRuntimeState: "running" });
+    servers.replaceMetadata({ ...running, displayName: "Renamed", runtimeIntent: "stopped" });
+    expect(servers.list()[0]).toMatchObject({ displayName: "Renamed", runtimeIntent: "running" });
   });
 
   it("persists restart phases and crash-loop recovery metadata", async () => {
@@ -280,7 +276,6 @@ describe("ServersRepository", () => {
     });
 
     expect(servers.list()[0]).toMatchObject({
-      desiredRuntimeState: "running",
       runtimeIntent: "restarting",
       restartPhase: "starting",
       crashAttemptTimestamps: ["2026-01-02T00:00:00.000Z"],

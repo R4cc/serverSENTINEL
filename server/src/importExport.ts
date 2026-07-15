@@ -11,7 +11,7 @@ import type { SettingsRepository } from "./storage/settingsRepository.js";
 import { parseDockerPorts } from "./core.js";
 
 export const exportArtifactType = "serversentinel.export";
-export const exportArtifactSchemaVersion = 2;
+export const exportArtifactSchemaVersion = 3;
 const maxExportedConfigFileBytes = 2 * 1024 * 1024;
 const excludedServerFileRoots = new Set([
   "backups",
@@ -137,7 +137,6 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
   for (const [index, server] of selectedServers.entries()) {
     input.report?.(20 + Math.floor((index / Math.max(selectedServers.length, 1)) * 60), `Collecting ${server.displayName}`);
     const {
-      runtimeIntent,
       restartPhase: _restartPhase,
       crashAttemptTimestamps: _crashAttemptTimestamps,
       crashNextRetryAt: _crashNextRetryAt,
@@ -146,10 +145,7 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
       ...exportedServer
     } = server;
     servers.push({
-      server: {
-        ...exportedServer,
-        desiredRuntimeState: runtimeIntent === "stopped" ? "stopped" : runtimeIntent ? "running" : server.desiredRuntimeState
-      },
+      server: exportedServer,
       modPreferences: input.modPreferencesForServer(server.id),
       files: await collectServerConfigFiles(server.serverDir)
     });
@@ -187,7 +183,6 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
         dockerStatus: node.dockerStatus,
         dataPathStatus: node.dataPathStatus,
         totalMemory: node.totalMemory,
-        compatibility: node.compatibility,
         joinTokenExpiresAt: node.joinTokenExpiresAt
       }))
     },
@@ -226,7 +221,7 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (!isPlainObject(value)) throw new Error("Import artifact must be an object");
   rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "instance", "servers"], "artifact");
   if (value.artifactType !== exportArtifactType) throw new Error("Unsupported import artifact type");
-  if (value.schemaVersion !== 1 && value.schemaVersion !== exportArtifactSchemaVersion) throw new Error("Unsupported import schema version");
+  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; serverSENTINEL 1.3 requires export schema ${exportArtifactSchemaVersion}`);
   if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
   if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
@@ -281,7 +276,7 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
     "dockerPorts",
     "managedPorts",
     "javaArgs",
-    "desiredRuntimeState",
+    "runtimeIntent",
     "restartRequiredSince",
     "restartRequiredChanges",
     "restartRequiredModBaseline",
@@ -301,8 +296,8 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
   optionalStringValue(server.dockerMountSource, `${label}.dockerMountSource`);
   optionalStringValue(server.dockerWorkingDir, `${label}.dockerWorkingDir`);
   optionalStringValue(server.javaArgs, `${label}.javaArgs`);
-  if (server.desiredRuntimeState !== undefined && server.desiredRuntimeState !== "running" && server.desiredRuntimeState !== "stopped") {
-    throw new Error(`${label}.desiredRuntimeState must be running or stopped`);
+  if (server.runtimeIntent !== undefined && server.runtimeIntent !== "running" && server.runtimeIntent !== "stopped" && server.runtimeIntent !== "restarting") {
+    throw new Error(`${label}.runtimeIntent must be running, stopped, or restarting`);
   }
   optionalStringValue(server.restartRequiredSince, `${label}.restartRequiredSince`);
   if (server.restartRequiredChanges !== undefined && !Array.isArray(server.restartRequiredChanges)) throw new Error(`${label}.restartRequiredChanges must be an array`);
@@ -369,45 +364,19 @@ function assertSchedules(value: unknown, label: string) {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const [index, schedule] of value.entries()) {
     if (!isPlainObject(schedule)) throw new Error(`${label}[${index}] must be a JSON object`);
-    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "steps", "commands", "commandDelaysSeconds", "commandDelaysMinutes", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
+    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "steps", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
     stringValue(schedule.id, `${label}[${index}].id`);
     stringValue(schedule.name, `${label}[${index}].name`);
     stringValue(schedule.cron, `${label}[${index}].cron`);
-    if (schedule.steps !== undefined) {
-      if (!Array.isArray(schedule.steps) || schedule.steps.length === 0) throw new Error(`${label}[${index}].steps must be a non-empty array`);
-      for (const [stepIndex, step] of schedule.steps.entries()) {
-        if (!isPlainObject(step)) throw new Error(`${label}[${index}].steps[${stepIndex}] must be a JSON object`);
-        const allowed = step.type === "command" ? ["type", "command", "delaySeconds"] : ["type", "procedure", "delaySeconds"];
-        rejectUnsupportedKeys(step, allowed, `${label}[${index}].steps[${stepIndex}]`);
-        if (step.type !== "command" && step.type !== "action") throw new Error(`${label}[${index}].steps[${stepIndex}].type must be command or action`);
-        if (step.type === "command") stringValue(step.command, `${label}[${index}].steps[${stepIndex}].command`);
-        if (step.type === "action" && step.procedure !== "restart") throw new Error(`${label}[${index}].steps[${stepIndex}].procedure must be restart`);
-        if (!Number.isInteger(step.delaySeconds) || (step.delaySeconds as number) < 0 || (step.delaySeconds as number) > 604_800) throw new Error(`${label}[${index}].steps[${stepIndex}].delaySeconds must be a whole number from 0 to 604800`);
-      }
-    } else {
-      stringArray(schedule.commands, `${label}[${index}].commands`);
-    }
-    if (schedule.commandDelaysMinutes !== undefined) {
-      const commandCount = Array.isArray(schedule.commands) ? schedule.commands.length : 0;
-      if (!Array.isArray(schedule.commandDelaysMinutes) || schedule.commandDelaysMinutes.length !== commandCount) {
-        throw new Error(`${label}[${index}].commandDelaysMinutes must contain one delay for every command`);
-      }
-      for (const [delayIndex, delay] of schedule.commandDelaysMinutes.entries()) {
-        if (!Number.isInteger(delay) || delay < 0 || delay > 10_080) {
-          throw new Error(`${label}[${index}].commandDelaysMinutes[${delayIndex}] must be a whole number from 0 to 10080`);
-        }
-      }
-    }
-    if (schedule.commandDelaysSeconds !== undefined) {
-      const commandCount = Array.isArray(schedule.commands) ? schedule.commands.length : 0;
-      if (!Array.isArray(schedule.commandDelaysSeconds) || schedule.commandDelaysSeconds.length !== commandCount) {
-        throw new Error(`${label}[${index}].commandDelaysSeconds must contain one delay for every command`);
-      }
-      for (const [delayIndex, delay] of schedule.commandDelaysSeconds.entries()) {
-        if (!Number.isInteger(delay) || delay < 0 || delay > 604_800) {
-          throw new Error(`${label}[${index}].commandDelaysSeconds[${delayIndex}] must be a whole number from 0 to 604800`);
-        }
-      }
+    if (!Array.isArray(schedule.steps) || schedule.steps.length === 0) throw new Error(`${label}[${index}].steps must be a non-empty array`);
+    for (const [stepIndex, step] of schedule.steps.entries()) {
+      if (!isPlainObject(step)) throw new Error(`${label}[${index}].steps[${stepIndex}] must be a JSON object`);
+      const allowed = step.type === "command" ? ["type", "command", "delaySeconds"] : ["type", "procedure", "delaySeconds"];
+      rejectUnsupportedKeys(step, allowed, `${label}[${index}].steps[${stepIndex}]`);
+      if (step.type !== "command" && step.type !== "action") throw new Error(`${label}[${index}].steps[${stepIndex}].type must be command or action`);
+      if (step.type === "command") stringValue(step.command, `${label}[${index}].steps[${stepIndex}].command`);
+      if (step.type === "action" && step.procedure !== "restart") throw new Error(`${label}[${index}].steps[${stepIndex}].procedure must be restart`);
+      if (!Number.isInteger(step.delaySeconds) || (step.delaySeconds as number) < 0 || (step.delaySeconds as number) > 604_800) throw new Error(`${label}[${index}].steps[${stepIndex}].delaySeconds must be a whole number from 0 to 604800`);
     }
     booleanValue(schedule.onlyWhenNoPlayers, `${label}[${index}].onlyWhenNoPlayers`);
     booleanValue(schedule.enabled, `${label}[${index}].enabled`);
@@ -736,10 +705,6 @@ function remapImportedServer(server: ManagedServer, input: {
       const scheduleId = scheduleIdMap.get(schedule.id) ?? randomUUID();
       return {
         ...schedule,
-        commandDelaysSeconds: schedule.commandDelaysSeconds
-          ?? schedule.commandDelaysMinutes?.map((minutes) => minutes * 60)
-          ?? (schedule.commands ?? []).map(() => 0),
-        commandDelaysMinutes: undefined,
         id: scheduleId,
         createdAt: input.now,
         updatedAt: input.now,

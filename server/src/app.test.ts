@@ -33,8 +33,6 @@ import {
   assertDownloadSize,
   fileDownloadIntentMode,
   dedupeDownloadSelections,
-  sanitizeCommandDelays,
-  sanitizeCommandDelaysSeconds,
   sanitizeScheduleSteps,
   waitForCommandDelay,
   dockerNetworkingConfigFromInspect,
@@ -92,9 +90,12 @@ function testRuntimeProfile() {
   };
 }
 
-describe("scheduled command delays", () => {
-  it("normalizes legacy commands into canonical command steps", () => {
-    expect(sanitizeScheduleSteps(undefined, ["say warning", "save-all"], [0, 30])).toEqual([
+describe("schedule steps", () => {
+  it("accepts canonical command steps", () => {
+    expect(sanitizeScheduleSteps([
+      { type: "command", command: "say warning", delaySeconds: 0 },
+      { type: "command", command: "save-all", delaySeconds: 30 }
+    ])).toEqual([
       { type: "command", command: "say warning", delaySeconds: 0 },
       { type: "command", command: "save-all", delaySeconds: 30 }
     ]);
@@ -112,18 +113,10 @@ describe("scheduled command delays", () => {
     expect(() => sanitizeScheduleSteps([{ type: "action", procedure: "reload", delaySeconds: 0 }])).toThrow(/Unsupported/);
   });
 
-  it("defaults legacy schedules to immediate commands", () => {
-    expect(sanitizeCommandDelays(undefined, 2)).toEqual([0, 0]);
-  });
-
-  it("accepts an aligned whole-minute delay list", () => {
-    expect(sanitizeCommandDelays([0, 5], 2)).toEqual([0, 5]);
-  });
-
-  it("rejects missing, fractional, and excessive delay values", () => {
-    expect(() => sanitizeCommandDelays([0], 2)).toThrow(/every scheduled command/);
-    expect(() => sanitizeCommandDelays([0, 1.5], 2)).toThrow(/whole minutes/);
-    expect(() => sanitizeCommandDelays([0, 10_081], 2)).toThrow(/whole minutes/);
+  it("requires steps and rejects invalid delays", () => {
+    expect(() => sanitizeScheduleSteps(undefined)).toThrow(/schedule step/);
+    expect(() => sanitizeScheduleSteps([{ type: "command", command: "save-all", delaySeconds: 1.5 }])).toThrow(/whole number of seconds/);
+    expect(() => sanitizeScheduleSteps([{ type: "command", command: "save-all", delaySeconds: 604_801 }])).toThrow(/whole number of seconds/);
   });
 
   it("can interrupt a pending schedule delay", async () => {
@@ -170,16 +163,6 @@ describe("Modrinth search facets", () => {
       ["versions:1.21.4", "versions:1.21.x"],
       ["server_side:required", "server_side:optional"]
     ]);
-  });
-
-  it("accepts whole-second delays and converts legacy minute delays", () => {
-    expect(sanitizeCommandDelaysSeconds([0, 75, 7200], 3)).toEqual([0, 75, 7200]);
-    expect(sanitizeCommandDelaysSeconds(undefined, 2, [0, 5])).toEqual([0, 300]);
-  });
-
-  it("rejects fractional and longer-than-seven-day second delays", () => {
-    expect(() => sanitizeCommandDelaysSeconds([0, 1.5], 2)).toThrow(/whole seconds/);
-    expect(() => sanitizeCommandDelaysSeconds([0, 604_801], 2)).toThrow(/whole seconds/);
   });
 
   it("keeps all-result searches limited only to mods", () => {

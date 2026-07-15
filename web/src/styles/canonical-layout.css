@@ -59,16 +59,6 @@
   gap: var(--space-2);
 }
 
-.selectedServerReadout {
-  min-height: 32px;
-  padding: 7px 10px;
-  border: 1px solid var(--border-row);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  display: flex;
-  align-items: center;
-}
-
 .accountChip {
   padding: 6px 8px;
   gap: var(--space-2);
@@ -114,7 +104,6 @@
 
 .workspaceActions button,
 .buttonRow button,
-.secondaryButton,
 .runtimeControlButton,
 .quickActionButton,
 .modalFooter button,
@@ -174,7 +163,6 @@
 }
 
 .nodeCardHeader,
-.settingsGroupHeader,
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
@@ -186,7 +174,6 @@
 }
 
 .nodeCardHeader,
-.settingsGroupHeader,
 .fileEditorHeader {
   display: flex;
   gap: var(--space-3);
@@ -442,59 +429,6 @@
   gap: var(--space-3);
 }
 
-.settingsGroup {
-  padding: 0;
-  overflow: hidden;
-}
-
-.settingsGroupHeader {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  align-items: center;
-  border-bottom-color: rgb(0 0 0 / 0.08);
-}
-
-.usersGroupHeader {
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-}
-
-.settingsRow {
-  min-height: 56px;
-  padding: var(--space-3) var(--space-4);
-  display: grid;
-  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
-  gap: var(--space-4);
-  align-items: center;
-  border-top: 1px solid rgb(0 0 0 / 0.08);
-  border-bottom: 0;
-}
-
-.themeDark .settingsGroupHeader {
-  border-bottom-color: rgb(255 255 255 / 0.1);
-}
-
-.themeDark .settingsRow {
-  border-top-color: rgb(255 255 255 / 0.1);
-}
-
-.settingsRow select,
-.settingsRow > button {
-  justify-self: stretch;
-  width: 100%;
-  max-width: 420px;
-}
-
-.settingsRow .settingsStatus {
-  justify-self: start;
-}
-
-.settingsRow .keyForm {
-  justify-self: stretch;
-  width: 100%;
-}
-
 .keyFormConfigured {
   align-items: stretch;
   display: grid;
@@ -591,25 +525,10 @@
   width: min(var(--modal-medium-width), calc(100vw - 32px));
 }
 
-.nodeDetailsPanel {
-  width: min(1180px, calc(100vw - 32px));
-}
-
-.nodeDetailsPanel .nodeDetailsActions {
-  align-items: center;
-  justify-content: space-between;
-}
-
 @media (max-width: 920px) {
-  .nodeDetailsPanel .nodeDetailsActions {
-    align-items: stretch;
-  }
 }
 
 @media (max-width: 640px) {
-  .nodeDetailsPanel .nodeDetailsActions {
-    bottom: calc(var(--space-4) * -1);
-  }
 }
 
 
@@ -662,16 +581,12 @@
   overflow: hidden;
 }
 
-.modInstallReview,
 .modInstallVersionTable,
-.nodeInfoCard,
 .addNodeStatusCard {
   border-width: 1px;
   border-radius: 8px;
 }
 
-.modInstallReview,
-.nodeInfoCard,
 .addNodeStatusCard {
   padding: var(--space-3);
 }
@@ -717,19 +632,8 @@
     justify-content: flex-start;
   }
 
-.settingsRow,
-.settingsGroupHeader,
-.usersGroupHeader,
 .nodeServerRow {
     grid-template-columns: 1fr;
-  }
-
-  .settingsRow select,
-  .settingsRow .keyForm,
-  .settingsRow .settingsStatus,
-  .settingsRow > button {
-    justify-self: stretch;
-    max-width: none;
   }
 
   .usersSettings {

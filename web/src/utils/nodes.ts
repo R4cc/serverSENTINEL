@@ -40,18 +40,6 @@ export function advanceNodeOperation(
   return { operation: { ...operation, phase, observedOffline, reconnectedAt }, outcome: "pending" };
 }
 
-export function nodeStatusLabel(status: ManagedNode["status"]) {
-  if (status === "online") return "Node online";
-  if (status === "offline") return "Node offline";
-  return "Node status unknown";
-}
-
-export function nodeCompatibilityLabel(node: ManagedNode) {
-  if (node.compatibility === "compatible") return "Compatible";
-  if (node.compatibility === "incompatible") return "Incompatible";
-  return "Compatibility unknown";
-}
-
 export function nodeDockerLabel(node: ManagedNode) {
   if (node.dockerStatus === "available") return "Docker available";
   if (node.dockerStatus === "unavailable") return "Docker unavailable";
@@ -64,16 +52,12 @@ export function nodeDataPathLabel(node: ManagedNode) {
   return "Data path unknown";
 }
 
-function isNodeCompatible(node: ManagedNode) {
-  return node.compatibility !== "incompatible";
-}
-
 function isNodeDockerUsable(node: ManagedNode) {
   return node.dockerStatus !== "unavailable";
 }
 
 export function isNodeRuntimeUsable(node: ManagedNode) {
-  return node.status === "online" && isNodeCompatible(node) && isNodeDockerUsable(node);
+  return node.status === "online" && isNodeDockerUsable(node);
 }
 
 export function nodeRestartImpactMessage(node: ManagedNode) {
@@ -91,7 +75,6 @@ export function nodeBlockReason(node: ManagedNode) {
   if (node.hasPendingJoinToken && node.status === "unknown") return "Waiting for node to join";
   if (node.status === "offline") return "Node offline";
   if (node.status === "unknown") return "Node has not connected yet";
-  if (node.compatibility === "incompatible") return "Node agent is incompatible";
   if (node.dockerStatus === "unavailable") return "Docker is unavailable on this node";
   if (!node.dockerStatus || node.dockerStatus === "unknown") return "Docker status is unknown";
   if (node.dataPathStatus === "missing") return "Node data path is missing";
@@ -104,8 +87,6 @@ export function nodeWarnings(node: ManagedNode) {
   else if (node.hasPendingJoinToken) warnings.push("Join token pending. Run the install command before it expires.");
   if (node.status === "offline") warnings.push("Node is offline.");
   if (node.status === "unknown") warnings.push("Node has not connected yet.");
-  if (node.compatibility === "incompatible") warnings.push("Agent protocol is incompatible with this panel.");
-  if (node.compatibility === "unknown") warnings.push("Agent compatibility is unknown.");
   if (node.dockerStatus === "unavailable") warnings.push("Docker is unavailable.");
   if (!node.dockerStatus || node.dockerStatus === "unknown") warnings.push("Docker availability is unknown.");
   if (node.dataPathStatus && node.dataPathStatus !== "ready") warnings.push(nodeDataPathLabel(node));

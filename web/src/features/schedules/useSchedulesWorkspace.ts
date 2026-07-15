@@ -316,5 +316,3 @@ export function useSchedulesWorkspace({
     }
   };
 }
-
-export type SchedulesWorkspace = ReturnType<typeof useSchedulesWorkspace>;

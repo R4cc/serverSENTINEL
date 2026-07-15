@@ -8,9 +8,6 @@ export type ScheduleBody = {
   name?: string;
   cron?: string;
   steps?: unknown;
-  commands?: unknown;
-  commandDelaysSeconds?: unknown;
-  commandDelaysMinutes?: unknown;
   onlyWhenNoPlayers?: boolean;
   enabled?: boolean;
 };

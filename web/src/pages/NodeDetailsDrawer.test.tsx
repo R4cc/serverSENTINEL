@@ -15,7 +15,6 @@ function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
     protocolVersion: "2.0",
     dockerStatus: "available",
     dataPathStatus: "ready",
-    compatibility: "compatible",
     totalMemory: 8 * 1024 * 1024 * 1024,
     lastSeenAt: "2026-07-13T18:00:00.000Z",
     capabilities: ["server.start", "files.read"],

@@ -4,7 +4,6 @@ import {
   assertNodeSupports,
   nodeAdvertisesCapability,
   nodeCapabilities,
-  nodeOperationContract,
   nodeProtocolVersion,
   normalizeNodeHello
 } from "./protocol.js";
@@ -19,20 +18,9 @@ function v2Hello(overrides: Record<string, unknown> = {}) {
     buildId: "commit-sha",
     protocolVersion: nodeProtocolVersion,
     capabilities: [...nodeCapabilities],
-    runtimeMode: "node",
-    dataRoot: {
-      root: "/data",
-      dockerRoot: "/srv/serversentinel",
-      status: "ready"
-    },
-    docker: {
-      available: true,
-      status: "available"
-    },
     dockerStatus: "available",
     dataPathStatus: "ready",
     totalMemory: 1024,
-    operations: nodeOperationContract,
     ...overrides
   };
 }
@@ -53,14 +41,11 @@ function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
 }
 
 describe("node protocol v2", () => {
-  it("accepts a complete v2 hello for existing node sessions", () => {
+  it("accepts the minimal v2 hello for existing node sessions", () => {
     const hello = normalizeNodeHello(v2Hello());
     expect(hello.protocolVersion).toBe("2.0");
     expect(hello.buildId).toBe("commit-sha");
-    expect(hello.runtimeMode).toBe("node");
-    expect(hello.operations.server).toContain("server.create");
-    expect(hello.operations.files).toContain("files.move");
-    expect(hello.dataRoot.dockerRoot).toBe("/srv/serversentinel");
+    expect(hello.capabilities).toContain("files.move");
   });
 
   it("accepts a complete v2 join-token hello before the panel assigns a node id", () => {
@@ -81,5 +66,14 @@ describe("node protocol v2", () => {
     expect(() => assertNodeSupports(node({ capabilities: ["server.start"] }), "files.list")).toThrow("does not advertise files.list");
     expect(nodeAdvertisesCapability(node(), "mods.liveMutation")).toBe(true);
     expect(nodeAdvertisesCapability(node({ capabilities: nodeCapabilities.filter((capability) => capability !== "mods.liveMutation") }), "mods.liveMutation")).toBe(false);
+  });
+
+  it("ignores redundant fields sent by a 1.2.1 node during a panel-first upgrade", () => {
+    expect(normalizeNodeHello(v2Hello({
+      runtimeMode: "node",
+      dataRoot: { root: "/data", dockerRoot: "/srv/serversentinel", status: "ready" },
+      docker: { available: true, status: "available" },
+      operations: { server: ["server.start"], files: ["files.list"], mods: ["mods.list"] }
+    }))).toMatchObject({ protocolVersion: "2.0", dockerStatus: "available", dataPathStatus: "ready" });
   });
 });

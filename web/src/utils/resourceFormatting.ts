@@ -10,10 +10,3 @@ export function formatUptime(startedAt?: string, running?: boolean) {
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
-
-export function formatActivityDate(value: string | undefined, formatDate: (value: string | number | Date) => string) {
-  if (!value) return "Unknown";
-  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : formatDate(value);
-}

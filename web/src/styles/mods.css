@@ -166,8 +166,6 @@
 .modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
 .modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
 .modsTechnicalDetails a { display: inline-block; margin-top: 14px; }
-.modsBackButton { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 6px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; font-size: .78rem; }
-.modsBackButton:hover:not(:disabled) { transform: none; color: var(--accent); background: transparent; }
 .modsReviewHero { padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .modsReviewHero > div { display: grid; gap: 3px; }
 .modsReviewHero span { color: var(--text-muted); font-size: .8rem; }
@@ -280,7 +278,6 @@
    aliases so page-level work can migrate without visual drift. */
 
 .uiButton,
-.secondaryButton,
 .dangerTextButton,
 .iconButton,
 .iconOnlyButton {
@@ -300,15 +297,13 @@
   color: var(--surface);
 }
 
-.uiButton--secondary,
-.secondaryButton {
+.uiButton--secondary {
   border-color: var(--border-muted);
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
   color: var(--text);
 }
 
-.uiButton--secondary:hover:not(:disabled),
-.secondaryButton:hover:not(:disabled) {
+.uiButton--secondary:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
@@ -316,9 +311,7 @@
 }
 
 .uiButton--ghost,
-.linkButton,
-.textLinkButton,
-.modsBackButton {
+.textLinkButton {
   border-color: transparent;
   background: transparent;
   color: var(--accent);
@@ -326,9 +319,7 @@
 }
 
 .uiButton--ghost:hover:not(:disabled),
-.linkButton:hover:not(:disabled),
-.textLinkButton:hover:not(:disabled),
-.modsBackButton:hover:not(:disabled) {
+.textLinkButton:hover:not(:disabled) {
   border-color: transparent;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--sentinel-accent-strong);
@@ -403,14 +394,12 @@
 }
 
 .uiButton:active:not(:disabled),
-.secondaryButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
 .iconOnlyButton:active:not(:disabled) {
   transform: translateY(0);
 }
 
 .uiButton:disabled,
-.secondaryButton:disabled,
 .iconButton:disabled,
 .iconOnlyButton:disabled {
   opacity: 0.42;
@@ -525,8 +514,7 @@
   cursor: not-allowed;
 }
 
-.uiPanelHeader,
-.settingsGroupHeader {
+.uiPanelHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;

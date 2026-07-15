@@ -16,7 +16,6 @@
 }
 
 .summaryTile > span,
-.activityItem > span,
 .resourceMetricLabel > span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -30,7 +29,6 @@
 }
 
 .summaryTile > strong,
-.activityItem > strong,
 .resourceMetricLabel > strong {
   color: var(--text);
   font-size: var(--type-card-title-size);
@@ -71,7 +69,6 @@
   color: var(--text);
 }
 
-.activityGrid,
 .resourceRow,
 .eventRow {
   border-color: var(--border-row);
@@ -238,12 +235,6 @@
   background: color-mix(in srgb, var(--surface-muted) 66%, var(--surface));
 }
 
-.settingsGroupHeader .uiPanelHeaderCopy,
-.settingsRow > div {
-  min-width: 0;
-}
-
-.settingsRow strong,
 .permissionRow > span,
 .usersTable td {
   font-size: var(--type-helper-size);
@@ -251,7 +242,6 @@
   letter-spacing: var(--tracking-ui);
 }
 
-.settingsRow > div > strong,
 .userNameCell strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
@@ -273,107 +263,6 @@
 .settingsList {
   max-width: var(--content-max-width);
   gap: var(--space-3);
-}
-
-.settingsGroup {
-  padding: 0;
-  overflow: hidden;
-}
-
-.settingsGroupHeader,
-.settingsGroupHeader.usersGroupHeader {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-row);
-  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
-}
-
-.settingsGroupHeader:not(.usersGroupHeader) {
-  grid-template-columns: 44px minmax(0, 1fr);
-}
-
-.settingsGroupHeader > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.settingsGroupHeader h2 {
-  margin: 0;
-}
-
-.settingsGroupHeader p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.usersGroupHeader .uiButton {
-  justify-self: end;
-  min-height: var(--control-height);
-}
-
-.settingsRow {
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: minmax(220px, 0.38fr) minmax(280px, 1fr);
-  gap: var(--space-4);
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border-row);
-  border-bottom: 0;
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
-}
-
-.settingsGroupHeader + .settingsRow {
-  border-top: 0;
-}
-
-.settingsRow:hover {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
-  border-color: var(--border-row);
-}
-
-.settingsRow > div:first-child {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.settingsRow > div:first-child > strong {
-  color: var(--text);
-  font-size: var(--type-row-title-size);
-  font-weight: var(--weight-strong);
-}
-
-.settingsRow > div:first-child > span {
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  line-height: 1.45;
-}
-
-.settingsRow select,
-.settingsRow > .uiButton,
-.settingsRow > button {
-  justify-self: start;
-  width: min(100%, 420px);
-  max-width: 420px;
-}
-
-.settingsRow .settingsStatus {
-  justify-self: start;
-}
-
-.settingsRow .keyForm {
-  justify-self: stretch;
-  width: min(100%, 720px);
-  max-width: 720px;
-}
-
-.settingsIntegrationRow {
-  min-height: 88px;
 }
 
 .keyForm fieldset,
@@ -447,33 +336,12 @@
 }
 
 @media (max-width: 1100px) {
-  .settingsRow {
-    grid-template-columns: minmax(180px, 0.42fr) minmax(0, 1fr);
-  }
-
-  .settingsRow .keyForm {
-    width: 100%;
-  }
 }
 
 @media (max-width: 760px) {
-  .settingsGroupHeader,
-  .settingsGroupHeader.usersGroupHeader,
-  .settingsRow,
   .keyForm fieldset,
-  .keyFormConfigured {
+.keyFormConfigured {
     grid-template-columns: 1fr;
-  }
-
-  .usersGroupHeader .uiButton,
-  .settingsRow select,
-  .settingsRow > .uiButton,
-  .settingsRow > button,
-  .settingsRow .keyForm,
-  .settingsRow .settingsStatus {
-    justify-self: stretch;
-    width: 100%;
-    max-width: none;
   }
 
   .keyFormActions {
@@ -494,10 +362,6 @@
 
   .usersSettings {
     padding: var(--space-3);
-  }
-
-  .settingsIntegrationRow {
-    min-height: 196px;
   }
 }
 
@@ -941,7 +805,6 @@
 
 /* Mods and Nodes adoption -------------------------------------------------- */
 
-.nodeAlert,
 .nodeWarnings span {
   border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
   border-radius: var(--radius-md);
@@ -961,7 +824,6 @@
 .modsDependencySummary,
 .modsCompatibilityCard,
 .nodeCard,
-.nodeInfoCard,
 .nodeInstallBox {
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
@@ -976,8 +838,7 @@
 
 .modsWorkspaceMetric small,
 .modsWorkspaceTableHead,
-.nodeServerSectionLabel,
-.nodeInfoCard dt {
+.nodeServerSectionLabel {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
@@ -1019,7 +880,6 @@
 .modsUpdateReviewActions .uiButton,
 .modsResultCard > .uiButton,
 .nodeCardActions .uiButton,
-.nodeDetailsActions .uiButton,
 .nodeModalFooter .uiButton {
   white-space: nowrap;
 }
@@ -1199,12 +1059,6 @@
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
 }
 
-.modsBackButton.uiButton {
-  min-height: var(--control-height-compact);
-  margin-bottom: var(--space-1);
-  padding-inline: var(--space-1);
-}
-
 .modsRecommendedVersion,
 .modsCompatibilityCard.ready {
   border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-row));
@@ -1294,8 +1148,7 @@
 }
 
 .nodeServerIcon svg,
-.nodePlayerIcon svg,
-.nodeDetailIcon svg {
+.nodePlayerIcon svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -1313,66 +1166,6 @@
   letter-spacing: var(--tracking-badge);
 }
 
-.nodeDetailIcon {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  border-color: var(--border-muted);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  box-shadow: none;
-}
-
-.nodeDetailIcon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.nodeDetailsTitleBlock > .nodeDetailIcon {
-  width: 44px;
-  height: 44px;
-  flex-basis: 44px;
-}
-
-.nodeDetailsTitleBlock > .nodeDetailIcon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.nodeDetailsTitleBlock h2 {
-  font-size: clamp(22px, 2.4vw, 30px);
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-ui);
-}
-
-.nodeInfoCard {
-  min-height: 72px;
-  gap: var(--space-3);
-  border-color: var(--border-row);
-  border-radius: var(--radius-md);
-  box-shadow: none;
-}
-
-.nodeInfoCard dd {
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-meta);
-}
-
-.nodeDetailsActions .uiButton {
-  min-height: var(--control-height);
-  border-radius: var(--radius-sm);
-  padding-inline: var(--control-padding-inline);
-  font-size: var(--type-button-size);
-  box-shadow: none;
-}
-
-.nodeDetailsActions .uiButton:disabled {
-  border-color: var(--border-muted);
-  background: var(--surface-muted);
-  color: var(--text-soft);
-  opacity: 0.62;
-}
-
 .addNodeIcon {
   display: grid;
   place-items: center;
@@ -1387,13 +1180,6 @@
 .addNodeIcon .buttonIcon {
   width: 24px;
   height: 24px;
-}
-
-.addNodeCardInner > span:last-child {
-  font-size: var(--type-button-size);
-  font-weight: var(--weight-button);
-  letter-spacing: var(--tracking-ui);
-  text-transform: none;
 }
 
 .installTabs .uiButton {
@@ -1424,13 +1210,11 @@
 /* Focused UI cohesion pass ------------------------------------------------ */
 
 .uiButton:hover:not(:disabled),
-.secondaryButton:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),
 .runtimeControlButton:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
 .textLinkButton:hover:not(:disabled),
-.modsBackButton:hover:not(:disabled),
 .dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled),
 .fileBreadcrumbs button:hover:not(:disabled),
@@ -1442,7 +1226,6 @@
 }
 
 .uiButton,
-.secondaryButton,
 .quickActionButton,
 .runtimeControlButton,
 .iconButton,
@@ -1457,7 +1240,6 @@
 }
 
 .uiButton--secondary:hover:not(:disabled),
-.secondaryButton:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),
 .runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
@@ -1467,7 +1249,6 @@
 
 .uiButton--ghost:hover:not(:disabled),
 .textLinkButton:hover:not(:disabled),
-.modsBackButton:hover:not(:disabled),
 .dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   border-color: transparent;
@@ -1475,7 +1256,6 @@
 }
 
 .panel,
-.settingsGroup,
 .scheduleTableCard,
 .modsWorkspaceInstalled,
 .modsResultCard,
@@ -1486,11 +1266,7 @@
 .modsCompatibilityCard,
 .nodesToolbar,
 .nodeCard,
-.nodeInfoCard,
 .nodeInstallBox,
-.propertiesSettingsCard,
-.activityGrid,
-.activityItem,
 .summaryTile {
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
@@ -1507,7 +1283,6 @@
 }
 
 .uiPanelHeader,
-.settingsGroupHeader,
 .nodeCardHeader,
 .modsWorkspaceListHeader,
 .modsDrawerHeader,
@@ -1522,7 +1297,6 @@
 
 .uiPanelHeader h2,
 .uiPanelHeaderCopy h2,
-.settingsGroupHeader h2,
 .nodeCardHeader h3,
 .modsWorkspaceListHeader h3,
 .modsDrawerHeader h2,
@@ -1540,7 +1314,6 @@
 
 .uiPanelHeader p,
 .uiPanelHeaderCopy p,
-.settingsGroupHeader p,
 .nodeCardHeader p,
 .modsWorkspaceListHeader span,
 .modsDrawerHeader p,
@@ -1562,7 +1335,6 @@
 .modsDrawerFooter,
 .scheduleRowActions,
 .nodeCardActions,
-.nodeDetailsActions,
 .nodeModalFooter,
 .modalFooter,
 .userModalFooter,
@@ -1593,7 +1365,6 @@
 .selectionActions .uiButton,
 .scheduleRowActions .uiButton,
 .nodeCardActions .uiButton,
-.nodeDetailsActions .uiButton,
 .fileEditorFooter .uiButton,
 .modalFooter .uiButton,
 .userModalFooter .uiButton {
@@ -1606,7 +1377,6 @@
 .scheduleTableRow,
 .nodeServerRow,
 .nodeServerMoreRow,
-.settingsRow,
 .eventRow {
   border-color: var(--border-row);
   background: var(--surface);
@@ -1619,7 +1389,6 @@
 .scheduleTableRow:hover,
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled),
-.settingsRow:hover,
 .eventRow:hover {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
@@ -1660,7 +1429,6 @@
   border-radius: 999px;
 }
 
-.nodeDetailIcon,
 .nodeServerIcon,
 .nodePlayerIcon,
 .addNodeIcon,
@@ -1672,17 +1440,16 @@
 
 @media (max-width: 760px) {
   .workspaceActions,
-  .buttonRow,
-  .fileToolbar,
-  .selectionActions,
-  .modsWorkspaceToolbar,
-  .modsWorkspacePrimaryActions,
-  .modsWorkspaceUpdateActions,
-  .nodeCardActions,
-  .nodeDetailsActions,
-  .modalFooter,
-  .userModalFooter,
-  .fileEditorFooter {
+.buttonRow,
+.fileToolbar,
+.selectionActions,
+.modsWorkspaceToolbar,
+.modsWorkspacePrimaryActions,
+.modsWorkspaceUpdateActions,
+.nodeCardActions,
+.modalFooter,
+.userModalFooter,
+.fileEditorFooter {
     align-items: stretch;
   }
 }
@@ -1754,9 +1521,8 @@
   }
 
   .overviewPage > *,
-  .overviewPage > .resourcePanel,
-  .overviewPage > .activityPanel,
-  .overviewPage > .eventsPanel {
+.overviewPage > .resourcePanel,
+.overviewPage > .eventsPanel {
     grid-column: 1 / -1;
   }
 }
@@ -1773,71 +1539,6 @@
     width: 100%;
     max-width: none;
     gap: var(--space-3);
-  }
-
-  .settingsGroup {
-    overflow: visible;
-  }
-
-  .settingsGroupHeader,
-  .settingsGroupHeader.usersGroupHeader {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: var(--space-2);
-    margin: 0;
-    padding: var(--space-3);
-  }
-
-  .settingsGroupHeader > div {
-    min-width: 0;
-  }
-
-  .settingsGroupHeader h2 {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: normal;
-    word-break: normal;
-  }
-
-  .settingsGroupHeader p {
-    max-width: none;
-    overflow-wrap: break-word;
-    word-break: normal;
-  }
-
-  .usersGroupHeader .uiButton {
-    justify-self: stretch;
-    width: 100%;
-    margin-top: var(--space-1);
-  }
-
-  .settingsRow {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: var(--space-3);
-    min-height: 0;
-    padding: var(--space-3);
-  }
-
-  .settingsRow > div:first-child > strong {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-
-  .settingsRow > div:first-child > span {
-    overflow-wrap: break-word;
-  }
-
-  .settingsRow select,
-  .settingsRow > .uiButton,
-  .settingsRow > button,
-  .settingsRow .keyForm,
-  .settingsRow .settingsStatus {
-    justify-self: stretch;
-    width: 100%;
-    max-width: none;
   }
 
   .keyForm fieldset,

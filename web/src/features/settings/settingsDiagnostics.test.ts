@@ -11,7 +11,6 @@ const nodes: ManagedNode[] = [
     isInternal: false,
     agentVersion: "1.2.1",
     protocolVersion: "2",
-    compatibility: "compatible",
     dataPathStatus: "C:/private/server/path"
   },
   {
@@ -21,8 +20,7 @@ const nodes: ManagedNode[] = [
     status: "offline",
     isInternal: false,
     agentVersion: "1.2.0",
-    protocolVersion: "2",
-    compatibility: "incompatible"
+    protocolVersion: "2"
   }
 ];
 
@@ -42,14 +40,11 @@ const info: SettingsSystemInfo = {
 };
 
 describe("settings system diagnostics", () => {
-  it("summarizes node health, compatibility, and versions", () => {
+  it("summarizes node health and versions", () => {
     const summary = summarizeSettingsSystemInfo(info);
     expect(summary).toMatchObject({
       nodeCount: 2,
       onlineNodeCount: 1,
-      compatibleNodeCount: 1,
-      incompatibleNodeCount: 1,
-      unknownCompatibilityCount: 0,
       protocolVersions: "2 (2)",
       dockerStatus: "Not required (remote-node mode)"
     });
@@ -61,7 +56,6 @@ describe("settings system diagnostics", () => {
     const output = buildSystemDiagnostics(info, new Date("2026-07-14T12:00:00.000Z"));
     expect(output).toContain("Generated: 2026-07-14T12:00:00.000Z");
     expect(output).toContain("Nodes online: 1/2");
-    expect(output).toContain("Node compatibility: 1 compatible, 1 incompatible, 0 unknown");
     expect(output).not.toContain("private-production-node");
     expect(output).not.toContain("customer-node-name");
     expect(output).not.toContain("secret-node-id");

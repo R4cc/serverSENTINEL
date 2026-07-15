@@ -89,18 +89,6 @@ export type InstalledModMetadata = {
   reviewAcknowledgedAt?: string;
 };
 
-export type InstalledModDependencyHealth = {
-  status: "satisfied" | "missing" | "unknown";
-  requiredCount: number;
-  missing: Array<{
-    projectId?: string;
-    versionId?: string;
-    title?: string;
-    iconUrl?: string;
-    disabled?: boolean;
-  }>;
-};
-
 export type RestartRequiredModSnapshot = {
   identity: string;
   displayName: string;
@@ -192,7 +180,6 @@ export type ManagedNode = {
   dockerStatus?: string;
   dataPathStatus?: string;
   totalMemory?: number;
-  compatibility?: "compatible" | "incompatible" | "unknown";
   secretHash?: string;
   joinTokenHash?: string;
   joinTokenExpiresAt?: string;
@@ -216,7 +203,6 @@ export type ManagedServer = {
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
-  desiredRuntimeState?: "running" | "stopped";
   runtimeIntent?: RuntimeIntent;
   restartPhase?: RestartPhase;
   crashAttemptTimestamps?: string[];
@@ -245,7 +231,7 @@ export type ManagedServerPort = {
   advanced: boolean;
 };
 
-export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir" | "desiredRuntimeState"> & {
+export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
   directoryLabel: string;
   hasDockerContainer: boolean;
   nodeName?: string;

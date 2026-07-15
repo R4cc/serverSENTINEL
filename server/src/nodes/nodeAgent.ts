@@ -22,7 +22,7 @@ import { parseServerProperties, serializeServerProperties } from "../runtime/ser
 import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
-import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
+import { isNodeCapability, nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
@@ -1500,20 +1500,9 @@ export async function startNodeAgent() {
         buildId: appBuildId,
         protocolVersion: nodeProtocolVersion,
         capabilities: [...nodeCapabilities],
-        runtimeMode: "node",
-        dataRoot: {
-          root: config.nodeDataDir,
-          dockerRoot: config.nodeDockerDataDir,
-          status: dataPathStatus
-        },
-        docker: {
-          available: dockerStatus === "available",
-          status: dockerStatus
-        },
         dockerStatus,
         dataPathStatus,
-        totalMemory: await detectedTotalMemory(),
-        operations: nodeOperationContract
+        totalMemory: await detectedTotalMemory()
       };
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));

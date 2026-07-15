@@ -98,7 +98,6 @@ export type ManagedNode = {
   totalMemory?: number;
   joinTokenExpiresAt?: string;
   hasPendingJoinToken?: boolean;
-  compatibility?: "compatible" | "incompatible" | "unknown";
   capabilities?: string[];
 };
 

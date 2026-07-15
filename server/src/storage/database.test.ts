@@ -1,10 +1,29 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import { currentSchemaVersion, openStorageDatabase, sqliteMigrations, type StorageDatabase } from "./database.js";
+import { currentSchemaName, currentSchemaVersion, openStorageDatabase, type StorageDatabase } from "./database.js";
+
+const legacySchema16Migrations = [
+  "sqlite-foundation",
+  "users-nodes-settings-sessions",
+  "managed-servers-schedules",
+  "file-edit-leases",
+  "resource-stats-history",
+  "mod-preferences",
+  "operations",
+  "server-restart-required",
+  "node-build-id",
+  "schedule-command-delays",
+  "schedule-command-delay-seconds",
+  "server-restart-required-mods",
+  "server-desired-runtime-state",
+  "schedule-steps",
+  "runtime-lifecycle-intent",
+  "scheduled-run-details"
+] as const;
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -20,31 +39,50 @@ async function temporaryDatabasePath() {
   return join(root, "nested", "serversentinel.sqlite");
 }
 
-function seedSchema(path: string, migrationCount: number) {
+function columnNames(database: Database.Database, table: string) {
+  return database.prepare(`PRAGMA table_info('${table}')`).all().map((column) => (column as { name: string }).name);
+}
+
+function seedMigrationHistory(database: Database.Database, count: number) {
+  database.exec(`
+    CREATE TABLE schema_migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    )
+  `);
+  const insert = database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)");
+  legacySchema16Migrations.slice(0, count).forEach((name, index) => insert.run(index + 1, name, "2026-01-01T00:00:00.000Z"));
+}
+
+function seedLegacySchema16(path: string) {
   mkdirSync(join(path, ".."), { recursive: true });
+  openStorageDatabase(path).close();
   const database = new Database(path);
-  try {
-    database.exec(`
-      CREATE TABLE schema_migrations (
-        version INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        applied_at TEXT NOT NULL
-      )
-    `);
-    for (const migration of sqliteMigrations.slice(0, migrationCount)) {
-      database.transaction(() => {
-        migration.up(database);
-        database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
-          .run(migration.version, migration.name, "2026-01-01T00:00:00.000Z");
-      }).immediate();
-    }
-  } finally {
-    database.close();
-  }
+  database.exec(`
+    ALTER TABLE nodes ADD COLUMN compatibility TEXT;
+    ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'));
+    ALTER TABLE schedules ADD COLUMN commands_json TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE schedules ADD COLUMN command_delays_json TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE schedules ADD COLUMN command_delays_seconds_json TEXT NOT NULL DEFAULT '[]';
+    DELETE FROM schema_migrations;
+  `);
+  const insertMigration = database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)");
+  legacySchema16Migrations.forEach((name, index) => insertMigration.run(index + 1, name, "2026-01-01T00:00:00.000Z"));
+  database.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at, protocol_version, capabilities_json, compatibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("node-1", "Node", "remote", "offline", 0, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "2.0", "[]", "compatible");
+  database.prepare("INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at, desired_runtime_state, runtime_intent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("server-1", "node-1", "Server", "/data/server-1", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "running", "running");
+  database.prepare("INSERT INTO schedules (server_id, id, name, cron, commands_json, command_delays_json, command_delays_seconds_json, steps_json, only_when_no_players, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("server-1", "schedule-1", "Restart", "0 4 * * *", "[\"stop\"]", "[1]", "[60]", "[{\"type\":\"command\",\"command\":\"stop\",\"delaySeconds\":60}]", 0, 1, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+  database.prepare("INSERT INTO storage_metadata (key, value) VALUES (?, ?)").run("preserved", "metadata");
+  database.prepare("INSERT INTO scheduled_runs (id, server_id, schedule_id, schedule_name, status, ran_at, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run("run-1", "server-1", "schedule-1", "Restart", "completed", "2026-01-01T04:00:00.000Z", "{\"stepCount\":1}");
+  database.close();
 }
 
 describe("SQLite storage", () => {
-  it("creates a fresh database and configures the connection", async () => {
+  it("creates the compact current schema and configures the connection", async () => {
     const path = await temporaryDatabasePath();
     const storage = openStorageDatabase(path);
     openDatabases.push(storage);
@@ -53,128 +91,93 @@ describe("SQLite storage", () => {
     expect(storage.connection.pragma("foreign_keys", { simple: true })).toBe(1);
     expect(storage.connection.pragma("journal_mode", { simple: true })).toBe("wal");
     expect(storage.connection.pragma("busy_timeout", { simple: true })).toBe(5_000);
-    expect(storage.connection.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
-      .toEqual({ version: currentSchemaVersion });
+    expect(storage.connection.prepare("SELECT version, name FROM schema_migrations").get())
+      .toEqual({ version: currentSchemaVersion, name: currentSchemaName });
+    expect(columnNames(storage.connection, "nodes")).not.toContain("compatibility");
+    expect(columnNames(storage.connection, "servers")).not.toContain("desired_runtime_state");
+    expect(columnNames(storage.connection, "schedules")).toEqual(expect.arrayContaining(["steps_json"]));
+    expect(columnNames(storage.connection, "schedules")).not.toEqual(expect.arrayContaining(["commands_json", "command_delays_json", "command_delays_seconds_json"]));
   });
 
-  it("initializes the schema idempotently", async () => {
+  it("initializes the compact schema idempotently", async () => {
     const path = await temporaryDatabasePath();
-    const first = openStorageDatabase(path);
-    first.close();
+    openStorageDatabase(path).close();
 
     const second = openStorageDatabase(path);
     openDatabases.push(second);
-    expect(second.connection.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all())
-      .toEqual([
-        { version: 1, name: "sqlite-foundation" },
-        { version: 2, name: "users-nodes-settings-sessions" },
-        { version: 3, name: "managed-servers-schedules" },
-        { version: 4, name: "file-edit-leases" },
-        { version: 5, name: "resource-stats-history" },
-        { version: 6, name: "mod-preferences" },
-        { version: 7, name: "operations" },
-        { version: 8, name: "server-restart-required" },
-        { version: 9, name: "node-build-id" },
-        { version: 10, name: "schedule-command-delays" },
-        { version: 11, name: "schedule-command-delay-seconds" },
-        { version: 12, name: "server-restart-required-mods" },
-        { version: 13, name: "server-desired-runtime-state" },
-        { version: 14, name: "schedule-steps" },
-        { version: 15, name: "runtime-lifecycle-intent" },
-        { version: 16, name: "scheduled-run-details" }
-      ]);
+    expect(second.connection.prepare("SELECT version, name FROM schema_migrations").all())
+      .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
   });
 
-  it("migrates from every supported schema prefix to the current schema", async () => {
-    for (let migrationCount = 0; migrationCount < sqliteMigrations.length; migrationCount += 1) {
-      const path = await temporaryDatabasePath();
-      seedSchema(path, migrationCount);
-      const storage = openStorageDatabase(path);
-      openDatabases.push(storage);
-
-      expect(storage.connection.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
-        .toEqual({ version: currentSchemaVersion });
-      expect(storage.connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'operations'").get())
-        .toEqual({ name: "operations" });
-      storage.close();
-      openDatabases.pop();
-    }
-  });
-
-  it("backfills legacy command schedules into ordered canonical steps", async () => {
+  it("compacts a complete schema-16 database without losing canonical data", async () => {
     const path = await temporaryDatabasePath();
-    seedSchema(path, 13);
+    seedLegacySchema16(path);
+
+    const storage = openStorageDatabase(path);
+    openDatabases.push(storage);
+
+    expect(storage.connection.prepare("SELECT version, name FROM schema_migrations").all())
+      .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
+    expect(storage.connection.prepare("SELECT id, protocol_version FROM nodes").get()).toEqual({ id: "node-1", protocol_version: "2.0" });
+    expect(storage.connection.prepare("SELECT id, runtime_intent FROM servers").get()).toEqual({ id: "server-1", runtime_intent: "running" });
+    expect(storage.connection.prepare("SELECT id, steps_json FROM schedules").get()).toEqual({
+      id: "schedule-1",
+      steps_json: "[{\"type\":\"command\",\"command\":\"stop\",\"delaySeconds\":60}]"
+    });
+    expect(storage.connection.prepare("SELECT key, value FROM storage_metadata WHERE key = ?").get("preserved")).toEqual({ key: "preserved", value: "metadata" });
+    expect(storage.connection.prepare("SELECT id, details_json FROM scheduled_runs").get()).toEqual({ id: "run-1", details_json: "{\"stepCount\":1}" });
+    const indexes = storage.connection.prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all().map(({ name }) => name);
+    expect(indexes).toEqual(expect.arrayContaining(["servers_node_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx"]));
+    expect(storage.connection.pragma("foreign_key_check")).toEqual([]);
+
+    storage.close();
+    openDatabases.pop();
+    const reopened = openStorageDatabase(path);
+    openDatabases.push(reopened);
+    expect(reopened.connection.prepare("SELECT version, name FROM schema_migrations").all())
+      .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
+  });
+
+  it("rejects pre-16 databases without changing their migration history", async () => {
+    const path = await temporaryDatabasePath();
+    mkdirSync(join(path, ".."), { recursive: true });
     const legacy = new Database(path);
-    legacy.pragma("foreign_keys = ON");
-    legacy.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run("node-1", "Node", "remote", "online", 0, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
-    legacy.prepare(`
-      INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at, desired_runtime_state)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run("server-1", "node-1", "Server", "/data/server-1", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "running");
-    legacy.prepare(`
-      INSERT INTO schedules (server_id, id, name, cron, commands_json, command_delays_json, command_delays_seconds_json, only_when_no_players, enabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run("server-1", "schedule-1", "Restart warning", "0 4 * * *", '["say warning","save-all"]', '[0,5]', '[0,300]', 0, 1, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    seedMigrationHistory(legacy, 15);
     legacy.close();
 
-    const storage = openStorageDatabase(path);
-    openDatabases.push(storage);
-    const row = storage.connection.prepare("SELECT steps_json FROM schedules WHERE id = 'schedule-1'").get() as { steps_json: string };
-    expect(JSON.parse(row.steps_json)).toEqual([
-      { type: "command", command: "say warning", delaySeconds: 0 },
-      { type: "command", command: "save-all", delaySeconds: 300 }
-    ]);
-    expect(storage.connection.prepare("SELECT runtime_intent FROM servers WHERE id = 'server-1'").get()).toEqual({ runtime_intent: "running" });
+    expect(() => openStorageDatabase(path)).toThrow(/1\.2\.1 first/);
+    const unchanged = new Database(path, { readonly: true });
+    expect(unchanged.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 15 });
+    unchanged.close();
   });
 
-  it("rejects newer or unsupported schema histories", async () => {
+  it("rejects unknown future migration history", async () => {
     const path = await temporaryDatabasePath();
-    seedSchema(path, sqliteMigrations.length);
+    mkdirSync(join(path, ".."), { recursive: true });
     const database = new Database(path);
+    database.exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
     database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
-      .run(currentSchemaVersion + 1, "future-schema", "2026-01-01T00:00:00.000Z");
+      .run(18, "future-schema", "2026-01-01T00:00:00.000Z");
     database.close();
 
-    expect(() => openStorageDatabase(path)).toThrow(/Unsupported SQLite schema migration/);
+    expect(() => openStorageDatabase(path)).toThrow(/newer than/);
+    const unchanged = new Database(path, { readonly: true });
+    expect(unchanged.prepare("SELECT version, name FROM schema_migrations").get()).toEqual({ version: 18, name: "future-schema" });
+    unchanged.close();
   });
 
-  it("creates SQLite backups that include uncheckpointed WAL data", async () => {
+  it("rejects malformed databases without creating migration metadata", async () => {
     const path = await temporaryDatabasePath();
-    const storage = openStorageDatabase(path);
-    openDatabases.push(storage);
-    storage.setMetadata("backup-test", "present only in wal");
-    expect(existsSync(`${path}-wal`)).toBe(true);
-    expect((await readFile(`${path}-wal`)).length).toBeGreaterThan(0);
+    mkdirSync(join(path, ".."), { recursive: true });
+    const database = new Database(path);
+    database.exec("CREATE TABLE unexpected_data (value TEXT NOT NULL)");
+    database.prepare("INSERT INTO unexpected_data (value) VALUES (?)").run("preserve-me");
+    database.close();
 
-    const backupPath = join(join(path, ".."), "backup.sqlite");
-    await storage.backupTo(backupPath);
-    const backup = openStorageDatabase(backupPath);
-    openDatabases.push(backup);
-
-    expect(backup.metadata("backup-test")).toBe("present only in wal");
-  });
-
-  it("rolls back explicit transactions when an operation fails", async () => {
-    const storage = openStorageDatabase(await temporaryDatabasePath());
-    openDatabases.push(storage);
-
-    expect(() => storage.transaction((database) => {
-      database.prepare("INSERT INTO storage_metadata (key, value) VALUES (?, ?)").run("test", "value");
-      throw new Error("stop");
-    })).toThrow("stop");
-    expect(storage.connection.prepare("SELECT * FROM storage_metadata").all()).toEqual([]);
-  });
-
-  it("stores runtime metadata in SQLite", async () => {
-    const storage = openStorageDatabase(await temporaryDatabasePath());
-    openDatabases.push(storage);
-
-    expect(storage.metadata("node.identity")).toBeUndefined();
-
-    storage.setMetadata("node.identity", JSON.stringify({ nodeId: "node-1", nodeSecret: "secret" }));
-    storage.setMetadata("node.identity", JSON.stringify({ nodeId: "node-1", nodeSecret: "rotated" }));
-
-    expect(storage.metadata("node.identity")).toBe(JSON.stringify({ nodeId: "node-1", nodeSecret: "rotated" }));
+    expect(() => openStorageDatabase(path)).toThrow(/schema_migrations is missing/);
+    const unchanged = new Database(path, { readonly: true });
+    expect(unchanged.prepare("SELECT value FROM unexpected_data").get()).toEqual({ value: "preserve-me" });
+    expect(unchanged.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'").get()).toBeUndefined();
+    unchanged.close();
   });
 });

@@ -4,7 +4,7 @@ import { AppIcon } from "../components/FileTypeIcon";
 import { Button, StatusBadge } from "../components/UiPrimitives";
 import type { ContextNode, ManagedNode, NodeManualRecovery, NodeOperation } from "../types";
 import { formatBytes } from "../utils/format";
-import { nodeCompatibilityLabel, nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
+import { nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
 
 type PrimaryActionKind = "operation" | "check" | "rotate-token" | "install" | "update" | null;
 
@@ -65,8 +65,8 @@ function shortBuildId(value?: string) {
 }
 
 function valueTone(value?: string) {
-  if (["online", "available", "compatible", "ready"].includes(value || "")) return "ready";
-  if (["offline", "unavailable", "incompatible", "missing"].includes(value || "")) return "limited";
+  if (["online", "available", "ready"].includes(value || "")) return "ready";
+  if (["offline", "unavailable", "missing"].includes(value || "")) return "limited";
   return "neutral";
 }
 
@@ -288,7 +288,6 @@ export function NodeDetailsDrawer({
         <section className="nodeDrawerSection" aria-labelledby="node-health-title">
           <h3 id="node-health-title">Health and runtime</h3>
           <dl className="nodeDrawerFacts">
-            <div><dt>Compatibility</dt><dd className={valueTone(node.compatibility)}>{nodeCompatibilityLabel(node)}</dd></div>
             <div><dt>Docker</dt><dd className={valueTone(node.dockerStatus)}>{nodeDockerLabel(node)}</dd></div>
             <div><dt>Data path</dt><dd className={valueTone(node.dataPathStatus)}>{nodeDataPathLabel(node)}</dd></div>
             <div><dt>Agent version</dt><dd>{node.agentVersion || "Unknown"}</dd></div>

@@ -19,9 +19,6 @@ export type SettingsSystemInfo = {
 export type SettingsSystemSummary = {
   nodeCount: number;
   onlineNodeCount: number;
-  compatibleNodeCount: number;
-  incompatibleNodeCount: number;
-  unknownCompatibilityCount: number;
   agentVersions: string;
   protocolVersions: string;
   dockerStatus: string;
@@ -45,9 +42,6 @@ export function summarizeSettingsSystemInfo(info: SettingsSystemInfo): SettingsS
   return {
     nodeCount: info.nodes.length,
     onlineNodeCount: info.nodes.filter((node) => node.status === "online").length,
-    compatibleNodeCount: info.nodes.filter((node) => node.compatibility === "compatible").length,
-    incompatibleNodeCount: info.nodes.filter((node) => node.compatibility === "incompatible").length,
-    unknownCompatibilityCount: info.nodes.filter((node) => !node.compatibility || node.compatibility === "unknown").length,
     agentVersions: aggregateVersions(info.nodes, "agentVersion"),
     protocolVersions: aggregateVersions(info.nodes, "protocolVersion"),
     dockerStatus: info.panelOnlyMode
@@ -74,7 +68,6 @@ export function buildSystemDiagnostics(info: SettingsSystemInfo, generatedAt = n
     `Docker control: ${summary.dockerStatus}`,
     `Managed servers: ${info.serverCount}`,
     `Nodes online: ${summary.onlineNodeCount}/${summary.nodeCount}`,
-    `Node compatibility: ${summary.compatibleNodeCount} compatible, ${summary.incompatibleNodeCount} incompatible, ${summary.unknownCompatibilityCount} unknown`,
     `Agent versions: ${summary.agentVersions}`,
     `Protocol versions: ${summary.protocolVersions}`,
     `Detected memory: ${summary.memory}`,

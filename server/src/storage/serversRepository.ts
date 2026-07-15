@@ -15,7 +15,6 @@ type ServerRow = {
   docker_working_dir: string | null;
   docker_ports: string | null;
   java_args: string | null;
-  desired_runtime_state: "running" | "stopped" | null;
   runtime_intent: "running" | "stopped" | "restarting" | null;
   restart_phase: "stopping" | "starting" | null;
   crash_attempts_json: string;
@@ -47,9 +46,6 @@ type ScheduleRow = {
   id: string;
   name: string;
   cron: string;
-  commands_json: string;
-  command_delays_json: string;
-  command_delays_seconds_json: string;
   steps_json: string;
   only_when_no_players: number;
   enabled: number;
@@ -98,23 +94,12 @@ function runFromRow(row: RunRow): ScheduledRun {
 }
 
 function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecution {
-  const commands = JSON.parse(row.commands_json) as string[];
-  const storedDelaySeconds = JSON.parse(row.command_delays_seconds_json) as number[];
-  const storedDelayMinutes = JSON.parse(row.command_delays_json) as number[];
-  const legacyDelays = storedDelaySeconds.length > 0
-    ? storedDelaySeconds
-    : storedDelayMinutes.length > 0
-      ? storedDelayMinutes.map((minutes) => minutes * 60)
-      : commands.map(() => 0);
-  const storedSteps = JSON.parse(row.steps_json) as ScheduleStep[];
-  const steps = storedSteps.length ? storedSteps : commands.map((command, index) => ({ type: "command" as const, command, delaySeconds: legacyDelays[index] ?? 0 }));
-  const commandOnly = steps.every((step) => step.type === "command");
+  const steps = JSON.parse(row.steps_json) as ScheduleStep[];
   return {
     id: row.id,
     name: row.name,
     cron: row.cron,
     steps,
-    ...(commandOnly ? { commands: steps.map((step) => step.type === "command" ? step.command : ""), commandDelaysSeconds: steps.map((step) => step.delaySeconds) } : {}),
     onlyWhenNoPlayers: row.only_when_no_players === 1,
     enabled: row.enabled === 1,
     createdAt: row.created_at,
@@ -123,21 +108,6 @@ function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecu
     lastStatus: row.last_status ?? undefined,
     lastMessage: row.last_message ?? undefined,
     recentRuns: runs
-  };
-}
-
-function canonicalScheduleSteps(schedule: ScheduledExecution) {
-  if (schedule.steps?.length) return schedule.steps;
-  const commands = schedule.commands ?? [];
-  const delays = schedule.commandDelaysSeconds ?? schedule.commandDelaysMinutes?.map((minutes) => minutes * 60) ?? commands.map(() => 0);
-  return commands.map((command, index) => ({ type: "command" as const, command, delaySeconds: delays[index] ?? 0 }));
-}
-
-function legacyScheduleStorage(schedule: ScheduledExecution) {
-  const commandSteps = canonicalScheduleSteps(schedule).filter((step) => step.type === "command");
-  return {
-    commands: commandSteps.map((step) => step.command),
-    delays: commandSteps.map((step) => step.delaySeconds)
   };
 }
 
@@ -192,8 +162,7 @@ export class ServersRepository {
       dockerPorts: row.docker_ports ?? undefined,
       managedPorts: portsByServer.get(row.id) ?? [],
       javaArgs: row.java_args ?? undefined,
-      desiredRuntimeState: row.desired_runtime_state ?? undefined,
-      runtimeIntent: row.runtime_intent ?? row.desired_runtime_state ?? undefined,
+      runtimeIntent: row.runtime_intent ?? undefined,
       restartPhase: row.restart_phase ?? undefined,
       crashAttemptTimestamps: JSON.parse(row.crash_attempts_json) as string[],
       crashNextRetryAt: row.crash_next_retry_at ?? undefined,
@@ -211,8 +180,7 @@ export class ServersRepository {
   create(value: ManagedServer) {
     this.storage.transaction((database) => {
       const server = this.normalize(value);
-      server.desiredRuntimeState ??= "stopped";
-      server.runtimeIntent ??= server.desiredRuntimeState;
+      server.runtimeIntent ??= "stopped";
       if (database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) {
         throw new Error("A managed server with this id already exists");
       }
@@ -273,21 +241,21 @@ export class ServersRepository {
     `).run(now, serverId).changes > 0;
   }
 
-  setDesiredRuntimeState(serverId: string, state: "running" | "stopped", now = new Date().toISOString()) {
+  setRuntimeIntent(serverId: string, state: "running" | "stopped", now = new Date().toISOString()) {
     return this.storage.connection.prepare(`
-      UPDATE servers SET desired_runtime_state = ?, runtime_intent = CASE WHEN runtime_intent = 'restarting' THEN runtime_intent ELSE ? END, updated_at = ?
-      WHERE id = ? AND desired_runtime_state IS NOT ?
-    `).run(state, state, now, serverId, state).changes > 0;
+      UPDATE servers SET runtime_intent = CASE WHEN runtime_intent = 'restarting' THEN runtime_intent ELSE ? END, updated_at = ?
+      WHERE id = ? AND runtime_intent IS NOT ?
+    `).run(state, now, serverId, state).changes > 0;
   }
 
   setRuntimeLifecycle(serverId: string, lifecycle: Pick<ManagedServer, "runtimeIntent" | "restartPhase" | "crashAttemptTimestamps" | "crashNextRetryAt" | "crashLoopSince" | "crashStableSince">, now = new Date().toISOString()) {
     const intent = lifecycle.runtimeIntent ?? "stopped";
     return this.storage.connection.prepare(`
-      UPDATE servers SET runtime_intent = ?, desired_runtime_state = ?, restart_phase = ?,
+      UPDATE servers SET runtime_intent = ?, restart_phase = ?,
         crash_attempts_json = ?, crash_next_retry_at = ?, crash_loop_since = ?, crash_stable_since = ?, updated_at = ?
       WHERE id = ?
     `).run(
-      intent, intent === "stopped" ? "stopped" : "running", lifecycle.restartPhase ?? null,
+      intent, lifecycle.restartPhase ?? null,
       JSON.stringify(lifecycle.crashAttemptTimestamps ?? []), lifecycle.crashNextRetryAt ?? null,
       lifecycle.crashLoopSince ?? null, lifecycle.crashStableSince ?? null, now, serverId
     ).changes > 0;
@@ -336,19 +304,18 @@ export class ServersRepository {
   }
 
   private writeSchedule(database: Database.Database, serverId: string, schedule: ScheduledExecution, update: boolean) {
-    const { commands, delays } = legacyScheduleStorage(schedule);
     const statement = update
       ? database.prepare(`
-        UPDATE schedules SET name=?, cron=?, commands_json=?, command_delays_json=?, command_delays_seconds_json=?, steps_json=?, only_when_no_players=?, enabled=?,
+        UPDATE schedules SET name=?, cron=?, steps_json=?, only_when_no_players=?, enabled=?,
           created_at=?, updated_at=? WHERE server_id=? AND id=?
       `)
       : database.prepare(`
         INSERT INTO schedules (
-          name, cron, commands_json, command_delays_json, command_delays_seconds_json, steps_json, only_when_no_players, enabled, created_at, updated_at, server_id, id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          name, cron, steps_json, only_when_no_players, enabled, created_at, updated_at, server_id, id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
     const result = statement.run(
-      schedule.name, schedule.cron, JSON.stringify(commands), JSON.stringify(delays.map((seconds) => seconds / 60)), JSON.stringify(delays), JSON.stringify(canonicalScheduleSteps(schedule)), schedule.onlyWhenNoPlayers ? 1 : 0,
+      schedule.name, schedule.cron, JSON.stringify(schedule.steps), schedule.onlyWhenNoPlayers ? 1 : 0,
       schedule.enabled ? 1 : 0, schedule.createdAt, schedule.updatedAt, serverId, schedule.id
     );
     if (update && result.changes === 0) throw new Error("Schedule not found");
@@ -360,10 +327,10 @@ export class ServersRepository {
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, desired_runtime_state, runtime_intent, restart_phase, crash_attempts_json,
+          docker_ports, java_args, runtime_intent, restart_phase, crash_attempts_json,
           crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
           restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -371,8 +338,7 @@ export class ServersRepository {
           docker_container=excluded.docker_container, docker_image=excluded.docker_image,
           docker_mount_source=excluded.docker_mount_source,
            docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, desired_runtime_state=servers.desired_runtime_state,
-          runtime_intent=servers.runtime_intent, restart_phase=servers.restart_phase,
+          java_args=excluded.java_args, runtime_intent=servers.runtime_intent, restart_phase=servers.restart_phase,
           crash_attempts_json=servers.crash_attempts_json, crash_next_retry_at=servers.crash_next_retry_at,
           crash_loop_since=servers.crash_loop_since, crash_stable_since=servers.crash_stable_since,
           restart_required_since=servers.restart_required_since,
@@ -384,10 +350,10 @@ export class ServersRepository {
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, desired_runtime_state, runtime_intent, restart_phase, crash_attempts_json,
+          docker_ports, java_args, runtime_intent, restart_phase, crash_attempts_json,
           crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
           restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -395,8 +361,7 @@ export class ServersRepository {
           docker_container=excluded.docker_container, docker_image=excluded.docker_image,
           docker_mount_source=excluded.docker_mount_source,
           docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, desired_runtime_state=excluded.desired_runtime_state,
-          runtime_intent=excluded.runtime_intent, restart_phase=excluded.restart_phase,
+          java_args=excluded.java_args, runtime_intent=excluded.runtime_intent, restart_phase=excluded.restart_phase,
           crash_attempts_json=excluded.crash_attempts_json, crash_next_retry_at=excluded.crash_next_retry_at,
           crash_loop_since=excluded.crash_loop_since, crash_stable_since=excluded.crash_stable_since,
           restart_required_since=excluded.restart_required_since,
@@ -408,8 +373,8 @@ export class ServersRepository {
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,
-      server.dockerPorts ?? null, server.javaArgs ?? null, server.desiredRuntimeState ?? null,
-      server.runtimeIntent ?? server.desiredRuntimeState ?? "stopped", server.restartPhase ?? null,
+      server.dockerPorts ?? null, server.javaArgs ?? null,
+      server.runtimeIntent ?? "stopped", server.restartPhase ?? null,
       JSON.stringify(server.crashAttemptTimestamps ?? []), server.crashNextRetryAt ?? null,
       server.crashLoopSince ?? null, server.crashStableSince ?? null,
       server.restartRequiredSince ?? null,
@@ -439,22 +404,19 @@ export class ServersRepository {
   private syncSchedules(database: Database.Database, server: ManagedServer) {
     const upsert = database.prepare(`
       INSERT INTO schedules (
-        server_id, id, name, cron, commands_json, command_delays_json, command_delays_seconds_json, steps_json, only_when_no_players, enabled,
+        server_id, id, name, cron, steps_json, only_when_no_players, enabled,
         created_at, updated_at, last_run_at, last_status, last_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(server_id, id) DO UPDATE SET
-        name=excluded.name, cron=excluded.cron, commands_json=excluded.commands_json,
-        command_delays_json=excluded.command_delays_json,
-        command_delays_seconds_json=excluded.command_delays_seconds_json, steps_json=excluded.steps_json,
+        name=excluded.name, cron=excluded.cron, steps_json=excluded.steps_json,
         only_when_no_players=excluded.only_when_no_players, enabled=excluded.enabled,
         created_at=excluded.created_at, updated_at=excluded.updated_at,
         last_run_at=excluded.last_run_at, last_status=excluded.last_status,
         last_message=excluded.last_message
     `);
     for (const schedule of server.schedules ?? []) {
-      const { commands, delays } = legacyScheduleStorage(schedule);
       upsert.run(
-        server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(commands), JSON.stringify(delays.map((seconds) => seconds / 60)), JSON.stringify(delays), JSON.stringify(canonicalScheduleSteps(schedule)),
+        server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.steps),
         schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
         schedule.updatedAt, schedule.lastRunAt ?? null, schedule.lastStatus ?? null,
         schedule.lastMessage ?? null

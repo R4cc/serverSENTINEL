@@ -247,7 +247,6 @@ export function SettingsPage(props: SettingsPageProps) {
             <div><dt>Docker control</dt><dd><strong>{systemSummary.dockerStatus}</strong><span>Local container access</span></dd></div>
             <div><dt>Managed servers</dt><dd><strong>{props.systemInfo.serverCount}</strong><span>Configured across all nodes</span></dd></div>
             <div><dt>Connected nodes</dt><dd><strong>{systemSummary.onlineNodeCount} / {systemSummary.nodeCount} online</strong><span>{systemSummary.nodeCount - systemSummary.onlineNodeCount} currently unavailable</span></dd></div>
-            <div><dt>Compatibility</dt><dd><strong>{systemSummary.compatibleNodeCount} compatible</strong><span>{systemSummary.incompatibleNodeCount} incompatible · {systemSummary.unknownCompatibilityCount} unknown</span></dd></div>
             <div><dt>Detected memory</dt><dd><strong>{systemSummary.memory}</strong><span>Panel host capacity</span></dd></div>
             <div><dt>Modrinth</dt><dd><StatusBadge tone={props.systemInfo.modrinthConfigured ? "success" : "neutral"}>{props.systemInfo.modrinthConfigured ? "Configured" : "Not configured"}</StatusBadge><span>Mod discovery integration</span></dd></div>
           </dl>

@@ -114,7 +114,6 @@ describe("SQLite repositories", () => {
       capabilities: ["node.update", "node.remove"],
       buildId: "commit-sha",
       totalMemory: 8_589_934_592,
-      compatibility: "compatible",
       secretHash: "secret"
     };
 

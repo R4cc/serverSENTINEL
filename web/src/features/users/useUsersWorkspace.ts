@@ -199,5 +199,3 @@ export function useUsersWorkspace({
     onRetry: () => void loadUsers()
   };
 }
-
-export type UsersWorkspace = ReturnType<typeof useUsersWorkspace>;

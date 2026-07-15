@@ -60,7 +60,6 @@ strong {
 button,
 .quickActionButton,
 .runtimeControlButton,
-.secondaryButton,
 .dangerTextButton,
 .fileNameCell,
 .modInstallVersionRow,
@@ -131,8 +130,7 @@ textarea,
   text-transform: none;
 }
 
-.settingsVersionText,
-.selectedServerReadout {
+.settingsVersionText {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
@@ -223,7 +221,6 @@ textarea,
   text-transform: none;
 }
 
-.settingsGroupHeader h2,
 .modalHeader h2,
 .userModalHeader h2,
 .nodeModalHeader h2,
@@ -278,9 +275,7 @@ textarea,
 .userModalForm label,
 .keyForm label,
 .fieldLabel,
-.settingsRow strong,
 .nodeServerSectionLabel,
-.nodeInfoCard dt,
 .resourceMetricLabel span,
 .modInstallVersionGroupHeader > strong,
 .fileDetailsContent dt {
@@ -313,8 +308,6 @@ textarea,
   text-transform: none;
 }
 
-.settingsGroupHeader p,
-.settingsRow span,
 .permissionsHeader span,
 .permissionRow small,
 .presetSummary,
@@ -370,7 +363,6 @@ textarea,
 .nodeCardHeader p,
 .nodeInstallHeader p,
 .nodeModalHeader p,
-.nodeDetailsTitleBlock p,
 .modInstallStepIntro p,
 .fileDetailsTitle > div > span,
 .fileDetailsContent dd,
@@ -384,24 +376,14 @@ textarea,
   text-transform: none;
 }
 
-.nodeDetailsTitleBlock h2 {
-  font-size: clamp(21px, 2.2vw, 28px);
-  letter-spacing: 0;
-  line-height: 1.12;
-  text-transform: none;
-}
-
-.nodeInfoCard dd,
 .nodeServerPlayers {
   font-size: var(--type-helper-size);
   font-weight: var(--weight-meta);
   letter-spacing: 0;
 }
 
-.addNodeCardInner span,
 .addNodeStepLabel,
-.addNodeStatusCard h3,
-.placementHeader h3 {
+.addNodeStatusCard h3 {
   font-size: var(--type-card-title-size);
   font-weight: var(--weight-strong);
   letter-spacing: 0;

@@ -36,7 +36,6 @@ export function useServerContext(input: {
       ...node,
       dockerStatus: (node.isInternal || node.type === "local") ? (effectiveAppState.dockerSocketMounted ? "available" : "unavailable") : node.dockerStatus,
       dataPathStatus: (node.isInternal || node.type === "local") ? "ready" : node.dataPathStatus,
-      compatibility: (node.isInternal || node.type === "local") ? "compatible" : node.compatibility,
       servers: [] as ManagedServer[]
     }));
     const nodesById = new Map(nodes.map((node) => [node.id, node]));

@@ -20,7 +20,6 @@ type NodeRow = {
   docker_status: string | null;
   data_path_status: string | null;
   total_memory: number | null;
-  compatibility: string | null;
   secret_hash: string | null;
   join_token_hash: string | null;
   join_token_expires_at: string | null;
@@ -56,7 +55,6 @@ export function normalizeNode(value: unknown): ManagedNode {
     dockerStatus: optionalString(node.dockerStatus, "node.dockerStatus"),
     dataPathStatus: optionalString(node.dataPathStatus, "node.dataPathStatus"),
     totalMemory,
-    compatibility: node.compatibility === "compatible" || node.compatibility === "incompatible" || node.compatibility === "unknown" ? node.compatibility : undefined,
     secretHash: optionalString(node.secretHash, "node.secretHash"),
     joinTokenHash: optionalString(node.joinTokenHash, "node.joinTokenHash"),
     joinTokenExpiresAt: optionalString(node.joinTokenExpiresAt, "node.joinTokenExpiresAt")
@@ -72,7 +70,7 @@ function nodeFromRow(row: NodeRow) {
     protocolVersion: row.protocol_version ?? undefined,
     capabilities: row.capabilities_json ? JSON.parse(row.capabilities_json) as unknown : undefined,
     dockerStatus: row.docker_status ?? undefined, dataPathStatus: row.data_path_status ?? undefined,
-    totalMemory: row.total_memory ?? undefined, compatibility: row.compatibility ?? undefined,
+    totalMemory: row.total_memory ?? undefined,
     secretHash: row.secret_hash ?? undefined, joinTokenHash: row.join_token_hash ?? undefined,
     joinTokenExpiresAt: row.join_token_expires_at ?? undefined
   });
@@ -144,9 +142,9 @@ export class NodesRepository {
       INSERT INTO nodes (
         id, name, type, status, is_internal, created_at, updated_at, last_seen_at,
         connected_at, agent_version, build_id, protocol_version, capabilities_json, docker_status,
-        data_path_status, total_memory, compatibility, secret_hash, join_token_hash,
+        data_path_status, total_memory, secret_hash, join_token_hash,
         join_token_expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name, type=excluded.type, status=excluded.status,
         is_internal=excluded.is_internal, created_at=excluded.created_at,
@@ -155,7 +153,7 @@ export class NodesRepository {
         build_id=excluded.build_id, protocol_version=excluded.protocol_version,
         capabilities_json=excluded.capabilities_json,
         docker_status=excluded.docker_status, data_path_status=excluded.data_path_status,
-        total_memory=excluded.total_memory, compatibility=excluded.compatibility,
+        total_memory=excluded.total_memory,
         secret_hash=excluded.secret_hash, join_token_hash=excluded.join_token_hash,
         join_token_expires_at=excluded.join_token_expires_at
     `).run(
@@ -163,7 +161,7 @@ export class NodesRepository {
       node.createdAt, node.updatedAt, node.lastSeenAt ?? null, node.connectedAt ?? null,
       node.agentVersion ?? null, node.buildId ?? null, node.protocolVersion ?? null,
       node.capabilities ? JSON.stringify(node.capabilities) : null, node.dockerStatus ?? null,
-      node.dataPathStatus ?? null, node.totalMemory ?? null, node.compatibility ?? null,
+      node.dataPathStatus ?? null, node.totalMemory ?? null,
       node.secretHash ?? null, node.joinTokenHash ?? null, node.joinTokenExpiresAt ?? null
     );
   }

@@ -1,4 +1,4 @@
-export const appVersion = process.env.npm_package_version ?? "1.2.1";
+export const appVersion = process.env.npm_package_version ?? "1.3.0";
 
 export function appUserAgentFor(component: string) {
   return `serverSENTINEL/${appVersion} (${component})`;

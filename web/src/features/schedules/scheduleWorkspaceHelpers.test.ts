@@ -29,19 +29,16 @@ describe("schedule workspace helpers", () => {
     expect(scheduleValidationMessage(patch())).toBe("");
   });
 
-  it("preserves legacy command fields only for command-only demo schedules", () => {
+  it("creates canonical step-only demo schedules", () => {
     const created = createDemoSchedule(patch(), "schedule-1", "2026-07-15T10:00:00.000Z");
     expect(created).toMatchObject({
       id: "schedule-1",
-      commands: ["say hello"],
-      commandDelaysSeconds: [5],
+      steps: [commandStep],
       createdAt: "2026-07-15T10:00:00.000Z",
       updatedAt: "2026-07-15T10:00:00.000Z"
     });
-
-    const withRestart = createDemoSchedule(patch({ steps: [{ type: "action", procedure: "restart", delaySeconds: 0 }] }), "schedule-2", "now");
-    expect(withRestart).not.toHaveProperty("commands");
-    expect(withRestart).not.toHaveProperty("commandDelaysSeconds");
+    expect(created).not.toHaveProperty("commands");
+    expect(created).not.toHaveProperty("commandDelaysSeconds");
   });
 
   it("labels toggles separately from general updates", () => {

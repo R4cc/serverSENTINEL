@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 - 2026-07-15
+
+- Established SQLite schema 17 as a compact baseline for fresh databases and databases fully migrated through schema 16. Older databases must stage through 1.2.1 first.
+- Removed legacy schedule columns, desired-runtime-state storage, node compatibility state, and historical migration rows while preserving canonical data.
+- Made canonical schedule steps and runtime intent the only current API, persistence, and export representations.
+- Bumped import/export artifacts to schema 3 and removed schema-1/2 import compatibility.
+- Slimmed the node handshake while retaining protocol 2.0 validation, capability checks, and panel-first upgrade tolerance for extra 1.2.1 hello fields.
+- Removed verified unused TypeScript declarations and retired pre-redesign CSS selectors.
+
 ## 1.2.1 - 2026-07-14
 
 - Bumped package, panel, node image, Docker, and release-facing version metadata to 1.2.1.

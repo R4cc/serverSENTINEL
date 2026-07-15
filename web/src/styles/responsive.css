@@ -4,9 +4,8 @@
   }
 
   .overviewSummary,
-  .overviewPage > .resourcePanel,
-  .overviewPage > .activityPanel,
-  .overviewPage > .eventsPanel {
+.overviewPage > .resourcePanel,
+.overviewPage > .eventsPanel {
     grid-column: 1 / -1;
     grid-row: auto;
   }
@@ -59,12 +58,11 @@
   }
 
   .sidebarCollapsed .brandBlock h1,
-  .sidebarCollapsed .brandBlock p,
-  .sidebarCollapsed .navLabel,
-  .sidebarCollapsed .selectedServerReadout,
-  .sidebarCollapsed .accountName,
-  .sidebarCollapsed .accountLogoutButton,
-  .sidebarCollapsed .settingsVersionText {
+.sidebarCollapsed .brandBlock p,
+.sidebarCollapsed .navLabel,
+.sidebarCollapsed .accountName,
+.sidebarCollapsed .accountLogoutButton,
+.sidebarCollapsed .settingsVersionText {
     opacity: 1 !important;
     max-width: none !important;
     visibility: visible !important;
@@ -80,10 +78,6 @@
     justify-content: flex-start;
     padding: 10px 12px;
     gap: var(--space-3) !important;
-  }
-
-  .sidebarCollapsed .selectedServerReadout {
-    display: block;
   }
 
   .sidebarCollapsed .accountChip {
@@ -145,9 +139,8 @@
   }
 
   .overviewSummary,
-  .overviewPage > .resourcePanel,
-  .overviewPage > .activityPanel,
-  .overviewPage > .eventsPanel {
+.overviewPage > .resourcePanel,
+.overviewPage > .eventsPanel {
     grid-column: 1 / -1;
     grid-row: auto;
   }
@@ -165,14 +158,6 @@
     justify-content: start;
   }
 
-  .settingsGroupHeader,
-  .settingsRow {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-  }
-
-.settingsRow select,
-.settingsRow .keyForm,
 .settingsStatus {
     justify-self: stretch;
     max-width: none;
@@ -266,7 +251,6 @@
     flex-direction: column;
   }
 
-  .activityGrid,
   .resourceRow {
     grid-template-columns: 1fr;
   }
@@ -290,15 +274,6 @@
     min-width: 0;
     margin: 0;
     padding: 6px 2px 2px 0;
-  }
-
-  .activityItem,
-  .activityItem:nth-child(odd) {
-    border-right: 0;
-  }
-
-  .activityItem:nth-last-child(2) {
-    border-bottom: var(--border-subtle) solid var(--border-muted);
   }
 
   .eventRow {
@@ -332,15 +307,6 @@
 
   .userActions button {
     flex: 1;
-  }
-
-  .usersGroupHeader {
-    grid-template-columns: 48px minmax(0, 1fr);
-  }
-
-  .usersGroupHeader button {
-    grid-column: 1 / -1;
-    justify-self: stretch;
   }
 
   .userModalFields,
@@ -577,15 +543,8 @@
   border-radius: var(--radius-sm);
 }
 
-.settingsGroupHeader > div,
-.settingsRow > div,
 .serverStripInfo {
   min-width: 0;
-}
-
-.settingsGroupHeader h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .emptyInline,
@@ -596,22 +555,8 @@
 
 button,
 .quickActionButton,
-.runtimeControlButton,
-.secondaryButton {
+.runtimeControlButton {
   min-height: 42px;
-}
-
-
-.secondaryButton {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--border);
-}
-
-.secondaryButton:hover:not(:disabled) {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--surface);
 }
 
 .iconButton,
@@ -648,14 +593,6 @@ button:disabled,
   transform: none;
 }
 
-.selectedServerReadout {
-  min-height: 28px;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: 6px 8px;
-}
-
 .serverListItem,
 .nodeCard {
   min-width: 0;
@@ -664,7 +601,6 @@ button:disabled,
 .serverListItem strong,
 .nodeCardTitle h3,
 .nodeServerName,
-.selectedServerReadout,
 .accountName,
 .settingsNavLabel {
   overflow: hidden;
@@ -783,29 +719,11 @@ button:disabled,
   margin-top: 0;
 }
 
-.nodeModalHeader.nodeDetailsHeader {
-  padding: var(--space-6) var(--space-7);
-}
-
 .nodeModalBody.nodeDetailsBody {
   padding: var(--space-6) var(--space-7) var(--space-7);
 }
 
 @media (max-width: 920px) {
-  .nodeInfoGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .nodeDetailsActions {
-    align-items: stretch;
-  }
-
-  .nodeActionGroup,
-  .nodeActionGroup.destructive {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 640px) {
@@ -815,36 +733,7 @@ button:disabled,
     border-radius: 14px;
   }
 
-  .nodeModalHeader.nodeDetailsHeader,
   .nodeModalBody.nodeDetailsBody {
-    padding: var(--space-4);
-  }
-
-  .nodeDetailsHeader {
-    align-items: flex-start;
-  }
-
-  .nodeDetailsTitleBlock {
-    gap: var(--space-3);
-  }
-
-  .nodeDetailIcon {
-    width: 44px;
-    height: 44px;
-    flex-basis: 44px;
-  }
-
-  .nodeDetailIcon svg {
-    width: 25px;
-    height: 25px;
-  }
-
-  .nodeInfoGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .nodeDetailsActions {
-    margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);
     padding: var(--space-4);
   }
 
@@ -1028,14 +917,6 @@ button:disabled,
   text-overflow: ellipsis;
 }
 
-
-.settingsRow,
-.settingsGroupHeader {
-  min-width: 0;
-}
-
-.settingsRow select,
-.settingsRow input,
 .keyForm,
 .secretPreview {
   min-width: 0;
@@ -1080,8 +961,6 @@ button:disabled,
 .fileToolbar,
 .selectionActions,
 .nodeCardActions,
-.nodeActions,
-.nodeDetailsActions,
 .modalFooter,
 .userModalFooter,
 .nodeModalFooter.inline,
@@ -1118,7 +997,6 @@ button:disabled,
   border-radius: var(--radius-sm);
 }
 
-.settingsGroupHeader,
 .nodeCardHeader,
 .nodeInstallHeader,
 .modalHeader,
@@ -1132,7 +1010,6 @@ button:disabled,
   gap: var(--space-3);
 }
 
-.settingsGroupHeader h2,
 .modalHeader h2,
 .userModalHeader h2,
 .nodeModalHeader h2,
@@ -1241,16 +1118,14 @@ button:disabled,
 .nodeServerRow,
 .nodeServerMoreRow,
 .fileTableRow,
-.eventRow,
-.settingsRow {
+.eventRow {
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
 
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled),
 .fileTableRow:hover,
-.eventRow:hover,
-.settingsRow:not(.readOnly):hover {
+.eventRow:hover {
   background: var(--sentinel-accent-soft);
 }
 
@@ -1317,7 +1192,6 @@ button:disabled,
 }
 
 .sidebar .brandBlock,
-.sidebar .selectedServerReadout,
 .sidebar .accountChip {
   color: var(--sidebar-foreground);
 }
@@ -1337,7 +1211,6 @@ button:disabled,
   color: var(--sidebar-foreground);
 }
 
-.sidebar .selectedServerReadout,
 .sidebar .accountChip {
   border-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
   background: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
@@ -2185,13 +2058,11 @@ button:disabled,
 .userModalHeader,
 .nodeModalHeader,
 .fileEditorHeader,
-.settingsGroupHeader,
 .fileNavBar,
 .usersTable th,
 .usersTable td,
 .fileTableHead,
-.fileTableRow,
-.settingsRow {
+.fileTableRow {
   border-color: var(--border-row);
 }
 
@@ -2204,7 +2075,6 @@ button:disabled,
 .serverStripIcon,
 .fileTypeIcon,
 .accountIcon,
-.nodeDetailIcon,
 .addNodeStepCircle {
   border-color: var(--border-muted);
 }
@@ -2247,7 +2117,6 @@ button:disabled,
   color: var(--sentinel-accent-strong);
 }
 
-.selectedServerReadout,
 .accountChip {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
@@ -2286,7 +2155,6 @@ button:disabled,
 .modalPanel .panel,
 .nodeModalBody .panel,
 .fileEditorBody .panel,
-.settingsGroup,
 .presetSummary,
 .secretPreview,
 .addNodeStatusCard,
@@ -2327,12 +2195,10 @@ select:hover:not(:disabled),
 textarea:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
-.secondaryButton:hover:not(:disabled),
 .fileBreadcrumbs button:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
 }
 
-.secondaryButton,
 .quickActionButton,
 .iconButton,
 .iconOnlyButton,
@@ -2344,7 +2210,6 @@ textarea:hover:not(:disabled),
   color: var(--text);
 }
 
-.secondaryButton:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
@@ -2358,8 +2223,7 @@ textarea:hover:not(:disabled),
   transform: none;
 }
 
-.runtimeControlButton,
-.workspaceActions > button:not(.secondaryButton) {
+.runtimeControlButton {
   border-color: var(--text);
 }
 
@@ -2391,8 +2255,7 @@ textarea:hover:not(:disabled),
 .nodeServerRow,
 .nodeServerMoreRow,
 .fileTableRow,
-.eventRow,
-.settingsRow {
+.eventRow {
   border-color: var(--border-row);
   box-shadow: none;
 }
@@ -2400,16 +2263,14 @@ textarea:hover:not(:disabled),
 .nodeServerRow,
 .nodeServerMoreRow,
 .fileTableRow,
-.eventRow,
-.settingsRow {
+.eventRow {
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
 }
 
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled),
 .fileTableRow:hover,
-.eventRow:hover,
-.settingsRow:hover {
+.eventRow:hover {
   background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
 }
@@ -2466,8 +2327,6 @@ textarea:hover:not(:disabled),
 
 .summaryTile,
 .resourceRow,
-.activityGrid,
-.activityItem,
 .usersTable,
 .fileTable,
 .scheduleTableFrame {
@@ -2493,22 +2352,12 @@ textarea:hover:not(:disabled),
   background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
 }
 
-.activityGrid {
-  background: color-mix(in srgb, var(--surface-raised) 70%, var(--surface-muted));
-}
-
-.activityItem {
-  border-color: var(--border-row);
-}
-
 .resourceChart,
 .resourceChartEmpty,
 .permissionWarning,
 .permissionGroup,
-.nodeCapabilitiesPanel,
 .installTabs,
-.addNodeStepCircle,
-.nodeDetailsActions {
+.addNodeStepCircle {
   border-color: var(--border-muted);
 }
 
@@ -2531,8 +2380,7 @@ textarea:hover:not(:disabled),
 }
 
 .usersTable th,
-.fileTableHead,
-.settingsGroupHeader {
+.fileTableHead {
   background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
 }
 
@@ -2712,10 +2560,9 @@ textarea:hover:not(:disabled),
   }
 
   .navLabel,
-  .settingsVersionText,
-  .accountName,
-  .accountLogoutButton,
-  .selectedServerReadout {
+.settingsVersionText,
+.accountName,
+.accountLogoutButton {
     display: flex !important;
     opacity: 1 !important;
     max-width: none !important;
@@ -2752,38 +2599,7 @@ textarea:hover:not(:disabled),
   }
 }
 
-.settingsGroupHeader.uiPanelHeader,
-.settingsGroupHeader.uiPanelHeader.usersGroupHeader {
-  display: flex;
-  grid-template-columns: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.settingsGroupHeader .uiPanelHeaderCopy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  overflow: visible;
-}
-
-.settingsGroupHeader .uiPanelHeaderActions {
-  margin-left: auto;
-}
-
 @media (max-width: 760px) {
-  .settingsGroupHeader.uiPanelHeader,
-  .settingsGroupHeader.uiPanelHeader.usersGroupHeader {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .settingsGroupHeader .uiPanelHeaderActions,
-  .settingsGroupHeader .uiPanelHeaderActions .uiButton {
-    width: 100%;
-    margin-left: 0;
-  }
 }
 
 /* Keep sidebar selections and account controls independent of page-theme surfaces. */

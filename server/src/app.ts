@@ -47,7 +47,7 @@ import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeAdvertisesCapability, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
+import { nodeAdvertisesCapability, normalizeNodeHello } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
@@ -1040,7 +1040,7 @@ function publicDockerStatus(value: unknown) {
 export function publicServerStatus(status: unknown, server: Pick<ManagedServer, "id"> & Partial<ManagedServer>) {
   const source = status && typeof status === "object" ? status as Record<string, unknown> : {};
   const docker = publicDockerStatus(source.docker);
-  const intent = server.runtimeIntent ?? server.desiredRuntimeState ?? (docker.running ? "running" : "stopped");
+  const intent = server.runtimeIntent ?? (docker.running ? "running" : "stopped");
   const lifecycleState = server.crashLoopSince
     ? "crash-loop" as const
     : server.crashNextRetryAt
@@ -1113,14 +1113,12 @@ export function publicInstalledModsResult(result: unknown) {
 
 function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
-  const steps = sanitizeScheduleSteps(schedule.steps, schedule.commands, schedule.commandDelaysSeconds, schedule.commandDelaysMinutes);
-  const legacy = legacyScheduleFields(steps);
+  const steps = sanitizeScheduleSteps(schedule.steps);
   return {
     id: validateScheduleId(schedule.id),
     name: requiredString(schedule.name, "schedule.name"),
     cron: requiredString(schedule.cron, "schedule.cron"),
     steps,
-    ...legacy,
     onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
     enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
     createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
@@ -1160,17 +1158,12 @@ function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
     scheduleName: requiredString(run.scheduleName, "activeRun.scheduleName"),
     status: "running",
     startedAt: requiredString(run.startedAt, "activeRun.startedAt"),
-    stepCount: typeof run.stepCount === "number" ? run.stepCount : typeof run.actionCount === "number" ? run.actionCount : 0,
-    currentStepIndex: typeof run.currentStepIndex === "number" ? run.currentStepIndex : typeof run.currentActionIndex === "number" ? run.currentActionIndex : undefined,
-    currentStep: optionalString(run.currentStep ?? run.currentAction, "activeRun.currentStep"),
+    stepCount: typeof run.stepCount === "number" ? run.stepCount : 0,
+    currentStepIndex: typeof run.currentStepIndex === "number" ? run.currentStepIndex : undefined,
+    currentStep: optionalString(run.currentStep, "activeRun.currentStep"),
     cancellable: run.cancellable !== false,
     waitingUntil: optionalString(run.waitingUntil, "activeRun.waitingUntil"),
-    waitingDelaySeconds: typeof run.waitingDelaySeconds === "number"
-      ? run.waitingDelaySeconds
-      : typeof run.waitingDelayMinutes === "number"
-        ? run.waitingDelayMinutes * 60
-        : undefined,
-    waitingDelayMinutes: typeof run.waitingDelayMinutes === "number" ? run.waitingDelayMinutes : undefined,
+    waitingDelaySeconds: typeof run.waitingDelaySeconds === "number" ? run.waitingDelaySeconds : undefined,
     message: optionalString(run.message, "activeRun.message")
   };
 }
@@ -1265,12 +1258,9 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerPorts,
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
-    desiredRuntimeState: server.desiredRuntimeState === "running" || server.desiredRuntimeState === "stopped"
-      ? server.desiredRuntimeState
-      : undefined,
     runtimeIntent: server.runtimeIntent === "running" || server.runtimeIntent === "stopped" || server.runtimeIntent === "restarting"
       ? server.runtimeIntent
-      : server.desiredRuntimeState === "running" || server.desiredRuntimeState === "stopped" ? server.desiredRuntimeState : undefined,
+      : undefined,
     restartPhase: server.restartPhase === "stopping" || server.restartPhase === "starting" ? server.restartPhase : undefined,
     crashAttemptTimestamps: server.crashAttemptTimestamps === undefined
       ? []
@@ -2128,41 +2118,9 @@ function sanitizeCommands(commands: unknown) {
   return clean;
 }
 
-const maximumCommandDelayMinutes = 10_080;
-const maximumCommandDelaySeconds = maximumCommandDelayMinutes * 60;
+const maximumCommandDelaySeconds = 604_800;
 
-export function sanitizeCommandDelays(delays: unknown, commandCount: number) {
-  if (delays === undefined) return Array<number>(commandCount).fill(0);
-  if (!Array.isArray(delays) || delays.length !== commandCount) {
-    throw new Error("A delay in minutes is required for every scheduled command");
-  }
-  return delays.map((delay) => {
-    if (!Number.isInteger(delay) || delay < 0 || delay > maximumCommandDelayMinutes) {
-      throw new Error(`Scheduled command delays must be whole minutes between 0 and ${maximumCommandDelayMinutes}`);
-    }
-    return delay;
-  });
-}
-
-export function sanitizeCommandDelaysSeconds(delays: unknown, commandCount: number, legacyMinutes?: unknown) {
-  if (delays === undefined) return sanitizeCommandDelays(legacyMinutes, commandCount).map((minutes) => minutes * 60);
-  if (!Array.isArray(delays) || delays.length !== commandCount) {
-    throw new Error("A delay in seconds is required for every scheduled command");
-  }
-  return delays.map((delay) => {
-    if (!Number.isInteger(delay) || delay < 0 || delay > maximumCommandDelaySeconds) {
-      throw new Error(`Scheduled command delays must be whole seconds between 0 and ${maximumCommandDelaySeconds}`);
-    }
-    return delay;
-  });
-}
-
-export function sanitizeScheduleSteps(steps: unknown, legacyCommands?: unknown, legacyDelaySeconds?: unknown, legacyDelayMinutes?: unknown): ScheduleStep[] {
-  if (steps === undefined) {
-    const commands = sanitizeCommands(legacyCommands);
-    const delays = sanitizeCommandDelaysSeconds(legacyDelaySeconds, commands.length, legacyDelayMinutes);
-    return commands.map((command, index) => ({ type: "command", command, delaySeconds: delays[index] ?? 0 }));
-  }
+export function sanitizeScheduleSteps(steps: unknown): ScheduleStep[] {
   if (!Array.isArray(steps) || steps.length === 0) throw new Error("At least one schedule step is required");
   const normalized = steps.map((raw, index): ScheduleStep => {
     const step = asObject(raw, `steps[${index}]`);
@@ -2184,13 +2142,6 @@ export function sanitizeScheduleSteps(steps: unknown, legacyCommands?: unknown, 
   if (restartIndexes.length > 1) throw new Error("A schedule can contain at most one Restart action");
   if (restartIndexes.length === 1 && restartIndexes[0] !== normalized.length - 1) throw new Error("Restart must be the final schedule step");
   return normalized;
-}
-
-function legacyScheduleFields(steps: ScheduleStep[]) {
-  if (steps.some((step) => step.type === "action")) return {};
-  const commands = steps.map((step) => step.type === "command" ? step.command : "");
-  const commandDelaysSeconds = steps.map((step) => step.delaySeconds);
-  return { commands, commandDelaysSeconds };
 }
 
 class ScheduleCancellationError extends Error {
@@ -3424,8 +3375,7 @@ const activeLifecycleActions = new Set<string>();
 
 function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<ManagedServer, "runtimeIntent" | "restartPhase" | "crashAttemptTimestamps" | "crashNextRetryAt" | "crashLoopSince" | "crashStableSince">>) {
   Object.assign(server, patch);
-  server.runtimeIntent ??= server.desiredRuntimeState ?? "stopped";
-  server.desiredRuntimeState = server.runtimeIntent === "stopped" ? "stopped" : "running";
+  server.runtimeIntent ??= "stopped";
   serversRepository.setRuntimeLifecycle(server.id, server);
 }
 
@@ -3451,7 +3401,7 @@ async function waitForRuntimeState(server: ManagedServer, running: boolean, time
 
 async function startServerWithIntent(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
-    const previous = server.runtimeIntent ?? server.desiredRuntimeState ?? "stopped";
+    const previous = server.runtimeIntent ?? "stopped";
     setRuntimeLifecycle(server, {
       runtimeIntent: "running",
       restartPhase: undefined,
@@ -3530,7 +3480,7 @@ async function restartServerGracefully(server: ManagedServer) {
   });
 }
 
-async function lifecycleWithDesiredState(server: ManagedServer, action: "start" | "stop" | "restart") {
+async function lifecycleWithIntent(server: ManagedServer, action: "start" | "stop" | "restart") {
   if (action === "start") return startServerWithIntent(server);
   if (action === "stop") return stopServerWithIntent(server);
   return restartServerGracefully(server);
@@ -3540,10 +3490,10 @@ export function isMinecraftStopCommand(command: unknown) {
   return typeof command === "string" && /^\/?stop$/i.test(command.trim());
 }
 
-async function sendConsoleCommandWithDesiredState(server: ManagedServer, command: unknown) {
+async function sendConsoleCommandWithIntent(server: ManagedServer, command: unknown) {
   if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
   if (activeLifecycleActions.has(server.id)) throw new Error("A lifecycle action is already running for this server");
-  const previous = server.runtimeIntent ?? server.desiredRuntimeState ?? "running";
+  const previous = server.runtimeIntent ?? "running";
   setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined, crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: undefined });
   runtimeStateCoordinator?.noteStopped(server.id);
   try {
@@ -3681,9 +3631,6 @@ async function startImportOperation(input: { artifactBase64: string; targetNodeI
 function scheduleFromBody(body: {
   name?: string;
   cron?: string;
-  commands?: unknown;
-  commandDelaysSeconds?: unknown;
-  commandDelaysMinutes?: unknown;
   steps?: unknown;
   onlyWhenNoPlayers?: boolean;
   enabled?: boolean;
@@ -3697,17 +3644,13 @@ function scheduleFromBody(body: {
     throw new Error("Cron schedule is required");
   }
   validateCron(cron);
-  if (body.steps === undefined && existing?.steps.some((step) => step.type === "action")) {
-    throw new Error("This schedule contains actions and must be updated with steps");
-  }
-  const steps = sanitizeScheduleSteps(body.steps, body.commands, body.commandDelaysSeconds, body.commandDelaysMinutes);
+  const steps = sanitizeScheduleSteps(body.steps);
   const now = new Date().toISOString();
   return {
     id: existing?.id ?? randomUUID(),
     name,
     cron,
     steps,
-    ...legacyScheduleFields(steps),
     onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
     enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
@@ -3745,7 +3688,6 @@ function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveR
     cancellable: run.cancellable,
     waitingUntil: run.waitingUntil,
     waitingDelaySeconds: run.waitingDelaySeconds,
-    waitingDelayMinutes: run.waitingDelayMinutes,
     message: run.message
   };
 }
@@ -3763,7 +3705,6 @@ function cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: st
   if (!active.controller.signal.aborted) {
     active.message = "Cancellation requested";
     active.waitingDelaySeconds = undefined;
-    active.waitingDelayMinutes = undefined;
     active.waitingUntil = undefined;
     active.controller.abort();
     operationsRepository.update(active.operationId, { task: "Cancelling schedule run" });
@@ -3808,19 +3749,17 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       active.currentStepIndex = index;
       active.currentStep = label;
       active.waitingDelaySeconds = delaySeconds || undefined;
-      active.waitingDelayMinutes = delaySeconds && delaySeconds % 60 === 0 ? delaySeconds / 60 : undefined;
       active.waitingUntil = delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : undefined;
       active.message = delaySeconds
         ? `Waiting before step ${index + 1} of ${schedule.steps.length}`
         : step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
       await waitForCommandDelay(delaySeconds, active.controller.signal);
       active.waitingDelaySeconds = undefined;
-      active.waitingDelayMinutes = undefined;
       active.waitingUntil = undefined;
       active.message = step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
       throwIfScheduleCancelled(active.controller.signal);
       if (step.type === "command") {
-        await sendConsoleCommandWithDesiredState(server, step.command);
+        await sendConsoleCommandWithIntent(server, step.command);
         active.message = `Sent command ${index + 1} of ${schedule.steps.length}`;
       } else {
         active.cancellable = false;
@@ -4385,7 +4324,6 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     isInternal: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-    compatibility: "unknown",
     capabilities: [],
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
@@ -4414,7 +4352,6 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     isInternal: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-    compatibility: "unknown",
     capabilities: [],
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
@@ -4629,7 +4566,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
   let helloTimer: NodeJS.Timeout | undefined;
   const reject = (message: string) => {
     if (helloTimer) clearTimeout(helloTimer);
-    const response: PanelWelcome = { type: "welcome", nodeId: "", protocolVersion: nodeProtocolVersion, accepted: false, compatibility: "incompatible", error: message };
+    const response: PanelWelcome = { type: "welcome", nodeId: "", accepted: false, error: message };
     ws.send(JSON.stringify(response));
     ws.close();
   };
@@ -4673,8 +4610,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
           capabilities: hello.capabilities,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
-          totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: "compatible"
+          totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory
         };
         nodes[nodes.indexOf(node)] = acceptedNode;
         return;
@@ -4702,7 +4638,6 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
-          compatibility: "compatible",
           secretHash: hashNodeSecret(issuedSecret),
           joinTokenHash: undefined,
           joinTokenExpiresAt: undefined
@@ -4720,9 +4655,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       type: "welcome",
       nodeId: acceptedNode.id,
       nodeSecret: issuedSecret,
-      protocolVersion: nodeProtocolVersion,
       accepted: true,
-      compatibility: "compatible",
       timeZone: config.timeZone
     };
     ws.send(JSON.stringify(welcome));
@@ -5022,7 +4955,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
     task: "Starting server",
     successTask: "Server started",
     restartEffect: (status) => !wasRunning && runtimeResultRunning(status) ? "clear" : undefined
-  }, () => lifecycleWithDesiredState(server, "start"));
+  }, () => lifecycleWithIntent(server, "start"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
@@ -5036,7 +4969,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     createdBy: user.id,
     task: "Stopping server",
     successTask: "Server stopped"
-  }, () => lifecycleWithDesiredState(server, "stop"));
+  }, () => lifecycleWithIntent(server, "stop"));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
@@ -5051,13 +4984,13 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     task: "Restarting server",
     successTask: "Server restarted",
     restartEffect: "clear"
-  }, () => lifecycleWithDesiredState(server, "restart"));
+  }, () => lifecycleWithIntent(server, "restart"));
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
   await requireRequestPermission(request, "console.command");
   const server = await getServer(request.params.id);
-  return sendConsoleCommandWithDesiredState(server, request.body.command);
+  return sendConsoleCommandWithIntent(server, request.body.command);
 });
 
 registerScheduleRoutes(app, {
@@ -7894,8 +7827,8 @@ runtimeStateCoordinator = new RuntimeStateCoordinator({
     if (!server) return;
     setRuntimeLifecycle(server, patch);
   },
-  setDesiredState: (serverId, state) => {
-    serversRepository.setDesiredRuntimeState(serverId, state);
+  setRuntimeIntent: (serverId, state) => {
+    serversRepository.setRuntimeIntent(serverId, state);
   },
   onError: (error, server) => {
     logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "runtime_state" }, "Runtime state reconciliation deferred");

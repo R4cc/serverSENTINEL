@@ -106,7 +106,7 @@ describe("schedule routes", () => {
   it("validates and persists a created schedule under the destructive route options", async () => {
     const created = schedule({ name: "Created schedule" });
     const harness = testApp({ parsedSchedule: created });
-    const body = { name: "Created schedule", cron: "0 5 * * *", enabled: true };
+    const body = { name: "Created schedule", cron: "0 5 * * *", steps: created.steps, enabled: true };
 
     const response = await harness.app.inject({ method: "POST", url: `/api/servers/${serverId}/schedules`, payload: body });
 
@@ -123,7 +123,7 @@ describe("schedule routes", () => {
     const existing = schedule();
     const updated = schedule({ name: "Updated schedule", updatedAt: "2026-01-02T00:00:00.000Z" });
     const harness = testApp({ schedules: [existing], parsedSchedule: updated });
-    const body = { name: "Updated schedule", cron: existing.cron };
+    const body = { name: "Updated schedule", cron: existing.cron, steps: updated.steps };
 
     const response = await harness.app.inject({ method: "PUT", url: `/api/servers/${serverId}/schedules/${scheduleId}`, payload: body });
 

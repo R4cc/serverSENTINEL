@@ -42,8 +42,6 @@ const schedule = (overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
   name: "Nightly restart",
   cron: "0 4 * * *",
   steps: [{ type: "command", command: "stop", delaySeconds: 0 }],
-  commands: ["stop"],
-  commandDelaysSeconds: [0],
   onlyWhenNoPlayers: true,
   enabled: true,
   createdAt: "2026-07-01T00:00:00.000Z",

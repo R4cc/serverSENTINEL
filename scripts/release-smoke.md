@@ -1,6 +1,6 @@
-# serverSENTINEL 1.0 Release Smoke Test
+# serverSENTINEL 1.3 Release Smoke Test
 
-This path verifies the 1.0 release like an administrator using a fresh instance. Run it on a disposable Linux host or VM with Docker and Docker Compose access. Do not run it against production data.
+This path verifies the 1.3 release like an administrator using a fresh instance. Run it on a disposable Linux host or VM with Docker and Docker Compose access. Do not run it against production data.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This path verifies the 1.0 release like an administrator using a fresh instance.
 Set these variables in the checkout:
 
 ```bash
-export SS_IMAGE=nl2109/serversentinel:1.2.1
+export SS_IMAGE=nl2109/serversentinel:1.3.0
 export SS_NAME=serversentinel-smoke
 export SS_URL=http://127.0.0.1:8080
 export SS_SMOKE_ROOT="$(mktemp -d -t serversentinel-smoke-XXXXXX)"
@@ -67,7 +67,7 @@ In the browser:
 Expected:
 
 - The first user lands in the full admin panel.
-- The footer or app metadata reports version `1.2.1`.
+- The footer or app metadata reports version `1.3.0`.
 - A second browser/incognito window no longer shows first-admin setup.
 
 Optional SQLite check:

@@ -99,29 +99,6 @@ export function isValidServerPort(port: string) {
   return value >= minServerPort && value <= maxServerPort;
 }
 
-export function runtimeLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
-  if (!status) return "Checking container";
-  if (status.lifecycle.state === "crash-loop") return "Crash loop protection active";
-  if (status.lifecycle.state === "recovering") return `Recovering from crash${status.lifecycle.recoveryAttempt !== undefined ? ` (${Math.min(status.lifecycle.recoveryAttempt + 1, 3)}/3)` : ""}`;
-  if (status.lifecycle.state === "stopping") return status.lifecycle.intent === "restarting" ? "Stopping for restart" : "Stopping server";
-  if (status.lifecycle.state === "starting") return "Starting after restart";
-  if (status.docker.container === "serversentinel-demo") return status.docker.running ? "Demo server running" : "Demo server stopped";
-  if (!dockerSocketMounted) return "Docker socket not mounted";
-  if (!status.docker.configured) return "Container control not configured";
-  if (!status.docker.available) return status.docker.message || "Container unavailable";
-
-  const state = status.docker.state?.toLowerCase();
-  if (state === "running") return "Container running";
-  if (state === "restarting" || state === "starting") return "Container starting";
-  if (state === "exited") return "Container exited";
-  if (state === "paused") return "Container paused";
-  if (state === "dead") return "Container dead";
-  if (state === "created" || !status.docker.running) return "Container stopped";
-
-  if (status.docker.state && status.docker.state !== "unknown") return `Container ${status.docker.state}`;
-  return "Container status unavailable";
-}
-
 export function runtimeTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!status || !dockerSocketMounted || !status.docker.configured || !status.docker.available) return "neutral";
   if (status.lifecycle.state === "crash-loop") return "exited";

@@ -19,15 +19,11 @@ export function scheduleUpdateLabel(patch: Partial<ScheduledExecution>) {
 }
 
 export function createDemoSchedule(patch: SchedulePatch, id: string, now: string): ScheduledExecution {
-  const commands = patch.steps.filter((step) => step.type === "command").map((step) => step.command);
   return {
     id,
     name: patch.name,
     cron: patch.cron,
     steps: patch.steps,
-    ...(patch.steps.every((step) => step.type === "command")
-      ? { commands, commandDelaysSeconds: patch.steps.map((step) => step.delaySeconds) }
-      : {}),
     onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
     enabled: patch.enabled,
     createdAt: now,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { __runtimeStateCoordinatorTestHooks, RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import type { ManagedServer } from "./types.js";
 
-function server(desiredRuntimeState?: "running" | "stopped"): ManagedServer {
+function server(runtimeIntent?: "running" | "stopped"): ManagedServer {
   return {
     id: "server-1",
     nodeId: "node-1",
@@ -18,7 +18,7 @@ function server(desiredRuntimeState?: "running" | "stopped"): ManagedServer {
       compatibilityStatus: "compatible",
       resolvedAt: "2026-01-01T00:00:00.000Z"
     },
-    desiredRuntimeState,
+    runtimeIntent,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"
   };
@@ -46,7 +46,7 @@ describe("RuntimeStateCoordinator", () => {
     })).toEqual({ available: true, running: false, stopped: true });
   });
 
-  it("initializes legacy desired state from an authoritative runtime", async () => {
+  it("initializes runtime intent from an authoritative runtime", async () => {
     const running = server();
     const stopped = { ...server(), id: "server-2" };
     const states: Array<[string, string]> = [];
@@ -55,7 +55,7 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async (candidate) => status(candidate.id === running.id),
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => status(true),
-      setDesiredState: (id, state) => states.push([id, state])
+      setRuntimeIntent: (id, state) => states.push([id, state])
     });
 
     await coordinator.poll();
@@ -72,9 +72,9 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(false),
       connectionEpoch: async () => "epoch-1",
       restoreServer,
-      setDesiredState: (_id, state) => {
+      setRuntimeIntent: (_id, state) => {
         states.push(state);
-        managed.desiredRuntimeState = state;
+        managed.runtimeIntent = state;
       }
     });
 
@@ -93,7 +93,7 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(false),
       connectionEpoch: async () => "epoch-2",
       restoreServer,
-      setDesiredState: () => undefined
+      setRuntimeIntent: () => undefined
     });
 
     await coordinator.poll();
@@ -110,7 +110,7 @@ describe("RuntimeStateCoordinator", () => {
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => status(true),
       restartServer,
-      setDesiredState: () => undefined,
+      setRuntimeIntent: () => undefined,
       setLifecycle: (_id, patch) => Object.assign(managed, patch)
     });
 
@@ -132,7 +132,7 @@ describe("RuntimeStateCoordinator", () => {
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => status(true),
       stopServer,
-      setDesiredState: (_id, state) => states.push(state)
+      setRuntimeIntent: (_id, state) => states.push(state)
     });
 
     await coordinator.poll();
@@ -153,9 +153,9 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(running),
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => status(true),
-      setDesiredState: (_id, state) => {
+      setRuntimeIntent: (_id, state) => {
         states.push(state);
-        managed.desiredRuntimeState = state;
+        managed.runtimeIntent = state;
       }
     });
 
@@ -181,7 +181,7 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(running),
       connectionEpoch: async () => "epoch-1",
       restoreServer,
-      setDesiredState: () => undefined,
+      setRuntimeIntent: () => undefined,
       setLifecycle: (_id, patch) => Object.assign(managed, patch)
     });
 
@@ -211,7 +211,7 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(false),
       connectionEpoch: async () => "epoch-1",
       restoreServer: async () => { throw new Error("still crashing"); },
-      setDesiredState: () => undefined,
+      setRuntimeIntent: () => undefined,
       setLifecycle: (_id, patch) => Object.assign(managed, patch)
     });
 
@@ -234,7 +234,7 @@ describe("RuntimeStateCoordinator", () => {
       serverStatus: async () => status(false),
       connectionEpoch: async () => "epoch-1",
       restoreServer,
-      setDesiredState: (_id, state) => states.push(state)
+      setRuntimeIntent: (_id, state) => states.push(state)
     });
     coordinator.noteRunning(managed.id);
 
@@ -259,8 +259,8 @@ describe("RuntimeStateCoordinator", () => {
       },
       connectionEpoch: async () => epoch,
       restoreServer,
-      setDesiredState: (_id, state) => {
-        managed.desiredRuntimeState = state;
+      setRuntimeIntent: (_id, state) => {
+        managed.runtimeIntent = state;
       }
     });
 
@@ -271,7 +271,7 @@ describe("RuntimeStateCoordinator", () => {
     epoch = "epoch-2";
     await coordinator.poll();
 
-    expect(managed.desiredRuntimeState).toBe("running");
+    expect(managed.runtimeIntent).toBe("running");
     expect(restoreServer).toHaveBeenCalledTimes(1);
   });
 });

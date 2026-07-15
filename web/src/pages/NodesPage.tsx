@@ -22,8 +22,8 @@ function formatNodeDate(value: string | undefined, formatter: (value: string | n
 }
 
 function statusTone(value?: string) {
-  if (value === "online" || value === "available" || value === "compatible" || value === "ready") return "ready";
-  if (value === "offline" || value === "unavailable" || value === "incompatible" || value === "missing") return "limited";
+  if (value === "online" || value === "available" || value === "ready") return "ready";
+  if (value === "offline" || value === "unavailable" || value === "missing") return "limited";
   return "";
 }
 
@@ -163,15 +163,14 @@ function InstallInstructions({
 
 const addNodeSteps = ["Create node", "Run install", "Connect", "Verify", "Ready"];
 
-type AddNodeFlowState = "waiting" | "success" | "incompatible" | "expired" | "disconnected";
+type AddNodeFlowState = "waiting" | "success" | "expired" | "disconnected";
 
 function isAddNodeSuccess(node?: ManagedNode) {
-  return Boolean(node && node.status === "online" && node.compatibility === "compatible" && isNodeRuntimeUsable(node));
+  return Boolean(node && node.status === "online" && isNodeRuntimeUsable(node));
 }
 
 function addNodeFlowState(node: ManagedNode | undefined, expiresAt: string): AddNodeFlowState {
   if (isAddNodeSuccess(node)) return "success";
-  if (node?.status === "online" && node.compatibility === "incompatible") return "incompatible";
   if (node?.status === "offline" && node.connectedAt) return "disconnected";
   if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return "expired";
   return "waiting";
@@ -179,7 +178,6 @@ function addNodeFlowState(node: ManagedNode | undefined, expiresAt: string): Add
 
 function addNodeActiveStep(flowState: AddNodeFlowState) {
   if (flowState === "success") return 5;
-  if (flowState === "incompatible") return 4;
   if (flowState === "disconnected") return 3;
   return 2;
 }
@@ -207,7 +205,7 @@ function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; compl
   );
 }
 
-function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; flowState: AddNodeFlowState; node?: ManagedNode }) {
+function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowState: AddNodeFlowState; node?: ManagedNode }) {
   if (flowState === "success") {
     return (
       <div className="addNodeStatusCard success">
@@ -216,19 +214,6 @@ function AddNodeStatusCard({ nodeName, flowState, node }: { nodeName: string; fl
           <h3>Node added successfully</h3>
           <p>{nodeName} is now connected to this panel and ready to host servers.</p>
           <p>You can close this dialog and manage the node from the Nodes page.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (flowState === "incompatible") {
-    const versionText = [node?.agentVersion ? `agent ${node.agentVersion}` : "", node?.protocolVersion ? `protocol ${node.protocolVersion}` : ""].filter(Boolean).join(", ");
-    return (
-      <div className="addNodeStatusCard error">
-        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
-        <div>
-          <h3>Node connected but incompatible</h3>
-          <p>{versionText ? `${nodeName} connected with ${versionText}, but it is not compatible with this panel.` : `${nodeName} connected, but its agent or protocol version is not compatible with this panel.`}</p>
         </div>
       </div>
     );
@@ -320,7 +305,7 @@ function AddNodeModal({
   const flowState = created ? addNodeFlowState(liveNode, created.expiresAt) : "waiting";
   const isSuccess = flowState === "success";
   const activeStep = addNodeActiveStep(flowState);
-  const showInstall = Boolean(created && flowState !== "success" && flowState !== "incompatible");
+  const showInstall = Boolean(created && flowState !== "success");
   const canClose = !busy;
 
   return (

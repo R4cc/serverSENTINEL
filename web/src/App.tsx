@@ -1124,7 +1124,7 @@ export default function App() {
   useEffect(() => {
     if (!addNodeOpen || !addNodeResult || demoMode) return;
     const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
-    if (currentNode && currentNode.status === "online" && currentNode.compatibility === "compatible" && isNodeRuntimeUsable(currentNode)) return;
+    if (currentNode && currentNode.status === "online" && isNodeRuntimeUsable(currentNode)) return;
     const interval = window.setInterval(() => {
       if (document.hidden) return;
       void refreshApp();
@@ -2253,7 +2253,7 @@ export default function App() {
       ? "Create servers permission is required."
       : serverCreationBlocked
         ? usableContextNodes.length === 0
-          ? "Add an online, compatible node before creating a server."
+          ? "Add an online, Docker-ready node before creating a server."
           : "Server creation is unavailable right now."
         : provisioningNavigationReason;
   const noManagedServersMessage = panelOnlyMode && usableContextNodes.length === 0
