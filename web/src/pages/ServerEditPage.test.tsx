@@ -12,6 +12,7 @@ const server: ManagedServer = {
   dockerImage: "eclipse-temurin:21-jre",
   dockerPorts: "25565:25565/tcp,25566:25566/udp,8123:8123/tcp",
   javaArgs: "-Xms2G -Xmx4G -XX:+UseG1GC",
+  startOnNodeStart: true,
   hasDockerContainer: true,
   runtimeProfile: {
     minecraftVersion: "1.21.4",
@@ -67,13 +68,16 @@ describe("ServerEditForm", () => {
       "dockerImage",
       "serverJar",
       "dockerContainer",
-      "dockerPorts"
+      "dockerPorts",
+      "startOnNodeStart"
     ]) {
       expect(html).toContain(`name="${name}"`);
     }
 
     expect(html).toContain("Discard changes");
     expect(html).toContain("Save changes");
+    expect(html).toContain("Start when node starts");
+    expect(html).toMatch(/name="startOnNodeStart"[^>]*checked=""/);
     expect(html).toContain('data-testid="danger-zone"');
   });
 

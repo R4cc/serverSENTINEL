@@ -7,7 +7,6 @@ import {
   ActivePlayersPanel,
   AutomationPanel,
   buildAutomationSnapshot,
-  buildModHealthSummary,
   eventDate,
   formatRelativeEventTime,
   formatRelativeScheduleTime,
@@ -72,19 +71,18 @@ describe("recent event timestamps", () => {
 });
 
 describe("overview summary", () => {
-  it("replaces Container with mod health and reserves CPU and memory for the wide layout", () => {
+  it("keeps mod updates out of the persistent summary and reserves CPU and memory for the wide layout", () => {
     const server = demoServer();
     const html = renderToStaticMarkup(createElement(OverviewSummary, {
       server,
       status: demoStatus(server, true),
       dockerSocketMounted: true,
-      activity: demoOverviewData(true).activity,
-      updatePlan: updatePlan()
+      activity: demoOverviewData(true).activity
     }));
 
-    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(8);
+    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(7);
     expect((html.match(/overviewWideSummaryTile/g) ?? []).length).toBe(2);
-    expect(html).toContain(">Mod updates<");
+    expect(html).not.toContain(">Mod updates<");
     expect(html).toContain(">CPU<");
     expect(html).toContain(">Memory<");
     expect(html).not.toContain(">Container<");
@@ -101,7 +99,7 @@ describe("overview summary", () => {
       loading: true
     }));
 
-    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(8);
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
   });
@@ -129,26 +127,27 @@ describe("active player states", () => {
 });
 
 describe("mod health", () => {
-  it("covers permission, loading, unavailable, empty, current, update, and attention states", () => {
-    expect(buildModHealthSummary(null, { canView: false }).label).toBe("No access");
-    expect(buildModHealthSummary(null, { loading: true }).label).toBe("Checking");
-    expect(buildModHealthSummary(null, { error: "offline" }).label).toBe("Unavailable");
-    expect(buildModHealthSummary(updatePlan({ totalInstalled: 0, upToDate: 0 })).label).toBe("No mods");
-    expect(buildModHealthSummary(updatePlan()).label).toBe("All up to date");
-    expect(buildModHealthSummary(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 })).label).toBe("3 available");
-    expect(buildModHealthSummary(updatePlan({ blockedUpdates: 1, unknown: 2, upToDate: 1 })).label).toBe("3 need attention");
-  });
-
-  it("shows pending restart changes even while the update plan is unavailable", () => {
-    const html = renderToStaticMarkup(createElement(ModHealthPanel, {
-      updatePlan: null,
-      error: "offline",
-      restartRequiredChanges: [{ type: "mod", identity: "sodium.jar", displayName: "Sodium", action: "updated" }],
+  it("only renders the clickable update count when updates are available", () => {
+    const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: plan,
+      canView,
       onOpenMods: () => undefined
     }));
-    expect(html).toContain("Restart required");
-    expect(html).toContain("Updated:");
-    expect(html).toContain("Sodium");
+
+    expect(render(null)).toBe("");
+    expect(render(updatePlan())).toBe("");
+    expect(render(updatePlan({ blockedUpdates: 1, unknown: 1, upToDate: 2 }))).toBe("");
+    expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
+
+    const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
+    expect(html).toContain("<button");
+    expect(html).toContain("Mod updates available");
+    expect(html).toContain("<strong>3</strong>");
+    expect(html).toContain("Open Mods, 3 mod updates available");
+    expect(html).not.toContain("installed");
+    expect(html).not.toContain("Safe");
+    expect(html).not.toContain("Review");
+    expect(html).not.toContain("Attention");
   });
 });
 

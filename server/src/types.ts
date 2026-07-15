@@ -204,6 +204,7 @@ export type ManagedServer = {
   dockerPorts?: string;
   managedPorts?: ManagedServerPort[];
   javaArgs?: string;
+  startOnNodeStart?: boolean;
   runtimeIntent?: RuntimeIntent;
   restartPhase?: RestartPhase;
   crashAttemptTimestamps?: string[];

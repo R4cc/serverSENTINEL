@@ -53,6 +53,7 @@ export type NodeHello = {
   nodeName: string;
   agentVersion: string;
   buildId?: string;
+  startupId?: string;
   protocolVersion: string;
   capabilities: string[];
   dockerStatus: string;
@@ -187,6 +188,7 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const nodeName = requiredString(hello.nodeName, "nodeName");
   const agentVersion = requiredString(hello.agentVersion, "agentVersion");
   const buildId = optionalString(hello.buildId, "buildId");
+  const startupId = optionalString(hello.startupId, "startupId");
   const capabilities = requiredStringArray(hello.capabilities, "capabilities");
   const unsupportedCapabilities = capabilities.filter((capability) => !isNodeCapability(capability));
   if (unsupportedCapabilities.length) {
@@ -200,6 +202,7 @@ export function normalizeNodeHello(value: unknown): NodeHello {
     nodeName,
     agentVersion,
     buildId,
+    startupId,
     protocolVersion,
     capabilities,
     dockerStatus: requiredString(hello.dockerStatus, "dockerStatus"),

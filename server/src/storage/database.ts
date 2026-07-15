@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 17;
+export const currentSchemaVersion = 18;
 export const currentSchemaName = "current-schema-baseline";
 
 const legacySchema16Migrations = [
@@ -47,7 +47,8 @@ const applicationTableNames = [
 ] as const;
 
 const currentNodeColumns = ["id", "name", "type", "status", "is_internal", "created_at", "updated_at", "last_seen_at", "connected_at", "agent_version", "protocol_version", "capabilities_json", "docker_status", "data_path_status", "total_memory", "secret_hash", "join_token_hash", "join_token_expires_at", "build_id"];
-const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since"];
+const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "start_on_node_start", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since"];
+const schema17ServerColumns = currentServerColumns.filter((column) => column !== "start_on_node_start");
 const currentScheduleColumns = ["server_id", "id", "name", "cron", "steps_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message"];
 const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   storage_metadata: ["key", "value"],
@@ -129,6 +130,7 @@ function createCurrentSchema(database: Database.Database) {
       docker_working_dir TEXT,
       docker_ports TEXT,
       java_args TEXT,
+      start_on_node_start INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       restart_required_since TEXT,
@@ -253,6 +255,12 @@ function isCurrentSchema(history: AppliedMigration[]) {
     && history[0].name === currentSchemaName;
 }
 
+function isSchema17Baseline(history: AppliedMigration[]) {
+  return history.length === 1
+    && history[0].version === 17
+    && history[0].name === currentSchemaName;
+}
+
 function isLegacySchema16(history: AppliedMigration[]) {
   return history.length === legacySchema16Migrations.length
     && history.every((migration, index) => migration.version === index + 1 && migration.name === legacySchema16Migrations[index]);
@@ -297,6 +305,15 @@ function assertCurrentSchemaLayout(database: Database.Database) {
   if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
     || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
     || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
+    throw new Error("Malformed SQLite schema: compact schema-18 columns do not match the supported baseline.");
+  }
+}
+
+function assertSchema17Layout(database: Database.Database) {
+  assertApplicationTables(database);
+  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
+    || !sameNameSet(tableColumns(database, "servers"), schema17ServerColumns)
+    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
     throw new Error("Malformed SQLite schema: compact schema-17 columns do not match the supported baseline.");
   }
 }
@@ -304,7 +321,7 @@ function assertCurrentSchemaLayout(database: Database.Database) {
 function assertLegacySchema16Layout(database: Database.Database) {
   assertApplicationTables(database);
   if (!sameNameSet(tableColumns(database, "nodes"), [...currentNodeColumns.slice(0, 15), "compatibility", ...currentNodeColumns.slice(15)])
-    || !sameNameSet(tableColumns(database, "servers"), [...currentServerColumns.slice(0, 17), "desired_runtime_state", ...currentServerColumns.slice(17)])
+    || !sameNameSet(tableColumns(database, "servers"), [...schema17ServerColumns.slice(0, 17), "desired_runtime_state", ...schema17ServerColumns.slice(17)])
     || !sameNameSet(tableColumns(database, "schedules"), ["server_id", "id", "name", "cron", "commands_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message", "command_delays_json", "command_delays_seconds_json", "steps_json"])) {
     throw new Error("Malformed SQLite schema: schema-16 columns do not match the supported 1.2.1 layout.");
   }
@@ -345,6 +362,15 @@ function initializeSchema(database: Database.Database) {
     return;
   }
 
+  if (isSchema17Baseline(history)) {
+    assertSchema17Layout(database);
+    database.transaction(() => {
+      database.exec("ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;");
+      recordCurrentSchema(database);
+    }).immediate();
+    return;
+  }
+
   if (isLegacySchema16(history)) {
     assertLegacySchema16Layout(database);
     database.transaction(() => {
@@ -354,6 +380,7 @@ function initializeSchema(database: Database.Database) {
         ALTER TABLE schedules DROP COLUMN command_delays_json;
         ALTER TABLE schedules DROP COLUMN command_delays_seconds_json;
         ALTER TABLE servers DROP COLUMN desired_runtime_state;
+        ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;
       `);
       recordCurrentSchema(database);
     }).immediate();

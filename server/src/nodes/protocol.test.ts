@@ -16,6 +16,7 @@ function v2Hello(overrides: Record<string, unknown> = {}) {
     nodeName: "Remote Node",
     agentVersion: "0.8.0",
     buildId: "commit-sha",
+    startupId: "startup-id",
     protocolVersion: nodeProtocolVersion,
     capabilities: [...nodeCapabilities],
     dockerStatus: "available",
@@ -45,6 +46,7 @@ describe("node protocol v2", () => {
     const hello = normalizeNodeHello(v2Hello());
     expect(hello.protocolVersion).toBe("2.0");
     expect(hello.buildId).toBe("commit-sha");
+    expect(hello.startupId).toBe("startup-id");
     expect(hello.capabilities).toContain("files.move");
   });
 

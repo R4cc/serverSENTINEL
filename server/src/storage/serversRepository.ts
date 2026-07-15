@@ -15,6 +15,7 @@ type ServerRow = {
   docker_working_dir: string | null;
   docker_ports: string | null;
   java_args: string | null;
+  start_on_node_start: number;
   runtime_intent: "running" | "stopped" | "restarting" | null;
   restart_phase: "stopping" | "starting" | null;
   crash_attempts_json: string;
@@ -162,6 +163,7 @@ export class ServersRepository {
       dockerPorts: row.docker_ports ?? undefined,
       managedPorts: portsByServer.get(row.id) ?? [],
       javaArgs: row.java_args ?? undefined,
+      startOnNodeStart: row.start_on_node_start === 1,
       runtimeIntent: row.runtime_intent ?? undefined,
       restartPhase: row.restart_phase ?? undefined,
       crashAttemptTimestamps: JSON.parse(row.crash_attempts_json) as string[],
@@ -248,6 +250,15 @@ export class ServersRepository {
     `).run(state, now, serverId, state).changes > 0;
   }
 
+  markStartOnNodeStart(nodeId: string, now = new Date().toISOString()) {
+    return this.storage.connection.prepare(`
+      UPDATE servers SET runtime_intent = 'running', restart_phase = NULL,
+        crash_attempts_json = '[]', crash_next_retry_at = NULL, crash_loop_since = NULL,
+        crash_stable_since = NULL, updated_at = ?
+      WHERE node_id = ? AND start_on_node_start = 1 AND runtime_intent IS NOT 'restarting'
+    `).run(now, nodeId).changes;
+  }
+
   setRuntimeLifecycle(serverId: string, lifecycle: Pick<ManagedServer, "runtimeIntent" | "restartPhase" | "crashAttemptTimestamps" | "crashNextRetryAt" | "crashLoopSince" | "crashStableSince">, now = new Date().toISOString()) {
     const intent = lifecycle.runtimeIntent ?? "stopped";
     return this.storage.connection.prepare(`
@@ -327,10 +338,10 @@ export class ServersRepository {
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, runtime_intent, restart_phase, crash_attempts_json,
+          docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
           crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
           restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -338,7 +349,8 @@ export class ServersRepository {
           docker_container=excluded.docker_container, docker_image=excluded.docker_image,
           docker_mount_source=excluded.docker_mount_source,
            docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, runtime_intent=servers.runtime_intent, restart_phase=servers.restart_phase,
+          java_args=excluded.java_args, start_on_node_start=excluded.start_on_node_start,
+          runtime_intent=servers.runtime_intent, restart_phase=servers.restart_phase,
           crash_attempts_json=servers.crash_attempts_json, crash_next_retry_at=servers.crash_next_retry_at,
           crash_loop_since=servers.crash_loop_since, crash_stable_since=servers.crash_stable_since,
           restart_required_since=servers.restart_required_since,
@@ -350,10 +362,10 @@ export class ServersRepository {
         INSERT INTO servers (
           id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
           docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, runtime_intent, restart_phase, crash_attempts_json,
+          docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
           crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
           restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           node_id=excluded.node_id, display_name=excluded.display_name,
           server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -361,7 +373,8 @@ export class ServersRepository {
           docker_container=excluded.docker_container, docker_image=excluded.docker_image,
           docker_mount_source=excluded.docker_mount_source,
           docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, runtime_intent=excluded.runtime_intent, restart_phase=excluded.restart_phase,
+          java_args=excluded.java_args, start_on_node_start=excluded.start_on_node_start,
+          runtime_intent=excluded.runtime_intent, restart_phase=excluded.restart_phase,
           crash_attempts_json=excluded.crash_attempts_json, crash_next_retry_at=excluded.crash_next_retry_at,
           crash_loop_since=excluded.crash_loop_since, crash_stable_since=excluded.crash_stable_since,
           restart_required_since=excluded.restart_required_since,
@@ -373,7 +386,7 @@ export class ServersRepository {
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
       server.dockerImage ?? null, server.dockerMountSource ?? null, server.dockerWorkingDir ?? null,
-      server.dockerPorts ?? null, server.javaArgs ?? null,
+      server.dockerPorts ?? null, server.javaArgs ?? null, server.startOnNodeStart ? 1 : 0,
       server.runtimeIntent ?? "stopped", server.restartPhase ?? null,
       JSON.stringify(server.crashAttemptTimestamps ?? []), server.crashNextRetryAt ?? null,
       server.crashLoopSince ?? null, server.crashStableSince ?? null,

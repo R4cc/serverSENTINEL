@@ -1796,7 +1796,8 @@ export default function App() {
           dockerPorts: form.get("dockerPorts"),
           javaArgs: form.get("javaArgs"),
           serverPort: form.get("serverPort"),
-          queryPort: form.get("queryPort")
+          queryPort: form.get("queryPort"),
+          startOnNodeStart: form.get("startOnNodeStart") === "on"
         })
       });
       notify("success", `Updated ${server.displayName}`);
@@ -2815,10 +2816,6 @@ export default function App() {
                     status={activeStatus}
                     dockerSocketMounted={activeServerDockerSocketMounted}
                     activity={overviewData.activity}
-                    updatePlan={modsWorkspace.data.updatePlan}
-                    updatePlanLoading={modsWorkspace.state.updatePlanLoading}
-                    updatePlanError={modsWorkspace.state.updatePlanError}
-                    canViewMods={canViewMods}
                     latestResourceSample={resourceSamples.at(-1)}
                     formatNumber={formatDisplayNumber}
                     loading={overviewInitialLoading}
@@ -2839,10 +2836,7 @@ export default function App() {
                   <ActivePlayersPanel activity={overviewData.activity} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
                   <ModHealthPanel
                     updatePlan={modsWorkspace.data.updatePlan}
-                    loading={modsWorkspace.state.updatePlanLoading}
-                    error={modsWorkspace.state.updatePlanError}
                     canView={canViewMods}
-                    restartRequiredChanges={activeServer.restartRequiredChanges}
                     onOpenMods={() => setActivePage("mods")}
                   />
                   <AutomationPanel

@@ -91,6 +91,7 @@ type CreateInput = {
   dockerPorts?: string;
   queryPort?: string;
   javaArgs?: string;
+  startOnNodeStart?: boolean;
   acceptEula?: boolean;
   serverPort?: string;
 };
@@ -526,6 +527,9 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
   const dockerPorts = requestedDockerPorts ? ensureQueryDockerPort(requestedDockerPorts, queryPort) : requestedDockerPorts;
   if (dockerPorts) parseDockerPorts(dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
+  const startOnNodeStart = input.startOnNodeStart === undefined
+    ? server.startOnNodeStart ?? false
+    : requireStrictBoolean(input.startOnNodeStart, "startOnNodeStart");
 
   const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
     || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
@@ -545,6 +549,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     dockerPorts,
     managedPorts: [queryPortEntry(queryPort)],
     javaArgs,
+    startOnNodeStart,
     updatedAt: new Date().toISOString()
   };
 
@@ -1465,6 +1470,7 @@ export const __nodeAgentTestHooks = {
 export async function startNodeAgent() {
   initializeRuntimeDataRoot(config.paths);
   nodeStorageDatabase = openStorageDatabase();
+  const startupId = randomUUID();
   let persisted = await readNodeIdentity();
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
@@ -1498,6 +1504,7 @@ export async function startNodeAgent() {
         nodeName: config.nodeName || "Remote Node",
         agentVersion: appVersion,
         buildId: appBuildId,
+        startupId,
         protocolVersion: nodeProtocolVersion,
         capabilities: [...nodeCapabilities],
         dockerStatus,

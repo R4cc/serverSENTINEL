@@ -24,6 +24,14 @@
   align-items: start;
 }
 
+.overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
+  grid-template-areas:
+    "summary summary summary summary summary summary summary summary summary summary summary summary"
+    "resource resource resource resource resource resource resource resource players players players players"
+    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "events events events events events events events events events events events events";
+}
+
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
 .overviewDashboardGrid > .resourcePanel { grid-area: resource; align-self: stretch; }
 .overviewDashboardGrid > .playersPanel { grid-area: players; }
@@ -40,16 +48,6 @@
 
 .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
   display: none;
-}
-
-.overviewSummary .summaryTile.modSummaryTile.healthy {
-  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
-}
-
-.overviewSummary .summaryTile.modSummaryTile.warning {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 40%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
 }
 
 .overviewOperationsPanel {
@@ -128,105 +126,57 @@
   white-space: nowrap;
 }
 
-.activePlayerRoster > small,
-.overviewMetricLead > small,
-.pendingRestartSummary small {
+.activePlayerRoster > small {
   color: var(--text-muted);
   font-size: 12px;
 }
 
-.modHealthContent {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.overviewMetricLead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.overviewStatGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-}
-
-.overviewStatGrid > div {
+.modUpdatesCard {
+  width: 100%;
   min-width: 0;
+  min-height: 72px;
   display: grid;
-  gap: 2px;
-  padding: 10px 12px;
-  border-left: var(--border-subtle) solid var(--border-muted);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border-color: color-mix(in srgb, var(--sentinel-warning) 42%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+  color: var(--text);
+  padding: var(--space-4);
+  text-align: left;
+  white-space: normal;
 }
 
-.overviewStatGrid > div:first-child {
-  border-left: 0;
+.modUpdatesCard:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 64%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-warning) 13%, var(--surface-raised));
+  color: var(--text);
 }
 
-.overviewStatGrid span,
+.modUpdatesCard > span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-title);
+}
+
+.modUpdatesCard > strong {
+  min-width: 42px;
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sentinel-warning) 18%, var(--surface-raised));
+  color: var(--sentinel-warning);
+  font-size: 20px;
+  line-height: 1;
+}
+
 .automationSummaryRow > span {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-}
-
-.overviewStatGrid strong {
-  color: var(--text);
-  font-size: 17px;
-}
-
-.overviewPanelNotice {
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.overviewPanelNotice.warning {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-muted));
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
-}
-
-.pendingRestartSummary {
-  min-height: 0;
-  display: grid;
-  gap: var(--space-2);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-muted));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-raised));
-  padding: 10px 12px;
-}
-
-.pendingRestartSummary > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.pendingRestartSummary ul {
-  max-height: 88px;
-  overflow-y: auto;
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: 18px;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.pendingRestartSummary b {
-  color: var(--text);
 }
 
 .automationSummaryList {
@@ -342,8 +292,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .overviewStatGrid {
-    grid-template-columns: repeat(3, minmax(72px, 1fr));
+}
+
+@media (max-width: 1320px) {
+  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
+    grid-template-areas:
+      "summary"
+      "resource"
+      "players"
+      "automation"
+      "events";
   }
 }
 
@@ -366,6 +324,13 @@
       "summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary"
       "resource resource resource resource resource resource resource resource resource resource resource resource events events events events"
       "players players players players players mods mods mods mods mods automation automation automation automation automation automation";
+  }
+
+  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
+    grid-template-areas:
+      "summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary"
+      "resource resource resource resource resource resource resource resource resource resource resource resource events events events events"
+      "players players players players players players players players automation automation automation automation automation automation automation automation";
   }
 
   .overviewDashboardGrid > .overviewSummary {

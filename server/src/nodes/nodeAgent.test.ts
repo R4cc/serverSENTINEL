@@ -292,11 +292,12 @@ describe("remote node Docker container recreation", () => {
       throw new Error(`Unexpected Docker request ${method} ${path}`);
     });
 
-    await hooks.handleCommand("server.update", {
+    const updated = await hooks.handleCommand("server.update", {
       server,
-      input: { dockerPorts: "25567:25565/tcp,25566:25566/udp" }
-    });
+      input: { dockerPorts: "25567:25565/tcp,25566:25566/udp", startOnNodeStart: true }
+    }) as ManagedServer;
 
+    expect(updated.startOnNodeStart).toBe(true);
     expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", "/containers/serversentinel-survival?force=1", [204, 404]);
     expect(mockDockerJsonRequest).toHaveBeenCalledWith(
       "POST",

@@ -1011,6 +1011,7 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     dockerImage: server.dockerImage,
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
+    startOnNodeStart: server.startOnNodeStart,
     restartRequiredSince: server.restartRequiredSince,
     restartRequiredChanges: server.restartRequiredChanges,
     schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)),
@@ -1294,6 +1295,7 @@ function normalizeManagedServer(value: unknown): ManagedServer {
     dockerPorts,
     managedPorts,
     javaArgs: server.javaArgs === undefined ? undefined : validateJavaArgs(server.javaArgs),
+    startOnNodeStart: optionalStrictBoolean(server.startOnNodeStart, "server.startOnNodeStart", false),
     runtimeIntent: server.runtimeIntent === "running" || server.runtimeIntent === "stopped" || server.runtimeIntent === "restarting"
       ? server.runtimeIntent
       : undefined,
@@ -3989,6 +3991,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     queryPort?: string;
     javaArgs?: string;
     serverPort?: string;
+    startOnNodeStart?: boolean;
   };
   let updatedServer: ManagedServer | null = null;
   await serverSideEffectsQueue.enqueue(async () => {
@@ -4058,6 +4061,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
       }
     }
     const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
+    const startOnNodeStart = optionalStrictBoolean(body.startOnNodeStart, "startOnNodeStart", current.startOnNodeStart ?? false);
 
     const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
       || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
@@ -4077,6 +4081,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
       dockerPorts,
       managedPorts,
       javaArgs,
+      startOnNodeStart,
       updatedAt: new Date().toISOString()
     };
 
@@ -4757,6 +4762,15 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
     };
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);
+    if (hello.startupId) {
+      const metadataKey = `node.startup.${acceptedNode.id}`;
+      const previousStartupId = storageDatabase.metadata(metadataKey);
+      storageDatabase.setMetadata(metadataKey, hello.startupId);
+      if (previousStartupId !== hello.startupId) {
+        serversRepository.markStartOnNodeStart(acceptedNode.id);
+        void runtimeStateCoordinator?.poll();
+      }
+    }
     const expectedUpdate = activeNodeUpdates.get(acceptedNode.id);
     if (expectedUpdate
       && (!expectedUpdate.version || acceptedNode.agentVersion === expectedUpdate.version)
@@ -4949,6 +4963,7 @@ app.put<{
     queryPort?: string;
     javaArgs?: string;
     serverPort?: string;
+    startOnNodeStart?: boolean;
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
@@ -7931,6 +7946,7 @@ runtimeStateCoordinator = new RuntimeStateCoordinator({
     logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "runtime_state" }, "Runtime state reconciliation deferred");
   }
 });
+if (config.runtimeMode === "all-in-one") serversRepository.markStartOnNodeStart(localNodeId);
 runtimeStateCoordinator.start();
 modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
   intervalMs: modUpdateCheckIntervalMs,

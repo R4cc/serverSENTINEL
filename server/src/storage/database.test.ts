@@ -62,6 +62,7 @@ function seedLegacySchema16(path: string) {
   database.exec(`
     ALTER TABLE nodes ADD COLUMN compatibility TEXT;
     ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'));
+    ALTER TABLE servers DROP COLUMN start_on_node_start;
     DROP TABLE schedules;
     CREATE TABLE schedules (
       server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
@@ -98,6 +99,20 @@ function seedLegacySchema16(path: string) {
   database.close();
 }
 
+function seedSchema17Baseline(path: string) {
+  openStorageDatabase(path).close();
+  const database = new Database(path);
+  database.exec(`
+    ALTER TABLE servers DROP COLUMN start_on_node_start;
+    UPDATE schema_migrations SET version = 17, name = 'current-schema-baseline';
+  `);
+  database.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run("node-17", "Node", "remote", "offline", 0, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+  database.prepare("INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at, runtime_intent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("server-17", "node-17", "Server", "/data/server-17", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "stopped");
+  database.close();
+}
+
 describe("SQLite storage", () => {
   it("creates the compact current schema and configures the connection", async () => {
     const path = await temporaryDatabasePath();
@@ -112,6 +127,7 @@ describe("SQLite storage", () => {
       .toEqual({ version: currentSchemaVersion, name: currentSchemaName });
     expect(columnNames(storage.connection, "nodes")).not.toContain("compatibility");
     expect(columnNames(storage.connection, "servers")).not.toContain("desired_runtime_state");
+    expect(columnNames(storage.connection, "servers")).toContain("start_on_node_start");
     expect(columnNames(storage.connection, "schedules")).toEqual(expect.arrayContaining(["steps_json"]));
     expect(columnNames(storage.connection, "schedules")).not.toEqual(expect.arrayContaining(["commands_json", "command_delays_json", "command_delays_seconds_json"]));
   });
@@ -126,6 +142,19 @@ describe("SQLite storage", () => {
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
   });
 
+  it("migrates the schema-17 baseline with auto-start disabled for existing servers", async () => {
+    const path = await temporaryDatabasePath();
+    seedSchema17Baseline(path);
+
+    const storage = openStorageDatabase(path);
+    openDatabases.push(storage);
+
+    expect(storage.connection.prepare("SELECT version, name FROM schema_migrations").all())
+      .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
+    expect(storage.connection.prepare("SELECT id, start_on_node_start FROM servers").get())
+      .toEqual({ id: "server-17", start_on_node_start: 0 });
+  });
+
   it("compacts a complete schema-16 database without losing canonical data", async () => {
     const path = await temporaryDatabasePath();
     seedLegacySchema16(path);
@@ -137,6 +166,7 @@ describe("SQLite storage", () => {
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
     expect(storage.connection.prepare("SELECT id, protocol_version FROM nodes").get()).toEqual({ id: "node-1", protocol_version: "2.0" });
     expect(storage.connection.prepare("SELECT id, runtime_intent FROM servers").get()).toEqual({ id: "server-1", runtime_intent: "running" });
+    expect(storage.connection.prepare("SELECT id, start_on_node_start FROM servers").get()).toEqual({ id: "server-1", start_on_node_start: 0 });
     expect(storage.connection.prepare("SELECT id, steps_json FROM schedules").get()).toEqual({
       id: "schedule-1",
       steps_json: "[{\"type\":\"command\",\"command\":\"stop\",\"delaySeconds\":60}]"
@@ -175,12 +205,12 @@ describe("SQLite storage", () => {
     const database = new Database(path);
     database.exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
     database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
-      .run(18, "future-schema", "2026-01-01T00:00:00.000Z");
+      .run(currentSchemaVersion + 1, "future-schema", "2026-01-01T00:00:00.000Z");
     database.close();
 
     expect(() => openStorageDatabase(path)).toThrow(/newer than/);
     const unchanged = new Database(path, { readonly: true });
-    expect(unchanged.prepare("SELECT version, name FROM schema_migrations").get()).toEqual({ version: 18, name: "future-schema" });
+    expect(unchanged.prepare("SELECT version, name FROM schema_migrations").get()).toEqual({ version: currentSchemaVersion + 1, name: "future-schema" });
     unchanged.close();
   });
 

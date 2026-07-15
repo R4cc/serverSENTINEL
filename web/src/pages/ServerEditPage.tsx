@@ -199,6 +199,7 @@ export function ServerEditForm({
   ));
   const [serverPort, setServerPort] = useState(() => serverPortForServer(server));
   const [queryPort, setQueryPort] = useState(() => queryPortForServer(server));
+  const [startOnNodeStart, setStartOnNodeStart] = useState(server.startOnNodeStart ?? false);
   const [resetVersion, setResetVersion] = useState(0);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
@@ -239,6 +240,7 @@ export function ServerEditForm({
     setJavaArgs(wizardJavaArgs(nextMinimum, nextMaximum, nextJavaArgs));
     setServerPort(serverPortForServer(server));
     setQueryPort(queryPortForServer(server));
+    setStartOnNodeStart(server.startOnNodeStart ?? false);
     setResetVersion((current) => current + 1);
   }
 
@@ -308,6 +310,21 @@ export function ServerEditForm({
                   <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
                 </label>
               </div>
+              <label className="propertiesStartupToggle">
+                <span className="switch">
+                  <input
+                    name="startOnNodeStart"
+                    type="checkbox"
+                    checked={startOnNodeStart}
+                    onChange={(event) => setStartOnNodeStart(event.target.checked)}
+                  />
+                  <span className="slider" />
+                </span>
+                <span>
+                  <strong>Start when node starts</strong>
+                  <small>Automatically start this Minecraft server whenever its assigned node starts.</small>
+                </span>
+              </label>
             </div>
 
             <div className="propertiesSection" aria-labelledby="properties-resources-title">
@@ -469,4 +486,3 @@ export function DeleteServerPanel({
     </section>
   );
 }
-

@@ -78,6 +78,38 @@
   grid-column: 1 / -1;
 }
 
+.propertiesStartupToggle {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.propertiesStartupToggle > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.propertiesStartupToggle strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+}
+
+.propertiesStartupToggle small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+  line-height: 1.35;
+}
+
+.serverPropertiesForm fieldset:disabled .propertiesStartupToggle {
+  cursor: default;
+}
+
 .propertiesMemorySection {
   gap: var(--space-3);
 }

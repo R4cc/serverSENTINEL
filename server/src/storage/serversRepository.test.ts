@@ -85,6 +85,7 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
       }
     ],
     javaArgs: "-Xms2G -Xmx4G",
+    startOnNodeStart: false,
     runtimeIntent: "stopped",
     crashAttemptTimestamps: [],
     schedules: [{
@@ -117,6 +118,31 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
 }
 
 describe("ServersRepository", () => {
+  it("marks opted-in servers to start when their node starts", async () => {
+    const { servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+
+    expect(servers.markStartOnNodeStart(server.nodeId)).toBe(0);
+    expect(servers.list()[0].runtimeIntent).toBe("stopped");
+
+    const optedIn = { ...servers.list()[0], startOnNodeStart: true };
+    servers.replaceMetadata(optedIn);
+    servers.setRuntimeLifecycle(server.id, {
+      runtimeIntent: "stopped",
+      crashAttemptTimestamps: ["2026-01-01T00:00:00.000Z"],
+      crashLoopSince: "2026-01-01T00:01:00.000Z"
+    });
+
+    expect(servers.markStartOnNodeStart(server.nodeId, "2026-01-02T00:00:00.000Z")).toBe(1);
+    expect(servers.list()[0]).toMatchObject({
+      startOnNodeStart: true,
+      runtimeIntent: "running",
+      crashAttemptTimestamps: []
+    });
+    expect(servers.list()[0].crashLoopSince).toBeUndefined();
+  });
+
   it("stores server, port, schedule, and run state in normalized tables", async () => {
     const { storage, servers } = await createRepositories();
     const server = managedServer();

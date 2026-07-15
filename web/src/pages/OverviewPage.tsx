@@ -3,7 +3,6 @@ import type {
   ManagedServer,
   ModUpdatePlan,
   ResourceSample,
-  RestartRequiredChange,
   ScheduledActiveRun,
   ScheduledExecution,
   ScheduledRun,
@@ -46,43 +45,11 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   return "stopped";
 }
 
-export type ModHealthSummary = {
-  label: string;
-  tone: "neutral" | "healthy" | "warning";
-  totalInstalled: number;
-  availableUpdates: number;
-  attention: number;
-};
-
-export function buildModHealthSummary(updatePlan: ModUpdatePlan | null, options: { loading?: boolean; error?: string; canView?: boolean } = {}): ModHealthSummary {
-  if (options.canView === false) return { label: "No access", tone: "neutral", totalInstalled: 0, availableUpdates: 0, attention: 0 };
-  if (!updatePlan) {
-    return {
-      label: options.loading ? "Checking" : options.error ? "Unavailable" : "Not checked",
-      tone: "neutral",
-      totalInstalled: 0,
-      availableUpdates: 0,
-      attention: 0
-    };
-  }
-  const { totalInstalled, safeUpdates, reviewUpdates, blockedUpdates, unknown } = updatePlan.counts;
-  const availableUpdates = safeUpdates + reviewUpdates;
-  const attention = blockedUpdates + unknown;
-  if (totalInstalled === 0) return { label: "No mods", tone: "neutral", totalInstalled, availableUpdates, attention };
-  if (availableUpdates > 0) return { label: `${availableUpdates} available`, tone: "warning", totalInstalled, availableUpdates, attention };
-  if (attention > 0) return { label: `${attention} need attention`, tone: "warning", totalInstalled, availableUpdates, attention };
-  return { label: "All up to date", tone: "healthy", totalInstalled, availableUpdates, attention };
-}
-
 export function OverviewSummary({
   server,
   status,
   dockerSocketMounted,
   activity,
-  updatePlan = null,
-  updatePlanLoading = false,
-  updatePlanError = "",
-  canViewMods = true,
   latestResourceSample,
   formatNumber = (value) => String(value),
   loading = false
@@ -91,10 +58,6 @@ export function OverviewSummary({
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
-  updatePlan?: ModUpdatePlan | null;
-  updatePlanLoading?: boolean;
-  updatePlanError?: string;
-  canViewMods?: boolean;
   latestResourceSample?: ResourceSample;
   formatNumber?: (value: number) => string;
   loading?: boolean;
@@ -108,7 +71,6 @@ export function OverviewSummary({
       : String(activity.playersOnline);
   const minecraftVersion = minecraftVersionInfo(server);
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
-  const modHealth = buildModHealthSummary(updatePlan, { loading: updatePlanLoading, error: updatePlanError, canView: canViewMods });
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
   const resourceFallback = running ? "Collecting" : "Not running";
   const cpu = hasResourceStats ? `${(latestResourceSample?.cpuPercent ?? 0).toFixed(1)}%` : resourceFallback;
@@ -117,7 +79,7 @@ export function OverviewSummary({
     : resourceFallback;
 
   return (
-    <section className="overviewSummary" aria-busy={loading || updatePlanLoading}>
+    <section className="overviewSummary" aria-busy={loading}>
       {loading && <LoadingLabel>Loading server summary</LoadingLabel>}
       <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
         <span>Status</span>
@@ -138,10 +100,6 @@ export function OverviewSummary({
       <div className="summaryTile">
         <span>Players</span>
         <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : players}</strong>
-      </div>
-      <div className={`summaryTile modSummaryTile ${modHealth.tone}`}>
-        <span>Mod updates</span>
-        <strong>{(loading || updatePlanLoading) && !updatePlan ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : modHealth.label}</strong>
       </div>
       <div className="summaryTile overviewWideSummaryTile">
         <span>CPU</span>
@@ -213,68 +171,30 @@ export function ActivePlayersPanel({
   );
 }
 
-const restartActionLabels: Record<RestartRequiredChange["action"], string> = {
-  added: "Added",
-  removed: "Removed",
-  enabled: "Enabled",
-  disabled: "Disabled",
-  updated: "Updated"
-};
-
 export function ModHealthPanel({
   updatePlan,
-  loading = false,
-  error = "",
   canView = true,
-  restartRequiredChanges = [],
   onOpenMods
 }: {
   updatePlan: ModUpdatePlan | null;
-  loading?: boolean;
-  error?: string;
   canView?: boolean;
-  restartRequiredChanges?: RestartRequiredChange[];
   onOpenMods: () => void;
 }) {
-  const summary = buildModHealthSummary(updatePlan, { loading, error, canView });
-  const tone = summary.tone === "healthy" ? "success" : summary.tone === "warning" ? "warning" : "neutral";
-  const restartSummary = canView && restartRequiredChanges.length > 0 && (
-    <div className="pendingRestartSummary">
-      <div><StatusBadge tone="warning">Restart required</StatusBadge><small>{restartRequiredChanges.length} pending change{restartRequiredChanges.length === 1 ? "" : "s"}</small></div>
-      <ul>
-        {restartRequiredChanges.map((change) => <li key={`${change.identity}:${change.action}`}><b>{restartActionLabels[change.action]}:</b> {change.displayName}</li>)}
-      </ul>
-    </div>
-  );
+  const updateCount = updatePlan
+    ? updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates
+    : 0;
+  if (!canView || updateCount === 0) return null;
+
   return (
-    <section className="panel modsHealthPanel overviewOperationsPanel" aria-busy={loading}>
-      <PanelHeader
-        title="Mod Health"
-        actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={onOpenMods}>Open Mods</Button>}
-      />
-      {loading && !updatePlan && <LoadingLabel>Checking mod health</LoadingLabel>}
-      <div className="modHealthContent">
-        {!canView ? (
-          <EmptyState compact title="Mod status unavailable" message="View mods permission is required." />
-        ) : !updatePlan ? (
-          <EmptyState compact title={loading ? "Checking installed mods" : "Mod status unavailable"} message={error || "Open Mods to retry the update check."} />
-        ) : (
-          <>
-          <div className="overviewMetricLead">
-            <StatusBadge tone={tone}>{summary.label}</StatusBadge>
-            <small>{summary.totalInstalled} installed</small>
-          </div>
-          <div className="overviewStatGrid">
-            <div><span>Safe</span><strong>{updatePlan.counts.safeUpdates}</strong></div>
-            <div><span>Review</span><strong>{updatePlan.counts.reviewUpdates}</strong></div>
-            <div><span>Attention</span><strong>{summary.attention}</strong></div>
-          </div>
-          {error && <div className="overviewPanelNotice warning">The last refresh failed; the previous update plan is shown.</div>}
-          </>
-        )}
-        {restartSummary}
-      </div>
-    </section>
+    <button
+      type="button"
+      className="panel modsHealthPanel modUpdatesCard"
+      onClick={onOpenMods}
+      aria-label={`Open Mods, ${updateCount} mod update${updateCount === 1 ? "" : "s"} available`}
+    >
+      <span>Mod updates available</span>
+      <strong>{updateCount}</strong>
+    </button>
   );
 }
 
