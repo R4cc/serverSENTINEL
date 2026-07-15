@@ -492,7 +492,7 @@ export function NodesPage({
   const selectedManualRecovery = selectedDetailsNode ? nodeManualRecoveryById[selectedDetailsNode.id] : undefined;
 
   return (
-    <section className="pageStack nodesPage layoutBalanced">
+    <section className={`pageStack nodesPage layoutBalanced ${selectedDetailsNode ? "nodeDetailsOpen" : ""}`.trim()}>
       {sortedNodes.length > 0 && (
         <section className="panel nodesToolbar">
           <div>

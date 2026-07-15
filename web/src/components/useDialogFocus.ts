@@ -34,10 +34,12 @@ if (typeof document !== "undefined") {
 
 export function useDialogFocus<T extends HTMLElement>({
   onClose,
-  initialFocusRef
+  initialFocusRef,
+  allowDocumentScrollOnPhone = false
 }: {
   onClose: () => void;
   initialFocusRef?: RefObject<HTMLElement | null>;
+  allowDocumentScrollOnPhone?: boolean;
 }) {
   const dialogRef = useRef<T>(null);
   const onCloseRef = useRef(onClose);
@@ -56,13 +58,14 @@ export function useDialogFocus<T extends HTMLElement>({
     const trigger = recentPointerTrigger || activeElement;
     dialogStack.push(dialogId);
 
-    if (bodyLockCount === 0) {
+    const lockDocumentScroll = !(allowDocumentScrollOnPhone && window.matchMedia("(max-width: 720px)").matches);
+    if (lockDocumentScroll && bodyLockCount === 0) {
       previousBodyOverflow = document.body.style.overflow;
       previousDocumentOverflow = document.documentElement.style.overflow;
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
     }
-    bodyLockCount += 1;
+    if (lockDocumentScroll) bodyLockCount += 1;
 
     const focusTarget = initialFocusRef?.current ?? dialogRef.current;
     focusTarget?.focus({ preventScroll: true });
@@ -113,14 +116,14 @@ export function useDialogFocus<T extends HTMLElement>({
       document.removeEventListener("touchmove", blockOutsideScroll, true);
       const stackIndex = dialogStack.lastIndexOf(dialogId);
       if (stackIndex >= 0) dialogStack.splice(stackIndex, 1);
-      bodyLockCount = Math.max(0, bodyLockCount - 1);
-      if (bodyLockCount === 0) {
+      if (lockDocumentScroll) bodyLockCount = Math.max(0, bodyLockCount - 1);
+      if (lockDocumentScroll && bodyLockCount === 0) {
         document.body.style.overflow = previousBodyOverflow;
         document.documentElement.style.overflow = previousDocumentOverflow;
       }
       if (trigger?.isConnected) window.setTimeout(() => trigger.focus({ preventScroll: true }), 0);
     };
-  }, [initialFocusRef]);
+  }, [allowDocumentScrollOnPhone, initialFocusRef]);
 
   return dialogRef;
 }

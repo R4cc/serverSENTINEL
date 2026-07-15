@@ -1509,9 +1509,14 @@ button:disabled,
   }
 
   .actionMenuPopover,
-  .overflowDropdown {
+  .actionMenuPopover--end {
     right: 0;
     left: auto;
+  }
+
+  .actionMenuPopover--start {
+    right: auto;
+    left: 0;
   }
 
   .restartRequirementTooltip {
@@ -2729,5 +2734,89 @@ textarea:hover:not(:disabled),
   .workspacePage-files .fileTableHead,
   .workspacePage-files .fileTableRow {
     min-height: 44px;
+  }
+}
+
+/* Native document scrolling lets mobile Safari collapse its browser chrome.
+   Feature surfaces may still own horizontal or terminal-specific overflow. */
+@media (max-width: 720px) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+  }
+
+  #root {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .appShell,
+  .sidebarCollapsed.appShell {
+    height: auto;
+    min-height: 100dvh;
+    grid-template-rows: 68px auto;
+    overflow: visible;
+  }
+
+  .workspace {
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .workspaceServerPage {
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    overflow: visible;
+  }
+
+  .workspaceServerPage > .tabPage,
+  .workspaceServerPage > .filesPage {
+    min-height: calc(100dvh - 68px);
+    flex: 0 0 auto;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .nodesPage.nodeDetailsOpen > .nodesToolbar,
+  .nodesPage.nodeDetailsOpen > .nodesGrid {
+    display: none;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop {
+    position: static;
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop > .nodeDetailsDrawer {
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    border: 0;
+    box-shadow: none;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop .nodeDrawerBody {
+    flex: 0 0 auto;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop .nodeDrawerFooter {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
   }
 }

@@ -78,17 +78,22 @@ async function shellMetrics(page) {
       shellTop: shell.scrollTop,
       shellOverflow: getComputedStyle(shell).overflow,
       rootOverflow: getComputedStyle(document.documentElement).overflow,
+      rootOverflowY: getComputedStyle(document.documentElement).overflowY,
+      bodyOverflowY: getComputedStyle(document.body).overflowY,
       shellHeight: shell.getBoundingClientRect().height,
+      documentHeight: document.documentElement.scrollHeight,
       viewportVariable: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--visual-viewport-height")),
       workspace: { x: workspaceRect.x, y: workspaceRect.y, width: workspaceRect.width, height: workspaceRect.height }
     };
   });
 }
 
-function assertStableShell(metrics, label) {
+function assertNativeScrollShell(metrics, label) {
   assert(metrics.documentTop === 0 && metrics.bodyTop === 0 && metrics.shellTop === 0, `${label}: document or shell scrolled independently`);
-  assert(metrics.shellOverflow === "hidden" && metrics.rootOverflow === "hidden", `${label}: outer scroll containers are not frozen`);
-  assert(Math.abs(metrics.shellHeight - metrics.viewportVariable) <= 1, `${label}: shell is not synchronized to the visual viewport`);
+  assert(metrics.shellOverflow === "visible", `${label}: shell blocks document scrolling (${metrics.shellOverflow})`);
+  assert(["auto", "scroll", "visible"].includes(metrics.rootOverflowY) && ["auto", "scroll", "visible"].includes(metrics.bodyOverflowY), `${label}: document is not the mobile scroll surface (${metrics.rootOverflow}/${metrics.bodyOverflowY})`);
+  assert(metrics.shellHeight >= metrics.viewportVariable - 1, `${label}: shell does not fill the visual viewport`);
+  assert(metrics.documentHeight >= metrics.viewportVariable - 1, `${label}: document does not fill the visual viewport`);
 }
 
 async function assertNavigationOverlay(page, label) {
@@ -96,10 +101,10 @@ async function assertNavigationOverlay(page, label) {
   await page.getByRole("button", { name: "Expand navigation" }).click();
   await page.locator(".mobileNavigationOpen").waitFor();
   const open = await shellMetrics(page);
-  for (const key of ["x", "y", "width", "height"]) {
+  for (const key of ["x", "y", "width"]) {
     assert(Math.abs(before.workspace[key] - open.workspace[key]) <= 1, `${label}: opening navigation changed workspace ${key} (${before.workspace[key]} -> ${open.workspace[key]})`);
   }
-  assertStableShell(open, `${label} navigation open`);
+  assertNativeScrollShell(open, `${label} navigation open`);
   await page.keyboard.press("Escape");
   await page.locator(".mobileNavigationOpen").waitFor({ state: "detached" });
   await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Expand navigation", null, { timeout: 2_000 });
@@ -174,18 +179,18 @@ async function assertScheduleActionMenuVisible(page, label) {
 
 async function assertModsToolbarVisible(page, label) {
   const result = await page.evaluate(() => {
-    const scrollOwner = document.querySelector(".modsWorkspacePage");
     const toolbar = document.querySelector(".modsWorkspaceToolbar");
     const installed = document.querySelector(".modsWorkspaceInstalled");
+    const documentScroller = document.scrollingElement;
     const actions = Array.from(document.querySelectorAll(".modsWorkspaceToolbar button"));
-    if (!(scrollOwner instanceof HTMLElement) || !(toolbar instanceof HTMLElement) || !(installed instanceof HTMLElement) || actions.length === 0) return { missing: true };
+    if (!(toolbar instanceof HTMLElement) || !(installed instanceof HTMLElement) || !(documentScroller instanceof HTMLElement) || actions.length === 0) return { missing: true };
     const toolbarRect = toolbar.getBoundingClientRect();
     const installedRect = installed.getBoundingClientRect();
-    const originalTop = scrollOwner.scrollTop;
+    const originalTop = documentScroller.scrollTop;
     const coveredActions = actions.flatMap((action) => {
       let rect = action.getBoundingClientRect();
       if (rect.top < 0 || rect.bottom > innerHeight) {
-        scrollOwner.scrollTop += rect.top - Math.max(0, (innerHeight - rect.height) / 2);
+        documentScroller.scrollTop += rect.top - Math.max(0, (innerHeight - rect.height) / 2);
         rect = action.getBoundingClientRect();
       }
       const x = Math.min(innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
@@ -193,7 +198,7 @@ async function assertModsToolbarVisible(page, label) {
       const hit = document.elementFromPoint(x, y);
       return action.contains(hit) ? [] : [action.getAttribute("aria-label") || action.textContent?.trim() || "unnamed action"];
     });
-    scrollOwner.scrollTop = originalTop;
+    documentScroller.scrollTop = originalTop;
     return {
       missing: false,
       toolbarBottom: toolbarRect.bottom,
@@ -206,39 +211,37 @@ async function assertModsToolbarVisible(page, label) {
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
 }
 
-async function assertPageScrollOwner(page, title, ownerSelector, label) {
+async function assertPageDocumentScroll(page, title, label) {
   await openPage(page, title);
-  await page.locator(ownerSelector).waitFor({ timeout: 10_000 });
-  const result = await page.evaluate((selector) => {
+  const result = await page.evaluate(() => {
     const shell = document.querySelector(".appShell");
     const workspace = document.querySelector(".workspace");
-    const owner = document.querySelector(selector);
+    const owner = document.scrollingElement;
     if (!(shell instanceof HTMLElement) || !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
-    const overflow = getComputedStyle(owner).overflowY;
     const before = owner.scrollTop;
     if (owner.scrollHeight > owner.clientHeight) owner.scrollTop = Math.min(80, owner.scrollHeight - owner.clientHeight);
     const moved = owner.scrollTop > before;
     owner.scrollTop = before;
     return {
       missing: false,
-      overflow,
+      rootOverflow: getComputedStyle(document.documentElement).overflowY,
+      bodyOverflow: getComputedStyle(document.body).overflowY,
       canOverflow: owner.scrollHeight > owner.clientHeight,
       moved,
-      outerTops: [document.documentElement.scrollTop, document.body.scrollTop, shell.scrollTop],
-      workspaceOverflow: getComputedStyle(workspace).overflowY
+      shellTop: shell.scrollTop
     };
-  }, ownerSelector);
-  assert(!result.missing, `${label}: intended scroll owner ${ownerSelector} is missing`);
-  assert(["auto", "scroll"].includes(result.overflow), `${label}: ${ownerSelector} is not scrollable (${result.overflow})`);
-  assert(!result.canOverflow || result.moved, `${label}: ${ownerSelector} cannot reach overflowing content`);
-  assert(result.outerTops.every((value) => value === 0), `${label}: an outer scroll surface moved`);
+  });
+  assert(!result.missing, `${label}: document scroll surface is missing`);
+  assert(["auto", "scroll", "visible"].includes(result.rootOverflow) && ["auto", "scroll", "visible"].includes(result.bodyOverflow), `${label}: document scrolling is disabled`);
+  assert(!result.canOverflow || result.moved, `${label}: document cannot reach overflowing content`);
+  assert(result.shellTop === 0, `${label}: shell became a competing scroll surface`);
 }
 
-async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, backgroundSelector, label) {
-  const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body, backgroundSelector: background }) => {
+async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
+  const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
     const bodyElement = document.querySelector(body);
-    const backgroundElement = document.querySelector(background);
+    const backgroundElement = document.scrollingElement;
     if (!(backdropElement instanceof HTMLElement) || !(bodyElement instanceof HTMLElement) || !(backgroundElement instanceof HTMLElement)) return { missing: true };
     backgroundElement.scrollTop = Math.min(30, Math.max(0, backgroundElement.scrollHeight - backgroundElement.clientHeight));
     const before = backgroundElement.scrollTop;
@@ -254,7 +257,7 @@ async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector
       bodyCanOverflow: bodyElement.scrollHeight > bodyElement.clientHeight,
       bodyTop: bodyElement.scrollTop
     };
-  }, { backdropSelector, dialogBodySelector, backgroundSelector });
+  }, { backdropSelector, dialogBodySelector });
   assert(!result.missing, `${label}: dialog scroll surfaces are missing`);
   assert(result.prevented, `${label}: outside wheel input was not blocked`);
   assert(result.before === result.after, `${label}: background scroll position changed under the dialog`);
@@ -288,22 +291,14 @@ async function runProfile(engine, profile, label) {
     });
     await signIn(page);
 
-    assertStableShell(await shellMetrics(page), `${label} initial`);
+    assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertNavigationOverlay(page, label);
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .overflowButton"], label);
     await assertFloatingSurfaces(page, label);
 
-    const serverPageOwners = {
-      overview: ".workspace > .tabPage",
-      files: ".workspace .filesPage .fileTable",
-      mods: ".workspace > .tabPage",
-      schedules: ".workspace > .tabPage",
-      console: ".workspace .xterm-viewport",
-      properties: ".workspace > .tabPage"
-    };
-    for (const [title, owner] of Object.entries(serverPageOwners)) await assertPageScrollOwner(page, title, owner, `${label} ${title}`);
-    await assertPageScrollOwner(page, "nodes", ".workspace", `${label} nodes`);
-    await assertPageScrollOwner(page, "settings", ".workspace", `${label} settings`);
+    for (const title of ["overview", "files", "mods", "schedules", "console", "properties", "nodes", "settings"]) {
+      await assertPageDocumentScroll(page, title, `${label} ${title}`);
+    }
     await assertEditableFontSizes(page, `${label} settings`);
 
     await openPage(page, "files");
@@ -317,7 +312,7 @@ async function runProfile(engine, profile, label) {
     await page.getByRole("dialog", { name: "Add mods", exact: true }).waitFor();
     await assertEditableFontSizes(page, `${label} mods drawer`);
     await assertTargets(page, [".modsDrawerHeader button"], `${label} mods drawer`);
-    await assertDialogScrollLock(page, ".modsDrawerBackdrop", ".modsDrawerBody", ".workspace > .tabPage", `${label} mods drawer`);
+    await assertDialogScrollLock(page, ".modsDrawerBackdrop", ".modsDrawerBody", `${label} mods drawer`);
     await page.getByRole("button", { name: "Close add mods" }).click();
 
     await openPage(page, "schedules");
@@ -327,7 +322,7 @@ async function runProfile(engine, profile, label) {
     await page.getByRole("dialog").waitFor();
     await assertEditableFontSizes(page, `${label} schedule dialog`);
     await assertTargets(page, [".scheduleModalPanel .modalCloseButton"], `${label} schedule dialog`);
-    await assertDialogScrollLock(page, ".scheduleModalBackdrop", ".scheduleModalPanel .scheduleEditBody", ".workspace > .tabPage", `${label} schedule dialog`);
+    await assertDialogScrollLock(page, ".scheduleModalBackdrop", ".scheduleModalPanel .scheduleEditBody", `${label} schedule dialog`);
     await page.keyboard.press("Escape");
     await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Add schedule", null, { timeout: 2_000 });
@@ -344,7 +339,7 @@ async function runProfile(engine, profile, label) {
     const initialHeight = profile.viewport.height;
     await page.setViewportSize({ width: profile.viewport.width, height: initialHeight - 80 });
     await page.waitForTimeout(100);
-    assertStableShell(await shellMetrics(page), `${label} resized visual viewport`);
+    assertNativeScrollShell(await shellMetrics(page), `${label} resized visual viewport`);
 
     await context.close();
     console.log(`mobile smoke passed: ${label}`);

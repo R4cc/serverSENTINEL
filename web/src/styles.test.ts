@@ -10,6 +10,7 @@ const serverPropertiesStyles = readFileSync(new URL("./styles/server-properties.
 const fileManagerStyles = readFileSync(new URL("./styles/file-manager.css", import.meta.url), "utf8");
 const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.css", import.meta.url), "utf8");
 const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "utf8");
+const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it.each([
@@ -47,5 +48,17 @@ describe("global stylesheet entry point", () => {
     expect(serverPropertiesStyles).not.toMatch(/\.filesPage\s*\{/);
     expect(canonicalLayoutStyles).not.toMatch(/\.filesPage\s*\{[^}]*grid-template-columns:/s);
     expect(fileManagerStyles).toMatch(/\.filesPage\s*\{[^}]*min-height:\s*520px;/s);
+  });
+
+  it("keeps phone action menus inside the edge they are aligned to", () => {
+    expect(responsiveStyles).toMatch(/\.actionMenuPopover--end\s*\{[^}]*right:\s*0;[^}]*left:\s*auto;/s);
+    expect(responsiveStyles).toMatch(/\.actionMenuPopover--start\s*\{[^}]*right:\s*auto;[^}]*left:\s*0;/s);
+  });
+
+  it("uses the document as the final phone scroll surface", () => {
+    const nativeScrollRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("/* Native document scrolling"));
+    expect(nativeScrollRules).toMatch(/html,\s*body\s*\{[^}]*height:\s*auto;[^}]*overflow-y:\s*auto;/s);
+    expect(nativeScrollRules).toMatch(/\.appShell,[^{]*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
+    expect(nativeScrollRules).toMatch(/\.nodesPage\s*>\s*\.nodeDrawerBackdrop\s+\.nodeDrawerBody\s*\{[^}]*overflow:\s*visible;/s);
   });
 });

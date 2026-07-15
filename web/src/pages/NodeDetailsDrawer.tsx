@@ -240,7 +240,7 @@ export function NodeDetailsDrawer({
   }
 
   return (
-    <DialogSurface className="nodeDetailsDrawer" labelledBy="node-details-title" describedBy="node-details-description" onClose={onClose}>
+    <DialogSurface className="nodeDetailsDrawer" labelledBy="node-details-title" describedBy="node-details-description" onClose={onClose} allowDocumentScrollOnPhone>
       <header className="nodeDrawerHeader">
         <div className="nodeDrawerTitle">
           <NodeGlyph />

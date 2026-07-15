@@ -6,15 +6,17 @@ export function DialogSurface({
   labelledBy,
   describedBy,
   onClose,
+  allowDocumentScrollOnPhone = false,
   children
 }: {
   className: string;
   labelledBy: string;
   describedBy?: string;
   onClose: () => void;
+  allowDocumentScrollOnPhone?: boolean;
   children: ReactNode;
 }) {
-  const dialogRef = useDialogFocus<HTMLElement>({ onClose });
+  const dialogRef = useDialogFocus<HTMLElement>({ onClose, allowDocumentScrollOnPhone });
   return (
     <section
       ref={dialogRef}
