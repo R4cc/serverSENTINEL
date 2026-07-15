@@ -30,6 +30,10 @@
   overscroll-behavior: contain;
 }
 
+.minecraftTerminal.initializing .xterm {
+  visibility: hidden;
+}
+
 .minecraftTerminal .xterm {
   height: 100%;
   padding: 8px 10px;

@@ -229,6 +229,7 @@
 }
 @media (max-width: 760px) {
   .modsWorkspacePage { height: auto; }
+  .modsWorkspaceToolbar { flex: 0 0 auto; }
   .modsWorkspaceInstalled { height: max(420px, calc(100vh - 260px)); flex: none; }
   .modsWorkspaceSummary { grid-template-columns: 1fr; }
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }

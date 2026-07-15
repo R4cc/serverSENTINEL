@@ -158,10 +158,15 @@ export function MinecraftTerminal({
     window.addEventListener("resize", handleViewportResize);
     terminal.textarea?.addEventListener("focus", handleTerminalFocus);
 
-    window.requestAnimationFrame(() => {
+    const initialRenderFrame = window.requestAnimationFrame(() => {
       fit();
       writeEntries([], entries);
       if (canSendCommandsRef.current) writePrompt();
+      terminal.write("", () => {
+        if (terminalRef.current !== terminal) return;
+        terminal.scrollToBottom();
+        container.classList.remove("initializing");
+      });
     });
 
     const resizeObserver = new ResizeObserver(() => fit());
@@ -171,6 +176,7 @@ export function MinecraftTerminal({
     terminal.attachCustomKeyEventHandler(handleTerminalKey);
 
     return () => {
+      window.cancelAnimationFrame(initialRenderFrame);
       resizeObserver.disconnect();
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchmove", handleTouchMove);
@@ -522,7 +528,7 @@ export function MinecraftTerminal({
 
   return (
     <div className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}>
-      <div ref={containerRef} className="minecraftTerminal" aria-label="Minecraft server console" />
+      <div ref={containerRef} className="minecraftTerminal initializing" aria-label="Minecraft server console" />
       {!canSendCommands && (
         <div className="minecraftTerminalStatus">
           {disabledReason || "Console command input is unavailable."}

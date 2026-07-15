@@ -172,6 +172,40 @@ async function assertScheduleActionMenuVisible(page, label) {
   await page.keyboard.press("Escape");
 }
 
+async function assertModsToolbarVisible(page, label) {
+  const result = await page.evaluate(() => {
+    const scrollOwner = document.querySelector(".modsWorkspacePage");
+    const toolbar = document.querySelector(".modsWorkspaceToolbar");
+    const installed = document.querySelector(".modsWorkspaceInstalled");
+    const actions = Array.from(document.querySelectorAll(".modsWorkspaceToolbar button"));
+    if (!(scrollOwner instanceof HTMLElement) || !(toolbar instanceof HTMLElement) || !(installed instanceof HTMLElement) || actions.length === 0) return { missing: true };
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const installedRect = installed.getBoundingClientRect();
+    const originalTop = scrollOwner.scrollTop;
+    const coveredActions = actions.flatMap((action) => {
+      let rect = action.getBoundingClientRect();
+      if (rect.top < 0 || rect.bottom > innerHeight) {
+        scrollOwner.scrollTop += rect.top - Math.max(0, (innerHeight - rect.height) / 2);
+        rect = action.getBoundingClientRect();
+      }
+      const x = Math.min(innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
+      const y = Math.min(innerHeight - 1, Math.max(0, rect.top + Math.min(rect.height / 2, 8)));
+      const hit = document.elementFromPoint(x, y);
+      return action.contains(hit) ? [] : [action.getAttribute("aria-label") || action.textContent?.trim() || "unnamed action"];
+    });
+    scrollOwner.scrollTop = originalTop;
+    return {
+      missing: false,
+      toolbarBottom: toolbarRect.bottom,
+      installedTop: installedRect.top,
+      coveredActions
+    };
+  });
+  assert(!result.missing, `${label}: mods toolbar surfaces are missing`);
+  assert(result.installedTop >= result.toolbarBottom, `${label}: installed mods overlaps the toolbar (${result.installedTop} < ${result.toolbarBottom})`);
+  assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
+}
+
 async function assertPageScrollOwner(page, title, ownerSelector, label) {
   await openPage(page, title);
   await page.locator(ownerSelector).waitFor({ timeout: 10_000 });
@@ -276,6 +310,7 @@ async function runProfile(engine, profile, label) {
     await assertTargets(page, [".fileNavButtons .uiButton", ".fileToolbar .uiButton", ".fileTableRow"], `${label} files`);
 
     await openPage(page, "mods");
+    await assertModsToolbarVisible(page, `${label} mods toolbar`);
     const addMods = page.getByRole("button", { name: "Add mods", exact: true });
     assert(await addMods.isEnabled(), `${label}: demo Add mods action is unexpectedly disabled`);
     await addMods.click();
