@@ -8,6 +8,7 @@ import {
   nextRunRelativeTime,
   SchedulePage,
   ScheduleRunDetailsDialog,
+  reorderScheduleSteps,
   scheduleDescription
 } from "./SchedulesPage";
 
@@ -43,6 +44,14 @@ function renderSchedulePage(schedules: ScheduledExecution[], overrides: Partial<
 }
 
 describe("schedule step summaries", () => {
+  it("reorders steps by stable client id without mutating the source", () => {
+    const steps = [{ id: "one" }, { id: "two" }, { id: "three" }];
+
+    expect(reorderScheduleSteps(steps, "three", "one").map((step) => step.id)).toEqual(["three", "one", "two"]);
+    expect(reorderScheduleSteps(steps, "one", "three").map((step) => step.id)).toEqual(["two", "three", "one"]);
+    expect(steps.map((step) => step.id)).toEqual(["one", "two", "three"]);
+  });
+
   it("describes mixed commands, restart actions, and delays", () => {
     expect(scheduleDescription(schedule([
       { type: "command", command: "say restarting", delaySeconds: 0 },

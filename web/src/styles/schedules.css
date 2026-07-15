@@ -756,6 +756,15 @@
   border: 0;
   border-radius: var(--radius-md);
   background: var(--surface-muted);
+  transition: box-shadow 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+
+.scheduleStepCard.isDragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 2px var(--accent);
+  opacity: .78;
 }
 
 .scheduleStepHeader {
@@ -763,8 +772,39 @@
   min-height: var(--control-height);
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: var(--space-1);
+}
+
+.scheduleStepIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.scheduleStepDragHandle.uiButton {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scheduleStepDragHandle.uiButton:hover:not(:disabled),
+.scheduleStepDragHandle.uiButton:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.scheduleStepDragHandle.uiButton:active {
+  cursor: grabbing;
 }
 
 .scheduleStepHeader strong {
