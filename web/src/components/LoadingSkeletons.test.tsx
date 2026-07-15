@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
 import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
 
 describe("loading skeletons", () => {
@@ -22,13 +22,28 @@ describe("loading skeletons", () => {
     expect(html).not.toContain("inlineState-loading");
   });
 
-  it("matches the overview summary geometry and omits it on unrelated pages", () => {
+  it("matches the overview summary geometry and keeps ultrawide-only tiles reserved", () => {
     const overview = renderToStaticMarkup(<ApplicationLoadingSkeleton page="overview" />);
     const files = renderToStaticMarkup(<ApplicationLoadingSkeleton page="files" />);
 
-    expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(6);
+    expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(8);
+    expect(overview.match(/applicationSkeletonWideTile/g)).toHaveLength(2);
     expect(overview).toContain("applicationLoadingSkeleton--overview");
     expect(files).toContain("applicationLoadingSkeleton--files");
     expect(files).not.toContain("applicationSkeletonSummary");
+  });
+
+  it("uses route-shaped loading structures for heavy workspaces and lazy fallbacks", () => {
+    const files = renderToStaticMarkup(<ApplicationLoadingSkeleton page="files" />);
+    const mods = renderToStaticMarkup(<ApplicationLoadingSkeleton page="mods" />);
+    const schedules = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="schedule" label="Loading schedules" />);
+    const consolePage = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="console" label="Loading console" />);
+
+    expect(files).toContain("applicationFilesSkeleton");
+    expect(files.match(/applicationFilesRow"/g)).toHaveLength(8);
+    expect(mods).toContain("applicationModsSummary");
+    expect(mods.match(/applicationModsMetric"/g)).toHaveLength(3);
+    expect(schedules).toContain("applicationScheduleGrid");
+    expect(consolePage).toContain("applicationConsoleSkeleton");
   });
 });

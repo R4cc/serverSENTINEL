@@ -9,6 +9,7 @@ const primitiveStyles = readFileSync(new URL("./styles/primitives.css", import.m
 const serverPropertiesStyles = readFileSync(new URL("./styles/server-properties.css", import.meta.url), "utf8");
 const fileManagerStyles = readFileSync(new URL("./styles/file-manager.css", import.meta.url), "utf8");
 const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.css", import.meta.url), "utf8");
+const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it.each([
@@ -33,6 +34,13 @@ describe("global stylesheet entry point", () => {
 
   it("keeps the overview loading summary on the same six-column desktop grid", () => {
     expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(6,/s);
+    expect(primitiveStyles).toMatch(/\.applicationSkeletonWideTile\s*\{[^}]*display:\s*none;/s);
+  });
+
+  it("keeps mod loading values and scrollbars from resizing the workspace", () => {
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
+    expect(modsStyles).toMatch(/\.modsMetricValueSkeleton\s*\{[^}]*height:\s*17px;[^}]*margin:\s*0;/s);
+    expect(modsStyles).toMatch(/\.modsWorkspaceTable\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
 
   it("keeps the Files page layout owned by the file-manager stylesheet", () => {

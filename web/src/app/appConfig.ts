@@ -39,6 +39,10 @@ export function shouldShowApplicationLoadingSkeleton(page: ActivePage) {
   return page !== "settings";
 }
 
+export function shouldShowInitialOverviewLoading(loading: boolean, eventCount: number, activityFieldCount: number) {
+  return loading && eventCount === 0 && activityFieldCount === 0;
+}
+
 export function readStoredDemoMode(storage: Storage = window.localStorage, enabled = true) {
   if (!enabled) {
     try {

@@ -104,8 +104,8 @@
 .authSkeletonLabel { width: 80px; height: 12px; margin-top: var(--space-2); }
 .authSkeletonInput { width: 100%; height: 42px; }
 .authSkeletonButton { width: 100%; height: 42px; margin-top: var(--space-3); }
-.applicationLoadingSkeleton { display: grid; gap: var(--space-4); min-height: 420px; }
-.workspaceServerPage > .tabPage.applicationLoadingSkeleton { flex: 1 1 0; height: auto; min-height: 0; overflow: hidden; }
+.applicationLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); overflow: auto; }
+.workspaceServerPage > .tabPage.applicationLoadingSkeleton { flex: 1 1 0; height: auto; min-height: 0; overflow: auto; }
 .activeServerStripLoadingSkeleton { min-height: 74px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingIcon { flex: 0 0 36px; width: 36px; height: 36px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingTitle { width: min(180px, 48vw); height: 16px; }
@@ -114,12 +114,88 @@
 .activeServerStripLoadingSkeleton .serverStripLoadingButton { display: block; width: 86px; height: var(--control-height); }
 .activeServerStripLoadingSkeleton .serverStripLoadingOverflow { display: block; width: var(--control-height); height: var(--control-height); }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
-.featurePageLoadingSkeleton .applicationSkeletonPanel { height: 100%; }
 .applicationSkeletonSummary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); }
 .applicationSkeletonTile { height: 82px; }
+.applicationSkeletonWideTile { display: none; }
 .applicationSkeletonPanel { display: grid; align-content: start; gap: var(--space-3); min-height: 320px; border: var(--border-strong) solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--surface); }
 .applicationSkeletonHeading { width: min(240px, 45%); height: 22px; margin-bottom: var(--space-2); }
 .applicationSkeletonRow { height: 42px; }
+.applicationSkeletonButton { width: 116px; height: var(--control-height); }
+.applicationSkeletonButtonGroup { width: 190px; height: var(--toolbar-min-height); }
+.applicationSkeletonButtonGroup--end { width: 230px; }
+.applicationSkeletonBreadcrumb { width: min(320px, 52%); height: 18px; }
+
+.applicationOverviewSkeleton,
+.applicationModsSkeleton,
+.applicationScheduleSkeleton {
+  min-height: 0;
+  height: 100%;
+}
+
+.applicationOverviewSkeleton { display: grid; align-content: start; gap: var(--space-4); }
+.applicationOverviewPanelGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-areas:
+    "resource resource resource resource resource resource resource resource players players players players"
+    "resource resource resource resource resource resource resource resource mods mods mods mods"
+    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "events events events events events events events events events events events events";
+  gap: var(--space-4);
+  min-height: 0;
+}
+.applicationOverviewPanelGrid > .applicationSkeletonPanel { min-height: 0; }
+.applicationOverviewResourcePanel { grid-area: resource; }
+.applicationOverviewPlayersPanel { grid-area: players; }
+.applicationOverviewModsPanel { grid-area: mods; }
+.applicationOverviewAutomationPanel { grid-area: automation; }
+.applicationOverviewEventsPanel { grid-area: events; }
+
+.applicationFilesSkeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
+  align-items: stretch;
+  gap: var(--space-4);
+  height: 100%;
+  min-height: 0;
+}
+.applicationFilesMainPanel,
+.applicationFilesDetailsPanel { min-height: 0; height: 100%; }
+.applicationFilesMainPanel { grid-template-rows: auto auto minmax(0, 1fr); align-content: stretch; }
+.applicationFilesToolbar,
+.applicationModsToolbar,
+.applicationScheduleToolbar,
+.applicationConsoleHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.applicationFilesToolbar { min-height: var(--toolbar-min-height); }
+.applicationFilesSelectionBar { width: 100%; height: 52px; }
+.applicationFilesRows { display: grid; align-content: start; gap: var(--space-2); min-height: 0; overflow: hidden; }
+.applicationFilesDetailsPanel { display: grid; }
+
+.applicationModsSkeleton { display: flex; flex-direction: column; gap: 14px; }
+.applicationModsSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.applicationModsMetric { height: 76px; }
+.applicationModsToolbar { min-height: var(--toolbar-min-height); }
+.applicationModsTable { flex: 1 1 auto; min-height: 0; align-content: start; }
+
+.applicationConsoleSkeleton {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.applicationConsoleHeader { flex: 0 0 auto; min-height: 68px; padding: var(--space-4); border-bottom: var(--border-subtle) solid var(--border-row); }
+.applicationConsoleHeader .applicationSkeletonHeading { margin: 0; }
+.applicationConsoleSkeleton .terminalLoadingSkeleton { flex: 1 1 auto; min-height: 0; }
+
+.applicationScheduleSkeleton { display: flex; flex-direction: column; gap: var(--space-4); }
+.applicationScheduleToolbar { flex: 0 0 auto; min-height: var(--toolbar-min-height); }
+.applicationScheduleGrid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 380px); gap: var(--space-4); flex: 1 1 auto; min-height: 0; }
+.applicationScheduleGrid > .applicationSkeletonPanel { min-height: 0; height: 100%; }
+.applicationFormSkeleton { height: 100%; }
 .codeLoadingSkeleton { width: 100%; height: 100%; min-height: 260px; overflow: hidden; padding: var(--space-4); background: var(--surface); }
 .codeLoadingSkeleton > div { display: grid; gap: 12px; }
 .codeSkeletonLine { height: 13px; }
@@ -130,12 +206,43 @@
 
 @media (max-width: 760px) {
   .applicationSkeletonSummary { grid-template-columns: 1fr; }
+  .applicationFilesSkeleton,
+  .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
+  .applicationFilesDetailsPanel,
+  .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
+  .applicationModsSummary { grid-template-columns: 1fr; }
+  .applicationFilesToolbar,
+  .applicationModsToolbar { align-items: stretch; flex-direction: column; }
+  .applicationSkeletonButtonGroup,
+  .applicationSkeletonButtonGroup--end,
+  .applicationSkeletonBreadcrumb { width: 100%; }
+  .applicationOverviewPanelGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "resource" "players" "mods" "automation" "events";
+  }
 }
 
 @media (min-width: 981px) and (max-width: 1320px) {
   .applicationSkeletonSummary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .applicationOverviewPanelGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "resource" "players" "mods" "automation" "events";
+  }
 }
 
 @media (min-width: 761px) and (max-width: 980px) {
   .applicationSkeletonSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .applicationOverviewPanelGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "resource" "players" "mods" "automation" "events";
+  }
+  .applicationFilesSkeleton,
+  .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
+  .applicationFilesDetailsPanel,
+  .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
+}
+
+@media (min-width: 2560px) {
+  .applicationSkeletonSummary { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .applicationSkeletonWideTile { display: block; }
 }

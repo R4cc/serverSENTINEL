@@ -7,7 +7,7 @@ import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionIn
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
-import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -2310,6 +2310,11 @@ export default function App() {
     nodes: "Nodes"
   };
   const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
+  const overviewInitialLoading = shouldShowInitialOverviewLoading(
+    overviewLoading,
+    overviewData.events.length,
+    Object.keys(overviewData.activity).length
+  );
 
   function openSidebarPage(page: ActivePage) {
     setActivePage(page);
@@ -2556,7 +2561,7 @@ export default function App() {
                 }}>Clear error</Button>
               </section>
             )}
-            <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server form" />}>
+            <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server form" page="create" />}>
               <ManagedServerForm
                 nodes={contextNodes}
                 preferredNodeId={preferredCreateNodeId}
@@ -2623,7 +2628,7 @@ export default function App() {
         )}
 
         {activePage === "nodes" && (
-          <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" />}>
+          <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" page="nodes" />}>
             <NodesPage
             nodes={contextNodes}
             panelVersion={panelVersion}
@@ -2816,7 +2821,7 @@ export default function App() {
                     canViewMods={canViewMods}
                     latestResourceSample={resourceSamples.at(-1)}
                     formatNumber={formatDisplayNumber}
-                    loading={overviewLoading}
+                    loading={overviewInitialLoading}
                   />
 
                   <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
@@ -2831,7 +2836,7 @@ export default function App() {
                     />
                   </Suspense>
 
-                  <ActivePlayersPanel activity={overviewData.activity} running={Boolean(activeStatus?.docker.running)} loading={overviewLoading} />
+                  <ActivePlayersPanel activity={overviewData.activity} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
                   <ModHealthPanel
                     updatePlan={modsWorkspace.data.updatePlan}
                     loading={modsWorkspace.state.updatePlanLoading}
@@ -2884,7 +2889,7 @@ export default function App() {
             )}
 
             {activePage === "files" && (
-              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading files" />}>
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading files" page="files" />}>
                 <FilesPage
                   workspace={filesWorkspace}
                   activeServerIsDemo={activeServerIsDemo}
@@ -2898,7 +2903,7 @@ export default function App() {
             )}
 
             {activePage === "mods" && (
-              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading mods" />}>
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading mods" page="mods" />}>
                 <ModsPage
                 workspace={modsWorkspace}
                 restartRequiredChanges={activeServer.restartRequiredChanges}
@@ -2924,7 +2929,7 @@ export default function App() {
             )}
 
             {activePage === "schedule" && (
-              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" />}>
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" page="schedule" />}>
                 <SchedulePage
                   schedules={schedulesWorkspace.schedules}
                   formatDate={formatDisplayDate}
@@ -2944,7 +2949,7 @@ export default function App() {
 
             {activePage === "properties" && (
               <section className="tabPage settingsPage layoutReadable">
-                <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" />}>
+                <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" page="properties" />}>
                   <ServerEditForm
                     server={activeServer}
                     versions={fabricVersions}
