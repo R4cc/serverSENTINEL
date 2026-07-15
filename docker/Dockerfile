@@ -15,6 +15,9 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY shared shared
 COPY server server
 COPY web web
+COPY scripts scripts
+COPY docker docker
+COPY docker-compose.yml .env.example ./
 RUN npm run build
 RUN npm prune --omit=dev --workspace server
 
