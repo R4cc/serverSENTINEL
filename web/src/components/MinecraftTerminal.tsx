@@ -143,9 +143,7 @@ export function MinecraftTerminal({
       terminal.scrollToBottom();
       if (terminal.element) terminal.element.scrollTop = 0;
     };
-    const syncVisualViewport = () => {
-      const viewportHeight = visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty("--visual-viewport-height", `${Math.round(viewportHeight)}px`);
+    const handleViewportResize = () => {
       window.requestAnimationFrame(() => {
         fit();
         keepFocusedPromptVisible();
@@ -155,9 +153,9 @@ export function MinecraftTerminal({
       window.requestAnimationFrame(keepFocusedPromptVisible);
     };
 
-    syncVisualViewport();
-    visualViewport?.addEventListener("resize", syncVisualViewport);
-    window.addEventListener("resize", syncVisualViewport);
+    handleViewportResize();
+    visualViewport?.addEventListener("resize", handleViewportResize);
+    window.addEventListener("resize", handleViewportResize);
     terminal.textarea?.addEventListener("focus", handleTerminalFocus);
 
     window.requestAnimationFrame(() => {
@@ -178,10 +176,9 @@ export function MinecraftTerminal({
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleTouchEnd);
       container.removeEventListener("touchcancel", handleTouchEnd);
-      visualViewport?.removeEventListener("resize", syncVisualViewport);
-      window.removeEventListener("resize", syncVisualViewport);
+      visualViewport?.removeEventListener("resize", handleViewportResize);
+      window.removeEventListener("resize", handleViewportResize);
       terminal.textarea?.removeEventListener("focus", handleTerminalFocus);
-      document.documentElement.style.removeProperty("--visual-viewport-height");
       disposables.forEach((disposable) => disposable.dispose());
       fitAddonRef.current = null;
       terminalRef.current = null;

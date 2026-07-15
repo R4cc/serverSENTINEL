@@ -135,7 +135,7 @@ body {
 button,
 input,
 select,
-textarea {
+textarea:not(.xterm-helper-textarea) {
   font: inherit;
 }
 

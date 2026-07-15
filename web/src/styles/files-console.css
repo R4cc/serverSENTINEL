@@ -38,6 +38,15 @@
   touch-action: pan-x pinch-zoom;
 }
 
+.minecraftTerminal .xterm-helper-textarea {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+}
+
 .minecraftTerminal .xterm-screen,
 .minecraftTerminal .xterm-viewport {
   background: var(--terminal-bg) !important;

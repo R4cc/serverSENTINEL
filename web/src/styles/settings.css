@@ -543,6 +543,14 @@
     gap: var(--space-3);
   }
 
+  .settingsHubCategories {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    padding-block: var(--space-2);
+    background: var(--surface);
+  }
+
   .settingsHubSectionHeader {
     min-height: 82px;
     grid-template-columns: 40px minmax(0, 1fr);

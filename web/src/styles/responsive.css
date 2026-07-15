@@ -1375,6 +1375,281 @@ button:disabled,
   color: var(--sentinel-accent-strong);
 }
 
+/* Phone layouts use a single visual viewport and a single active scroll owner. */
+@media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .appShell,
+  .sidebarCollapsed.appShell {
+    width: 100%;
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 68px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    position: relative;
+    inset: auto;
+    z-index: 40;
+    grid-row: 1;
+    height: 68px;
+    min-height: 0;
+    padding: 12px !important;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: var(--border-heavy) solid var(--border);
+  }
+
+  .sidebar .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    min-height: 44px;
+    height: 44px !important;
+    padding: 0 !important;
+    border-bottom: 0;
+  }
+
+  .workspace {
+    grid-row: 2;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspaceServerPage {
+    overflow: hidden;
+    touch-action: auto;
+  }
+
+  .mobileNavigationOpen .sidebar {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: var(--visual-viewport-height, 100dvh);
+    padding-top: max(12px, env(safe-area-inset-top)) !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(12px, env(safe-area-inset-left)) !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    background: var(--surface);
+    border: 0;
+  }
+
+  .mobileNavigationOpen .sidebar .brandBlock {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex: 0 0 44px;
+    background: var(--surface);
+  }
+
+  .mobileNavigationOpen .sideNav,
+  .mobileNavigationOpen .sideNavBottom {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .mobileNavigationOpen .sideNavBottom {
+    margin-top: auto;
+  }
+
+  .mobileNavigationOpen .workspace {
+    pointer-events: none;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  [contenteditable="true"],
+  .fileCodeEditor .cm-content {
+    font-size: 16px !important;
+  }
+
+  .minecraftTerminal .xterm-helper-textarea {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 16px !important;
+  }
+
+  .uiButton,
+  .iconButton,
+  .iconOnlyButton,
+  .actionMenuItem,
+  .sideNav button,
+  .fileBreadcrumbs button,
+  .runtimeControlButton,
+  .overflowButton,
+  .serverListItem,
+  .installTabs button,
+  .modalHeader button,
+  .userModalHeader button,
+  .nodeModalHeader button,
+  .fileEditorHeader button,
+  .modsDrawerHeader button {
+    min-height: 44px;
+  }
+
+  .uiButton--icon,
+  .iconButton,
+  .iconOnlyButton,
+  .overflowButton,
+  .selectionActionMenu .actionMenuTrigger,
+  .modalHeader button,
+  .userModalHeader button,
+  .nodeModalHeader button,
+  .fileEditorHeader button,
+  .modsDrawerHeader button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripRight {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .runtimeControlButton,
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    width: 44px;
+  }
+
+  .workspacePage-files .fileNavButtons .uiButton,
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
+  .workspacePage-files .fileBreadcrumbs button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex-basis: 44px;
+  }
+
+  .workspacePage-files .fileBreadcrumbs {
+    min-height: 44px;
+  }
+
+  .workspacePage-files .fileBreadcrumbs button {
+    width: auto;
+    max-width: min(160px, 54vw);
+  }
+
+  .workspacePage-files .fileTableHead,
+  .workspacePage-files .fileTableRow {
+    min-height: 44px;
+  }
+
+  .modalBackdrop,
+  .modsDrawerBackdrop,
+  .nodeDrawerBackdrop {
+    height: var(--visual-viewport-height, 100dvh);
+    overscroll-behavior: none;
+  }
+
+  .modalPanel {
+    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+  }
+
+  .fileEditorModal {
+    height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+  }
+
+  .modalBody,
+  .userModalBody,
+  .nodeModalBody,
+  .fileEditorBody,
+  .modsDrawerBody,
+  .nodeDrawerBody {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modsWorkflowDrawer,
+  .modsDetailsDrawer,
+  .nodeDetailsDrawer {
+    width: 100vw;
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    border-left: 0;
+  }
+
+  .modsDrawerHeader,
+  .modsDrawerFooter {
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+  }
+
+  .modsDrawerHeader {
+    padding-top: max(var(--space-3), env(safe-area-inset-top));
+  }
+
+  .modsDrawerBody {
+    padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) var(--space-3) max(var(--space-3), env(safe-area-inset-left));
+  }
+
+  .modsDrawerFooter {
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+
+  .actionMenuPopover,
+  .overflowDropdown,
+  .restartRequirementTooltip,
+  .roleTooltip,
+  .fieldTooltip {
+    max-width: calc(100vw - 16px);
+    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+    overflow: auto;
+  }
+
+  .actionMenuPopover,
+  .overflowDropdown {
+    right: 0;
+    left: auto;
+  }
+
+  .restartRequirementTooltip {
+    position: fixed;
+    top: max(76px, calc(env(safe-area-inset-top) + 60px));
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}
+
 /* Fill the desktop viewport from the shell instead of approximating the
    remaining page height with per-feature 100vh offsets. */
 @media (min-width: 721px) {
@@ -2537,4 +2812,106 @@ textarea:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+/* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
+@media (max-width: 720px) {
+  .appShell,
+  .sidebarCollapsed.appShell {
+    grid-template-rows: 68px minmax(0, 1fr);
+  }
+
+  .sidebar,
+  .sidebarCollapsed .sidebar {
+    position: relative;
+    inset: auto;
+    grid-row: 1;
+    height: 68px;
+    padding: 12px !important;
+    overflow: hidden;
+  }
+
+  .sidebar .brandBlock,
+  .sidebarCollapsed .brandBlock {
+    min-height: 44px;
+    height: 44px !important;
+    padding: 0 !important;
+    border-bottom: 0;
+  }
+
+  .workspace {
+    grid-row: 2;
+  }
+
+  .mobileNavigationOpen .sidebar {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: var(--visual-viewport-height, 100dvh);
+    padding-top: max(12px, env(safe-area-inset-top)) !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(12px, env(safe-area-inset-left)) !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--surface);
+    border: 0;
+  }
+
+  .mobileNavigationOpen .sidebar .brandBlock {
+    position: sticky;
+    top: 0;
+    flex: 0 0 44px;
+  }
+
+  .mobileNavigationOpen .sideNav,
+  .mobileNavigationOpen .sideNavBottom {
+    display: grid;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .mobileNavigationOpen .sideNavBottom {
+    margin-top: auto;
+  }
+
+  .workspaceServerPage > .activeServerStrip .serverStripRight {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .runtimeControlButton,
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .workspaceServerPage > .activeServerStrip .overflowButton {
+    width: 44px;
+  }
+
+  .workspacePage-files .fileNavButtons .uiButton,
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
+  .workspacePage-files .fileBreadcrumbs button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex-basis: 44px;
+  }
+
+  .workspacePage-files .fileBreadcrumbs button {
+    width: auto;
+  }
+
+  .workspacePage-files .fileTableHead,
+  .workspacePage-files .fileTableRow {
+    min-height: 44px;
+  }
 }

@@ -11,6 +11,7 @@
     "dev:web": "npm --workspace web run dev",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
+    "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run typecheck --workspaces",

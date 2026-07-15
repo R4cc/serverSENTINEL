@@ -12,6 +12,25 @@ const focusableSelector = [
 const dialogStack: symbol[] = [];
 let bodyLockCount = 0;
 let previousBodyOverflow = "";
+let previousDocumentOverflow = "";
+type DialogTrackingWindow = Window & {
+  __serverSentinelDialogTriggerTracking?: boolean;
+  __serverSentinelDialogTrigger?: HTMLElement | null;
+  __serverSentinelDialogTriggerAt?: number;
+};
+
+if (typeof document !== "undefined") {
+  const trackingWindow = window as DialogTrackingWindow;
+  if (!trackingWindow.__serverSentinelDialogTriggerTracking) {
+    document.addEventListener("pointerdown", (event) => {
+      if (event.target instanceof HTMLElement) {
+        trackingWindow.__serverSentinelDialogTrigger = event.target.closest<HTMLElement>(focusableSelector) || event.target;
+        trackingWindow.__serverSentinelDialogTriggerAt = performance.now();
+      }
+    }, true);
+    trackingWindow.__serverSentinelDialogTriggerTracking = true;
+  }
+}
 
 export function useDialogFocus<T extends HTMLElement>({
   onClose,
@@ -26,12 +45,22 @@ export function useDialogFocus<T extends HTMLElement>({
 
   useEffect(() => {
     const dialogId = Symbol("dialog");
-    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const activeElement = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement
+      : null;
+    const trackingWindow = window as DialogTrackingWindow;
+    const pointerTrigger = trackingWindow.__serverSentinelDialogTrigger;
+    const recentPointerTrigger = pointerTrigger?.isConnected && performance.now() - (trackingWindow.__serverSentinelDialogTriggerAt || 0) < 1_000
+      ? pointerTrigger
+      : null;
+    const trigger = recentPointerTrigger || activeElement;
     dialogStack.push(dialogId);
 
     if (bodyLockCount === 0) {
       previousBodyOverflow = document.body.style.overflow;
+      previousDocumentOverflow = document.documentElement.style.overflow;
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
     }
     bodyLockCount += 1;
 
@@ -68,13 +97,27 @@ export function useDialogFocus<T extends HTMLElement>({
       }
     };
 
+    const blockOutsideScroll = (event: WheelEvent | TouchEvent) => {
+      if (dialogStack.at(-1) !== dialogId) return;
+      const dialog = dialogRef.current;
+      if (dialog && event.target instanceof Node && dialog.contains(event.target)) return;
+      if (event.cancelable) event.preventDefault();
+    };
+
     window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("wheel", blockOutsideScroll, { capture: true, passive: false });
+    document.addEventListener("touchmove", blockOutsideScroll, { capture: true, passive: false });
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("wheel", blockOutsideScroll, true);
+      document.removeEventListener("touchmove", blockOutsideScroll, true);
       const stackIndex = dialogStack.lastIndexOf(dialogId);
       if (stackIndex >= 0) dialogStack.splice(stackIndex, 1);
       bodyLockCount = Math.max(0, bodyLockCount - 1);
-      if (bodyLockCount === 0) document.body.style.overflow = previousBodyOverflow;
+      if (bodyLockCount === 0) {
+        document.body.style.overflow = previousBodyOverflow;
+        document.documentElement.style.overflow = previousDocumentOverflow;
+      }
       if (trigger?.isConnected) window.setTimeout(() => trigger.focus({ preventScroll: true }), 0);
     };
   }, [initialFocusRef]);

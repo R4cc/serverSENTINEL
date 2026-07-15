@@ -25,6 +25,7 @@ import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
+import { useMobileViewport } from "./components/useMobileViewport";
 import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
@@ -246,6 +247,8 @@ export default function App() {
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
+  const phoneLayout = useMobileViewport();
+  const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
   const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
@@ -772,6 +775,18 @@ export default function App() {
     compactLayout.addEventListener("change", synchronizeSidebar);
     return () => compactLayout.removeEventListener("change", synchronizeSidebar);
   }, []);
+
+  useEffect(() => {
+    if (!phoneLayout || sidebarCollapsed) return;
+    const closeMobileNavigation = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      setSidebarCollapsed(true);
+      window.requestAnimationFrame(() => sidebarToggleRef.current?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", closeMobileNavigation);
+    return () => window.removeEventListener("keydown", closeMobileNavigation);
+  }, [phoneLayout, sidebarCollapsed]);
 
   const hasWaitingNodeOperation = Object.values(nodeOperations).some((operation) => operation.phase === "waiting");
 
@@ -2693,7 +2708,7 @@ export default function App() {
   return (
     <>
       <AppToaster darkMode={darkMode} />
-      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${themeClassName}`}>
+      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${themeClassName}`.replace(/\s+/g, " ").trim()}>
         <aside className="sidebar" id="application-sidebar">
         <div className="brandBlock">
           <div className="brandLockup">
@@ -2705,7 +2720,7 @@ export default function App() {
               </h1>
             </div>
           </div>
-          <Button variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
+          <Button ref={sidebarToggleRef} variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
             <SidebarToggleIcon collapsed={sidebarCollapsed} />
           </Button>
         </div>
@@ -2816,7 +2831,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <section className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
+      <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
