@@ -2,11 +2,10 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PermissionKey, PublicUser, ResourceSample, ResourceStatsHistory, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ServerActivity, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
-import { clientId } from "./utils/files";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, ResourceSample, ResourceStatsHistory, ServerActivity, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
-import { hasPermission, normalizePermissions } from "./utils/permissions";
-import { trimFormValue, validateCommandList, validateCronExpression, validatePassword, validateUsername } from "./utils/validation";
+import { hasPermission } from "./utils/permissions";
+import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
@@ -33,12 +32,15 @@ import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/th
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
+import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
+import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
 const loadResourcePanel = () => import("./components/ResourcePanel");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
-const loadServerSettingsPage = () => import("./pages/ServerSettingsPage");
+const loadServerCreatePage = () => import("./pages/ServerCreatePage");
+const loadServerEditPage = () => import("./pages/ServerEditPage");
 const loadModsPage = () => import("./pages/ModsPage");
 const loadFilesPage = () => import("./features/files/FilesPage");
 
@@ -46,9 +48,9 @@ const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({
 const ResourcePanel = lazy(() => loadResourcePanel().then((module) => ({ default: module.ResourcePanel })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
-const ManagedServerForm = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.ManagedServerForm })));
-const ServerEditForm = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.ServerEditForm })));
-const DeleteServerPanel = lazy(() => loadServerSettingsPage().then((module) => ({ default: module.DeleteServerPanel })));
+const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
+const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
+const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
 const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
 
@@ -59,7 +61,8 @@ function preloadActivePage(page: ActivePage) {
   if (page === "mods") return loadModsPage();
   if (page === "schedule") return loadSchedulePage();
   if (page === "nodes") return loadNodesPage();
-  if (page === "create" || page === "properties") return loadServerSettingsPage();
+  if (page === "create") return loadServerCreatePage();
+  if (page === "properties") return loadServerEditPage();
   return Promise.resolve();
 }
 
@@ -210,8 +213,6 @@ export default function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [users, setUsers] = useState<PublicUser[]>([]);
-  const [userModal, setUserModal] = useState<"create" | PublicUser | null>(null);
   const [appState, setAppState] = useState<AppState>(emptyApp);
   const [activeServerId, setActiveServerId] = useState("");
   const [status, setStatus] = useState<ServerStatus | null>(null);
@@ -229,9 +230,6 @@ export default function App() {
   const [consoleError, setConsoleError] = useState("");
   const [consoleConnectionState, setConsoleConnectionState] = useState<ConsoleConnectionState>("connecting");
   const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState("");
-  const [userSaving, setUserSaving] = useState(false);
   const [commandSending, setCommandSending] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory(readConsoleHistoryEnabled()));
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
@@ -239,8 +237,6 @@ export default function App() {
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
-  const [scheduleBusy, setScheduleBusy] = useState(false);
-  const demoScheduleControllersRef = useRef(new Map<string, AbortController>());
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
@@ -438,7 +434,6 @@ export default function App() {
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
-  const canAdmin = canViewUsers;
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
@@ -530,7 +525,19 @@ export default function App() {
             ? "Server settings are saving."
             : "";
   const settingsDataLoading = !appStateLoaded && !appLoadError;
-  const usersInitialLoading = canViewUsers && users.length === 0 && !usersError && (settingsDataLoading || usersLoading);
+  const usersWorkspace = useUsersWorkspace({
+    activePage,
+    authSession,
+    demoMode,
+    canViewUsers,
+    canManageUsers,
+    settingsDataLoading,
+    notify,
+    requestConfirmation,
+    handleStaleSession,
+    refreshAuth,
+    logout
+  });
   const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
@@ -632,15 +639,25 @@ export default function App() {
   useEffect(() => {
     refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
   }, [modsWorkspace.actions]);
-  const scheduleDisabledReason = scheduleBusy
-    ? "Schedule changes are still saving."
-    : isProvisioning
-      ? "Server setup is still running."
-      : !canManageSchedules
-        ? "Manage schedules permission is required."
-        : dockerOperationalLock
-          ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-          : "";
+  const schedulesWorkspace = useSchedulesWorkspace({
+    activeServer: activeServer ?? null,
+    activeServerIsDemo,
+    demoRunning,
+    setDemoRunning,
+    setDemoSchedules,
+    setStatus,
+    loading: !appStateLoaded && !appLoadError,
+    error: appLoadError,
+    isProvisioning,
+    dockerOperationalLock,
+    runtimeControlsDisabledReason,
+    canManage: canManageSchedules,
+    notify,
+    setNotice,
+    requestConfirmation,
+    handleStaleSession,
+    refreshApp: () => refreshApp()
+  });
   const consoleCommandDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
@@ -882,11 +899,6 @@ export default function App() {
       });
     });
   }, [authSession?.authenticated, authSession?.user?.rolePreset, demoMode]);
-
-  useEffect(() => {
-    if (activePage !== "settings" || !authSession?.authenticated || !canViewUsers || demoMode) return;
-    void loadUsers();
-  }, [activePage, authSession?.authenticated, canViewUsers, demoMode]);
 
   useEffect(() => {
     if (demoMode) {
@@ -1456,166 +1468,6 @@ export default function App() {
     setLogs([]);
     staleSessionLogoutRef.current = false;
     staleSessionSuppressUntilRef.current = 0;
-  }
-
-  function parsePermissionsField(form: FormData): PermissionKey[] {
-    try {
-      const parsed = JSON.parse(String(form.get("permissions") || "[]"));
-      return Array.isArray(parsed) ? normalizePermissions(parsed) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function loadUsers() {
-    if (!canViewUsers) return;
-    setUsersLoading(true);
-    setUsersError("");
-    try {
-      const result = await api<{ users: PublicUser[] }>("/api/users");
-      setUsers(result.users);
-    } catch (error) {
-      const message = errorMessage(error, "Could not load users. Check your permissions and try again.");
-      setUsersError(message);
-      notify("error", message);
-    } finally {
-      setUsersLoading(false);
-    }
-  }
-
-  async function createUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canManageUsers || userSaving) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const username = trimFormValue(form, "username");
-    const password = String(form.get("password") || "");
-    const permissions = parsePermissionsField(form);
-    const errors = [
-      validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null,
-      permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
-    ].filter((error): error is { field: string; message: string } => Boolean(error));
-    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
-    setUserSaving(true);
-    try {
-      await api<PublicUser>("/api/users", {
-        method: "POST",
-        body: JSON.stringify({
-          username,
-          password,
-          rolePreset: form.get("rolePreset"),
-          permissions
-        })
-      });
-      formElement.reset();
-      setUserModal(null);
-      notify("success", "User account created");
-      await loadUsers();
-    } catch (error) {
-      notify("error", (error as Error).message);
-    } finally {
-      setUserSaving(false);
-    }
-  }
-
-  async function updateUser(event: FormEvent<HTMLFormElement>, user: PublicUser) {
-    event.preventDefault();
-    if (!canManageUsers || userSaving) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(event.currentTarget);
-    const username = trimFormValue(form, "username");
-    const permissions = parsePermissionsField(form);
-    const errors = [
-      validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-      permissions.length === 0 ? { field: "permissions", message: "Choose at least one permission." } : null
-    ].filter((error): error is { field: string; message: string } => Boolean(error));
-    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return;
-    if (authSession?.user?.id === user.id && !permissions.includes("users.manage")) {
-      const confirmed = await requestConfirmation({
-        title: "Remove your own Manage users permission?",
-        description: "Saving these changes may prevent you from managing user accounts again.",
-        warning: "The backend may reject this change if it would remove the last full-access administrator.",
-        confirmLabel: "Save anyway",
-        variant: "critical"
-      });
-      if (!confirmed) return;
-    }
-    setUserSaving(true);
-    try {
-      await api<PublicUser>(`/api/users/${user.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          username,
-          rolePreset: form.get("rolePreset"),
-          permissions
-        })
-      });
-      setUserModal(null);
-      notify("success", "User account updated");
-      await loadUsers();
-      if (authSession?.user?.id === user.id) {
-        await refreshAuth();
-      }
-    } catch (error) {
-      notify("error", (error as Error).message);
-    } finally {
-      setUserSaving(false);
-    }
-  }
-
-  async function resetUserPassword(event: FormEvent<HTMLFormElement>, user: PublicUser) {
-    event.preventDefault();
-    if (!canManageUsers || userSaving) return false;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const password = String(form.get("password") || "");
-    const confirmPassword = String(form.get("confirmPassword") || "");
-    const errors = [
-      validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null,
-      password !== confirmPassword ? { field: "confirmPassword", message: "Passwords do not match." } : null
-    ].filter((error): error is { field: string; message: string } => Boolean(error));
-    if (setValidationNotice(formElement, errors, (message) => notify("error", message))) return false;
-    setUserSaving(true);
-    try {
-      await api<PublicUser>(`/api/users/${user.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ password })
-      });
-      formElement.reset();
-      notify("success", `Password reset for ${user.username}`);
-      return true;
-    } catch (error) {
-      notify("error", (error as Error).message);
-      return false;
-    } finally {
-      setUserSaving(false);
-    }
-  }
-
-  async function deleteUser(user: PublicUser) {
-    if (!canManageUsers || userSaving) return;
-    const confirmed = await requestConfirmation({
-      title: `Delete ${user.username}?`,
-      description: "This immediately removes the user account and invalidates all of its active sessions.",
-      warning: "This action cannot be undone.",
-      confirmLabel: "Delete user",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setUserSaving(true);
-    try {
-      await api(`/api/users/${user.id}`, { method: "DELETE" });
-      notify("success", `Deleted ${user.username}`);
-      await loadUsers();
-      if (authSession?.user?.id === user.id) {
-        await logout();
-      }
-    } catch (error) {
-      notify("error", (error as Error).message);
-    } finally {
-      setUserSaving(false);
-    }
   }
 
   async function refreshApp(options: { silent?: boolean } = {}) {
@@ -2333,247 +2185,6 @@ export default function App() {
     }
   }
 
-  async function createSchedule(patch: Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "enabled">) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
-    setNotice("");
-    setScheduleBusy(true);
-    const scheduleName = patch.name;
-    const cron = patch.cron;
-    const commands = patch.steps.filter((step) => step.type === "command").map((step) => step.command);
-    const scheduleErrors = [
-      scheduleName ? null : { field: "name", message: "Schedule name is required." },
-      validateCronExpression(cron) ? { field: "cron", message: validateCronExpression(cron)! } : null,
-      commands.length && validateCommandList(commands) ? { field: "commands", message: validateCommandList(commands)! } : null
-    ].filter((error): error is { field: string; message: string } => Boolean(error));
-    if (scheduleErrors.length) {
-      const message = scheduleErrors[0]!.message;
-      setNotice(message);
-      notify("error", message);
-      setScheduleBusy(false);
-      return false;
-    }
-    if (activeServerIsDemo) {
-      const schedule: ScheduledExecution = {
-        id: clientId(),
-        name: scheduleName,
-        cron,
-        steps: patch.steps,
-        ...(patch.steps.every((step) => step.type === "command") ? { commands, commandDelaysSeconds: patch.steps.map((step) => step.delaySeconds) } : {}),
-        onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
-        enabled: patch.enabled,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastMessage: "Not run in demo session"
-      };
-      setDemoSchedules((current) => [schedule, ...current]);
-      notify("success", "Demo scheduled execution created");
-      setScheduleBusy(false);
-      return true;
-    }
-    try {
-      await api<ScheduledExecution>(`/api/servers/${activeServer.id}/schedules`, {
-        method: "POST",
-        body: JSON.stringify({
-          name: scheduleName,
-          cron,
-          steps: patch.steps,
-          onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
-          enabled: patch.enabled
-        })
-      });
-      notify("success", "Scheduled execution created");
-      await refreshApp();
-      return true;
-    } catch (error) {
-      const message = errorMessage(error, "Could not create the schedule. Check the cron expression and commands.");
-      setNotice(message);
-      notify("error", message);
-      return false;
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
-  async function updateSchedule(schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
-    setScheduleBusy(true);
-    const actionLabel = patch.enabled !== undefined && Object.keys(patch).length === 1
-      ? patch.enabled ? "Schedule enabled" : "Schedule disabled"
-      : "Schedule updated";
-    if (activeServerIsDemo) {
-      setDemoSchedules((current) => current.map((candidate) => (
-        candidate.id === schedule.id
-          ? { ...candidate, ...patch, updatedAt: new Date().toISOString() }
-          : candidate
-      )));
-      notify("success", actionLabel);
-      setScheduleBusy(false);
-      return true;
-    }
-    try {
-      const next = { ...schedule, ...patch };
-      await api<ScheduledExecution>(`/api/servers/${activeServer.id}/schedules/${schedule.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          name: next.name,
-          cron: next.cron,
-          steps: next.steps,
-          onlyWhenNoPlayers: next.onlyWhenNoPlayers,
-          enabled: next.enabled
-        })
-      });
-      notify("success", actionLabel);
-      await refreshApp();
-      return true;
-    } catch (error) {
-      const message = errorMessage(error, "Could not update the schedule. Try again after refreshing.");
-      setNotice(message);
-      notify("error", message);
-      return false;
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
-  async function deleteSchedule(schedule: ScheduledExecution) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return;
-    const confirmed = await requestConfirmation({
-      title: `Delete ${schedule.name}?`,
-      description: "Delete this scheduled execution and its configured actions.",
-      warning: "This action cannot be undone.",
-      confirmLabel: "Delete schedule",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setScheduleBusy(true);
-    if (activeServerIsDemo) {
-      setDemoSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
-      notify("success", `Deleted ${schedule.name}`);
-      setScheduleBusy(false);
-      return;
-    }
-    try {
-      await api(`/api/servers/${activeServer.id}/schedules/${schedule.id}`, { method: "DELETE" });
-      notify("success", `Deleted ${schedule.name}`);
-      await refreshApp();
-    } catch (error) {
-      const message = errorMessage(error, "Could not delete the schedule. Try again after refreshing.");
-      setNotice(message);
-      notify("error", message);
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
-  async function runScheduleNow(schedule: ScheduledExecution) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
-    setScheduleBusy(true);
-    if (activeServerIsDemo) {
-      const runId = clientId();
-      const startedAt = new Date().toISOString();
-      if (!demoRunning) {
-        const message = "Skipped because Minecraft server is stopped";
-        const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "skipped", message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount: 0 } };
-        setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, lastRunAt: startedAt, lastStatus: "skipped", lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
-        notify("info", `${schedule.name} was skipped`);
-        setScheduleBusy(false);
-        return true;
-      }
-      const controller = new AbortController();
-      demoScheduleControllersRef.current.set(runId, controller);
-      const activeRun: ScheduledActiveRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt, stepCount: schedule.steps.length, cancellable: true, message: "Starting" };
-      setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [activeRun] } : candidate));
-      notify("success", `Started ${schedule.name}`);
-      setScheduleBusy(false);
-      void (async () => {
-        let completedStepCount = 0;
-        let terminalStep = "";
-        let terminalStepIndex: number | undefined;
-        let outcome: "success" | "cancelled" | "failed" = "success";
-        let message = "";
-        try {
-          for (const [index, step] of schedule.steps.entries()) {
-            terminalStepIndex = index;
-            terminalStep = step.type === "command" ? step.command : "Restart";
-            const delayMs = Math.min(step.delaySeconds * 1000, 5_000);
-            const update = (patch: Partial<ScheduledActiveRun>) => setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [{ ...activeRun, currentStepIndex: index, currentStep: terminalStep, ...patch }] } : candidate));
-            if (delayMs) {
-              update({ waitingUntil: new Date(Date.now() + delayMs).toISOString(), waitingDelaySeconds: delayMs / 1000, message: `Waiting before step ${index + 1}` });
-              await new Promise<void>((resolve, reject) => {
-                const timer = window.setTimeout(resolve, delayMs);
-                controller.signal.addEventListener("abort", () => { window.clearTimeout(timer); reject(new DOMException("Cancelled", "AbortError")); }, { once: true });
-              });
-            }
-            if (step.type === "action") {
-              update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: "Restarting server" });
-              setDemoRunning(false);
-              setStatus(demoStatus(activeServer, false));
-              await new Promise((resolve) => window.setTimeout(resolve, 1_500));
-              setDemoRunning(true);
-              setStatus(demoStatus(activeServer, true));
-            } else {
-              update({ waitingUntil: undefined, waitingDelaySeconds: undefined, message: `Sent command ${index + 1}` });
-            }
-            completedStepCount += 1;
-          }
-          message = `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`;
-        } catch (error) {
-          outcome = error instanceof DOMException && error.name === "AbortError" ? "cancelled" : "failed";
-          message = outcome === "cancelled" ? "Cancelled by user" : errorMessage(error, "Demo schedule failed");
-        } finally {
-          demoScheduleControllersRef.current.delete(runId);
-          const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: outcome, message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep } };
-          setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [], lastRunAt: startedAt, lastStatus: outcome, lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
-        }
-      })();
-      return true;
-    }
-    try {
-      await api<{ run: ScheduledActiveRun }>(`/api/servers/${activeServer.id}/schedules/${schedule.id}/run`, { method: "POST" });
-      notify("success", `Started ${schedule.name}`);
-      await refreshApp();
-      return true;
-    } catch (error) {
-      const message = errorMessage(error, "Could not start the schedule. It may already be running.");
-      setNotice(message);
-      notify("error", message);
-      return false;
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
-  async function cancelScheduleRun(run: ScheduledActiveRun) {
-    if (isProvisioning || scheduleBusy || dockerOperationalLock || !canManageSchedules || !activeServer) return false;
-    const confirmed = await requestConfirmation({
-      title: `Cancel ${run.scheduleName}?`,
-      description: "Cancel the currently active scheduled run.",
-      warning: "Any remaining scheduled actions will not execute.",
-      confirmLabel: "Cancel run",
-      variant: "critical"
-    });
-    if (!confirmed) return false;
-    if (activeServerIsDemo) {
-      demoScheduleControllersRef.current.get(run.id)?.abort();
-      notify("success", `Cancelled ${run.scheduleName}`);
-      return true;
-    }
-    setScheduleBusy(true);
-    try {
-      await api(`/api/servers/${activeServer.id}/schedules/${run.scheduleId}/runs/${run.id}/cancel`, { method: "POST" });
-      notify("success", `Cancelled ${run.scheduleName}`);
-      await refreshApp();
-      return true;
-    } catch (error) {
-      const message = errorMessage(error, "Could not cancel the schedule run. It may have already finished.");
-      setNotice(message);
-      notify("error", message);
-      return false;
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
   async function deleteServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isProvisioning || serverSettingsSaving || dockerOperationalLock || !canDeleteServers) return;
@@ -2987,24 +2598,8 @@ export default function App() {
             modrinthConfigured={effectiveAppState.modrinthApiConfigured}
             canManageIntegrations={canManageIntegrations}
             onSubmitModrinthKey={updateModrinthKey}
-            canViewUsers={canAdmin}
-            userState={{
-              users,
-              currentUserId: authSession.user?.id,
-              editingUser: userModal,
-              busy: userSaving,
-              loading: usersInitialLoading,
-              error: usersError,
-              canManage: canManageUsers,
-              onOpenCreate: () => setUserModal("create"),
-              onOpenEdit: setUserModal,
-              onCloseModal: () => setUserModal(null),
-              onCreate: createUser,
-              onUpdate: updateUser,
-              onResetPassword: resetUserPassword,
-              onDelete: deleteUser,
-              onRetry: () => void loadUsers()
-            }}
+            canViewUsers={canViewUsers}
+            userState={usersWorkspace}
             systemInfo={{
               panelVersion,
               buildId: panelBuildId,
@@ -3331,18 +2926,18 @@ export default function App() {
             {activePage === "schedule" && (
               <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" />}>
                 <SchedulePage
-                  schedules={activeServer.schedules ?? []}
+                  schedules={schedulesWorkspace.schedules}
                   formatDate={formatDisplayDate}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
-                  onCreate={createSchedule}
-                  onToggle={(schedule) => updateSchedule(schedule, { enabled: !schedule.enabled })}
-                  onUpdate={updateSchedule}
-                  onDelete={deleteSchedule}
-                  onRunNow={runScheduleNow}
-                  onCancelRun={cancelScheduleRun}
-                  disabled={scheduleBusy || isProvisioning || !canManageSchedules || dockerOperationalLock}
-                  disabledReason={scheduleDisabledReason}
+                  onCreate={schedulesWorkspace.actions.create}
+                  onToggle={schedulesWorkspace.actions.toggle}
+                  onUpdate={schedulesWorkspace.actions.update}
+                  onDelete={schedulesWorkspace.actions.delete}
+                  onRunNow={schedulesWorkspace.actions.runNow}
+                  onCancelRun={schedulesWorkspace.actions.cancelRun}
+                  disabled={schedulesWorkspace.disabled}
+                  disabledReason={schedulesWorkspace.disabledReason}
                 />
               </Suspense>
             )}

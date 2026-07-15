@@ -377,65 +377,6 @@
   flex-wrap: wrap;
 }
 
-.filesPage {
-  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
-  gap: var(--space-4);
-  height: max(560px, calc(100vh - 238px));
-  max-height: none;
-  align-items: stretch;
-}
-
-.tabPage.filesPage {
-  max-width: none;
-  align-content: stretch;
-}
-
-.filesPage .filesExplorer,
-.filesPage .filesPanel,
-.filesPage .fileDetailsPanel {
-  height: 100%;
-  min-height: 0;
-}
-
-.filesPage .fileNavBar,
-.filesPage .selectionActionBar,
-.filesPage .fileTableFooter {
-  flex: 0 0 auto;
-}
-
-.filesPage .selectionActionBar {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  align-items: center;
-  container-type: inline-size;
-}
-
-.filesPage .selectionActions {
-  justify-content: flex-end;
-}
-
-@container (max-width: 960px) {
-  .filesPage .selectionActions {
-    flex-wrap: nowrap;
-  }
-
-  .filesPage .selectionActions .uiButton {
-    width: var(--control-height-compact);
-    min-width: var(--control-height-compact);
-    padding-inline: 0;
-  }
-
-  .filesPage .selectionActionLabel {
-    display: none;
-  }
-}
-
-.filesPage .fileTable {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
 .fileTableHead,
 .fileTableRow {
   min-height: 42px;
@@ -448,10 +389,6 @@
 
 .fileNameCell {
   min-width: 0;
-}
-
-.fileDetailsPanel {
-  padding: var(--space-4);
 }
 
 .fileDetailsContent dl {

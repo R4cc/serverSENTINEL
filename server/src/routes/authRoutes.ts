@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { ROLE_PRESETS, normalizePermissions } from "../permissions.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
+import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
 
 type UserPermissionData = {
   permissions: Permission[];
@@ -32,7 +33,7 @@ type AuthRoutesContext = {
   trustProxy: boolean;
   verifySetupToken(token: unknown): boolean;
   currentUserFromCookie(cookieHeader?: string): Promise<StoredUser | null>;
-  requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission): Promise<StoredUser>;
+  requireRequestPermission(request: AuthenticatedRequest, permission?: Permission): Promise<StoredUser>;
   validateUsername(username?: string): string;
   validatePassword(password?: string): string;
   normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined;

@@ -3,18 +3,20 @@
   "version": "1.2.1",
   "private": true,
   "workspaces": [
+    "shared",
     "server",
     "web"
   ],
   "scripts": {
     "dev:server": "npm --workspace server run dev",
     "dev:web": "npm --workspace web run dev",
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "build": "npm run check:versions && npm --workspace shared run build && npm --workspace server run build && npm --workspace web run build",
+    "test": "npm --workspace server run test && npm --workspace web run test",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
-    "typecheck": "npm run typecheck --workspaces",
+    "typecheck": "npm run check:versions && npm --workspace shared run build && npm --workspace server run typecheck && npm --workspace web run typecheck",
+    "check:versions": "node scripts/check-version-consistency.mjs",
     "demo:reset": "npm --workspace server run demo:reset",
     "screenshots:update": "node scripts/update-readme-screenshots.mjs",
     "start": "npm --workspace server run start"

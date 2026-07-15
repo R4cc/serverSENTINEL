@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { FabricVersions, ManagedServer } from "../types";
-import { ServerEditForm } from "./ServerSettingsPage";
+import { ServerEditForm } from "./ServerEditPage";
 
 const server: ManagedServer = {
   id: "server-1",

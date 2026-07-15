@@ -6,6 +6,9 @@ const stylesheet = readFileSync(new URL("./styles.css", import.meta.url), "utf8"
 const motionStyles = readFileSync(new URL("./styles/motion.css", import.meta.url), "utf8");
 const tokenStyles = readFileSync(new URL("./styles/tokens.css", import.meta.url), "utf8");
 const primitiveStyles = readFileSync(new URL("./styles/primitives.css", import.meta.url), "utf8");
+const serverPropertiesStyles = readFileSync(new URL("./styles/server-properties.css", import.meta.url), "utf8");
+const fileManagerStyles = readFileSync(new URL("./styles/file-manager.css", import.meta.url), "utf8");
+const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.css", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it.each([
@@ -30,5 +33,11 @@ describe("global stylesheet entry point", () => {
 
   it("keeps the overview loading summary on the same six-column desktop grid", () => {
     expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(6,/s);
+  });
+
+  it("keeps the Files page layout owned by the file-manager stylesheet", () => {
+    expect(serverPropertiesStyles).not.toMatch(/\.filesPage\s*\{/);
+    expect(canonicalLayoutStyles).not.toMatch(/\.filesPage\s*\{[^}]*grid-template-columns:/s);
+    expect(fileManagerStyles).toMatch(/\.filesPage\s*\{[^}]*min-height:\s*520px;/s);
   });
 });

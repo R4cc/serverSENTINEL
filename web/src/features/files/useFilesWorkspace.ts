@@ -1,18 +1,9 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import {
-  functionalUpdate,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type RowSelectionState,
-  type SortingState
-} from "@tanstack/react-table";
-import { ApiError, api, apiErrorFromResponse } from "../../api";
+import { api, apiErrorFromResponse } from "../../api";
 import { demoListing, demoServerId } from "../../demo";
-import type { FileEditLease, FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser, ZipArchiveListing, ZipExtractionPlan } from "../../types";
+import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser, ZipArchiveListing, ZipExtractionPlan } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
-import { bufferToBase64, fileDisplayType, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
+import { bufferToBase64, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
 import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, publicPathContains } from "../../utils/appHelpers";
@@ -20,6 +11,9 @@ import { formatBytes } from "../../utils/format";
 import { adjacentFilePath, retainedFileFocus, updateFileSelection, type FileSelectionModifiers } from "./fileSelection";
 import { writeStoredFileLocation } from "./fileLocationStorage";
 import { fileMoveTargetPath, isFileMoveDestination, moveDemoFileTree } from "./fileMove";
+import { defaultFileSort, nextFileSort, sortFileEntries } from "./fileSorting";
+import { unsupportedEditorMessage } from "./fileEditorSession";
+import { useFileEditorSession } from "./useFileEditorSession";
 
 type DownloadIntent =
   | {
@@ -100,39 +94,75 @@ export function useFilesWorkspace({
   const [archiveContext, setArchiveContext] = useState<{ archivePath: string; path: string; encrypted: boolean } | null>(null);
   const [fileBackStack, setFileBackStack] = useState<FileLocation[]>([]);
   const [fileForwardStack, setFileForwardStack] = useState<FileLocation[]>([]);
-  const [fileSorting, setFileSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [fileSort, setFileSort] = useState(defaultFileSort);
   const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
   const [fileOperationBusy, setFileOperationBusy] = useState("");
-  const [selectedPath, setSelectedPath] = useState("");
-  const [editorText, setEditorText] = useState("");
-  const [savedEditorText, setSavedEditorText] = useState("");
-  const [fileRevision, setFileRevision] = useState("");
-  const [fileEditLease, setFileEditLease] = useState<FileEditLease | null>(null);
-  const [fileEditMode, setFileEditMode] = useState(false);
-  const [fileLeaseBusy, setFileLeaseBusy] = useState(false);
-  const [fileLeaseMessage, setFileLeaseMessage] = useState("");
-  const [dirty, setDirty] = useState(false);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState("");
-  const [fileReadError, setFileReadError] = useState("");
-  const [fileOpenFailed, setFileOpenFailed] = useState(false);
-  const [fileOpening, setFileOpening] = useState(false);
-  const [fileSaving, setFileSaving] = useState(false);
-  const [discardEditorRequest, setDiscardEditorRequest] = useState<{ action: "close" } | { action: "switch"; path: string } | null>(null);
   const [zipDestinationListing, setZipDestinationListing] = useState<FileListing | null>(null);
   const [zipDestinationLoading, setZipDestinationLoading] = useState(false);
   const [zipConflictPlan, setZipConflictPlan] = useState<ZipExtractionPlan | null>(null);
   const [zipOperationId, setZipOperationId] = useState("");
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
-  const fileEditLeaseRef = useRef<FileEditLease | null>(null);
   const trackedZipOperationsRef = useRef(new Set<string>());
+
+  const {
+    state: {
+      selectedPath,
+      editorText,
+      savedEditorText,
+      dirty,
+      fileOpening,
+      fileOpenFailed,
+      fileReadError,
+      fileSaving,
+      fileEditMode,
+      fileLeaseBusy,
+      fileLeaseMessage,
+      discardEditorRequest,
+      canEditSelectedPath
+    },
+    actions: {
+      openFile,
+      saveFile,
+      enterFileEditMode,
+      cancelFileEdit,
+      requestCloseEditor,
+      discardEditorChanges,
+      resetEditorState,
+      setSelectedPath,
+      setEditorText,
+      setDirty,
+      setFileReadError,
+      setDiscardEditorRequest
+    }
+  } = useFileEditorSession({
+    activeServer,
+    activeServerIsDemo,
+    archiveContext,
+    listing,
+    setListing,
+    demoFiles,
+    setDemoFiles,
+    demoInstalledMods,
+    isProvisioning,
+    dockerOperationalLock,
+    runtimeControlsDisabledReason,
+    permissionUser,
+    formatDisplayDate,
+    notify,
+    setNotice,
+    handleStaleSession,
+    setSelectedFilePaths,
+    setFocusedFilePath,
+    setSelectionAnchorPath,
+    refreshFiles: (serverId, path) => loadFiles(serverId, path)
+  });
 
   const permissionPath = archiveContext?.archivePath ?? listing.path;
   const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view");
   const canUploadToCurrentPath = !archiveContext && (activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload"));
-  const canEditSelectedPath = !archiveContext
-    && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
@@ -143,64 +173,11 @@ export function useFilesWorkspace({
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
   const selectedTouchesServerSettings = selectedEntries.some((entry) => isServerPropertiesPath(entry.path));
   const selectedEntryTouchesServerSettings = Boolean(selectedEntry && isServerPropertiesPath(selectedEntry.path));
-  const fileRowSelection = useMemo<RowSelectionState>(() => (
-    Object.fromEntries(selectedFilePaths.map((path) => [path, true]))
-  ), [selectedFilePaths]);
-  const fileColumns = useMemo<ColumnDef<FileEntry>[]>(() => {
-    const sortedColumn = fileSorting.find((sort) => sort.id !== "select")?.id;
-    const fileSortWithFolders = (columnId: string, compare: (left: FileEntry, right: FileEntry) => number) => (left: { original: FileEntry }, right: { original: FileEntry }) => {
-      const folderOrder = Number(right.original.type === "directory") - Number(left.original.type === "directory");
-      if (folderOrder !== 0) return sortedColumn === columnId && fileSorting[0]?.desc ? -folderOrder : folderOrder;
-      const result = compare(left.original, right.original);
-      return result === 0 ? left.original.name.localeCompare(right.original.name) : result;
-    };
-
-    return [
-      { id: "select", enableSorting: false },
-      {
-        id: "name",
-        accessorKey: "name",
-        sortingFn: fileSortWithFolders("name", (left, right) => left.name.localeCompare(right.name))
-      },
-      {
-        id: "modifiedAt",
-        accessorKey: "modifiedAt",
-        sortingFn: fileSortWithFolders("modifiedAt", (left, right) => new Date(left.modifiedAt).getTime() - new Date(right.modifiedAt).getTime())
-      },
-      {
-        id: "type",
-        accessorFn: (entry) => fileDisplayType(entry),
-        sortingFn: fileSortWithFolders("type", (left, right) => fileDisplayType(left).localeCompare(fileDisplayType(right)))
-      },
-      {
-        id: "size",
-        accessorKey: "size",
-        sortingFn: fileSortWithFolders("size", (left, right) => left.size - right.size)
-      }
-    ];
-  }, [fileSorting]);
-  const fileTable = useReactTable({
-    data: listing.entries,
-    columns: fileColumns,
-    getRowId: (entry) => entry.path,
-    state: {
-      sorting: fileSorting,
-      rowSelection: fileRowSelection
-    },
-    enableRowSelection: true,
-    onSortingChange: setFileSorting,
-    onRowSelectionChange: (updater) => {
-      setSelectedFilePaths((current) => {
-        const currentSelection = Object.fromEntries(current.map((path) => [path, true]));
-        const nextSelection = functionalUpdate(updater, currentSelection);
-        return Object.keys(nextSelection).filter((path) => nextSelection[path]);
-      });
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
-  });
-  const sortedFileRows = fileTable.getRowModel().rows;
-  const sortedFilePaths = sortedFileRows.map((row) => row.original.path);
+  const sortedFileEntries = useMemo(() => sortFileEntries(listing.entries, fileSort), [listing.entries, fileSort]);
+  const sortedFilePaths = sortedFileEntries.map((entry) => entry.path);
+  const selectedFilePathSet = useMemo(() => new Set(selectedFilePaths), [selectedFilePaths]);
+  const allFilesSelected = sortedFilePaths.length > 0 && sortedFilePaths.every((path) => selectedFilePathSet.has(path));
+  const someFilesSelected = !allFilesSelected && sortedFilePaths.some((path) => selectedFilePathSet.has(path));
 
   function selectFileEntry(path: string, modifiers: FileSelectionModifiers = {}) {
     const result = updateFileSelection(selectedFilePaths, sortedFilePaths, path, selectionAnchorPath, modifiers);
@@ -213,6 +190,10 @@ export function useFilesWorkspace({
     setSelectedFilePaths([]);
     setSelectionAnchorPath("");
     setFocusedFilePath("");
+  }
+
+  function toggleSelectAllFiles() {
+    setSelectedFilePaths(allFilesSelected ? [] : sortedFilePaths);
   }
 
   function moveFileFocus(path: string, direction: -1 | 1, extendSelection = false) {
@@ -294,9 +275,9 @@ export function useFilesWorkspace({
 
   useEffect(() => {
     if (fileSelectAllRef.current) {
-      fileSelectAllRef.current.indeterminate = fileTable.getIsSomeRowsSelected() && !fileTable.getIsAllRowsSelected();
+      fileSelectAllRef.current.indeterminate = someFilesSelected;
     }
-  }, [fileRowSelection, fileTable, sortedFileRows.length]);
+  }, [someFilesSelected]);
 
   useEffect(() => {
     if (!selectedEntry) {
@@ -314,52 +295,6 @@ export function useFilesWorkspace({
     }
     void loadFilePreview(selectedEntry);
   }, [selectedEntry?.path, selectedEntry?.modifiedAt, selectedEntry?.size, activeServer?.id, demoFiles]);
-
-  useEffect(() => {
-    fileEditLeaseRef.current = fileEditLease;
-  }, [fileEditLease]);
-
-  useEffect(() => {
-    if (!fileEditLease || !fileEditMode || activeServerIsDemo) return;
-    const heartbeat = async () => {
-      try {
-        const result = await api<{ lease: FileEditLease }>(
-          `/api/servers/${encodeURIComponent(fileEditLease.serverId)}/file/lease/${encodeURIComponent(fileEditLease.leaseId)}/heartbeat`,
-          { method: "POST" }
-        );
-        setFileEditLease(result.lease);
-      } catch (error) {
-        const message = error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
-          ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
-          : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
-        releaseFileLease(fileEditLease);
-        setFileEditMode(false);
-        setFileEditLease(null);
-        setFileLeaseMessage(message);
-        notify("error", message);
-      }
-    };
-    const interval = window.setInterval(() => void heartbeat(), 20_000);
-    return () => window.clearInterval(interval);
-  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo]);
-
-  useEffect(() => {
-    const releaseOnUnload = () => {
-      const lease = fileEditLeaseRef.current;
-      if (!lease) return;
-      void fetch(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
-        method: "DELETE",
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        credentials: "same-origin",
-        keepalive: true
-      });
-    };
-    window.addEventListener("beforeunload", releaseOnUnload);
-    return () => {
-      window.removeEventListener("beforeunload", releaseOnUnload);
-      releaseOnUnload();
-    };
-  }, []);
 
   async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace", preserveSelection = false) {
     if (isProvisioning) return false;
@@ -510,61 +445,6 @@ export function useFilesWorkspace({
     }
   }
 
-  function releaseFileLease(lease = fileEditLease) {
-    if (!lease || activeServerIsDemo) return;
-    void api(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
-      method: "DELETE"
-    }).catch(() => undefined);
-  }
-
-  function resetEditorState() {
-    releaseFileLease();
-    setSelectedPath("");
-    setEditorText("");
-    setSavedEditorText("");
-    setFileRevision("");
-    setFileEditLease(null);
-    setFileEditMode(false);
-    setFileLeaseBusy(false);
-    setFileLeaseMessage("");
-    setDirty(false);
-    setFileReadError("");
-    setFileOpenFailed(false);
-    setFileOpening(false);
-    setFileSaving(false);
-  }
-
-  function closeEditor() {
-    resetEditorState();
-    setDiscardEditorRequest(null);
-  }
-
-  function requestCloseEditor() {
-    if (dirty) {
-      setDiscardEditorRequest({ action: "close" });
-      return;
-    }
-    closeEditor();
-  }
-
-  function discardEditorChanges() {
-    const request = discardEditorRequest;
-    setDiscardEditorRequest(null);
-    if (!request) return;
-    if (request.action === "close") {
-      closeEditor();
-      return;
-    }
-    resetEditorState();
-    void openFile(request.path, true);
-  }
-
-  function unsupportedEditorMessage(entry: FileEntry) {
-    if (entry.type !== "file") return "Folders cannot be edited in the browser editor.";
-    if (entry.size > 2 * 1024 * 1024) return "Only files up to 2 MiB can be edited in the browser editor.";
-    return "Only small text files can be edited in the browser editor.";
-  }
-
   function activateFileEntry(entry: FileEntry) {
     if (entry.type === "directory") {
       if (archiveContext) void navigateArchive(entry.path);
@@ -628,150 +508,6 @@ export function useFilesWorkspace({
       setFilePreview((current) => current.path === entry.path
         ? { path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") }
         : current);
-    }
-  }
-
-  async function openFile(path: string, discardConfirmed = false) {
-    if (isProvisioning) return;
-    if (!activeServer) return;
-    if (dockerOperationalLock) {
-      const message = dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
-        : "Server files are unavailable.";
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    const openPermissionPath = archiveContext?.archivePath ?? path;
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, openPermissionPath, "view")) {
-      const message = "View files permission is required to open this file.";
-      setFileReadError(message);
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    if (selectedPath && selectedPath !== path && dirty && !discardConfirmed) {
-      setDiscardEditorRequest({ action: "switch", path });
-      return;
-    }
-    const pathError = validateSafePath(path);
-    if (pathError) {
-      setFileReadError(pathError);
-      setNotice(pathError);
-      return;
-    }
-    const targetEntry = listing.entries.find((entry) => entry.path === path);
-    if (targetEntry && !isEditableFile(targetEntry)) {
-      const message = unsupportedEditorMessage(targetEntry);
-      setSelectedFilePaths([path]);
-      setNotice(message);
-      notify("warning", message);
-      return;
-    }
-    if (fileEditLease && selectedPath !== path) releaseFileLease(fileEditLease);
-    setSelectedPath(path);
-    setEditorText("");
-    setSavedEditorText("");
-    setDirty(false);
-    setFileRevision("");
-    setFileEditLease(null);
-    setFileEditMode(false);
-    setFileLeaseMessage("");
-    setFileReadError("");
-    setFileOpenFailed(false);
-    setFileOpening(true);
-    setNotice("");
-    setSelectedFilePaths([path]);
-    setFocusedFilePath(path);
-    setSelectionAnchorPath(path);
-    if (activeServerIsDemo) {
-      const content = demoFiles[path] ?? `Demo binary or generated file: ${path}`;
-      setSelectedPath(path);
-      setEditorText(content);
-      setSavedEditorText(content);
-      setFileRevision("demo");
-      setDirty(false);
-      setFileOpening(false);
-      return;
-    }
-    try {
-      if (archiveContext) {
-        const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/files/archive/preview?path=${encodeURIComponent(archiveContext.archivePath)}&entryPath=${encodeURIComponent(path)}`);
-        if (preview.preview !== "text") throw new Error(preview.message || "This archive entry cannot be opened as text");
-        setSelectedPath(path);
-        setEditorText(preview.content ?? "");
-        setSavedEditorText(preview.content ?? "");
-        setFileRevision("");
-        setFileEditMode(false);
-        setDirty(false);
-        setSelectedFilePaths([path]);
-        return;
-      }
-      const file = await api<{ path: string; content: string; revision: string }>(
-        `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
-      );
-      setSelectedPath(file.path);
-      setEditorText(file.content);
-      setSavedEditorText(file.content);
-      setFileRevision(file.revision);
-      setDirty(false);
-      setSelectedFilePaths([file.path]);
-    } catch (error) {
-      const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
-      setFileReadError(message);
-      setFileOpenFailed(true);
-      setSelectedFilePaths([]);
-      notify("error", message);
-    } finally {
-      setFileOpening(false);
-    }
-  }
-
-  function leaseConflictMessage(error: unknown) {
-    if (!(error instanceof ApiError) || (error.code !== "FILE_EDIT_LEASE_CONFLICT" && error.status !== 409)) {
-      return errorMessage(error, "Could not acquire an edit lease for this file.");
-    }
-    const details = error.details as { lease?: FileEditLease } | undefined;
-    if (details?.lease) {
-      return `${details.lease.displayName || "Another user"} is editing this file. They were last active ${formatDisplayDate(details.lease.refreshedAt)}. You can try again after they close the editor.`;
-    }
-    return "Another editing session currently has exclusive access to this file. Try again after the other editor closes it.";
-  }
-
-  async function enterFileEditMode() {
-    if (archiveContext) {
-      setFileLeaseMessage("ZIP archive contents are read-only. Extract the archive before editing files.");
-      return;
-    }
-    if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
-    if (!canEditSelectedPath) {
-      const message = "Edit permission is required to modify this file.";
-      setFileLeaseMessage(message);
-      notify("warning", message);
-      return;
-    }
-    if (activeServerIsDemo) {
-      setFileEditMode(true);
-      setFileLeaseMessage("");
-      return;
-    }
-    setFileLeaseBusy(true);
-    setFileLeaseMessage("");
-    try {
-      const result = await api<{ lease: FileEditLease }>(`/api/servers/${activeServer.id}/file/lease`, {
-        method: "POST",
-        body: JSON.stringify({ path: selectedPath, revision: fileRevision })
-      });
-      setFileEditLease(result.lease);
-      setFileEditMode(true);
-    } catch (error) {
-      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
-        ? "This file changed since it was opened. Reload it before entering edit mode."
-        : leaseConflictMessage(error);
-      setFileLeaseMessage(message);
-      notify("warning", message);
-    } finally {
-      setFileLeaseBusy(false);
     }
   }
 
@@ -1342,83 +1078,6 @@ export function useFilesWorkspace({
     }
   }
 
-  async function saveFile() {
-    if (isProvisioning || dockerOperationalLock || !canEditSelectedPath) return;
-    if (!activeServer) return;
-    if (!selectedPath || !dirty) return;
-    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease)) return;
-    if (fileSaving) return;
-    setFileSaving(true);
-    setNotice("");
-    setFileReadError("");
-    setFileOpenFailed(false);
-    const pathError = validateSafePath(selectedPath);
-    if (pathError) {
-      setNotice(pathError);
-      notify("error", pathError);
-      setFileSaving(false);
-      return;
-    }
-    if (new Blob([editorText]).size > 2 * 1024 * 1024) {
-      const message = "File content is larger than the 2 MiB editor limit.";
-      setNotice(message);
-      notify("error", message);
-      setFileSaving(false);
-      return;
-    }
-    if (activeServerIsDemo) {
-      const nextFiles = { ...demoFiles, [selectedPath]: editorText };
-      setDemoFiles(nextFiles);
-      setSavedEditorText(editorText);
-      setDirty(false);
-      setNotice(`Saved ${selectedPath}`);
-      notify("success", `Saved ${selectedPath}`);
-      setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
-      setFileSaving(false);
-      return;
-    }
-    try {
-      const result = await api<{ revision: string }>(`/api/servers/${activeServer.id}/file`, {
-        method: "PUT",
-        body: JSON.stringify({
-          path: selectedPath,
-          content: editorText,
-          leaseId: fileEditLease?.leaseId,
-          revision: fileRevision
-        })
-      });
-      setSavedEditorText(editorText);
-      setFileRevision(result.revision);
-      setDirty(false);
-      setNotice(`Saved ${selectedPath}`);
-      notify("success", `Saved ${selectedPath}`);
-      await loadFiles(activeServer.id, listing.path);
-    } catch (error) {
-      const conflict = error instanceof ApiError && (error.code === "FILE_REVISION_CONFLICT" || error.code === "FILE_EDIT_LEASE_LOST");
-      const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
-        ? "The file changed outside this editor. Your changes were not saved. Reload the file before editing again."
-        : error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
-          ? "Your edit lease expired or was lost. Your changes were not saved. Reload the file before editing again."
-          : errorMessage(error, "Could not save the file. Review the path and try again.");
-      if (conflict) {
-        releaseFileLease();
-        setFileEditLease(null);
-        setFileEditMode(false);
-        setFileLeaseMessage(message);
-      }
-      setFileReadError(message);
-      setFileOpenFailed(false);
-      setNotice(message);
-      notify("error", message);
-    } finally {
-      setFileSaving(false);
-    }
-  }
-
-  function cancelFileEdit() {
-    requestCloseEditor();
-  }
-
   function clearWorkspace() {
     setListing({ path: "/", entries: [] });
     setArchiveContext(null);
@@ -1479,7 +1138,7 @@ export function useFilesWorkspace({
       selectedEntry,
       selectedZipEntry,
       selectedTotalSize,
-      sortedFileRows,
+      sortedFileEntries,
       selectionSummary,
       fileBreadcrumbs,
       filePreview,
@@ -1519,13 +1178,15 @@ export function useFilesWorkspace({
       fileActionBlockedReason,
       fileReadActionBlockedReason,
       zipDestinationLoading,
-      zipOperationId
+      zipOperationId,
+      selectedFilePaths,
+      fileSort,
+      allFilesSelected
     },
     refs: {
       fileUploadRef,
       fileSelectAllRef
     },
-    table: fileTable,
     actions: {
       loadFiles,
       refreshCurrentFiles,
@@ -1538,6 +1199,8 @@ export function useFilesWorkspace({
       activateFileEntry,
       selectFileEntry,
       clearFileSelection,
+      toggleSelectAllFiles,
+      toggleFileSort: (id: Parameters<typeof nextFileSort>[1]) => setFileSort((current) => nextFileSort(current, id)),
       moveFileFocus,
       canDragFileEntry,
       canMoveFileEntry,

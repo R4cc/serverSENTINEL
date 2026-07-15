@@ -1,12 +1,44 @@
-export type RestartRequiredModAction = "added" | "removed" | "enabled" | "disabled" | "updated";
+import type {
+  PublicUser,
+  ReleaseChannel,
+  ResolvedServerVersions,
+  RestartRequiredChange,
+  RuntimeLifecycleStatus,
+  ScheduledExecution,
+  ServerActivity,
+  ServerEvent,
+  ServerRuntimeProfile
+} from "@serversentinel/contracts";
 
-export type RestartRequiredChange = {
-  type: "mod";
-  identity: string;
-  displayName: string;
-  filename?: string;
-  action: RestartRequiredModAction;
-};
+export type {
+  JavaMajorVersion,
+  LoaderType,
+  OperationRecord,
+  OperationStatus,
+  OperationType,
+  Permission as PermissionKey,
+  PublicUser,
+  ReleaseChannel,
+  ResolvedServerVersions,
+  RestartRequiredChange,
+  RestartRequiredModAction,
+  RolePreset,
+  RuntimeCompatibilityStatus,
+  RuntimeIntent,
+  RuntimeLifecycleStatus,
+  ScheduleStep,
+  ScheduledActiveRun,
+  ScheduledExecution,
+  ScheduledRun,
+  ScheduledRunDetails,
+  ServerAccess,
+  ServerActivity,
+  ServerEvent,
+  ServerJarProviderId,
+  ServerRuntimeProfile,
+  VersionResolution,
+  VersionSource
+} from "@serversentinel/contracts";
 
 export type ManagedServer = {
   id: string;
@@ -38,28 +70,6 @@ export type ManagedServerPort = {
   required?: boolean;
   removable?: boolean;
   advanced?: boolean;
-};
-
-export type LoaderType = "fabric";
-export type ServerJarProviderId = "mcjars";
-export type RuntimeCompatibilityStatus = "compatible" | "unsupported" | "unknown";
-
-export type ServerRuntimeProfile = {
-  minecraftVersion: string;
-  loader: LoaderType;
-  loaderVersion: string;
-  javaMajorVersion: 17 | 21 | 25;
-  jarProvider: ServerJarProviderId;
-  jarArtifact: {
-    id?: string;
-    filename: string;
-    downloadUrl?: string;
-    sha1?: string;
-    sha256?: string;
-    sizeBytes?: number;
-  };
-  compatibilityStatus: RuntimeCompatibilityStatus;
-  resolvedAt: string;
 };
 
 export type RuntimeLoaderVersion = {
@@ -158,74 +168,6 @@ export type NodeManualRecovery = {
   image?: string;
 };
 
-export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";
-
-export type VersionResolution = {
-  version?: string;
-  source: VersionSource;
-  lastCheckedAt: string;
-};
-
-export type ResolvedServerVersions = {
-  minecraftVersion: VersionResolution;
-  fabricLoaderVersion: VersionResolution;
-};
-
-export type ScheduledExecution = {
-  id: string;
-  name: string;
-  cron: string;
-  steps: ScheduleStep[];
-  commands?: string[];
-  commandDelaysSeconds?: number[];
-  commandDelaysMinutes?: number[];
-  onlyWhenNoPlayers: boolean;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastRunAt?: string;
-  lastStatus?: string;
-  lastMessage?: string;
-  nextRunAt?: string;
-  recentRuns?: ScheduledRun[];
-  activeRuns?: ScheduledActiveRun[];
-};
-
-export type ScheduleStep =
-  | { type: "command"; command: string; delaySeconds: number }
-  | { type: "action"; procedure: "restart"; delaySeconds: number };
-
-export type ScheduledRun = {
-  id: string;
-  scheduleId: string;
-  scheduleName: string;
-  status: string;
-  message?: string;
-  ranAt: string;
-  details?: {
-    stepCount: number;
-    completedStepCount: number;
-    terminalStepIndex?: number;
-    terminalStep?: string;
-  };
-};
-
-export type ScheduledActiveRun = {
-  id: string;
-  scheduleId: string;
-  scheduleName: string;
-  status: "running";
-  startedAt: string;
-  stepCount: number;
-  currentStepIndex?: number;
-  currentStep?: string;
-  cancellable: boolean;
-  waitingUntil?: string;
-  waitingDelaySeconds?: number;
-  waitingDelayMinutes?: number;
-  message?: string;
-};
-
 export type AppState = {
   servers: ManagedServer[];
   nodes?: ManagedNode[];
@@ -237,48 +179,6 @@ export type AppState = {
   dockerSocketMounted: boolean;
   totalMemory: number;
   currentUser?: PublicUser;
-};
-
-export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
-
-export type PermissionKey =
-  | "servers.view"
-  | "servers.control"
-  | "servers.create"
-  | "servers.delete"
-  | "servers.editSettings"
-  | "console.view"
-  | "console.command"
-  | "files.view"
-  | "files.edit"
-  | "files.delete"
-  | "files.upload"
-  | "files.download"
-  | "mods.view"
-  | "mods.install"
-  | "mods.upload"
-  | "mods.enableDisable"
-  | "mods.remove"
-  | "mods.update"
-  | "schedules.view"
-  | "schedules.manage"
-  | "settings.view"
-  | "integrations.manage"
-  | "users.view"
-  | "users.manage";
-
-export type ServerAccess = {
-  mode: "all" | "selected";
-  serverIds: string[];
-};
-
-export type PublicUser = {
-  id: string;
-  username: string;
-  rolePreset: RolePreset;
-  permissions: PermissionKey[];
-  serverAccess?: ServerAccess;
-  createdAt: string;
 };
 
 export type AuthSession = {
@@ -309,16 +209,6 @@ export type ServerStatus = {
   lifecycle: RuntimeLifecycleStatus;
 };
 
-export type RuntimeLifecycleStatus = {
-  intent: "stopped" | "running" | "restarting";
-  state: "running" | "stopped" | "stopping" | "starting" | "recovering" | "crash-loop";
-  recoveryAttempt?: number;
-  recoveryLimit?: number;
-  nextRetryAt?: string;
-  crashLoopSince?: string;
-  message?: string;
-};
-
 export type ResourceStats = {
   available: boolean;
   running: boolean;
@@ -338,32 +228,6 @@ export type ResourceSample = ResourceStats & {
 
 export type ResourceStatsHistory = {
   samples: ResourceSample[];
-};
-
-export type ServerEvent = {
-  id: string;
-  eventType: "server_started" | "server_stopped" | "player_joined" | "player_left" | "mod_disabled" | "server_crashed";
-  type: "info" | "success" | "warning" | "error";
-  severity: "info" | "success" | "warning" | "error";
-  text: string;
-  message: string;
-  timestamp?: string;
-  signature: string;
-  source: "logs/latest.log" | "docker";
-};
-
-export type ServerActivity = {
-  lastStartedAt?: string;
-  lastStoppedAt?: string;
-  lastRestartAt?: string;
-  currentWorld?: string;
-  serverPort?: string;
-  eulaAccepted?: boolean;
-  javaRuntime?: string;
-  autosaveStatus?: string;
-  playersOnline?: number | null;
-  maxPlayers?: number | null;
-  playerNames?: string[];
 };
 
 export type ServerOverviewData = {
@@ -424,8 +288,6 @@ export type FileEditLease = {
   expiresAt: string;
   fileRevision: string;
 };
-
-export type ReleaseChannel = "release" | "beta" | "alpha";
 
 export type ModCompatibility = {
   status: "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";
@@ -614,39 +476,6 @@ export type SafeBatchUpdateResult = {
   skipped: Array<{ filename: string; reason: string }>;
   failed: Array<{ filename: string; reason: string }>;
   counts: { requested: number; updated: number; skipped: number; failed: number };
-};
-
-export type OperationRecord = {
-  id: string;
-  type:
-    | "server.create"
-    | "server.start"
-    | "server.stop"
-    | "server.restart"
-    | "mod.upload"
-    | "mod.install"
-    | "mod.update"
-    | "mod.remove"
-    | "mod.toggle"
-    | "mod.batchUpdate"
-    | "schedule.run"
-    | "backup.create"
-    | "backup.restore"
-    | "file.extract"
-    | "import.run"
-    | "export.run";
-  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
-  serverId?: string;
-  nodeId?: string;
-  createdBy?: string;
-  progress: number;
-  task?: string;
-  createdAt: string;
-  startedAt?: string;
-  finishedAt?: string;
-  errorMessage?: string;
-  result?: unknown;
-  logSummary?: string;
 };
 
 export type GeneralJob = {

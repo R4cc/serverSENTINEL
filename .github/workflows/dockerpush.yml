@@ -31,11 +31,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
       - name: Test
         run: npm run test
+
+      - name: Read package version
+        id: version
+        run: node -e "console.log('value=' + require('./package.json').version)" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: npm run build
@@ -73,6 +74,9 @@ jobs:
           platforms: linux/amd64
           build-args: |
             SS_BUILD_ID=${{ github.sha }}
+            SS_VERSION=${{ steps.version.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           push: false
 
       - name: Build and push
@@ -86,3 +90,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             SS_BUILD_ID=${{ github.sha }}
+            SS_VERSION=${{ steps.version.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

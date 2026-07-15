@@ -1,11 +1,3 @@
-.filesPage {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  height: calc(100vh - 300px);
-  min-height: 520px;
-  max-height: calc(100vh - 220px);
-  min-width: 0;
-}
-
 .settingsPage {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;

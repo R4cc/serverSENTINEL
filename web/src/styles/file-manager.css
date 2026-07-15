@@ -4,7 +4,11 @@
   align-items: stretch;
   gap: var(--space-4);
   height: max(560px, calc(100vh - 238px));
+  min-width: 0;
+  min-height: 520px;
   max-height: none;
+  max-width: none;
+  align-content: stretch;
 }
 
 .filesPage .filesExplorer,
@@ -57,6 +61,12 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
+.filesPage .fileNavBar,
+.filesPage .selectionActionBar,
+.filesPage .fileTableFooter {
+  flex: 0 0 auto;
+}
+
 .filesPage .fileBreadcrumbs button.fileDropTarget,
 .filesPage .fileTableRow.fileDropTarget {
   background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
@@ -92,6 +102,7 @@
   border-bottom: var(--border-subtle) solid var(--border-row);
   border-radius: 0;
   background: color-mix(in srgb, var(--surface-raised) 68%, var(--surface-muted));
+  container-type: inline-size;
 }
 
 .filesPage .selectionActions {
@@ -111,7 +122,9 @@
 
 .filesPage .fileTable {
   position: relative;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   width: 100%;
   overflow: auto;
   border: 0;
@@ -143,6 +156,22 @@
 .filesPage .fileTableRow {
   cursor: default;
   border-radius: var(--radius-sm);
+}
+
+@container (max-width: 960px) {
+  .filesPage .selectionActions {
+    flex-wrap: nowrap;
+  }
+
+  .filesPage .selectionActions .uiButton {
+    width: var(--control-height-compact);
+    min-width: var(--control-height-compact);
+    padding-inline: 0;
+  }
+
+  .filesPage .selectionActionLabel {
+    display: none;
+  }
 }
 
 .filesPage .fileTableRow.fileDragging {

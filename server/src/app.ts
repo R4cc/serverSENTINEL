@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
 import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -16,6 +16,7 @@ import { fetch } from "undici";
 import { totalmem } from "node:os";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
+import { currentUserForRequest, type AuthenticatedRequest } from "./auth/requestAuthentication.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
@@ -62,6 +63,7 @@ import {
   type ServerJarProvider
 } from "./runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "./runtime/terminal.js";
+import { parseServerProperties, serializeServerProperties } from "./runtime/serverProperties.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { normalizePlayerNames, queryMinecraftServer } from "./minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
@@ -75,6 +77,8 @@ import {
 } from "./permissions.js";
 import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
+import { registerOperationsRoutes } from "./routes/operationsRoutes.js";
+import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
@@ -92,6 +96,7 @@ import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js"
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
+import { OperationService, type ForegroundOperationInput } from "./operations/operationService.js";
 import { diffModSnapshots, snapshotMods } from "./modRestartState.js";
 import {
   applyImportArtifact,
@@ -141,7 +146,6 @@ import type {
   ModrinthProject,
   ModrinthVersion,
   OperationRecord,
-  OperationStatus,
   OperationType,
   Permission,
   PublicNode,
@@ -360,6 +364,7 @@ let serversRepository: ServersRepository;
 let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
 let operationsRepository: OperationsRepository;
+let operationService: OperationService;
 let storageDatabase: StorageDatabase;
 let modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
 const panelNodeConnections = new PanelNodeConnections();
@@ -666,12 +671,11 @@ async function currentUserFromCookie(cookieHeader?: string) {
     sessionsRepository.delete(sessionId);
     return null;
   }
-  const users = await readUsers();
-  return users.find((user) => user.id === session.userId) ?? null;
+  return usersRepository.findById(session.userId) ?? null;
 }
 
-async function requireAuthenticated(cookieHeader?: string) {
-  const user = await currentUserFromCookie(cookieHeader);
+async function requireAuthenticated(request: AuthenticatedRequest) {
+  const user = await currentUserForRequest(request, currentUserFromCookie);
   if (!user) {
     const error = new Error("Authentication required") as Error & { statusCode?: number };
     error.statusCode = 401;
@@ -680,8 +684,8 @@ async function requireAuthenticated(cookieHeader?: string) {
   return user;
 }
 
-async function requireRequestPermission(request: { headers: { cookie?: string } }, permission?: Permission) {
-  const user = await requireAuthenticated(request.headers.cookie);
+async function requireRequestPermission(request: AuthenticatedRequest, permission?: Permission) {
+  const user = await requireAuthenticated(request);
   if (permission) {
     requireUserPermission(permission)(user);
   }
@@ -942,7 +946,7 @@ async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<Ver
     if (!jarStat.isFile() || jarStat.size > 16 * 1024 * 1024) return {};
     const installProperties = readZipEntry(await readFile(jarPath), "install.properties");
     if (!installProperties) return {};
-    const values = parseProperties(installProperties.toString("utf8"));
+    const values = parseServerProperties(installProperties.toString("utf8"));
     return {
       minecraftVersion: values["game-version"],
       fabricLoaderVersion: values["fabric-loader-version"]
@@ -2757,31 +2761,15 @@ async function readLatestServerLog(server: ManagedServer) {
   return (await readFileRange(logPath, start, logStat.size - 1)).toString("utf8");
 }
 
-function parseProperties(text: string) {
-  const values: Record<string, string> = {};
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    if (separator === -1) continue;
-    values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-  }
-  return values;
-}
-
-function serializeProperties(values: Record<string, string>) {
-  return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
-}
-
 async function updateServerProperties(server: ManagedServer, updates: Record<string, string>) {
   const path = ensureInsideServer(server, "server.properties");
   let values: Record<string, string> = {};
   try {
-    values = parseProperties(await readFile(path, "utf8"));
+    values = parseServerProperties(await readFile(path, "utf8"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  await writeFile(path, serializeProperties({ ...values, ...updates }), "utf8");
+  await writeFile(path, serializeServerProperties({ ...values, ...updates }), "utf8");
 }
 
 function normalizeJavaRuntime(server: ManagedServer) {
@@ -3057,7 +3045,7 @@ async function serverOverviewData(server: ManagedServer) {
     .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index, parsedAt)).filter((event): event is ServerEvent => Boolean(event)));
   const reversedEvents = [...parsedEvents].reverse();
   const events = compactRecentEvents(parsedEvents, 10);
-  const props = properties.status === "fulfilled" ? parseProperties(properties.value) : {};
+  const props = properties.status === "fulfilled" ? parseServerProperties(properties.value) : {};
   const eulaAccepted = eula.status === "fulfilled"
     ? /^eula\s*=\s*true\s*$/im.test(eula.value)
     : undefined;
@@ -3099,7 +3087,7 @@ async function queryPlayerMetrics(server: ManagedServer, props: Record<string, s
 
 async function onlinePlayerCount(server: ManagedServer) {
   const path = await validateExistingInsideServer(server, "server.properties").catch(() => "");
-  const props = path ? parseProperties(await readFile(path, "utf8")) : {};
+  const props = path ? parseServerProperties(await readFile(path, "utf8")) : {};
   const metrics = await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }));
   return metrics.playersOnline;
 }
@@ -3373,64 +3361,11 @@ function operationErrorMessage(error: unknown, fallback = "Operation failed") {
   return error instanceof Error ? error.message : fallback;
 }
 
-function optionalOperationStatus(value: unknown): OperationStatus | undefined {
-  if (value === undefined) return undefined;
-  if (value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "cancelled") {
-    return value;
-  }
-  throw new Error("Operation status must be queued, running, succeeded, failed, or cancelled");
-}
-
-type RestartEffect = "mark" | "clear";
-
 async function recordOperation<T>(
-  input: {
-    type: OperationType;
-    serverId?: string;
-    nodeId?: string;
-    createdBy?: string;
-    task: string;
-    runningTask?: string;
-    successTask?: string;
-    serverIdFromResult?: (value: T) => string | undefined;
-    result?: (value: T) => unknown;
-    restartEffect?: RestartEffect | ((value: T) => RestartEffect | undefined);
-  },
+  input: ForegroundOperationInput<T>,
   action: (operation: OperationRecord) => Promise<T>
 ) {
-  const operation = operationsRepository.create({
-    type: input.type,
-    serverId: input.serverId,
-    nodeId: input.nodeId,
-    createdBy: input.createdBy,
-    task: input.task
-  });
-  operationsRepository.start(operation.id, { progress: 5, task: input.runningTask ?? input.task });
-  try {
-    const result = await action(operation);
-    const resultServerId = input.serverIdFromResult?.(result);
-    const affectedServerId = resultServerId ?? input.serverId;
-    const restartEffect = typeof input.restartEffect === "function" ? input.restartEffect(result) : input.restartEffect;
-    if (affectedServerId && restartEffect === "mark") {
-      serversRepository.markRestartRequired(affectedServerId);
-    }
-    if (affectedServerId && restartEffect === "clear") {
-      serversRepository.clearRestartRequired(affectedServerId);
-    }
-    operationsRepository.succeed(operation.id, {
-      serverId: resultServerId,
-      progress: 100,
-      task: input.successTask ?? "Operation complete",
-      result: input.result ? input.result(result) : result
-    });
-    return result;
-  } catch (error) {
-    operationsRepository.fail(operation.id, operationErrorMessage(error), {
-      task: "Operation failed",
-      logSummary: detailedErrorMessage(error)
-    });
-    throw error;
-  }
+  return operationService.run(input, action);
 }
 
 const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
@@ -3438,10 +3373,7 @@ const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "s
 const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 
 function blockingRuntimeOperations(serverId: string) {
-  return [
-    ...operationsRepository.list({ serverId, status: "queued", limit: 25 }),
-    ...operationsRepository.list({ serverId, status: "running", limit: 25 })
-  ].filter((operation) => blockingRuntimeOperationTypes.has(operation.type));
+  return operationsRepository.listActive(serverId).filter((operation) => blockingRuntimeOperationTypes.has(operation.type));
 }
 
 export function mutableServerConfigurationBlockedReason(status: unknown, operations: Array<{ type?: string }> = []) {
@@ -3486,11 +3418,6 @@ function runtimeStatusRunning(value: unknown): boolean | undefined {
   }
   if (status.running === false || status.docker?.running === false) return false;
   return undefined;
-}
-
-function setDesiredRuntimeState(server: ManagedServer, state: "running" | "stopped") {
-  serversRepository.setDesiredRuntimeState(server.id, state);
-  server.desiredRuntimeState = state;
 }
 
 const activeLifecycleActions = new Set<string>();
@@ -3639,41 +3566,30 @@ async function startProvisionOperation(input: CreateServerInput, createdBy: stri
   await assertNodePortsAvailable(nodeId, dockerPorts);
   input.dockerPorts = dockerPorts;
   input.queryPort = String(queryPort);
-  const operation = operationsRepository.create({
+  return operationService.enqueue<ManagedServer>({
     type: "server.create",
     nodeId,
     createdBy,
-    progress: 0,
-    task: "Queued server setup"
-  });
-  operationsRepository.start(operation.id, { progress: 0, task: "Queued server setup" });
-  activeProvisionPortReservations.set(operation.id, {
-    nodeId,
-    dockerPorts,
-    displayName: input.displayName?.trim() || "unnamed server"
-  });
-  logInfo({ operationId: operation.id, serverName: input.displayName?.trim() }, "Provisioning operation started");
-
-  void runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, (progress, task) => {
-    operationsRepository.update(operation.id, { progress, task });
-  }, operation.id).then(async (server) => {
-    operationsRepository.succeed(operation.id, {
-      serverId: server.id,
-      progress: 100,
-      task: "Server setup complete",
-      result: { server: await runtimeForServer(server).publicServer(server) }
-    });
-  }).catch((error: unknown) => {
-    logError({ operationId: operation.id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning operation failed");
-    operationsRepository.fail(operation.id, operationErrorMessage(error, "Server setup failed"), {
-      task: "Server setup failed",
-      logSummary: detailedErrorMessage(error)
-    });
-  }).finally(() => {
-    activeProvisionPortReservations.delete(operation.id);
-  });
-
-  return operationsRepository.find(operation.id)!;
+    task: "Queued server setup",
+    runningTask: "Queued server setup",
+    successTask: "Server setup complete",
+    failureTask: "Server setup failed",
+    failureFallback: "Server setup failed",
+    serverIdFromResult: (server) => server.id,
+    result: async (server) => ({ server: await runtimeForServer(server).publicServer(server) }),
+    onStarted: (operation) => {
+      activeProvisionPortReservations.set(operation.id, {
+        nodeId,
+        dockerPorts,
+        displayName: input.displayName?.trim() || "unnamed server"
+      });
+      logInfo({ operationId: operation.id, serverName: input.displayName?.trim() }, "Provisioning operation started");
+    },
+    onError: (error, operation) => {
+      logError({ operationId: operation.id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning operation failed");
+    },
+    onSettled: (operation) => { activeProvisionPortReservations.delete(operation.id); }
+  }, (operation, report) => runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, report, operation.id));
 }
 
 function selectedExportServerIds(value: unknown) {
@@ -3690,90 +3606,76 @@ function targetNodeIdFromBody(value: unknown) {
 }
 
 async function startExportOperation(input: { serverIds?: string[] }, createdBy: string) {
-  const operation = operationsRepository.create({
+  return operationService.enqueue<{
+    artifact: Awaited<ReturnType<typeof createExportArtifact>>;
+    written: Awaited<ReturnType<typeof writeExportArtifact>>;
+    operationId: string;
+  }>({
     type: "export.run",
     createdBy,
-    progress: 0,
-    task: "Queued export"
-  });
-  operationsRepository.start(operation.id, { progress: 0, task: "Preparing export" });
-  void (async () => {
-    try {
-      const artifact = await createExportArtifact({
-        appVersion,
-        settings: settingsRepository.get(),
-        nodes: await readNodes(),
-        servers: await listManagedServers(),
-        selectedServerIds: input.serverIds,
-        modPreferencesForServer: (serverId) => modPreferencesRepository.list(serverId),
-        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
-      });
-      const written = await writeExportArtifact(join(config.exportsDir, exportArtifactFilename(operation.id)), artifact);
-      operationsRepository.succeed(operation.id, {
-        progress: 100,
-        task: "Export ready",
-        result: {
-          artifact: {
-            filename: written.filename,
-            size: written.size,
-            sha256: written.sha256,
-            downloadUrl: `/api/exports/${operation.id}/download`
-          },
-          artifactPath: written.path,
-          serverCount: artifact.servers.length,
-          serverFileCount: artifact.manifest.content.serverFiles
-        }
-      });
-    } catch (error) {
+    task: "Queued export",
+    runningTask: "Preparing export",
+    successTask: "Export ready",
+    failureTask: "Export failed",
+    failureFallback: "Export failed",
+    result: ({ artifact, written, operationId }) => ({
+      artifact: {
+        filename: written.filename,
+        size: written.size,
+        sha256: written.sha256,
+        downloadUrl: `/api/exports/${operationId}/download`
+      },
+      artifactPath: written.path,
+      serverCount: artifact.servers.length,
+      serverFileCount: artifact.manifest.content.serverFiles
+    }),
+    onError: (error, operation) => {
       logError({ operationId: operation.id, action: "export", status: "failed", ...errorLogFields(error) }, "Export operation failed");
-      operationsRepository.fail(operation.id, operationErrorMessage(error, "Export failed"), {
-        task: "Export failed",
-        logSummary: detailedErrorMessage(error)
-      });
     }
-  })();
-  return operationsRepository.find(operation.id)!;
+  }, async (operation, report) => {
+    const artifact = await createExportArtifact({
+      appVersion,
+      settings: settingsRepository.get(),
+      nodes: await readNodes(),
+      servers: await listManagedServers(),
+      selectedServerIds: input.serverIds,
+      modPreferencesForServer: (serverId) => modPreferencesRepository.list(serverId),
+      report
+    });
+    const written = await writeExportArtifact(join(config.exportsDir, exportArtifactFilename(operation.id)), artifact);
+    return { artifact, written, operationId: operation.id };
+  });
 }
 
 async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings?: boolean }, createdBy: string) {
-  const operation = operationsRepository.create({
+  return operationService.enqueue({
     type: "import.run",
     nodeId: input.targetNodeId,
     createdBy,
-    progress: 0,
-    task: "Queued import"
-  });
-  operationsRepository.start(operation.id, { progress: 0, task: "Validating import" });
-  void (async () => {
-    try {
-      const artifact = parseExportArtifactBase64(input.artifactBase64);
-      const result = await applyImportArtifact(artifact, {
-        targetNodeId: input.targetNodeId,
-        nodes: await readNodes(),
-        existingServers: await listManagedServers(),
-        serversDir: config.serversDir,
-        tmpDir: config.tmpDir,
-        storage: storageDatabase,
-        serversRepository,
-        modPreferencesRepository,
-        settingsRepository,
-        importInstanceSettings: input.importInstanceSettings,
-        report: (progress, task) => operationsRepository.update(operation.id, { progress, task })
-      });
-      operationsRepository.succeed(operation.id, {
-        progress: 100,
-        task: "Import complete",
-        result
-      });
-    } catch (error) {
+    task: "Queued import",
+    runningTask: "Validating import",
+    successTask: "Import complete",
+    failureTask: "Import failed",
+    failureFallback: "Import failed",
+    onError: (error, operation) => {
       logError({ operationId: operation.id, action: "import", status: "failed", ...errorLogFields(error) }, "Import operation failed");
-      operationsRepository.fail(operation.id, operationErrorMessage(error, "Import failed"), {
-        task: "Import failed",
-        logSummary: detailedErrorMessage(error)
-      });
     }
-  })();
-  return operationsRepository.find(operation.id)!;
+  }, async (_operation, report) => {
+    const artifact = parseExportArtifactBase64(input.artifactBase64);
+    return applyImportArtifact(artifact, {
+      targetNodeId: input.targetNodeId,
+      nodes: await readNodes(),
+      existingServers: await listManagedServers(),
+      serversDir: config.serversDir,
+      tmpDir: config.tmpDir,
+      storage: storageDatabase,
+      serversRepository,
+      modPreferencesRepository,
+      settingsRepository,
+      importInstanceSettings: input.importInstanceSettings,
+      report
+    });
+  });
 }
 
 function scheduleFromBody(body: {
@@ -4248,7 +4150,9 @@ async function localServerLogs(server: ManagedServer) {
   return { text: await readLatestServerLog(server), source: "logs/latest.log" };
 }
 
-export async function startServer() {
+let activeAppReservation: symbol | undefined;
+
+async function buildAppInstance(reservation: symbol) {
 initializeRuntimeDataRoot(config.paths);
 const app = Fastify({
   trustProxy: config.trustProxy,
@@ -4262,11 +4166,21 @@ const app = Fastify({
       "request.headers.cookie"
     ]
   },
-  disableRequestLogging: true,
+  logController: new LogController({ disableRequestLogging: true }),
   bodyLimit: 180 * 1024 * 1024
 });
+app.addHook("onClose", async () => {
+  if (activeAppReservation === reservation) activeAppReservation = undefined;
+});
+try {
+app.decorateRequest("authenticatedUser", null);
+app.decorateRequest("authenticationPromise");
 appLogger = app.log;
-storageDatabase = openStorageDatabase();
+const instanceStorageDatabase = openStorageDatabase();
+storageDatabase = instanceStorageDatabase;
+app.addHook("onClose", async () => {
+  instanceStorageDatabase.close();
+});
 usersRepository = new UsersRepository(storageDatabase);
 if (config.enableDemo) {
   const demoUser = ensureDemoUser(usersRepository, hashPassword);
@@ -4285,6 +4199,11 @@ serversRepository = new ServersRepository(storageDatabase, normalizeManagedServe
 fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
 modPreferencesRepository = new ModPreferencesRepository(storageDatabase);
 operationsRepository = new OperationsRepository(storageDatabase);
+operationService = new OperationService(operationsRepository, {
+  markRestartRequired: (serverId) => { serversRepository.markRestartRequired(serverId); },
+  clearRestartRequired: (serverId) => { serversRepository.clearRestartRequired(serverId); },
+  errorDetails: detailedErrorMessage
+});
 const recoveredOperations = operationsRepository.failIncompleteOnStartup();
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
@@ -4299,9 +4218,6 @@ if (prunedLeases > 0) {
   logInfo({ leaseCount: prunedLeases }, "Pruned expired file edit leases");
 }
 configureModrinthApiKeyProvider(modrinthApiKey);
-app.addHook("onClose", async () => {
-  storageDatabase.close();
-});
 await app.register(helmet, {
   contentSecurityPolicy: {
     useDefaults: false,
@@ -4391,9 +4307,9 @@ registerAuthRoutes(app, {
   logWarn
 });
 
-async function isDemoModeRequest(request: { headers: { cookie?: string } }) {
+async function isDemoModeRequest(request: AuthenticatedRequest) {
   if (!config.enableDemo) return false;
-  return isDemoUser(await currentUserFromCookie(request.headers.cookie));
+  return isDemoUser(await currentUserForRequest(request, currentUserFromCookie));
 }
 
 app.addHook("preHandler", async (request) => {
@@ -4905,38 +4821,11 @@ app.post<{ Body: { minecraftVersion?: string; loaderVersion?: string; preferStab
   return { runtimeProfile, warnings: [] };
 });
 
-app.get<{ Querystring: { serverId?: string; status?: string; limit?: string } }>("/api/operations", async (request) => {
-  await requireRequestPermission(request, "servers.view");
-  const status = optionalOperationStatus(request.query.status);
-  const parsedLimit = request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined;
-  const serverId = request.query.serverId ? validateServerId(request.query.serverId) : undefined;
-  if (serverId) await getServer(serverId);
-  return {
-    operations: operationsRepository.list({
-      serverId,
-      status,
-      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
-    })
-  };
-});
-
-app.get<{ Params: { id: string } }>("/api/operations/:id", async (request, reply) => {
-  await requireRequestPermission(request, "servers.view");
-  const operation = operationsRepository.find(validateOperationId(request.params.id));
-  if (!operation) {
-    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
-  }
-  if (operation.serverId) await getServer(operation.serverId);
-  return operation;
-});
-
-app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", destructiveRateLimit, async (request, reply) => {
-  await requireRequestPermission(request, "servers.editSettings");
-  const operation = operationsRepository.cancel(validateOperationId(request.params.id), "Operation cancelled by user");
-  if (!operation) {
-    return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
-  }
-  return operation;
+registerOperationsRoutes(app, {
+  destructiveRateLimit,
+  requireRequestPermission,
+  assertServerExists: getServer,
+  operations: operationsRepository
 });
 
 app.post<{ Body: { serverIds?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
@@ -5171,78 +5060,19 @@ app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:
   return sendConsoleCommandWithDesiredState(server, request.body.command);
 });
 
-app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
-  await requireRequestPermission(request, "schedules.view");
-  const server = await getServer(request.params.id);
-  return { schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)) };
-});
-
-app.post<{
-  Params: { id: string };
-  Body: { name?: string; cron?: string; steps?: unknown; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
-}>("/api/servers/:id/schedules", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "schedules.manage");
-  const server = await getServer(request.params.id);
-  const createdSchedule = scheduleFromBody(request.body);
-  serversRepository.createSchedule(server.id, createdSchedule, createdSchedule.updatedAt);
-  logInfo({ ...serverLogFields(server), scheduleId: createdSchedule.id, enabled: createdSchedule.enabled, action: "create_schedule" }, "Schedule created");
-  return createdSchedule;
-});
-
-app.put<{
-  Params: { id: string; scheduleId: string };
-  Body: { name?: string; cron?: string; steps?: unknown; commands?: unknown; commandDelaysSeconds?: unknown; commandDelaysMinutes?: unknown; onlyWhenNoPlayers?: boolean; enabled?: boolean };
-}>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "schedules.manage");
-  const server = await getServer(request.params.id);
-  const scheduleId = validateScheduleId(request.params.scheduleId);
-  const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
-  if (!existing) throw new Error("Schedule not found");
-  const updatedSchedule = scheduleFromBody(request.body, existing);
-  serversRepository.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt);
-  logInfo({ ...serverLogFields(server), scheduleId: updatedSchedule.id, enabled: updatedSchedule.enabled, action: "update_schedule" }, "Schedule updated");
-  return updatedSchedule;
-});
-
-app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", destructiveRateLimit, async (request) => {
-  await requireRequestPermission(request, "schedules.manage");
-  const server = await getServer(request.params.id);
-  const scheduleId = validateScheduleId(request.params.scheduleId);
-  serversRepository.deleteSchedule(server.id, scheduleId, new Date().toISOString());
-  logInfo({ ...serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
-  return { ok: true };
-});
-
-app.post<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId/run", destructiveRateLimit, async (request, reply) => {
-  await requireRequestPermission(request, "schedules.manage");
-  const server = await getServer(request.params.id);
-  const scheduleId = validateScheduleId(request.params.scheduleId);
-  const schedule = server.schedules?.find((candidate) => candidate.id === scheduleId);
-  if (!schedule) {
-    return reply.code(404).send(apiErrorResponse("SCHEDULE_NOT_FOUND", "Schedule not found"));
-  }
-  const run = startScheduleExecution(server, schedule);
-  if (!run) {
-    return reply.code(409).send(apiErrorResponse("SCHEDULE_ALREADY_RUNNING", "Schedule is already running"));
-  }
-  logInfo({ ...serverLogFields(server), scheduleId, runId: run.id, action: "run_schedule_now" }, "Schedule test run started");
-  return reply.code(202).send({ run });
-});
-
-app.post<{ Params: { id: string; scheduleId: string; runId: string } }>("/api/servers/:id/schedules/:scheduleId/runs/:runId/cancel", destructiveRateLimit, async (request, reply) => {
-  await requireRequestPermission(request, "schedules.manage");
-  const server = await getServer(request.params.id);
-  const scheduleId = validateScheduleId(request.params.scheduleId);
-  const runId = validateOperationId(request.params.runId);
-  const cancelled = cancelActiveScheduleRun(server.id, scheduleId, runId);
-  if (cancelled === null) {
-    return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "The Restart step has started and must finish before this run can end"));
-  }
-  if (!cancelled) {
-    return reply.code(404).send(apiErrorResponse("SCHEDULE_RUN_NOT_FOUND", "Active schedule run not found"));
-  }
-  logInfo({ ...serverLogFields(server), scheduleId, runId, action: "cancel_schedule_run" }, "Schedule run cancellation requested");
-  return { run: cancelled };
+registerScheduleRoutes(app, {
+  destructiveRateLimit,
+  requireRequestPermission,
+  getServer,
+  parseSchedule: scheduleFromBody,
+  publicSchedule,
+  createSchedule: (serverId, schedule, updatedAt) => { serversRepository.createSchedule(serverId, schedule, updatedAt); },
+  updateSchedule: (serverId, schedule, updatedAt) => { serversRepository.updateSchedule(serverId, schedule, updatedAt); },
+  deleteSchedule: (serverId, scheduleId, updatedAt) => { serversRepository.deleteSchedule(serverId, scheduleId, updatedAt); },
+  startScheduleExecution,
+  cancelActiveScheduleRun,
+  serverLogFields,
+  logInfo
 });
 
 app.get("/ws/console", { websocket: true }, async (socket, request) => {
@@ -5338,10 +5168,7 @@ async function resolveArchiveDestination(runtime: NodeRuntime, server: ManagedSe
 }
 
 function requireNoRunningFileExtraction(serverId: string) {
-  const running = [
-    ...operationsRepository.list({ serverId, status: "queued", limit: 25 }),
-    ...operationsRepository.list({ serverId, status: "running", limit: 25 })
-  ].some((operation) => operation.type === "file.extract");
+  const running = operationsRepository.listActive(serverId).some((operation) => operation.type === "file.extract");
   if (running) throw new Error("File mutations are unavailable while ZIP extraction is running");
 }
 
@@ -5466,10 +5293,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const plan = await runtime.planArchiveExtraction(server, archive, destination);
   if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
   const touchesMods = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
-  const alreadyRunning = [
-    ...operationsRepository.list({ serverId: server.id, status: "queued", limit: 25 }),
-    ...operationsRepository.list({ serverId: server.id, status: "running", limit: 25 })
-  ].some((operation) => operation.type === "file.extract");
+  const alreadyRunning = operationsRepository.listActive(server.id).some((operation) => operation.type === "file.extract");
   if (alreadyRunning) throw new Error("Another ZIP extraction is already running for this server");
   const user = await requireRequestPermission(request);
   const operation = operationsRepository.create({
@@ -5837,7 +5661,7 @@ async function localListArchive(_server: ManagedServer, archivePath: string, ent
   return { ...listing, archivePath: toPublicPath(_server, archivePath) };
 }
 
-async function localPreviewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
+async function localPreviewArchiveEntry(_server: ManagedServer, archivePath: string, entryPath: string) {
   const normalizedPath = entryPath.startsWith("/") ? entryPath : `/${entryPath}`;
   const indexed = await readZipArchiveEntry(archivePath, entryPath, fileZipLimits, editorFileSizeLimit);
   if (!isTextLikeServerFile(indexed.entry.name)) {
@@ -6706,7 +6530,6 @@ function modsFromListResult(result: unknown) {
 }
 
 async function buildModUpdatePlan(server: ManagedServer, options: { forceRefresh?: boolean; channel?: ReleaseChannel } = {}): Promise<ModUpdatePlan> {
-  const runtime = runtimeForServer(server);
   const listed = await listModsWithPanelMetadata(server, { forceRefresh: options.forceRefresh });
   let mods = modsFromListResult(listed);
   if (options.channel) {
@@ -6923,7 +6746,6 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
 async function acknowledgeInstalledModReview(server: ManagedServer, input: unknown) {
   const body = asObject(input, "mod review acknowledgement request");
   const filename = safeInstalledModFilename(requiredString(body.filename, "filename"));
-  const runtime = runtimeForServer(server);
   const listResult = await listModsWithPanelMetadata(server, { forceRefresh: true });
   const currentMod = modsFromListResult(listResult).find((mod) => mod.filename === filename);
   if (!currentMod) {
@@ -8124,18 +7946,27 @@ app.setErrorHandler((error, _request, reply) => {
   reply.code(statusCode).send(publicApiError(error, statusCode));
 });
 
+let scheduleTimer: NodeJS.Timeout | undefined;
+let schedulerClosed = false;
 function scheduleNextTick() {
-  setTimeout(async () => {
+  scheduleTimer = setTimeout(async () => {
+    scheduleTimer = undefined;
     try {
       await tickSchedules();
     } catch (error: unknown) {
       app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
     } finally {
-      scheduleNextTick();
+      if (!schedulerClosed) scheduleNextTick();
     }
-  }, 30_000).unref();
+  }, 30_000);
+  scheduleTimer.unref();
 }
 scheduleNextTick();
+app.addHook("onClose", async () => {
+  schedulerClosed = true;
+  if (scheduleTimer) clearTimeout(scheduleTimer);
+  scheduleTimer = undefined;
+});
 
 const startupUsers = await readUsers().catch(() => []);
 const startupNodes = await readNodes().catch(() => []);
@@ -8162,6 +7993,29 @@ if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
   app.log.warn({ dockerSocket: config.dockerSocket }, "Docker socket is not mounted; runtime management is unavailable");
 }
 
+return app;
+} catch (error) {
+  await app.close().catch(() => undefined);
+  throw error;
+}
+}
+
+export async function buildApp() {
+  if (activeAppReservation) {
+    throw new Error("Only one serverSENTINEL application instance can be active in a process");
+  }
+  const reservation = Symbol("serverSENTINEL application");
+  activeAppReservation = reservation;
+  try {
+    return await buildAppInstance(reservation);
+  } catch (error) {
+    if (activeAppReservation === reservation) activeAppReservation = undefined;
+    throw error;
+  }
+}
+
+export async function startServer() {
+const app = await buildApp();
 await app.listen({ host: "0.0.0.0", port: config.port });
 app.log.info({ port: config.port }, "serverSENTINEL web panel listening");
 }

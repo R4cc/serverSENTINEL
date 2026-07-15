@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Keybo
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
-import { SortHeaderButton } from "../../components/TableControls";
 import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
@@ -41,7 +40,7 @@ export function FilesPage({
   dateTimeFormatter,
   onCopyText
 }: FilesPageProps) {
-  const { data, state, refs, table, actions } = workspace;
+  const { data, state, refs, actions } = workspace;
   const {
     listing,
     archiveContext,
@@ -49,7 +48,7 @@ export function FilesPage({
     selectedEntry,
     selectedZipEntry,
     selectedTotalSize,
-    sortedFileRows,
+    sortedFileEntries,
     selectionSummary,
     fileBreadcrumbs,
     filePreview,
@@ -89,7 +88,10 @@ export function FilesPage({
     fileActionBlockedReason,
     fileReadActionBlockedReason,
     zipDestinationLoading,
-    zipOperationId
+    zipOperationId,
+    selectedFilePaths,
+    fileSort,
+    allFilesSelected
   } = state;
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const fileTableRef = useRef<HTMLDivElement>(null);
@@ -432,31 +434,42 @@ export function FilesPage({
             />
           )}
 
-          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileRows.length) + 1} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
+          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileEntries.length) + 1} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
             <div className="fileTableHead" role="row">
-              <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={table.getIsAllRowsSelected() ? "Clear visible selection" : "Select all visible files"}>
+              <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={allFilesSelected ? "Clear visible selection" : "Select all visible files"}>
                 <input
                   ref={refs.fileSelectAllRef}
                   type="checkbox"
-                  checked={table.getIsAllRowsSelected()}
-                  disabled={sortedFileRows.length === 0}
-                  onChange={table.getToggleAllRowsSelectedHandler()}
+                  checked={allFilesSelected}
+                  disabled={sortedFileEntries.length === 0}
+                  onChange={actions.toggleSelectAllFiles}
                 />
               </label>
-              {table.getHeaderGroups()[0]?.headers.filter((header) => header.id !== "select").map((header) => (
-                <span className={`fileColumnHeader fileColumnHeader--${header.id}`} key={header.id} role="presentation"><SortHeaderButton header={header}>
-                  {header.id === "name" ? "Name" : header.id === "modifiedAt" ? "Date Modified" : header.id === "type" ? "Type" : "Size"}
-                </SortHeaderButton></span>
+              {([
+                ["name", "Name"],
+                ["modifiedAt", "Date Modified"],
+                ["type", "Type"],
+                ["size", "Size"]
+              ] as const).map(([id, label]) => (
+                <span className={`fileColumnHeader fileColumnHeader--${id}`} key={id} role="presentation"><button
+                  type="button"
+                  role="columnheader"
+                  className="uiSortHeaderButton"
+                  onClick={() => actions.toggleFileSort(id)}
+                  aria-sort={fileSort.id === id ? (fileSort.desc ? "descending" : "ascending") : "none"}
+                >
+                  {label}
+                  <span className="uiSortIndicator" aria-hidden="true">{fileSort.id === id ? (fileSort.desc ? "↓" : "↑") : "↕"}</span>
+                </button></span>
               ))}
             </div>
             {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
             {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
-            {!filesLoading && !filesError && sortedFileRows.length === 0 && (
+            {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
               <InlineState tone="empty" title="This folder is empty" message={archiveContext ? "There are no entries in this ZIP folder." : "There are no files or folders here yet. Upload a file or create a folder to add content."} />
             )}
-            {sortedFileRows.map((row) => {
-              const entry = row.original;
-              const selected = row.getIsSelected();
+            {sortedFileEntries.map((entry) => {
+              const selected = selectedFilePaths.includes(entry.path);
               return (
                 <div
                   key={entry.path}
@@ -491,7 +504,7 @@ export function FilesPage({
                     role="rowheader"
                     className="fileNameCell"
                     ref={(node) => { if (node) rowButtonRefs.current.set(entry.path, node); else rowButtonRefs.current.delete(entry.path); }}
-                    tabIndex={focusedFilePath === entry.path || (!focusedFilePath && sortedFileRows[0]?.original.path === entry.path) ? 0 : -1}
+                    tabIndex={focusedFilePath === entry.path || (!focusedFilePath && sortedFileEntries[0]?.path === entry.path) ? 0 : -1}
                     onFocus={() => actions.setFocusedFilePath(entry.path)}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -511,7 +524,7 @@ export function FilesPage({
             })}
           </div>
           <div className="fileTableFooter">
-            <span>{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : `${sortedFileRows.length} items`}</span>
+            <span>{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : `${sortedFileEntries.length} items`}</span>
             <span title={archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}</span>
           </div>
           </section>

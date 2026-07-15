@@ -134,6 +134,16 @@ export class OperationsRepository {
       .map(operationFromRow);
   }
 
+  listActive(serverId: string, limit = 50) {
+    const safeLimit = Math.max(1, Math.min(limit, 250));
+    return this.storage.connection.prepare<[string, number], OperationRow>(`
+      SELECT * FROM operations
+      WHERE server_id = ? AND status IN ('queued', 'running')
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(serverId, safeLimit).map(operationFromRow);
+  }
+
   start(id: string, patch: OperationPatch = {}, now = new Date().toISOString()) {
     this.storage.connection.prepare(`
       UPDATE operations

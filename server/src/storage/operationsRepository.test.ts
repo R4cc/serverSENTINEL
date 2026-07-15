@@ -127,6 +127,19 @@ describe("OperationsRepository", () => {
     expect(operations.list({ serverId: "server-a", status: "failed" }).map((operation) => operation.id)).toEqual([second.id]);
   });
 
+  it("lists queued and running operations for a server in one active query", async () => {
+    const operations = await createRepository();
+    const queued = operations.create({ type: "file.extract", serverId: "server-a", createdAt: "2026-01-01T00:00:00.000Z" });
+    const running = operations.create({ type: "server.start", serverId: "server-a", createdAt: "2026-01-01T00:00:01.000Z" });
+    const finished = operations.create({ type: "server.stop", serverId: "server-a", createdAt: "2026-01-01T00:00:02.000Z" });
+    const other = operations.create({ type: "server.start", serverId: "server-b" });
+    operations.start(running.id);
+    operations.succeed(finished.id);
+    operations.start(other.id);
+
+    expect(operations.listActive("server-a").map((operation) => operation.id)).toEqual([running.id, queued.id]);
+  });
+
   it("prunes old finished operations and caps retained history", async () => {
     const operations = await createRepository();
     const old = operations.create({ type: "export.run", createdAt: "2026-01-01T00:00:00.000Z" });

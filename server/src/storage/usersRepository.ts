@@ -179,7 +179,7 @@ export class UsersRepository {
     });
   }
 
-  private findById(id: string) {
+  findById(id: string) {
     const row = this.storage.connection.prepare<[string], UserRow>(`
       SELECT id, username, password_hash, salt, role_preset, permissions_json,
              server_access_json, created_at, updated_at FROM users WHERE id = ?

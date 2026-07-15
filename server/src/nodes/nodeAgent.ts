@@ -18,7 +18,8 @@ import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
-import type { ManagedServer, ManagedServerPort, ModrinthVersion, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
+import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { queryMinecraftServer } from "../minecraftQuery.js";
 import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
 import { isNodeCapability, nodeCapabilities, nodeOperationContract, nodeProtocolVersion } from "./protocol.js";
@@ -304,22 +305,6 @@ function ensureQueryDockerPort(dockerPorts: string, queryPort: number) {
   return [...ports].join(",");
 }
 
-function parseProperties(text: string) {
-  const values: Record<string, string> = {};
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    if (separator === -1) continue;
-    values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-  }
-  return values;
-}
-
-function serializeProperties(values: Record<string, string>) {
-  return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
-}
-
 async function writeVersionMetadata(server: ManagedServer) {
   const now = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
@@ -497,7 +482,7 @@ async function createServer(input: CreateInput) {
   const { server, serverPort, queryPort } = createdServerRecord(input, resolvedRuntime);
   await mkdir(await serverRoot(server), { recursive: true });
   await mkdir(await inside(server, "logs", false), { recursive: true });
-  await writeFile(await writableInside(server, "server.properties"), serializeProperties({
+  await writeFile(await writableInside(server, "server.properties"), serializeServerProperties({
     "server-port": serverPort,
     "enable-query": "true",
     "query.port": String(queryPort)
@@ -571,11 +556,11 @@ async function updateServer(server: ManagedServer, input: UpdateInput) {
     const propertiesPath = await writableInside(updated, "server.properties");
     let props: Record<string, string> = {};
     try {
-      props = parseProperties(await readFile(propertiesPath, "utf8"));
+      props = parseServerProperties(await readFile(propertiesPath, "utf8"));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
-    await writeFile(propertiesPath, serializeProperties({
+    await writeFile(propertiesPath, serializeServerProperties({
       ...props,
       ...(serverPort ? { "server-port": serverPort } : {}),
       "enable-query": "true",
@@ -1157,7 +1142,7 @@ async function uploadFile(server: ManagedServer, parentInput: unknown, filenameI
   return { ok: true, path: publicPath(root, target), size: content.length };
 }
 
-async function modsList(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
+async function modsList(server: ManagedServer) {
   await mkdir(await inside(server, "mods", false), { recursive: true });
   const listing = await fileList(server, "mods") as any;
   const mods = await Promise.all(
@@ -1295,7 +1280,7 @@ async function handleCommand(command: string, payload: any) {
   if (command === "server.inspect") return runtimeStatus(server);
   if (command === "server.queryMetrics") {
     const propsPath = await inside(server, "server.properties", false);
-    const props = parseProperties(await readFile(propsPath, "utf8").catch(() => ""));
+    const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
     if (minecraftQueryDisabled(props)) return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query is disabled in server.properties."] };
     const minecraftInspect = await inspect(server).catch(() => null) as NodeContainerInspect | null;
     const callerInspect = await inspectCurrentContainer().catch(() => null);
@@ -1426,7 +1411,7 @@ async function handleCommand(command: string, payload: any) {
     else await rm(target, { force: false });
     return { ok: true };
   }
-  if (command === "mods.list") return modsList(server, { forceRefresh: payload?.forceRefresh === true });
+  if (command === "mods.list") return modsList(server);
   if (command === "mods.upload") {
     return modUpload(server, payload?.filename, payload?.contentBase64);
   }

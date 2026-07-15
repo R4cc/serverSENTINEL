@@ -8,6 +8,7 @@ import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, Run
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { normalizePlayerNames } from "../minecraftQuery.js";
+import { parseServerProperties } from "../runtime/serverProperties.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -41,18 +42,6 @@ function normalizeRemotePath(path: string) {
 function publicRemotePath(path: string) {
   const normalized = normalizeRemotePath(path);
   return normalized === "." ? "/" : `/${normalized}`;
-}
-
-function parseProperties(text?: string) {
-  const values: Record<string, string> = {};
-  for (const rawLine of (text ?? "").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    if (separator === -1) continue;
-    values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-  }
-  return values;
 }
 
 function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
@@ -321,7 +310,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       .filter((event): event is ServerEvent => Boolean(event));
     const reversedEvents = [...parsedEvents].reverse();
     const status = statusResult.status === "fulfilled" ? statusResult.value : {};
-    const props = parseProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
+    const props = parseServerProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
     const queryMetrics = status.docker?.running
       ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null, playerNames: undefined })) as { playersOnline?: number | null; maxPlayers?: number | null; playerNames?: string[] }
       : { playersOnline: null, maxPlayers: null, playerNames: undefined };
