@@ -27,6 +27,7 @@ import {
   fetchProject,
   fetchProjects,
   fetchProjectVersions,
+  fetchVersions,
   latestCompatibleProjectVersion,
   minecraftVersionFacetValues,
   minecraftVersionsInclude,
@@ -43,6 +44,7 @@ import { assessRequiredModDependencies } from "./modrinth/dependencyHealth.js";
 import { searchModrinth } from "./modrinth/searchCache.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
+import { ModHashCache } from "./modHashCache.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -217,6 +219,7 @@ const modrinthAssetTimeoutMs = 10_000;
 const modrinthIconRequests = new Map<string, Promise<{ bytes: Buffer; contentType: string }>>();
 const remoteModListRequests = new Map<string, Promise<unknown>>();
 const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
+const localModHashCache = new ModHashCache();
 const versionMetadataFilename = ".serversentinel-version.json";
 
 const serverSideEffectsQueue = new AsyncQueue();
@@ -6248,12 +6251,14 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
   const hashes = Array.from(new Set(base.mods.map((mod) => typeof mod.sha1 === "string" ? mod.sha1 : undefined).filter((hash): hash is string => Boolean(hash))));
   let versions = new Map<string, ModrinthVersion>();
   let projects = new Map<string, ModrinthProject>();
-  try {
-    versions = await batchVersionsFromSha1(hashes);
-    const projectIds = Array.from(new Set(Array.from(versions.values()).map((version) => version.project_id).filter((projectId): projectId is string => Boolean(projectId))));
-    projects = await batchProjects(projectIds);
-  } catch (error) {
-    logWarn({ ...serverLogFields(server), hashCount: hashes.length, action: "remote_mod_metadata_reconcile", ...errorLogFields(error) }, "Remote mod metadata refresh failed; retaining last-known metadata");
+  if (options.forceRefresh) {
+    try {
+      versions = await batchVersionsFromSha1(hashes);
+      const projectIds = Array.from(new Set(Array.from(versions.values()).map((version) => version.project_id).filter((projectId): projectId is string => Boolean(projectId))));
+      projects = await batchProjects(projectIds);
+    } catch (error) {
+      logWarn({ ...serverLogFields(server), hashCount: hashes.length, action: "remote_mod_metadata_reconcile", ...errorLogFields(error) }, "Remote mod metadata refresh failed; retaining last-known metadata");
+    }
   }
 
   let prefsModified = false;
@@ -6311,26 +6316,32 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
   return { ...base, mods };
 }
 
-async function enrichInstalledModDependencies(result: unknown) {
+async function enrichInstalledModDependencies(result: unknown, options: { fetchMetadata?: boolean } = { fetchMetadata: true }) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
   const installed = base.mods.map((mod) => ({ mod, metadata: remoteModMetadata(mod.modrinth) }));
   const installedIdentities = installed.map(({ mod, metadata }) => ({ projectId: metadata?.projectId, versionId: metadata?.versionId, enabled: mod.enabled !== false }));
-  const resolved = await Promise.all(installed.map(async ({ metadata }) => {
+  const versionIds = installed.map(({ metadata }) => metadata?.versionId).filter((id): id is string => Boolean(id));
+  let versions = new Map<string, ModrinthVersion>();
+  try {
+    versions = await fetchVersions(versionIds, { cacheOnly: options.fetchMetadata === false });
+  } catch {
+    // Dependency health is supplemental; an unavailable Modrinth API must not block the installed-mod list.
+  }
+  const resolved = installed.map(({ metadata }) => {
     if (!metadata) return null;
-    try {
-      const version = await resolveSelectedProjectVersion({ projectId: metadata.projectId, versionId: metadata.versionId });
-      return (version.dependencies ?? []).filter((dependency) => (dependency.dependency_type || "required") === "required");
-    } catch {
-      return undefined;
-    }
-  }));
+    const version = versions.get(metadata.versionId);
+    if (!version || (version.project_id && version.project_id !== metadata.projectId)) return undefined;
+    return (version.dependencies ?? []).filter((dependency) => (dependency.dependency_type || "required") === "required");
+  });
   const projectIds = Array.from(new Set(resolved.flatMap((dependencies) => dependencies ?? []).map((dependency) => dependency.project_id).filter((id): id is string => Boolean(id))));
   let projects = new Map<string, ModrinthProject>();
-  try {
-    projects = await fetchProjects(projectIds) as Map<string, ModrinthProject>;
-  } catch {
-    // Project names and icons are optional; dependency identifiers remain actionable.
+  if (options.fetchMetadata !== false) {
+    try {
+      projects = await fetchProjects(projectIds) as Map<string, ModrinthProject>;
+    } catch {
+      // Project names and icons are optional; dependency identifiers remain actionable.
+    }
   }
   return {
     ...base,
@@ -6387,11 +6398,11 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
       .map(async (entry) => {
         const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
         const modStat = await stat(modPath);
-        const sha1 = createHash("sha1").update(await readFile(modPath)).digest("hex");
+        const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, () => readFile(modPath));
         const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
         let metadata = prefs[entry.name]?.modrinth;
 
-        if (!metadata) {
+        if (!metadata && options.forceRefresh) {
           try {
             const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${sha1}?algorithm=sha1`);
             if (currentRes.ok) {
@@ -7244,7 +7255,7 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
   const server = await getServer(request.params.id);
   const options = { forceRefresh: request.query.forceRefresh === "true" };
   const listed = await listModsWithPanelMetadata(server, options);
-  return publicInstalledModsResult(await enrichInstalledModDependencies(listed));
+  return publicInstalledModsResult(await enrichInstalledModDependencies(listed, { fetchMetadata: options.forceRefresh }));
 });
 
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {

@@ -24,6 +24,7 @@ type DeleteServerRecordFn = (serverId: string) => Promise<void>;
 const defaultRemoteCommandTimeoutMs = 15_000;
 const provisioningCommandTimeoutMs = 10 * 60 * 1000;
 const transferCommandTimeoutMs = 2 * 60 * 1000;
+const modsListCommandTimeoutMs = 30_000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
 const archiveCommandTimeoutMs = 30 * 60 * 1000;
 
@@ -460,7 +461,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   listMods(server: ManagedServer, options?: { forceRefresh?: boolean }) {
-    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined, modrinthCommandTimeoutMs);
+    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined, modsListCommandTimeoutMs);
   }
 
   async modIcon(): Promise<ModIconResult | null> {

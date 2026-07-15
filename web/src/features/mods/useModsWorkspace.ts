@@ -196,7 +196,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const activeServerIdRef = useRef("");
   const loadMoreInFlightRef = useRef(false);
-  const refreshUpdatesInFlightRef = useRef(false);
+  const refreshUpdatesInFlightRef = useRef(new Set<string>());
   const installVersionsRequestRef = useRef(0);
   const installReviewOpenRef = useRef(false);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
@@ -224,7 +224,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   );
 
   async function loadInstalledMods(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
-    if (!serverId || isProvisioning) return;
+    if (!serverId || isProvisioning) {
+      if (!serverId || activeServerIdRef.current === serverId) setModsLoading(false);
+      return;
+    }
     setModsLoading(true);
     setModsError("");
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
@@ -241,10 +244,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } catch (error) {
       if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
-      setModsError(message);
-      if (options.notifyOnError) {
-        setNotice(message);
-        notify("error", message);
+      if (activeServerIdRef.current === serverId) {
+        setModsError(message);
+        if (options.notifyOnError) {
+          setNotice(message);
+          notify("error", message);
+        }
       }
     } finally {
       if (activeServerIdRef.current === serverId) setModsLoading(false);
@@ -283,8 +288,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } catch (error) {
       if (handleStaleSession(error)) return null;
       const message = errorMessage(error, "Could not build the mod update plan.");
-      setUpdatePlanError(message);
-      if (options.notifyOnError) notify("error", message);
+      if (activeServerIdRef.current === serverId) {
+        setUpdatePlanError(message);
+        if (options.notifyOnError) notify("error", message);
+      }
       return null;
     } finally {
       if (showLoading && activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
@@ -292,16 +299,17 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   async function refreshUpdates(forceRefresh = true, notifyOnError = forceRefresh) {
-    if (refreshUpdatesInFlightRef.current) return;
-    refreshUpdatesInFlightRef.current = true;
+    const serverId = activeServer?.id;
+    if (!serverId || refreshUpdatesInFlightRef.current.has(serverId)) return;
+    refreshUpdatesInFlightRef.current.add(serverId);
     try {
       await Promise.all([
-        loadInstalledMods(activeServer?.id, { forceRefresh, notifyOnError }),
-        loadUpdatePlan(activeServer?.id, { forceRefresh, notifyOnError }),
+        loadInstalledMods(serverId, { forceRefresh, notifyOnError }),
+        loadUpdatePlan(serverId, { forceRefresh, notifyOnError }),
         refreshServerState()
       ]);
     } finally {
-      refreshUpdatesInFlightRef.current = false;
+      refreshUpdatesInFlightRef.current.delete(serverId);
     }
   }
 

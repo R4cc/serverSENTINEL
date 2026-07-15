@@ -40,12 +40,14 @@ const modrinthMetadataCacheMaxEntries = 500;
 
 const projectCache = new Map<string, TimedCacheEntry<any>>();
 const projectRequestCache = new Map<string, Promise<any>>();
+const versionCache = new Map<string, TimedCacheEntry<ModrinthVersion>>();
 const projectVersionsCache = new Map<string, TimedCacheEntry<ModrinthVersion[]>>();
 const projectVersionsRequestCache = new Map<string, Promise<ModrinthVersion[]>>();
 
 export function resetModrinthMetadataCachesForTests() {
   projectCache.clear();
   projectRequestCache.clear();
+  versionCache.clear();
   projectVersionsCache.clear();
   projectVersionsRequestCache.clear();
 }
@@ -119,11 +121,50 @@ export async function fetchProjects(projectIds: string[]): Promise<Map<string, a
 }
 
 export async function fetchProjectVersion(versionId: string): Promise<ModrinthVersion> {
-  const response = await modrinthFetch(`https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Modrinth version ${versionId}: ${response.statusText}`);
+  const versions = await fetchVersions([versionId]);
+  const version = versions.get(versionId);
+  if (!version) throw new Error(`Failed to fetch Modrinth version ${versionId}`);
+  return version;
+}
+
+export async function fetchVersions(
+  versionIds: string[],
+  options: { cacheOnly?: boolean; forceRefresh?: boolean } = {}
+): Promise<Map<string, ModrinthVersion>> {
+  const ids = Array.from(new Set(versionIds.filter(Boolean)));
+  const resolved = new Map<string, ModrinthVersion>();
+  const stale = new Map<string, ModrinthVersion>();
+  const missing: string[] = [];
+  const now = Date.now();
+  for (const id of ids) {
+    const cached = versionCache.get(id);
+    if (!options.forceRefresh && cached?.expiresAt && cached.expiresAt > now) resolved.set(id, cached.value);
+    else if (options.cacheOnly && cached) resolved.set(id, cached.value);
+    else {
+      missing.push(id);
+      if (cached) stale.set(id, cached.value);
+    }
   }
-  return await response.json() as ModrinthVersion;
+  if (options.cacheOnly || missing.length === 0) return resolved;
+
+  try {
+    for (let index = 0; index < missing.length; index += 100) {
+      const chunk = missing.slice(index, index + 100);
+      const url = new URL("https://api.modrinth.com/v2/versions");
+      url.searchParams.set("ids", JSON.stringify(chunk));
+      const response = await modrinthFetch(url.toString());
+      const versions = await response.json() as ModrinthVersion[];
+      for (const version of versions) {
+        if (!version.id) continue;
+        resolved.set(version.id, version);
+        setBoundedCache(versionCache, version.id, { value: version, expiresAt: Date.now() + projectVersionsCacheTtlMs });
+      }
+    }
+  } catch (error) {
+    if (stale.size === 0) throw error;
+    for (const [id, version] of stale) resolved.set(id, version);
+  }
+  return resolved;
 }
 
 export async function resolveSelectedProjectVersion(input: {
@@ -333,6 +374,9 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
     try {
       const response = await modrinthFetch(url.toString());
       const versions = await response.json() as ModrinthVersion[];
+      for (const version of versions) {
+        if (version.id) setBoundedCache(versionCache, version.id, { value: version, expiresAt: Date.now() + projectVersionsCacheTtlMs });
+      }
       setBoundedCache(projectVersionsCache, cacheKey, { value: versions, expiresAt: Date.now() + projectVersionsCacheTtlMs });
       return versions;
     } catch (error) {

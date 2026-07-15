@@ -256,7 +256,7 @@ describe("RemoteNodeRuntime command timeouts", () => {
       { command: "files.download", timeoutMs: 120_000 },
       { command: "files.upload", timeoutMs: 120_000 },
       { command: "mods.upload", timeoutMs: 120_000 },
-      { command: "mods.list", timeoutMs: 300_000 },
+      { command: "mods.list", timeoutMs: 30_000 },
       { command: "mods.install", timeoutMs: 300_000 }
     ]);
   });

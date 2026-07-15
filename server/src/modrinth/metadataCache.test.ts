@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchProjects, fetchProjectVersions, resetModrinthMetadataCachesForTests } from "./compatibility.js";
+import { fetchProjects, fetchProjectVersions, fetchVersions, resetModrinthMetadataCachesForTests } from "./compatibility.js";
 import { modrinthFetch } from "./modrinthClient.js";
 
 vi.mock("./modrinthClient.js", () => ({ modrinthFetch: vi.fn() }));
@@ -34,6 +34,24 @@ describe("Modrinth metadata caches", () => {
     await fetchProjectVersions("project-a", undefined, { forceRefresh: true });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads installed version metadata in one bulk request and supports cache-only reads", async () => {
+    const dependencyVersions = [
+      { ...version, id: "v1", project_id: "project-a" },
+      { ...version, id: "v2", project_id: "project-b" }
+    ];
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(dependencyVersions), { status: 200 }) as never);
+
+    const first = await fetchVersions(["v1", "v2", "v1"]);
+    const second = await fetchVersions(["v1", "v2"], { cacheOnly: true });
+    const missing = await fetchVersions(["not-cached"], { cacheOnly: true });
+
+    expect(first.get("v1")?.project_id).toBe("project-a");
+    expect(second.get("v2")?.project_id).toBe("project-b");
+    expect(missing.size).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/v2/versions?ids=");
   });
 
   it("uses stale version metadata after a transient refresh failure", async () => {

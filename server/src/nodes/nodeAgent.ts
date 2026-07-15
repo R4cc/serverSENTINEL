@@ -15,6 +15,7 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { assertMcJarsArtifactUrl } from "../http/outboundUrls.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
+import { ModHashCache } from "../modHashCache.js";
 import { defaultServerJarProvider } from "../runtime/mcjarsProvider.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
@@ -30,6 +31,7 @@ import { defaultServerContainerName, newServerId, serverDirectory, serverStorage
 import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "../zipArchive.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
+const modHashCache = new ModHashCache();
 type NodeUpdateRequest = {
   image?: string;
 };
@@ -1189,7 +1191,7 @@ async function modsList(server: ManagedServer) {
         };
         try {
           const target = await inside(server, posix.join("mods", filename));
-          const sha1 = createHash("sha1").update(await readFile(target)).digest("hex");
+          const sha1 = await modHashCache.sha1(`${server.id}:${filename}`, entry.size, entry.modifiedAt, () => readFile(target));
           return { ...base, sha1 };
         } catch {
           return base;
