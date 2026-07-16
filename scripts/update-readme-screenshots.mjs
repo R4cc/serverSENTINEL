@@ -170,6 +170,14 @@ try {
     colorScheme: "light",
     reducedMotion: "reduce"
   });
+  const loginResponse = await context.request.post(`${baseUrl}/api/auth/login`, {
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+    data: { username: "demo", password: "demo" }
+  });
+  if (!loginResponse.ok()) {
+    const detail = await loginResponse.text().catch(() => "");
+    throw new Error(`Demo startup is broken: demo / demo could not sign in.${detail ? ` ${detail.trim()}` : ""}`);
+  }
   const page = await context.newPage();
   await page.clock.setFixedTime(fixedTime);
   await page.addInitScript(() => {
@@ -185,9 +193,6 @@ try {
     content: "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }"
   });
 
-  await page.getByLabel("Username").fill("demo");
-  await page.getByLabel("Password").fill("demo");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   try {
     await page.locator(".appShell").waitFor({ timeout: 15_000 });
   } catch {
