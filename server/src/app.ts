@@ -46,6 +46,7 @@ import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "
 import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import { ModHashCache } from "./modHashCache.js";
 import { cachedIconFilenames, findCachedIconFile } from "./iconFileCache.js";
+import { normalizeInstalledModMetadata } from "./installedModMetadata.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -5968,39 +5969,6 @@ function normalizeModPreferences(value: unknown): Record<string, ModPreference> 
   return normalized;
 }
 
-function normalizeInstalledModMetadata(value: unknown): InstalledModMetadata {
-  const metadata = asObject(value, "installed mod metadata");
-  return {
-    projectId: requiredString(metadata.projectId, "modrinth.projectId"),
-    versionId: requiredString(metadata.versionId, "modrinth.versionId"),
-    filename: safeInstalledModFilename(requiredString(metadata.filename, "modrinth.filename")),
-    versionNumber: requiredString(metadata.versionNumber, "modrinth.versionNumber"),
-    versionType: metadata.versionType === undefined ? undefined : normalizeReleaseChannel(optionalString(metadata.versionType, "modrinth.versionType")),
-    gameVersions: asArray(metadata.gameVersions, "modrinth.gameVersions").map((version) => requiredString(version, "modrinth.gameVersions[]")),
-    loaders: asArray(metadata.loaders, "modrinth.loaders").map((loader) => requiredString(loader, "modrinth.loaders[]")),
-    hashes: metadata.hashes === undefined ? undefined : normalizeStringRecord(metadata.hashes, "modrinth.hashes"),
-    installedAt: requiredString(metadata.installedAt, "modrinth.installedAt"),
-    installedWithForceIncompatible: requireStrictBoolean(metadata.installedWithForceIncompatible, "modrinth.installedWithForceIncompatible"),
-    incompatibilityReason: optionalString(metadata.incompatibilityReason, "modrinth.incompatibilityReason"),
-    overrideMinecraftVersion: metadata.overrideMinecraftVersion === undefined ? undefined : requireStrictBoolean(metadata.overrideMinecraftVersion, "modrinth.overrideMinecraftVersion"),
-    overrideReason: optionalString(metadata.overrideReason, "modrinth.overrideReason"),
-    clientSide: optionalString(metadata.clientSide, "modrinth.clientSide"),
-    serverSide: optionalString(metadata.serverSide, "modrinth.serverSide"),
-    forceIncompatible: metadata.forceIncompatible === undefined ? undefined : requireStrictBoolean(metadata.forceIncompatible, "modrinth.forceIncompatible"),
-    reviewAcknowledgedVersionId: optionalString(metadata.reviewAcknowledgedVersionId, "modrinth.reviewAcknowledgedVersionId"),
-    reviewAcknowledgedAt: optionalString(metadata.reviewAcknowledgedAt, "modrinth.reviewAcknowledgedAt")
-  };
-}
-
-function normalizeStringRecord(value: unknown, label: string) {
-  const raw = asObject(value, label);
-  const normalized: Record<string, string> = {};
-  for (const [key, item] of Object.entries(raw)) {
-    normalized[key] = requiredString(item, `${label}.${key}`);
-  }
-  return normalized;
-}
-
 function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
   if (!metadata) {
     return { status: "unknown", compatible: false, reason: "Server-side support unknown" };
@@ -6303,6 +6271,19 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
     } catch (error) {
       logWarn({ ...serverLogFields(server), hashCount: hashes.length, action: "remote_mod_metadata_reconcile", ...errorLogFields(error) }, "Remote mod metadata refresh failed; retaining last-known metadata");
     }
+  } else {
+    const missingIconProjectIds = Array.from(new Set(base.mods.map((mod) => {
+      const filename = typeof mod.filename === "string" ? mod.filename : "";
+      const metadata = remoteModMetadata(mod.modrinth) ?? prefs[filename]?.modrinth;
+      return metadata && !metadata.iconUrl ? metadata.projectId : undefined;
+    }).filter((projectId): projectId is string => Boolean(projectId))));
+    if (missingIconProjectIds.length) {
+      try {
+        projects = await batchProjects(missingIconProjectIds);
+      } catch (error) {
+        logWarn({ ...serverLogFields(server), projectCount: missingIconProjectIds.length, action: "remote_mod_icon_reconcile", ...errorLogFields(error) }, "Remote mod icon metadata refresh failed; retaining last-known metadata");
+      }
+    }
   }
 
   let prefsModified = false;
@@ -6313,7 +6294,8 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
     const incomingMetadata = remoteModMetadata(mod.modrinth) ?? undefined;
     const existingMetadata = incomingMetadata ?? existingPreference?.modrinth;
     const version = versions.get(sha1);
-    const project = version?.project_id ? projects.get(version.project_id) : undefined;
+    const projectId = version?.project_id ?? existingMetadata?.projectId;
+    const project = projectId ? projects.get(projectId) : undefined;
     let metadata = existingMetadata;
     if (version?.project_id) {
       const primaryFile = version.files?.find((file) => file.hashes?.sha1 === sha1 || file.primary);
@@ -6335,6 +6317,11 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
           ? modrinthIconProxyUrl(project.icon_url)
           : existingMetadata?.iconUrl ?? (typeof mod.iconUrl === "string" ? modrinthIconProxyUrl(mod.iconUrl) : undefined)
       };
+    }
+    if (metadata && !metadata.iconUrl && project?.icon_url) {
+      metadata = { ...metadata, iconUrl: modrinthIconProxyUrl(project.icon_url) };
+    }
+    if (metadata) {
       const nextPreference = { channel: normalizeReleaseChannel(existingPreference?.channel), modrinth: metadata };
       if (JSON.stringify(existingPreference) !== JSON.stringify(nextPreference)) {
         prefs[filename] = nextPreference;
