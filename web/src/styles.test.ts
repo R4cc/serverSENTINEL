@@ -33,8 +33,8 @@ describe("global stylesheet entry point", () => {
     expect(tokenStyles).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
 
-  it("keeps the overview loading summary on the same six-column desktop grid", () => {
-    expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(6,/s);
+  it("keeps the overview loading summary on the same five-column desktop grid", () => {
+    expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(5,/s);
     expect(primitiveStyles).toMatch(/\.applicationSkeletonWideTile\s*\{[^}]*display:\s*none;/s);
   });
 

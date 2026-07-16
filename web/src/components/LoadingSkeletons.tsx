@@ -35,7 +35,7 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
     return (
       <div className="applicationOverviewSkeleton" aria-hidden="true">
         <div className="applicationSkeletonSummary">
-          {Array.from({ length: 8 }, (_, index) => <SkeletonBlock className={`applicationSkeletonTile ${index > 5 ? "applicationSkeletonWideTile" : ""}`} key={index} />)}
+          {Array.from({ length: 7 }, (_, index) => <SkeletonBlock className={`applicationSkeletonTile ${index > 4 ? "applicationSkeletonWideTile" : ""}`} key={index} />)}
         </div>
         <div className="applicationOverviewPanelGrid">
           <SkeletonPanel className="applicationOverviewResourcePanel" rows={3} />

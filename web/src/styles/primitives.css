@@ -114,7 +114,7 @@
 .activeServerStripLoadingSkeleton .serverStripLoadingButton { display: block; width: 86px; height: var(--control-height); }
 .activeServerStripLoadingSkeleton .serverStripLoadingOverflow { display: block; width: var(--control-height); height: var(--control-height); }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
-.applicationSkeletonSummary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); }
+.applicationSkeletonSummary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
 .applicationSkeletonTile { height: 82px; }
 .applicationSkeletonWideTile { display: none; }
 .applicationSkeletonPanel { display: grid; align-content: start; gap: var(--space-3); min-height: 320px; border: var(--border-strong) solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--surface); }
@@ -222,16 +222,22 @@
   }
 }
 
+@media (min-width: 541px) and (max-width: 760px) {
+  .applicationSkeletonSummary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: span 2; }
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(4),
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
+}
+
 @media (min-width: 981px) and (max-width: 1320px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .applicationOverviewPanelGrid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "resource" "players" "mods" "automation" "events";
-  }
+  .applicationSkeletonSummary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 @media (min-width: 761px) and (max-width: 980px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .applicationSkeletonSummary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: span 2; }
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(4),
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
   .applicationOverviewPanelGrid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "resource" "players" "mods" "automation" "events";
@@ -243,6 +249,6 @@
 }
 
 @media (min-width: 2560px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .applicationSkeletonSummary { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .applicationSkeletonWideTile { display: block; }
 }

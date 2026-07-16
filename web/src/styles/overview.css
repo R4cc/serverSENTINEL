@@ -41,7 +41,7 @@
 
 .overviewDashboardGrid > .overviewSummary {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: stretch;
   gap: var(--space-2);
 }
@@ -605,19 +605,8 @@
 }
 
 @media (min-width: 981px) and (max-width: 1320px) {
-  .overviewDashboardGrid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "summary"
-      "resource"
-      "players"
-      "mods"
-      "automation"
-      "events";
-  }
-
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
@@ -634,7 +623,16 @@
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    grid-column: span 2;
+  }
+
+  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(4),
+  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(5) {
+    grid-column: span 3;
   }
 }
 
@@ -656,6 +654,34 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    grid-column: auto;
+  }
+
+}
+
+@media (min-width: 541px) and (max-width: 720px) {
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    grid-column: span 2;
+  }
+
+  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(4),
+  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(5) {
+    grid-column: span 3;
+  }
+
+  .overviewDashboardGrid .activePlayerGrid,
+  .overviewDashboardGrid .overviewPanelSkeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspacePage-overview .resourcePanel .resourceRow {
+    grid-template-columns: minmax(180px, 0.38fr) minmax(220px, 1fr);
+  }
 }
 
 @media (max-width: 1320px) {
@@ -698,7 +724,7 @@
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {

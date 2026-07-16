@@ -26,7 +26,7 @@ describe("loading skeletons", () => {
     const overview = renderToStaticMarkup(<ApplicationLoadingSkeleton page="overview" />);
     const files = renderToStaticMarkup(<ApplicationLoadingSkeleton page="files" />);
 
-    expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(8);
+    expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(7);
     expect(overview.match(/applicationSkeletonWideTile/g)).toHaveLength(2);
     expect(overview).toContain("applicationLoadingSkeleton--overview");
     expect(files).toContain("applicationLoadingSkeleton--files");
