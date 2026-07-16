@@ -264,11 +264,28 @@ describe("automation summary", () => {
     expect(html).toContain("automationTimelineItem--past");
     expect(html).toContain("automationTimelineItem--active");
     expect(html).toContain("automationTimelineItem--future");
+    expect(html).toContain("automationTimelineStatus tone-success");
+    expect(html).not.toContain("uiStatusBadge uiStatusBadge--success");
     expect(html).toContain('aria-label="View details for Nightly restart, Succeeded');
     expect(html).toContain('aria-label="Open active run Nightly restart, Saving world"');
     expect(html).toContain('aria-label="Open Nightly restart, next run');
     expect(html.indexOf("Last run")).toBeLessThan(html.indexOf("Running now"));
     expect(html.indexOf("Running now")).toBeLessThan(html.indexOf("Next up"));
+  });
+
+  it("marks failed completed runs with a danger border and compact status marker", () => {
+    const html = renderToStaticMarkup(createElement(AutomationPanel, {
+      schedules: [schedule({
+        nextRunAt: "2099-07-11T13:00:00.000Z",
+        recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "failed", ranAt: "2026-07-11T10:00:00.000Z" }]
+      })],
+      formatDate: (timestamp) => new Date(timestamp).toISOString(),
+      onOpenSchedules: () => undefined
+    }));
+
+    expect(html).toContain("automationTimelineItem--past tone-danger");
+    expect(html).toContain("automationTimelineStatus tone-danger");
+    expect(html).toContain('aria-label="View details for Nightly restart, Failed');
   });
 
   it("uses the full configured date and time when relative timestamps are disabled", () => {

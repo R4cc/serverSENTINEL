@@ -298,10 +298,10 @@ export function AutomationPanel({
               <span className="automationTimelineCopy">
                 <span className="automationTimelineLabel">Last run</span>
                 <strong>{snapshot.recent.scheduleName}</strong>
-                <span className="automationTimelineMeta">
-                  <StatusBadge tone={recentStatus.tone}>{recentStatus.label}</StatusBadge>
-                  <time dateTime={snapshot.recent.ranAt} title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>{recentTime}</time>
-                </span>
+                <time className="automationTimelineMeta" dateTime={snapshot.recent.ranAt} title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>{recentTime}</time>
+              </span>
+              <span className={`automationTimelineStatus tone-${recentStatus.tone}`} aria-hidden="true">
+                {recentStatus.tone === "success" ? <AppIcon name="check" /> : recentStatus.tone === "danger" ? <AppIcon name="x" /> : recentStatus.tone === "warning" ? "!" : "?"}
               </span>
               <AppIcon name="chevronRight" />
             </button>

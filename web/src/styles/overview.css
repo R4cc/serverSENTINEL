@@ -183,8 +183,8 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  align-content: stretch;
-  gap: 5px;
+  align-content: start;
+  gap: var(--space-2);
 }
 
 .automationTimeline::before {
@@ -203,7 +203,7 @@
   position: relative;
   z-index: 1;
   min-width: 0;
-  min-height: 0;
+  min-height: 82px;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) 16px;
   align-items: center;
@@ -212,17 +212,19 @@
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
   color: var(--text);
-  padding: 7px 8px 7px 3px;
+  padding: 9px 8px 9px 3px;
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
-.automationTimelineItem:hover {
+.automationTimelineItem:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-muted));
+  color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--text) 8%, transparent);
-  transform: translateX(2px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 7%, transparent);
+  transform: translateX(1px);
 }
 
 .automationTimelineItem:focus-visible {
@@ -234,6 +236,21 @@
   background: color-mix(in srgb, var(--surface-muted) 88%, var(--surface-raised));
 }
 
+.automationTimelineItem--past.tone-success {
+  border-color: color-mix(in srgb, var(--sentinel-success) 55%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-success) 5%, var(--surface-raised));
+}
+
+.automationTimelineItem--past.tone-danger {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 58%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 5%, var(--surface-raised));
+}
+
+.automationTimelineItem--past.tone-warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 52%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-warning) 5%, var(--surface-raised));
+}
+
 .automationTimelineItem--active {
   border-color: color-mix(in srgb, var(--sentinel-success) 44%, var(--border-muted));
   background: linear-gradient(110deg, color-mix(in srgb, var(--sentinel-success) 12%, var(--surface-raised)), color-mix(in srgb, var(--accent) 7%, var(--surface-raised)));
@@ -242,6 +259,31 @@
 .automationTimelineItem--future {
   border-color: color-mix(in srgb, var(--accent) 36%, var(--border-muted));
   background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 10%, var(--surface-raised)), color-mix(in srgb, var(--sentinel-accent-soft) 52%, var(--surface-raised)));
+}
+
+button.automationTimelineItem--past.tone-success:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-success) 9%, var(--surface-raised));
+}
+
+button.automationTimelineItem--past.tone-danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 74%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--surface-raised));
+}
+
+button.automationTimelineItem--past.tone-warning:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 68%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
+}
+
+button.automationTimelineItem--active:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 64%, var(--border-muted));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised)), color-mix(in srgb, var(--accent) 6%, var(--surface-raised)));
+}
+
+button.automationTimelineItem--future:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border-muted));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 14%, var(--surface-raised)), color-mix(in srgb, var(--sentinel-accent-soft) 64%, var(--surface-raised)));
 }
 
 .automationTimelineNode {
@@ -270,13 +312,58 @@
   gap: 2px var(--space-2);
 }
 
+.automationTimelineStatus {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  line-height: 1;
+}
+
+.automationTimelineStatus .buttonIcon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.8;
+}
+
+.automationTimelineStatus.tone-success {
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface-raised));
+  color: var(--sentinel-success);
+}
+
+.automationTimelineStatus.tone-danger {
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised));
+  color: var(--sentinel-danger);
+}
+
+.automationTimelineStatus.tone-warning {
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
+  color: var(--sentinel-warning);
+}
+
+.automationTimelineStatus.tone-neutral {
+  color: var(--text-muted);
+}
+
 .automationTimelineLabel {
   grid-column: 1 / -1;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
+}
+
+.automationTimelineItem--past .automationTimelineLabel {
+  padding-right: 28px;
 }
 
 .automationTimelineItem--active .automationTimelineLabel { color: var(--sentinel-success); }
@@ -286,7 +373,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -299,13 +386,9 @@
   gap: 5px;
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.automationTimelineMeta .uiStatusBadge {
-  flex: 0 0 auto;
 }
 
 .automationTimelineItem > .buttonIcon {
@@ -358,11 +441,20 @@
 
 @container (min-width: 620px) {
   .automationTimeline {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr);
     align-items: stretch;
+    align-content: stretch;
     gap: var(--space-2);
   }
+
+  .automationTimeline.hasActiveRun {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .automationTimelineItem--past { grid-column: 1; }
+  .automationTimelineItem--active,
+  .automationTimelineNow { grid-column: 2; }
+  .automationTimelineItem--future { grid-column: 3; }
 
   .automationTimeline::before {
     top: 9px;
@@ -375,13 +467,14 @@
   }
 
   .automationTimelineItem {
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr) 16px;
     grid-template-rows: 20px minmax(0, 1fr);
     align-items: center;
     padding: 0 10px 9px;
   }
 
-  .automationTimelineItem:hover { transform: translateY(-2px); }
+  .automationTimelineItem:hover:not(:disabled) { transform: translateY(-1px); }
 
   .automationTimelineItem .automationTimelineNode {
     grid-column: 1 / -1;
@@ -419,7 +512,7 @@
     transition: none;
   }
 
-  .automationTimelineItem:hover { transform: none; }
+  .automationTimelineItem:hover:not(:disabled) { transform: none; }
 }
 
 .overviewPage .consolePanel {
