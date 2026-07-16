@@ -11,8 +11,10 @@ import {
   formatRelativeEventTime,
   formatRelativeScheduleTime,
   groupRecentEvents,
+  groupRecentEventsByTime,
   ModHealthPanel,
-  OverviewSummary
+  OverviewSummary,
+  recentEventPresentation
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -161,8 +163,31 @@ describe("recent event grouping", () => {
     ], now);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ kind: "player_reconnected", title: "Steve reconnected", details: "Left and rejoined after 7 seconds" });
+    expect(groups[0]).toMatchObject({ kind: "player_reconnected", title: "Steve reconnected", details: "Offline for 7 seconds" });
     expect(groups[0].events).toHaveLength(2);
+    expect(recentEventPresentation(groups[0])).toEqual({ title: "Reconnected", subject: "Steve", details: "Offline for 7 seconds" });
+  });
+
+  it("uses the event type as the player-event heading and the player as its subject", () => {
+    const [joined, left] = groupRecentEvents([
+      serverEvent("player_joined", "2026-07-11T12:03:00.000Z", { text: "Alex joined", subject: "Alex", signature: "player_joined:alex", severity: "success" }),
+      serverEvent("player_left", "2026-07-11T11:30:00.000Z", { text: "Steve left", subject: "Steve", signature: "player_left:steve" })
+    ], now);
+
+    expect(recentEventPresentation(joined)).toEqual({ title: "Joined", subject: "Alex", details: undefined });
+    expect(recentEventPresentation(left)).toEqual({ title: "Left", subject: "Steve", details: undefined });
+  });
+
+  it("groups displayed events into just now, within the last hour, and earlier sections", () => {
+    const groups = groupRecentEvents([
+      serverEvent("player_joined", "2026-07-11T12:03:00.000Z", { text: "Alex joined", subject: "Alex", signature: "player_joined:alex" }),
+      serverEvent("player_left", "2026-07-11T11:30:00.000Z", { text: "Steve left", subject: "Steve", signature: "player_left:steve" }),
+      serverEvent("server_started", "2026-07-11T10:00:00.000Z", { text: "Server started", signature: "server_started" })
+    ], now);
+
+    const sections = groupRecentEventsByTime(groups, now);
+    expect(sections.map((section) => section.label)).toEqual(["Just now", "Within the last hour", "Earlier"]);
+    expect(sections.map((section) => section.events.length)).toEqual([1, 1, 1]);
   });
 
   it("combines adjacent stop/start lifecycle events into a restart", () => {

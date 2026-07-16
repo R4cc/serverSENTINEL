@@ -388,6 +388,12 @@ export type RecentEventGroup = {
   events: ServerEvent[];
 };
 
+export type RecentEventTimeSection = {
+  id: "just-now" | "last-hour" | "earlier";
+  label: "Just now" | "Within the last hour" | "Earlier";
+  events: RecentEventGroup[];
+};
+
 function eventSubject(event: ServerEvent) {
   if (event.subject?.trim()) return event.subject.trim();
   if (event.eventType === "player_joined") return event.text.replace(/\s+joined$/i, "").trim();
@@ -434,7 +440,7 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
         kind: "player_reconnected",
         severity: "success",
         title: `${player} reconnected`,
-        details: duration < 2 ? "Left and rejoined almost immediately" : `Left and rejoined after ${Math.round(duration)} seconds`,
+        details: duration < 2 ? "Offline only momentarily" : `Offline for ${Math.round(duration)} seconds`,
         timestamp: event.timestamp,
         events: [event, next]
       });
@@ -488,6 +494,49 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
   return groups;
 }
 
+export function groupRecentEventsByTime(groups: RecentEventGroup[], now = new Date()): RecentEventTimeSection[] {
+  const sections: RecentEventTimeSection[] = [
+    { id: "just-now", label: "Just now", events: [] },
+    { id: "last-hour", label: "Within the last hour", events: [] },
+    { id: "earlier", label: "Earlier", events: [] }
+  ];
+
+  for (const group of groups) {
+    const timestamp = eventDate(group.timestamp, now);
+    const elapsedMinutes = timestamp ? Math.max(0, (now.getTime() - timestamp.getTime()) / 60_000) : Number.POSITIVE_INFINITY;
+    const section = elapsedMinutes < 15 ? sections[0] : elapsedMinutes < 60 ? sections[1] : sections[2];
+    section.events.push(group);
+  }
+
+  return sections.filter((section) => section.events.length > 0);
+}
+
+export function recentEventPresentation(group: RecentEventGroup) {
+  const playerEvent = group.events[0];
+  const player = eventSubject(playerEvent) || group.title.replace(/\s+(?:joined|left|reconnected)$/i, "").trim();
+  if (group.kind === "player_joined") {
+    return { title: "Joined", subject: player, details: playerEvent.details };
+  }
+  if (group.kind === "player_left") {
+    return {
+      title: "Left",
+      subject: player,
+      details: playerEvent.details || (group.severity === "warning" ? "The connection was lost" : undefined)
+    };
+  }
+  if (group.kind === "player_reconnected") {
+    return { title: "Reconnected", subject: player, details: group.details };
+  }
+  return { title: group.title, subject: undefined, details: group.details };
+}
+
+function relatedEventLabel(group: RecentEventGroup) {
+  if (group.events.length < 2) return null;
+  return group.kind === "player_reconnected" || group.kind === "server_restarted"
+    ? `${group.events.length} related events`
+    : `${group.events.length} occurrences`;
+}
+
 function EventIcon({ kind }: { kind: RecentEventKind }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -535,6 +584,7 @@ export function RecentEventsPanel({
   const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
   const visibleEvents = useMemo(() => events.filter((event) => !hiddenSignatureSet.has(event.signature)), [events, hiddenSignatureSet]);
   const displayEvents = useMemo(() => groupRecentEvents(visibleEvents, now).slice(0, 8), [visibleEvents, now]);
+  const eventSections = useMemo(() => groupRecentEventsByTime(displayEvents, now), [displayEvents, now]);
   const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
 
   useEffect(() => {
@@ -578,32 +628,46 @@ export function RecentEventsPanel({
             <SkeletonBlock className="eventTextSkeleton" />
             <SkeletonBlock className="eventTimeSkeleton" />
           </div>
-        )) : displayEvents.length ? displayEvents.map((group) => {
-          const timestamp = eventDate(group.timestamp, now);
-          return (
-            <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
-              <span className="eventIcon" aria-hidden="true"><EventIcon kind={group.kind} /></span>
-              <div className="eventCopy">
-                <strong>{group.title}</strong>
-                {group.details && <span>{group.details}</span>}
-              </div>
-              <div className="eventMeta">
-                <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
-                  {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
-                </small>
-                {group.events.length > 1 && <span className="eventCount">{group.events.length} events</span>}
-              </div>
-              <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(group)} aria-label={`Hide events matching ${group.title}`}>
-                <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" y1="2" x2="22" y2="22" />
-                </svg>
-              </Button>
-            </article>
-          );
-        }) : (
+        )) : displayEvents.length ? eventSections.map((section) => (
+          <section className="eventTimeGroup" aria-labelledby={`event-time-group-${section.id}`} key={section.id}>
+            <h3 className="eventTimeGroupHeading" id={`event-time-group-${section.id}`}>{section.label}</h3>
+            <div className="eventTimeGroupList">
+              {section.events.map((group) => {
+                const timestamp = eventDate(group.timestamp, now);
+                const presentation = recentEventPresentation(group);
+                const relatedLabel = relatedEventLabel(group);
+                return (
+                  <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
+                    <span className="eventIcon" aria-hidden="true"><EventIcon kind={group.kind} /></span>
+                    <div className="eventCopy">
+                      <strong>{presentation.title}</strong>
+                      {presentation.subject && <span className="eventSubject">{presentation.subject}</span>}
+                      {(presentation.details || relatedLabel) && (
+                        <span className="eventDetailLine">
+                          {presentation.details && <span>{presentation.details}</span>}
+                          {relatedLabel && <span className="eventCount">{relatedLabel}</span>}
+                        </span>
+                      )}
+                    </div>
+                    <div className="eventMeta">
+                      <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
+                        {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
+                      </small>
+                    </div>
+                    <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(group)} aria-label={`Hide events matching ${group.title}`}>
+                      <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
+                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                        <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                        <line x1="2" y1="2" x2="22" y2="22" />
+                      </svg>
+                    </Button>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )) : (
           <EmptyState
             compact
             className="eventEmpty"

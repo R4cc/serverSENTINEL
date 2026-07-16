@@ -43,6 +43,7 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.automationTimeline::before\s*\{[^}]*top:\s*41px;[^}]*bottom:\s*41px;[^}]*left:\s*13px;/s);
     expect(overviewStyles).toMatch(/\.automationTimelineItem\s*\{[^}]*grid-template-columns:\s*20px[^}]*border:\s*var\(--border-subtle\)[^}]*padding:\s*9px 8px 9px 3px;/s);
     expect(overviewStyles).toMatch(/\.automationTimelineNow\s*\{[^}]*grid-template-columns:\s*20px[^}]*padding-left:\s*4px;/s);
+    expect(overviewStyles).not.toMatch(/@container[^\{]*\{[^}]*\.automationTimeline/s);
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {
