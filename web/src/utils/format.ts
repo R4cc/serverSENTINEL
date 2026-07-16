@@ -166,10 +166,14 @@ export function versionSourceLabel(source: VersionSource) {
 export function readThemePreference(): ThemePreference {
   try {
     const saved = window.localStorage.getItem("serversentinel-theme");
-    return isThemePreference(saved) ? saved : "light";
+    return themePreferenceFromStoredValue(saved);
   } catch {
-    return "light";
+    return "system";
   }
+}
+
+export function themePreferenceFromStoredValue(value: string | null): ThemePreference {
+  return isThemePreference(value) ? value : "system";
 }
 
 export function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {

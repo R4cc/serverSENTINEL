@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatRelativeTimestamp, formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone } from "./format";
+import { formatRelativeTimestamp, formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, themePreferenceFromStoredValue } from "./format";
+
+describe("theme preference", () => {
+  it("defaults to the system theme while preserving a saved choice", () => {
+    expect(themePreferenceFromStoredValue(null)).toBe("system");
+    expect(themePreferenceFromStoredValue("unknown-theme")).toBe("system");
+    expect(themePreferenceFromStoredValue("dark")).toBe("dark");
+  });
+});
 
 describe("configured time zone formatting", () => {
   it("uses the requested zone for timestamped filenames", () => {
