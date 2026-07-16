@@ -101,6 +101,7 @@ import { ServersRepository } from "./storage/serversRepository.js";
 import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
+import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
 import { OperationService, type ForegroundOperationInput } from "./operations/operationService.js";
 import { diffModSnapshots, snapshotMods } from "./modRestartState.js";
@@ -8008,6 +8009,7 @@ modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
   intervalMs: modUpdateCheckIntervalMs,
   readServers,
   buildPlan: (server, options) => buildModUpdatePlan(server, options),
+  cache: new ModUpdatePlanRepository(storageDatabase),
   onError: (error, server) => {
     logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
   }

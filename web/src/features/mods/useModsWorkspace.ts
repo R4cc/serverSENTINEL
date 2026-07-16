@@ -362,7 +362,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     if (activePage === "mods") {
       void refreshUpdates(false);
-    } else if (activePage === "overview") {
+    } else if (activePage === "overview" && updatePlan?.serverId !== activeServer.id) {
+      setUpdatePlan(null);
       void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false });
     }
   }, [activeServer?.id, activeNodeRuntimeBlocked, activeNodeBlockMessage, activePage]);

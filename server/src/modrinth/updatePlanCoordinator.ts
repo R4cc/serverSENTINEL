@@ -3,6 +3,11 @@ import type { ModUpdatePlan } from "./updatePlan.js";
 
 type BuildModUpdatePlan = (server: ManagedServer, options: { forceRefresh: boolean }) => Promise<ModUpdatePlan>;
 
+type ModUpdatePlanCache = {
+  get: (serverId: string) => ModUpdatePlan | null;
+  set: (plan: ModUpdatePlan) => void;
+};
+
 export class ModUpdatePlanCoordinator {
   private readonly plans = new Map<string, ModUpdatePlan>();
   private readonly inFlight = new Map<string, Promise<ModUpdatePlan>>();
@@ -12,6 +17,7 @@ export class ModUpdatePlanCoordinator {
     intervalMs: number;
     readServers: () => Promise<ManagedServer[]>;
     buildPlan: BuildModUpdatePlan;
+    cache?: ModUpdatePlanCache;
     onError?: (error: unknown, server?: ManagedServer) => void;
   }) {}
 
@@ -29,7 +35,16 @@ export class ModUpdatePlanCoordinator {
   }
 
   get(serverId: string) {
-    return this.plans.get(serverId) ?? null;
+    const current = this.plans.get(serverId);
+    if (current) return current;
+    try {
+      const cached = this.options.cache?.get(serverId) ?? null;
+      if (cached) this.plans.set(serverId, cached);
+      return cached;
+    } catch (error) {
+      this.options.onError?.(error);
+      return null;
+    }
   }
 
   refresh(server: ManagedServer) {
@@ -38,6 +53,11 @@ export class ModUpdatePlanCoordinator {
     const request = this.options.buildPlan(server, { forceRefresh: true })
       .then((plan) => {
         this.plans.set(server.id, plan);
+        try {
+          this.options.cache?.set(plan);
+        } catch (error) {
+          this.options.onError?.(error, server);
+        }
         return plan;
       })
       .finally(() => {
