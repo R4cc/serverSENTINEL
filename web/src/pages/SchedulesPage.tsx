@@ -6,7 +6,7 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
-import type { ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
+import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
@@ -73,12 +73,16 @@ export function SchedulePage({
   disabledReason,
   formatDate,
   relativeTimestamps = true,
-  scheduleTimeZone
+  scheduleTimeZone,
+  navigationTarget,
+  onNavigationTargetHandled
 }: {
   schedules: ScheduledExecution[];
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
   scheduleTimeZone: string;
+  navigationTarget?: ScheduleNavigationTarget | null;
+  onNavigationTargetHandled?: () => void;
   onCreate: (patch: SchedulePatch) => boolean | void | Promise<boolean | void>;
   onToggle: (schedule: ScheduledExecution) => void;
   onUpdate: (schedule: ScheduledExecution, patch: Partial<ScheduledExecution>) => boolean | Promise<boolean>;
@@ -99,6 +103,8 @@ export function SchedulePage({
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
   const runsFeedRef = useRef<HTMLDivElement>(null);
+  const scheduleRowRefs = useRef(new Map<string, HTMLElement>());
+  const runItemRefs = useRef(new Map<string, HTMLElement>());
   const scheduleEditBodyRef = useRef<HTMLDivElement>(null);
   const stepDraftsRef = useRef(stepDrafts);
   const draggingStepIdRef = useRef<string | null>(null);
@@ -182,6 +188,24 @@ export function SchedulePage({
       setSelectedRun(null);
     }
   }, [runItems, selectedRun]);
+
+  useEffect(() => {
+    if (!navigationTarget) return;
+    const resolved = resolveScheduleNavigationTarget(schedules, navigationTarget);
+    if (!resolved) return;
+    if (resolved.kind === "completed-run") {
+      setSelectedRun(resolved.run);
+      onNavigationTargetHandled?.();
+      return;
+    }
+    const target = resolved.kind === "schedule"
+      ? scheduleRowRefs.current.get(resolved.schedule.id)
+      : runItemRefs.current.get(resolved.run.id);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.focus({ preventScroll: true });
+    onNavigationTargetHandled?.();
+  }, [navigationTarget, onNavigationTargetHandled, schedules]);
 
   useEffect(() => {
     setRelativeNow(Date.now());
@@ -411,7 +435,16 @@ export function SchedulePage({
               {scheduleRows.length ? scheduleRows.map((row) => {
                 const schedule = row.original;
                 return (
-                <article key={schedule.id} className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`} role="row">
+                <article
+                  key={schedule.id}
+                  ref={(element) => {
+                    if (element) scheduleRowRefs.current.set(schedule.id, element);
+                    else scheduleRowRefs.current.delete(schedule.id);
+                  }}
+                  className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}
+                  role="row"
+                  tabIndex={-1}
+                >
                   <div className="scheduleNameCell" data-label="Name" role="cell">
                     <div className="scheduleCellValue scheduleNameValue">
                       <strong>{schedule.name}</strong>
@@ -535,7 +568,15 @@ export function SchedulePage({
           {runItems.length ? (
             <div ref={runsFeedRef} className="scheduledRunsFeed">
               {runItems.map((run) => (
-                <article key={`${run.kind}:${run.id}`} className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}>
+                <article
+                  key={`${run.kind}:${run.id}`}
+                  ref={(element) => {
+                    if (element) runItemRefs.current.set(run.id, element);
+                    else runItemRefs.current.delete(run.id);
+                  }}
+                  className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}
+                  tabIndex={-1}
+                >
                   <span className="scheduledRunMarker" aria-hidden="true"></span>
                   <div className="scheduledRunDetails">
                     <strong>{run.scheduleName}</strong>
@@ -850,6 +891,18 @@ function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelIte
     .filter((run) => !activeIds.has(run.id))
     .map((run) => ({ ...run, kind: "completed" as const, sortAt: run.ranAt }));
   return [...active, ...completed.slice(0, Math.max(8 - active.length, 0))];
+}
+
+export function resolveScheduleNavigationTarget(schedules: ScheduledExecution[], target: ScheduleNavigationTarget) {
+  if (target.kind === "schedule") {
+    const schedule = schedules.find((candidate) => candidate.id === target.scheduleId);
+    return schedule ? { kind: "schedule" as const, schedule } : undefined;
+  }
+  const run = scheduleRunItems(schedules).find((candidate) => candidate.id === target.runId && candidate.scheduleId === target.scheduleId);
+  if (!run) return undefined;
+  if (target.kind === "active-run" && run.kind === "active") return { kind: "active-run" as const, run };
+  if (target.kind === "completed-run" && run.kind === "completed") return { kind: "completed-run" as const, run };
+  return undefined;
 }
 
 export function scheduleDescription(schedule: ScheduledExecution) {

@@ -139,6 +139,12 @@
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }
 
+.scheduleTableRow:focus,
+.scheduledRunItem:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .scheduleTableRow.disabled {
   opacity: .62;
 }

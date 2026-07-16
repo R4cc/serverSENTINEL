@@ -2,7 +2,7 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -179,6 +179,7 @@ export default function App() {
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
+  const [scheduleNavigationTarget, setScheduleNavigationTarget] = useState<ScheduleNavigationTarget | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -2738,7 +2739,10 @@ export default function App() {
                     canView={canViewSchedules}
                     formatDate={formatDisplayDate}
                     relativeTimestamps={relativeTimestamps}
-                    onOpenSchedules={() => setActivePage("schedule")}
+                    onOpenSchedules={(target) => {
+                      setScheduleNavigationTarget(target ?? null);
+                      setActivePage("schedule");
+                    }}
                   />
                   <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
                 </div>
@@ -2823,6 +2827,8 @@ export default function App() {
                   formatDate={formatDisplayDate}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
+                  navigationTarget={scheduleNavigationTarget}
+                  onNavigationTargetHandled={() => setScheduleNavigationTarget(null)}
                   onCreate={schedulesWorkspace.actions.create}
                   onToggle={schedulesWorkspace.actions.toggle}
                   onUpdate={schedulesWorkspace.actions.update}

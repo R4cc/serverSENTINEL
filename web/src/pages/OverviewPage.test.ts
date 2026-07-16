@@ -250,6 +250,27 @@ describe("automation summary", () => {
     expect(renderToStaticMarkup(createElement(AutomationPanel, { ...props, canView: false }))).toContain("View schedules permission is required");
   });
 
+  it("renders past, active, and future automation as an interactive chronological timeline", () => {
+    const html = renderToStaticMarkup(createElement(AutomationPanel, {
+      schedules: [schedule({
+        nextRunAt: "2099-07-11T13:00:00.000Z",
+        activeRuns: [{ id: "active", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "running", startedAt: "2026-07-11T11:58:00.000Z", stepCount: 2, currentStep: "Saving world", cancellable: true }],
+        recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "success", ranAt: "2026-07-11T10:00:00.000Z" }]
+      })],
+      formatDate: (timestamp) => new Date(timestamp).toISOString(),
+      onOpenSchedules: () => undefined
+    }));
+
+    expect(html).toContain("automationTimelineItem--past");
+    expect(html).toContain("automationTimelineItem--active");
+    expect(html).toContain("automationTimelineItem--future");
+    expect(html).toContain('aria-label="View details for Nightly restart, Succeeded');
+    expect(html).toContain('aria-label="Open active run Nightly restart, Saving world"');
+    expect(html).toContain('aria-label="Open Nightly restart, next run');
+    expect(html.indexOf("Last run")).toBeLessThan(html.indexOf("Running now"));
+    expect(html.indexOf("Running now")).toBeLessThan(html.indexOf("Next up"));
+  });
+
   it("uses the full configured date and time when relative timestamps are disabled", () => {
     const value = schedule({
       nextRunAt: "2099-07-11T13:00:00.000Z",

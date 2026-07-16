@@ -171,59 +171,255 @@
   line-height: 1;
 }
 
-.automationSummaryRow > span {
+.automationPanel {
+  min-height: 226px;
+  align-self: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
+  container-type: inline-size;
+}
+
+.automationTimeline {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: stretch;
+  gap: 5px;
+}
+
+.automationTimeline::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 18px;
+  bottom: 18px;
+  left: 9px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, var(--border-muted), color-mix(in srgb, var(--accent) 58%, var(--border-muted)));
+}
+
+.automationTimelineItem {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 7px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text);
+  padding: 7px 8px 7px 3px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.automationTimelineItem:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--text) 8%, transparent);
+  transform: translateX(2px);
+}
+
+.automationTimelineItem:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.automationTimelineItem--past {
+  background: color-mix(in srgb, var(--surface-muted) 88%, var(--surface-raised));
+}
+
+.automationTimelineItem--active {
+  border-color: color-mix(in srgb, var(--sentinel-success) 44%, var(--border-muted));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--sentinel-success) 12%, var(--surface-raised)), color-mix(in srgb, var(--accent) 7%, var(--surface-raised)));
+}
+
+.automationTimelineItem--future {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-muted));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 10%, var(--surface-raised)), color-mix(in srgb, var(--sentinel-accent-soft) 52%, var(--surface-raised)));
+}
+
+.automationTimelineNode {
+  position: relative;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  justify-self: center;
+  border: 2px solid var(--surface-raised);
+  border-radius: 999px;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 2px var(--border-muted);
+}
+
+.automationTimelineItem--past.tone-success .automationTimelineNode { background: var(--sentinel-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sentinel-success) 30%, var(--border-muted)); }
+.automationTimelineItem--past.tone-warning .automationTimelineNode { background: var(--sentinel-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sentinel-warning) 30%, var(--border-muted)); }
+.automationTimelineItem--past.tone-danger .automationTimelineNode { background: var(--sentinel-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sentinel-danger) 30%, var(--border-muted)); }
+.automationTimelineItem--active .automationTimelineNode { background: var(--sentinel-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 20%, transparent); animation: automationTimelinePulse 1.8s ease-out infinite; }
+.automationTimelineItem--future .automationTimelineNode { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+
+.automationTimelineCopy {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
+
+.automationTimelineLabel {
+  grid-column: 1 / -1;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
 }
 
-.automationSummaryList {
-  display: grid;
-  gap: var(--space-2);
-}
+.automationTimelineItem--active .automationTimelineLabel { color: var(--sentinel-success); }
+.automationTimelineItem--future .automationTimelineLabel { color: var(--sentinel-accent-strong); }
 
-.automationSummaryRow {
-  min-width: 0;
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px var(--space-2);
-  align-items: center;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  padding: 10px 12px;
-}
-
-.automationSummaryRow.active {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-muted));
-  background: color-mix(in srgb, var(--accent) 6%, var(--surface-raised));
-}
-
-.automationSummaryRow > span {
-  grid-column: 1 / -1;
-}
-
-.automationSummaryRow strong {
+.automationTimelineCopy strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.automationSummaryRow small {
+.automationTimelineMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  overflow: hidden;
   color: var(--text-muted);
-  font-size: 12px;
-  text-align: right;
+  font-size: 10px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.automationSummaryRow small .uiStatusBadge {
-  margin-right: 4px;
+.automationTimelineMeta .uiStatusBadge {
+  flex: 0 0 auto;
+}
+
+.automationTimelineItem > .buttonIcon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.automationTimelineItem:hover > .buttonIcon {
+  color: var(--sentinel-accent-strong);
+  transform: translateX(2px);
+}
+
+.automationTimelineNow {
+  position: relative;
+  z-index: 1;
+  min-height: 20px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  padding-left: 3px;
+}
+
+.automationTimelineNow .automationTimelineNode {
+  width: 7px;
+  height: 7px;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.automationTimelineNow > span:last-child {
+  width: max-content;
+  border-radius: 999px;
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  padding: 2px 7px;
+  font-size: 9px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+@keyframes automationTimelinePulse {
+  0%, 45% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 20%, transparent); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+
+@container (min-width: 620px) {
+  .automationTimeline {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .automationTimeline::before {
+    top: 9px;
+    right: 11%;
+    bottom: auto;
+    left: 11%;
+    width: auto;
+    height: 2px;
+    background: linear-gradient(to right, var(--border-muted), color-mix(in srgb, var(--accent) 58%, var(--border-muted)));
+  }
+
+  .automationTimelineItem {
+    grid-template-columns: minmax(0, 1fr) 16px;
+    grid-template-rows: 20px minmax(0, 1fr);
+    align-items: center;
+    padding: 0 10px 9px;
+  }
+
+  .automationTimelineItem:hover { transform: translateY(-2px); }
+
+  .automationTimelineItem .automationTimelineNode {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .automationTimelineItem .automationTimelineCopy {
+    grid-column: 1;
+    grid-row: 2;
+    align-content: center;
+  }
+
+  .automationTimelineItem > .buttonIcon {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .automationTimelineNow {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 20px minmax(0, 1fr);
+    justify-items: center;
+    align-items: start;
+    padding: 0;
+  }
+
+  .automationTimelineNow .automationTimelineNode { grid-row: 1; }
+  .automationTimelineNow > span:last-child { grid-row: 2; align-self: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .automationTimelineItem,
+  .automationTimelineItem > .buttonIcon,
+  .automationTimelineItem--active .automationTimelineNode {
+    animation: none;
+    transition: none;
+  }
+
+  .automationTimelineItem:hover { transform: none; }
 }
 
 .overviewPage .consolePanel {

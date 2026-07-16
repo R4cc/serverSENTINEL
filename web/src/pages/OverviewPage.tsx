@@ -6,6 +6,7 @@ import type {
   ResourceSample,
   ScheduledActiveRun,
   ScheduledExecution,
+  ScheduleNavigationTarget,
   ScheduledRun,
   ServerActivity,
   ServerEvent,
@@ -15,6 +16,7 @@ import { formatUptime } from '../utils/resourceFormatting';
 import { fabricLoaderVersionInfo, minecraftVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, StatusBadge } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
+import { AppIcon } from '../components/FileTypeIcon';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -263,49 +265,83 @@ export function AutomationPanel({
   canView?: boolean;
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
-  onOpenSchedules: () => void;
+  onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
   const snapshot = buildAutomationSnapshot(schedules);
   const recentStatus = scheduleStatus(snapshot.recent?.status);
+  const recentTime = snapshot.recent
+    ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.recent.ranAt) : formatDate(snapshot.recent.ranAt)
+    : "";
+  const nextTime = snapshot.next?.nextRunAt
+    ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.next.nextRunAt) : formatDate(snapshot.next.nextRunAt)
+    : "Not scheduled";
   return (
     <section className="panel automationPanel overviewOperationsPanel">
       <PanelHeader
         title="Automation"
-        actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={onOpenSchedules}>Open Schedules</Button>}
+        actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
       />
       {!canView ? (
         <EmptyState compact title="Automation unavailable" message="View schedules permission is required." />
       ) : schedules.length === 0 ? (
         <EmptyState compact title="No schedules configured" message="Create recurring console actions from Schedules." />
       ) : (
-        <div className="automationSummaryList">
-          {snapshot.active && (
-            <div className="automationSummaryRow active">
-              <span>Running now</span>
-              <strong>{snapshot.active.scheduleName}</strong>
-              <small>{activeRunDetail(snapshot.active)}</small>
+        <div className={`automationTimeline${snapshot.active ? " hasActiveRun" : ""}`}>
+          {snapshot.recent && (
+            <button
+              type="button"
+              className={`automationTimelineItem automationTimelineItem--past tone-${recentStatus.tone}`}
+              onClick={() => onOpenSchedules({ kind: "completed-run", scheduleId: snapshot.recent!.scheduleId, runId: snapshot.recent!.id })}
+              aria-label={`View details for ${snapshot.recent.scheduleName}, ${recentStatus.label}, ${recentTime}`}
+            >
+              <span className="automationTimelineNode" aria-hidden="true" />
+              <span className="automationTimelineCopy">
+                <span className="automationTimelineLabel">Last run</span>
+                <strong>{snapshot.recent.scheduleName}</strong>
+                <span className="automationTimelineMeta">
+                  <StatusBadge tone={recentStatus.tone}>{recentStatus.label}</StatusBadge>
+                  <time dateTime={snapshot.recent.ranAt} title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>{recentTime}</time>
+                </span>
+              </span>
+              <AppIcon name="chevronRight" />
+            </button>
+          )}
+          {snapshot.active ? (
+            <button
+              type="button"
+              className="automationTimelineItem automationTimelineItem--active"
+              onClick={() => onOpenSchedules({ kind: "active-run", scheduleId: snapshot.active!.scheduleId, runId: snapshot.active!.id })}
+              aria-label={`Open active run ${snapshot.active.scheduleName}, ${activeRunDetail(snapshot.active)}`}
+            >
+              <span className="automationTimelineNode" aria-hidden="true" />
+              <span className="automationTimelineCopy">
+                <span className="automationTimelineLabel">Running now</span>
+                <strong>{snapshot.active.scheduleName}</strong>
+                <span className="automationTimelineMeta">{activeRunDetail(snapshot.active)}</span>
+              </span>
+              <AppIcon name="chevronRight" />
+            </button>
+          ) : (
+            <div className="automationTimelineNow" aria-label="Now">
+              <span className="automationTimelineNode" aria-hidden="true" />
+              <span>Now</span>
             </div>
           )}
           {snapshot.next && (
-            <div className="automationSummaryRow">
-              <span>Next run</span>
-              <strong>{snapshot.next.name}</strong>
-              <small title={relativeTimestamps && snapshot.next.nextRunAt ? formatDate(snapshot.next.nextRunAt) : undefined}>
-                {snapshot.next.nextRunAt
-                  ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.next.nextRunAt) : formatDate(snapshot.next.nextRunAt)
-                  : "Not scheduled"}
-              </small>
-            </div>
-          )}
-          {snapshot.recent && (
-            <div className="automationSummaryRow">
-              <span>Latest run</span>
-              <strong>{snapshot.recent.scheduleName}</strong>
-              <small title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>
-                <StatusBadge tone={recentStatus.tone}>{recentStatus.label}</StatusBadge>{" "}
-                {relativeTimestamps ? formatRelativeScheduleTime(snapshot.recent.ranAt) : formatDate(snapshot.recent.ranAt)}
-              </small>
-            </div>
+            <button
+              type="button"
+              className="automationTimelineItem automationTimelineItem--future"
+              onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: snapshot.next!.id })}
+              aria-label={`Open ${snapshot.next.name}, next run ${nextTime}`}
+            >
+              <span className="automationTimelineNode" aria-hidden="true" />
+              <span className="automationTimelineCopy">
+                <span className="automationTimelineLabel">Next up</span>
+                <strong>{snapshot.next.name}</strong>
+                <time className="automationTimelineMeta" dateTime={snapshot.next.nextRunAt} title={relativeTimestamps && snapshot.next.nextRunAt ? formatDate(snapshot.next.nextRunAt) : undefined}>{nextTime}</time>
+              </span>
+              <AppIcon name="chevronRight" />
+            </button>
           )}
           {!snapshot.active && !snapshot.next && !snapshot.recent && <EmptyState compact title="No automation activity yet" message="Enabled schedules will appear here when they run." />}
         </div>

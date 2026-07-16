@@ -505,6 +505,11 @@ export type GeneralJob = {
 
 export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
 
+export type ScheduleNavigationTarget =
+  | { kind: "schedule"; scheduleId: string }
+  | { kind: "active-run"; scheduleId: string; runId: string }
+  | { kind: "completed-run"; scheduleId: string; runId: string };
+
 export type ThemePreference = "light" | "dark" | "system" | "xander" | "mint" | "nightlight" | "peach";
 
 export type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";

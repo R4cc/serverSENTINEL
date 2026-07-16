@@ -8,6 +8,7 @@ import {
   nextRunRelativeTime,
   SchedulePage,
   ScheduleRunDetailsDialog,
+  resolveScheduleNavigationTarget,
   reorderScheduleSteps,
   scheduleDescription
 } from "./SchedulesPage";
@@ -80,6 +81,30 @@ describe("active schedule status", () => {
     };
 
     expect(activeRunStatus(run)).toBe("Restarting server");
+  });
+});
+
+describe("overview schedule navigation", () => {
+  const activeRun: ScheduledActiveRun = {
+    id: "run-active",
+    scheduleId: "schedule-1",
+    scheduleName: "Nightly maintenance",
+    status: "running",
+    startedAt: "2026-07-14T11:55:00.000Z",
+    stepCount: 1,
+    cancellable: true
+  };
+  const value: ScheduledExecution = {
+    ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
+    activeRuns: [activeRun],
+    recentRuns: [{ id: "run-completed", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "success", ranAt: "2026-07-14T06:40:00.000Z" }]
+  };
+
+  it("resolves schedule, active-run, and completed-run targets without crossing run kinds", () => {
+    expect(resolveScheduleNavigationTarget([value], { kind: "schedule", scheduleId: "schedule-1" })).toMatchObject({ kind: "schedule", schedule: { id: "schedule-1" } });
+    expect(resolveScheduleNavigationTarget([value], { kind: "active-run", scheduleId: "schedule-1", runId: "run-active" })).toMatchObject({ kind: "active-run", run: { id: "run-active" } });
+    expect(resolveScheduleNavigationTarget([value], { kind: "completed-run", scheduleId: "schedule-1", runId: "run-completed" })).toMatchObject({ kind: "completed-run", run: { id: "run-completed" } });
+    expect(resolveScheduleNavigationTarget([value], { kind: "completed-run", scheduleId: "schedule-1", runId: "run-active" })).toBeUndefined();
   });
 });
 
