@@ -153,13 +153,41 @@
   color: var(--text);
 }
 
-.modUpdatesCard > span {
+.modUpdatesCompact {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.modUpdatesWide {
+  display: none;
+}
+
+.modUpdatesCardSkeleton {
+  cursor: default;
+}
+
+.modUpdatesTitleSkeleton {
+  width: min(168px, 72%);
+  height: 14px;
+}
+
+.modUpdatesCountSkeleton {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.modUpdatesCompact > span {
   color: var(--text);
   font-size: 14px;
   font-weight: var(--weight-title);
 }
 
-.modUpdatesCard > strong {
+.modUpdatesCompact > strong {
   min-width: 42px;
   min-height: 42px;
   display: grid;
@@ -821,6 +849,153 @@ button.automationTimelineItem--future:hover:not(:disabled) {
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
     display: grid;
+  }
+
+  .overviewDashboardGrid > .modsHealthPanel {
+    align-self: stretch;
+  }
+
+  .modUpdatesCard {
+    min-height: 280px;
+    display: block;
+  }
+
+  .modUpdatesCompact {
+    display: none;
+  }
+
+  .modUpdatesWide {
+    height: 100%;
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+  }
+
+  .modUpdatesWideHeader {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .modUpdatesWideHeader > span {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .modUpdatesWideHeader strong {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: var(--weight-title);
+  }
+
+  .modUpdatesWideHeader small,
+  .modUpdatesRemaining {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .modUpdatesWideHeader > svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .modUpdatesList {
+    min-width: 0;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .modUpdatesListItem {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-3);
+    border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--sentinel-warning) 5%, var(--surface-muted));
+    padding: 7px 9px;
+  }
+
+  .modUpdatesListItem > img,
+  .modUpdatesListItem > .modsWorkspaceFallback {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .modUpdatesListCopy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .modUpdatesListCopy > strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: var(--weight-title);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modUpdatesListCopy > small {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .modUpdatesListCopy > small > span:last-child {
+    overflow: hidden;
+    color: var(--sentinel-warning);
+    font-weight: var(--weight-title);
+    text-overflow: ellipsis;
+  }
+
+  .modUpdatesRemaining {
+    justify-self: start;
+  }
+
+  .modUpdatesWideTitleSkeleton {
+    width: 156px;
+    height: 14px;
+  }
+
+  .modUpdatesWideMetaSkeleton {
+    width: 112px;
+    height: 11px;
+  }
+
+  .modUpdatesChevronSkeleton {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+  }
+
+  .modUpdatesIconSkeleton {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .modUpdatesNameSkeleton {
+    width: min(188px, 45%);
+    height: 12px;
+  }
+
+  .modUpdatesVersionSkeleton {
+    width: min(142px, 34%);
+    height: 10px;
   }
 
   .workspacePage-overview .resourcePanel .resourceRows {

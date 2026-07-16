@@ -3,6 +3,7 @@ export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" 
 export type ModUpdatePlanSource = {
   filename?: unknown;
   displayName?: unknown;
+  iconUrl?: unknown;
   enabled?: unknown;
   preferredChannel?: unknown;
   compatibility?: unknown;
@@ -13,6 +14,7 @@ export type ModUpdatePlanSource = {
 export type ModUpdatePlanEntry = {
   filename: string;
   displayName: string;
+  iconUrl?: string;
   projectId?: string;
   currentVersion?: string;
   currentFilename: string;
@@ -68,6 +70,7 @@ export function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpda
   const compatibility = objectValue(source.compatibility);
   const versionInfo = objectValue(source.versionInfo);
   const projectId = stringValue(metadata?.projectId);
+  const iconUrl = stringValue(source.iconUrl) ?? stringValue(metadata?.iconUrl);
   const currentVersion = stringValue(versionInfo?.currentVersion) ?? stringValue(metadata?.versionNumber);
   const targetVersion = stringValue(versionInfo?.latestVersion);
   const targetFilename = stringValue(versionInfo?.latestFilename);
@@ -92,6 +95,7 @@ export function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpda
   const base = {
     filename,
     displayName,
+    iconUrl,
     projectId,
     currentVersion,
     currentFilename: filename,

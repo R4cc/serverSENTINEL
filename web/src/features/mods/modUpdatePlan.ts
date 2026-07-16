@@ -52,6 +52,7 @@ export function createDemoUpdatePlan(serverId: string, mods: InstalledMod[], gen
     return {
       filename: mod.filename,
       displayName: mod.displayName,
+      iconUrl: mod.iconUrl ?? mod.modrinth?.iconUrl,
       projectId: mod.modrinth?.projectId,
       currentVersion: modVersion(mod),
       currentFilename: mod.filename,

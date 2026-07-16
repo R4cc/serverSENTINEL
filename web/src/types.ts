@@ -445,6 +445,7 @@ export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" 
 export type ModUpdatePlanEntry = {
   filename: string;
   displayName: string;
+  iconUrl?: string;
   projectId?: string;
   currentVersion?: string;
   currentFilename: string;

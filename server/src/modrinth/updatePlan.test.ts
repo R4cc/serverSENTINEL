@@ -20,8 +20,8 @@ describe("mod update planning", () => {
   });
 
   it("classifies a compatible target as a safe update", () => {
-    const plan = createModUpdatePlan("server", [mod({ versionInfo: { currentVersion: "1.0.0", latestVersion: "1.1.0", latestFilename: "example-1.1.jar", upToDate: false } })]);
-    expect(plan.updates[0]).toMatchObject({ status: "safe_update", safeBatchEligible: true, targetVersion: "1.1.0" });
+    const plan = createModUpdatePlan("server", [mod({ iconUrl: "/api/modrinth/icons/example.png", versionInfo: { currentVersion: "1.0.0", latestVersion: "1.1.0", latestFilename: "example-1.1.jar", upToDate: false } })]);
+    expect(plan.updates[0]).toMatchObject({ status: "safe_update", safeBatchEligible: true, targetVersion: "1.1.0", iconUrl: "/api/modrinth/icons/example.png" });
     expect(plan.counts.safeUpdates).toBe(1);
   });
 

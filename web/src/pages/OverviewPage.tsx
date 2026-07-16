@@ -17,6 +17,8 @@ import { fabricLoaderVersionInfo, minecraftVersionInfo, versionValue } from '../
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, StatusBadge } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon } from '../components/FileTypeIcon';
+import { ModIconImage } from '../features/mods/ModIconImage';
+import { modIconSource } from '../utils/appHelpers';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -186,10 +188,14 @@ export function ModHealthPanel({
   canView?: boolean;
   onOpenMods: () => void;
 }) {
-  const updateCount = updatePlan
-    ? updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates
-    : 0;
-  if (!canView || updateCount === 0) return null;
+  if (!canView) return null;
+  if (!updatePlan) return <ModHealthPanelSkeleton />;
+
+  const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
+  const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
+  const visibleUpdates = availableUpdates.slice(0, 3);
+  const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
+  if (updateCount === 0) return null;
 
   return (
     <button
@@ -198,9 +204,68 @@ export function ModHealthPanel({
       onClick={onOpenMods}
       aria-label={`Open Mods, ${updateCount} mod update${updateCount === 1 ? "" : "s"} available`}
     >
-      <span>Mod updates available</span>
-      <strong>{updateCount}</strong>
+      <span className="modUpdatesCompact">
+        <span>Mod updates available</span>
+        <strong>{updateCount}</strong>
+      </span>
+      <span className="modUpdatesWide" aria-hidden="true">
+        <span className="modUpdatesWideHeader">
+          <span>
+            <strong>Mod updates available</strong>
+            <small>{updateCount} update{updateCount === 1 ? "" : "s"} ready to view</small>
+          </span>
+          <AppIcon name="chevronRight" />
+        </span>
+        <span className="modUpdatesList">
+          {visibleUpdates.map((entry) => (
+            <span className="modUpdatesListItem" key={entry.filename}>
+              <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
+              <span className="modUpdatesListCopy">
+                <strong>{entry.displayName}</strong>
+                <small>
+                  {entry.currentVersion && <span>{entry.currentVersion}</span>}
+                  {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
+                  <span>{entry.targetVersion ?? "Update available"}</span>
+                </small>
+              </span>
+            </span>
+          ))}
+        </span>
+        {remainingUpdates > 0 && <small className="modUpdatesRemaining">+{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}</small>}
+      </span>
     </button>
+  );
+}
+
+function ModHealthPanelSkeleton() {
+  return (
+    <section className="panel modsHealthPanel modUpdatesCard modUpdatesCardSkeleton" aria-busy="true">
+      <LoadingLabel>Loading mod updates</LoadingLabel>
+      <span className="modUpdatesCompact" aria-hidden="true">
+        <SkeletonBlock className="modUpdatesTitleSkeleton" />
+        <SkeletonBlock className="modUpdatesCountSkeleton" />
+      </span>
+      <span className="modUpdatesWide modUpdatesWideSkeleton" aria-hidden="true">
+        <span className="modUpdatesWideHeader">
+          <span>
+            <SkeletonBlock className="modUpdatesWideTitleSkeleton" />
+            <SkeletonBlock className="modUpdatesWideMetaSkeleton" />
+          </span>
+          <SkeletonBlock className="modUpdatesChevronSkeleton" />
+        </span>
+        <span className="modUpdatesList">
+          {Array.from({ length: 3 }, (_, index) => (
+            <span className="modUpdatesListItem" key={index}>
+              <SkeletonBlock className="modUpdatesIconSkeleton" />
+              <span className="modUpdatesListCopy">
+                <SkeletonBlock className="modUpdatesNameSkeleton" />
+                <SkeletonBlock className="modUpdatesVersionSkeleton" />
+              </span>
+            </span>
+          ))}
+        </span>
+      </span>
+    </section>
   );
 }
 

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "../demo";
-import type { ModUpdatePlan, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
+import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
 import {
   ActivePlayersPanel,
   AutomationPanel,
@@ -30,7 +30,7 @@ const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, ove
   ...overrides
 });
 
-const updatePlan = (counts: Partial<ModUpdatePlan["counts"]> = {}): ModUpdatePlan => ({
+const updatePlan = (counts: Partial<ModUpdatePlan["counts"]> = {}, updates: ModUpdatePlanEntry[] = []): ModUpdatePlan => ({
   serverId: "demo",
   generatedAt: "2026-07-11T12:00:00.000Z",
   counts: {
@@ -42,7 +42,7 @@ const updatePlan = (counts: Partial<ModUpdatePlan["counts"]> = {}): ModUpdatePla
     unknown: 0,
     ...counts
   },
-  updates: []
+  updates
 });
 
 const schedule = (overrides: Partial<ScheduledExecution> = {}): ScheduledExecution => ({
@@ -216,6 +216,22 @@ describe("recent event grouping", () => {
 });
 
 describe("mod health", () => {
+  it("reserves the mod update card with a skeleton until the plan loads", () => {
+    const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: plan,
+      canView,
+      onOpenMods: () => undefined
+    }));
+
+    const loadingHtml = render(null);
+    expect(loadingHtml).toContain("modsHealthPanel");
+    expect(loadingHtml).toContain("modUpdatesCardSkeleton");
+    expect(loadingHtml).toContain("Loading mod updates");
+    expect(loadingHtml).toContain("modUpdatesCompact");
+    expect(loadingHtml).toContain("modUpdatesWideSkeleton");
+    expect(render(null, false)).toBe("");
+  });
+
   it("only renders the clickable update count when updates are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
@@ -223,7 +239,6 @@ describe("mod health", () => {
       onOpenMods: () => undefined
     }));
 
-    expect(render(null)).toBe("");
     expect(render(updatePlan())).toBe("");
     expect(render(updatePlan({ blockedUpdates: 1, unknown: 1, upToDate: 2 }))).toBe("");
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
@@ -237,6 +252,33 @@ describe("mod health", () => {
     expect(html).not.toContain("Safe");
     expect(html).not.toContain("Review");
     expect(html).not.toContain("Attention");
+  });
+
+  it("includes update names, icons, and version transitions for the wide layout", () => {
+    const entry: ModUpdatePlanEntry = {
+      filename: "lithium.jar",
+      displayName: "Lithium",
+      iconUrl: "/api/modrinth/icons/lithium.png",
+      currentVersion: "0.14.8",
+      currentFilename: "lithium.jar",
+      targetVersion: "0.15.0",
+      targetFilename: "lithium-0.15.0.jar",
+      channel: "release",
+      status: "safe_update",
+      reason: "Compatible update",
+      safeBatchEligible: true,
+      acknowledgementRequired: false,
+      enabled: true
+    };
+    const html = renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: updatePlan({ safeUpdates: 1, upToDate: 3 }, [entry]),
+      onOpenMods: () => undefined
+    }));
+
+    expect(html).toContain("Lithium");
+    expect(html).toContain("/api/modrinth/icons/lithium.png");
+    expect(html).toContain("0.14.8");
+    expect(html).toContain("0.15.0");
   });
 });
 
