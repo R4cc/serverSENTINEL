@@ -998,11 +998,6 @@ describe("Minecraft Docker network preservation", () => {
 });
 
 describe("Minecraft Query timeout behavior", () => {
-  it("rejects with a useful timeout message when the UDP query endpoint does not respond", async () => {
-    const { queryMinecraftServer } = await import("./minecraftQuery.js");
-    await expect(queryMinecraftServer("127.0.0.1", 9, 5)).rejects.toThrow("Minecraft Query timed out");
-  });
-
   it("detects disabled Minecraft Query configuration", async () => {
     const { minecraftQueryDisabled } = await import("./queryEndpoint.js");
     expect(minecraftQueryDisabled({ "enable-query": "false" })).toBe(true);

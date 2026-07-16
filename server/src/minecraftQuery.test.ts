@@ -35,6 +35,12 @@ async function udpServer(onMessage: (server: dgram.Socket, packet: Buffer, port:
 }
 
 describe("Minecraft Query full-stat transport", () => {
+  it("rejects with a useful timeout message when the UDP query endpoint does not respond", async () => {
+    const port = await udpServer(() => {});
+
+    await expect(queryMinecraftServer("127.0.0.1", port, 50, 1)).rejects.toThrow("Minecraft Query timed out");
+  });
+
   it("reassembles fragmented responses that arrive out of order", async () => {
     const payload = fullPayload();
     const splitAt = payload.indexOf(Buffer.from("\0\0\x01player_", "latin1"));
