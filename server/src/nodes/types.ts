@@ -2,6 +2,7 @@ import type { Readable } from "node:stream";
 import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
+import type { PlayerObservation } from "../playerSnapshots.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
 export type RuntimeAction = "start" | "stop" | "restart";
@@ -28,7 +29,7 @@ export type NodeRuntime = {
   sendConsoleCommand(server: ManagedServer, command: unknown): Promise<unknown>;
   streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void): Promise<void>;
   serverLogs(server: ManagedServer): Promise<unknown>;
-  onlinePlayerCount(server: ManagedServer): Promise<number | null>;
+  readPlayerObservation(server: ManagedServer): Promise<PlayerObservation>;
   serverStats(server: ManagedServer): Promise<unknown>;
   serverOverview(server: ManagedServer): Promise<unknown>;
   resolveExistingPath(server: ManagedServer, path: string): Promise<string>;

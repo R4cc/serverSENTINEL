@@ -107,14 +107,19 @@ describe("RemoteNodeRuntime command timeouts", () => {
     }]);
   });
 
-  it("normalizes the player roster returned by a remote node overview", async () => {
+  it("reads the authoritative player observation from the remote node", async () => {
     const node = testNode();
+    const observation = {
+      state: "live" as const,
+      instanceId: "container:started",
+      online: 2,
+      maxPlayers: 20,
+      names: ["Alex", "Steve"],
+      sampledAt: "2026-07-11T10:00:00.000Z"
+    };
     const connections = {
       request: async (_node: ManagedNode, command: string) => {
-        if (command === "server.inspect") return { docker: { running: true, startedAt: "2026-07-11T10:00:00.000Z" } };
-        if (command === "server.logs.recent") return { text: "", source: "docker" };
-        if (command === "server.queryMetrics") return { playersOnline: 3, maxPlayers: 20, playerNames: [" Alex ", "", "Steve", "Alex"] };
-        if (command === "files.read") return { content: "max-players=20\nlevel-name=world" };
+        if (command === "server.players.read") return observation;
         return {};
       }
     } as unknown as PanelNodeConnections;
@@ -128,31 +133,15 @@ describe("RemoteNodeRuntime command timeouts", () => {
       async () => undefined
     );
 
-    const overview = await runtime.serverOverview(testServer());
-
-    expect(overview.activity).toMatchObject({
-      playersOnline: 3,
-      maxPlayers: 20,
-      playerNames: ["Alex", "Steve"],
-      playerNamesSource: "query"
-    });
+    await expect(runtime.readPlayerObservation(testServer())).resolves.toEqual(observation);
   });
 
-  it("infers a count-only remote roster from recent join and leave events", async () => {
+  it("keeps remote overview activity independent from player collection", async () => {
     const node = testNode();
     const connections = {
       request: async (_node: ManagedNode, command: string) => {
         if (command === "server.inspect") return { docker: { running: true, startedAt: "2026-07-15T10:00:00.000Z" } };
-        if (command === "server.logs.recent") return {
-          source: "logs/latest.log",
-          text: [
-            "[12:00:00] [Server thread/INFO]: Alex joined the game",
-            "[12:01:00] [Server thread/INFO]: Steve joined the game",
-            "[12:02:00] [Server thread/INFO]: Alex left the game",
-            "[12:03:00] [Server thread/INFO]: Sam joined the game"
-          ].join("\n")
-        };
-        if (command === "server.queryMetrics") return { playersOnline: 2, maxPlayers: 20, playerNames: [] };
+        if (command === "server.logs.recent") return { source: "logs/latest.log", text: "[12:00:00] [Server thread/INFO]: Alex joined the game" };
         if (command === "files.read") return { content: "max-players=20\nlevel-name=world" };
         return {};
       }
@@ -169,38 +158,40 @@ describe("RemoteNodeRuntime command timeouts", () => {
 
     const overview = await runtime.serverOverview(testServer());
 
-    expect(overview.activity).toMatchObject({
-      playersOnline: 2,
-      playerNames: ["Steve", "Sam"],
-      playerNamesSource: "logs"
-    });
+    expect(overview.activity).toMatchObject({ currentWorld: "world" });
+    expect(overview.activity).not.toHaveProperty("playersOnline");
   });
 
-  it("clears remote player names when the server is stopped or the fresh query fails", async () => {
-    for (const inspect of [{ docker: { running: false } }, { docker: { running: true } }]) {
-      const node = testNode();
-      const connections = {
-        request: async (_node: ManagedNode, command: string) => {
-          if (command === "server.inspect") return inspect;
-          if (command === "server.logs.recent") return { text: "", source: "docker" };
-          if (command === "server.queryMetrics") throw new Error("query unavailable");
-          if (command === "files.read") return { content: "max-players=20" };
-          return {};
-        }
-      } as unknown as PanelNodeConnections;
-      const runtime = new RemoteNodeRuntime(
-        node.id,
-        async () => node,
-        connections,
-        async (server) => server as never,
-        async () => undefined,
-        async () => undefined,
-        async () => undefined
-      );
+  it("parses operational warnings and caught exceptions from remote logs", async () => {
+    const node = testNode();
+    const connections = {
+      request: async (_node: ManagedNode, command: string) => {
+        if (command === "server.inspect") return { docker: { running: true } };
+        if (command === "server.logs.recent") return {
+          source: "logs/latest.log",
+          text: [
+            "[12:00:00] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2400ms or 48 ticks behind",
+            "[12:00:01] [Server thread/ERROR]: Caught java.lang.IllegalStateException: tick task failed"
+          ].join("\n")
+        };
+        if (command === "files.read") return { content: "level-name=world" };
+        return {};
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
 
-      const overview = await runtime.serverOverview(testServer());
-      expect(overview.activity.playerNames).toBeUndefined();
-    }
+    const overview = await runtime.serverOverview(testServer());
+
+    expect(overview.events.map((event) => event.eventType)).toEqual(["exception_caught", "server_overloaded"]);
+    expect(overview.events[0].details).toContain("tick task failed");
   });
 
   it("sends a structured retryable event when console streaming finds the node offline", async () => {

@@ -206,11 +206,20 @@ export type ResolvedServerVersions = {
 
 export type ServerEvent = {
   id: string;
-  eventType: "server_started" | "server_stopped" | "player_joined" | "player_left" | "mod_disabled" | "server_crashed";
+  eventType:
+    | "server_started"
+    | "server_stopped"
+    | "player_joined"
+    | "player_left"
+    | "mod_disabled"
+    | "server_crashed"
+    | "exception_caught"
+    | "server_overloaded";
   type: "info" | "success" | "warning" | "error";
   severity: "info" | "success" | "warning" | "error";
   text: string;
   message: string;
+  details?: string;
   timestamp?: string;
   signature: string;
   source: "logs/latest.log" | "docker";
@@ -226,8 +235,47 @@ export type ServerActivity = {
   eulaAccepted?: boolean;
   javaRuntime?: string;
   autosaveStatus?: string;
-  playersOnline?: number | null;
-  maxPlayers?: number | null;
-  playerNames?: string[];
-  playerNamesSource?: "query" | "logs";
 };
+
+export type PlayerSnapshotErrorCode =
+  | "NODE_UNAVAILABLE"
+  | "QUERY_DISABLED"
+  | "QUERY_ENDPOINT_UNAVAILABLE"
+  | "QUERY_TIMEOUT"
+  | "QUERY_RESPONSE_INCOMPLETE"
+  | "QUERY_RESPONSE_INVALID";
+
+export type PlayerSnapshot =
+  | {
+      state: "live";
+      online: number;
+      maxPlayers: number | null;
+      names: string[];
+      sampledAt: string;
+    }
+  | {
+      state: "stale";
+      online: number;
+      maxPlayers: number | null;
+      names: string[];
+      sampledAt: string;
+      lastAttemptAt: string;
+      code: PlayerSnapshotErrorCode;
+      message: string;
+    }
+  | {
+      state: "stopped";
+      online: 0;
+      maxPlayers: number | null;
+      names: [];
+      sampledAt: string;
+    }
+  | {
+      state: "unavailable";
+      online: null;
+      maxPlayers: number | null;
+      names: [];
+      lastAttemptAt?: string;
+      code: PlayerSnapshotErrorCode;
+      message: string;
+    };

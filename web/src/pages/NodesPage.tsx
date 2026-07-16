@@ -3,7 +3,7 @@ import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
-import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, ServerActivity } from "../types";
+import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
@@ -55,9 +55,9 @@ function PlayerIcon() {
   );
 }
 
-function playerCountLabel(activity?: ServerActivity) {
-  if (!activity || activity.playersOnline === null || activity.playersOnline === undefined) return "-";
-  return activity.maxPlayers ? `${activity.playersOnline}/${activity.maxPlayers}` : String(activity.playersOnline);
+function playerCountLabel(snapshot?: PlayerSnapshot) {
+  if (!snapshot || snapshot.state === "unavailable") return "-";
+  return snapshot.maxPlayers ? `${snapshot.online}/${snapshot.maxPlayers}` : String(snapshot.online);
 }
 
 function compareVersions(left?: string, right?: string) {
@@ -411,7 +411,7 @@ export function NodesPage({
   onClearInstall,
   onCopy,
   serverStateLabel,
-  serverActivities,
+  playerSnapshots,
   formatDate
 }: {
   nodes: ContextNode[];
@@ -448,7 +448,7 @@ export function NodesPage({
   onClearInstall: () => void;
   onCopy: (text: string) => void;
   serverStateLabel: (serverId: string) => string;
-  serverActivities: Record<string, ServerActivity>;
+  playerSnapshots: Record<string, PlayerSnapshot>;
   formatDate: (value: string | number | Date) => string;
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
@@ -572,13 +572,13 @@ export function NodesPage({
                 <div className="nodeServerList">
                   {visibleServers.map((server) => {
                     const state = serverStateLabel(server.id);
-                    const playerLabel = playerCountLabel(serverActivities[server.id]);
+                    const playerLabel = playerCountLabel(playerSnapshots[server.id]);
                     return (
                       <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                         <span className="nodeServerIcon"><ServerRowIcon /></span>
                         <span className="nodeServerName">{server.displayName}</span>
                         {playerLabel !== "-" && (
-                          <span className="nodeServerPlayers" title={`${playerLabel} players online`}>
+                          <span className={`nodeServerPlayers${playerSnapshots[server.id]?.state === "stale" ? " unknown" : ""}`} title={`${playerLabel} players online${playerSnapshots[server.id]?.state === "stale" ? " (last verified snapshot)" : ""}`}>
                             {playerLabel}
                             <span className="nodePlayerIcon"><PlayerIcon /></span>
                           </span>

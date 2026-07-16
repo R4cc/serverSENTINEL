@@ -16,7 +16,7 @@ export type MinecraftQueryEndpoint = {
 };
 
 export function minecraftQueryDisabled(props: Record<string, string> = {}) {
-  return Boolean(props["enable-query"] && props["enable-query"].toLowerCase() !== "true");
+  return props["enable-query"]?.trim().toLowerCase() !== "true";
 }
 
 export function queryPortBinding(server: ManagedServer) {

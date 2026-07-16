@@ -12,7 +12,7 @@ function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
     isInternal: false,
     agentVersion: "1.2.0",
     buildId: "1234567890abcdef",
-    protocolVersion: "2.0",
+    protocolVersion: "3.0",
     dockerStatus: "available",
     dataPathStatus: "ready",
     totalMemory: 8 * 1024 * 1024 * 1024,

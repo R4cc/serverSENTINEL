@@ -1,6 +1,7 @@
 import type { ManagedNode } from "../types.js";
 
-export const nodeProtocolVersion = "2.0";
+export const nodeProtocolVersion = "3.0";
+export const nodeUpgradeProtocolVersion = "2.0";
 
 export const nodeCapabilities = [
   "node.health",
@@ -16,7 +17,7 @@ export const nodeCapabilities = [
   "server.restart",
   "server.inspect",
   "server.stats",
-  "server.queryMetrics",
+  "server.players.read",
   "server.logs.recent",
   "server.console.send",
   "server.console.stream",
@@ -148,7 +149,15 @@ export function protocolCompatible(version?: string) {
   return version === nodeProtocolVersion;
 }
 
+export function protocolCanSelfUpdate(version?: string) {
+  return version === nodeProtocolVersion || version === nodeUpgradeProtocolVersion;
+}
+
 const nodeCapabilitySet = new Set<string>(nodeCapabilities);
+const legacyNodeCapabilitySet = new Set<string>([
+  ...nodeCapabilities.filter((capability) => capability !== "server.players.read"),
+  "server.queryMetrics"
+]);
 
 export function isNodeCapability(value: unknown): value is NodeCapability {
   return typeof value === "string" && nodeCapabilitySet.has(value);
@@ -162,6 +171,7 @@ export function requireNodeCapability(value: string): NodeCapability {
 }
 
 export function assertNodeSupports(node: ManagedNode, command: NodeCapability) {
+  if (command === "node.update" && protocolCanSelfUpdate(node.protocolVersion) && node.capabilities?.includes(command)) return;
   if (!protocolCompatible(node.protocolVersion)) {
     throw structuredNodeProtocolError("node_incompatible", `Node ${node.name} uses unsupported protocol ${node.protocolVersion ?? "unknown"}; protocol ${nodeProtocolVersion} is required`);
   }
@@ -171,6 +181,7 @@ export function assertNodeSupports(node: ManagedNode, command: NodeCapability) {
 }
 
 export function nodeAdvertisesCapability(node: ManagedNode, command: NodeCapability) {
+  if (command === "node.update" && protocolCanSelfUpdate(node.protocolVersion)) return node.capabilities?.includes(command) === true;
   return protocolCompatible(node.protocolVersion) && node.capabilities?.includes(command) === true;
 }
 
@@ -181,7 +192,7 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const hello = value as Record<string, unknown>;
   if (hello.type !== "hello") throw new Error("Node hello type must be hello");
   const protocolVersion = requiredString(hello.protocolVersion, "protocolVersion");
-  if (!protocolCompatible(protocolVersion)) {
+  if (!protocolCompatible(protocolVersion) && protocolVersion !== nodeUpgradeProtocolVersion) {
     throw new Error(`Unsupported node protocol ${protocolVersion}; protocol ${nodeProtocolVersion} is required`);
   }
   const nodeId = hello.nodeId === null ? null : optionalString(hello.nodeId, "nodeId") ?? null;
@@ -190,9 +201,13 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const buildId = optionalString(hello.buildId, "buildId");
   const startupId = optionalString(hello.startupId, "startupId");
   const capabilities = requiredStringArray(hello.capabilities, "capabilities");
-  const unsupportedCapabilities = capabilities.filter((capability) => !isNodeCapability(capability));
+  const allowedCapabilities = protocolVersion === nodeUpgradeProtocolVersion ? legacyNodeCapabilitySet : nodeCapabilitySet;
+  const unsupportedCapabilities = capabilities.filter((capability) => !allowedCapabilities.has(capability));
   if (unsupportedCapabilities.length) {
     throw new Error(`Node advertised unsupported capabilities: ${unsupportedCapabilities.join(", ")}`);
+  }
+  if (protocolVersion === nodeUpgradeProtocolVersion && !capabilities.includes("node.update")) {
+    throw new Error(`Node protocol ${nodeUpgradeProtocolVersion} is accepted only for self-update and must advertise node.update`);
   }
   const normalized: NodeHello = {
     type: "hello",

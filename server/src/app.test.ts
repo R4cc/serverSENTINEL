@@ -564,6 +564,31 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event!.eventType).toBe("server_crashed");
   });
 
+  it("identifies caught exceptions without promoting them to crashes", () => {
+    const line = "[12:34:56] [Server thread/WARN]: Caught java.lang.NullPointerException: chunk task failed";
+    const event = parseLogEvent(line, "logs/latest.log", 5);
+
+    expect(event).toMatchObject({
+      eventType: "exception_caught",
+      severity: "warning",
+      text: "Exception caught: NullPointerException",
+      signature: "exception_caught:nullpointerexception"
+    });
+    expect(event?.details).toContain("chunk task failed");
+  });
+
+  it("identifies server overload warnings with useful lag details", () => {
+    const line = "[12:34:56] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 5421ms or 108 ticks behind";
+    const event = parseLogEvent(line, "logs/latest.log", 6);
+
+    expect(event).toMatchObject({
+      eventType: "server_overloaded",
+      severity: "warning",
+      text: "Server is falling behind",
+      details: "Running 5421ms or 108 ticks behind"
+    });
+  });
+
   it("ignores file listing lines from ls -la even if they contain 'error'", () => {
     const line = "-rw-r--r-- 1 root root    0 May 29 12:34 error.log";
     const event = parseLogEvent(line, "docker", 5);
@@ -578,7 +603,7 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(parseLogEvent(line2, "docker", 7)).toBeNull();
   });
 
-  it("ignores broad errors and warnings that are not allowlisted event types", () => {
+  it("ignores unstructured stack lines that are not caught or levelled log events", () => {
     const line = "java.lang.NullPointerException: something went wrong";
     const event = parseLogEvent(line, "logs/latest.log", 8);
     expect(event).toBeNull();
@@ -609,7 +634,7 @@ describe("Minecraft Query metrics parsing", () => {
     const sessionId = Buffer.from([1, 2, 3, 4]);
     const payload = Buffer.concat([
       Buffer.from("hostname\0Test Server\0numplayers\0", "utf8"),
-      Buffer.from("3\0maxplayers\0", "utf8"),
+      Buffer.from("2\0maxplayers\0", "utf8"),
       Buffer.from("20\0", "utf8"),
       Buffer.from("\0\x01player_\0\0", "latin1"),
       Buffer.from(" Alex \0Steve\0Alex\0\0", "utf8")
@@ -618,7 +643,7 @@ describe("Minecraft Query metrics parsing", () => {
 
     expect(parseMinecraftQueryResponse(packet, sessionId)).toEqual({
       responding: true,
-      playersOnline: 3,
+      playersOnline: 2,
       maxPlayers: 20,
       playerNames: ["Alex", "Steve"]
     });
@@ -715,7 +740,7 @@ describe("node install instructions", () => {
       joinToken: "join-token"
     });
 
-    expect(install.protocolVersion).toBe("2.0");
+    expect(install.protocolVersion).toBe("3.0");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DATA_DIR).toBe("/data");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
     expect(install.dockerCompose.environment.TZ).toBe(process.env.TZ);
@@ -982,5 +1007,6 @@ describe("Minecraft Query timeout behavior", () => {
     const { minecraftQueryDisabled } = await import("./queryEndpoint.js");
     expect(minecraftQueryDisabled({ "enable-query": "false" })).toBe(true);
     expect(minecraftQueryDisabled({ "enable-query": "true" })).toBe(false);
+    expect(minecraftQueryDisabled({})).toBe(true);
   });
 });

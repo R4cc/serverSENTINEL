@@ -17,6 +17,8 @@ export type {
   OperationStatus,
   OperationType,
   Permission,
+  PlayerSnapshot,
+  PlayerSnapshotErrorCode,
   PublicUser,
   ReleaseChannel,
   ResolvedServerVersions,

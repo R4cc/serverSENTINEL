@@ -2,6 +2,7 @@ import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../ty
 import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
+import type { PlayerObservation } from "../playerSnapshots.js";
 
 export type LocalNodeRuntimeHandlers = {
   publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer>;
@@ -13,7 +14,7 @@ export type LocalNodeRuntimeHandlers = {
   sendConsoleCommand(server: ManagedServer, command: unknown): Promise<unknown>;
   streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void): Promise<void>;
   serverLogs(server: ManagedServer): Promise<unknown>;
-  onlinePlayerCount(server: ManagedServer): Promise<number | null>;
+  readPlayerObservation(server: ManagedServer): Promise<PlayerObservation>;
   serverStats(server: ManagedServer): Promise<unknown>;
   serverOverview(server: ManagedServer): Promise<unknown>;
   resolveExistingPath(server: ManagedServer, path: string): Promise<string>;
@@ -89,8 +90,8 @@ export class LocalNodeRuntime implements NodeRuntime {
     return this.handlers.serverLogs(server);
   }
 
-  onlinePlayerCount(server: ManagedServer) {
-    return this.handlers.onlinePlayerCount(server);
+  readPlayerObservation(server: ManagedServer) {
+    return this.handlers.readPlayerObservation(server);
   }
 
   serverStats(server: ManagedServer) {

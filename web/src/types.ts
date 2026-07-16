@@ -1,5 +1,6 @@
 import type {
   PublicUser,
+  PlayerSnapshot,
   ReleaseChannel,
   ResolvedServerVersions,
   RestartRequiredChange,
@@ -17,6 +18,8 @@ export type {
   OperationStatus,
   OperationType,
   Permission as PermissionKey,
+  PlayerSnapshot,
+  PlayerSnapshotErrorCode,
   PublicUser,
   ReleaseChannel,
   ResolvedServerVersions,
@@ -235,6 +238,10 @@ export type ServerOverviewData = {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
   activity: ServerActivity;
+};
+
+export type PlayerSnapshotsResponse = {
+  snapshots: Record<string, PlayerSnapshot>;
 };
 
 export type FileEntry = {

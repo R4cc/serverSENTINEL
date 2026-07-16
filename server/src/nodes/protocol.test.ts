@@ -5,16 +5,17 @@ import {
   nodeAdvertisesCapability,
   nodeCapabilities,
   nodeProtocolVersion,
+  nodeUpgradeProtocolVersion,
   normalizeNodeHello
 } from "./protocol.js";
 
-function v2Hello(overrides: Record<string, unknown> = {}) {
+function hello(overrides: Record<string, unknown> = {}) {
   return {
     type: "hello",
     nodeId: "node-1",
     nodeSecret: "secret",
     nodeName: "Remote Node",
-    agentVersion: "0.8.0",
+    agentVersion: "1.4.0",
     buildId: "commit-sha",
     startupId: "startup-id",
     protocolVersion: nodeProtocolVersion,
@@ -41,41 +42,41 @@ function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
   };
 }
 
-describe("node protocol v2", () => {
-  it("accepts the minimal v2 hello for existing node sessions", () => {
-    const hello = normalizeNodeHello(v2Hello());
-    expect(hello.protocolVersion).toBe("2.0");
-    expect(hello.buildId).toBe("commit-sha");
-    expect(hello.startupId).toBe("startup-id");
-    expect(hello.capabilities).toContain("files.move");
+describe("node protocol v3", () => {
+  it("accepts complete v3 secret and join-token hellos", () => {
+    expect(normalizeNodeHello(hello())).toMatchObject({ protocolVersion: "3.0", buildId: "commit-sha" });
+    expect(normalizeNodeHello(hello({ nodeId: null, nodeSecret: undefined, joinToken: "join-token" }))).toMatchObject({
+      nodeId: null,
+      joinToken: "join-token"
+    });
   });
 
-  it("accepts a complete v2 join-token hello before the panel assigns a node id", () => {
-    const hello = normalizeNodeHello(v2Hello({ nodeId: null, nodeSecret: undefined, joinToken: "join-token" }));
-    expect(hello.nodeId).toBeNull();
-    expect(hello.joinToken).toBe("join-token");
+  it("accepts the current v2 node only as a self-update bridge", () => {
+    const capabilities = [...nodeCapabilities.filter((capability) => capability !== "server.players.read"), "server.queryMetrics"];
+    const legacy = normalizeNodeHello(hello({
+      protocolVersion: nodeUpgradeProtocolVersion,
+      agentVersion: "1.3.0",
+      capabilities
+    }));
+    expect(legacy.protocolVersion).toBe("2.0");
+
+    const legacyNode = node({ protocolVersion: "2.0", capabilities });
+    expect(() => assertNodeSupports(legacyNode, "node.update")).not.toThrow();
+    expect(() => assertNodeSupports(legacyNode, "server.start")).toThrow("protocol 3.0 is required");
+    expect(nodeAdvertisesCapability(legacyNode, "node.update")).toBe(true);
+    expect(nodeAdvertisesCapability(legacyNode, "server.start")).toBe(false);
   });
 
-  it("rejects old protocol and incomplete node hello payloads clearly", () => {
-    expect(() => normalizeNodeHello(v2Hello({ protocolVersion: "1.2" }))).toThrow("protocol 2.0 is required");
-    expect(() => normalizeNodeHello({ type: "hello", protocolVersion: "2.0" })).toThrow("nodeName is required");
-    expect(() => normalizeNodeHello(v2Hello({ capabilities: ["server.start", "legacy.thing"] }))).toThrow("unsupported capabilities");
+  it("rejects older protocols, incomplete hellos, and unsupported capabilities", () => {
+    expect(() => normalizeNodeHello(hello({ protocolVersion: "1.2" }))).toThrow("protocol 3.0 is required");
+    expect(() => normalizeNodeHello({ type: "hello", protocolVersion: "3.0" })).toThrow("nodeName is required");
+    expect(() => normalizeNodeHello(hello({ capabilities: ["server.start", "legacy.thing"] }))).toThrow("unsupported capabilities");
+    expect(() => normalizeNodeHello(hello({ protocolVersion: "2.0", capabilities: ["server.start"] }))).toThrow("must advertise node.update");
   });
 
-  it("centralizes capability and compatibility checks", () => {
+  it("centralizes full capability checks for v3 nodes", () => {
     expect(() => assertNodeSupports(node(), "server.start")).not.toThrow();
-    expect(() => assertNodeSupports(node({ protocolVersion: "1.2" }), "server.start")).toThrow("protocol 2.0 is required");
     expect(() => assertNodeSupports(node({ capabilities: ["server.start"] }), "files.list")).toThrow("does not advertise files.list");
-    expect(nodeAdvertisesCapability(node(), "mods.liveMutation")).toBe(true);
-    expect(nodeAdvertisesCapability(node({ capabilities: nodeCapabilities.filter((capability) => capability !== "mods.liveMutation") }), "mods.liveMutation")).toBe(false);
-  });
-
-  it("ignores redundant fields sent by a 1.2.1 node during a panel-first upgrade", () => {
-    expect(normalizeNodeHello(v2Hello({
-      runtimeMode: "node",
-      dataRoot: { root: "/data", dockerRoot: "/srv/serversentinel", status: "ready" },
-      docker: { available: true, status: "available" },
-      operations: { server: ["server.start"], files: ["files.list"], mods: ["mods.list"] }
-    }))).toMatchObject({ protocolVersion: "2.0", dockerStatus: "available", dataPathStatus: "ready" });
+    expect(nodeAdvertisesCapability(node(), "server.players.read")).toBe(true);
   });
 });

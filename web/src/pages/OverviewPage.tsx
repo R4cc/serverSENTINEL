@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
   ManagedServer,
   ModUpdatePlan,
+  PlayerSnapshot,
   ResourceSample,
   ScheduledActiveRun,
   ScheduledExecution,
@@ -50,6 +51,7 @@ export function OverviewSummary({
   status,
   dockerSocketMounted,
   activity,
+  playerSnapshot,
   latestResourceSample,
   formatNumber = (value) => String(value),
   loading = false
@@ -58,17 +60,22 @@ export function OverviewSummary({
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
+  playerSnapshot?: PlayerSnapshot;
   latestResourceSample?: ResourceSample;
   formatNumber?: (value: number) => string;
   loading?: boolean;
 }) {
   const running = Boolean(status?.docker.running);
   const state = dockerStateLabel(status, dockerSocketMounted);
-  const players = activity.playersOnline === null || activity.playersOnline === undefined
-    ? "Unknown"
-    : activity.maxPlayers
-      ? `${activity.playersOnline} / ${activity.maxPlayers}`
-      : String(activity.playersOnline);
+  const players = !playerSnapshot
+    ? "Collecting"
+    : playerSnapshot.state === "stopped"
+      ? "Not running"
+      : playerSnapshot.state === "unavailable"
+        ? "Unavailable"
+        : playerSnapshot.maxPlayers
+          ? `${playerSnapshot.online} / ${playerSnapshot.maxPlayers}`
+          : String(playerSnapshot.online);
   const minecraftVersion = minecraftVersionInfo(server);
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
@@ -113,59 +120,55 @@ export function OverviewSummary({
   );
 }
 
-function uniquePlayerNames(names?: string[]) {
-  return Array.from(new Set((names ?? []).map((name) => name.trim()).filter(Boolean)));
+function snapshotAge(sampledAt: string) {
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(sampledAt).getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  return `${Math.floor(seconds / 60)}m ago`;
 }
 
 export function ActivePlayersPanel({
-  activity,
+  snapshot,
   running,
   loading = false
 }: {
-  activity: ServerActivity;
+  snapshot?: PlayerSnapshot;
   running: boolean;
   loading?: boolean;
 }) {
-  const names = uniquePlayerNames(activity.playerNames);
-  const online = activity.playersOnline;
-  const unnamedPlayers = online === null || online === undefined ? 0 : Math.max(0, online - names.length);
-  const countLabel = online === null || online === undefined
-    ? "Unavailable"
-    : activity.maxPlayers
-      ? `${online} / ${activity.maxPlayers}`
-      : String(online);
+  const available = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot : undefined;
+  const online = available?.online;
+  const countLabel = available
+    ? available.maxPlayers ? `${available.online} / ${available.maxPlayers}` : String(available.online)
+    : snapshot?.state === "stopped" ? "Stopped" : "Unavailable";
 
   let content;
-  if (loading && online === undefined) {
+  if (loading && !snapshot) {
     content = <div className="overviewPanelSkeleton" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerNameSkeleton" />)}</div>;
-  } else if (!running) {
+  } else if (!running || snapshot?.state === "stopped") {
     content = <EmptyState compact title="Server is not running" message="Player activity will appear after the server starts." />;
-  } else if (online === null || online === undefined) {
-    content = <EmptyState compact title="Player query unavailable" message="Enable Minecraft Query or check the query endpoint to see the live roster." />;
+  } else if (!snapshot || snapshot.state === "unavailable") {
+    content = <EmptyState compact title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
   } else if (online === 0) {
     content = <EmptyState compact title="No players online" message="The server is ready for players." />;
-  } else if (!names.length) {
-    content = <EmptyState compact title={`${online} player${online === 1 ? "" : "s"} online`} message="The server reported a count but did not provide player names." />;
   } else {
     content = (
       <div className="activePlayerRoster">
         <div className="activePlayerGrid">
-          {names.map((name) => (
+          {snapshot.names.map((name) => (
             <div className="activePlayer" key={name}>
               <span className="activePlayerDot" aria-hidden="true" />
               <strong>{name}</strong>
             </div>
           ))}
         </div>
-        {activity.playerNamesSource === "logs" && <small>Inferred from recent server logs.</small>}
-        {unnamedPlayers > 0 && <small>{unnamedPlayers} additional player{unnamedPlayers === 1 ? "" : "s"} did not include a name.</small>}
+        {snapshot.state === "stale" && <small>Last verified {snapshotAge(snapshot.sampledAt)}. {snapshot.message}</small>}
       </div>
     );
   }
 
   return (
     <section className="panel playersPanel overviewOperationsPanel" aria-busy={loading}>
-      <PanelHeader title="Active Players" actions={<StatusBadge tone={running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>} />
+      <PanelHeader title="Active Players" actions={<StatusBadge tone={available?.state === "stale" ? "warning" : running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>} />
       {loading && <LoadingLabel>Loading active players</LoadingLabel>}
       {content}
     </section>
@@ -337,6 +340,135 @@ export function formatRelativeEventTime(value: string | undefined, now = new Dat
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
+type RecentEventKind = ServerEvent["eventType"] | "player_reconnected" | "server_restarted";
+
+export type RecentEventGroup = {
+  id: string;
+  kind: RecentEventKind;
+  severity: ServerEvent["severity"];
+  title: string;
+  details?: string;
+  timestamp?: string;
+  events: ServerEvent[];
+};
+
+function eventSubject(event: ServerEvent) {
+  if (event.subject?.trim()) return event.subject.trim();
+  if (event.eventType === "player_joined") return event.text.replace(/\s+joined$/i, "").trim();
+  if (event.eventType === "player_left") return event.text.replace(/\s+left$/i, "").trim();
+  return "";
+}
+
+function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
+  const firstDate = eventDate(first.timestamp, now);
+  const secondDate = eventDate(second.timestamp, now);
+  if (!firstDate || !secondDate) return null;
+  return Math.abs(firstDate.getTime() - secondDate.getTime()) / 1000;
+}
+
+function defaultEventDetails(event: ServerEvent) {
+  if (event.details) return event.details;
+  if (event.eventType === "player_joined") return "Connected to the server";
+  if (event.eventType === "player_left") return event.severity === "warning" ? "The connection was lost" : "Disconnected from the server";
+  if (event.eventType === "server_started") return "Ready for players";
+  if (event.eventType === "server_stopped") return "No longer accepting connections";
+  if (event.eventType === "mod_disabled") return "Review the mod configuration before the next restart";
+  if (event.eventType === "server_crashed") return "Open the console or crash reports for the cause";
+  return undefined;
+}
+
+export function groupRecentEvents(events: ServerEvent[], now = new Date()): RecentEventGroup[] {
+  const groups: RecentEventGroup[] = [];
+
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    const next = events[index + 1];
+    const duration = next ? secondsBetween(event, next, now) : null;
+
+    if (
+      event.eventType === "player_joined"
+      && next?.eventType === "player_left"
+      && eventSubject(event).localeCompare(eventSubject(next), undefined, { sensitivity: "accent" }) === 0
+      && duration !== null
+      && duration <= 30
+    ) {
+      const player = eventSubject(event);
+      groups.push({
+        id: `${event.id}:${next.id}`,
+        kind: "player_reconnected",
+        severity: "success",
+        title: `${player} reconnected`,
+        details: duration < 2 ? "Left and rejoined almost immediately" : `Left and rejoined after ${Math.round(duration)} seconds`,
+        timestamp: event.timestamp,
+        events: [event, next]
+      });
+      index += 1;
+      continue;
+    }
+
+    if (
+      event.eventType === "server_started"
+      && next?.eventType === "server_stopped"
+      && duration !== null
+      && duration <= 5 * 60
+    ) {
+      groups.push({
+        id: `${event.id}:${next.id}`,
+        kind: "server_restarted",
+        severity: "success",
+        title: "Server restarted",
+        details: duration < 2 ? "Stopped and started again" : `Back online after ${Math.round(duration)} seconds`,
+        timestamp: event.timestamp,
+        events: [event, next]
+      });
+      index += 1;
+      continue;
+    }
+
+    const repeatable = ["exception_caught", "server_overloaded", "server_crashed", "mod_disabled"].includes(event.eventType);
+    const repeated = [event];
+    if (repeatable) {
+      while (events[index + 1]?.signature === event.signature) {
+        const repeatedDuration = secondsBetween(event, events[index + 1], now);
+        if (repeatedDuration === null || repeatedDuration > 60) break;
+        repeated.push(events[index + 1]);
+        index += 1;
+      }
+    }
+
+    groups.push({
+      id: repeated.map((item) => item.id).join(":"),
+      kind: event.eventType,
+      severity: event.severity,
+      title: event.text,
+      details: repeated.length > 1
+        ? `${defaultEventDetails(event) ?? "The same event was logged"} · ${repeated.length} occurrences within a minute`
+        : defaultEventDetails(event),
+      timestamp: event.timestamp,
+      events: repeated
+    });
+  }
+
+  return groups;
+}
+
+function EventIcon({ kind }: { kind: RecentEventKind }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {kind === "player_joined" && <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" /><path d="M15 10h6m-3-3 3 3-3 3" /></>}
+      {kind === "player_left" && <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" /><path d="M21 10h-6m3-3-3 3 3 3" /></>}
+      {kind === "player_reconnected" && <><circle cx="8" cy="8" r="3" /><path d="M2.5 19c.5-3.5 2.3-5 5.5-5 1.4 0 2.5.3 3.4.8" /><path d="M14 10a5 5 0 1 1-1 7m1 3-1-3 3-1" /></>}
+      {kind === "server_started" && <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m10 8 6 4-6 4Z" /></>}
+      {kind === "server_stopped" && <><rect x="3" y="4" width="18" height="16" rx="3" /><rect x="9" y="9" width="6" height="6" /></>}
+      {kind === "server_restarted" && <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 12a4 4 0 0 1 7-2m1-2-1 2-2-1" /><path d="M16 12a4 4 0 0 1-7 2m-1 2 1-2 2 1" /></>}
+      {kind === "mod_disabled" && <><path d="M8 3h8v4a2 2 0 1 1 0 4v10H8v-4a2 2 0 1 0 0-4Z" /><path d="m4 4 16 16" /></>}
+      {kind === "server_crashed" && <><path d="M12 3 2.5 20h19Z" /><path d="M12 9v5m0 3h.01" /></>}
+      {kind === "exception_caught" && <><path d="M8 8h8v9a4 4 0 0 1-8 0Z" /><path d="M9 8V6a3 3 0 0 1 6 0v2M4 12h4m8 0h4M5 18l3-2m11 2-3-2" /></>}
+      {kind === "server_overloaded" && <><path d="M4 18a8 8 0 1 1 16 0" /><path d="m12 14 4-4" /><path d="M7 18h10" /></>}
+    </svg>
+  );
+}
+
 export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
@@ -366,7 +498,7 @@ export function RecentEventsPanel({
   const [now, setNow] = useState(() => new Date());
   const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
   const visibleEvents = useMemo(() => events.filter((event) => !hiddenSignatureSet.has(event.signature)), [events, hiddenSignatureSet]);
-  const displayEvents = visibleEvents.slice(0, 8);
+  const displayEvents = useMemo(() => groupRecentEvents(visibleEvents, now).slice(0, 8), [visibleEvents, now]);
   const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
 
   useEffect(() => {
@@ -382,17 +514,18 @@ export function RecentEventsPanel({
     return () => window.clearInterval(timer);
   }, []);
 
-  async function confirmHideEvent(event: ServerEvent) {
+  async function confirmHideEvent(group: RecentEventGroup) {
+    const signatures = Array.from(new Set(group.events.map((event) => event.signature)));
     const confirmed = await requestConfirmation({
-      title: "Hide event type?",
-      description: "Hide all recent events matching this type.",
-      details: event.text,
+      title: "Hide matching events?",
+      description: "Hide recent events matching this entry.",
+      details: group.title,
       warning: "You can restore hidden event types with Reset hidden events.",
       warningTone: "warning",
       confirmLabel: "Hide events",
       variant: "critical"
     });
-    if (confirmed) setHiddenSignatures((current) => current.includes(event.signature) ? current : [...current, event.signature]);
+    if (confirmed) setHiddenSignatures((current) => Array.from(new Set([...current, ...signatures])));
   }
 
   return (
@@ -409,16 +542,22 @@ export function RecentEventsPanel({
             <SkeletonBlock className="eventTextSkeleton" />
             <SkeletonBlock className="eventTimeSkeleton" />
           </div>
-        )) : displayEvents.length ? displayEvents.map((event) => {
-          const timestamp = eventDate(event.timestamp, now);
+        )) : displayEvents.length ? displayEvents.map((group) => {
+          const timestamp = eventDate(group.timestamp, now);
           return (
-            <div className={`eventRow ${event.type}`} key={event.id}>
-              <span className="eventMarker" aria-hidden="true" />
-              <strong>{event.text}</strong>
-              <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
-                {relativeTimestamps ? formatRelativeEventTime(event.timestamp, now) : timestamp ? formatDate(timestamp) : event.timestamp ? "Unknown" : "No timestamp"}
-              </small>
-              <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(event)} aria-label="Hide events of this type">
+            <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
+              <span className="eventIcon" aria-hidden="true"><EventIcon kind={group.kind} /></span>
+              <div className="eventCopy">
+                <strong>{group.title}</strong>
+                {group.details && <span>{group.details}</span>}
+              </div>
+              <div className="eventMeta">
+                <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
+                  {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
+                </small>
+                {group.events.length > 1 && <span className="eventCount">{group.events.length} events</span>}
+              </div>
+              <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(group)} aria-label={`Hide events matching ${group.title}`}>
                 <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
                   <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
                   <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
@@ -426,7 +565,7 @@ export function RecentEventsPanel({
                   <line x1="2" y1="2" x2="22" y2="22" />
                 </svg>
               </Button>
-            </div>
+            </article>
           );
         }) : (
           <EmptyState

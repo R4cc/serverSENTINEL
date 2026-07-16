@@ -21,8 +21,8 @@ import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
 import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
-import { queryMinecraftServer } from "../minecraftQuery.js";
-import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
+import { resolveMinecraftQueryEndpoint } from "../queryEndpoint.js";
+import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { isNodeCapability, nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
 import type { NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, PanelWelcome } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
@@ -1308,15 +1308,17 @@ async function handleCommand(command: string, payload: any) {
     return { ok: true, deletedContainer, deletedFiles: Boolean(payload?.input?.deleteFiles) };
   }
   if (command === "server.inspect") return runtimeStatus(server);
-  if (command === "server.queryMetrics") {
+  if (command === "server.players.read") {
     const propsPath = await inside(server, "server.properties", false);
     const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
-    if (minecraftQueryDisabled(props)) return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query is disabled in server.properties."] };
     const minecraftInspect = await inspect(server).catch(() => null) as NodeContainerInspect | null;
-    const callerInspect = await inspectCurrentContainer().catch(() => null);
-    const endpoint = resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect);
-    if (!endpoint) return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query endpoint could not be resolved."] };
-    return queryMinecraftServer(endpoint.host, endpoint.port).catch((error) => ({ responding: false, playersOnline: null, maxPlayers: null, diagnostics: [...endpoint.diagnostics, error instanceof Error ? error.message : String(error)] }));
+    const running = minecraftInspect?.State?.Running === true;
+    const callerInspect = running ? await inspectCurrentContainer().catch(() => null) : null;
+    const endpoint = running ? resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect) : null;
+    const instanceId = minecraftInspect?.Id
+      ? `${minecraftInspect.Id}:${minecraftInspect.State?.StartedAt ?? "not-started"}`
+      : undefined;
+    return readMinecraftPlayerObservation({ running, instanceId, props, endpoint });
   }
   if (command === "server.start") { await ensureContainer(server); await dockerRequest("POST", `/containers/${name}/start`, [204, 304]); return runtimeStatus(server); }
   if (command === "server.stop") { await dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304]); return runtimeStatus(server); }

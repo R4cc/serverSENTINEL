@@ -1,4 +1,4 @@
-import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus } from './types';
+import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus } from './types';
 
 const demoStartedAt = Date.now();
 
@@ -401,17 +401,33 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
       serverPort: "25565",
       eulaAccepted: true,
       javaRuntime: "Temurin 21",
-      autosaveStatus: running ? "Recently saved" : "Unavailable",
-      playersOnline: running ? 14 : 0,
-      maxPlayers: 20,
-      playerNames: running ? ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"] : []
+      autosaveStatus: running ? "Recently saved" : "Unavailable"
     },
     events: [
-      demoEvent({ id: "demo-join-steve", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: "13:46:00", signature: "player_joined:steve", source: "logs/latest.log" }),
-      demoEvent({ id: "demo-join-alex", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: "13:43:00", signature: "player_joined:alex", source: "logs/latest.log" }),
-      demoEvent({ id: "demo-left-sam", eventType: "player_left", type: "info", severity: "info", text: "Sam left", message: "Sam left", timestamp: "13:40:00", signature: "player_left:sam", source: "logs/latest.log" }),
+      demoEvent({ id: "demo-rejoin-steve", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: "13:46:08", signature: "player_joined:steve", source: "logs/latest.log", subject: "Steve" }),
+      demoEvent({ id: "demo-left-steve", eventType: "player_left", type: "warning", severity: "warning", text: "Steve left", message: "Steve left", timestamp: "13:46:01", signature: "player_left:steve", source: "logs/latest.log", subject: "Steve" }),
+      demoEvent({ id: "demo-exception", eventType: "exception_caught", type: "error", severity: "error", text: "Exception caught: NullPointerException", message: "Exception caught: NullPointerException", details: "Chunk task failed with java.lang.NullPointerException", timestamp: "13:44:00", signature: "exception_caught:nullpointerexception", source: "logs/latest.log", subject: "NullPointerException" }),
+      demoEvent({ id: "demo-join-alex", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: "13:43:00", signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" }),
+      demoEvent({ id: "demo-overloaded", eventType: "server_overloaded", type: "warning", severity: "warning", text: "Server is falling behind", message: "Server is falling behind", details: "Running 5,421ms or 108 ticks behind", timestamp: "13:41:00", signature: "server_overloaded", source: "logs/latest.log" }),
+      demoEvent({ id: "demo-left-sam", eventType: "player_left", type: "info", severity: "info", text: "Sam left", message: "Sam left", timestamp: "13:40:00", signature: "player_left:sam", source: "logs/latest.log", subject: "Sam" }),
       demoEvent({ id: "demo-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: "11:32:00", signature: "server_started", source: "logs/latest.log" })
     ]
+  };
+}
+
+export function demoPlayerSnapshot(running: boolean): PlayerSnapshot {
+  return running ? {
+    state: "live",
+    online: 14,
+    maxPlayers: 20,
+    names: ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"],
+    sampledAt: new Date().toISOString()
+  } : {
+    state: "stopped",
+    online: 0,
+    maxPlayers: 20,
+    names: [],
+    sampledAt: new Date().toISOString()
   };
 }
 

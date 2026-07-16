@@ -45,6 +45,7 @@ import { searchModrinth } from "./modrinth/searchCache.js";
 import { createModUpdatePlan, executeSafeUpdatePlan, type ModUpdatePlan } from "./modrinth/updatePlan.js";
 import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import { ModHashCache } from "./modHashCache.js";
+import { cachedIconFilenames, findCachedIconFile } from "./iconFileCache.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -68,9 +69,9 @@ import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } 
 import { parseServerProperties, serializeServerProperties } from "./runtime/serverProperties.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { captureScheduledCommandLogs } from "./schedules/runLogCapture.js";
-import { queryMinecraftServer } from "./minecraftQuery.js";
-import { minecraftQueryDisabled, resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
-import { resolvePlayerNames } from "./playerRoster.js";
+import { resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
+import { readMinecraftPlayerObservation } from "./playerObservationReader.js";
+import { PlayerSnapshotCoordinator } from "./playerSnapshots.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
@@ -217,6 +218,7 @@ export function modrinthSearchFacets(loader: string, minecraftVersion: string, c
 const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 const modrinthAssetTimeoutMs = 10_000;
 const modrinthIconRequests = new Map<string, Promise<{ bytes: Buffer; contentType: string }>>();
+const modrinthIconRefreshRequests = new Map<string, Promise<void>>();
 const remoteModListRequests = new Map<string, Promise<unknown>>();
 const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
 const localModHashCache = new ModHashCache();
@@ -886,6 +888,7 @@ async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
 let runtimeRegistry: NodeRuntimeRegistry | undefined;
 let resourceStatsCollector: ResourceStatsCollector | undefined;
 let runtimeStateCoordinator: RuntimeStateCoordinator | undefined;
+let playerSnapshotCoordinator: PlayerSnapshotCoordinator | undefined;
 
 function runtimeForServer(server: ManagedServer): NodeRuntime {
   if (!runtimeRegistry) {
@@ -1715,12 +1718,10 @@ async function modIconUrl(server: ManagedServer, filename: string) {
     if (!isMissingPathError(error)) throw error;
     return undefined;
   }
-  const key = modIconKey(filename);
-  const icon = (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`));
+  const icon = await findCachedIconFile(iconsDir, modIconKey(filename));
   if (!icon) return undefined;
-  const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
-  const iconStat = await stat(iconPath);
-  const version = Math.trunc(iconStat.mtimeMs).toString(36);
+  await validateExistingResolvedInsideServer(server, icon.path);
+  const version = Math.trunc(icon.mtimeMs).toString(36);
   return `/api/servers/${encodeURIComponent(server.id)}/mods/icon?filename=${encodeURIComponent(filename)}&v=${encodeURIComponent(version)}`;
 }
 
@@ -1732,11 +1733,13 @@ async function deleteModIcon(server: ManagedServer, filename: string) {
     if (!isMissingPathError(error)) throw error;
     return;
   }
-  const key = modIconKey(filename);
-  const icons = await readdir(iconsDir);
-  await Promise.all(icons.filter((entry) => entry.startsWith(`${key}.`)).map(async (entry) => {
-    const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, entry));
-    await rm(iconPath, { force: true });
+  await Promise.all(cachedIconFilenames(modIconKey(filename)).map(async (entry) => {
+    try {
+      const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, entry));
+      await rm(iconPath, { force: true });
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
   }));
 }
 
@@ -1813,19 +1816,10 @@ function modrinthIconNotFound(): never {
 async function readCachedModrinthIcon(url: string, options: { allowStale?: boolean } = {}) {
   const cacheDir = join(config.dataDir, "modrinth-icon-cache");
   const key = createHash("sha256").update(url).digest("hex");
-  let entries: string[];
-  try {
-    entries = await readdir(cacheDir);
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-    return null;
-  }
-  const entry = entries.find((candidate) => candidate.startsWith(`${key}.`));
+  const entry = await findCachedIconFile(cacheDir, key);
   if (!entry) return null;
-  const path = join(cacheDir, entry);
-  const entryStat = await stat(path);
-  if (!options.allowStale && Date.now() - entryStat.mtimeMs > modrinthIconCacheMaxAgeMs) return null;
-  return { bytes: await readFile(path), contentType: iconContentType(entry) };
+  if (!options.allowStale && Date.now() - entry.mtimeMs > modrinthIconCacheMaxAgeMs) return null;
+  return { bytes: await readFile(entry.path), contentType: iconContentType(entry.filename) };
 }
 
 async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUrl: string, contentType: string) {
@@ -1833,8 +1827,7 @@ async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUrl: stri
   await mkdir(cacheDir, { recursive: true });
   const key = createHash("sha256").update(url).digest("hex");
   const extension = iconExtension(iconUrl, contentType);
-  const previous = await readdir(cacheDir);
-  await Promise.all(previous.filter((entry) => entry.startsWith(`${key}.`)).map((entry) => rm(join(cacheDir, entry), { force: true })));
+  await Promise.all(cachedIconFilenames(key).map((entry) => rm(join(cacheDir, entry), { force: true })));
   const destination = join(cacheDir, `${key}${extension}`);
   const temporary = `${destination}.${randomUUID()}.tmp`;
   await writeFile(temporary, bytes);
@@ -1844,6 +1837,23 @@ async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUrl: stri
 async function loadModrinthIcon(normalizedUrl: string) {
   const cached = await readCachedModrinthIcon(normalizedUrl);
   if (cached) return cached;
+
+  const stale = await readCachedModrinthIcon(normalizedUrl, { allowStale: true });
+  if (stale) {
+    if (!modrinthIconRefreshRequests.has(normalizedUrl)) {
+      const refresh = downloadModrinthIcon(normalizedUrl)
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => modrinthIconRefreshRequests.delete(normalizedUrl));
+      modrinthIconRefreshRequests.set(normalizedUrl, refresh);
+    }
+    return stale;
+  }
+
+  return downloadModrinthIcon(normalizedUrl);
+}
+
+async function downloadModrinthIcon(normalizedUrl: string) {
 
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
@@ -2791,6 +2801,7 @@ type ParsedEventInput = {
   eventType: ServerEvent["eventType"];
   severity: ServerEvent["severity"];
   message: string;
+  details?: string;
   timestamp?: string;
   source: ServerEvent["source"];
   index: number;
@@ -2807,6 +2818,7 @@ function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
     severity: input.severity,
     text: input.message,
     message: input.message,
+    details: input.details,
     timestamp: input.timestamp,
     signature: input.signature,
     source: input.source,
@@ -2828,6 +2840,11 @@ function cleanPlayerName(value: string) {
 
 function cleanModName(value: string) {
   return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
+}
+
+function conciseEventDetails(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
 }
 
 export function parseLogEvent(line: string, source: ServerEvent["source"], index: number, referenceDate = new Date()): ServerEvent | null {
@@ -2987,18 +3004,50 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     });
   }
 
+  const overloaded = message.match(/Can't keep up! Is the server overloaded\?\s*(.*)/i);
+  if (overloaded) {
+    return eventFromParsedLine({
+      eventType: "server_overloaded",
+      severity: "warning",
+      message: "Server is falling behind",
+      details: conciseEventDetails(overloaded[1] || message),
+      timestamp,
+      source,
+      index,
+      signature: eventSignature("server_overloaded")
+    });
+  }
+
   if (
-    /Encountered an unexpected exception|This crash report has been saved to:|Minecraft Crash Report|A crash report has been generated|The game crashed|server crashed/i.test(message)
+    /Encountered an unexpected exception|This crash report has been saved to:|Minecraft Crash Report|A crash report has been generated|The game crashed|server crashed|Failed to start the minecraft server|OutOfMemoryError/i.test(message)
     || (level === "FATAL" && /\b(exception|crash|crashed)\b/i.test(message))
   ) {
     return eventFromParsedLine({
       eventType: "server_crashed",
       severity: "error",
       message: "Server crashed",
+      details: conciseEventDetails(message),
       timestamp,
       source,
       index,
       signature: eventSignature("server_crashed")
+    });
+  }
+
+  const exception = message.match(/\b((?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*(?:Exception|Error)))\b(?::\s*(.*))?/i);
+  const exceptionContext = /\b(?:caught|caused by|uncaught|unhandled)\b/i.test(message) || ["WARN", "ERROR", "FATAL"].includes(level);
+  if (exception && exceptionContext) {
+    const exceptionName = exception[2];
+    return eventFromParsedLine({
+      eventType: "exception_caught",
+      severity: level === "WARN" ? "warning" : "error",
+      message: `Exception caught: ${exceptionName}`,
+      details: conciseEventDetails(message),
+      timestamp,
+      source,
+      index,
+      signature: eventSignature("exception_caught", exceptionName),
+      subject: exceptionName
     });
   }
   return null;
@@ -3043,7 +3092,7 @@ async function serverOverviewData(server: ManagedServer) {
   const parsedEvents = logSources
     .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index, parsedAt)).filter((event): event is ServerEvent => Boolean(event)));
   const reversedEvents = [...parsedEvents].reverse();
-  const events = compactRecentEvents(parsedEvents, 10);
+  const events = compactRecentEvents(parsedEvents, 20);
   const props = properties.status === "fulfilled" ? parseServerProperties(properties.value) : {};
   const eulaAccepted = eula.status === "fulfilled"
     ? /^eula\s*=\s*true\s*$/im.test(eula.value)
@@ -3054,42 +3103,28 @@ async function serverOverviewData(server: ManagedServer) {
   const stoppedAt = dockerInspect.status === "fulfilled"
     ? validDockerTimestamp(dockerInspect.value?.State?.FinishedAt)
     : undefined;
-  const queryMetrics = dockerInspect.status === "fulfilled" && dockerInspect.value?.State?.Running
-    ? await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined }))
-    : { responding: false, playersOnline: null, maxPlayers: null, playerNames: undefined };
-  const playerRoster = resolvePlayerNames(queryMetrics.playerNames, parsedEvents, queryMetrics.playersOnline);
   const activity: ServerActivity = {
     lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
     lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
     currentWorld: props["level-name"],
     serverPort: configuredServerPort(server, props),
     eulaAccepted,
-    javaRuntime: normalizeJavaRuntime(server),
-    playersOnline: queryMetrics.playersOnline,
-    maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
-    ...playerRoster
+    javaRuntime: normalizeJavaRuntime(server)
   };
   return { events, eventsStatus, activity };
 }
 
-async function queryPlayerMetrics(server: ManagedServer, props: Record<string, string> = {}) {
-  if (minecraftQueryDisabled(props)) {
-    return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query is disabled in server.properties."] };
-  }
-  const minecraftInspect = dockerControlConfigured(server) ? await inspectDockerContainer(server).catch(() => null) : null;
-  const callerInspect = dockerAvailable() ? await currentContainerInspect().catch(() => null) : null;
-  const endpoint = resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect);
-  if (!endpoint) {
-    return { responding: false, playersOnline: null, maxPlayers: null, diagnostics: ["Minecraft Query endpoint could not be resolved."] };
-  }
-  return queryMinecraftServer(endpoint.host, endpoint.port).catch((error) => ({ responding: false, playersOnline: null, maxPlayers: null, diagnostics: [...endpoint.diagnostics, error instanceof Error ? error.message : String(error)] }));
-}
-
-async function onlinePlayerCount(server: ManagedServer) {
+async function readLocalPlayerObservation(server: ManagedServer) {
   const path = await validateExistingInsideServer(server, "server.properties").catch(() => "");
   const props = path ? parseServerProperties(await readFile(path, "utf8")) : {};
-  const metrics = await queryPlayerMetrics(server, props).catch(() => ({ responding: false, playersOnline: null, maxPlayers: null }));
-  return metrics.playersOnline;
+  const minecraftInspect = dockerControlConfigured(server) ? await inspectDockerContainer(server).catch(() => null) : null;
+  const running = minecraftInspect?.State?.Running === true;
+  const callerInspect = running && dockerAvailable() ? await currentContainerInspect().catch(() => null) : null;
+  const endpoint = running ? resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect) : null;
+  const instanceId = minecraftInspect?.Id
+    ? `${minecraftInspect.Id}:${minecraftInspect.State?.StartedAt ?? "not-started"}`
+    : undefined;
+  return readMinecraftPlayerObservation({ running, instanceId, props, endpoint });
 }
 
 function streamLatestServerLog(server: ManagedServer, client: Client) {
@@ -3450,6 +3485,7 @@ async function waitForRuntimeState(server: ManagedServer, running: boolean, time
 
 async function startServerWithIntent(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
+    playerSnapshotCoordinator?.invalidate(server.id);
     const previous = server.runtimeIntent ?? "stopped";
     setRuntimeLifecycle(server, {
       runtimeIntent: "running",
@@ -3475,6 +3511,7 @@ async function startServerWithIntent(server: ManagedServer) {
 
 async function stopServerWithIntent(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
+    playerSnapshotCoordinator?.invalidate(server.id);
     setRuntimeLifecycle(server, {
       runtimeIntent: "stopped",
       restartPhase: undefined,
@@ -3490,6 +3527,7 @@ async function stopServerWithIntent(server: ManagedServer) {
 
 async function restartServerGracefully(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
+    playerSnapshotCoordinator?.invalidate(server.id);
     setRuntimeLifecycle(server, {
       runtimeIntent: "restarting",
       restartPhase: "stopping",
@@ -3786,7 +3824,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
     if (schedule.onlyWhenNoPlayers) {
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking online players";
-      const count = await runtime.onlinePlayerCount(server);
+      const count = await playerSnapshotCoordinator!.freshOnlineCount(server);
       if (count === null) {
         logWarn({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, reason: "player_count_unknown" }, "Schedule skipped");
         return { status: "skipped", message: "Skipped because online player count could not be determined", details: details() };
@@ -5198,6 +5236,12 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) =
   return runtimeForServer(server).serverOverview(server);
 });
 
+app.get("/api/player-snapshots", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const servers = await listManagedServers();
+  return { snapshots: await playerSnapshotCoordinator!.snapshots(servers) };
+});
+
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
@@ -6473,11 +6517,10 @@ async function localModIcon(server: ManagedServer, filenameInput: unknown) {
     if (!isMissingPathError(error)) throw error;
     return null;
   }
-  const key = modIconKey(filename);
-  const icon = existsSync(iconsDir) ? (await readdir(iconsDir)).find((entry) => entry.startsWith(`${key}.`)) : undefined;
+  const icon = existsSync(iconsDir) ? await findCachedIconFile(iconsDir, modIconKey(filename)) : null;
   if (!icon) return null;
-  const iconPath = await validateExistingResolvedInsideServer(server, join(iconsDir, icon));
-  return { contentType: iconContentType(icon), stream: createReadStream(iconPath) };
+  const iconPath = await validateExistingResolvedInsideServer(server, icon.path);
+  return { contentType: iconContentType(icon.filename), stream: createReadStream(iconPath) };
 }
 
 async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
@@ -7866,7 +7909,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   sendConsoleCommand: localSendConsoleCommand,
   streamConsole: localStreamConsole,
   serverLogs: localServerLogs,
-  onlinePlayerCount,
+  readPlayerObservation: readLocalPlayerObservation,
   serverStats: dockerResourceStats,
   serverOverview: serverOverviewData,
   resolveExistingPath: localResolveExistingPath,
@@ -7918,6 +7961,13 @@ runtimeRegistry = new NodeRuntimeRegistry(
     }
   )
 );
+playerSnapshotCoordinator = new PlayerSnapshotCoordinator({
+  pollMs: 10_000,
+  staleMs: 5 * 60 * 1000,
+  readServers: listManagedServers,
+  runtimeForServer
+});
+playerSnapshotCoordinator.start();
 runtimeStateCoordinator = new RuntimeStateCoordinator({
   pollMs: 5_000,
   exitConfirmationMs: 5_000,
@@ -7988,6 +8038,7 @@ app.addHook("onClose", async () => {
   runtimeStateCoordinator?.stop();
   modUpdatePlanCoordinator?.stop();
   resourceStatsCollector?.stop();
+  playerSnapshotCoordinator?.stop();
 });
 
 await registerStaticFrontend(app);

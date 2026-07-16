@@ -2,13 +2,13 @@ import { basename, dirname } from "node:path";
 import { Readable } from "node:stream";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
+import type { PlayerObservation } from "../playerSnapshots.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { assertNodeSupports } from "./protocol.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
-import { resolvePlayerNames } from "../playerRoster.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -57,6 +57,15 @@ function cleanPlayerName(value: string) {
     .replace(/\s+\(\/?[^)]+:\d+\)$/g, "");
 }
 
+function cleanModName(value: string) {
+  return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
+}
+
+function conciseEventDetails(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
+}
+
 function eventTimestampSecond(timestamp?: string) {
   if (!timestamp) return "";
   if (/^\d{2}:\d{2}:\d{2}$/.test(timestamp)) return timestamp;
@@ -94,38 +103,86 @@ function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index:
     }
     rest = stripped.slice(tsMatch[0].length).trim();
   }
-  const message = rest.match(/^\[[^\]/]+\/[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
-    ?? rest.match(/^\[[^\]]+\]\s+\[[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
-    ?? rest.match(/^\[[A-Z]+\]:\s*(?<message>.*)$/)?.groups?.message
-    ?? rest.match(/^[A-Z]+:\s*(?<message>.*)$/)?.groups?.message
-    ?? rest;
-  const playerJoin = message.match(/^(.+?) joined the game$/i);
-  const playerLeft = message.match(/^(.+?) left the game$/i) ?? message.match(/^(.+?) lost connection:/i);
-  const start = /Done \([^)]+\)! For help, type "help"/i.test(message) || /Starting minecraft server/i.test(message);
-  const stop = /Stopping server|Stopping the server|ThreadedAnvilChunkStorage: All chunks are saved/i.test(message);
-  const crash = /Encountered an unexpected exception|Minecraft Crash Report|server crashed|The game crashed/i.test(message);
-  const eventType = playerJoin ? "player_joined" : playerLeft ? "player_left" : start ? "server_started" : stop ? "server_stopped" : crash ? "server_crashed" : null;
-  if (!eventType) return null;
-  const subject = playerJoin || playerLeft ? cleanPlayerName((playerJoin?.[1] ?? playerLeft?.[1])!) : undefined;
-  const text = eventType === "player_joined" ? `${subject?.trim()} joined`
-    : eventType === "player_left" ? `${subject?.trim()} left`
-    : eventType === "server_started" ? "Server started"
-    : eventType === "server_stopped" ? "Server stopped"
-    : "Server crashed";
-  const severity = eventType === "server_crashed" ? "error" : eventType === "player_joined" || eventType === "server_started" ? "success" : "info";
-  const signature = eventSignature(eventType, subject);
-  return {
-    id: `${source}-${index}-${timestamp ?? ""}-${signature}`,
-    eventType,
-    type: severity,
-    severity,
-    text,
-    message: text,
-    timestamp,
-    signature,
-    source,
-    subject
+  let level = "";
+  let message = rest;
+  const parsedLine = rest.match(/^\[[^\]/]+\/(?<level>[A-Z]+)\]:\s*(?<message>.*)$/)
+    ?? rest.match(/^\[[^\]]+\]\s+\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/)
+    ?? rest.match(/^\[(?<level>[A-Z]+)\]:\s*(?<message>.*)$/)
+    ?? rest.match(/^(?<level>[A-Z]+):\s*(?<message>.*)$/);
+  if (parsedLine?.groups) {
+    level = parsedLine.groups.level;
+    message = parsedLine.groups.message;
+  }
+
+  const makeEvent = (eventType: ServerEvent["eventType"], severity: ServerEvent["severity"], text: string, subject?: string, details?: string): ServerEvent => {
+    const signature = eventSignature(eventType, subject);
+    return {
+      id: `${source}-${index}-${timestamp ?? ""}-${signature}`,
+      eventType,
+      type: severity,
+      severity,
+      text,
+      message: text,
+      details,
+      timestamp,
+      signature,
+      source,
+      subject
+    };
   };
+
+  const playerJoin = message.match(/^(.+?) joined the game$/i);
+  if (playerJoin) {
+    const player = cleanPlayerName(playerJoin[1]);
+    return makeEvent("player_joined", "success", `${player} joined`, player);
+  }
+
+  const playerLeft = message.match(/^(.+?) left the game$/i)
+    ?? message.match(/^(.+?) lost connection:/i)
+    ?? message.match(/^Disconnecting\s+(.+?)(?:\s*\(|:|$)/i);
+  if (playerLeft) {
+    const player = cleanPlayerName(playerLeft[1]);
+    const severity = /lost connection|^Disconnecting/i.test(message) ? "warning" : "info";
+    return makeEvent("player_left", severity, `${player} left`, player);
+  }
+
+  if (/Done \([^)]+\)! For help, type "help"/i.test(message) || /Starting minecraft server/i.test(message)) {
+    return makeEvent("server_started", "success", "Server started");
+  }
+  if (/Stopping server|Stopping the server|ThreadedAnvilChunkStorage: All chunks are saved/i.test(message)) {
+    return makeEvent("server_stopped", "info", "Server stopped");
+  }
+
+  const disabledJar = message.match(/\b([\w .+@()[\]-]+?\.jar(?:\.disabled)?)\b.*\b(?:disabled|disabling)\b/i)
+    ?? message.match(/\b(?:disabled|disabling)\b.*\b([\w .+@()[\]-]+?\.jar(?:\.disabled)?)\b/i);
+  const disabledMod = disabledJar
+    ?? message.match(/\bmod\s+["']?([^"',:]+?)["']?\s+(?:was\s+)?disabled\b/i)
+    ?? message.match(/\b(?:disabled|disabling)\s+mod\s+["']?([^"',:]+?)["']?\b/i);
+  if (disabledMod) {
+    const modName = cleanModName(disabledMod[1]);
+    return makeEvent("mod_disabled", "warning", `Mod disabled: ${modName}`, modName);
+  }
+
+  const overloaded = message.match(/Can't keep up! Is the server overloaded\?\s*(.*)/i);
+  if (overloaded) {
+    return makeEvent("server_overloaded", "warning", "Server is falling behind", undefined, conciseEventDetails(overloaded[1] || message));
+  }
+
+  if (
+    /Encountered an unexpected exception|This crash report has been saved to:|Minecraft Crash Report|A crash report has been generated|The game crashed|server crashed|Failed to start the minecraft server|OutOfMemoryError/i.test(message)
+    || (level === "FATAL" && /\b(exception|crash|crashed)\b/i.test(message))
+  ) {
+    return makeEvent("server_crashed", "error", "Server crashed", undefined, conciseEventDetails(message));
+  }
+
+  const exception = message.match(/\b((?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*(?:Exception|Error)))\b(?::\s*(.*))?/i);
+  const exceptionContext = /\b(?:caught|caused by|uncaught|unhandled)\b/i.test(message) || ["WARN", "ERROR", "FATAL"].includes(level);
+  if (exception && exceptionContext) {
+    const exceptionName = exception[2];
+    return makeEvent("exception_caught", level === "WARN" ? "warning" : "error", `Exception caught: ${exceptionName}`, exceptionName, conciseEventDetails(message));
+  }
+
+  return null;
 }
 
 function configuredServerPort(server: ManagedServer, props: Record<string, string>) {
@@ -287,9 +344,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.logs.recent");
   }
 
-  async onlinePlayerCount(server: ManagedServer) {
-    const metrics = await this.command(server, "server.queryMetrics") as { playersOnline?: number | null };
-    return metrics.playersOnline ?? null;
+  readPlayerObservation(server: ManagedServer) {
+    return this.command(server, "server.players.read") as Promise<PlayerObservation>;
   }
 
   serverStats(server: ManagedServer) {
@@ -313,10 +369,6 @@ export class RemoteNodeRuntime implements NodeRuntime {
     const reversedEvents = [...parsedEvents].reverse();
     const status = statusResult.status === "fulfilled" ? statusResult.value : {};
     const props = parseServerProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
-    const queryMetrics = status.docker?.running
-      ? await this.command(server, "server.queryMetrics").catch(() => ({ playersOnline: null, maxPlayers: null, playerNames: undefined })) as { playersOnline?: number | null; maxPlayers?: number | null; playerNames?: string[] }
-      : { playersOnline: null, maxPlayers: null, playerNames: undefined };
-    const playerRoster = resolvePlayerNames(queryMetrics.playerNames, parsedEvents, queryMetrics.playersOnline);
     const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
@@ -325,13 +377,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
       currentWorld: props["level-name"],
       serverPort: configuredServerPort(server, props),
       eulaAccepted,
-      javaRuntime: javaRuntimeLabel(server),
-      playersOnline: queryMetrics.playersOnline ?? null,
-      maxPlayers: queryMetrics.maxPlayers ?? (props["max-players"] ? Number(props["max-players"]) : null),
-      ...playerRoster
+      javaRuntime: javaRuntimeLabel(server)
     };
     return {
-      events: compactRecentEvents(parsedEvents, 10),
+      events: compactRecentEvents(parsedEvents, 20),
       eventsStatus: logsResult.status === "fulfilled" ? "ok" : "unavailable",
       activity,
       logSources: logText ? [{ source, text: logText }] : []

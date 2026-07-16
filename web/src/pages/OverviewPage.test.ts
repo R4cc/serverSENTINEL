@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { demoOverviewData, demoServer, demoStatus } from "../demo";
-import type { ModUpdatePlan, ScheduledExecution, ServerActivity } from "../types";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "../demo";
+import type { ModUpdatePlan, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
 import {
   ActivePlayersPanel,
   AutomationPanel,
@@ -10,14 +10,21 @@ import {
   eventDate,
   formatRelativeEventTime,
   formatRelativeScheduleTime,
+  groupRecentEvents,
   ModHealthPanel,
   OverviewSummary
 } from "./OverviewPage";
 
-const activity = (overrides: Partial<ServerActivity> = {}): ServerActivity => ({
-  playersOnline: 0,
-  maxPlayers: 20,
-  playerNames: [],
+const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
+  id: `${eventType}-${timestamp}`,
+  eventType,
+  type: "info",
+  severity: "info",
+  text: eventType,
+  message: eventType,
+  timestamp,
+  signature: eventType,
+  source: "logs/latest.log",
   ...overrides
 });
 
@@ -77,7 +84,8 @@ describe("overview summary", () => {
       server,
       status: demoStatus(server, true),
       dockerSocketMounted: true,
-      activity: demoOverviewData(true).activity
+      activity: demoOverviewData(true).activity,
+      playerSnapshot: demoPlayerSnapshot(true)
     }));
 
     expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(7);
@@ -96,6 +104,7 @@ describe("overview summary", () => {
       status: demoStatus(server, true),
       dockerSocketMounted: true,
       activity: demoOverviewData(true).activity,
+      playerSnapshot: demoPlayerSnapshot(true),
       loading: true
     }));
 
@@ -106,29 +115,78 @@ describe("overview summary", () => {
 });
 
 describe("active player states", () => {
-  const render = (value: ServerActivity, running = true) => renderToStaticMarkup(createElement(ActivePlayersPanel, { activity: value, running }));
+  const render = (snapshot: PlayerSnapshot | undefined, running = true) => renderToStaticMarkup(createElement(ActivePlayersPanel, { snapshot, running }));
+  const live = (overrides: Partial<Extract<PlayerSnapshot, { state: "live" }>> = {}): Extract<PlayerSnapshot, { state: "live" }> => ({
+    state: "live",
+    online: 2,
+    maxPlayers: 20,
+    names: ["Alex", "Steve"],
+    sampledAt: new Date().toISOString(),
+    ...overrides
+  });
 
   it("distinguishes stopped, empty, and unavailable query states", () => {
-    expect(render(activity({ playersOnline: 2, playerNames: ["Alex"] }), false)).toContain("Server is not running");
-    expect(render(activity())).toContain("No players online");
-    expect(render(activity({ playersOnline: null }))).toContain("Player query unavailable");
+    expect(render(live(), false)).toContain("Server is not running");
+    expect(render(live({ online: 0, names: [] }))).toContain("No players online");
+    expect(render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_TIMEOUT", message: "Minecraft Query timed out" })).toContain("Player query unavailable");
   });
 
-  it("normalizes names and explains partial-name responses", () => {
-    const html = render(activity({ playersOnline: 3, playerNames: [" Alex ", "Alex", "", "Steve"] }));
-    expect((html.match(/>Alex</g) ?? []).length).toBe(1);
+  it("renders every name from a complete live snapshot", () => {
+    const html = render(live());
+    expect(html).toContain(">Alex</");
     expect(html).toContain(">Steve</");
-    expect(html).toContain("1 additional player did not include a name");
   });
 
-  it("explains a count-only response", () => {
-    expect(render(activity({ playersOnline: 2, playerNames: undefined }))).toContain("reported a count but did not provide player names");
+  it("keeps the complete roster and labels stale snapshots", () => {
+    const html = render({
+      ...live(),
+      state: "stale",
+      lastAttemptAt: new Date().toISOString(),
+      code: "QUERY_TIMEOUT",
+      message: "Minecraft Query timed out"
+    });
+    expect(html).toContain(">Alex</");
+    expect(html).toContain("Last verified");
+    expect(html).toContain("Minecraft Query timed out");
+  });
+});
+
+describe("recent event grouping", () => {
+  const now = new Date("2026-07-11T12:05:00.000Z");
+
+  it("combines an immediate leave and rejoin into one reconnect entry", () => {
+    const groups = groupRecentEvents([
+      serverEvent("player_joined", "2026-07-11T12:00:08.000Z", { text: "Steve joined", subject: "Steve", signature: "player_joined:steve", severity: "success" }),
+      serverEvent("player_left", "2026-07-11T12:00:01.000Z", { text: "Steve left", subject: "Steve", signature: "player_left:steve", severity: "warning" })
+    ], now);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ kind: "player_reconnected", title: "Steve reconnected", details: "Left and rejoined after 7 seconds" });
+    expect(groups[0].events).toHaveLength(2);
   });
 
-  it("labels log-inferred names and preserves the unnamed remainder", () => {
-    const html = render(activity({ playersOnline: 3, playerNames: ["Alex", "Steve"], playerNamesSource: "logs" }));
-    expect(html).toContain("Inferred from recent server logs.");
-    expect(html).toContain("1 additional player did not include a name");
+  it("combines adjacent stop/start lifecycle events into a restart", () => {
+    const groups = groupRecentEvents([
+      serverEvent("server_started", "2026-07-11T12:01:00.000Z", { text: "Server started", severity: "success" }),
+      serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped" })
+    ], now);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
+  });
+
+  it("collapses repeated operational warnings while keeping unrelated player activity separate", () => {
+    const overload = { text: "Server is falling behind", signature: "server_overloaded", severity: "warning" as const, details: "Running 100 ticks behind" };
+    const groups = groupRecentEvents([
+      serverEvent("server_overloaded", "2026-07-11T12:00:20.000Z", overload),
+      serverEvent("server_overloaded", "2026-07-11T12:00:00.000Z", overload),
+      serverEvent("player_joined", "2026-07-11T11:59:50.000Z", { text: "Alex joined", subject: "Alex", signature: "player_joined:alex" })
+    ], now);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0].events).toHaveLength(2);
+    expect(groups[0].details).toContain("2 occurrences within a minute");
+    expect(groups[1].title).toBe("Alex joined");
   });
 });
 

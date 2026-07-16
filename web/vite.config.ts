@@ -9,9 +9,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": backendTarget,
+      "/api": {
+        target: backendTarget,
+        // Preserve the browser-facing Vite host so the backend's same-origin
+        // CSRF check can validate requests made through the development proxy.
+        changeOrigin: false
+      },
       "/ws": {
         target: backendWsTarget,
+        changeOrigin: false,
         ws: true
       }
     }

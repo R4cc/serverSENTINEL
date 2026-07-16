@@ -1,8 +1,8 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, ResourceSample, ResourceStatsHistory, ServerActivity, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -77,69 +77,6 @@ const stoppedServerMutationMessage = "Stop the server before changing mods or se
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 const activePageStorageKey = "serversentinel-active-page";
 const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
-const playerMetricsStorageKey = "serversentinel-player-metrics";
-const playerMetricsMaxAgeMs = 15 * 60 * 1000;
-
-type StoredPlayerMetrics = {
-  playersOnline: number;
-  maxPlayers?: number | null;
-  savedAt: number;
-};
-
-function mergeTransientPlayerMetrics(incoming: ServerActivity, previous: ServerActivity | undefined, preservePrevious: boolean): ServerActivity {
-  if (!preservePrevious || incoming.playersOnline !== null && incoming.playersOnline !== undefined) return incoming;
-  if (previous?.playersOnline === null || previous?.playersOnline === undefined) return incoming;
-  return {
-    ...incoming,
-    playersOnline: previous.playersOnline,
-    maxPlayers: incoming.maxPlayers ?? previous.maxPlayers
-  };
-}
-
-function readStoredPlayerMetrics() {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(playerMetricsStorageKey) || "{}") as Record<string, StoredPlayerMetrics>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredPlayerMetrics(serverId: string, activity: ServerActivity) {
-  if (activity.playersOnline === null || activity.playersOnline === undefined) return;
-  try {
-    const current = readStoredPlayerMetrics();
-    current[serverId] = {
-      playersOnline: activity.playersOnline,
-      maxPlayers: activity.maxPlayers,
-      savedAt: Date.now()
-    };
-    window.localStorage.setItem(playerMetricsStorageKey, JSON.stringify(current));
-  } catch {
-    // Ignore unavailable browser storage; overview will fall back to live data.
-  }
-}
-
-function clearStoredPlayerMetrics(serverId: string) {
-  try {
-    const current = readStoredPlayerMetrics();
-    if (!(serverId in current)) return;
-    delete current[serverId];
-    window.localStorage.setItem(playerMetricsStorageKey, JSON.stringify(current));
-  } catch {
-    // Ignore unavailable browser storage.
-  }
-}
-
-function storedPlayerMetricsActivity(serverId: string): ServerActivity | null {
-  const stored = readStoredPlayerMetrics()[serverId];
-  if (!stored || Date.now() - stored.savedAt > playerMetricsMaxAgeMs) return null;
-  return {
-    playersOnline: stored.playersOnline,
-    maxPlayers: stored.maxPlayers
-  };
-}
-
 function readStoredActivePage() {
   try {
     const stored = window.localStorage.getItem(activePageStorageKey);
@@ -222,7 +159,7 @@ export default function App() {
   const [appRefreshing, setAppRefreshing] = useState(false);
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
-  const [serverActivities, setServerActivities] = useState<Record<string, ServerActivity>>({});
+  const [playerSnapshots, setPlayerSnapshots] = useState<Record<string, PlayerSnapshot>>({});
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
   const [statusError, setStatusError] = useState("");
@@ -343,24 +280,8 @@ export default function App() {
     setOverviewError("");
     try {
       const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
-      const preservePlayerMetrics = Boolean(status?.server.id === serverId && status.docker.running);
-      const cachedPlayerMetrics = storedPlayerMetricsActivity(serverId);
-      setServerActivities((current) => {
-        const previousActivity = current[serverId] ?? cachedPlayerMetrics ?? undefined;
-        const activity = mergeTransientPlayerMetrics(data.activity, previousActivity, preservePlayerMetrics);
-        if (activity.playersOnline !== null && activity.playersOnline !== undefined) writeStoredPlayerMetrics(serverId, activity);
-        else if (!preservePlayerMetrics) clearStoredPlayerMetrics(serverId);
-        return { ...current, [serverId]: activity };
-      });
       if (activeServerIdRef.current === serverId) {
-        setOverviewData((current) => ({
-          ...data,
-          activity: mergeTransientPlayerMetrics(
-            data.activity,
-            current.activity.playersOnline !== null && current.activity.playersOnline !== undefined ? current.activity : cachedPlayerMetrics ?? undefined,
-            preservePlayerMetrics
-          )
-        }));
+        setOverviewData(data);
         setOverviewError("");
       }
     } catch (error) {
@@ -371,7 +292,7 @@ export default function App() {
     } finally {
       if (activeServerIdRef.current === serverId) setOverviewLoading(false);
     }
-  }, [demoMode, demoRunning, status]);
+  }, [demoMode, demoRunning]);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (overviewRefreshTimeoutRef.current !== null) {
@@ -740,51 +661,38 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (activePage !== "nodes") return;
-    const servers = contextNodes.flatMap((node) => node.servers);
-    if (!servers.length) return;
+    if (activePage !== "nodes" && activePage !== "overview") return;
     if (demoMode) {
-      setServerActivities((current) => ({
+      setPlayerSnapshots((current) => ({
         ...current,
-        [demoServerId]: demoOverviewData(demoRunning).activity
+        [demoServerId]: demoPlayerSnapshot(demoRunning)
       }));
       return;
     }
 
     let cancelled = false;
     let inFlight = false;
-    async function loadNodeServerActivity() {
+    async function loadPlayerSnapshots() {
       if (inFlight || document.hidden) return;
       inFlight = true;
       try {
-        const entries = await Promise.all(servers.map(async (server) => {
-          try {
-            const data = await api<ServerOverviewData>(`/api/servers/${server.id}/events`);
-            return [server.id, data.activity] as const;
-          } catch {
-            return [server.id, undefined] as const;
-          }
-        }));
+        const data = await api<PlayerSnapshotsResponse>("/api/player-snapshots");
         if (cancelled) return;
-        setServerActivities((current) => {
-          const next = { ...current };
-          for (const [serverId, activity] of entries) {
-            if (activity) next[serverId] = activity;
-          }
-          return next;
-        });
+        setPlayerSnapshots(data.snapshots);
+      } catch (error) {
+        if (handleStaleSession(error)) return;
       } finally {
         inFlight = false;
       }
     }
 
-    void loadNodeServerActivity();
-    const interval = window.setInterval(() => void loadNodeServerActivity(), 30_000);
+    void loadPlayerSnapshots();
+    const interval = window.setInterval(() => void loadPlayerSnapshots(), 10_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activePage, contextNodes, demoMode, demoRunning]);
+  }, [activePage, demoMode, demoRunning]);
 
   useEffect(() => {
     const compactLayout = window.matchMedia("(max-width: 1100px)");
@@ -933,11 +841,7 @@ export default function App() {
         window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
         consoleReconnectNoticeTimeoutRef.current = null;
       }
-      const cachedPlayerMetrics = storedPlayerMetricsActivity(activeServer.id);
-      setOverviewData({ events: [], activity: cachedPlayerMetrics ?? {} });
-      if (cachedPlayerMetrics) {
-        setServerActivities((current) => ({ ...current, [activeServer.id]: cachedPlayerMetrics }));
-      }
+      setOverviewData({ events: [], activity: {} });
       setResourceSamples([]);
     }
     if (demoMode && activeServer.id === demoServerId) {
@@ -1091,27 +995,16 @@ export default function App() {
   }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode]);
 
   useEffect(() => {
-    if (!activeServer || activeServerIsDemo || !activeStatus || activeStatus.docker.running) return;
-    clearStoredPlayerMetrics(activeServer.id);
-    setServerActivities((current) => {
-      const activity = current[activeServer.id];
-      if (!activity || (activity.playersOnline === null || activity.playersOnline === undefined) && !activity.playerNames?.length) return current;
-      return {
-        ...current,
-        [activeServer.id]: { ...activity, playersOnline: null, playerNames: [] }
-      };
-    });
-    if (activeServerIdRef.current === activeServer.id) {
-      setOverviewData((current) => {
-        if ((current.activity.playersOnline === null || current.activity.playersOnline === undefined) && !current.activity.playerNames?.length) return current;
-        return { ...current, activity: { ...current.activity, playersOnline: null, playerNames: [] } };
-      });
-    }
-  }, [activeServer?.id, activeServerIsDemo, activeStatus?.docker.running]);
-
-  useEffect(() => {
     persistCommandHistory(window.localStorage, commandHistory, rememberConsoleHistory);
   }, [commandHistory, rememberConsoleHistory]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem("serversentinel-player-metrics");
+    } catch {
+      // Ignore unavailable browser storage; player snapshots are server-owned.
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -2676,7 +2569,7 @@ export default function App() {
             onClearInstall={() => setNodeInstallResult(null)}
             onCopy={(text) => void copyText(text)}
             serverStateLabel={nodeServerStateLabel}
-            serverActivities={serverActivities}
+            playerSnapshots={playerSnapshots}
               formatDate={formatDisplayDate}
             />
           </Suspense>
@@ -2816,6 +2709,7 @@ export default function App() {
                     status={activeStatus}
                     dockerSocketMounted={activeServerDockerSocketMounted}
                     activity={overviewData.activity}
+                    playerSnapshot={playerSnapshots[activeServer.id]}
                     latestResourceSample={resourceSamples.at(-1)}
                     formatNumber={formatDisplayNumber}
                     loading={overviewInitialLoading}
@@ -2833,7 +2727,7 @@ export default function App() {
                     />
                   </Suspense>
 
-                  <ActivePlayersPanel activity={overviewData.activity} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
+                  <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
                   <ModHealthPanel
                     updatePlan={modsWorkspace.data.updatePlan}
                     canView={canViewMods}
