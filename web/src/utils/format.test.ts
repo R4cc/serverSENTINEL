@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone } from "./format";
+import { formatRelativeTimestamp, formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone } from "./format";
 
 describe("configured time zone formatting", () => {
   it("uses the requested zone for timestamped filenames", () => {
@@ -23,5 +23,13 @@ describe("relative timestamp preference", () => {
     expect(relativeTimestampsFromStoredValue(null)).toBe(true);
     expect(relativeTimestampsFromStoredValue("true")).toBe(true);
     expect(relativeTimestampsFromStoredValue("false")).toBe(false);
+  });
+
+  it("formats elapsed timestamps in human-readable units", () => {
+    const now = new Date("2026-07-16T12:00:00.000Z");
+
+    expect(formatRelativeTimestamp("2026-07-16T11:36:00.000Z", now)).toBe("24 minutes ago");
+    expect(formatRelativeTimestamp("2026-07-16T10:00:00.000Z", now)).toBe("2 hours ago");
+    expect(formatRelativeTimestamp("2026-07-15T12:00:00.000Z", now)).toBe("1 day ago");
   });
 });

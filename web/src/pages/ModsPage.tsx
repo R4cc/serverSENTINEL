@@ -10,6 +10,7 @@ import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace"
 import type { RestartRequiredChange } from "../types";
 import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
 import { DialogSurface } from "../components/DialogSurface";
+import { formatRelativeTimestamp } from "../utils/format";
 
 type ModsPageServerContext = {
   minecraftVersion: string;
@@ -34,13 +35,14 @@ type Props = {
   restartRequiredChanges?: RestartRequiredChange[];
   serverContext: ModsPageServerContext;
   access: ModsPageAccess;
+  relativeTimestamps: boolean;
   formatters: {
     date: (value: string | number | Date) => string;
     number: (value: number) => string;
   };
 };
 
-export function ModsPage({ workspace, restartRequiredChanges, serverContext, access, formatters }: Props) {
+export function ModsPage({ workspace, restartRequiredChanges, serverContext, access, relativeTimestamps, formatters }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const { data, state, derived, refs, actions } = workspace;
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
@@ -57,7 +59,7 @@ export function ModsPage({ workspace, restartRequiredChanges, serverContext, acc
       <div className="modsWorkspaceToolbar">
         <div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add mods</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>
         <div className="modsWorkspaceUpdateActions">
-          <span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt}>{formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>
+          <span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>
           <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? "Waiting for the current mod change to finish." : state.updatePlanLoading ? "Checking installed mods for updates." : "Check installed mods for updates."} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>
           {showSafeBatch && <Button className="modsWorkspaceBatchAction" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch} reserveLabel="Updating safe mods…">{state.batchUpdateRunning ? "Updating safe mods…" : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</Button>}
         </div>

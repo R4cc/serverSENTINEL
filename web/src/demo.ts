@@ -367,8 +367,8 @@ export function demoStatus(server: ManagedServer, running: boolean): ServerStatu
   };
 }
 
-export function demoStats(running: boolean): ResourceSample {
-  const elapsed = (Date.now() - demoStartedAt) / 1000;
+export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSample {
+  const elapsed = (sampledAt - (demoStartedAt - 60 * 60 * 1000)) / 1000;
   const memoryLimitBytes = 4 * 1024 * 1024 * 1024;
   const memoryUsageBytes = running ? Math.round((1.35 + Math.sin(elapsed / 12) * 0.18) * 1024 * 1024 * 1024) : 0;
   return {
@@ -379,11 +379,22 @@ export function demoStats(running: boolean): ResourceSample {
     memoryLimitBytes,
     networkRxBytes: running ? Math.round(84_000_000 + elapsed * 680_000 + Math.sin(elapsed / 5) * 180_000) : 0,
     networkTxBytes: running ? Math.round(62_000_000 + elapsed * 510_000 + Math.cos(elapsed / 6) * 120_000) : 0,
-    readAt: new Date().toISOString(),
+    readAt: new Date(sampledAt).toISOString(),
     container: "serversentinel-demo",
     message: running ? "Simulated runtime stats." : "Demo server is stopped.",
-    sampledAt: Date.now()
+    sampledAt
   };
+}
+
+export function demoStatsHistory(
+  running: boolean,
+  sampledAt = Date.now(),
+  sampleIntervalMs = 5_000,
+  sampleLimit = 721
+): ResourceSample[] {
+  return Array.from({ length: sampleLimit }, (_, index) => (
+    demoStats(running, sampledAt - (sampleLimit - index - 1) * sampleIntervalMs)
+  ));
 }
 
 function demoEvent(event: ServerEvent): ServerEvent {
