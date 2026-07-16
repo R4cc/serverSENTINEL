@@ -1,7 +1,7 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatus } from "./demo";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
@@ -1049,7 +1049,7 @@ export default function App() {
   useEffect(() => {
     if (!activeServer || activePage !== "overview" || activeNodeRuntimeBlocked) return;
     if (demoMode && activeServer.id === demoServerId) {
-      setResourceSamples([demoStats(demoRunning)]);
+      setResourceSamples(demoStatsHistory(demoRunning, Date.now(), resourcePollMs, resourceHistorySampleLimit));
       const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-resourceHistorySampleLimit)), resourcePollMs);
       return () => window.clearInterval(interval);
     }
@@ -2815,6 +2815,7 @@ export default function App() {
                   uploadDisabled: uploadModDisabled,
                   uploadDisabledReason: uploadModDisabledReason
                 }}
+                  relativeTimestamps={relativeTimestamps}
                   formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
                 />
               </Suspense>

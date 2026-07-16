@@ -30,6 +30,19 @@ export function formatTimestampForFilename(value: string | number | Date, timeZo
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}-${part("minute")}-${part("second")}`;
 }
 
+export function formatRelativeTimestamp(value: string | number | Date, now = new Date()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1_000));
+  if (elapsedSeconds < 60) return "Just now";
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 export function detectedBrowserTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
