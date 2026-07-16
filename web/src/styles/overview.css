@@ -183,6 +183,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
+  align-self: start;
   align-content: start;
   gap: var(--space-2);
 }
@@ -191,9 +192,9 @@
   content: "";
   position: absolute;
   z-index: 0;
-  top: 18px;
-  bottom: 18px;
-  left: 9px;
+  top: 41px;
+  bottom: 41px;
+  left: 13px;
   width: 2px;
   border-radius: 999px;
   background: linear-gradient(to bottom, var(--border-muted), color-mix(in srgb, var(--accent) 58%, var(--border-muted)));
@@ -412,7 +413,7 @@ button.automationTimelineItem--future:hover:not(:disabled) {
   align-items: center;
   gap: 7px;
   color: var(--text-muted);
-  padding-left: 3px;
+  padding-left: 4px;
 }
 
 .automationTimelineNow .automationTimelineNode {
@@ -442,6 +443,7 @@ button.automationTimelineItem--future:hover:not(:disabled) {
 @container (min-width: 620px) {
   .automationTimeline {
     grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr);
+    align-self: stretch;
     align-items: stretch;
     align-content: stretch;
     gap: var(--space-2);

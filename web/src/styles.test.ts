@@ -11,6 +11,7 @@ const fileManagerStyles = readFileSync(new URL("./styles/file-manager.css", impo
 const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.css", import.meta.url), "utf8");
 const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "utf8");
 const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
+const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it.each([
@@ -36,6 +37,12 @@ describe("global stylesheet entry point", () => {
   it("keeps the overview loading summary on the same five-column desktop grid", () => {
     expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(5,/s);
     expect(primitiveStyles).toMatch(/\.applicationSkeletonWideTile\s*\{[^}]*display:\s*none;/s);
+  });
+
+  it("aligns the compact automation rail with every timeline node", () => {
+    expect(overviewStyles).toMatch(/\.automationTimeline::before\s*\{[^}]*top:\s*41px;[^}]*bottom:\s*41px;[^}]*left:\s*13px;/s);
+    expect(overviewStyles).toMatch(/\.automationTimelineItem\s*\{[^}]*grid-template-columns:\s*20px[^}]*border:\s*var\(--border-subtle\)[^}]*padding:\s*9px 8px 9px 3px;/s);
+    expect(overviewStyles).toMatch(/\.automationTimelineNow\s*\{[^}]*grid-template-columns:\s*20px[^}]*padding-left:\s*4px;/s);
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {
