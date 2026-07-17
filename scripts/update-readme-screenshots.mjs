@@ -126,6 +126,12 @@ async function openPage(page, title, heading) {
   await page.locator(".workspaceHeader").getByRole("heading", { name: heading, exact: true }).waitFor();
 }
 
+async function waitForOverviewTimeline(page) {
+  const timeline = page.locator('.serverTimelinePanel[aria-busy="false"]');
+  await timeline.getByRole("heading", { name: "Server Timeline", exact: true }).waitFor();
+  await timeline.locator(".serverTimelineEChart svg").waitFor();
+}
+
 try {
   if (process.env.SERVERSENTINEL_SCREENSHOT_SKIP_BUILD !== "true") {
     await runNpm(["run", "build"]);
@@ -201,6 +207,7 @@ try {
   }
 
   await page.locator(".workspaceHeader").getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await waitForOverviewTimeline(page);
   await capture(page, "overview.png");
 
   await openPage(page, "console", "Console");
@@ -236,6 +243,7 @@ try {
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await page.locator(".appShell.themeDark").waitFor();
   await openPage(page, "overview", "Overview");
+  await waitForOverviewTimeline(page);
   await capture(page, "overview-dark.png");
 
   console.log(`Updated README screenshots in ${outputDirectory}`);
