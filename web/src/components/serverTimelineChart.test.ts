@@ -143,12 +143,32 @@ describe("server timeline ECharts option", () => {
     const stableMemory = [
       { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 66.1 },
       { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 66.8 },
-      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 92 }
+      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 67.2 }
     ];
     const bounds = adaptiveMemoryAxisBounds(stableMemory, { from: 5_000, to: 25_000 });
     expect(bounds.max - bounds.min).toBeGreaterThanOrEqual(5);
     expect(bounds.min).toBeGreaterThan(60);
     expect(bounds.max).toBeLessThan(70);
+  });
+
+  it("includes interpolated viewport edges so entering and leaving memory lines remain visible", () => {
+    const crossingMemory = [
+      { ...sample, sampledAt: 0, memoryUtilizationPercent: 20 },
+      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 60 },
+      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 65 },
+      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 5 }
+    ];
+    const bounds = adaptiveMemoryAxisBounds(crossingMemory, { from: 5_000, to: 25_000 });
+    expect(bounds.min).toBeLessThan(35);
+    expect(bounds.max).toBeGreaterThan(65);
+  });
+
+  it("keeps true percentage endpoints above the rendered chart boundary", () => {
+    const bounds = adaptiveMemoryAxisBounds([
+      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 0 },
+      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 100 }
+    ], { from: 10_000, to: 20_000 });
+    expect(bounds).toEqual({ min: -0.5, max: 100.5 });
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {

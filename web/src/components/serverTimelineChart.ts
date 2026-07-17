@@ -20,14 +20,31 @@ export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>,
 }
 
 export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
-  const values = samples.flatMap((sample) => (
-    sample.sampledAt >= viewport.from
-    && sample.sampledAt <= viewport.to
-    && typeof sample.memoryUtilizationPercent === "number"
+  const points = samples.flatMap((sample) => (
+    typeof sample.memoryUtilizationPercent === "number"
     && Number.isFinite(sample.memoryUtilizationPercent)
-      ? [sample.memoryUtilizationPercent]
+      ? [{ sampledAt: sample.sampledAt, value: sample.memoryUtilizationPercent }]
       : []
+  )).sort((left, right) => left.sampledAt - right.sampledAt);
+  const values = points.flatMap((point) => (
+    point.sampledAt >= viewport.from && point.sampledAt <= viewport.to ? [point.value] : []
   ));
+  for (const edge of [viewport.from, viewport.to]) {
+    let before: (typeof points)[number] | undefined;
+    for (let index = points.length - 1; index >= 0; index -= 1) {
+      if (points[index].sampledAt > edge) continue;
+      before = points[index];
+      break;
+    }
+    const after = points.find((point) => point.sampledAt >= edge);
+    if (!before || !after) continue;
+    if (before.sampledAt === after.sampledAt) {
+      values.push(before.value);
+      continue;
+    }
+    const progress = (edge - before.sampledAt) / (after.sampledAt - before.sampledAt);
+    values.push(before.value + (after.value - before.value) * progress);
+  }
   if (!values.length) return { min: 0, max: 100 };
   const observedMin = Math.min(...values);
   const observedMax = Math.max(...values);
@@ -40,6 +57,8 @@ export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[],
     if (min === 0) max = Math.min(100, span);
     else min = Math.max(0, 100 - span);
   }
+  if (observedMin <= 0) min = -0.5;
+  if (observedMax >= 100) max = 100.5;
   return { min: Math.floor(min * 10) / 10, max: Math.ceil(max * 10) / 10 };
 }
 
@@ -284,7 +303,7 @@ export function buildTimelineChartOption({
       nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },
       axisTick: { show: false },
-      axisLabel: { color: palette.textMuted, formatter: (value: number) => `${value.toFixed(1)}%` },
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => value < 0 || value > 100 ? "" : `${value.toFixed(1)}%` },
       splitLine: { show: false }
     });
     rightAxisOffset += 52;
