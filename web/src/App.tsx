@@ -2731,6 +2731,7 @@ export default function App() {
                   <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
                   <ModHealthPanel
                     updatePlan={modsWorkspace.data.updatePlan}
+                    loading={modsWorkspace.state.updatePlanLoading}
                     canView={canViewMods}
                     onOpenMods={() => setActivePage("mods")}
                   />

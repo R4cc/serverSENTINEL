@@ -181,21 +181,57 @@ export function ActivePlayersPanel({
 
 export function ModHealthPanel({
   updatePlan,
+  loading = false,
   canView = true,
   onOpenMods
 }: {
   updatePlan: ModUpdatePlan | null;
+  loading?: boolean;
   canView?: boolean;
   onOpenMods: () => void;
 }) {
   if (!canView) return null;
-  if (!updatePlan) return <ModHealthPanelSkeleton />;
+  if (loading || !updatePlan) return <ModHealthPanelSkeleton />;
 
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
   const visibleUpdates = availableUpdates.slice(0, 3);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
-  if (updateCount === 0) return null;
+  if (updateCount === 0) {
+    const attentionCount = updatePlan.counts.blockedUpdates + updatePlan.counts.unknown;
+    const healthy = attentionCount === 0;
+    const title = healthy ? "Mods are up to date" : "Mods need attention";
+    const icon = healthy ? "check" : "shield";
+    return (
+      <button
+        type="button"
+        className={`panel modsHealthPanel modUpdatesCard${healthy ? " modUpdatesCard--healthy" : ""}`}
+        onClick={onOpenMods}
+        aria-label={healthy ? "Open Mods, all installed mods are up to date" : `Open Mods, ${attentionCount} installed mod${attentionCount === 1 ? " needs" : "s need"} attention`}
+      >
+        <span className="modUpdatesCompact">
+          <span>{title}</span>
+          <strong><AppIcon name={icon} /></strong>
+        </span>
+        <span className="modUpdatesWide" aria-hidden="true">
+          <span className="modUpdatesWideHeader">
+            <span>
+              <strong>{title}</strong>
+              <small>{healthy ? `${updatePlan.counts.totalInstalled} installed mod${updatePlan.counts.totalInstalled === 1 ? "" : "s"} checked` : `${attentionCount} installed mod${attentionCount === 1 ? " needs" : "s need"} review`}</small>
+            </span>
+            <AppIcon name="chevronRight" />
+          </span>
+          <span className="modUpdatesHealthyState">
+            <span className="modUpdatesHealthyIcon"><AppIcon name={icon} /></span>
+            <span>
+              <strong>{healthy ? "No updates available" : "No automatic updates ready"}</strong>
+              <small>Open Mods to review the installed set.</small>
+            </span>
+          </span>
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button

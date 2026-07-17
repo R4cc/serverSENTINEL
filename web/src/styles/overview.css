@@ -153,6 +153,16 @@
   color: var(--text);
 }
 
+.modUpdatesCard--healthy {
+  border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.modUpdatesCard--healthy:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 58%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 11%, var(--surface-raised));
+}
+
 .modUpdatesCompact {
   grid-column: 1 / -1;
   min-width: 0;
@@ -327,6 +337,75 @@
   color: var(--sentinel-warning);
   font-size: 20px;
   line-height: 1;
+}
+
+.modUpdatesCard--healthy .modUpdatesCompact > strong {
+  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
+  color: var(--sentinel-success);
+}
+
+.modUpdatesCompact > strong > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modUpdatesHealthyState {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  align-self: stretch;
+  gap: var(--space-3);
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 5%, var(--surface-muted));
+  padding: 9px;
+}
+
+.modUpdatesCard--healthy .modUpdatesHealthyState {
+  border-color: color-mix(in srgb, var(--sentinel-success) 24%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-success) 5%, var(--surface-muted));
+}
+
+.modUpdatesHealthyIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sentinel-warning) 18%, var(--surface-raised));
+  color: var(--sentinel-warning);
+}
+
+.modUpdatesCard--healthy .modUpdatesHealthyIcon {
+  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
+  color: var(--sentinel-success);
+}
+
+.modUpdatesHealthyIcon > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modUpdatesHealthyState > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.modUpdatesHealthyState strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+}
+
+.modUpdatesHealthyState small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .automationPanel {

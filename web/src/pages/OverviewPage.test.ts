@@ -216,9 +216,10 @@ describe("recent event grouping", () => {
 });
 
 describe("mod health", () => {
-  it("reserves the mod update card with a skeleton until the plan loads", () => {
-    const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
+  it("reserves the mod update card with a skeleton while the plan loads", () => {
+    const render = (plan: ModUpdatePlan | null, canView = true, loading = false) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
+      loading,
       canView,
       onOpenMods: () => undefined
     }));
@@ -229,19 +230,34 @@ describe("mod health", () => {
     expect(loadingHtml).toContain("Loading mod updates");
     expect(loadingHtml).toContain("modUpdatesCompact");
     expect(loadingHtml).toContain("modUpdatesWideSkeleton");
+    expect(render(updatePlan({ safeUpdates: 1 }), true, true)).toContain("modUpdatesCardSkeleton");
     expect(render(null, false)).toBe("");
   });
 
-  it("only renders the clickable update count when updates are available", () => {
+  it("keeps a clickable healthy card when no updates are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
       canView,
       onOpenMods: () => undefined
     }));
 
-    expect(render(updatePlan())).toBe("");
-    expect(render(updatePlan({ blockedUpdates: 1, unknown: 1, upToDate: 2 }))).toBe("");
+    const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
+    expect(healthyHtml).toContain("modUpdatesCard--healthy");
+    expect(healthyHtml).toContain("Mods are up to date");
+    expect(healthyHtml).toContain("4 installed mods checked");
+    expect(healthyHtml).toContain("Open Mods, all installed mods are up to date");
+    const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
+    expect(attentionHtml).toContain("Mods need attention");
+    expect(attentionHtml).not.toContain("modUpdatesCard--healthy");
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
+  });
+
+  it("renders the clickable update count when updates are available", () => {
+    const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: plan,
+      canView,
+      onOpenMods: () => undefined
+    }));
 
     const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
     expect(html).toContain("<button");
