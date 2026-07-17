@@ -6,6 +6,7 @@ import type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker
 } from "../types";
+import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
 import {
   buildTimelineChartOption,
@@ -40,6 +41,11 @@ export type TimelineMarker = {
   label: string;
   tone: "join" | "leave" | "server" | "schedule";
   event?: ServerTimelineEvent;
+  reconnect?: {
+    player: string;
+    durationSeconds: number;
+    events: [ServerTimelineEvent, ServerTimelineEvent];
+  };
   schedule?: ServerTimelineScheduleMarker;
 };
 
@@ -84,14 +90,46 @@ function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
 
 export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMarker[] {
   if (!data) return [];
-  return [
-    ...data.events.map((event) => ({
+  const eventMarkers: TimelineMarker[] = [];
+  const events = [...data.events].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    const next = events[index + 1];
+    const player = playerEventSubject(event);
+    const nextPlayer = next ? playerEventSubject(next) : "";
+    const reconnectDuration = next ? next.occurredAt - event.occurredAt : Number.POSITIVE_INFINITY;
+    if (
+      event.eventType === "player_left"
+      && next?.eventType === "player_joined"
+      && samePlayerName(player, nextPlayer)
+      && reconnectDuration >= 0
+      && reconnectDuration <= playerReconnectWindowMs
+    ) {
+      eventMarkers.push({
+        id: `reconnect:${event.id}:${next.id}`,
+        occurredAt: next.occurredAt,
+        label: `${nextPlayer} reconnected`,
+        tone: "join",
+        event: next,
+        reconnect: {
+          player: nextPlayer,
+          durationSeconds: Math.round(reconnectDuration / 1_000),
+          events: [event, next]
+        }
+      });
+      index += 1;
+      continue;
+    }
+    eventMarkers.push({
       id: `event:${event.id}`,
       occurredAt: event.occurredAt,
       label: event.message,
       tone: eventTone(event),
       event
-    })),
+    });
+  }
+  return [
+    ...eventMarkers,
     ...data.schedules.map((schedule) => ({
       id: schedule.id,
       occurredAt: schedule.occurredAt,
@@ -139,6 +177,7 @@ function capitalizeTimelineLabel(value: string) {
 }
 
 export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMarkerDisplayLabel {
+  if (marker.reconnect) return { primary: "Player reconnected", secondary: marker.reconnect.player };
   const event = marker.event;
   if (event?.eventType === "player_joined") return { primary: "Player joined", secondary: event.subject };
   if (event?.eventType === "player_left") return { primary: "Player left", secondary: event.subject };
@@ -208,6 +247,11 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
 
 function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number | Date) => string) {
   return cluster.markers.map((marker) => `${formatDate(marker.occurredAt)} — ${marker.label}`).join("\n");
+}
+
+function timelineMarkerGlyph(marker: TimelineMarker) {
+  if (marker.reconnect) return "↻";
+  return marker.tone === "join" ? "+" : marker.tone === "leave" ? "−" : marker.tone === "server" ? "!" : "S";
 }
 
 function readTimelinePalette(element: HTMLElement): TimelinePalette {
@@ -400,7 +444,9 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  const markers = useMemo(() => allMarkers.filter((marker) => annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
+  const markers = useMemo(() => allMarkers.filter((marker) => marker.reconnect
+    ? annotationEnabled.join || annotationEnabled.leave
+    : annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
   const positionedClusters = useMemo(
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
@@ -588,8 +634,7 @@ export function ServerTimeline({
         )}
         <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
           {positionedClusters.map((cluster) => {
-            const glyph = cluster.markers.length > 1 ? String(cluster.markers.length)
-              : cluster.tone === "join" ? "+" : cluster.tone === "leave" ? "−" : cluster.tone === "server" ? "!" : "S";
+            const glyph = cluster.markers.length > 1 ? String(cluster.markers.length) : timelineMarkerGlyph(cluster.markers[0]);
             const displayLabel = cluster.markers.length > 1
               ? { primary: `${cluster.markers.length} events` }
               : timelineMarkerDisplayLabel(cluster.markers[0]);
@@ -650,7 +695,7 @@ export function ServerTimeline({
                   onClick={() => activateMarker(marker)}
                 >
                   <span className="serverTimelineAnnotationPopoverGlyph" aria-hidden="true">
-                    {marker.tone === "join" ? "+" : marker.tone === "leave" ? "−" : marker.tone === "server" ? "!" : "S"}
+                    {timelineMarkerGlyph(marker)}
                   </span>
                   <span>
                     <strong>{marker.label}</strong>

@@ -31,6 +31,33 @@ describe("server timeline markers", () => {
     expect(markers.map((marker) => marker.tone)).toEqual(["join", "leave", "schedule"]);
   });
 
+  it("combines a leave and rejoin within 30 seconds into one reconnect marker", () => {
+    const value = response();
+    value.events = [
+      { ...value.events[1], id: "left-first", occurredAt: 10_000, timestamp: "2026-01-01T00:00:10.000Z" },
+      { ...value.events[0], id: "joined-again", occurredAt: 17_000, timestamp: "2026-01-01T00:00:17.000Z" }
+    ];
+    const markers = timelineMarkers(value);
+    expect(markers).toHaveLength(2);
+    expect(markers[0]).toMatchObject({
+      id: "reconnect:left-first:joined-again",
+      occurredAt: 17_000,
+      label: "Alex reconnected",
+      tone: "join",
+      reconnect: { player: "Alex", durationSeconds: 7 }
+    });
+    expect(timelineMarkerDisplayLabel(markers[0])).toEqual({ primary: "Player reconnected", secondary: "Alex" });
+  });
+
+  it("keeps longer disconnects as separate leave and join markers", () => {
+    const value = response();
+    value.events = [
+      { ...value.events[1], occurredAt: 10_000 },
+      { ...value.events[0], occurredAt: 41_000 }
+    ];
+    expect(timelineMarkers(value).map((marker) => marker.label)).toEqual(["Alex left", "Alex joined", "Restart scheduled"]);
+  });
+
   it("clusters colliding markers without dropping their contents", () => {
     const markers = timelineMarkers(response());
     const clusters = clusterTimelineMarkers(markers, 0, 60_000, 6);

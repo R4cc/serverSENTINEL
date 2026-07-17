@@ -18,6 +18,7 @@ import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon } from '../components/FileTypeIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
+import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 
@@ -496,10 +497,7 @@ export type RecentEventTimeSection = {
 };
 
 function eventSubject(event: ServerEvent) {
-  if (event.subject?.trim()) return event.subject.trim();
-  if (event.eventType === "player_joined") return event.text.replace(/\s+joined$/i, "").trim();
-  if (event.eventType === "player_left") return event.text.replace(/\s+left$/i, "").trim();
-  return "";
+  return playerEventSubject(event);
 }
 
 function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
@@ -531,9 +529,9 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
     if (
       event.eventType === "player_joined"
       && next?.eventType === "player_left"
-      && eventSubject(event).localeCompare(eventSubject(next), undefined, { sensitivity: "accent" }) === 0
+      && samePlayerName(eventSubject(event), eventSubject(next))
       && duration !== null
-      && duration <= 30
+      && duration * 1_000 <= playerReconnectWindowMs
     ) {
       const player = eventSubject(event);
       groups.push({
