@@ -170,17 +170,22 @@ export function buildTimelineChartOption({
   ];
   const markerLines: Array<{
     xAxis: number;
-    lineStyle: { color: string; type: "dashed"; width: number };
+    lineStyle: { color: string; type: "dashed"; width: number; opacity: number };
     label: { show: boolean; formatter?: string; color?: string; position?: string };
   }> = clusters.map((cluster) => ({
     xAxis: cluster.occurredAt,
-    lineStyle: { color: markerColor(cluster, palette), type: "dashed" as const, width: 1 },
+    lineStyle: {
+      color: markerColor(cluster, palette),
+      type: "dashed" as const,
+      width: Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75),
+      opacity: 0.84
+    },
     label: { show: false }
   }));
   if (now >= viewport.from && now <= viewport.to) {
     markerLines.push({
       xAxis: now,
-      lineStyle: { color: palette.accent, type: "dashed", width: 1 },
+      lineStyle: { color: palette.accent, type: "dashed", width: 1.5, opacity: 0.8 },
       label: { show: true, formatter: "Now", color: palette.textMuted, position: "insideEndTop" }
     });
   }
@@ -260,9 +265,11 @@ export function buildTimelineChartOption({
         yAxisIndex: series.yAxisIndex,
         data: samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
         showSymbol: false,
+        smooth: 0.28,
+        smoothMonotone: "x" as const,
         connectNulls: false,
         silent: false,
-        lineStyle: { color: series.color, width: series.width },
+        lineStyle: { color: series.color, width: series.width, opacity: 0.82, cap: "round", join: "round" },
         itemStyle: { color: series.color },
         emphasis: { focus: "series" as const },
         animation: !reducedMotion

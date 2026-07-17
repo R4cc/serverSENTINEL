@@ -58,6 +58,8 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*340px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
+    expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;[^}]*transform:\s*translateX\(-50%\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineAnnotationDetailsList\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,/s);
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {

@@ -35,6 +35,8 @@ const clusters: MarkerCluster[] = [{
   id: "cluster",
   occurredAt: 10_000,
   tone: "join",
+  slot: 2,
+  slotCount: 24,
   markers: [{ id: "event", occurredAt: 10_000, label: "<Alex> joined & played", tone: "join" }]
 }];
 
@@ -79,14 +81,16 @@ describe("server timeline ECharts option", () => {
       animation: boolean;
       yAxis: unknown[];
       dataZoom: Array<{ startValue: number; endValue: number; zoomOnMouseWheel: string }>;
-      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; connectNulls?: boolean; markLine?: { data: unknown[] } }>;
+      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; markLine?: { data: Array<{ lineStyle: { width: number } }> } }>;
     };
     expect(option.animation).toBe(false);
     expect(option.yAxis).toHaveLength(3);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
     expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, "-"]]);
     expect(option.series.find((series) => series.id === "cpuPercent")?.connectNulls).toBe(false);
+    expect(option.series.find((series) => series.id === "cpuPercent")).toMatchObject({ smooth: 0.28, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
+    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
   });
 
   it("omits disabled metric series", () => {

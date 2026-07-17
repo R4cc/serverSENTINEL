@@ -298,50 +298,148 @@
   top: 7px;
   right: 154px;
   left: 60px;
-  height: 34px;
+  height: 32px;
   pointer-events: none;
 }
 
 .timelineAnnotationLabel {
   position: absolute;
   top: 0;
-  max-width: 132px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
   min-height: 26px;
-  display: inline-flex;
+  display: grid;
+  place-items: center;
   align-items: center;
-  gap: 6px;
-  overflow: hidden;
-  transform: translateX(-8px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  transform: translateX(-50%);
+  border: 2px solid currentColor;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
-  color: var(--text);
-  padding: 3px 7px 3px 5px;
+  padding: 0;
   box-shadow: var(--shadow-xs);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: var(--weight-title);
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1;
   cursor: pointer;
   pointer-events: auto;
 }
 
 .timelineAnnotationLabel > span {
-  width: 8px;
-  height: 8px;
+  color: inherit;
+}
+
+.timelineAnnotationLabel.tone-join { color: var(--timeline-join); }
+.timelineAnnotationLabel.tone-leave { color: var(--timeline-leave); }
+.timelineAnnotationLabel.tone-server { color: var(--timeline-server); }
+.timelineAnnotationLabel.tone-schedule { color: var(--timeline-schedule); }
+.timelineAnnotationLabel[aria-expanded="true"] { background: color-mix(in srgb, currentColor 14%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-50%) translateY(-1px); border-color: currentColor; background: color-mix(in srgb, currentColor 10%, var(--surface-raised)); color: inherit; }
+.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.serverTimelineAnnotationDetails {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface-raised));
+  padding: var(--space-3);
+}
+
+.serverTimelineAnnotationDetailsHeader,
+.serverTimelineAnnotationDetailsHeader > div,
+.serverTimelineAnnotationDetail,
+.serverTimelineAnnotationDetailCopy {
+  display: flex;
+  align-items: center;
+}
+
+.serverTimelineAnnotationDetailsHeader {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.serverTimelineAnnotationDetailsHeader > div {
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.serverTimelineAnnotationDetailsHeader strong { color: var(--text); font-size: 13px; }
+.serverTimelineAnnotationDetailsHeader span { color: var(--text-muted); font-size: 11px; }
+.serverTimelineAnnotationDetailsHeader .uiButton { min-width: 30px; font-size: 18px; line-height: 1; }
+
+.serverTimelineAnnotationDetailsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-2);
+}
+
+.serverTimelineAnnotationDetail {
+  min-width: 0;
+  min-height: 48px;
+  gap: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 7px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.serverTimelineAnnotationDetail:hover {
+  border-color: color-mix(in srgb, currentColor 44%, var(--border-subtle));
+  background: color-mix(in srgb, currentColor 5%, var(--surface-raised));
+}
+
+.serverTimelineAnnotationDetail:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.serverTimelineAnnotationDetail.tone-join { color: var(--timeline-join); }
+.serverTimelineAnnotationDetail.tone-leave { color: var(--timeline-leave); }
+.serverTimelineAnnotationDetail.tone-server { color: var(--timeline-server); }
+.serverTimelineAnnotationDetail.tone-schedule { color: var(--timeline-schedule); }
+
+.serverTimelineAnnotationDetailGlyph {
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
   border: 2px solid currentColor;
   border-radius: 999px;
   background: var(--surface-raised);
+  font-size: 12px;
+  font-weight: var(--weight-title);
 }
 
-.timelineAnnotationLabel.tone-join > span { color: var(--timeline-join); }
-.timelineAnnotationLabel.tone-leave > span { color: var(--timeline-leave); }
-.timelineAnnotationLabel.tone-server > span { color: var(--timeline-server); }
-.timelineAnnotationLabel.tone-schedule > span { color: var(--timeline-schedule); }
-.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.serverTimelineAnnotationDetailCopy {
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text);
+}
+
+.serverTimelineAnnotationDetailCopy strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverTimelineAnnotationDetailCopy span,
+.serverTimelineAnnotationDetailAction {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.serverTimelineAnnotationDetailAction {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 .serverTimelineTooltip {
   min-width: 190px;

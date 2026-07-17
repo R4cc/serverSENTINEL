@@ -30,6 +30,7 @@ describe("server timeline markers", () => {
     const clusters = clusterTimelineMarkers(markers, 0, 60_000, 6);
     expect(clusters).toHaveLength(2);
     expect(clusters[0].markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left"]);
+    expect(clusters[0]).toMatchObject({ slot: 1, slotCount: 6 });
   });
 
   it("does not pin buffered annotations outside the visible viewport to an edge", () => {
