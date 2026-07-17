@@ -56,6 +56,8 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/@media \(min-width: 721px\) and \(max-width: 980px\)[\s\S]*?\.overviewDashboardGrid > \.resourcePanel \{ grid-area: resource; \}/s);
     expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*340px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+    expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {

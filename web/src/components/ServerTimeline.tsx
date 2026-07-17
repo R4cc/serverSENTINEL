@@ -1,14 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import {
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ScheduleNavigationTarget,
   ServerTimelineEvent,
@@ -16,6 +6,16 @@ import type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker
 } from "../types";
+import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
+import {
+  buildTimelineChartOption,
+  dataZoomWindow,
+  defaultTimelinePalette,
+  liveTimelineWindow,
+  timelineNeedsRefill,
+  timelineQueryWindow,
+  type TimelinePalette
+} from "./serverTimelineChart";
 import { Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
 
 const timelineRanges = [
@@ -27,10 +27,12 @@ const timelineRanges = [
 ] as const;
 
 type TimelineRange = typeof timelineRanges[number]["label"];
-type SeriesKey = "cpuPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond";
+type TimelineSelection = TimelineRange | "custom";
+export type SeriesKey = "cpuPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond";
+export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
 
-type TimelineMarker = {
+export type TimelineMarker = {
   id: string;
   occurredAt: number;
   label: string;
@@ -39,30 +41,19 @@ type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
-type MarkerCluster = {
+export type MarkerCluster = {
   id: string;
   occurredAt: number;
   markers: TimelineMarker[];
   tone: TimelineMarker["tone"];
 };
 
-const seriesOptions: Array<{ key: SeriesKey; label: string; shortLabel: string }> = [
-  { key: "cpuPercent", label: "CPU Usage", shortLabel: "CPU" },
-  { key: "memoryUsageBytes", label: "Memory Usage", shortLabel: "Memory" },
-  { key: "networkRxBytesPerSecond", label: "Network In", shortLabel: "Net In" },
-  { key: "networkTxBytesPerSecond", label: "Network Out", shortLabel: "Net Out" }
+const seriesOptions: Array<{ key: SeriesKey; label: string }> = [
+  { key: "cpuPercent", label: "CPU Usage" },
+  { key: "memoryUsageBytes", label: "Memory Usage" },
+  { key: "networkRxBytesPerSecond", label: "Network In" },
+  { key: "networkTxBytesPerSecond", label: "Network Out" }
 ];
-
-function formatBytes(value: number) {
-  if (value < 1024) return `${Math.max(0, value).toFixed(0)} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)} MB`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
-function formatRate(value: number) {
-  return `${formatBytes(value)}/s`;
-}
 
 function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
   if (event.eventType === "player_joined") return "join";
@@ -95,6 +86,7 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
   const bucketMs = Math.max(1, (to - from) / slots);
   const buckets = new Map<number, TimelineMarker[]>();
   for (const marker of markers) {
+    if (marker.occurredAt < from || marker.occurredAt > to) continue;
     const bucket = Math.max(0, Math.min(slots - 1, Math.floor((marker.occurredAt - from) / bucketMs)));
     const existing = buckets.get(bucket) ?? [];
     existing.push(marker);
@@ -137,76 +129,52 @@ function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number
   return cluster.markers.map((marker) => `${formatDate(marker.occurredAt)} — ${marker.label}`).join("\n");
 }
 
-function AnnotationLabel({
-  props,
-  cluster,
-  formatDate,
-  onActivate
-}: {
-  props: unknown;
-  cluster: MarkerCluster;
-  formatDate: (value: string | number | Date) => string;
-  onActivate: () => void;
-}) {
-  const viewBox = (props as { viewBox?: { x?: number; y?: number } })?.viewBox;
-  const x = viewBox?.x ?? 0;
-  const y = (viewBox?.y ?? 0) + 6;
-  const label = cluster.markers.length > 1 ? `${cluster.markers.length} events` : cluster.markers[0].label;
-  const activateFromKeyboard = (event: KeyboardEvent<SVGGElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onActivate();
-    }
+function readTimelinePalette(element: HTMLElement): TimelinePalette {
+  const styles = getComputedStyle(element);
+  const read = (property: string, fallback: string) => styles.getPropertyValue(property).trim() || fallback;
+  return {
+    cpu: read("--timeline-cpu", defaultTimelinePalette.cpu),
+    memory: read("--timeline-memory", defaultTimelinePalette.memory),
+    networkIn: read("--timeline-network-in", defaultTimelinePalette.networkIn),
+    networkOut: read("--timeline-network-out", defaultTimelinePalette.networkOut),
+    join: read("--timeline-join", defaultTimelinePalette.join),
+    leave: read("--timeline-leave", defaultTimelinePalette.leave),
+    server: read("--timeline-server", defaultTimelinePalette.server),
+    schedule: read("--timeline-schedule", defaultTimelinePalette.schedule),
+    accent: read("--accent", defaultTimelinePalette.accent),
+    text: read("--text", defaultTimelinePalette.text),
+    textMuted: read("--text-muted", defaultTimelinePalette.textMuted),
+    border: read("--border-subtle", defaultTimelinePalette.border),
+    surface: read("--surface-raised", defaultTimelinePalette.surface)
   };
-  return (
-    <g
-      className={`timelineAnnotationLabel tone-${cluster.tone}`}
-      transform={`translate(${x},${y})`}
-      role="button"
-      tabIndex={0}
-      aria-label={markerTitle(cluster, formatDate)}
-      onClick={onActivate}
-      onKeyDown={activateFromKeyboard}
-    >
-      <title>{markerTitle(cluster, formatDate)}</title>
-      <circle r="7" />
-      <text x="11" y="4">{label.length > 22 ? `${label.slice(0, 21)}…` : label}</text>
-    </g>
-  );
 }
 
-function TimelineTooltip({
-  active,
-  payload,
-  label,
-  clusters,
-  span,
-  formatDate
-}: {
-  active?: boolean;
-  payload?: readonly { dataKey?: unknown; value?: unknown; name?: string | number }[];
-  label?: string | number;
-  clusters: MarkerCluster[];
-  span: number;
-  formatDate: (value: string | number | Date) => string;
-}) {
-  const timestamp = Number(label);
-  if (!active || !Number.isFinite(timestamp)) return null;
-  const nearby = clusters.filter((cluster) => Math.abs(cluster.occurredAt - timestamp) <= span / 80);
-  return (
-    <div className="serverTimelineTooltip">
-      <strong>{formatDate(timestamp)}</strong>
-      {payload?.map((entry) => {
-        const value = Number(entry.value);
-        if (!Number.isFinite(value)) return null;
-        const formatted = entry.dataKey === "cpuPercent" ? `${value.toFixed(1)}%`
-          : entry.dataKey === "memoryUsageBytes" ? formatBytes(value)
-            : formatRate(value);
-        return <span key={String(entry.dataKey)}><i className={`timelineTooltipSwatch series-${String(entry.dataKey)}`} />{entry.name}: {formatted}</span>;
-      })}
-      {nearby.flatMap((cluster) => cluster.markers).map((marker) => <span className="timelineTooltipEvent" key={marker.id}>{marker.label}</span>)}
-    </div>
-  );
+function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) {
+  const [palette, setPalette] = useState(defaultTimelinePalette);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      setReducedMotion(media.matches);
+      const next = readTimelinePalette(panel);
+      setPalette((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    const shell = panel.closest(".appShell");
+    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["class", "style"] });
+    media.addEventListener("change", update);
+    update();
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", update);
+    };
+  }, [panelRef]);
+
+  return { palette, reducedMotion };
 }
 
 export function ServerTimeline({
@@ -224,75 +192,99 @@ export function ServerTimeline({
   onOpenConsole: () => void;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
-  const [range, setRange] = useState<TimelineRange>("1h");
+  const initialSpan = timelineRanges[2].milliseconds;
+  const [selection, setSelection] = useState<TimelineSelection>("1h");
+  const [lastPreset, setLastPreset] = useState<TimelineRange>("1h");
   const [live, setLive] = useState(true);
-  const [historicalTo, setHistoricalTo] = useState<number | null>(null);
+  const [viewport, setViewportState] = useState<TimelineWindow>(() => liveTimelineWindow(initialSpan));
   const [data, setData] = useState<ServerTimelineResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [clockNow, setClockNow] = useState(Date.now());
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
     cpuPercent: true,
     memoryUsageBytes: true,
     networkRxBytesPerSecond: true,
     networkTxBytesPerSecond: true
   });
+  const panelRef = useRef<HTMLElement>(null);
+  const viewportRef = useRef(viewport);
   const dataRef = useRef<ServerTimelineResponse | null>(null);
+  const liveRef = useRef(live);
   const lastFullLoadRef = useRef(0);
-  const selectedRange = timelineRanges.find((candidate) => candidate.label === range) ?? timelineRanges[2];
-  const span = selectedRange.milliseconds;
+  const requestIdRef = useRef(0);
+  const navigationTimerRef = useRef<number | undefined>(undefined);
+  const { palette, reducedMotion } = useTimelinePresentation(panelRef);
 
-  const refresh = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
+  const setViewport = useCallback((next: TimelineWindow) => {
+    viewportRef.current = next;
+    setViewportState(next);
+  }, []);
+
+  const setLiveMode = useCallback((next: boolean) => {
+    liveRef.current = next;
+    setLive(next);
+  }, []);
+
+  const loadWindow = useCallback(async (nextViewport: TimelineWindow, nextLive: boolean, options: { showLoading?: boolean; incremental?: boolean } = {}) => {
+    const query = timelineQueryWindow(nextViewport, nextLive);
+    const current = dataRef.current;
     const now = Date.now();
-    const to = live ? now + span * 0.1 : historicalTo ?? now + span * 0.1;
-    const from = to - span;
+    const generatedAt = current ? new Date(current.generatedAt).getTime() : NaN;
+    const incremental = Boolean(
+      options.incremental
+      && current
+      && Number.isFinite(generatedAt)
+      && now - lastFullLoadRef.current < 60_000
+      && current.to >= query.from
+      && current.to <= query.to
+    );
+    const requestFrom = incremental ? Math.max(query.from, generatedAt - 15_000) : query.from;
+    const requestId = ++requestIdRef.current;
+    if (options.showLoading) setLoading(true);
     try {
-      const current = dataRef.current;
-      const generatedAt = current ? new Date(current.generatedAt).getTime() : NaN;
-      const incremental = Boolean(
-        live
-        && !showLoading
-        && current
-        && Number.isFinite(generatedAt)
-        && now - lastFullLoadRef.current < 60_000
-        && Math.abs((current.to - current.from) - span) < 1_000
-        && current.to >= from
-        && current.to <= to
-      );
-      const requestFrom = incremental ? Math.max(from, generatedAt - 15_000) : from;
-      const response = await loadTimeline(requestFrom, to, 900);
-      const next = incremental && current ? mergeTimelineResponses(current, response, from, to) : { ...response, from, to };
+      const response = await loadTimeline(requestFrom, query.to, 1_200);
+      if (requestId !== requestIdRef.current) return;
+      const next = incremental && current
+        ? mergeTimelineResponses(current, response, query.from, query.to)
+        : { ...response, from: query.from, to: query.to };
       if (!incremental) lastFullLoadRef.current = now;
       dataRef.current = next;
       setData(next);
       onLatestSample?.(next.latest);
       setError("");
     } catch (requestError) {
-      setError((requestError as Error).message || "Timeline data is unavailable");
+      if (requestId === requestIdRef.current) setError((requestError as Error).message || "Timeline data is unavailable");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [historicalTo, live, loadTimeline, onLatestSample, span]);
-
-  useEffect(() => () => onLatestSample?.(undefined), [onLatestSample]);
+  }, [loadTimeline, onLatestSample]);
 
   useEffect(() => {
-    void refresh(true);
+    void loadWindow(viewportRef.current, true, { showLoading: true });
+    return () => {
+      requestIdRef.current += 1;
+      if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
+      onLatestSample?.(undefined);
+    };
+  }, [loadWindow, onLatestSample]);
+
+  useEffect(() => {
     if (!live) return;
     const interval = window.setInterval(() => {
-      if (!document.hidden) void refresh();
+      if (document.hidden) return;
+      const span = viewportRef.current.to - viewportRef.current.from;
+      const next = liveTimelineWindow(span);
+      setClockNow(Date.now());
+      setViewport(next);
+      void loadWindow(next, true, { incremental: true });
     }, 5_000);
     return () => window.clearInterval(interval);
-  }, [live, refresh]);
+  }, [live, loadWindow, setViewport]);
 
   const markers = useMemo(() => timelineMarkers(data), [data]);
-  const clusters = useMemo(() => clusterTimelineMarkers(markers, data?.from ?? 0, data?.to ?? 0), [data?.from, data?.to, markers]);
-  const chartData = useMemo<ServerTimelineResourcePoint[]>(() => data?.samples.length ? data.samples : [
-    { sampledAt: data?.from ?? Date.now() - span, available: false, running: false, cpuPercent: null, memoryUsageBytes: null, memoryLimitBytes: null, networkRxBytesPerSecond: null, networkTxBytesPerSecond: null },
-    { sampledAt: data?.to ?? Date.now(), available: false, running: false, cpuPercent: null, memoryUsageBytes: null, memoryLimitBytes: null, networkRxBytesPerSecond: null, networkTxBytesPerSecond: null }
-  ], [data, span]);
-  const chartFrom = data?.from ?? Date.now() - span;
-  const chartTo = data?.to ?? Date.now();
+  const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
+  const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
     const available = data.samples.filter((point) => point.available && point.running && point.cpuPercent !== null && point.memoryUsageBytes !== null).length;
@@ -301,7 +293,7 @@ export function ServerTimeline({
     return "available";
   }, [data]);
 
-  const activateCluster = (cluster: MarkerCluster) => {
+  const activateCluster = useCallback((cluster: MarkerCluster) => {
     const schedule = cluster.markers.find((marker) => marker.schedule)?.schedule;
     if (!schedule) {
       onOpenConsole();
@@ -310,31 +302,71 @@ export function ServerTimeline({
     if (schedule.kind === "run" && schedule.runId) onOpenSchedules({ kind: "completed-run", scheduleId: schedule.scheduleId, runId: schedule.runId });
     else if (schedule.kind === "active" && schedule.runId) onOpenSchedules({ kind: "active-run", scheduleId: schedule.scheduleId, runId: schedule.runId });
     else onOpenSchedules({ kind: "schedule", scheduleId: schedule.scheduleId });
+  }, [onOpenConsole, onOpenSchedules]);
+
+  const selectPreset = (range: TimelineRange) => {
+    const span = timelineRanges.find((candidate) => candidate.label === range)?.milliseconds ?? initialSpan;
+    const next = liveTimelineWindow(span);
+    setSelection(range);
+    setLastPreset(range);
+    setLiveMode(true);
+    setClockNow(Date.now());
+    setViewport(next);
+    void loadWindow(next, true, { showLoading: true });
   };
+
+  const jumpToNow = () => selectPreset(lastPreset);
 
   const pan = (direction: -1 | 1) => {
-    const currentTo = data?.to ?? Date.now() + span * 0.1;
+    const current = viewportRef.current;
+    const span = current.to - current.from;
     const liveBoundary = Date.now() + span * 0.1;
-    const nextTo = Math.min(liveBoundary, currentTo + direction * span * 0.5);
+    const nextTo = Math.min(liveBoundary, current.to + direction * span * 0.5);
     if (direction === 1 && nextTo >= liveBoundary - 1_000) {
-      setHistoricalTo(null);
-      setLive(true);
+      jumpToNow();
       return;
     }
-    setHistoricalTo(nextTo);
-    setLive(false);
+    const next = { from: nextTo - span, to: nextTo };
+    setLiveMode(false);
+    setViewport(next);
+    void loadWindow(next, false);
   };
 
-  const jumpToNow = () => {
-    setHistoricalTo(null);
-    setLive(true);
-  };
+  const handleDataZoom = useCallback((event: TimelineDataZoomEvent) => {
+    const currentData = dataRef.current;
+    if (!currentData) return;
+    const currentQuery = { from: currentData.from, to: currentData.to };
+    const next = dataZoomWindow(event, currentQuery);
+    if (!next) return;
+    const previousSpan = viewportRef.current.to - viewportRef.current.from;
+    const nextSpan = next.to - next.from;
+    if (Math.abs(nextSpan - previousSpan) > previousSpan * 0.01) setSelection("custom");
+    setLiveMode(false);
+    setViewport(next);
+    if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = window.setTimeout(() => {
+      if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+    }, 250);
+  }, [loadWindow, setLiveMode, setViewport]);
+
+  const chartOption = useMemo(() => buildTimelineChartOption({
+    samples: data?.samples ?? [],
+    query,
+    viewport,
+    enabled,
+    clusters,
+    palette,
+    formatTime,
+    formatDate,
+    reducedMotion,
+    now: clockNow
+  }), [clockNow, clusters, data?.samples, enabled, formatDate, formatTime, palette, query, reducedMotion, viewport]);
 
   return (
-    <section className="panel serverTimelinePanel" aria-busy={loading}>
+    <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
       <PanelHeader
         title="Server Timeline"
-        description="Correlate resource usage with player activity, server events, and schedules."
+        description="Correlate resource usage with player activity, server events, and schedules. Drag to pan; use Ctrl or Command with the wheel to zoom."
         actions={<div className="serverTimelineRangeControls" role="group" aria-label="Timeline range">
           <Button variant="ghost" compact className={live ? "active" : ""} onClick={jumpToNow} aria-pressed={live}>Live</Button>
           {timelineRanges.map((candidate) => (
@@ -342,11 +374,12 @@ export function ServerTimeline({
               variant="ghost"
               compact
               key={candidate.label}
-              className={range === candidate.label ? "active" : ""}
-              onClick={() => { setRange(candidate.label); setHistoricalTo(null); setLive(true); }}
-              aria-pressed={range === candidate.label}
+              className={selection === candidate.label ? "active" : ""}
+              onClick={() => selectPreset(candidate.label)}
+              aria-pressed={selection === candidate.label}
             >{candidate.label}</Button>
           ))}
+          {selection === "custom" && <span className="serverTimelineCustomRange" aria-live="polite">Custom</span>}
         </div>}
       />
       {loading && <LoadingLabel>Loading server timeline</LoadingLabel>}
@@ -378,32 +411,25 @@ export function ServerTimeline({
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
       {!loading && resourceState === "partial" && <div className="serverTimelineNotice">Some resource samples are unavailable, so gaps are preserved in the chart.</div>}
-      <div className="serverTimelineChart" role="img" aria-label="Server resource and event timeline">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 48, right: 96, bottom: 12, left: 6 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis type="number" dataKey="sampledAt" domain={[chartFrom, chartTo]} allowDataOverflow tickFormatter={(value) => formatTime(Number(value))} minTickGap={56} tickLine={false} axisLine tickMargin={10} />
-            <YAxis yAxisId="cpu" orientation="left" width={54} tickFormatter={(value) => `${Number(value).toFixed(0)}%`} tickLine={false} axisLine domain={[0, "auto"]} />
-            <YAxis yAxisId="memory" orientation="right" width={68} tickFormatter={(value) => formatBytes(Number(value))} tickLine={false} axisLine domain={[0, "auto"]} />
-            <YAxis yAxisId="network" orientation="right" width={74} tickFormatter={(value) => formatRate(Number(value))} tickLine={false} axisLine={false} domain={[0, "auto"]} />
-            <Tooltip content={(props) => <TimelineTooltip {...props} clusters={clusters} span={span} formatDate={formatDate} />} isAnimationActive={false} />
-            {enabled.cpuPercent && <Line yAxisId="cpu" type="monotone" dataKey="cpuPercent" name="CPU" stroke="var(--timeline-cpu)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />}
-            {enabled.memoryUsageBytes && <Line yAxisId="memory" type="monotone" dataKey="memoryUsageBytes" name="Memory" stroke="var(--timeline-memory)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />}
-            {enabled.networkRxBytesPerSecond && <Line yAxisId="network" type="monotone" dataKey="networkRxBytesPerSecond" name="Network In" stroke="var(--timeline-network-in)" strokeWidth={1.8} dot={false} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />}
-            {enabled.networkTxBytesPerSecond && <Line yAxisId="network" type="monotone" dataKey="networkTxBytesPerSecond" name="Network Out" stroke="var(--timeline-network-out)" strokeWidth={1.8} dot={false} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />}
-            {clusters.map((cluster) => (
-              <ReferenceLine
+      <div className="serverTimelineChart" role="group" aria-label="Server resource and event timeline">
+        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} />
+        <div className="serverTimelineAnnotations" aria-label="Timeline annotations">
+          {clusters.map((cluster) => {
+            const left = Math.max(0, Math.min(100, (cluster.occurredAt - viewport.from) / (viewport.to - viewport.from) * 100));
+            const label = cluster.markers.length > 1 ? `${cluster.markers.length} events` : cluster.markers[0].label;
+            return (
+              <button
+                type="button"
                 key={cluster.id}
-                x={cluster.occurredAt}
-                yAxisId="cpu"
-                stroke={`var(--timeline-${cluster.tone})`}
-                strokeDasharray="3 3"
-                label={(props: unknown) => <AnnotationLabel props={props} cluster={cluster} formatDate={formatDate} onActivate={() => activateCluster(cluster)} />}
-              />
-            ))}
-            {Date.now() >= chartFrom && Date.now() <= chartTo && <ReferenceLine x={Date.now()} yAxisId="cpu" stroke="var(--accent)" strokeDasharray="2 3" label={{ value: "Now", position: "top", fill: "var(--text-muted)", fontSize: 11 }} />}
-          </ComposedChart>
-        </ResponsiveContainer>
+                className={`timelineAnnotationLabel tone-${cluster.tone}`}
+                style={{ left: `${left}%` }}
+                title={markerTitle(cluster, formatDate)}
+                aria-label={markerTitle(cluster, formatDate)}
+                onClick={() => activateCluster(cluster)}
+              ><span aria-hidden="true" />{label.length > 22 ? `${label.slice(0, 21)}…` : label}</button>
+            );
+          })}
+        </div>
       </div>
       {!loading && !data?.samples.length && !markers.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}
     </section>

@@ -32,6 +32,12 @@ describe("server timeline markers", () => {
     expect(clusters[0].markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left"]);
   });
 
+  it("does not pin buffered annotations outside the visible viewport to an edge", () => {
+    const markers = timelineMarkers(response());
+    const clusters = clusterTimelineMarkers(markers, 20_000, 40_000, 6);
+    expect(clusters).toEqual([]);
+  });
+
   it("omits the schedule legend data when permission-filtered responses contain none", () => {
     const value = response();
     value.scheduleAnnotationsAvailable = false;
