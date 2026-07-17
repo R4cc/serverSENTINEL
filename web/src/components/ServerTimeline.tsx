@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
+import { EventIcon } from "./EventIcon";
 import {
   buildTimelineChartOption,
   dataZoomWindow,
@@ -273,9 +274,9 @@ function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number
 }
 
 function timelineMarkerGlyph(marker: TimelineMarker) {
-  if (marker.reconnect) return "↻";
-  if (marker.tone === "join") return "+";
-  if (marker.tone === "leave") return "−";
+  if (marker.reconnect) return <EventIcon kind="player_reconnected" />;
+  if (marker.tone === "join") return <EventIcon kind="player_joined" />;
+  if (marker.tone === "leave") return <EventIcon kind="player_left" />;
   if (marker.tone === "server") return "!";
   return marker.tone === "planned" ? "○" : "▶";
 }

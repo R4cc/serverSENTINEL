@@ -458,6 +458,16 @@
   color: var(--annotation-color);
 }
 
+.timelineAnnotationGlyph svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .timelineAnnotationLabelText {
   width: 0;
   min-width: 0;
@@ -514,11 +524,11 @@
   gap: var(--space-2);
   overflow: auto;
   transform: translateX(-50%);
-  border: 1px solid var(--border-subtle);
+  border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
   padding: var(--space-3);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-elevated);
 }
 
 .serverTimelineAnnotationPopoverHeader,
@@ -532,6 +542,8 @@
 .serverTimelineAnnotationPopoverHeader {
   justify-content: space-between;
   gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
 }
 
 .serverTimelineAnnotationPopoverHeader > div {
@@ -554,7 +566,7 @@
   min-width: 0;
   min-height: 42px;
   gap: var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text);

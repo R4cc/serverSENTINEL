@@ -22,6 +22,13 @@ export const timelineChartInitOptions = {
   renderer: "svg" as const
 };
 
+// Resource data, theme colors, and container size can all settle during the
+// initial render. Apply each complete option synchronously so a resize cannot
+// overtake a deferred full replacement and leave one of the enabled series out.
+export const timelineChartSetOptionOptions = {
+  notMerge: true
+} as const;
+
 export type TimelineDataZoomEvent = {
   start?: number;
   end?: number;
@@ -29,6 +36,34 @@ export type TimelineDataZoomEvent = {
   endValue?: number;
   batch?: TimelineDataZoomEvent[];
 };
+
+export function createChartOptionScheduler(apply: (option: EChartsCoreOption) => void) {
+  let interacting = false;
+  let pending: EChartsCoreOption | undefined;
+  return {
+    startInteraction() {
+      interacting = true;
+    },
+    update(option: EChartsCoreOption) {
+      if (interacting) {
+        pending = option;
+        return;
+      }
+      apply(option);
+    },
+    finishInteraction() {
+      interacting = false;
+      if (!pending) return;
+      const next = pending;
+      pending = undefined;
+      apply(next);
+    },
+    cancel() {
+      interacting = false;
+      pending = undefined;
+    }
+  };
+}
 
 export function EChartsCanvas({
   option,
@@ -45,6 +80,7 @@ export function EChartsCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
+  const optionSchedulerRef = useRef<ReturnType<typeof createChartOptionScheduler> | null>(null);
   const onDataZoomRef = useRef(onDataZoom);
   onDataZoomRef.current = onDataZoom;
 
@@ -53,21 +89,34 @@ export function EChartsCanvas({
     if (!container) return;
     const chart = init(container, undefined, timelineChartInitOptions);
     chartRef.current = chart;
+    const optionScheduler = createChartOptionScheduler((next) => chart.setOption(next, timelineChartSetOptionOptions));
+    optionSchedulerRef.current = optionScheduler;
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
     chart.on("datazoom", handleDataZoom);
+    const renderer = chart.getZr();
+    const startInteraction = () => optionScheduler.startInteraction();
+    const finishInteraction = () => optionScheduler.finishInteraction();
+    renderer.on("mousedown", startInteraction);
+    renderer.on("mouseup", finishInteraction);
+    renderer.on("globalout", finishInteraction);
     const resizeObserver = new ResizeObserver(() => chart.resize());
     resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
+      renderer.off("mousedown", startInteraction);
+      renderer.off("mouseup", finishInteraction);
+      renderer.off("globalout", finishInteraction);
       chart.off("datazoom", handleDataZoom);
+      optionScheduler.cancel();
       chart.dispose();
       if (chartRef.current === chart) chartRef.current = null;
+      if (optionSchedulerRef.current === optionScheduler) optionSchedulerRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    chartRef.current?.setOption(option, { notMerge: true, lazyUpdate: true });
+    optionSchedulerRef.current?.update(option);
   }, [option]);
 
   return <div ref={containerRef} className="serverTimelineEChart" onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} onClick={onClick} />;
