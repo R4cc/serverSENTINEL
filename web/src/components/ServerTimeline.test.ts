@@ -4,9 +4,11 @@ import {
   clusterTimelineMarkers,
   mergeTimelineResponses,
   positionTimelineClusters,
+  timelineAnnotationGridTop,
   timelineMarkers,
   timelineMarkerDisplayLabel,
-  timelineMarkerIsImportant
+  timelineMarkerIsImportant,
+  timelineMarkerPreview
 } from "./ServerTimeline";
 
 function response(): ServerTimelineResponse {
@@ -65,6 +67,23 @@ describe("server timeline markers", () => {
     expect(clusters).toHaveLength(2);
     expect(clusters[0].markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left"]);
     expect(clusters[0]).toMatchObject({ slot: 1, slotCount: 6 });
+  });
+
+  it("previews four clustered events and reports the remaining count", () => {
+    const marker = timelineMarkers(response())[0];
+    const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, label: `Event ${index + 1}` }));
+    const cluster = clusterTimelineMarkers(markers, 0, 60_000, 1)[0];
+    const preview = timelineMarkerPreview(cluster);
+    expect(preview.markers.map((item) => item.label)).toEqual(["Event 1", "Event 2", "Event 3", "Event 4"]);
+    expect(preview.remaining).toBe(2);
+  });
+
+  it("grows the annotation grid to fit stacked event previews", () => {
+    const marker = timelineMarkers(response())[0];
+    const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, occurredAt: 10_000 + index }));
+    const positioned = positionTimelineClusters(clusterTimelineMarkers(markers, 0, 60_000, 1), 0, 60_000);
+    expect(positioned[0]).toMatchObject({ labelTop: 2, labelHeight: 140 });
+    expect(timelineAnnotationGridTop(positioned)).toBe(148);
   });
 
   it("does not pin buffered annotations outside the visible viewport to an edge", () => {

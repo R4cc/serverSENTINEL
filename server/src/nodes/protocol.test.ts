@@ -55,7 +55,7 @@ describe("node protocol v3", () => {
     const capabilities = [...nodeCapabilities.filter((capability) => capability !== "server.players.read"), "server.queryMetrics"];
     const legacy = normalizeNodeHello(hello({
       protocolVersion: nodeUpgradeProtocolVersion,
-      agentVersion: "1.3.0",
+      agentVersion: "1.4.0",
       capabilities
     }));
     expect(legacy.protocolVersion).toBe("2.0");

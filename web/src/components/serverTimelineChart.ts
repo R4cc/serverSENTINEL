@@ -5,7 +5,7 @@ import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline"
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
 export const timelineChartGrid = { left: 56, right: 24, top: 66, bottom: 38 } as const;
 
-export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>) {
+export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
   const cpu = enabled.cpuUtilizationPercent;
   const memory = enabled.memoryUtilizationPercent;
   const network = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
@@ -13,6 +13,7 @@ export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>)
   const visibleRightAxes = Number(memory) + Number(network) + Number(players);
   return {
     ...timelineChartGrid,
+    top,
     left: cpu ? 56 : 24,
     right: visibleRightAxes === 3 ? 180 : visibleRightAxes === 2 ? 128 : visibleRightAxes === 1 ? 76 : 24
   };
@@ -229,7 +230,8 @@ export function buildTimelineChartOption({
   formatTime,
   formatShortTime,
   reducedMotion,
-  now
+  now,
+  gridTop
 }: {
   samples: ServerTimelineResourcePoint[];
   query: TimelineWindow;
@@ -241,8 +243,9 @@ export function buildTimelineChartOption({
   formatShortTime: (value: string | number | Date) => string;
   reducedMotion: boolean;
   now: number;
+  gridTop?: number;
 }): EChartsCoreOption {
-  const grid = timelineChartGridForEnabled(enabled);
+  const grid = timelineChartGridForEnabled(enabled, gridTop);
   const cpuEnabled = enabled.cpuUtilizationPercent;
   const memoryEnabled = enabled.memoryUtilizationPercent;
   const networkEnabled = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;

@@ -356,8 +356,8 @@
 .serverTimelineChart {
   position: relative;
   width: 100%;
-  height: clamp(340px, 26vw, 400px);
-  min-height: 340px;
+  height: calc(clamp(340px, 26vw, 400px) + var(--timeline-annotation-extra, 0px));
+  min-height: calc(340px + var(--timeline-annotation-extra, 0px));
   color: var(--text-muted);
 }
 
@@ -491,6 +491,63 @@
   opacity: 1;
 }
 
+.timelineAnnotationLabel.is-stack {
+  height: auto;
+  min-height: 0;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 15px;
+  padding: 2px;
+}
+
+.timelineAnnotationPreviewRow {
+  --annotation-row-color: var(--annotation-color);
+  min-width: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.timelineAnnotationPreviewRow + .timelineAnnotationPreviewRow,
+.timelineAnnotationMore {
+  border-top: 1px solid var(--border-muted);
+}
+
+.timelineAnnotationPreviewRow .timelineAnnotationGlyph {
+  width: 22px;
+  height: 22px;
+  border-width: 1.5px;
+  border-color: var(--annotation-row-color);
+  color: var(--annotation-row-color);
+}
+
+.timelineAnnotationPreviewRow .timelineAnnotationLabelText {
+  width: auto;
+  flex: 1 1 auto;
+  opacity: 1;
+  text-align: left;
+}
+
+.timelineAnnotationPreviewRow.tone-join { --annotation-row-color: var(--timeline-join); }
+.timelineAnnotationPreviewRow.tone-leave { --annotation-row-color: var(--timeline-leave); }
+.timelineAnnotationPreviewRow.tone-server { --annotation-row-color: var(--timeline-server); }
+.timelineAnnotationPreviewRow.tone-automation,
+.timelineAnnotationPreviewRow.tone-planned { --annotation-row-color: var(--timeline-schedule); }
+
+.timelineAnnotationMore {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 7px 0 29px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-meta);
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .timelineAnnotationLabelText strong,
 .timelineAnnotationLabelText small {
   overflow: hidden;
@@ -503,6 +560,10 @@
 
 .timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
 .timelineAnnotationLabel.align-end.is-expanded { padding: 0 2px 0 8px; }
+.timelineAnnotationLabel.is-stack.align-end { flex-direction: column; padding: 2px; }
+.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationPreviewRow { flex-direction: row-reverse; }
+.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationLabelText { text-align: right; }
+.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationMore { justify-content: flex-end; padding: 0 29px 0 7px; }
 .timelineAnnotationMarker.tone-join { --annotation-color: var(--timeline-join); }
 .timelineAnnotationMarker.tone-leave { --annotation-color: var(--timeline-leave); }
 .timelineAnnotationMarker.tone-server { --annotation-color: var(--timeline-server); }

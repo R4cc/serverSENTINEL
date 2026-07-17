@@ -14,6 +14,7 @@ import {
   dataZoomWindow,
   defaultTimelinePalette,
   liveTimelineWindow,
+  timelineChartGrid,
   timelineChartGridForEnabled,
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
@@ -173,6 +174,8 @@ export type PositionedMarkerCluster = MarkerCluster & {
   leftPercent: number;
   lane: number;
   alignEnd: boolean;
+  labelTop: number;
+  labelHeight: number;
 };
 
 export type TimelineMarkerDisplayLabel = {
@@ -218,19 +221,32 @@ function clusterIsImportant(cluster: MarkerCluster) {
   return cluster.markers.some(timelineMarkerIsImportant);
 }
 
+export const maxTimelineMarkerPreviews = 4;
+
+export function timelineMarkerPreview(cluster: MarkerCluster) {
+  const markers = cluster.markers.slice(0, maxTimelineMarkerPreviews);
+  return { markers, remaining: Math.max(0, cluster.markers.length - markers.length) };
+}
+
 function estimatedMarkerLabelWidth(cluster: MarkerCluster) {
-  const display = cluster.markers.length > 1
-    ? { primary: `${cluster.markers.length} events` }
-    : timelineMarkerDisplayLabel(cluster.markers[0]);
-  const longestLine = Math.max(display.primary.length, display.secondary?.length ?? 0);
+  const preview = timelineMarkerPreview(cluster);
+  const displays = preview.markers.map(timelineMarkerDisplayLabel);
+  const overflowLabel = preview.remaining > 0 ? `${preview.remaining} more ${preview.remaining === 1 ? "event" : "events"}` : "";
+  const longestLine = Math.max(overflowLabel.length, ...displays.flatMap((display) => [display.primary.length, display.secondary?.length ?? 0]));
   return Math.min(220, Math.max(108, 46 + longestLine * 6));
+}
+
+function estimatedMarkerLabelHeight(cluster: MarkerCluster) {
+  if (cluster.markers.length === 1) return 30;
+  const preview = timelineMarkerPreview(cluster);
+  return 4 + preview.markers.length * 28 + (preview.remaining > 0 ? 24 : 0);
 }
 
 export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000, laneCount = 2): PositionedMarkerCluster[] {
   if (to <= from) return [];
   const availableWidth = Math.max(1, railWidth);
   const laneEnds = Array.from({ length: laneCount }, () => Number.NEGATIVE_INFINITY);
-  return clusters.map((cluster) => {
+  const positioned = clusters.map((cluster) => {
     const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
     const center = availableWidth * leftPercent / 100;
     const labelWidth = estimatedMarkerLabelWidth(cluster);
@@ -240,8 +256,15 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
     let lane = laneEnds.findIndex((laneEnd) => laneEnd + 6 <= start);
     if (lane < 0) lane = laneEnds.indexOf(Math.min(...laneEnds));
     laneEnds[lane] = end;
-    return { ...cluster, leftPercent, lane, alignEnd };
+    return { ...cluster, leftPercent, lane, alignEnd, labelHeight: estimatedMarkerLabelHeight(cluster) };
   });
+  const laneHeights = Array.from({ length: laneCount }, (_, lane) => Math.max(0, ...positioned.filter((cluster) => cluster.lane === lane).map((cluster) => cluster.labelHeight)));
+  const laneTops = laneHeights.map((_, lane) => 2 + laneHeights.slice(0, lane).reduce((total, height) => total + height + 4, 0));
+  return positioned.map((cluster) => ({ ...cluster, labelTop: laneTops[cluster.lane] }));
+}
+
+export function timelineAnnotationGridTop(clusters: PositionedMarkerCluster[]) {
+  return Math.max(timelineChartGrid.top, ...clusters.map((cluster) => cluster.labelTop + cluster.labelHeight + 6));
 }
 
 function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
@@ -486,9 +509,10 @@ export function ServerTimeline({
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
     [annotationRailWidth, clusters, viewport.from, viewport.to]
   );
+  const annotationGridTop = useMemo(() => timelineAnnotationGridTop(positionedClusters), [positionedClusters]);
   const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
-  const chartGrid = useMemo(() => timelineChartGridForEnabled(enabled), [enabled]);
+  const chartGrid = useMemo(() => timelineChartGridForEnabled(enabled, annotationGridTop), [annotationGridTop, enabled]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
     const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUtilizationPercent !== null)).length;
@@ -622,8 +646,9 @@ export function ServerTimeline({
     formatTime,
     formatShortTime,
     reducedMotion,
-    now: clockNow
-  }), [clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
+    now: clockNow,
+    gridTop: annotationGridTop
+  }), [annotationGridTop, clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
 
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
@@ -696,7 +721,12 @@ export function ServerTimeline({
       {error && <div className="serverTimelineNotice tone-warning">{error}. Previously loaded data is still shown.</div>}
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
-      <div className="serverTimelineChart" role="group" aria-label="Server resource and event timeline">
+      <div
+        className="serverTimelineChart"
+        role="group"
+        aria-label="Server resource and event timeline"
+        style={{ "--timeline-annotation-extra": `${annotationGridTop - timelineChartGrid.top}px` } as React.CSSProperties}
+      >
         <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} onPointerMove={handleChartPointerMove} onPointerLeave={hideHoverTooltip} onClick={pinHoverTooltip} />
         {hoverTooltip && <span
           className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
@@ -713,12 +743,10 @@ export function ServerTimeline({
         )}
         <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: chartGrid.left, right: chartGrid.right }}>
           {positionedClusters.map((cluster) => {
-            const glyph = cluster.markers.length > 1 ? String(cluster.markers.length) : timelineMarkerGlyph(cluster.markers[0]);
-            const displayLabel = cluster.markers.length > 1
-              ? { primary: `${cluster.markers.length} events` }
-              : timelineMarkerDisplayLabel(cluster.markers[0]);
+            const stacked = cluster.markers.length > 1;
+            const preview = timelineMarkerPreview(cluster);
+            const displayLabel = timelineMarkerDisplayLabel(cluster.markers[0]);
             const important = clusterIsImportant(cluster);
-            const labelTop = 2 + cluster.lane * 32;
             return (
               <div
                 key={cluster.id}
@@ -727,13 +755,13 @@ export function ServerTimeline({
               >
                 <span
                   className="timelineAnnotationConnector"
-                  style={{ top: `${labelTop + 15}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
+                  style={{ top: `${cluster.labelTop + cluster.labelHeight / 2}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
                   aria-hidden="true"
                 />
                 <button
                   type="button"
-                  className={`timelineAnnotationLabel is-expanded${cluster.alignEnd ? " align-end" : ""}${important ? " is-important" : ""}`}
-                  style={{ top: `${labelTop}px` }}
+                  className={`timelineAnnotationLabel is-expanded${stacked ? " is-stack" : ""}${cluster.alignEnd ? " align-end" : ""}${important ? " is-important" : ""}`}
+                  style={{ top: `${cluster.labelTop}px` }}
                   title={markerTitle(cluster, formatDate)}
                   aria-label={markerTitle(cluster, formatDate)}
                   aria-expanded={selectedCluster?.id === cluster.id}
@@ -743,11 +771,35 @@ export function ServerTimeline({
                     setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
                   }}
                 >
-                  <span className="timelineAnnotationGlyph" aria-hidden="true">{glyph}</span>
-                  <span className="timelineAnnotationLabelText" aria-hidden="true">
-                    <strong>{displayLabel.primary}</strong>
-                    {displayLabel.secondary && <small>{displayLabel.secondary}</small>}
-                  </span>
+                  {stacked ? (
+                    <>
+                      {preview.markers.map((marker) => {
+                        const rowLabel = timelineMarkerDisplayLabel(marker);
+                        return (
+                          <span className={`timelineAnnotationPreviewRow tone-${marker.tone}`} key={marker.id} aria-hidden="true">
+                            <span className="timelineAnnotationGlyph">{timelineMarkerGlyph(marker)}</span>
+                            <span className="timelineAnnotationLabelText">
+                              <strong>{rowLabel.primary}</strong>
+                              {rowLabel.secondary && <small>{rowLabel.secondary}</small>}
+                            </span>
+                          </span>
+                        );
+                      })}
+                      {preview.remaining > 0 && (
+                        <span className="timelineAnnotationMore" aria-hidden="true">
+                          {preview.remaining} more {preview.remaining === 1 ? "event" : "events"}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="timelineAnnotationGlyph" aria-hidden="true">{timelineMarkerGlyph(cluster.markers[0])}</span>
+                      <span className="timelineAnnotationLabelText" aria-hidden="true">
+                        <strong>{displayLabel.primary}</strong>
+                        {displayLabel.secondary && <small>{displayLabel.secondary}</small>}
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             );

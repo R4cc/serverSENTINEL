@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0 - 2026-07-17
+
+- Improved Server Timeline event annotations with stacked previews for up to four clustered events and a remaining-event indicator.
+- Stabilized timeline resource-series rendering and drag-to-pan interaction.
+
 ## 1.3.0 - 2026-07-15
 
 - Established SQLite schema 17 as a compact baseline for fresh databases and databases fully migrated through schema 16. Older databases must stage through 1.2.1 first.

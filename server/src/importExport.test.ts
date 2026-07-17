@@ -127,7 +127,7 @@ function artifact(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
     schemaVersion: exportArtifactSchemaVersion,
     manifest: {
       exportedAt: "2026-01-01T00:00:00.000Z",
-      appVersion: "1.3.0",
+      appVersion: "1.4.0",
       sqliteSchemaVersion: 17,
       content: {
         instance: true,
@@ -190,7 +190,7 @@ describe("export/import artifacts", () => {
     await writeFile(join(root, "config", "fabric-api.properties"), "enabled=true\n", "utf8");
     const server = managedServer({ serverDir: root, runtimeIntent: "running" });
     const result = await createExportArtifact({
-      appVersion: "1.3.0",
+      appVersion: "1.4.0",
       settings: { modrinthApiKey: "secret" },
       nodes: [node({ secretHash: "not-exported", joinTokenHash: "not-exported" })],
       servers: [server],
