@@ -76,6 +76,7 @@ import { PlayerSnapshotCoordinator } from "./playerSnapshots.js";
 import {
   ROLE_PRESETS,
   inferRolePreset,
+  hasPermission,
   normalizePermissions,
   permissionsForRolePreset,
   requirePermission as requireUserPermission,
@@ -87,6 +88,8 @@ import { registerOperationsRoutes } from "./routes/operationsRoutes.js";
 import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
+import { TimelineEventCollector } from "./timelineEventCollector.js";
+import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { sameOriginFailure } from "./http/requestOrigin.js";
@@ -100,6 +103,7 @@ import { SessionsRepository } from "./storage/sessionsRepository.js";
 import { ServersRepository } from "./storage/serversRepository.js";
 import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
+import { TimelineEventsRepository } from "./storage/timelineEventsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
@@ -397,7 +401,9 @@ const destructiveRateLimit = { config: { rateLimit: { max: 20, timeWindow: "1 mi
 const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } };
 const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
 const resourceStatsPollMs = 5_000;
-const resourceStatsHistoryWindowMs = 60 * 60 * 1000;
+const resourceStatsHistoryWindowMs = 24 * 60 * 60 * 1000;
+const timelineEventPollMs = 10_000;
+const timelineHistoryWindowMs = 24 * 60 * 60 * 1000;
 const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
@@ -889,6 +895,9 @@ async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
 
 let runtimeRegistry: NodeRuntimeRegistry | undefined;
 let resourceStatsCollector: ResourceStatsCollector | undefined;
+let timelineEventCollector: TimelineEventCollector | undefined;
+let resourceStatsRepository: ResourceStatsRepository;
+let timelineEventsRepository: TimelineEventsRepository;
 let runtimeStateCoordinator: RuntimeStateCoordinator | undefined;
 let playerSnapshotCoordinator: PlayerSnapshotCoordinator | undefined;
 
@@ -5232,6 +5241,47 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/stats/history", async (req
   return resourceStatsCollector.history(server);
 });
 
+app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; maxPoints?: string } }>("/api/servers/:id/timeline", async (request) => {
+  const user = await requireRequestPermission(request, "servers.view");
+  const server = await getServer(request.params.id);
+  const generatedAt = new Date();
+  const to = request.query.to === undefined ? generatedAt.getTime() : Number(request.query.to);
+  const from = request.query.from === undefined ? to - 60 * 60 * 1000 : Number(request.query.from);
+  const requestedMaxPoints = request.query.maxPoints === undefined ? 900 : Number(request.query.maxPoints);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) badRequest("Timeline from and to must define a valid time range");
+  if (to - from > timelineHistoryWindowMs) badRequest("Timeline range cannot exceed 24 hours");
+  if (!Number.isInteger(requestedMaxPoints) || requestedMaxPoints < 100) badRequest("Timeline maxPoints must be a whole number of at least 100");
+  const maxPoints = Math.min(1_200, requestedMaxPoints);
+  const rawSamples = resourceStatsRepository.listRange(server.id, from, to, true);
+  const samples = timelineResourcePoints(rawSamples, from, to, maxPoints);
+  const latestRaw = resourceStatsRepository.latest(server.id);
+  const latest = latestRaw
+    ? timelineResourcePoints(resourceStatsRepository.listRange(server.id, latestRaw.sampledAt, latestRaw.sampledAt, true), latestRaw.sampledAt, latestRaw.sampledAt, 2).at(-1)
+    : undefined;
+  const scheduleAnnotationsAvailable = hasPermission(user, "schedules.view");
+  const scheduleResult = scheduleAnnotationsAvailable
+    ? timelineScheduleMarkers({
+        schedules: server.schedules ?? [],
+        runs: serversRepository.scheduledRunsInRange(server.id, from, to),
+        activeRuns: (server.schedules ?? []).flatMap((schedule) => activeScheduledRunsFor(server.id, schedule.id)),
+        from,
+        to,
+        now: generatedAt.getTime()
+      })
+    : { markers: [], truncated: false };
+  return {
+    from,
+    to,
+    generatedAt: generatedAt.toISOString(),
+    latest,
+    samples,
+    events: timelineEventsRepository.list(server.id, from, to),
+    schedules: scheduleResult.markers,
+    scheduleAnnotationsAvailable,
+    truncated: { schedules: scheduleResult.truncated }
+  };
+});
+
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
@@ -8015,18 +8065,33 @@ modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
   }
 });
 modUpdatePlanCoordinator.start();
+resourceStatsRepository = new ResourceStatsRepository(storageDatabase);
+timelineEventsRepository = new TimelineEventsRepository(storageDatabase);
 resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindowMs,
   readServers: listManagedServers,
   runtimeForServer,
-  statsRepository: new ResourceStatsRepository(storageDatabase)
+  statsRepository: resourceStatsRepository
 });
 resourceStatsCollector.start();
+timelineEventCollector = new TimelineEventCollector({
+  intervalMs: timelineEventPollMs,
+  retentionMs: timelineHistoryWindowMs,
+  readServers: listManagedServers,
+  readLogs: (server) => runtimeForServer(server).serverLogs(server),
+  parseLine: parseLogEvent,
+  repository: timelineEventsRepository,
+  onError: (error, server) => {
+    logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "timeline_events" }, "Timeline event collection deferred");
+  }
+});
+timelineEventCollector.start();
 app.addHook("onClose", async () => {
   runtimeStateCoordinator?.stop();
   modUpdatePlanCoordinator?.stop();
   resourceStatsCollector?.stop();
+  timelineEventCollector?.stop();
   playerSnapshotCoordinator?.stop();
 });
 

@@ -52,6 +52,12 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/@media \(min-width: 2560px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*280px;[\s\S]*?\.modUpdatesWide\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch;/s);
   });
 
+  it("reserves the unified timeline for widths that can support it", () => {
+    expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
+    expect(overviewStyles).toMatch(/@media \(min-width: 721px\) and \(max-width: 980px\)[\s\S]*?\.overviewDashboardGrid > \.resourcePanel \{ grid-area: resource; \}/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*340px;/s);
+  });
+
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {
     expect(modsStyles).toMatch(/\.modsWorkspaceMetric strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
     expect(modsStyles).toMatch(/\.modsMetricValueSkeleton\s*\{[^}]*height:\s*17px;[^}]*margin:\s*0;/s);
@@ -73,6 +79,7 @@ describe("global stylesheet entry point", () => {
     const nativeScrollRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("/* Native document scrolling"));
     expect(nativeScrollRules).toMatch(/html,\s*body\s*\{[^}]*height:\s*auto;[^}]*overflow-y:\s*auto;/s);
     expect(nativeScrollRules).toMatch(/\.appShell,[^{]*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
+    expect(nativeScrollRules).toMatch(/\.mobileNavigationOpen\.appShell\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
     expect(nativeScrollRules).toMatch(/\.nodesPage\s*>\s*\.nodeDrawerBackdrop\s+\.nodeDrawerBody\s*\{[^}]*overflow:\s*visible;/s);
   });
 });

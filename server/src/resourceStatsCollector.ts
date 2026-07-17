@@ -116,11 +116,13 @@ export class ResourceStatsCollector {
     return request;
   }
 
-  async history(server: ManagedServer): Promise<ResourceStatsHistory> {
+  async history(server: ManagedServer, windowMs = 60 * 60 * 1000): Promise<ResourceStatsHistory> {
     if (!this.samples.get(server.id)?.length) {
       await this.collectServer(server);
     }
-    return { samples: [...(this.samples.get(server.id) ?? [])] };
+    const samples = this.samples.get(server.id) ?? [];
+    const latestAt = samples.at(-1)?.sampledAt ?? Date.now();
+    return { samples: samples.filter((sample) => sample.sampledAt >= latestAt - windowMs) };
   }
 
   latest(server: ManagedServer) {

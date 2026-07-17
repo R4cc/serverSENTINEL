@@ -60,6 +60,7 @@ function seedLegacySchema16(path: string) {
   openStorageDatabase(path).close();
   const database = new Database(path);
   database.exec(`
+    DROP TABLE timeline_events;
     ALTER TABLE nodes ADD COLUMN compatibility TEXT;
     ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'));
     ALTER TABLE servers DROP COLUMN start_on_node_start;
@@ -103,6 +104,7 @@ function seedSchema17Baseline(path: string) {
   openStorageDatabase(path).close();
   const database = new Database(path);
   database.exec(`
+    DROP TABLE timeline_events;
     ALTER TABLE servers DROP COLUMN start_on_node_start;
     UPDATE schema_migrations SET version = 17, name = 'current-schema-baseline';
   `);
@@ -110,6 +112,16 @@ function seedSchema17Baseline(path: string) {
     .run("node-17", "Node", "remote", "offline", 0, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
   database.prepare("INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at, runtime_intent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .run("server-17", "node-17", "Server", "/data/server-17", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "stopped");
+  database.close();
+}
+
+function seedSchema18Baseline(path: string) {
+  openStorageDatabase(path).close();
+  const database = new Database(path);
+  database.exec(`
+    DROP TABLE timeline_events;
+    UPDATE schema_migrations SET version = 18, name = 'current-schema-baseline';
+  `);
   database.close();
 }
 
@@ -140,6 +152,17 @@ describe("SQLite storage", () => {
     openDatabases.push(second);
     expect(second.connection.prepare("SELECT version, name FROM schema_migrations").all())
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
+  });
+
+  it("migrates the schema-18 baseline with an empty timeline event store", async () => {
+    const path = await temporaryDatabasePath();
+    seedSchema18Baseline(path);
+
+    const storage = openStorageDatabase(path);
+    openDatabases.push(storage);
+    expect(storage.connection.prepare("SELECT version, name FROM schema_migrations").all())
+      .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
+    expect(columnNames(storage.connection, "timeline_events")).toEqual(["server_id", "event_key", "occurred_at", "event_json"]);
   });
 
   it("migrates the schema-17 baseline with auto-start disabled for existing servers", async () => {

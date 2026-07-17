@@ -16,9 +16,8 @@
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-template-areas:
     "summary summary summary summary summary summary summary summary summary summary summary summary"
-    "resource resource resource resource resource resource resource resource players players players players"
-    "resource resource resource resource resource resource resource resource mods mods mods mods"
-    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+    "players players players players mods mods mods mods automation automation automation automation"
     "events events events events events events events events events events events events";
   gap: var(--space-4);
   align-items: start;
@@ -27,13 +26,14 @@
 .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
   grid-template-areas:
     "summary summary summary summary summary summary summary summary summary summary summary summary"
-    "resource resource resource resource resource resource resource resource players players players players"
-    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+    "players players players players players players automation automation automation automation automation automation"
     "events events events events events events events events events events events events";
 }
 
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
-.overviewDashboardGrid > .resourcePanel { grid-area: resource; align-self: stretch; }
+.overviewDashboardGrid > .resourcePanel { grid-area: timeline; align-self: stretch; }
+.overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .playersPanel { grid-area: players; }
 .overviewDashboardGrid > .modsHealthPanel { grid-area: mods; }
 .overviewDashboardGrid > .automationPanel { grid-area: automation; }
@@ -151,6 +151,217 @@
   border-color: color-mix(in srgb, var(--sentinel-warning) 64%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-warning) 13%, var(--surface-raised));
   color: var(--text);
+}
+
+.serverTimelinePanel {
+  --timeline-cpu: #4169ff;
+  --timeline-memory: #8b4cf6;
+  --timeline-network-in: #34a853;
+  --timeline-network-out: #159ca6;
+  --timeline-join: #2fa84f;
+  --timeline-leave: #df3d72;
+  --timeline-server: #f28b16;
+  --timeline-schedule: #7a42e8;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+.serverTimelinePanel .uiPanelHeader {
+  align-items: start;
+}
+
+.serverTimelineRangeControls,
+.serverTimelineNavigation,
+.serverTimelineSeries,
+.serverTimelineToolbar {
+  display: flex;
+  align-items: center;
+}
+
+.serverTimelineRangeControls {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.serverTimelineRangeControls .uiButton.active {
+  color: var(--accent);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.serverTimelineToolbar {
+  min-width: 0;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-block: 1px solid var(--border-subtle);
+}
+
+.serverTimelineSeries {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.timelineSeriesToggle {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.timelineSeriesToggle > span,
+.timelineAnnotationLegend::before,
+.timelineTooltipSwatch {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.timelineSeriesToggle.active { color: var(--text); }
+.timelineSeriesToggle:not(.active) > span { background: transparent; border: 1px solid currentColor; }
+.timelineSeriesToggle.series-cpuPercent > span,
+.timelineTooltipSwatch.series-cpuPercent { color: var(--timeline-cpu); }
+.timelineSeriesToggle.series-memoryUsageBytes > span,
+.timelineTooltipSwatch.series-memoryUsageBytes { color: var(--timeline-memory); }
+.timelineSeriesToggle.series-networkRxBytesPerSecond > span,
+.timelineTooltipSwatch.series-networkRxBytesPerSecond { color: var(--timeline-network-in); }
+.timelineSeriesToggle.series-networkTxBytesPerSecond > span,
+.timelineTooltipSwatch.series-networkTxBytesPerSecond { color: var(--timeline-network-out); }
+
+.timelineAnnotationLegend {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.timelineAnnotationLegend::before {
+  content: "";
+  border-radius: 999px;
+}
+
+.timelineAnnotationLegend.tone-join::before { background: var(--timeline-join); }
+.timelineAnnotationLegend.tone-leave::before { background: var(--timeline-leave); }
+.timelineAnnotationLegend.tone-server::before { background: var(--timeline-server); }
+.timelineAnnotationLegend.tone-schedule::before { background: var(--timeline-schedule); }
+
+.serverTimelineNavigation {
+  flex: 0 0 auto;
+  gap: var(--space-1);
+}
+
+.serverTimelineChart {
+  width: 100%;
+  height: clamp(340px, 37vw, 470px);
+  min-height: 340px;
+  color: var(--text-muted);
+}
+
+.serverTimelineChart .recharts-cartesian-grid line,
+.serverTimelineChart .recharts-cartesian-axis line {
+  stroke: var(--border-subtle);
+}
+
+.serverTimelineChart .recharts-cartesian-axis-tick-value {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
+.timelineAnnotationLabel {
+  outline: none;
+  cursor: pointer;
+}
+
+.timelineAnnotationLabel circle {
+  fill: var(--surface-raised);
+  stroke: currentColor;
+  stroke-width: 4;
+}
+
+.timelineAnnotationLabel text {
+  fill: var(--text);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+}
+
+.timelineAnnotationLabel.tone-join { color: var(--timeline-join); }
+.timelineAnnotationLabel.tone-leave { color: var(--timeline-leave); }
+.timelineAnnotationLabel.tone-server { color: var(--timeline-server); }
+.timelineAnnotationLabel.tone-schedule { color: var(--timeline-schedule); }
+.timelineAnnotationLabel:focus circle { stroke-width: 6; }
+
+.serverTimelineTooltip {
+  min-width: 190px;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  font-size: 12px;
+}
+
+.serverTimelineTooltip > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.serverTimelineTooltip .timelineTooltipEvent {
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.serverTimelineNotice,
+.serverTimelineEmpty {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  font-size: 12px;
+}
+
+.serverTimelineNotice.tone-warning {
+  color: var(--status-warning-foreground);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-muted));
+}
+
+@media (min-width: 981px) and (max-width: 1180px) {
+  .serverTimelinePanel .uiPanelHeader {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .serverTimelineToolbar {
+    align-items: flex-start;
+  }
+
+  .serverTimelineChart {
+    height: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .serverTimelinePanel * { transition: none !important; animation: none !important; }
 }
 
 .modUpdatesCard--healthy {
@@ -951,6 +1162,8 @@ button.automationTimelineItem--future:hover:not(:disabled) {
       "events";
   }
 
+  .overviewDashboardGrid > .resourcePanel { grid-area: resource; }
+
   .overviewDashboardGrid > .overviewSummary {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -976,6 +1189,8 @@ button.automationTimelineItem--future:hover:not(:disabled) {
       "automation"
       "events";
   }
+
+  .overviewDashboardGrid > .resourcePanel { grid-area: resource; }
 
   .overviewDashboardGrid > .overviewSummary,
   .activePlayerGrid,
@@ -1013,14 +1228,13 @@ button.automationTimelineItem--future:hover:not(:disabled) {
   }
 }
 
-@media (max-width: 1320px) {
+@media (min-width: 981px) and (max-width: 1320px) {
   .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
     grid-template-areas:
-      "summary"
-      "resource"
-      "players"
-      "automation"
-      "events";
+      "summary summary summary summary summary summary summary summary summary summary summary summary"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+      "players players players players players players automation automation automation automation automation automation"
+      "events events events events events events events events events events events events";
   }
 }
 
@@ -1066,18 +1280,20 @@ button.automationTimelineItem--future:hover:not(:disabled) {
   }
 
   .overviewDashboardGrid {
-    grid-template-columns: repeat(16, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary"
-      "resource resource resource resource resource resource resource resource resource resource resource resource events events events events"
-      "players players players players players mods mods mods mods mods automation automation automation automation automation automation";
+      "summary summary summary summary summary summary summary summary summary summary summary summary"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+      "players players players players mods mods mods mods automation automation automation automation"
+      "events events events events events events events events events events events events";
   }
 
   .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
     grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary summary"
-      "resource resource resource resource resource resource resource resource resource resource resource resource events events events events"
-      "players players players players players players players players automation automation automation automation automation automation automation automation";
+      "summary summary summary summary summary summary summary summary summary summary summary summary"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+      "players players players players players players automation automation automation automation automation automation"
+      "events events events events events events events events events events events events";
   }
 
   .overviewDashboardGrid > .overviewSummary {

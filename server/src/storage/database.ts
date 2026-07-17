@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 18;
+export const currentSchemaVersion = 19;
 export const currentSchemaName = "current-schema-baseline";
 
 const legacySchema16Migrations = [
@@ -42,6 +42,7 @@ const applicationTableNames = [
   "scheduled_runs",
   "file_edit_leases",
   "resource_stats",
+  "timeline_events",
   "mod_preferences",
   "operations"
 ] as const;
@@ -59,10 +60,13 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   scheduled_runs: ["id", "server_id", "schedule_id", "schedule_name", "status", "message", "ran_at", "details_json"],
   file_edit_leases: ["lease_id", "server_id", "path", "user_id", "session_id", "display_name", "acquired_at", "refreshed_at", "expires_at", "file_revision"],
   resource_stats: ["server_id", "sampled_at", "sample_json"],
+  timeline_events: ["server_id", "event_key", "occurred_at", "event_json"],
   mod_preferences: ["server_id", "filename", "channel", "metadata_json"],
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
-const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx"];
+const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx"];
+const preTimelineTableNames = applicationTableNames.filter((name) => name !== "timeline_events");
+const preTimelineIndexNames = applicationIndexNames.filter((name) => name !== "timeline_events_occurred_at_idx");
 
 function createCurrentSchema(database: Database.Database) {
   database.exec(`
@@ -215,6 +219,15 @@ function createCurrentSchema(database: Database.Database) {
     );
     CREATE INDEX resource_stats_sampled_at_idx ON resource_stats(sampled_at);
 
+    CREATE TABLE timeline_events (
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      event_key TEXT NOT NULL,
+      occurred_at INTEGER NOT NULL,
+      event_json TEXT NOT NULL,
+      PRIMARY KEY (server_id, event_key)
+    );
+    CREATE INDEX timeline_events_occurred_at_idx ON timeline_events(server_id, occurred_at);
+
     CREATE TABLE mod_preferences (
       server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
       filename TEXT NOT NULL,
@@ -261,6 +274,12 @@ function isSchema17Baseline(history: AppliedMigration[]) {
     && history[0].name === currentSchemaName;
 }
 
+function isSchema18Baseline(history: AppliedMigration[]) {
+  return history.length === 1
+    && history[0].version === 18
+    && history[0].name === currentSchemaName;
+}
+
 function isLegacySchema16(history: AppliedMigration[]) {
   return history.length === legacySchema16Migrations.length
     && history.every((migration, index) => migration.version === index + 1 && migration.name === legacySchema16Migrations[index]);
@@ -289,15 +308,16 @@ function sameNameSet(actual: string[], expected: readonly string[]) {
   return sameNames([...actual].sort(), [...expected].sort());
 }
 
-function assertApplicationTables(database: Database.Database) {
+function assertApplicationTables(database: Database.Database, includesTimeline = true) {
   const actual = applicationTables(database).map((table) => table.name).sort();
-  const expected = [...applicationTableNames].sort();
+  const expected = [...(includesTimeline ? applicationTableNames : preTimelineTableNames)].sort();
   if (!sameNames(actual, expected)) throw new Error("Malformed SQLite schema: application table layout does not match the supported baseline.");
   for (const [table, columns] of Object.entries(unchangedTableColumns)) {
+    if (!includesTimeline && table === "timeline_events") continue;
     if (!sameNames(tableColumns(database, table), columns)) throw new Error(`Malformed SQLite schema: ${table} columns do not match the supported baseline.`);
   }
   const indexes = database.prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all().map(({ name }) => name);
-  if (!sameNameSet(indexes, applicationIndexNames)) throw new Error("Malformed SQLite schema: application indexes do not match the supported baseline.");
+  if (!sameNameSet(indexes, includesTimeline ? applicationIndexNames : preTimelineIndexNames)) throw new Error("Malformed SQLite schema: application indexes do not match the supported baseline.");
 }
 
 function assertCurrentSchemaLayout(database: Database.Database) {
@@ -310,7 +330,7 @@ function assertCurrentSchemaLayout(database: Database.Database) {
 }
 
 function assertSchema17Layout(database: Database.Database) {
-  assertApplicationTables(database);
+  assertApplicationTables(database, false);
   if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
     || !sameNameSet(tableColumns(database, "servers"), schema17ServerColumns)
     || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
@@ -319,12 +339,34 @@ function assertSchema17Layout(database: Database.Database) {
 }
 
 function assertLegacySchema16Layout(database: Database.Database) {
-  assertApplicationTables(database);
+  assertApplicationTables(database, false);
   if (!sameNameSet(tableColumns(database, "nodes"), [...currentNodeColumns.slice(0, 15), "compatibility", ...currentNodeColumns.slice(15)])
     || !sameNameSet(tableColumns(database, "servers"), [...schema17ServerColumns.slice(0, 17), "desired_runtime_state", ...schema17ServerColumns.slice(17)])
     || !sameNameSet(tableColumns(database, "schedules"), ["server_id", "id", "name", "cron", "commands_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message", "command_delays_json", "command_delays_seconds_json", "steps_json"])) {
     throw new Error("Malformed SQLite schema: schema-16 columns do not match the supported 1.2.1 layout.");
   }
+}
+
+function assertSchema18Layout(database: Database.Database) {
+  assertApplicationTables(database, false);
+  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
+    || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
+    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
+    throw new Error("Malformed SQLite schema: compact schema-18 columns do not match the supported baseline.");
+  }
+}
+
+function createTimelineEventsSchema(database: Database.Database) {
+  database.exec(`
+    CREATE TABLE timeline_events (
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      event_key TEXT NOT NULL,
+      occurred_at INTEGER NOT NULL,
+      event_json TEXT NOT NULL,
+      PRIMARY KEY (server_id, event_key)
+    );
+    CREATE INDEX timeline_events_occurred_at_idx ON timeline_events(server_id, occurred_at);
+  `);
 }
 
 function recordCurrentSchema(database: Database.Database) {
@@ -362,10 +404,20 @@ function initializeSchema(database: Database.Database) {
     return;
   }
 
+  if (isSchema18Baseline(history)) {
+    assertSchema18Layout(database);
+    database.transaction(() => {
+      createTimelineEventsSchema(database);
+      recordCurrentSchema(database);
+    }).immediate();
+    return;
+  }
+
   if (isSchema17Baseline(history)) {
     assertSchema17Layout(database);
     database.transaction(() => {
       database.exec("ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;");
+      createTimelineEventsSchema(database);
       recordCurrentSchema(database);
     }).immediate();
     return;
@@ -382,6 +434,7 @@ function initializeSchema(database: Database.Database) {
         ALTER TABLE servers DROP COLUMN desired_runtime_state;
         ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;
       `);
+      createTimelineEventsSchema(database);
       recordCurrentSchema(database);
     }).immediate();
     return;

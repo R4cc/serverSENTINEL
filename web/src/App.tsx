@@ -1,8 +1,8 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, GeneralJob } from "./types";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData } from "./demo";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -24,7 +24,7 @@ import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
 import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
-import { useMobileViewport } from "./components/useMobileViewport";
+import { useMobileViewport, useWideTimelineViewport } from "./components/useMobileViewport";
 import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
@@ -37,6 +37,7 @@ import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspac
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
 const loadResourcePanel = () => import("./components/ResourcePanel");
+const loadServerTimeline = () => import("./components/ServerTimeline");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
 const loadServerCreatePage = () => import("./pages/ServerCreatePage");
@@ -46,6 +47,7 @@ const loadFilesPage = () => import("./features/files/FilesPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
 const ResourcePanel = lazy(() => loadResourcePanel().then((module) => ({ default: module.ResourcePanel })));
+const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
 const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
@@ -158,6 +160,7 @@ export default function App() {
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
+  const [timelineLatestSample, setTimelineLatestSample] = useState<ServerTimelineResourcePoint>();
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
   const [playerSnapshots, setPlayerSnapshots] = useState<Record<string, PlayerSnapshot>>({});
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -182,6 +185,7 @@ export default function App() {
   const [scheduleNavigationTarget, setScheduleNavigationTarget] = useState<ScheduleNavigationTarget | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
+  const wideTimelineLayout = useWideTimelineViewport();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
@@ -356,6 +360,11 @@ export default function App() {
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
+  const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
+    if (!activeServer) throw new Error("Select a server to load its timeline");
+    if (demoMode && activeServer.id === demoServerId) return demoTimelineData(demoRunning, demoSchedules, from, to);
+    return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
+  }, [activeServer?.id, demoMode, demoRunning, demoSchedules]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
@@ -1047,7 +1056,10 @@ export default function App() {
   }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
-    if (!activeServer || activePage !== "overview" || activeNodeRuntimeBlocked) return;
+    if (!activeServer || activePage !== "overview" || activeNodeRuntimeBlocked || wideTimelineLayout) {
+      setResourceSamples([]);
+      return;
+    }
     if (demoMode && activeServer.id === demoServerId) {
       setResourceSamples(demoStatsHistory(demoRunning, Date.now(), resourcePollMs, resourceHistorySampleLimit));
       const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-resourceHistorySampleLimit)), resourcePollMs);
@@ -1088,7 +1100,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning]);
+  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning, wideTimelineLayout]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
@@ -1295,9 +1307,10 @@ export default function App() {
     const demoLogin = Boolean(authSession?.demoEnabled) && username === "demo" && password === "demo";
     setAuthNotice("");
     if (!demoLogin) {
+      const passwordError = setupRequired ? validatePassword(password, true) : password ? null : "Password is required.";
       const errors = [
         validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-        validatePassword(password, true) ? { field: "password", message: validatePassword(password, true)! } : null
+        passwordError ? { field: "password", message: passwordError } : null
       ].filter((error): error is { field: string; message: string } => Boolean(error));
       if (setValidationNotice(formElement, errors, setAuthNotice)) return;
     }
@@ -2711,22 +2724,39 @@ export default function App() {
                     dockerSocketMounted={activeServerDockerSocketMounted}
                     activity={overviewData.activity}
                     playerSnapshot={playerSnapshots[activeServer.id]}
-                    latestResourceSample={resourceSamples.at(-1)}
+                    latestResourceSample={wideTimelineLayout ? timelineLatestSample : resourceSamples.at(-1)}
                     formatNumber={formatDisplayNumber}
                     loading={overviewInitialLoading}
                   />
 
-                  <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
-                    <ResourcePanel
-                      server={activeServer}
-                      samples={resourceSamples}
-                      status={activeStatus}
-                      dockerSocketMounted={activeServerDockerSocketMounted}
-                      formatNumber={formatDisplayNumber}
-                      formatTime={formatDisplayTime}
-                      loading={overviewLoading && resourceSamples.length === 0}
-                    />
-                  </Suspense>
+                  {wideTimelineLayout ? (
+                    <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
+                      <ServerTimeline
+                        key={activeServer.id}
+                        loadTimeline={loadActiveTimeline}
+                        formatTime={formatDisplayTime}
+                        formatDate={formatDisplayDate}
+                        onLatestSample={setTimelineLatestSample}
+                        onOpenConsole={() => setActivePage("console")}
+                        onOpenSchedules={(target) => {
+                          setScheduleNavigationTarget(target ?? null);
+                          setActivePage("schedule");
+                        }}
+                      />
+                    </Suspense>
+                  ) : (
+                    <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
+                      <ResourcePanel
+                        server={activeServer}
+                        samples={resourceSamples}
+                        status={activeStatus}
+                        dockerSocketMounted={activeServerDockerSocketMounted}
+                        formatNumber={formatDisplayNumber}
+                        formatTime={formatDisplayTime}
+                        loading={overviewLoading && resourceSamples.length === 0}
+                      />
+                    </Suspense>
+                  )}
 
                   <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
                   <ModHealthPanel

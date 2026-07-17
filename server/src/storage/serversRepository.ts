@@ -304,14 +304,24 @@ export class ServersRepository {
         INSERT INTO scheduled_runs (id, server_id, schedule_id, schedule_name, status, message, ran_at, details_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(run.id, serverId, scheduleId, run.scheduleName, run.status, run.message ?? null, run.ranAt, run.details ? JSON.stringify(run.details) : null);
+      const cutoff = new Date(new Date(run.ranAt).getTime() - 24 * 60 * 60 * 1000).toISOString();
       database.prepare(`
         DELETE FROM scheduled_runs
-        WHERE server_id = ? AND schedule_id = ? AND id NOT IN (
+        WHERE server_id = ? AND schedule_id = ? AND ran_at < ? AND id NOT IN (
           SELECT id FROM scheduled_runs WHERE server_id = ? AND schedule_id = ?
           ORDER BY ran_at DESC, id DESC LIMIT 25
         )
-      `).run(serverId, scheduleId, serverId, scheduleId);
+      `).run(serverId, scheduleId, cutoff, serverId, scheduleId);
     });
+  }
+
+  scheduledRunsInRange(serverId: string, from: number, to: number) {
+    return this.storage.connection.prepare<[string, string, string], RunRow>(`
+      SELECT id, server_id, schedule_id, schedule_name, status, message, ran_at, details_json
+      FROM scheduled_runs
+      WHERE server_id = ? AND ran_at >= ? AND ran_at <= ?
+      ORDER BY ran_at, id
+    `).all(serverId, new Date(from).toISOString(), new Date(to).toISOString()).map(runFromRow);
   }
 
   private writeSchedule(database: Database.Database, serverId: string, schedule: ScheduledExecution, update: boolean) {

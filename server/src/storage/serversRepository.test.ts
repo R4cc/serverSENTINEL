@@ -333,6 +333,34 @@ describe("ServersRepository", () => {
     });
   });
 
+  it("retains every scheduled run from the last 24 hours plus at least the newest 25", async () => {
+    const { storage, servers } = await createRepositories();
+    const server = managedServer();
+    servers.create(server);
+    storage.connection.prepare("DELETE FROM scheduled_runs WHERE server_id = ?").run(server.id);
+    const start = new Date("2026-01-01T00:00:00.000Z").getTime();
+    for (let index = 0; index < 30; index += 1) {
+      servers.recordScheduledRun(server.id, "schedule-id", {
+        id: `dense-${index}`,
+        scheduleId: "schedule-id",
+        scheduleName: "Backup notice",
+        status: "success",
+        ranAt: new Date(start + index * 60_000).toISOString()
+      });
+    }
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 30 });
+    expect(servers.scheduledRunsInRange(server.id, start, start + 60 * 60_000)).toHaveLength(30);
+
+    servers.recordScheduledRun(server.id, "schedule-id", {
+      id: "two-days-later",
+      scheduleId: "schedule-id",
+      scheduleName: "Backup notice",
+      status: "success",
+      ranAt: new Date(start + 48 * 60 * 60_000).toISOString()
+    });
+    expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 25 });
+  });
+
   it("renames display names without changing immutable identity or dependent state", async () => {
     const { storage, servers } = await createRepositories();
     const original = managedServer("00000000-0000-4000-8000-000000000001");

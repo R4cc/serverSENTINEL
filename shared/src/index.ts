@@ -226,6 +226,44 @@ export type ServerEvent = {
   subject?: string;
 };
 
+export type ServerTimelineResourcePoint = {
+  sampledAt: number;
+  available: boolean;
+  running: boolean;
+  cpuPercent: number | null;
+  memoryUsageBytes: number | null;
+  memoryLimitBytes: number | null;
+  networkRxBytesPerSecond: number | null;
+  networkTxBytesPerSecond: number | null;
+};
+
+export type ServerTimelineEvent = ServerEvent & {
+  occurredAt: number;
+};
+
+export type ServerTimelineScheduleMarker = {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  occurredAt: number;
+  kind: "run" | "active" | "upcoming";
+  status: "success" | "failed" | "skipped" | "cancelled" | "running" | "upcoming" | "unknown";
+  runId?: string;
+  message?: string;
+};
+
+export type ServerTimelineResponse = {
+  from: number;
+  to: number;
+  generatedAt: string;
+  latest?: ServerTimelineResourcePoint;
+  samples: ServerTimelineResourcePoint[];
+  events: ServerTimelineEvent[];
+  schedules: ServerTimelineScheduleMarker[];
+  scheduleAnnotationsAvailable: boolean;
+  truncated: { schedules: boolean };
+};
+
 export type ServerActivity = {
   lastStartedAt?: string;
   lastStoppedAt?: string;

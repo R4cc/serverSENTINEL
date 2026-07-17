@@ -1,4 +1,4 @@
-import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus } from './types';
+import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from './types';
 
 const demoStartedAt = Date.now();
 
@@ -395,6 +395,61 @@ export function demoStatsHistory(
   return Array.from({ length: sampleLimit }, (_, index) => (
     demoStats(running, sampledAt - (sampleLimit - index - 1) * sampleIntervalMs)
   ));
+}
+
+export function demoTimelineData(running: boolean, schedules: ScheduledExecution[], from: number, to: number): ServerTimelineResponse {
+  const step = Math.max(5_000, Math.ceil((to - from) / 900 / 5_000) * 5_000);
+  const raw = Array.from({ length: Math.max(2, Math.floor((to - from) / step) + 1) }, (_, index) => demoStats(running, Math.min(to, from + index * step)));
+  const samples = raw.map((sample, index) => {
+    const previous = raw[index - 1];
+    const elapsedSeconds = previous ? Math.max(1, (sample.sampledAt - previous.sampledAt) / 1000) : 0;
+    const valid = sample.available && sample.running;
+    return {
+      sampledAt: sample.sampledAt,
+      available: sample.available,
+      running: sample.running,
+      cpuPercent: valid ? sample.cpuPercent : null,
+      memoryUsageBytes: valid ? sample.memoryUsageBytes : null,
+      memoryLimitBytes: valid ? sample.memoryLimitBytes : null,
+      networkRxBytesPerSecond: valid && previous && sample.networkRxBytes !== undefined && previous.networkRxBytes !== undefined
+        ? Math.max(0, (sample.networkRxBytes - previous.networkRxBytes) / elapsedSeconds)
+        : null,
+      networkTxBytesPerSecond: valid && previous && sample.networkTxBytes !== undefined && previous.networkTxBytes !== undefined
+        ? Math.max(0, (sample.networkTxBytes - previous.networkTxBytes) / elapsedSeconds)
+        : null
+    };
+  });
+  const now = Date.now();
+  const eventFixtures = ([
+    { id: "timeline-alex-join", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: new Date(now - 48 * 60_000).toISOString(), occurredAt: now - 48 * 60_000, signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" },
+    { id: "timeline-overload", eventType: "server_overloaded", type: "warning", severity: "warning", text: "Server is falling behind", message: "Server is falling behind", timestamp: new Date(now - 31 * 60_000).toISOString(), occurredAt: now - 31 * 60_000, signature: "server_overloaded", source: "logs/latest.log" },
+    { id: "timeline-steve-leave", eventType: "player_left", type: "info", severity: "info", text: "Steve left", message: "Steve left", timestamp: new Date(now - 19 * 60_000).toISOString(), occurredAt: now - 19 * 60_000, signature: "player_left:steve", source: "logs/latest.log", subject: "Steve" },
+    { id: "timeline-maya-join", eventType: "player_joined", type: "success", severity: "success", text: "Maya joined", message: "Maya joined", timestamp: new Date(now - 7 * 60_000).toISOString(), occurredAt: now - 7 * 60_000, signature: "player_joined:maya", source: "logs/latest.log", subject: "Maya" }
+  ] satisfies ServerTimelineEvent[]).filter((event) => event.occurredAt >= from && event.occurredAt <= to);
+  const scheduleMarkers: ServerTimelineScheduleMarker[] = schedules.flatMap((schedule) => {
+    const markers: ServerTimelineScheduleMarker[] = [];
+    for (const run of schedule.recentRuns ?? []) {
+      const occurredAt = new Date(run.ranAt).getTime();
+      if (occurredAt >= from && occurredAt <= to) markers.push({ id: `run:${run.id}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "run", status: "success", runId: run.id, message: run.message });
+    }
+    const upcomingAt = schedule.nextRunAt ? new Date(schedule.nextRunAt).getTime() : NaN;
+    if (Number.isFinite(upcomingAt) && upcomingAt >= from && upcomingAt <= to) markers.push({ id: `upcoming:${schedule.id}:${upcomingAt}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt: upcomingAt, kind: "upcoming", status: "upcoming" });
+    return markers;
+  });
+  if (schedules[0] && now + 3 * 60_000 >= from && now + 3 * 60_000 <= to) {
+    scheduleMarkers.push({ id: "upcoming:demo-near", scheduleId: schedules[0].id, scheduleName: schedules[0].name, occurredAt: now + 3 * 60_000, kind: "upcoming", status: "upcoming" });
+  }
+  return {
+    from,
+    to,
+    generatedAt: new Date(now).toISOString(),
+    latest: samples.at(-1),
+    samples,
+    events: eventFixtures,
+    schedules: scheduleMarkers.sort((left, right) => left.occurredAt - right.occurredAt),
+    scheduleAnnotationsAvailable: true,
+    truncated: { schedules: false }
+  };
 }
 
 function demoEvent(event: ServerEvent): ServerEvent {

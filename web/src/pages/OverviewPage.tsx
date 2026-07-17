@@ -3,7 +3,6 @@ import type {
   ManagedServer,
   ModUpdatePlan,
   PlayerSnapshot,
-  ResourceSample,
   ScheduledActiveRun,
   ScheduledExecution,
   ScheduleNavigationTarget,
@@ -65,7 +64,12 @@ export function OverviewSummary({
   dockerSocketMounted: boolean;
   activity: ServerActivity;
   playerSnapshot?: PlayerSnapshot;
-  latestResourceSample?: ResourceSample;
+  latestResourceSample?: {
+    available: boolean;
+    running: boolean;
+    cpuPercent: number | null;
+    memoryUsageBytes: number | null;
+  };
   formatNumber?: (value: number) => string;
   loading?: boolean;
 }) {

@@ -32,3 +32,17 @@ export function useMobileViewport() {
 
   return phoneLayout;
 }
+
+export function useWideTimelineViewport() {
+  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 981px)").matches);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 981px)");
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return wide;
+}

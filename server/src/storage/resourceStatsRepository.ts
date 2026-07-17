@@ -24,6 +24,28 @@ export class ResourceStatsRepository {
     });
   }
 
+  listRange(serverId: string, from: number, to: number, includePrevious = false): ResourceStatsSample[] {
+    const rows = this.storage.connection.prepare<[string, number, number], ResourceStatsRow>(`
+      SELECT sample_json FROM resource_stats
+      WHERE server_id = ? AND sampled_at >= ? AND sampled_at <= ?
+      ORDER BY sampled_at
+    `).all(serverId, from, to).map((row) => JSON.parse(row.sample_json) as ResourceStatsSample);
+    if (!includePrevious) return rows;
+    const previous = this.storage.connection.prepare<[string, number], ResourceStatsRow>(`
+      SELECT sample_json FROM resource_stats
+      WHERE server_id = ? AND sampled_at < ?
+      ORDER BY sampled_at DESC LIMIT 1
+    `).get(serverId, from);
+    return previous ? [JSON.parse(previous.sample_json) as ResourceStatsSample, ...rows] : rows;
+  }
+
+  latest(serverId: string) {
+    const row = this.storage.connection.prepare<[string], ResourceStatsRow>(`
+      SELECT sample_json FROM resource_stats WHERE server_id = ? ORDER BY sampled_at DESC LIMIT 1
+    `).get(serverId);
+    return row ? JSON.parse(row.sample_json) as ResourceStatsSample : undefined;
+  }
+
   prune(cutoff: number) {
     return this.storage.connection.prepare("DELETE FROM resource_stats WHERE sampled_at < ?").run(cutoff).changes;
   }
