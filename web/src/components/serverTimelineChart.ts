@@ -134,6 +134,44 @@ export function timelineTooltipHtml(
   return `<div class="serverTimelineTooltip"><strong>${escapeTimelineHtml(formatDate(timestamp))}</strong>${rows.join("")}${nearby.join("")}</div>`;
 }
 
+export function nearestTimelineSample(samples: ServerTimelineResourcePoint[], timestamp: number) {
+  if (!samples.length) return undefined;
+  let low = 0;
+  let high = samples.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (samples[middle].sampledAt < timestamp) low = middle + 1;
+    else high = middle;
+  }
+  const after = samples[low];
+  const before = samples[Math.max(0, low - 1)];
+  return Math.abs(before.sampledAt - timestamp) <= Math.abs(after.sampledAt - timestamp) ? before : after;
+}
+
+export function timelineHoverTooltipHtml(
+  timestamp: number,
+  samples: ServerTimelineResourcePoint[],
+  enabled: Record<SeriesKey, boolean>,
+  clusters: MarkerCluster[],
+  span: number,
+  formatDate: (value: string | number | Date) => string
+) {
+  const sample = nearestTimelineSample(samples, timestamp);
+  const tooltipTimestamp = sample?.sampledAt ?? timestamp;
+  const names: Record<SeriesKey, string> = {
+    cpuPercent: "CPU",
+    memoryUsageBytes: "Memory",
+    networkRxBytesPerSecond: "Network In",
+    networkTxBytesPerSecond: "Network Out"
+  };
+  const entries: TooltipEntry[] = (Object.keys(names) as SeriesKey[]).flatMap((key) => {
+    const value = sample?.[key];
+    if (!enabled[key] || typeof value !== "number" || !Number.isFinite(value)) return [];
+    return [{ axisValue: tooltipTimestamp, seriesId: key, seriesName: names[key], value: [tooltipTimestamp, value] }];
+  });
+  return timelineTooltipHtml(entries.length ? entries : [{ axisValue: tooltipTimestamp }], clusters, span, formatDate);
+}
+
 function markerColor(cluster: MarkerCluster, palette: TimelinePalette) {
   return palette[cluster.tone];
 }
@@ -147,7 +185,6 @@ export function buildTimelineChartOption({
   palette,
   formatTime,
   formatShortTime,
-  formatDate,
   reducedMotion,
   now
 }: {
@@ -159,7 +196,6 @@ export function buildTimelineChartOption({
   palette: TimelinePalette;
   formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
-  formatDate: (value: string | number | Date) => string;
   reducedMotion: boolean;
   now: number;
 }): EChartsCoreOption {
@@ -198,15 +234,6 @@ export function buildTimelineChartOption({
       description: `Server resource timeline with ${samples.length} samples and ${clusters.reduce((total, cluster) => total + cluster.markers.length, 0)} annotations.`
     },
     grid: { ...timelineChartGrid, containLabel: false },
-    tooltip: {
-      trigger: "axis",
-      renderMode: "html",
-      appendToBody: true,
-      confine: true,
-      className: "serverTimelineTooltipHost",
-      axisPointer: { type: "line", lineStyle: { color: palette.textMuted, type: "dashed" } },
-      formatter: (entries: unknown) => timelineTooltipHtml(entries, clusters, viewport.to - viewport.from, formatDate)
-    },
     xAxis: {
       type: "time",
       min: query.from,
@@ -269,14 +296,15 @@ export function buildTimelineChartOption({
         type: "line" as const,
         yAxisIndex: series.yAxisIndex,
         data: samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
+        symbol: "none",
         showSymbol: false,
         smooth: 0.28,
         smoothMonotone: "x" as const,
         connectNulls: false,
-        silent: false,
+        silent: true,
         lineStyle: { color: series.color, width: series.width, opacity: 0.82, cap: "round", join: "round" },
         itemStyle: { color: series.color },
-        emphasis: { focus: "series" as const },
+        emphasis: { disabled: true },
         animation: !reducedMotion
       })),
       {

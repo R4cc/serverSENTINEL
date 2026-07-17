@@ -4,11 +4,10 @@ import {
   AriaComponent,
   DataZoomInsideComponent,
   GridComponent,
-  MarkLineComponent,
-  TooltipComponent
+  MarkLineComponent
 } from "echarts/components";
 import { init, use, type EChartsCoreOption, type EChartsType } from "echarts/core";
-import { CanvasRenderer } from "echarts/renderers";
+import { SVGRenderer } from "echarts/renderers";
 
 use([
   LineChart,
@@ -16,9 +15,12 @@ use([
   DataZoomInsideComponent,
   GridComponent,
   MarkLineComponent,
-  TooltipComponent,
-  CanvasRenderer
+  SVGRenderer
 ]);
+
+export const timelineChartInitOptions = {
+  renderer: "svg" as const
+};
 
 export type TimelineDataZoomEvent = {
   start?: number;
@@ -30,10 +32,14 @@ export type TimelineDataZoomEvent = {
 
 export function EChartsCanvas({
   option,
-  onDataZoom
+  onDataZoom,
+  onPointerMove,
+  onPointerLeave
 }: {
   option: EChartsCoreOption;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
+  onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
+  onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
@@ -43,7 +49,7 @@ export function EChartsCanvas({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const chart = init(container, undefined, { renderer: "canvas", useDirtyRect: true });
+    const chart = init(container, undefined, timelineChartInitOptions);
     chartRef.current = chart;
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
     chart.on("datazoom", handleDataZoom);
@@ -62,5 +68,5 @@ export function EChartsCanvas({
     chartRef.current?.setOption(option, { notMerge: true, lazyUpdate: true });
   }, [option]);
 
-  return <div ref={containerRef} className="serverTimelineEChart" />;
+  return <div ref={containerRef} className="serverTimelineEChart" onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} />;
 }

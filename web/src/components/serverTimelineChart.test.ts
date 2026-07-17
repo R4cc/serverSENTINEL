@@ -7,6 +7,8 @@ import {
   defaultTimelinePalette,
   escapeTimelineHtml,
   liveTimelineWindow,
+  nearestTimelineSample,
+  timelineHoverTooltipHtml,
   timelineNeedsRefill,
   timelineQueryWindow,
   timelineRetentionMs,
@@ -75,7 +77,6 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: (value) => `short:${value}`,
-      formatDate: String,
       reducedMotion: true,
       now: 12_000
     }) as {
@@ -83,14 +84,16 @@ describe("server timeline ECharts option", () => {
       yAxis: unknown[];
       dataZoom: Array<{ startValue: number; endValue: number; zoomOnMouseWheel: string }>;
       xAxis: { axisLabel: { formatter: (value: number) => string } };
-      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
+      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; symbol?: string; silent?: boolean; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; emphasis?: { disabled: boolean }; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
     };
     expect(option.animation).toBe(false);
+    expect(option).not.toHaveProperty("tooltip");
     expect(option.yAxis).toHaveLength(3);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
     expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, "-"]]);
     expect(option.series.find((series) => series.id === "cpuPercent")?.connectNulls).toBe(false);
-    expect(option.series.find((series) => series.id === "cpuPercent")).toMatchObject({ smooth: 0.28, smoothMonotone: "x" });
+    expect(option.series.find((series) => series.id === "cpuPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.28, smoothMonotone: "x" });
+    expect(option.series.find((series) => series.id === "cpuPercent")?.emphasis).toEqual({ disabled: true });
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("solid");
@@ -107,7 +110,6 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: String,
-      formatDate: String,
       reducedMotion: false,
       now: 30_000
     }) as { series: Array<{ id: string }> };
@@ -124,7 +126,6 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: (value) => `seconds:${value}`,
       formatShortTime: (value) => `minutes:${value}`,
-      formatDate: String,
       reducedMotion: false,
       now: 5_000_000
     }) as { xAxis: { axisLabel: { formatter: (value: number) => string } } };
@@ -136,5 +137,14 @@ describe("server timeline ECharts option", () => {
     expect(html).toContain("&lt;Alex&gt; joined &amp; played");
     expect(html).not.toContain("<Alex>");
     expect(escapeTimelineHtml('"server"')).toBe("&quot;server&quot;");
+  });
+
+  it("builds the hover tooltip without asking ECharts to highlight or redraw a series", () => {
+    const laterSample = { ...sample, sampledAt: 20_000, cpuPercent: 30 };
+    expect(nearestTimelineSample([sample, laterSample], 18_000)).toBe(laterSample);
+    const html = timelineHoverTooltipHtml(18_000, [sample, laterSample], { ...enabled, memoryUsageBytes: false }, [], 10_000, String);
+    expect(html).toContain("20000");
+    expect(html).toContain("CPU: 30.0%");
+    expect(html).not.toContain("Memory:");
   });
 });

@@ -302,6 +302,16 @@
   height: 100%;
 }
 
+.serverTimelineHoverTooltip {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.serverTimelineHoverTooltip.align-end { transform: translateX(-100%); }
+.serverTimelineHoverTooltip.align-bottom { transform: translateY(-100%); }
+.serverTimelineHoverTooltip.align-end.align-bottom { transform: translate(-100%, -100%); }
+
 .serverTimelineAnnotations {
   position: absolute;
   z-index: 2;
@@ -518,13 +528,6 @@
   color: var(--text);
   box-shadow: var(--shadow-md);
   font-size: 12px;
-}
-
-.serverTimelineTooltipHost {
-  border: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-  box-shadow: none !important;
 }
 
 .serverTimelineTooltip > span {

@@ -12,6 +12,8 @@ import {
   dataZoomWindow,
   defaultTimelinePalette,
   liveTimelineWindow,
+  timelineChartGrid,
+  timelineHoverTooltipHtml,
   timelineNeedsRefill,
   timelineQueryWindow,
   type TimelinePalette
@@ -42,6 +44,14 @@ export type TimelineMarker = {
 };
 
 type AnnotationKey = TimelineMarker["tone"];
+
+type TimelineHoverTooltip = {
+  x: number;
+  y: number;
+  html: string;
+  alignEnd: boolean;
+  alignBottom: boolean;
+};
 
 export type MarkerCluster = {
   id: string;
@@ -276,6 +286,7 @@ export function ServerTimeline({
   const [clockNow, setClockNow] = useState(Date.now());
   const [selectedCluster, setSelectedCluster] = useState<MarkerCluster | null>(null);
   const [annotationRailWidth, setAnnotationRailWidth] = useState(1_000);
+  const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
     cpuPercent: true,
     memoryUsageBytes: true,
@@ -296,6 +307,7 @@ export function ServerTimeline({
   const lastFullLoadRef = useRef(0);
   const requestIdRef = useRef(0);
   const navigationTimerRef = useRef<number | undefined>(undefined);
+  const hoverFrameRef = useRef<number | undefined>(undefined);
   const { palette, reducedMotion } = useTimelinePresentation(panelRef);
 
   const setViewport = useCallback((next: TimelineWindow) => {
@@ -383,6 +395,10 @@ export function ServerTimeline({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => () => {
+    if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+  }, []);
+
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
   const markers = useMemo(() => allMarkers.filter((marker) => annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
@@ -458,6 +474,37 @@ export function ServerTimeline({
     }, 250);
   }, [loadWindow, setLiveMode, setViewport]);
 
+  const hideHoverTooltip = useCallback(() => {
+    if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    hoverFrameRef.current = undefined;
+    setHoverTooltip(null);
+  }, []);
+
+  const handleChartPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const plotWidth = rect.width - timelineChartGrid.left - timelineChartGrid.right;
+    const plotBottom = rect.height - timelineChartGrid.bottom;
+    if (plotWidth <= 0 || x < timelineChartGrid.left || x > timelineChartGrid.left + plotWidth || y < timelineChartGrid.top || y > plotBottom) {
+      hideHoverTooltip();
+      return;
+    }
+    const timestamp = viewport.from + (x - timelineChartGrid.left) / plotWidth * (viewport.to - viewport.from);
+    const html = timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate);
+    if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    hoverFrameRef.current = window.requestAnimationFrame(() => {
+      hoverFrameRef.current = undefined;
+      setHoverTooltip({
+        x: x + 14,
+        y: y + 14,
+        html,
+        alignEnd: x > rect.width * 0.68,
+        alignBottom: y > rect.height * 0.6
+      });
+    });
+  }, [clusters, data?.samples, enabled, formatDate, hideHoverTooltip, viewport]);
+
   const chartOption = useMemo(() => buildTimelineChartOption({
     samples: data?.samples ?? [],
     query,
@@ -467,10 +514,9 @@ export function ServerTimeline({
     palette,
     formatTime,
     formatShortTime,
-    formatDate,
     reducedMotion,
     now: clockNow
-  }), [clockNow, clusters, data?.samples, enabled, formatDate, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
+  }), [clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
 
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
@@ -531,7 +577,15 @@ export function ServerTimeline({
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
       <div className="serverTimelineChart" role="group" aria-label="Server resource and event timeline">
-        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} />
+        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} onPointerMove={handleChartPointerMove} onPointerLeave={hideHoverTooltip} />
+        {hoverTooltip && (
+          <div
+            className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.alignBottom ? " align-bottom" : ""}`}
+            style={{ left: hoverTooltip.x, top: hoverTooltip.y }}
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: hoverTooltip.html }}
+          />
+        )}
         <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
           {positionedClusters.map((cluster) => {
             const glyph = cluster.markers.length > 1 ? String(cluster.markers.length)
