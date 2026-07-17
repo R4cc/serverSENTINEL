@@ -74,6 +74,7 @@ describe("server timeline ECharts option", () => {
       clusters,
       palette: defaultTimelinePalette,
       formatTime: String,
+      formatShortTime: (value) => `short:${value}`,
       formatDate: String,
       reducedMotion: true,
       now: 12_000
@@ -81,7 +82,8 @@ describe("server timeline ECharts option", () => {
       animation: boolean;
       yAxis: unknown[];
       dataZoom: Array<{ startValue: number; endValue: number; zoomOnMouseWheel: string }>;
-      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; markLine?: { data: Array<{ lineStyle: { width: number } }> } }>;
+      xAxis: { axisLabel: { formatter: (value: number) => string } };
+      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
     };
     expect(option.animation).toBe(false);
     expect(option.yAxis).toHaveLength(3);
@@ -91,6 +93,8 @@ describe("server timeline ECharts option", () => {
     expect(option.series.find((series) => series.id === "cpuPercent")).toMatchObject({ smooth: 0.28, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
+    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("solid");
+    expect(option.xAxis.axisLabel.formatter(10_000)).toBe("10000");
   });
 
   it("omits disabled metric series", () => {
@@ -102,11 +106,29 @@ describe("server timeline ECharts option", () => {
       clusters: [],
       palette: defaultTimelinePalette,
       formatTime: String,
+      formatShortTime: String,
       formatDate: String,
       reducedMotion: false,
       now: 30_000
     }) as { series: Array<{ id: string }> };
     expect(option.series.some((series) => series.id === "cpuPercent")).toBe(false);
+  });
+
+  it("omits seconds from axis labels for one-hour and longer viewports", () => {
+    const option = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 4_000_000 },
+      viewport: { from: 0, to: 3_600_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: (value) => `seconds:${value}`,
+      formatShortTime: (value) => `minutes:${value}`,
+      formatDate: String,
+      reducedMotion: false,
+      now: 5_000_000
+    }) as { xAxis: { axisLabel: { formatter: (value: number) => string } } };
+    expect(option.xAxis.axisLabel.formatter(10_000)).toBe("minutes:10000");
   });
 
   it("escapes event text rendered into the HTML tooltip", () => {

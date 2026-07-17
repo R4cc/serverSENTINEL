@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ServerTimelineResponse } from "../types";
-import { clusterTimelineMarkers, mergeTimelineResponses, timelineMarkers } from "./ServerTimeline";
+import {
+  clusterTimelineMarkers,
+  mergeTimelineResponses,
+  positionTimelineClusters,
+  timelineMarkers,
+  timelineMarkerShortLabel
+} from "./ServerTimeline";
 
 function response(): ServerTimelineResponse {
   return {
@@ -37,6 +43,20 @@ describe("server timeline markers", () => {
     const markers = timelineMarkers(response());
     const clusters = clusterTimelineMarkers(markers, 20_000, 40_000, 6);
     expect(clusters).toEqual([]);
+  });
+
+  it("positions labels from their exact event time and moves nearby labels into separate lanes", () => {
+    const clusters = clusterTimelineMarkers(timelineMarkers(response()), 0, 60_000, 24);
+    const positioned = positionTimelineClusters(clusters, 0, 60_000);
+    expect(positioned[0].leftPercent).toBeCloseTo(17.5);
+    expect(positioned[1].leftPercent).toBeCloseTo(83.333);
+    expect(positioned[0].lane).toBe(0);
+  });
+
+  it("uses compact player labels and truncates long player names", () => {
+    const marker = timelineMarkers(response())[0];
+    marker.event = { ...marker.event!, subject: "AnExtremelyLongPlayerName" };
+    expect(timelineMarkerShortLabel(marker)).toBe("AnExtremelyLo… joined");
   });
 
   it("omits the schedule legend data when permission-filtered responses contain none", () => {

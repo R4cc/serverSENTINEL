@@ -41,6 +41,8 @@ export type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
+type AnnotationKey = TimelineMarker["tone"];
+
 export type MarkerCluster = {
   id: string;
   occurredAt: number;
@@ -55,6 +57,13 @@ const seriesOptions: Array<{ key: SeriesKey; label: string }> = [
   { key: "memoryUsageBytes", label: "Memory Usage" },
   { key: "networkRxBytesPerSecond", label: "Network In" },
   { key: "networkTxBytesPerSecond", label: "Network Out" }
+];
+
+const annotationOptions: Array<{ key: AnnotationKey; label: string }> = [
+  { key: "join", label: "Player joins" },
+  { key: "leave", label: "Player leaves" },
+  { key: "server", label: "Server events" },
+  { key: "schedule", label: "Schedules" }
 ];
 
 function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
@@ -102,6 +111,45 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
     slot: bucket,
     slotCount: slots
   }));
+}
+
+export type PositionedMarkerCluster = MarkerCluster & {
+  leftPercent: number;
+  lane: number;
+  alignEnd: boolean;
+};
+
+export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, laneCount = 4): PositionedMarkerCluster[] {
+  if (to <= from) return [];
+  const laneEnds = Array.from({ length: laneCount }, () => Number.NEGATIVE_INFINITY);
+  return clusters.map((cluster) => {
+    const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
+    const alignEnd = leftPercent > 82;
+    const start = alignEnd ? leftPercent - 16 : leftPercent - 2;
+    const end = alignEnd ? leftPercent + 2 : leftPercent + 16;
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd + 1 <= start);
+    if (lane < 0) lane = laneEnds.indexOf(Math.min(...laneEnds));
+    laneEnds[lane] = end;
+    return { ...cluster, leftPercent, lane, alignEnd };
+  });
+}
+
+function truncateTimelineLabel(value: string, maximum = 14) {
+  return value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value;
+}
+
+export function timelineMarkerShortLabel(marker: TimelineMarker) {
+  const event = marker.event;
+  if (event?.subject && event.eventType === "player_joined") return `${truncateTimelineLabel(event.subject)} joined`;
+  if (event?.subject && event.eventType === "player_left") return `${truncateTimelineLabel(event.subject)} left`;
+  if (event?.eventType === "server_started") return "Server started";
+  if (event?.eventType === "server_stopped") return "Server stopped";
+  if (event?.eventType === "server_crashed") return "Server crashed";
+  if (event?.eventType === "server_overloaded") return "Server overloaded";
+  if (event?.eventType === "exception_caught") return "Exception caught";
+  if (event?.eventType === "mod_disabled") return `${truncateTimelineLabel(event.subject ?? "Mod")} disabled`;
+  if (marker.schedule) return `${truncateTimelineLabel(marker.schedule.scheduleName)} ${marker.schedule.kind === "upcoming" ? "scheduled" : marker.schedule.status}`;
+  return truncateTimelineLabel(marker.label, 22);
 }
 
 function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
@@ -184,6 +232,7 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
 export function ServerTimeline({
   loadTimeline,
   formatTime,
+  formatShortTime,
   formatDate,
   onLatestSample,
   onOpenConsole,
@@ -191,6 +240,7 @@ export function ServerTimeline({
 }: {
   loadTimeline: LoadTimeline;
   formatTime: (value: string | number | Date) => string;
+  formatShortTime: (value: string | number | Date) => string;
   formatDate: (value: string | number | Date) => string;
   onLatestSample?: (sample?: ServerTimelineResourcePoint) => void;
   onOpenConsole: () => void;
@@ -211,6 +261,12 @@ export function ServerTimeline({
     memoryUsageBytes: true,
     networkRxBytesPerSecond: true,
     networkTxBytesPerSecond: true
+  });
+  const [annotationEnabled, setAnnotationEnabled] = useState<Record<AnnotationKey, boolean>>({
+    join: true,
+    leave: true,
+    server: true,
+    schedule: true
   });
   const panelRef = useRef<HTMLElement>(null);
   const viewportRef = useRef(viewport);
@@ -287,8 +343,20 @@ export function ServerTimeline({
     return () => window.clearInterval(interval);
   }, [live, loadWindow, setViewport]);
 
-  const markers = useMemo(() => timelineMarkers(data), [data]);
+  useEffect(() => {
+    if (!selectedCluster) return;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedCluster(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedCluster]);
+
+  const allMarkers = useMemo(() => timelineMarkers(data), [data]);
+  const markers = useMemo(() => allMarkers.filter((marker) => annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
+  const positionedClusters = useMemo(() => positionTimelineClusters(clusters, viewport.from, viewport.to), [clusters, viewport.from, viewport.to]);
+  const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
@@ -365,10 +433,11 @@ export function ServerTimeline({
     clusters,
     palette,
     formatTime,
+    formatShortTime,
     formatDate,
     reducedMotion,
     now: clockNow
-  }), [clockNow, clusters, data?.samples, enabled, formatDate, formatTime, palette, query, reducedMotion, viewport]);
+  }), [clockNow, clusters, data?.samples, enabled, formatDate, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
 
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
@@ -404,10 +473,20 @@ export function ServerTimeline({
               <span aria-hidden="true" />{series.label}
             </button>
           ))}
-          <span className="timelineAnnotationLegend tone-join">Player joins</span>
-          <span className="timelineAnnotationLegend tone-leave">Player leaves</span>
-          <span className="timelineAnnotationLegend tone-server">Server events</span>
-          {data?.scheduleAnnotationsAvailable && <span className="timelineAnnotationLegend tone-schedule">Schedules</span>}
+          {annotationOptions.filter((annotation) => annotation.key !== "schedule" || data?.scheduleAnnotationsAvailable).map((annotation) => (
+            <button
+              type="button"
+              key={annotation.key}
+              className={`timelineSeriesToggle timelineAnnotationToggle tone-${annotation.key}${annotationEnabled[annotation.key] ? " active" : ""}`}
+              aria-pressed={annotationEnabled[annotation.key]}
+              onClick={() => {
+                setSelectedCluster(null);
+                setAnnotationEnabled((current) => ({ ...current, [annotation.key]: !current[annotation.key] }));
+              }}
+            >
+              <span aria-hidden="true" />{annotation.label}
+            </button>
+          ))}
         </div>
         <div className="serverTimelineNavigation">
           {!live && <Button variant="secondary" compact onClick={jumpToNow}>Jump to now</Button>}
@@ -415,36 +494,6 @@ export function ServerTimeline({
           <Button variant="secondary" compact onClick={() => pan(1)} aria-label="Later timeline window" disabled={live}>›</Button>
         </div>
       </div>
-      {selectedCluster && (
-        <section className="serverTimelineAnnotationDetails" id="server-timeline-annotation-details" aria-label="Selected timeline events">
-          <div className="serverTimelineAnnotationDetailsHeader">
-            <div>
-              <strong>{selectedCluster.markers.length === 1 ? "Event details" : `${selectedCluster.markers.length} events at this point`}</strong>
-              <span>{formatDate(selectedCluster.occurredAt)}</span>
-            </div>
-            <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close event details">×</Button>
-          </div>
-          <div className="serverTimelineAnnotationDetailsList">
-            {selectedCluster.markers.map((marker) => (
-              <button
-                type="button"
-                className={`serverTimelineAnnotationDetail tone-${marker.tone}`}
-                key={marker.id}
-                onClick={() => activateMarker(marker)}
-              >
-                <span className="serverTimelineAnnotationDetailGlyph" aria-hidden="true">
-                  {marker.tone === "join" ? "+" : marker.tone === "leave" ? "−" : marker.tone === "server" ? "!" : "S"}
-                </span>
-                <span className="serverTimelineAnnotationDetailCopy">
-                  <strong>{marker.label}</strong>
-                  <span>{formatDate(marker.occurredAt)} · {marker.tone === "join" ? "Player joined" : marker.tone === "leave" ? "Player left" : marker.tone === "server" ? "Server event" : "Schedule"}</span>
-                </span>
-                <span className="serverTimelineAnnotationDetailAction">Open {marker.schedule ? "Schedules" : "Console"} →</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
       {error && <div className="serverTimelineNotice tone-warning">{error}. Previously loaded data is still shown.</div>}
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
@@ -452,25 +501,61 @@ export function ServerTimeline({
       <div className="serverTimelineChart" role="group" aria-label="Server resource and event timeline">
         <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} />
         <div className="serverTimelineAnnotations" aria-label="Timeline annotations">
-          {clusters.map((cluster) => {
-            const left = (cluster.slot + 0.5) / cluster.slotCount * 100;
+          {positionedClusters.map((cluster) => {
             const glyph = cluster.markers.length > 1 ? String(cluster.markers.length)
               : cluster.tone === "join" ? "+" : cluster.tone === "leave" ? "−" : cluster.tone === "server" ? "!" : "S";
+            const label = cluster.markers.length > 1 ? `${cluster.markers.length} events` : timelineMarkerShortLabel(cluster.markers[0]);
             return (
               <button
                 type="button"
                 key={cluster.id}
-                className={`timelineAnnotationLabel tone-${cluster.tone}`}
-                style={{ left: `${left}%` }}
+                className={`timelineAnnotationLabel tone-${cluster.tone}${cluster.alignEnd ? " align-end" : ""}`}
+                style={{ left: `${cluster.leftPercent}%`, top: `${7 + cluster.lane * 30}px` }}
                 title={markerTitle(cluster, formatDate)}
                 aria-label={markerTitle(cluster, formatDate)}
-                aria-expanded={selectedCluster?.id === cluster.id}
-                aria-controls="server-timeline-annotation-details"
-                onClick={() => setSelectedCluster(cluster)}
-              ><span aria-hidden="true">{glyph}</span></button>
+                aria-expanded={cluster.markers.length > 1 ? selectedCluster?.id === cluster.id : undefined}
+                aria-controls={cluster.markers.length > 1 ? "server-timeline-annotation-popover" : undefined}
+                onClick={() => cluster.markers.length > 1
+                  ? setSelectedCluster((current) => current?.id === cluster.id ? null : cluster)
+                  : activateMarker(cluster.markers[0])}
+              ><span className="timelineAnnotationGlyph" aria-hidden="true">{glyph}</span><span className="timelineAnnotationLabelText" aria-hidden="true">{label}</span></button>
             );
           })}
         </div>
+        {selectedCluster && selectedPosition && (
+          <section
+            className="serverTimelineAnnotationPopover"
+            id="server-timeline-annotation-popover"
+            aria-label="Events at selected time"
+            style={{ left: `${Math.max(22, Math.min(78, selectedPosition.leftPercent))}%` }}
+          >
+            <div className="serverTimelineAnnotationPopoverHeader">
+              <div>
+                <strong>{selectedCluster.markers.length} events</strong>
+                <span>{formatDate(selectedCluster.occurredAt)}</span>
+              </div>
+              <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>
+            </div>
+            <div className="serverTimelineAnnotationPopoverList">
+              {selectedCluster.markers.map((marker) => (
+                <button
+                  type="button"
+                  className={`serverTimelineAnnotationPopoverItem tone-${marker.tone}`}
+                  key={marker.id}
+                  onClick={() => activateMarker(marker)}
+                >
+                  <span className="serverTimelineAnnotationPopoverGlyph" aria-hidden="true">
+                    {marker.tone === "join" ? "+" : marker.tone === "leave" ? "−" : marker.tone === "server" ? "!" : "S"}
+                  </span>
+                  <span>
+                    <strong>{marker.label}</strong>
+                    <small>Open {marker.schedule ? "Schedules" : "Console"}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
       {!loading && !data?.samples.length && !markers.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}
     </section>

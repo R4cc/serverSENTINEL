@@ -505,6 +505,7 @@ export default function App() {
   const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
   const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
   const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
+  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
 
   function formatDisplayDate(value: string | number | Date) {
@@ -513,6 +514,10 @@ export default function App() {
 
   function formatDisplayTime(value: string | number | Date) {
     return timeFormatter.format(new Date(value));
+  }
+
+  function formatDisplayShortTime(value: string | number | Date) {
+    return shortTimeFormatter.format(new Date(value));
   }
 
   const filesWorkspace = useFilesWorkspace({
@@ -2735,6 +2740,7 @@ export default function App() {
                         key={activeServer.id}
                         loadTimeline={loadActiveTimeline}
                         formatTime={formatDisplayTime}
+                        formatShortTime={formatDisplayShortTime}
                         formatDate={formatDisplayDate}
                         onLatestSample={setTimelineLatestSample}
                         onOpenConsole={() => setActivePage("console")}

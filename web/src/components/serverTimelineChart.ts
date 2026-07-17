@@ -3,7 +3,7 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
 
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
-export const timelineChartGrid = { left: 60, right: 154, top: 48, bottom: 42 } as const;
+export const timelineChartGrid = { left: 60, right: 154, top: 134, bottom: 42 } as const;
 
 export type TimelinePalette = {
   cpu: string;
@@ -147,6 +147,7 @@ export function buildTimelineChartOption({
   clusters,
   palette,
   formatTime,
+  formatShortTime,
   formatDate,
   reducedMotion,
   now
@@ -158,6 +159,7 @@ export function buildTimelineChartOption({
   clusters: MarkerCluster[];
   palette: TimelinePalette;
   formatTime: (value: string | number | Date) => string;
+  formatShortTime: (value: string | number | Date) => string;
   formatDate: (value: string | number | Date) => string;
   reducedMotion: boolean;
   now: number;
@@ -170,13 +172,13 @@ export function buildTimelineChartOption({
   ];
   const markerLines: Array<{
     xAxis: number;
-    lineStyle: { color: string; type: "dashed"; width: number; opacity: number };
+    lineStyle: { color: string; type: "solid" | "dashed"; width: number; opacity: number };
     label: { show: boolean; formatter?: string; color?: string; position?: string };
   }> = clusters.map((cluster) => ({
     xAxis: cluster.occurredAt,
     lineStyle: {
       color: markerColor(cluster, palette),
-      type: "dashed" as const,
+      type: "solid" as const,
       width: Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75),
       opacity: 0.84
     },
@@ -212,7 +214,11 @@ export function buildTimelineChartOption({
       max: query.to,
       axisLine: { lineStyle: { color: palette.border } },
       axisTick: { show: false },
-      axisLabel: { color: palette.textMuted, hideOverlap: true, formatter: (value: number) => formatTime(value) },
+      axisLabel: {
+        color: palette.textMuted,
+        hideOverlap: true,
+        formatter: (value: number) => viewport.to - viewport.from >= 60 * 60 * 1000 ? formatShortTime(value) : formatTime(value)
+      },
       splitLine: { show: false }
     },
     yAxis: [

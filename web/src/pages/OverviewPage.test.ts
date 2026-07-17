@@ -234,7 +234,7 @@ describe("mod health", () => {
     expect(render(null, false)).toBe("");
   });
 
-  it("keeps a clickable healthy card when no updates are available", () => {
+  it("keeps a clickable green card focused only on updates when none are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
       canView,
@@ -243,12 +243,15 @@ describe("mod health", () => {
 
     const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
     expect(healthyHtml).toContain("modUpdatesCard--healthy");
-    expect(healthyHtml).toContain("Mods are up to date");
-    expect(healthyHtml).toContain("4 installed mods checked");
-    expect(healthyHtml).toContain("Open Mods, all installed mods are up to date");
+    expect(healthyHtml).toContain("No mod updates available");
+    expect(healthyHtml).toContain("Everything is up to date");
+    expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
-    expect(attentionHtml).toContain("Mods need attention");
-    expect(attentionHtml).not.toContain("modUpdatesCard--healthy");
+    expect(attentionHtml).toContain("modUpdatesCard--healthy");
+    expect(attentionHtml).toContain("No mod updates available");
+    expect(attentionHtml).not.toContain("attention");
+    expect(attentionHtml).not.toContain("review");
+    expect(attentionHtml).not.toContain("installed");
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
   });
 

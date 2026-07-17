@@ -202,34 +202,30 @@ export function ModHealthPanel({
   const visibleUpdates = availableUpdates.slice(0, 3);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   if (updateCount === 0) {
-    const attentionCount = updatePlan.counts.blockedUpdates + updatePlan.counts.unknown;
-    const healthy = attentionCount === 0;
-    const title = healthy ? "Mods are up to date" : "Mods need attention";
-    const icon = healthy ? "check" : "shield";
     return (
       <button
         type="button"
-        className={`panel modsHealthPanel modUpdatesCard${healthy ? " modUpdatesCard--healthy" : ""}`}
+        className="panel modsHealthPanel modUpdatesCard modUpdatesCard--healthy"
         onClick={onOpenMods}
-        aria-label={healthy ? "Open Mods, all installed mods are up to date" : `Open Mods, ${attentionCount} installed mod${attentionCount === 1 ? " needs" : "s need"} attention`}
+        aria-label="Open Mods, no mod updates available"
       >
         <span className="modUpdatesCompact">
-          <span>{title}</span>
-          <strong><AppIcon name={icon} /></strong>
+          <span>No mod updates available</span>
+          <strong><AppIcon name="check" /></strong>
         </span>
         <span className="modUpdatesWide" aria-hidden="true">
           <span className="modUpdatesWideHeader">
             <span>
-              <strong>{title}</strong>
-              <small>{healthy ? `${updatePlan.counts.totalInstalled} installed mod${updatePlan.counts.totalInstalled === 1 ? "" : "s"} checked` : `${attentionCount} installed mod${attentionCount === 1 ? " needs" : "s need"} review`}</small>
+              <strong>Mod updates</strong>
+              <small>No updates available</small>
             </span>
             <AppIcon name="chevronRight" />
           </span>
           <span className="modUpdatesHealthyState">
-            <span className="modUpdatesHealthyIcon"><AppIcon name={icon} /></span>
+            <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
             <span>
-              <strong>{healthy ? "No updates available" : "No automatic updates ready"}</strong>
-              <small>Open Mods to review the installed set.</small>
+              <strong>Everything is up to date</strong>
+              <small>New mod updates will appear here.</small>
             </span>
           </span>
         </span>

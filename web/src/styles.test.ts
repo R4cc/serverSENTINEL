@@ -55,11 +55,12 @@ describe("global stylesheet entry point", () => {
   it("reserves the unified timeline for widths that can support it", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/@media \(min-width: 721px\) and \(max-width: 980px\)[\s\S]*?\.overviewDashboardGrid > \.resourcePanel \{ grid-area: resource; \}/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*340px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*440px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
-    expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;[^}]*transform:\s*translateX\(-50%\);/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineAnnotationDetailsList\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,/s);
+    expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\s*\{[^}]*max-width:\s*118px;[^}]*transform:\s*translateX\(-13px\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineAnnotationPopover\s*\{[^}]*position:\s*absolute;[^}]*max-height:\s*250px;/s);
+    expect(overviewStyles).toMatch(/\.timelineSeriesToggle\s*\{[^}]*border:\s*1px solid[^}]*cursor:\s*pointer;/s);
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {

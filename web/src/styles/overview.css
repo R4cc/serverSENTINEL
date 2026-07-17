@@ -34,7 +34,7 @@
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
 .overviewDashboardGrid > .resourcePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline; align-self: stretch; }
-.overviewDashboardGrid > .playersPanel { grid-area: players; }
+.overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
 .overviewDashboardGrid > .modsHealthPanel { grid-area: mods; }
 .overviewDashboardGrid > .automationPanel { grid-area: automation; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
@@ -222,21 +222,55 @@
 }
 
 .timelineSeriesToggle {
-  min-height: 34px;
+  --timeline-toggle-color: var(--text-muted);
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
   color: var(--text-muted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
-.timelineSeriesToggle > span,
-.timelineAnnotationLegend::before,
+.timelineSeriesToggle:hover:not(:disabled) {
+  transform: none;
+  border-color: color-mix(in srgb, var(--timeline-toggle-color) 55%, var(--border-subtle));
+  background: color-mix(in srgb, var(--timeline-toggle-color) 6%, var(--surface-raised));
+  color: var(--text);
+}
+
+.timelineSeriesToggle > span {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--timeline-toggle-color);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--surface-raised);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.timelineSeriesToggle > span::after { content: "✓"; opacity: 0; }
+.timelineSeriesToggle.active { border-color: color-mix(in srgb, var(--timeline-toggle-color) 48%, var(--border-subtle)); background: color-mix(in srgb, var(--timeline-toggle-color) 8%, var(--surface-raised)); color: var(--text); }
+.timelineSeriesToggle.active > span { background: var(--timeline-toggle-color); }
+.timelineSeriesToggle.active > span::after { opacity: 1; }
+.timelineSeriesToggle.series-cpuPercent { --timeline-toggle-color: var(--timeline-cpu); }
+.timelineSeriesToggle.series-memoryUsageBytes { --timeline-toggle-color: var(--timeline-memory); }
+.timelineSeriesToggle.series-networkRxBytesPerSecond { --timeline-toggle-color: var(--timeline-network-in); }
+.timelineSeriesToggle.series-networkTxBytesPerSecond { --timeline-toggle-color: var(--timeline-network-out); }
+.timelineAnnotationToggle.tone-join { --timeline-toggle-color: var(--timeline-join); }
+.timelineAnnotationToggle.tone-leave { --timeline-toggle-color: var(--timeline-leave); }
+.timelineAnnotationToggle.tone-server { --timeline-toggle-color: var(--timeline-server); }
+.timelineAnnotationToggle.tone-schedule { --timeline-toggle-color: var(--timeline-schedule); }
+
 .timelineTooltipSwatch {
   width: 11px;
   height: 11px;
@@ -245,34 +279,10 @@
   background: currentColor;
 }
 
-.timelineSeriesToggle.active { color: var(--text); }
-.timelineSeriesToggle:not(.active) > span { background: transparent; border: 1px solid currentColor; }
-.timelineSeriesToggle.series-cpuPercent > span,
 .timelineTooltipSwatch.series-cpuPercent { color: var(--timeline-cpu); }
-.timelineSeriesToggle.series-memoryUsageBytes > span,
 .timelineTooltipSwatch.series-memoryUsageBytes { color: var(--timeline-memory); }
-.timelineSeriesToggle.series-networkRxBytesPerSecond > span,
 .timelineTooltipSwatch.series-networkRxBytesPerSecond { color: var(--timeline-network-in); }
-.timelineSeriesToggle.series-networkTxBytesPerSecond > span,
 .timelineTooltipSwatch.series-networkTxBytesPerSecond { color: var(--timeline-network-out); }
-
-.timelineAnnotationLegend {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.timelineAnnotationLegend::before {
-  content: "";
-  border-radius: 999px;
-}
-
-.timelineAnnotationLegend.tone-join::before { background: var(--timeline-join); }
-.timelineAnnotationLegend.tone-leave::before { background: var(--timeline-leave); }
-.timelineAnnotationLegend.tone-server::before { background: var(--timeline-server); }
-.timelineAnnotationLegend.tone-schedule::before { background: var(--timeline-schedule); }
 
 .serverTimelineNavigation {
   flex: 0 0 auto;
@@ -282,8 +292,8 @@
 .serverTimelineChart {
   position: relative;
   width: 100%;
-  height: clamp(340px, 37vw, 470px);
-  min-height: 340px;
+  height: clamp(440px, 42vw, 560px);
+  min-height: 440px;
   color: var(--text-muted);
 }
 
@@ -298,25 +308,28 @@
   top: 7px;
   right: 154px;
   left: 60px;
-  height: 32px;
+  height: 124px;
   pointer-events: none;
 }
 
 .timelineAnnotationLabel {
+  --annotation-color: var(--timeline-server);
   position: absolute;
-  top: 0;
-  width: 26px;
+  width: max-content;
+  max-width: 118px;
   height: 26px;
   min-width: 26px;
   min-height: 26px;
-  display: grid;
-  place-items: center;
+  display: flex;
   align-items: center;
-  transform: translateX(-50%);
-  border: 2px solid currentColor;
+  gap: 5px;
+  overflow: hidden;
+  transform: translateX(-13px);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
-  padding: 0;
+  color: var(--text);
+  padding: 0 7px 0 0;
   box-shadow: var(--shadow-xs);
   font: inherit;
   font-size: 11px;
@@ -326,94 +339,123 @@
   pointer-events: auto;
 }
 
-.timelineAnnotationLabel > span {
-  color: inherit;
-}
-
-.timelineAnnotationLabel.tone-join { color: var(--timeline-join); }
-.timelineAnnotationLabel.tone-leave { color: var(--timeline-leave); }
-.timelineAnnotationLabel.tone-server { color: var(--timeline-server); }
-.timelineAnnotationLabel.tone-schedule { color: var(--timeline-schedule); }
-.timelineAnnotationLabel[aria-expanded="true"] { background: color-mix(in srgb, currentColor 14%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
-.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-50%) translateY(-1px); border-color: currentColor; background: color-mix(in srgb, currentColor 10%, var(--surface-raised)); color: inherit; }
-.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.serverTimelineAnnotationDetails {
-  display: grid;
-  gap: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface-raised));
-  padding: var(--space-3);
-}
-
-.serverTimelineAnnotationDetailsHeader,
-.serverTimelineAnnotationDetailsHeader > div,
-.serverTimelineAnnotationDetail,
-.serverTimelineAnnotationDetailCopy {
-  display: flex;
-  align-items: center;
-}
-
-.serverTimelineAnnotationDetailsHeader {
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.serverTimelineAnnotationDetailsHeader > div {
-  min-width: 0;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-
-.serverTimelineAnnotationDetailsHeader strong { color: var(--text); font-size: 13px; }
-.serverTimelineAnnotationDetailsHeader span { color: var(--text-muted); font-size: 11px; }
-.serverTimelineAnnotationDetailsHeader .uiButton { min-width: 30px; font-size: 18px; line-height: 1; }
-
-.serverTimelineAnnotationDetailsList {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: var(--space-2);
-}
-
-.serverTimelineAnnotationDetail {
-  min-width: 0;
-  min-height: 48px;
-  gap: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
-  color: var(--text);
-  padding: 7px 9px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.serverTimelineAnnotationDetail:hover {
-  border-color: color-mix(in srgb, currentColor 44%, var(--border-subtle));
-  background: color-mix(in srgb, currentColor 5%, var(--surface-raised));
-}
-
-.serverTimelineAnnotationDetail:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.serverTimelineAnnotationDetail.tone-join { color: var(--timeline-join); }
-.serverTimelineAnnotationDetail.tone-leave { color: var(--timeline-leave); }
-.serverTimelineAnnotationDetail.tone-server { color: var(--timeline-server); }
-.serverTimelineAnnotationDetail.tone-schedule { color: var(--timeline-schedule); }
-
-.serverTimelineAnnotationDetailGlyph {
+.timelineAnnotationGlyph {
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 2px solid currentColor;
+  border: 2px solid var(--annotation-color);
   border-radius: 999px;
   background: var(--surface-raised);
+  color: var(--annotation-color);
+}
+
+.timelineAnnotationLabelText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 13px)); padding: 0 0 0 7px; }
+.timelineAnnotationLabel.tone-join { --annotation-color: var(--timeline-join); }
+.timelineAnnotationLabel.tone-leave { --annotation-color: var(--timeline-leave); }
+.timelineAnnotationLabel.tone-server { --annotation-color: var(--timeline-server); }
+.timelineAnnotationLabel.tone-schedule { --annotation-color: var(--timeline-schedule); }
+.timelineAnnotationLabel[aria-expanded="true"] { border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
+.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-13px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
+.timelineAnnotationLabel.align-end:hover:not(:disabled) { transform: translateX(calc(-100% + 13px)) translateY(-1px); }
+.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.serverTimelineAnnotationPopover {
+  position: absolute;
+  z-index: 5;
+  top: 126px;
+  width: min(360px, calc(100% - 24px));
+  max-height: 250px;
+  display: grid;
+  gap: var(--space-2);
+  overflow: auto;
+  transform: translateX(-50%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-lg);
+}
+
+.serverTimelineAnnotationPopoverHeader,
+.serverTimelineAnnotationPopoverHeader > div,
+.serverTimelineAnnotationPopoverItem,
+.serverTimelineAnnotationPopoverItem > span:last-child {
+  display: flex;
+  align-items: center;
+}
+
+.serverTimelineAnnotationPopoverHeader {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.serverTimelineAnnotationPopoverHeader > div {
+  min-width: 0;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.serverTimelineAnnotationPopoverHeader strong { color: var(--text); font-size: 13px; }
+.serverTimelineAnnotationPopoverHeader span { color: var(--text-muted); font-size: 11px; }
+.serverTimelineAnnotationPopoverHeader .uiButton { min-width: 30px; font-size: 18px; line-height: 1; }
+
+.serverTimelineAnnotationPopoverList {
+  display: grid;
+  gap: 5px;
+}
+
+.serverTimelineAnnotationPopoverItem {
+  min-width: 0;
+  min-height: 42px;
+  gap: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.serverTimelineAnnotationPopoverItem:hover:not(:disabled) {
+  transform: none;
+  border-color: color-mix(in srgb, var(--annotation-color) 48%, var(--border-subtle));
+  background: color-mix(in srgb, var(--annotation-color) 6%, var(--surface-raised));
+  color: var(--text);
+}
+
+.serverTimelineAnnotationPopoverItem:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.serverTimelineAnnotationPopoverItem.tone-join { --annotation-color: var(--timeline-join); }
+.serverTimelineAnnotationPopoverItem.tone-leave { --annotation-color: var(--timeline-leave); }
+.serverTimelineAnnotationPopoverItem.tone-server { --annotation-color: var(--timeline-server); }
+.serverTimelineAnnotationPopoverItem.tone-schedule { --annotation-color: var(--timeline-schedule); }
+
+.serverTimelineAnnotationPopoverGlyph {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--annotation-color);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--annotation-color);
   font-size: 12px;
   font-weight: var(--weight-title);
 }
 
-.serverTimelineAnnotationDetailCopy {
+.serverTimelineAnnotationPopoverItem > span:last-child {
   min-width: 0;
   flex: 1 1 auto;
   align-items: flex-start;
@@ -422,7 +464,7 @@
   color: var(--text);
 }
 
-.serverTimelineAnnotationDetailCopy strong {
+.serverTimelineAnnotationPopoverItem strong {
   max-width: 100%;
   overflow: hidden;
   font-size: 12px;
@@ -430,15 +472,9 @@
   white-space: nowrap;
 }
 
-.serverTimelineAnnotationDetailCopy span,
-.serverTimelineAnnotationDetailAction {
+.serverTimelineAnnotationPopoverItem small {
   color: var(--text-muted);
   font-size: 10px;
-}
-
-.serverTimelineAnnotationDetailAction {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 .serverTimelineTooltip {
@@ -498,7 +534,7 @@
   }
 
   .serverTimelineChart {
-    height: 360px;
+    height: 460px;
   }
 }
 
@@ -506,12 +542,12 @@
   .serverTimelinePanel * { transition: none !important; animation: none !important; }
 }
 
-.modUpdatesCard--healthy {
+.overviewDashboardGrid > .modUpdatesCard--healthy {
   border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
 }
 
-.modUpdatesCard--healthy:hover:not(:disabled) {
+.overviewDashboardGrid > .modUpdatesCard--healthy:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--sentinel-success) 58%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-success) 11%, var(--surface-raised));
 }
