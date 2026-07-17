@@ -209,7 +209,6 @@ export function ModHealthPanel({
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
   const visibleUpdates = availableUpdates.slice(0, modUpdateCardSlotCount);
-  const placeholderCount = modUpdateCardSlotCount - visibleUpdates.length;
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   if (updateCount === 0) {
     return (
@@ -273,15 +272,6 @@ export function ModHealthPanel({
                   {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
                   <span>{entry.targetVersion ?? "Update available"}</span>
                 </small>
-              </span>
-            </span>
-          ))}
-          {Array.from({ length: placeholderCount }, (_, index) => (
-            <span className="modUpdatesListItem modUpdatesListItem--placeholder" key={`placeholder-${index}`}>
-              <SkeletonBlock className="modUpdatesIconSkeleton" />
-              <span className="modUpdatesListCopy">
-                <SkeletonBlock className="modUpdatesNameSkeleton" />
-                <SkeletonBlock className="modUpdatesVersionSkeleton" />
               </span>
             </span>
           ))}

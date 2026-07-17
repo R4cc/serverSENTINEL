@@ -48,6 +48,7 @@ describe("global stylesheet entry point", () => {
 
   it("expands mod update previews progressively on large overview layouts", () => {
     expect(overviewStyles).toMatch(/\.modUpdatesList\s*\{[^}]*grid-auto-rows:\s*52px;[^}]*align-content:\s*start;/s);
+    expect(overviewStyles).toMatch(/\.modUpdatesListCopy > strong\s*\{[^}]*line-height:\s*17px;/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 1440px\) and \(max-width: 2559px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*136px;[\s\S]*?\.modUpdatesListItem:nth-child\(n \+ 2\),\s*\.modUpdatesRemaining\s*\{[^}]*display:\s*none;/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 2560px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*280px;[\s\S]*?\.modUpdatesWide\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch;/s);
   });

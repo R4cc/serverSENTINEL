@@ -298,11 +298,11 @@ describe("mod health", () => {
     expect(html).toContain("/api/modrinth/icons/lithium.png");
     expect(html).toContain("0.14.8");
     expect(html).toContain("0.15.0");
-    expect(html.indexOf("Lithium")).toBeLessThan(html.indexOf("modUpdatesListItem--placeholder"));
-    expect(html.match(/modUpdatesListItem--placeholder/g)).toHaveLength(2);
+    expect(html).not.toContain("modUpdatesListItem--placeholder");
+    expect(html.match(/modUpdatesListItem/g)).toHaveLength(1);
   });
 
-  it("fills all predefined update slots before adding placeholders", () => {
+  it("fills all predefined update slots with real updates", () => {
     const entries = Array.from({ length: 3 }, (_, index): ModUpdatePlanEntry => ({
       filename: `mod-${index}.jar`,
       displayName: `Mod ${index}`,

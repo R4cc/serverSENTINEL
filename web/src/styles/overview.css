@@ -771,11 +771,6 @@
   padding: 7px 9px;
 }
 
-.modUpdatesListItem--placeholder {
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--surface-muted) 68%, transparent);
-}
-
 .modUpdatesListItem > img,
 .modUpdatesListItem > .modsWorkspaceFallback {
   width: 36px;
@@ -794,6 +789,7 @@
   color: var(--text);
   font-size: 13px;
   font-weight: var(--weight-title);
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
