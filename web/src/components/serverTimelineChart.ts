@@ -3,7 +3,7 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
 
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
-export const timelineChartGrid = { left: 60, right: 154, top: 134, bottom: 42 } as const;
+export const timelineChartGrid = { left: 60, right: 154, top: 82, bottom: 42 } as const;
 
 export type TimelinePalette = {
   cpu: string;
@@ -38,8 +38,7 @@ export const defaultTimelinePalette: TimelinePalette = {
 };
 
 export function liveTimelineWindow(span: number, now = Date.now()): TimelineWindow {
-  const to = now + span * 0.1;
-  return { from: to - span, to };
+  return { from: now - span, to: now };
 }
 
 export function timelineQueryWindow(viewport: TimelineWindow, live: boolean): TimelineWindow {

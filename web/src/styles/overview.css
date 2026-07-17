@@ -305,31 +305,49 @@
 .serverTimelineAnnotations {
   position: absolute;
   z-index: 2;
-  top: 7px;
+  top: 0;
   right: 154px;
   left: 60px;
-  height: 124px;
+  height: 82px;
   pointer-events: none;
 }
 
-.timelineAnnotationLabel {
+.timelineAnnotationMarker {
   --annotation-color: var(--timeline-server);
   position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.timelineAnnotationConnector {
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-50%);
+  background: var(--annotation-color);
+  opacity: 0.84;
+}
+
+.timelineAnnotationLabel {
+  position: absolute;
   width: max-content;
-  max-width: 118px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
+  max-width: 184px;
+  height: 36px;
+  min-width: 108px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   gap: 5px;
   overflow: hidden;
-  transform: translateX(-13px);
+  transform: translateX(-12px);
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   color: var(--text);
-  padding: 0 7px 0 0;
+  padding: 0 8px 0 0;
   box-shadow: var(--shadow-xs);
   font: inherit;
   font-size: 11px;
@@ -340,8 +358,10 @@
 }
 
 .timelineAnnotationGlyph {
-  width: 26px;
-  height: 26px;
+  position: relative;
+  z-index: 1;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -353,26 +373,36 @@
 
 .timelineAnnotationLabelText {
   min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 1px;
   overflow: hidden;
-  color: var(--text);
+}
+
+.timelineAnnotationLabelText strong,
+.timelineAnnotationLabelText small {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 13px)); padding: 0 0 0 7px; }
-.timelineAnnotationLabel.tone-join { --annotation-color: var(--timeline-join); }
-.timelineAnnotationLabel.tone-leave { --annotation-color: var(--timeline-leave); }
-.timelineAnnotationLabel.tone-server { --annotation-color: var(--timeline-server); }
-.timelineAnnotationLabel.tone-schedule { --annotation-color: var(--timeline-schedule); }
+.timelineAnnotationLabelText strong { color: var(--text); font-size: 11px; line-height: 1.1; }
+.timelineAnnotationLabelText small { color: var(--text-muted); font-size: 9px; font-weight: var(--weight-meta); line-height: 1.1; }
+
+.timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 12px)); padding: 0 0 0 8px; }
+.timelineAnnotationMarker.tone-join { --annotation-color: var(--timeline-join); }
+.timelineAnnotationMarker.tone-leave { --annotation-color: var(--timeline-leave); }
+.timelineAnnotationMarker.tone-server { --annotation-color: var(--timeline-server); }
+.timelineAnnotationMarker.tone-schedule { --annotation-color: var(--timeline-schedule); }
 .timelineAnnotationLabel[aria-expanded="true"] { border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
-.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-13px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
-.timelineAnnotationLabel.align-end:hover:not(:disabled) { transform: translateX(calc(-100% + 13px)) translateY(-1px); }
+.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-12px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
+.timelineAnnotationLabel.align-end:hover:not(:disabled) { transform: translateX(calc(-100% + 12px)) translateY(-1px); }
 .timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .serverTimelineAnnotationPopover {
   position: absolute;
   z-index: 5;
-  top: 126px;
+  top: 84px;
   width: min(360px, calc(100% - 24px));
   max-height: 250px;
   display: grid;

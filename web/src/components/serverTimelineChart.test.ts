@@ -41,10 +41,10 @@ const clusters: MarkerCluster[] = [{
 }];
 
 describe("server timeline chart windows", () => {
-  it("reserves future space in a live viewport and buffers one span behind it", () => {
+  it("places now at the right edge of a live viewport and buffers one span behind it", () => {
     const viewport = liveTimelineWindow(1_000, 10_000);
-    expect(viewport).toEqual({ from: 9_100, to: 10_100 });
-    expect(timelineQueryWindow(viewport, true)).toEqual({ from: 8_100, to: 10_100 });
+    expect(viewport).toEqual({ from: 9_000, to: 10_000 });
+    expect(timelineQueryWindow(viewport, true)).toEqual({ from: 8_000, to: 10_000 });
   });
 
   it("buffers historical viewports on both sides and caps full-day queries", () => {
