@@ -52,6 +52,29 @@ describe("server timeline resource points", () => {
     });
   });
 
+  it("carries the last verified player count across running samples", () => {
+    const points = timelineResourcePoints([
+      sample(0, 100, 100, { playersOnline: 1 }),
+      sample(5_000, 200, 200, { playersOnline: undefined }),
+      sample(10_000, 300, 300, { playersOnline: undefined }),
+      sample(15_000, 400, 400, { playersOnline: 2 }),
+      sample(20_000, 500, 500, { playersOnline: undefined })
+    ], 0, 20_000, 100);
+    expect(points.map((point) => point.playersOnline)).toEqual([1, 1, 1, 2, 2]);
+  });
+
+  it("does not carry a cached player count across downtime or a long collection gap", () => {
+    const points = timelineResourcePoints([
+      sample(0, 100, 100, { playersOnline: 1 }),
+      sample(5_000, 200, 200, { available: false, running: false, playersOnline: undefined }),
+      sample(10_000, 300, 300, { playersOnline: undefined }),
+      sample(15_000, 400, 400, { playersOnline: 2 }),
+      sample(50_000, 500, 500, { playersOnline: undefined })
+    ], 0, 50_000, 100);
+    expect(points.find((point) => point.sampledAt === 10_000)?.playersOnline).toBeNull();
+    expect(points.find((point) => point.sampledAt === 50_000)?.playersOnline).toBeNull();
+  });
+
   it("caps dense histories through aggregation", () => {
     const samples = Array.from({ length: 1_500 }, (_, index) => sample(index * 5_000, index * 100, index * 200));
     expect(timelineResourcePoints(samples, 0, samples.at(-1)!.sampledAt, 300).length).toBeLessThanOrEqual(300);

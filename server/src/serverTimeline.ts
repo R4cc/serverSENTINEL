@@ -30,10 +30,16 @@ function utilizationPercent(value: number, capacity: number | undefined) {
   return Math.max(0, Math.min(100, value / capacity));
 }
 
-function point(sample: ResourceStatsSample, previous?: ResourceStatsSample, fallbackCpuCapacityCores?: number): ServerTimelineResourcePoint {
+function point(
+  sample: ResourceStatsSample,
+  previous?: ResourceStatsSample,
+  fallbackCpuCapacityCores?: number,
+  cachedPlayersOnline: number | null = null
+): ServerTimelineResourcePoint {
   const valid = sample.available && sample.running;
   const elapsedMs = previous ? sample.sampledAt - previous.sampledAt : 0;
   const ratesValid = valid && previous?.available && previous.running && elapsedMs > 0 && elapsedMs <= gapThresholdMs;
+  const verifiedPlayersOnline = finite(sample.playersOnline);
   return {
     sampledAt: sample.sampledAt,
     available: sample.available,
@@ -43,7 +49,7 @@ function point(sample: ResourceStatsSample, previous?: ResourceStatsSample, fall
     memoryUsageBytes: valid ? finite(sample.memoryUsageBytes) : null,
     memoryLimitBytes: valid ? finite(sample.memoryLimitBytes) : null,
     memoryUtilizationPercent: valid ? utilizationPercent(sample.memoryUsageBytes * 100, sample.memoryLimitBytes) : null,
-    playersOnline: valid ? finite(sample.playersOnline) : null,
+    playersOnline: valid ? verifiedPlayersOnline ?? cachedPlayersOnline : null,
     networkRxBytesPerSecond: ratesValid ? rate(sample.networkRxBytes, previous.networkRxBytes, elapsedMs / 1000) : null,
     networkTxBytesPerSecond: ratesValid ? rate(sample.networkTxBytes, previous.networkTxBytes, elapsedMs / 1000) : null
   };
@@ -86,11 +92,17 @@ function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
 export function timelineResourcePoints(samples: ResourceStatsSample[], from: number, to: number, maxPoints: number, fallbackCpuCapacityCores?: number) {
   const output: ServerTimelineResourcePoint[] = [];
   const cpuCapacityCores = [...samples].reverse().find((sample) => sample.cpuCapacityCores)?.cpuCapacityCores ?? fallbackCpuCapacityCores;
+  let cachedPlayersOnline: number | null = null;
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
     const previous = samples[index - 1];
-    if (sample.sampledAt < from || sample.sampledAt > to) continue;
-    if (previous && sample.sampledAt - previous.sampledAt > gapThresholdMs) {
+    if (sample.sampledAt > to) break;
+    const containsLongGap = Boolean(previous && sample.sampledAt - previous.sampledAt > gapThresholdMs);
+    if (containsLongGap || !sample.available || !sample.running) cachedPlayersOnline = null;
+    const current = point(sample, previous, cpuCapacityCores, cachedPlayersOnline);
+    if (current.playersOnline !== null) cachedPlayersOnline = current.playersOnline;
+    if (sample.sampledAt < from) continue;
+    if (containsLongGap) {
       output.push({
         sampledAt: Math.max(from, previous.sampledAt + 5_000),
         available: false,
@@ -105,7 +117,7 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
         networkTxBytesPerSecond: null
       });
     }
-    output.push(point(sample, previous, cpuCapacityCores));
+    output.push(current);
   }
   return aggregate(output, maxPoints);
 }

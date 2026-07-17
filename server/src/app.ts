@@ -8076,7 +8076,7 @@ resourceStatsCollector = new ResourceStatsCollector({
   statsRepository: resourceStatsRepository,
   decorateSample: (server, sample) => {
     const playerSnapshot = playerSnapshotCoordinator?.latest(server.id);
-    if (playerSnapshot?.state === "live" || playerSnapshot?.state === "stopped") {
+    if (playerSnapshot?.state === "live" || playerSnapshot?.state === "stale" || playerSnapshot?.state === "stopped") {
       sample.playersOnline = playerSnapshot.online ?? undefined;
     }
     return sample;
