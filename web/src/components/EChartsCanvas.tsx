@@ -34,12 +34,14 @@ export function EChartsCanvas({
   option,
   onDataZoom,
   onPointerMove,
-  onPointerLeave
+  onPointerLeave,
+  onClick
 }: {
   option: EChartsCoreOption;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
@@ -68,5 +70,5 @@ export function EChartsCanvas({
     chartRef.current?.setOption(option, { notMerge: true, lazyUpdate: true });
   }, [option]);
 
-  return <div ref={containerRef} className="serverTimelineEChart" onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} />;
+  return <div ref={containerRef} className="serverTimelineEChart" onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} onClick={onClick} />;
 }

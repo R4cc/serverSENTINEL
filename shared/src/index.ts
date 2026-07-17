@@ -231,8 +231,11 @@ export type ServerTimelineResourcePoint = {
   available: boolean;
   running: boolean;
   cpuPercent: number | null;
+  cpuUtilizationPercent: number | null;
   memoryUsageBytes: number | null;
   memoryLimitBytes: number | null;
+  memoryUtilizationPercent: number | null;
+  playersOnline: number | null;
   networkRxBytesPerSecond: number | null;
   networkTxBytesPerSecond: number | null;
 };

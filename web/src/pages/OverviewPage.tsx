@@ -69,6 +69,8 @@ export function OverviewSummary({
     available: boolean;
     running: boolean;
     cpuPercent: number | null;
+    cpuUtilizationPercent?: number | null;
+    cpuCapacityCores?: number;
     memoryUsageBytes: number | null;
   };
   formatNumber?: (value: number) => string;
@@ -89,7 +91,11 @@ export function OverviewSummary({
   const fabricLoaderVersion = fabricLoaderVersionInfo(server);
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
   const resourceFallback = running ? "Collecting" : "Not running";
-  const cpu = hasResourceStats ? `${(latestResourceSample?.cpuPercent ?? 0).toFixed(1)}%` : resourceFallback;
+  const normalizedCpu = latestResourceSample?.cpuUtilizationPercent
+    ?? (latestResourceSample?.cpuCapacityCores && latestResourceSample.cpuPercent !== null
+      ? latestResourceSample.cpuPercent / latestResourceSample.cpuCapacityCores
+      : null);
+  const cpu = hasResourceStats && normalizedCpu !== null ? `${normalizedCpu.toFixed(1)}%` : resourceFallback;
   const memory = hasResourceStats
     ? `${formatNumber(Math.round((latestResourceSample?.memoryUsageBytes ?? 0) / 1024 / 1024))} MB`
     : resourceFallback;

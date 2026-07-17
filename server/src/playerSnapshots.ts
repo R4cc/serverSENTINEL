@@ -165,6 +165,10 @@ export class PlayerSnapshotCoordinator {
       ?? unavailable("NODE_UNAVAILABLE", "Player data has not been collected yet")]));
   }
 
+  latest(serverId: string) {
+    return this.snapshotsByServer.get(serverId);
+  }
+
   async freshOnlineCount(server: ManagedServer) {
     const snapshot = await this.collect(server);
     return snapshot.state === "live" ? snapshot.online : null;

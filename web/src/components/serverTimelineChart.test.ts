@@ -16,10 +16,11 @@ import {
 } from "./serverTimelineChart";
 
 const enabled: Record<SeriesKey, boolean> = {
-  cpuPercent: true,
-  memoryUsageBytes: true,
+  cpuUtilizationPercent: true,
+  memoryUtilizationPercent: true,
   networkRxBytesPerSecond: true,
-  networkTxBytesPerSecond: true
+  networkTxBytesPerSecond: true,
+  playersOnline: false
 };
 
 const sample: ServerTimelineResourcePoint = {
@@ -27,8 +28,11 @@ const sample: ServerTimelineResourcePoint = {
   available: true,
   running: true,
   cpuPercent: 12.5,
+  cpuUtilizationPercent: 12.5,
   memoryUsageBytes: null,
   memoryLimitBytes: 1_000,
+  memoryUtilizationPercent: null,
+  playersOnline: 2,
   networkRxBytesPerSecond: 4,
   networkTxBytesPerSecond: 5
 };
@@ -88,12 +92,12 @@ describe("server timeline ECharts option", () => {
     };
     expect(option.animation).toBe(false);
     expect(option).not.toHaveProperty("tooltip");
-    expect(option.yAxis).toHaveLength(3);
+    expect(option.yAxis).toHaveLength(2);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
-    expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, "-"]]);
-    expect(option.series.find((series) => series.id === "cpuPercent")?.connectNulls).toBe(false);
-    expect(option.series.find((series) => series.id === "cpuPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.28, smoothMonotone: "x" });
-    expect(option.series.find((series) => series.id === "cpuPercent")?.emphasis).toEqual({ disabled: true });
+    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.data).toEqual([[10_000, "-"]]);
+    expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.connectNulls).toBe(false);
+    expect(option.series.find((series) => series.id === "cpuUtilizationPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.24, smoothMonotone: "x" });
+    expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.emphasis).toEqual({ disabled: true });
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("solid");
@@ -105,15 +109,33 @@ describe("server timeline ECharts option", () => {
       samples: [sample],
       query: { from: 0, to: 20_000 },
       viewport: { from: 5_000, to: 15_000 },
-      enabled: { ...enabled, cpuPercent: false },
+      enabled: { ...enabled, cpuUtilizationPercent: false },
       clusters: [],
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: String,
       reducedMotion: false,
       now: 30_000
-    }) as { series: Array<{ id: string }> };
-    expect(option.series.some((series) => series.id === "cpuPercent")).toBe(false);
+    }) as { yAxis: unknown[]; series: Array<{ id: string }> };
+    expect(option.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
+    expect(option.yAxis).toHaveLength(2);
+  });
+
+  it("removes unused right axes and gives players an integer step axis only when enabled", () => {
+    const option = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 20_000 },
+      viewport: { from: 5_000, to: 15_000 },
+      enabled: { ...enabled, networkRxBytesPerSecond: false, networkTxBytesPerSecond: false, playersOnline: true },
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      reducedMotion: false,
+      now: 30_000
+    }) as { yAxis: Array<{ name?: string }>; series: Array<{ id: string; step?: string }> };
+    expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU / Memory", "Players"]);
+    expect(option.series.find((series) => series.id === "playersOnline")?.step).toBe("end");
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {
@@ -133,18 +155,19 @@ describe("server timeline ECharts option", () => {
   });
 
   it("escapes event text rendered into the HTML tooltip", () => {
-    const html = timelineTooltipHtml([{ axisValue: 10_000, seriesId: "cpuPercent", seriesName: "CPU", value: [10_000, 12.5] }], clusters, 10_000, String);
+    const html = timelineTooltipHtml([{ axisValue: 10_000, seriesId: "cpuUtilizationPercent", seriesName: "CPU", value: [10_000, 12.5] }], clusters, 10_000, String);
     expect(html).toContain("&lt;Alex&gt; joined &amp; played");
     expect(html).not.toContain("<Alex>");
     expect(escapeTimelineHtml('"server"')).toBe("&quot;server&quot;");
   });
 
   it("builds the hover tooltip without asking ECharts to highlight or redraw a series", () => {
-    const laterSample = { ...sample, sampledAt: 20_000, cpuPercent: 30 };
+    const laterSample = { ...sample, sampledAt: 20_000, cpuUtilizationPercent: 30 };
     expect(nearestTimelineSample([sample, laterSample], 18_000)).toBe(laterSample);
-    const html = timelineHoverTooltipHtml(18_000, [sample, laterSample], { ...enabled, memoryUsageBytes: false }, [], 10_000, String);
+    const html = timelineHoverTooltipHtml(18_000, [sample, laterSample], { ...enabled, memoryUtilizationPercent: false }, [], 10_000, String);
     expect(html).toContain("20000");
     expect(html).toContain("CPU: 30.0%");
+    expect(html).toContain("Players: 2 online");
     expect(html).not.toContain("Memory:");
   });
 });

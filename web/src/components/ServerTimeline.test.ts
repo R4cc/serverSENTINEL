@@ -5,7 +5,8 @@ import {
   mergeTimelineResponses,
   positionTimelineClusters,
   timelineMarkers,
-  timelineMarkerDisplayLabel
+  timelineMarkerDisplayLabel,
+  timelineMarkerIsImportant
 } from "./ServerTimeline";
 
 function response(): ServerTimelineResponse {
@@ -28,7 +29,7 @@ describe("server timeline markers", () => {
   it("maps player and schedule annotations to distinct non-color labels", () => {
     const markers = timelineMarkers(response());
     expect(markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left", "Restart scheduled"]);
-    expect(markers.map((marker) => marker.tone)).toEqual(["join", "leave", "schedule"]);
+    expect(markers.map((marker) => marker.tone)).toEqual(["join", "leave", "planned"]);
   });
 
   it("combines a leave and rejoin within 30 seconds into one reconnect marker", () => {
@@ -80,17 +81,28 @@ describe("server timeline markers", () => {
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
   });
 
-  it("moves labels into another lane only when their measured widths collide", () => {
+  it("keeps compact routine markers in one lane when their full labels would have collided", () => {
     const clusters = clusterTimelineMarkers(timelineMarkers(response()), 0, 60_000, 24);
     clusters[1].occurredAt = 13_000;
     const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
-    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
+    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
   });
 
   it("separates the player action from the full player-name subtitle", () => {
     const marker = timelineMarkers(response())[0];
     marker.event = { ...marker.event!, subject: "AnExtremelyLongPlayerName" };
     expect(timelineMarkerDisplayLabel(marker)).toEqual({ primary: "Player joined", secondary: "AnExtremelyLongPlayerName" });
+  });
+
+  it("keeps lifecycle and failed automation labels important while routine and planned markers stay compact", () => {
+    const value = response();
+    value.events.push({ id: "crash", eventType: "server_crashed", type: "error", severity: "error", text: "Server crashed", message: "Server crashed", occurredAt: 30_000, signature: "server_crashed", source: "logs/latest.log" });
+    value.schedules.push({ id: "failed", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 40_000, kind: "run", status: "failed" });
+    const markers = timelineMarkers(value);
+    expect(timelineMarkerIsImportant(markers.find((marker) => marker.event?.eventType === "server_crashed")!)).toBe(true);
+    expect(timelineMarkerIsImportant(markers.find((marker) => marker.schedule?.status === "failed")!)).toBe(true);
+    expect(timelineMarkerIsImportant(markers.find((marker) => marker.tone === "planned")!)).toBe(false);
+    expect(timelineMarkerIsImportant(markers.find((marker) => marker.tone === "join")!)).toBe(false);
   });
 
   it("omits the schedule legend data when permission-filtered responses contain none", () => {
@@ -102,12 +114,12 @@ describe("server timeline markers", () => {
 
   it("merges incremental refreshes and evicts items outside the moving window", () => {
     const current = response();
-    current.samples = [{ sampledAt: 20_000, available: true, running: true, cpuPercent: 10, memoryUsageBytes: 100, memoryLimitBytes: 200, networkRxBytesPerSecond: 1, networkTxBytesPerSecond: 2 }];
+    current.samples = [{ sampledAt: 20_000, available: true, running: true, cpuPercent: 10, cpuUtilizationPercent: 10, memoryUsageBytes: 100, memoryLimitBytes: 200, memoryUtilizationPercent: 50, playersOnline: 1, networkRxBytesPerSecond: 1, networkTxBytesPerSecond: 2 }];
     const incoming = response();
     incoming.from = 45_000;
     incoming.to = 65_000;
     incoming.generatedAt = "2026-01-01T00:01:05.000Z";
-    incoming.samples = [{ sampledAt: 60_000, available: true, running: true, cpuPercent: 20, memoryUsageBytes: 120, memoryLimitBytes: 200, networkRxBytesPerSecond: 3, networkTxBytesPerSecond: 4 }];
+    incoming.samples = [{ sampledAt: 60_000, available: true, running: true, cpuPercent: 20, cpuUtilizationPercent: 20, memoryUsageBytes: 120, memoryLimitBytes: 200, memoryUtilizationPercent: 60, playersOnline: 2, networkRxBytesPerSecond: 3, networkTxBytesPerSecond: 4 }];
     incoming.events = [{ ...current.events[1], occurredAt: 50_000 }];
     const merged = mergeTimelineResponses(current, incoming, 15_000, 65_000);
     expect(merged.samples.map((point) => point.sampledAt)).toEqual([20_000, 60_000]);

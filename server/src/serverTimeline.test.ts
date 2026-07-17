@@ -7,8 +7,10 @@ function sample(sampledAt: number, rx: number, tx: number, overrides: Partial<Re
     available: true,
     running: true,
     cpuPercent: 20,
+    cpuCapacityCores: 4,
     memoryUsageBytes: 1024,
     memoryLimitBytes: 4096,
+    playersOnline: 2,
     networkRxBytes: rx,
     networkTxBytes: tx,
     readAt: new Date(sampledAt).toISOString(),
@@ -21,7 +23,7 @@ describe("server timeline resource points", () => {
   it("derives separate receive and transmit rates", () => {
     const points = timelineResourcePoints([sample(0, 100, 200), sample(5_000, 600, 1_200)], 5_000, 5_000, 100);
     expect(points).toHaveLength(1);
-    expect(points[0]).toMatchObject({ networkRxBytesPerSecond: 100, networkTxBytesPerSecond: 200 });
+    expect(points[0]).toMatchObject({ cpuUtilizationPercent: 5, memoryUtilizationPercent: 25, playersOnline: 2, networkRxBytesPerSecond: 100, networkTxBytesPerSecond: 200 });
   });
 
   it("leaves gaps for counter resets, unavailable samples, and long pauses", () => {
@@ -39,6 +41,14 @@ describe("server timeline resource points", () => {
   it("caps dense histories through aggregation", () => {
     const samples = Array.from({ length: 1_500 }, (_, index) => sample(index * 5_000, index * 100, index * 200));
     expect(timelineResourcePoints(samples, 0, samples.at(-1)!.sampledAt, 300).length).toBeLessThanOrEqual(300);
+  });
+
+  it("leaves legacy CPU samples unnormalized and retains the final player count in an aggregate bucket", () => {
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { cpuCapacityCores: undefined, playersOnline: 1 }),
+      sample(5_000, 10, 10, { cpuCapacityCores: undefined, playersOnline: 3 })
+    ], 0, 5_000, 1);
+    expect(points[0]).toMatchObject({ cpuUtilizationPercent: null, playersOnline: 3 });
   });
 
   it("preserves network reset gaps while aggregating", () => {

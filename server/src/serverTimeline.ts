@@ -21,6 +21,11 @@ function rate(current: number | undefined, previous: number | undefined, elapsed
   return (current - previous) / elapsedSeconds;
 }
 
+function utilizationPercent(value: number, capacity: number | undefined) {
+  if (!Number.isFinite(value) || !Number.isFinite(capacity) || !capacity || capacity <= 0) return null;
+  return Math.max(0, Math.min(100, value / capacity));
+}
+
 function point(sample: ResourceStatsSample, previous?: ResourceStatsSample): ServerTimelineResourcePoint {
   const valid = sample.available && sample.running;
   const elapsedMs = previous ? sample.sampledAt - previous.sampledAt : 0;
@@ -30,8 +35,11 @@ function point(sample: ResourceStatsSample, previous?: ResourceStatsSample): Ser
     available: sample.available,
     running: sample.running,
     cpuPercent: valid ? finite(sample.cpuPercent) : null,
+    cpuUtilizationPercent: valid ? utilizationPercent(sample.cpuPercent, sample.cpuCapacityCores) : null,
     memoryUsageBytes: valid ? finite(sample.memoryUsageBytes) : null,
     memoryLimitBytes: valid ? finite(sample.memoryLimitBytes) : null,
+    memoryUtilizationPercent: valid ? utilizationPercent(sample.memoryUsageBytes * 100, sample.memoryLimitBytes) : null,
+    playersOnline: valid ? finite(sample.playersOnline) : null,
     networkRxBytesPerSecond: ratesValid ? rate(sample.networkRxBytes, previous.networkRxBytes, elapsedMs / 1000) : null,
     networkTxBytesPerSecond: ratesValid ? rate(sample.networkTxBytes, previous.networkTxBytes, elapsedMs / 1000) : null
   };
@@ -52,14 +60,18 @@ function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
   const output: ServerTimelineResourcePoint[] = [];
   for (let index = 0; index < points.length; index += bucketSize) {
     const bucket = points.slice(index, index + bucketSize);
-    const containsGap = bucket.some((item) => !item.available || !item.running || item.cpuPercent === null);
+    const containsGap = bucket.some((item) => !item.available || !item.running);
+    const lastPlayersOnline = [...bucket].reverse().find((item) => item.playersOnline !== null)?.playersOnline ?? null;
     output.push({
       sampledAt: Math.round(average(bucket.map((item) => item.sampledAt)) ?? bucket[0].sampledAt),
       available: !containsGap,
       running: !containsGap,
       cpuPercent: containsGap ? null : completeAverage(bucket.map((item) => item.cpuPercent)),
+      cpuUtilizationPercent: containsGap ? null : completeAverage(bucket.map((item) => item.cpuUtilizationPercent)),
       memoryUsageBytes: containsGap ? null : completeAverage(bucket.map((item) => item.memoryUsageBytes)),
       memoryLimitBytes: containsGap ? null : completeAverage(bucket.map((item) => item.memoryLimitBytes)),
+      memoryUtilizationPercent: containsGap ? null : completeAverage(bucket.map((item) => item.memoryUtilizationPercent)),
+      playersOnline: containsGap ? null : lastPlayersOnline,
       networkRxBytesPerSecond: containsGap ? null : completeAverage(bucket.map((item) => item.networkRxBytesPerSecond)),
       networkTxBytesPerSecond: containsGap ? null : completeAverage(bucket.map((item) => item.networkTxBytesPerSecond))
     });
@@ -79,8 +91,11 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
         available: false,
         running: false,
         cpuPercent: null,
+        cpuUtilizationPercent: null,
         memoryUsageBytes: null,
         memoryLimitBytes: null,
+        memoryUtilizationPercent: null,
+        playersOnline: null,
         networkRxBytesPerSecond: null,
         networkTxBytesPerSecond: null
       });

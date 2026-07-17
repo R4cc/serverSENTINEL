@@ -3,17 +3,31 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
 
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
-export const timelineChartGrid = { left: 60, right: 154, top: 82, bottom: 42 } as const;
+export const timelineChartGrid = { left: 56, right: 24, top: 60, bottom: 38 } as const;
+
+export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>) {
+  const percentage = enabled.cpuUtilizationPercent || enabled.memoryUtilizationPercent;
+  const network = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
+  const players = enabled.playersOnline;
+  const visibleRightAxes = Number(network) + Number(players);
+  return {
+    ...timelineChartGrid,
+    left: percentage ? 56 : 24,
+    right: visibleRightAxes === 2 ? 128 : visibleRightAxes === 1 ? 76 : 24
+  };
+}
 
 export type TimelinePalette = {
   cpu: string;
   memory: string;
   networkIn: string;
   networkOut: string;
+  players: string;
   join: string;
   leave: string;
   server: string;
-  schedule: string;
+  automation: string;
+  planned: string;
   accent: string;
   text: string;
   textMuted: string;
@@ -26,10 +40,12 @@ export const defaultTimelinePalette: TimelinePalette = {
   memory: "#8b4cf6",
   networkIn: "#34a853",
   networkOut: "#159ca6",
+  players: "#667085",
   join: "#2fa84f",
   leave: "#df3d72",
   server: "#f28b16",
-  schedule: "#7a42e8",
+  automation: "#7a42e8",
+  planned: "#7a42e8",
   accent: "#4169ff",
   text: "#1f2530",
   textMuted: "#697386",
@@ -97,8 +113,8 @@ function formatBytes(value: number) {
 }
 
 function formatMetric(key: SeriesKey, value: number) {
-  if (key === "cpuPercent") return `${value.toFixed(1)}%`;
-  if (key === "memoryUsageBytes") return formatBytes(value);
+  if (key === "cpuUtilizationPercent" || key === "memoryUtilizationPercent") return `${value.toFixed(1)}%`;
+  if (key === "playersOnline") return `${Math.round(value)} online`;
   return `${formatBytes(value)}/s`;
 }
 
@@ -108,6 +124,7 @@ type TooltipEntry = {
   seriesName?: unknown;
   value?: unknown;
   color?: unknown;
+  detail?: string;
 };
 
 export function timelineTooltipHtml(
@@ -121,11 +138,12 @@ export function timelineTooltipHtml(
   if (!Number.isFinite(timestamp)) return "";
   const rows = entries.flatMap((entry) => {
     const key = String(entry.seriesId ?? "") as SeriesKey;
-    if (!(["cpuPercent", "memoryUsageBytes", "networkRxBytesPerSecond", "networkTxBytesPerSecond"] as string[]).includes(key)) return [];
+    if (!(["cpuUtilizationPercent", "memoryUtilizationPercent", "networkRxBytesPerSecond", "networkTxBytesPerSecond", "playersOnline"] as string[]).includes(key)) return [];
     const pair = Array.isArray(entry.value) ? entry.value : [];
     const value = Number(pair[1]);
     if (!Number.isFinite(value)) return [];
-    return [`<span><i class="timelineTooltipSwatch series-${escapeTimelineHtml(key)}"></i>${escapeTimelineHtml(entry.seriesName)}: ${escapeTimelineHtml(formatMetric(key, value))}</span>`];
+    const detail = entry.detail ? ` <small>${escapeTimelineHtml(entry.detail)}</small>` : "";
+    return [`<span><i class="timelineTooltipSwatch series-${escapeTimelineHtml(key)}"></i>${escapeTimelineHtml(entry.seriesName)}: ${escapeTimelineHtml(formatMetric(key, value))}${detail}</span>`];
   });
   const nearby = clusters
     .filter((cluster) => Math.abs(cluster.occurredAt - timestamp) <= span / 80)
@@ -159,15 +177,19 @@ export function timelineHoverTooltipHtml(
   const sample = nearestTimelineSample(samples, timestamp);
   const tooltipTimestamp = sample?.sampledAt ?? timestamp;
   const names: Record<SeriesKey, string> = {
-    cpuPercent: "CPU",
-    memoryUsageBytes: "Memory",
+    cpuUtilizationPercent: "CPU",
+    memoryUtilizationPercent: "Memory",
     networkRxBytesPerSecond: "Network In",
-    networkTxBytesPerSecond: "Network Out"
+    networkTxBytesPerSecond: "Network Out",
+    playersOnline: "Players"
   };
   const entries: TooltipEntry[] = (Object.keys(names) as SeriesKey[]).flatMap((key) => {
     const value = sample?.[key];
-    if (!enabled[key] || typeof value !== "number" || !Number.isFinite(value)) return [];
-    return [{ axisValue: tooltipTimestamp, seriesId: key, seriesName: names[key], value: [tooltipTimestamp, value] }];
+    if ((key !== "playersOnline" && !enabled[key]) || typeof value !== "number" || !Number.isFinite(value)) return [];
+    const detail = key === "memoryUtilizationPercent" && typeof sample?.memoryUsageBytes === "number" && typeof sample?.memoryLimitBytes === "number"
+      ? `${formatBytes(sample.memoryUsageBytes)} / ${formatBytes(sample.memoryLimitBytes)}`
+      : undefined;
+    return [{ axisValue: tooltipTimestamp, seriesId: key, seriesName: names[key], value: [tooltipTimestamp, value], detail }];
   });
   return timelineTooltipHtml(entries.length ? entries : [{ axisValue: tooltipTimestamp }], clusters, span, formatDate);
 }
@@ -199,11 +221,66 @@ export function buildTimelineChartOption({
   reducedMotion: boolean;
   now: number;
 }): EChartsCoreOption {
-  const metricSeries: Array<{ key: SeriesKey; name: string; yAxisIndex: number; color: string; width: number }> = [
-    { key: "cpuPercent", name: "CPU", yAxisIndex: 0, color: palette.cpu, width: 2 },
-    { key: "memoryUsageBytes", name: "Memory", yAxisIndex: 1, color: palette.memory, width: 2 },
-    { key: "networkRxBytesPerSecond", name: "Network In", yAxisIndex: 2, color: palette.networkIn, width: 1.8 },
-    { key: "networkTxBytesPerSecond", name: "Network Out", yAxisIndex: 2, color: palette.networkOut, width: 1.8 }
+  const grid = timelineChartGridForEnabled(enabled);
+  const percentageEnabled = enabled.cpuUtilizationPercent || enabled.memoryUtilizationPercent;
+  const networkEnabled = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
+  const playersEnabled = enabled.playersOnline;
+  const yAxis: Array<Record<string, unknown>> = [];
+  let percentageAxis = -1;
+  let networkAxis = -1;
+  let playersAxis = -1;
+  if (percentageEnabled) {
+    percentageAxis = yAxis.length;
+    yAxis.push({
+      type: "value",
+      position: "left",
+      min: 0,
+      max: 100,
+      name: enabled.cpuUtilizationPercent && enabled.memoryUtilizationPercent ? "CPU / Memory" : enabled.cpuUtilizationPercent ? "CPU" : "Memory",
+      nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
+      axisLine: { show: true, lineStyle: { color: palette.border } },
+      axisTick: { show: false },
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => `${value.toFixed(0)}%` },
+      splitLine: { lineStyle: { color: palette.border, type: "dashed", opacity: 0.7 } }
+    });
+  }
+  if (playersEnabled) {
+    playersAxis = yAxis.length;
+    yAxis.push({
+      type: "value",
+      position: "right",
+      min: 0,
+      minInterval: 1,
+      name: "Players",
+      nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
+      axisLine: { show: true, lineStyle: { color: palette.border } },
+      axisTick: { show: false },
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => `${Math.round(value)}` },
+      splitLine: { show: false }
+    });
+  }
+  if (networkEnabled) {
+    networkAxis = yAxis.length;
+    yAxis.push({
+      type: "value",
+      position: "right",
+      offset: playersEnabled ? 48 : 0,
+      min: 0,
+      name: "Network",
+      nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
+      axisLine: { show: true, lineStyle: { color: palette.border } },
+      axisTick: { show: false },
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => `${formatBytes(value)}/s` },
+      splitLine: { show: false }
+    });
+  }
+  if (!yAxis.length) yAxis.push({ type: "value", show: false, min: 0, max: 1 });
+  const metricSeries: Array<{ key: SeriesKey; name: string; yAxisIndex: number; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
+    { key: "cpuUtilizationPercent", name: "CPU", yAxisIndex: percentageAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
+    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: percentageAxis, color: palette.memory, width: 2.2, opacity: 0.9, dash: "dashed" },
+    { key: "networkRxBytesPerSecond", name: "Network In", yAxisIndex: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
+    { key: "networkTxBytesPerSecond", name: "Network Out", yAxisIndex: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
+    { key: "playersOnline", name: "Players", yAxisIndex: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }
   ];
   const markerLines: Array<{
     xAxis: number;
@@ -213,7 +290,7 @@ export function buildTimelineChartOption({
     xAxis: cluster.occurredAt,
     lineStyle: {
       color: markerColor(cluster, palette),
-      type: "solid" as const,
+      type: cluster.markers.every((marker) => marker.tone === "planned") ? "dashed" as const : "solid" as const,
       width: Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75),
       opacity: 0.84
     },
@@ -233,7 +310,7 @@ export function buildTimelineChartOption({
       enabled: true,
       description: `Server resource timeline with ${samples.length} samples and ${clusters.reduce((total, cluster) => total + cluster.markers.length, 0)} annotations.`
     },
-    grid: { ...timelineChartGrid, containLabel: false },
+    grid: { ...grid, containLabel: false },
     xAxis: {
       type: "time",
       min: query.from,
@@ -247,36 +324,7 @@ export function buildTimelineChartOption({
       },
       splitLine: { show: false }
     },
-    yAxis: [
-      {
-        type: "value",
-        position: "left",
-        min: 0,
-        axisLine: { show: true, lineStyle: { color: palette.border } },
-        axisTick: { show: false },
-        axisLabel: { color: palette.textMuted, formatter: (value: number) => `${value.toFixed(0)}%` },
-        splitLine: { lineStyle: { color: palette.border, type: "dashed" } }
-      },
-      {
-        type: "value",
-        position: "right",
-        min: 0,
-        axisLine: { show: true, lineStyle: { color: palette.border } },
-        axisTick: { show: false },
-        axisLabel: { color: palette.textMuted, formatter: (value: number) => formatBytes(value) },
-        splitLine: { show: false }
-      },
-      {
-        type: "value",
-        position: "right",
-        offset: 76,
-        min: 0,
-        axisLine: { show: true, lineStyle: { color: palette.border } },
-        axisTick: { show: false },
-        axisLabel: { color: palette.textMuted, formatter: (value: number) => `${formatBytes(value)}/s` },
-        splitLine: { show: false }
-      }
-    ],
+    yAxis,
     dataZoom: [{
       id: "timeline-inside",
       type: "inside",
@@ -298,11 +346,12 @@ export function buildTimelineChartOption({
         data: samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
         symbol: "none",
         showSymbol: false,
-        smooth: 0.28,
+        smooth: series.step ? false : series.key.startsWith("network") ? 0.36 : 0.24,
         smoothMonotone: "x" as const,
+        step: series.step,
         connectNulls: false,
         silent: true,
-        lineStyle: { color: series.color, width: series.width, opacity: 0.82, cap: "round", join: "round" },
+        lineStyle: { color: series.color, width: series.width, opacity: series.opacity, type: series.dash ?? "solid", cap: "round", join: "round" },
         itemStyle: { color: series.color },
         emphasis: { disabled: true },
         animation: !reducedMotion

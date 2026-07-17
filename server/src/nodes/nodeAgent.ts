@@ -1329,9 +1329,10 @@ async function handleCommand(command: string, payload: any) {
     const stats = await dockerRequest<any>("GET", `/containers/${name}/stats?stream=false`);
     const cpuDelta = (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
     const systemDelta = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
-    const cpuPercent = systemDelta > 0 ? (cpuDelta / systemDelta) * (stats.cpu_stats?.online_cpus ?? 1) * 100 : 0;
+    const cpuCapacityCores = stats.cpu_stats?.online_cpus ?? 1;
+    const cpuPercent = systemDelta > 0 ? (cpuDelta / systemDelta) * cpuCapacityCores * 100 : 0;
     const networks = Object.values(stats.networks ?? {}) as Array<{ rx_bytes?: number; tx_bytes?: number }>;
-    return { available: true, running: true, cpuPercent, memoryUsageBytes: stats.memory_stats?.usage ?? 0, memoryLimitBytes: stats.memory_stats?.limit ?? 0, networkRxBytes: networks.reduce((sum, n) => sum + (n.rx_bytes ?? 0), 0), networkTxBytes: networks.reduce((sum, n) => sum + (n.tx_bytes ?? 0), 0), sampledAt: new Date().toISOString() };
+    return { available: true, running: true, cpuPercent, cpuCapacityCores, memoryUsageBytes: stats.memory_stats?.usage ?? 0, memoryLimitBytes: stats.memory_stats?.limit ?? 0, networkRxBytes: networks.reduce((sum, n) => sum + (n.rx_bytes ?? 0), 0), networkTxBytes: networks.reduce((sum, n) => sum + (n.tx_bytes ?? 0), 0), sampledAt: new Date().toISOString() };
   }
   if (command === "server.logs.recent") return readRecentServerLogs(server);
   if (command === "server.console.send") {

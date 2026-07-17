@@ -172,7 +172,8 @@ export function ResourcePanel({
   }, [latest, samples, selectedScope.milliseconds]);
   const hasStats = Boolean(latest?.available && latest.running);
   const statsUnavailableLabel = !dockerSocketMounted ? "Not connected" : status?.docker.running ? "Collecting" : "Not running";
-  const cpu = hasStats ? latest?.cpuPercent ?? 0 : 0;
+  const hasNormalizedCpu = Boolean(hasStats && latest?.cpuCapacityCores);
+  const cpu = hasNormalizedCpu ? (latest?.cpuPercent ?? 0) / latest!.cpuCapacityCores! : 0;
   const memoryUsage = hasStats ? latest?.memoryUsageBytes ?? 0 : 0;
   const configuredMemoryBytes = latest?.memoryLimitBytes || parseMaxMemoryGb(server.javaArgs) * 1024 * 1024 * 1024;
   const memoryPercent = hasStats && configuredMemoryBytes ? (memoryUsage / configuredMemoryBytes) * 100 : 0;
@@ -235,10 +236,10 @@ export function ResourcePanel({
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">
             <span>CPU usage</span>
-            <strong>{hasStats ? `${cpu.toFixed(1)}%` : statsUnavailableLabel}</strong>
-            <small>{hasStats ? "Current sample" : "Start the server to collect samples"}</small>
+            <strong>{hasNormalizedCpu ? `${cpu.toFixed(1)}%` : hasStats ? "Collecting" : statsUnavailableLabel}</strong>
+            <small>{hasNormalizedCpu ? "Current capacity usage" : hasStats ? "Waiting for normalized samples" : "Start the server to collect samples"}</small>
           </div>
-          <ResourceChart samples={scopedSamples} value={(sample) => sample.cpuPercent} formatValue={(value) => `${value.toFixed(1)}%`} formatTime={formatTime} emptyLabel={hasStats ? "Collecting history" : statsUnavailableLabel} />
+          <ResourceChart samples={scopedSamples} value={(sample) => sample.cpuCapacityCores ? sample.cpuPercent / sample.cpuCapacityCores : Number.NaN} formatValue={(value) => `${value.toFixed(1)}%`} formatTime={formatTime} emptyLabel={hasStats ? "Collecting normalized history" : statsUnavailableLabel} />
         </div>
         <div className={`resourceRow ${hasStats ? "" : "unavailable"}`}>
           <div className="resourceMetricLabel">

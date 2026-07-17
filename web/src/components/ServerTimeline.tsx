@@ -13,7 +13,7 @@ import {
   dataZoomWindow,
   defaultTimelinePalette,
   liveTimelineWindow,
-  timelineChartGrid,
+  timelineChartGridForEnabled,
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
   timelineQueryWindow,
@@ -31,7 +31,7 @@ const timelineRanges = [
 
 type TimelineRange = typeof timelineRanges[number]["label"];
 type TimelineSelection = TimelineRange | "custom";
-export type SeriesKey = "cpuPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond";
+export type SeriesKey = "cpuUtilizationPercent" | "memoryUtilizationPercent" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
 
@@ -39,7 +39,7 @@ export type TimelineMarker = {
   id: string;
   occurredAt: number;
   label: string;
-  tone: "join" | "leave" | "server" | "schedule";
+  tone: "join" | "leave" | "server" | "automation" | "planned";
   event?: ServerTimelineEvent;
   reconnect?: {
     player: string;
@@ -49,14 +49,14 @@ export type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
-type AnnotationKey = TimelineMarker["tone"];
+type AnnotationKey = "player" | "server" | "automation" | "planned";
 
 type TimelineHoverTooltip = {
   x: number;
-  y: number;
+  timestamp: number;
   html: string;
   alignEnd: boolean;
-  alignBottom: boolean;
+  pinned: boolean;
 };
 
 export type MarkerCluster = {
@@ -69,17 +69,18 @@ export type MarkerCluster = {
 };
 
 const seriesOptions: Array<{ key: SeriesKey; label: string }> = [
-  { key: "cpuPercent", label: "CPU Usage" },
-  { key: "memoryUsageBytes", label: "Memory Usage" },
+  { key: "cpuUtilizationPercent", label: "CPU" },
+  { key: "memoryUtilizationPercent", label: "Memory" },
   { key: "networkRxBytesPerSecond", label: "Network In" },
-  { key: "networkTxBytesPerSecond", label: "Network Out" }
+  { key: "networkTxBytesPerSecond", label: "Network Out" },
+  { key: "playersOnline", label: "Players" }
 ];
 
 const annotationOptions: Array<{ key: AnnotationKey; label: string }> = [
-  { key: "join", label: "Player joins" },
-  { key: "leave", label: "Player leaves" },
+  { key: "player", label: "Player activity" },
   { key: "server", label: "Server events" },
-  { key: "schedule", label: "Schedules" }
+  { key: "automation", label: "Automation runs" },
+  { key: "planned", label: "Planned schedules" }
 ];
 
 function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
@@ -134,7 +135,7 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
       id: schedule.id,
       occurredAt: schedule.occurredAt,
       label: schedule.kind === "upcoming" ? `${schedule.scheduleName} scheduled` : `${schedule.scheduleName}: ${schedule.status}`,
-      tone: "schedule" as const,
+      tone: schedule.kind === "upcoming" ? "planned" as const : "automation" as const,
       schedule
     }))
   ].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
@@ -155,7 +156,13 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
     id: `cluster:${bucket}:${grouped.map((marker) => marker.id).join(":")}`,
     occurredAt: Math.round(grouped.reduce((total, marker) => total + marker.occurredAt, 0) / grouped.length),
     markers: grouped,
-    tone: grouped.length === 1 ? grouped[0].tone : grouped.some((marker) => marker.tone === "server") ? "server" : grouped[0].tone,
+    tone: grouped.length === 1
+      ? grouped[0].tone
+      : grouped.some((marker) => marker.tone === "server")
+        ? "server"
+        : grouped.some((marker) => marker.tone === "automation")
+          ? "automation"
+          : grouped[0].tone,
     slot: bucket,
     slotCount: slots
   }));
@@ -194,7 +201,24 @@ export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMark
   return { primary: marker.label };
 }
 
+export function timelineMarkerIsImportant(marker: TimelineMarker) {
+  if (marker.schedule) return marker.schedule.status === "failed" || marker.schedule.status === "running";
+  return Boolean(marker.event && [
+    "server_started",
+    "server_stopped",
+    "server_crashed",
+    "server_overloaded",
+    "exception_caught",
+    "mod_disabled"
+  ].includes(marker.event.eventType));
+}
+
+function clusterIsImportant(cluster: MarkerCluster) {
+  return cluster.markers.some(timelineMarkerIsImportant);
+}
+
 function estimatedMarkerLabelWidth(cluster: MarkerCluster) {
+  if (!clusterIsImportant(cluster)) return 30;
   const display = cluster.markers.length > 1
     ? { primary: `${cluster.markers.length} events` }
     : timelineMarkerDisplayLabel(cluster.markers[0]);
@@ -251,7 +275,10 @@ function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number
 
 function timelineMarkerGlyph(marker: TimelineMarker) {
   if (marker.reconnect) return "↻";
-  return marker.tone === "join" ? "+" : marker.tone === "leave" ? "−" : marker.tone === "server" ? "!" : "S";
+  if (marker.tone === "join") return "+";
+  if (marker.tone === "leave") return "−";
+  if (marker.tone === "server") return "!";
+  return marker.tone === "planned" ? "○" : "▶";
 }
 
 function readTimelinePalette(element: HTMLElement): TimelinePalette {
@@ -262,10 +289,12 @@ function readTimelinePalette(element: HTMLElement): TimelinePalette {
     memory: read("--timeline-memory", defaultTimelinePalette.memory),
     networkIn: read("--timeline-network-in", defaultTimelinePalette.networkIn),
     networkOut: read("--timeline-network-out", defaultTimelinePalette.networkOut),
+    players: read("--timeline-players", defaultTimelinePalette.players),
     join: read("--timeline-join", defaultTimelinePalette.join),
     leave: read("--timeline-leave", defaultTimelinePalette.leave),
     server: read("--timeline-server", defaultTimelinePalette.server),
-    schedule: read("--timeline-schedule", defaultTimelinePalette.schedule),
+    automation: read("--timeline-schedule", defaultTimelinePalette.automation),
+    planned: read("--timeline-schedule", defaultTimelinePalette.planned),
     accent: read("--accent", defaultTimelinePalette.accent),
     text: read("--text", defaultTimelinePalette.text),
     textMuted: read("--text-muted", defaultTimelinePalette.textMuted),
@@ -331,17 +360,19 @@ export function ServerTimeline({
   const [selectedCluster, setSelectedCluster] = useState<MarkerCluster | null>(null);
   const [annotationRailWidth, setAnnotationRailWidth] = useState(1_000);
   const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
+  const [hoveredClusterId, setHoveredClusterId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
-    cpuPercent: true,
-    memoryUsageBytes: true,
-    networkRxBytesPerSecond: true,
-    networkTxBytesPerSecond: true
+    cpuUtilizationPercent: true,
+    memoryUtilizationPercent: true,
+    networkRxBytesPerSecond: false,
+    networkTxBytesPerSecond: false,
+    playersOnline: false
   });
   const [annotationEnabled, setAnnotationEnabled] = useState<Record<AnnotationKey, boolean>>({
-    join: true,
-    leave: true,
+    player: true,
     server: true,
-    schedule: true
+    automation: true,
+    planned: true
   });
   const panelRef = useRef<HTMLElement>(null);
   const annotationRailRef = useRef<HTMLDivElement>(null);
@@ -421,13 +452,16 @@ export function ServerTimeline({
   }, [live, loadWindow, setViewport]);
 
   useEffect(() => {
-    if (!selectedCluster) return;
+    if (!selectedCluster && !hoverTooltip?.pinned) return;
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedCluster(null);
+      if (event.key === "Escape") {
+        setSelectedCluster(null);
+        setHoverTooltip(null);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [selectedCluster]);
+  }, [hoverTooltip?.pinned, selectedCluster]);
 
   useEffect(() => {
     const rail = annotationRailRef.current;
@@ -444,9 +478,10 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  const markers = useMemo(() => allMarkers.filter((marker) => marker.reconnect
-    ? annotationEnabled.join || annotationEnabled.leave
-    : annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
+  const markers = useMemo(() => allMarkers.filter((marker) => {
+    if (marker.tone === "join" || marker.tone === "leave") return annotationEnabled.player;
+    return annotationEnabled[marker.tone];
+  }), [allMarkers, annotationEnabled]);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
   const positionedClusters = useMemo(
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
@@ -454,9 +489,10 @@ export function ServerTimeline({
   );
   const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
+  const chartGrid = useMemo(() => timelineChartGridForEnabled(enabled), [enabled]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
-    const available = data.samples.filter((point) => point.available && point.running && point.cpuPercent !== null && point.memoryUsageBytes !== null).length;
+    const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUtilizationPercent !== null)).length;
     if (available === 0) return "unavailable";
     return "available";
   }, [data]);
@@ -472,19 +508,40 @@ export function ServerTimeline({
     else onOpenSchedules({ kind: "schedule", scheduleId: schedule.scheduleId });
   }, [onOpenConsole, onOpenSchedules]);
 
-  const selectPreset = (range: TimelineRange) => {
+  const selectPreset = (range: TimelineRange, nextLive = liveRef.current) => {
     const span = timelineRanges.find((candidate) => candidate.label === range)?.milliseconds ?? initialSpan;
-    const next = liveTimelineWindow(span);
+    const current = viewportRef.current;
+    const center = (current.from + current.to) / 2;
+    const historicalTo = Math.min(Date.now(), center + span / 2);
+    const next = nextLive ? liveTimelineWindow(span) : { from: historicalTo - span, to: historicalTo };
     setSelection(range);
     setSelectedCluster(null);
+    setHoverTooltip(null);
     setLastPreset(range);
-    setLiveMode(true);
+    setLiveMode(nextLive);
     setClockNow(Date.now());
     setViewport(next);
-    void loadWindow(next, true, { showLoading: true });
+    void loadWindow(next, nextLive, { showLoading: true });
   };
 
-  const jumpToNow = () => selectPreset(lastPreset);
+  const jumpToNow = () => selectPreset(lastPreset, true);
+
+  const resetView = () => {
+    const span = timelineRanges.find((candidate) => candidate.label === lastPreset)?.milliseconds ?? initialSpan;
+    if (live) {
+      selectPreset(lastPreset);
+      return;
+    }
+    const current = viewportRef.current;
+    const center = (current.from + current.to) / 2;
+    const nextTo = Math.min(Date.now(), center + span / 2);
+    const next = { from: nextTo - span, to: nextTo };
+    setSelection(lastPreset);
+    setSelectedCluster(null);
+    setHoverTooltip(null);
+    setViewport(next);
+    void loadWindow(next, false, { showLoading: true });
+  };
 
   const pan = (direction: -1 | 1) => {
     const current = viewportRef.current;
@@ -523,33 +580,38 @@ export function ServerTimeline({
   const hideHoverTooltip = useCallback(() => {
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
     hoverFrameRef.current = undefined;
-    setHoverTooltip(null);
+    setHoverTooltip((current) => current?.pinned ? current : null);
   }, []);
 
   const handleChartPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (hoverTooltip?.pinned) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    const plotWidth = rect.width - timelineChartGrid.left - timelineChartGrid.right;
-    const plotBottom = rect.height - timelineChartGrid.bottom;
-    if (plotWidth <= 0 || x < timelineChartGrid.left || x > timelineChartGrid.left + plotWidth || y < timelineChartGrid.top || y > plotBottom) {
+    const plotWidth = rect.width - chartGrid.left - chartGrid.right;
+    const plotBottom = rect.height - chartGrid.bottom;
+    if (plotWidth <= 0 || x < chartGrid.left || x > chartGrid.left + plotWidth || y < chartGrid.top || y > plotBottom) {
       hideHoverTooltip();
       return;
     }
-    const timestamp = viewport.from + (x - timelineChartGrid.left) / plotWidth * (viewport.to - viewport.from);
+    const timestamp = viewport.from + (x - chartGrid.left) / plotWidth * (viewport.to - viewport.from);
     const html = timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate);
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
     hoverFrameRef.current = window.requestAnimationFrame(() => {
       hoverFrameRef.current = undefined;
       setHoverTooltip({
-        x: x + 14,
-        y: y + 14,
+        x,
+        timestamp,
         html,
         alignEnd: x > rect.width * 0.68,
-        alignBottom: y > rect.height * 0.6
+        pinned: false
       });
     });
-  }, [clusters, data?.samples, enabled, formatDate, hideHoverTooltip, viewport]);
+  }, [chartGrid, clusters, data?.samples, enabled, formatDate, hideHoverTooltip, hoverTooltip?.pinned, viewport]);
+
+  const pinHoverTooltip = useCallback(() => {
+    setHoverTooltip((current) => current ? { ...current, pinned: !current.pinned } : current);
+  }, []);
 
   const chartOption = useMemo(() => buildTimelineChartOption({
     samples: data?.samples ?? [],
@@ -569,52 +631,65 @@ export function ServerTimeline({
       <PanelHeader
         title="Server Timeline"
         description="Correlate resource usage with player activity, server events, and schedules. Drag to pan; use Ctrl or Command with the wheel to zoom."
-        actions={<div className="serverTimelineRangeControls" role="group" aria-label="Timeline range">
-          <Button variant="ghost" compact className={live ? "active" : ""} onClick={jumpToNow} aria-pressed={live}>Live</Button>
-          {timelineRanges.map((candidate) => (
-            <Button
-              variant="ghost"
-              compact
-              key={candidate.label}
-              className={selection === candidate.label ? "active" : ""}
-              onClick={() => selectPreset(candidate.label)}
-              aria-pressed={selection === candidate.label}
-            >{candidate.label}</Button>
-          ))}
-          {selection === "custom" && <span className="serverTimelineCustomRange" aria-live="polite">Custom</span>}
+        actions={<div className="serverTimelineHeaderControls">
+          <span className={`serverTimelineMode tone-${live ? "live" : "history"}`} aria-live="polite"><i aria-hidden="true" />{live ? "Live" : "Historical"}</span>
+          <div className="serverTimelineRangeControls" role="group" aria-label="Timeline range">
+            {timelineRanges.map((candidate) => (
+              <Button
+                variant="ghost"
+                compact
+                key={candidate.label}
+                className={selection === candidate.label ? "active" : ""}
+                onClick={() => selectPreset(candidate.label)}
+                aria-pressed={selection === candidate.label}
+              >{candidate.label}</Button>
+            ))}
+            {selection === "custom" && <span className="serverTimelineCustomRange" aria-live="polite">Custom</span>}
+          </div>
         </div>}
       />
       {loading && <LoadingLabel>Loading server timeline</LoadingLabel>}
       <div className="serverTimelineToolbar">
-        <div className="serverTimelineSeries" role="group" aria-label="Timeline series">
-          {seriesOptions.map((series) => (
-            <button
-              type="button"
-              key={series.key}
-              className={`timelineSeriesToggle series-${series.key}${enabled[series.key] ? " active" : ""}`}
-              aria-pressed={enabled[series.key]}
-              onClick={() => setEnabled((current) => ({ ...current, [series.key]: !current[series.key] }))}
-            >
-              <span aria-hidden="true" />{series.label}
-            </button>
-          ))}
-          {annotationOptions.filter((annotation) => annotation.key !== "schedule" || data?.scheduleAnnotationsAvailable).map((annotation) => (
-            <button
-              type="button"
-              key={annotation.key}
-              className={`timelineSeriesToggle timelineAnnotationToggle tone-${annotation.key}${annotationEnabled[annotation.key] ? " active" : ""}`}
-              aria-pressed={annotationEnabled[annotation.key]}
-              onClick={() => {
-                setSelectedCluster(null);
-                setAnnotationEnabled((current) => ({ ...current, [annotation.key]: !current[annotation.key] }));
-              }}
-            >
-              <span aria-hidden="true" />{annotation.label}
-            </button>
-          ))}
+        <div className="serverTimelineLayerGroups">
+          <div className="serverTimelineLayerGroup" role="group" aria-label="Metric layers">
+            <span className="serverTimelineLayerHeading">Metrics</span>
+            <div className="serverTimelineSeries">
+              {seriesOptions.map((series) => (
+                <button
+                  type="button"
+                  key={series.key}
+                  className={`timelineSeriesToggle series-${series.key}${enabled[series.key] ? " active" : ""}`}
+                  aria-pressed={enabled[series.key]}
+                  onClick={() => setEnabled((current) => ({ ...current, [series.key]: !current[series.key] }))}
+                >
+                  <span aria-hidden="true" />{series.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="serverTimelineLayerGroup" role="group" aria-label="Event layers">
+            <span className="serverTimelineLayerHeading">Events</span>
+            <div className="serverTimelineSeries">
+              {annotationOptions.filter((annotation) => !["automation", "planned"].includes(annotation.key) || data?.scheduleAnnotationsAvailable).map((annotation) => (
+                <button
+                  type="button"
+                  key={annotation.key}
+                  className={`timelineSeriesToggle timelineAnnotationToggle tone-${annotation.key}${annotationEnabled[annotation.key] ? " active" : ""}`}
+                  aria-pressed={annotationEnabled[annotation.key]}
+                  onClick={() => {
+                    setSelectedCluster(null);
+                    setAnnotationEnabled((current) => ({ ...current, [annotation.key]: !current[annotation.key] }));
+                  }}
+                >
+                  <span aria-hidden="true" />{annotation.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="serverTimelineNavigation">
           {!live && <Button variant="secondary" compact onClick={jumpToNow}>Jump to now</Button>}
+          <Button variant="secondary" compact onClick={resetView} disabled={live && selection !== "custom"}>Reset view</Button>
           <Button variant="secondary" compact onClick={() => pan(-1)} aria-label="Earlier timeline window">‹</Button>
           <Button variant="secondary" compact onClick={() => pan(1)} aria-label="Later timeline window" disabled={live}>›</Button>
         </div>
@@ -623,44 +698,56 @@ export function ServerTimeline({
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
       <div className="serverTimelineChart" role="group" aria-label="Server resource and event timeline">
-        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} onPointerMove={handleChartPointerMove} onPointerLeave={hideHoverTooltip} />
+        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} onPointerMove={handleChartPointerMove} onPointerLeave={hideHoverTooltip} onClick={pinHoverTooltip} />
+        {hoverTooltip && <span
+          className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
+          style={{ left: hoverTooltip.x, top: chartGrid.top, bottom: chartGrid.bottom }}
+          aria-hidden="true"
+        />}
         {hoverTooltip && (
           <div
-            className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.alignBottom ? " align-bottom" : ""}`}
-            style={{ left: hoverTooltip.x, top: hoverTooltip.y }}
-            aria-hidden="true"
+            className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.pinned ? " is-pinned" : ""}`}
+            style={{ left: hoverTooltip.x + (hoverTooltip.alignEnd ? -14 : 14), top: chartGrid.top + 8 }}
+            aria-live={hoverTooltip.pinned ? "polite" : undefined}
             dangerouslySetInnerHTML={{ __html: hoverTooltip.html }}
           />
         )}
-        <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
+        <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: chartGrid.left, right: chartGrid.right }}>
           {positionedClusters.map((cluster) => {
             const glyph = cluster.markers.length > 1 ? String(cluster.markers.length) : timelineMarkerGlyph(cluster.markers[0]);
             const displayLabel = cluster.markers.length > 1
               ? { primary: `${cluster.markers.length} events` }
               : timelineMarkerDisplayLabel(cluster.markers[0]);
-            const labelTop = 3 + cluster.lane * 38;
+            const important = clusterIsImportant(cluster);
+            const expanded = important || hoveredClusterId === cluster.id || selectedCluster?.id === cluster.id;
+            const labelTop = 2 + cluster.lane * 29;
             return (
               <div
                 key={cluster.id}
-                className={`timelineAnnotationMarker tone-${cluster.tone}`}
+                className={`timelineAnnotationMarker tone-${cluster.tone}${cluster.tone === "planned" ? " is-planned" : ""}`}
                 style={{ left: `${cluster.leftPercent}%` }}
               >
                 <span
                   className="timelineAnnotationConnector"
-                  style={{ top: `${labelTop + 18}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
+                  style={{ top: `${labelTop + 15}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
                   aria-hidden="true"
                 />
                 <button
                   type="button"
-                  className={`timelineAnnotationLabel${cluster.alignEnd ? " align-end" : ""}`}
+                  className={`timelineAnnotationLabel${cluster.alignEnd ? " align-end" : ""}${expanded ? " is-expanded" : ""}${important ? " is-important" : ""}`}
                   style={{ top: `${labelTop}px` }}
                   title={markerTitle(cluster, formatDate)}
                   aria-label={markerTitle(cluster, formatDate)}
-                  aria-expanded={cluster.markers.length > 1 ? selectedCluster?.id === cluster.id : undefined}
-                  aria-controls={cluster.markers.length > 1 ? "server-timeline-annotation-popover" : undefined}
-                  onClick={() => cluster.markers.length > 1
-                    ? setSelectedCluster((current) => current?.id === cluster.id ? null : cluster)
-                    : activateMarker(cluster.markers[0])}
+                  aria-expanded={selectedCluster?.id === cluster.id}
+                  aria-controls="server-timeline-annotation-popover"
+                  onPointerEnter={() => setHoveredClusterId(cluster.id)}
+                  onPointerLeave={() => setHoveredClusterId((current) => current === cluster.id ? null : current)}
+                  onFocus={() => setHoveredClusterId(cluster.id)}
+                  onBlur={() => setHoveredClusterId((current) => current === cluster.id ? null : current)}
+                  onClick={() => {
+                    setHoverTooltip(null);
+                    setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
+                  }}
                 >
                   <span className="timelineAnnotationGlyph" aria-hidden="true">{glyph}</span>
                   <span className="timelineAnnotationLabelText" aria-hidden="true">
@@ -681,7 +768,7 @@ export function ServerTimeline({
           >
             <div className="serverTimelineAnnotationPopoverHeader">
               <div>
-                <strong>{selectedCluster.markers.length} events</strong>
+                <strong>{selectedCluster.markers.length} {selectedCluster.markers.length === 1 ? "event" : "events"}</strong>
                 <span>{formatDate(selectedCluster.occurredAt)}</span>
               </div>
               <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>

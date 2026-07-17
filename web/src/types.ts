@@ -221,8 +221,10 @@ export type ResourceStats = {
   available: boolean;
   running: boolean;
   cpuPercent: number;
+  cpuCapacityCores?: number;
   memoryUsageBytes: number;
   memoryLimitBytes: number;
+  playersOnline?: number;
   networkRxBytes?: number;
   networkTxBytes?: number;
   readAt: string;

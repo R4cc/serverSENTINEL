@@ -2740,6 +2740,7 @@ async function dockerResourceStats(server: ManagedServer) {
     available: true,
     running: true,
     cpuPercent: Number.isFinite(rawCpuPercent) ? Math.max(0, rawCpuPercent) : 0,
+    cpuCapacityCores: onlineCpus,
     memoryUsageBytes: Math.max(0, memoryUsage - reclaimableCache),
     memoryLimitBytes: stats.memory_stats?.limit ?? 0,
     networkRxBytes: networkTotals.rx,
@@ -8072,7 +8073,14 @@ resourceStatsCollector = new ResourceStatsCollector({
   historyWindowMs: resourceStatsHistoryWindowMs,
   readServers: listManagedServers,
   runtimeForServer,
-  statsRepository: resourceStatsRepository
+  statsRepository: resourceStatsRepository,
+  decorateSample: (server, sample) => {
+    const playerSnapshot = playerSnapshotCoordinator?.latest(server.id);
+    if (playerSnapshot?.state === "live" || playerSnapshot?.state === "stopped") {
+      sample.playersOnline = playerSnapshot.online ?? undefined;
+    }
+    return sample;
+  }
 });
 resourceStatsCollector.start();
 timelineEventCollector = new TimelineEventCollector({

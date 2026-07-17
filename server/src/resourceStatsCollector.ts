@@ -6,8 +6,10 @@ export type ResourceStatsSample = {
   available: boolean;
   running: boolean;
   cpuPercent: number;
+  cpuCapacityCores?: number;
   memoryUsageBytes: number;
   memoryLimitBytes: number;
+  playersOnline?: number;
   networkRxBytes?: number;
   networkTxBytes?: number;
   readAt: string;
@@ -26,6 +28,7 @@ type CollectorOptions = {
   readServers: () => Promise<ManagedServer[]>;
   runtimeForServer: (server: ManagedServer) => NodeRuntime;
   statsRepository: ResourceStatsRepository;
+  decorateSample?: (server: ManagedServer, sample: ResourceStatsSample) => ResourceStatsSample;
 };
 
 function finiteNumber(value: unknown, fallback = 0) {
@@ -52,6 +55,10 @@ function normalizeStats(value: unknown, sampledAt = Date.now()): ResourceStatsSa
     readAt,
     sampledAt
   };
+  const cpuCapacityCores = optionalFiniteNumber(record.cpuCapacityCores);
+  const playersOnline = optionalFiniteNumber(record.playersOnline);
+  if (cpuCapacityCores !== undefined && cpuCapacityCores > 0) sample.cpuCapacityCores = cpuCapacityCores;
+  if (playersOnline !== undefined && playersOnline >= 0) sample.playersOnline = Math.floor(playersOnline);
   const networkRxBytes = optionalFiniteNumber(record.networkRxBytes);
   const networkTxBytes = optionalFiniteNumber(record.networkTxBytes);
   if (networkRxBytes !== undefined) sample.networkRxBytes = Math.max(0, networkRxBytes);
@@ -133,7 +140,8 @@ export class ResourceStatsCollector {
     const sampledAt = Date.now();
     try {
       const stats = await this.options.runtimeForServer(server).serverStats(server);
-      return this.append(server.id, normalizeStats(stats, sampledAt));
+      const sample = normalizeStats(stats, sampledAt);
+      return this.append(server.id, this.options.decorateSample?.(server, sample) ?? sample);
     } catch (error) {
       return this.append(server.id, unavailableSample((error as Error).message || "Container stats are unavailable", sampledAt));
     }

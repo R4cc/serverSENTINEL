@@ -370,13 +370,17 @@ export function demoStatus(server: ManagedServer, running: boolean): ServerStatu
 export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSample {
   const elapsed = (sampledAt - (demoStartedAt - 60 * 60 * 1000)) / 1000;
   const memoryLimitBytes = 4 * 1024 * 1024 * 1024;
+  const cpuCapacityCores = 4;
+  const cpuUtilizationPercent = running ? 8 + Math.max(0, Math.sin(elapsed / 7)) * 22 : 0;
   const memoryUsageBytes = running ? Math.round((1.35 + Math.sin(elapsed / 12) * 0.18) * 1024 * 1024 * 1024) : 0;
   return {
     available: true,
     running,
-    cpuPercent: running ? 8 + Math.max(0, Math.sin(elapsed / 7)) * 22 : 0,
+    cpuPercent: cpuUtilizationPercent * cpuCapacityCores,
+    cpuCapacityCores,
     memoryUsageBytes,
     memoryLimitBytes,
+    playersOnline: running ? 12 + Math.round(1 + Math.sin(elapsed / 240)) : 0,
     networkRxBytes: running ? Math.round(84_000_000 + elapsed * 680_000 + Math.sin(elapsed / 5) * 180_000) : 0,
     networkTxBytes: running ? Math.round(62_000_000 + elapsed * 510_000 + Math.cos(elapsed / 6) * 120_000) : 0,
     readAt: new Date(sampledAt).toISOString(),
@@ -409,8 +413,11 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
       available: sample.available,
       running: sample.running,
       cpuPercent: valid ? sample.cpuPercent : null,
+      cpuUtilizationPercent: valid && sample.cpuCapacityCores ? sample.cpuPercent / sample.cpuCapacityCores : null,
       memoryUsageBytes: valid ? sample.memoryUsageBytes : null,
       memoryLimitBytes: valid ? sample.memoryLimitBytes : null,
+      memoryUtilizationPercent: valid && sample.memoryLimitBytes ? sample.memoryUsageBytes / sample.memoryLimitBytes * 100 : null,
+      playersOnline: valid ? sample.playersOnline ?? null : null,
       networkRxBytesPerSecond: valid && previous && sample.networkRxBytes !== undefined && previous.networkRxBytes !== undefined
         ? Math.max(0, (sample.networkRxBytes - previous.networkRxBytes) / elapsedSeconds)
         : null,
