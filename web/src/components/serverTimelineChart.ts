@@ -277,7 +277,7 @@ export function buildTimelineChartOption({
   if (!yAxis.length) yAxis.push({ type: "value", show: false, min: 0, max: 1 });
   const metricSeries: Array<{ key: SeriesKey; name: string; yAxisIndex: number; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
     { key: "cpuUtilizationPercent", name: "CPU", yAxisIndex: percentageAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
-    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: percentageAxis, color: palette.memory, width: 2.2, opacity: 0.9, dash: "dashed" },
+    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: percentageAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
     { key: "networkRxBytesPerSecond", name: "Network In", yAxisIndex: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
     { key: "networkTxBytesPerSecond", name: "Network Out", yAxisIndex: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
     { key: "playersOnline", name: "Players", yAxisIndex: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }

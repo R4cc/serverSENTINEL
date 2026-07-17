@@ -26,7 +26,7 @@ function utilizationPercent(value: number, capacity: number | undefined) {
   return Math.max(0, Math.min(100, value / capacity));
 }
 
-function point(sample: ResourceStatsSample, previous?: ResourceStatsSample): ServerTimelineResourcePoint {
+function point(sample: ResourceStatsSample, previous?: ResourceStatsSample, fallbackCpuCapacityCores?: number): ServerTimelineResourcePoint {
   const valid = sample.available && sample.running;
   const elapsedMs = previous ? sample.sampledAt - previous.sampledAt : 0;
   const ratesValid = valid && previous?.available && previous.running && elapsedMs > 0 && elapsedMs <= gapThresholdMs;
@@ -35,7 +35,7 @@ function point(sample: ResourceStatsSample, previous?: ResourceStatsSample): Ser
     available: sample.available,
     running: sample.running,
     cpuPercent: valid ? finite(sample.cpuPercent) : null,
-    cpuUtilizationPercent: valid ? utilizationPercent(sample.cpuPercent, sample.cpuCapacityCores) : null,
+    cpuUtilizationPercent: valid ? utilizationPercent(sample.cpuPercent, sample.cpuCapacityCores ?? fallbackCpuCapacityCores) : null,
     memoryUsageBytes: valid ? finite(sample.memoryUsageBytes) : null,
     memoryLimitBytes: valid ? finite(sample.memoryLimitBytes) : null,
     memoryUtilizationPercent: valid ? utilizationPercent(sample.memoryUsageBytes * 100, sample.memoryLimitBytes) : null,
@@ -79,8 +79,9 @@ function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
   return output;
 }
 
-export function timelineResourcePoints(samples: ResourceStatsSample[], from: number, to: number, maxPoints: number) {
+export function timelineResourcePoints(samples: ResourceStatsSample[], from: number, to: number, maxPoints: number, fallbackCpuCapacityCores?: number) {
   const output: ServerTimelineResourcePoint[] = [];
+  const cpuCapacityCores = [...samples].reverse().find((sample) => sample.cpuCapacityCores)?.cpuCapacityCores ?? fallbackCpuCapacityCores;
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
     const previous = samples[index - 1];
@@ -100,7 +101,7 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
         networkTxBytesPerSecond: null
       });
     }
-    output.push(point(sample, previous));
+    output.push(point(sample, previous, cpuCapacityCores));
   }
   return aggregate(output, maxPoints);
 }

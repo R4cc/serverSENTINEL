@@ -88,7 +88,7 @@ describe("server timeline ECharts option", () => {
       yAxis: unknown[];
       dataZoom: Array<{ startValue: number; endValue: number; zoomOnMouseWheel: string }>;
       xAxis: { axisLabel: { formatter: (value: number) => string } };
-      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; symbol?: string; silent?: boolean; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; emphasis?: { disabled: boolean }; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
+      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; symbol?: string; silent?: boolean; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; lineStyle?: { type?: string }; emphasis?: { disabled: boolean }; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
     };
     expect(option.animation).toBe(false);
     expect(option).not.toHaveProperty("tooltip");
@@ -98,6 +98,7 @@ describe("server timeline ECharts option", () => {
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.connectNulls).toBe(false);
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.24, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.emphasis).toEqual({ disabled: true });
+    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.lineStyle?.type).toBe("solid");
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("solid");

@@ -5254,10 +5254,10 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
   if (!Number.isInteger(requestedMaxPoints) || requestedMaxPoints < 100) badRequest("Timeline maxPoints must be a whole number of at least 100");
   const maxPoints = Math.min(1_200, requestedMaxPoints);
   const rawSamples = resourceStatsRepository.listRange(server.id, from, to, true);
-  const samples = timelineResourcePoints(rawSamples, from, to, maxPoints);
   const latestRaw = resourceStatsRepository.latest(server.id);
+  const samples = timelineResourcePoints(rawSamples, from, to, maxPoints, latestRaw?.cpuCapacityCores);
   const latest = latestRaw
-    ? timelineResourcePoints(resourceStatsRepository.listRange(server.id, latestRaw.sampledAt, latestRaw.sampledAt, true), latestRaw.sampledAt, latestRaw.sampledAt, 2).at(-1)
+    ? timelineResourcePoints(resourceStatsRepository.listRange(server.id, latestRaw.sampledAt, latestRaw.sampledAt, true), latestRaw.sampledAt, latestRaw.sampledAt, 2, latestRaw.cpuCapacityCores).at(-1)
     : undefined;
   const scheduleAnnotationsAvailable = hasPermission(user, "schedules.view");
   const scheduleResult = scheduleAnnotationsAvailable

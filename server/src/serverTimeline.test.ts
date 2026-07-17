@@ -51,6 +51,14 @@ describe("server timeline resource points", () => {
     expect(points[0]).toMatchObject({ cpuUtilizationPercent: null, playersOnline: 3 });
   });
 
+  it("normalizes retained legacy CPU samples with the latest known server capacity", () => {
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { cpuPercent: 160, cpuCapacityCores: undefined }),
+      sample(5_000, 10, 10, { cpuPercent: 80, cpuCapacityCores: undefined })
+    ], 0, 5_000, 100, 8);
+    expect(points.map((point) => point.cpuUtilizationPercent)).toEqual([20, 10]);
+  });
+
   it("preserves network reset gaps while aggregating", () => {
     const points = timelineResourcePoints([
       sample(0, 100, 100),
