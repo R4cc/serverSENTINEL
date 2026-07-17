@@ -28,6 +28,17 @@ type Props = {
   updatePlan?: ModUpdatePlan | null;
 };
 
+function canonicalModFilename(filename: string) {
+  return filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase();
+}
+
+function restartChangeMatchesMod(mod: InstalledMod, change: RestartRequiredChange) {
+  if (change.action === "removed") return false;
+  const filename = canonicalModFilename(mod.filename);
+  const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${filename}`;
+  return change.identity === identity || Boolean(change.filename && canonicalModFilename(change.filename) === filename);
+}
+
 export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
   const initialLoading = busy && mods.length === 0;
@@ -77,8 +88,7 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
           const health = getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate));
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
-          const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${mod.filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase()}`;
-          const requiresRestart = restartRequiredChanges.some((change) => change.identity === identity && change.action !== "removed");
+          const requiresRestart = restartRequiredChanges.some((change) => restartChangeMatchesMod(mod, change));
           return (
             <article
               key={mod.filename}

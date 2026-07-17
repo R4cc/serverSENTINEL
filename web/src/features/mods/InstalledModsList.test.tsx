@@ -109,6 +109,23 @@ describe("InstalledModsList", () => {
     expect(html).toContain("Requires restart");
   });
 
+  it("shows restart chips for every affected mod when stored and current identities differ", () => {
+    const fabricApi = mod({ versionInfo: { currentVersion: "0.155.0+26.2", latestVersion: "0.155.0+26.2", upToDate: true } });
+    const lithium = mod({
+      filename: "lithium-fabric-0.16.0.jar",
+      displayName: "Lithium",
+      modrinth: { projectId: "lithium", versionId: "v2", filename: "lithium-fabric-0.16.0.jar", versionNumber: "0.16.0", gameVersions: ["1.21.4"], loaders: ["fabric"], installedAt: "2026-01-01T00:00:00.000Z", installedWithForceIncompatible: false },
+      versionInfo: { currentVersion: "0.16.0", latestVersion: "0.16.0", upToDate: true }
+    });
+    const html = renderInstalledMods([fabricApi, lithium], null, [{
+      type: "mod", identity: "modrinth:fabric-api", displayName: "Fabric API", filename: "fabric-api.jar", action: "updated"
+    }, {
+      type: "mod", identity: "file:lithium-fabric-0.16.0.jar", displayName: "Lithium", filename: "lithium-fabric-0.16.0.jar", action: "updated"
+    }]);
+
+    expect((html.match(/Requires restart/g) ?? [])).toHaveLength(2);
+  });
+
   it("exposes the installed mods table as a file drop target", () => {
     const html = renderInstalledMods([mod()]);
 
