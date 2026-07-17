@@ -3,18 +3,43 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
 
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
-export const timelineChartGrid = { left: 56, right: 24, top: 60, bottom: 38 } as const;
+export const timelineChartGrid = { left: 56, right: 24, top: 66, bottom: 38 } as const;
 
 export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>) {
-  const percentage = enabled.cpuUtilizationPercent || enabled.memoryUtilizationPercent;
+  const cpu = enabled.cpuUtilizationPercent;
+  const memory = enabled.memoryUtilizationPercent;
   const network = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
   const players = enabled.playersOnline;
-  const visibleRightAxes = Number(network) + Number(players);
+  const visibleRightAxes = Number(memory) + Number(network) + Number(players);
   return {
     ...timelineChartGrid,
-    left: percentage ? 56 : 24,
-    right: visibleRightAxes === 2 ? 128 : visibleRightAxes === 1 ? 76 : 24
+    left: cpu ? 56 : 24,
+    right: visibleRightAxes === 3 ? 180 : visibleRightAxes === 2 ? 128 : visibleRightAxes === 1 ? 76 : 24
   };
+}
+
+export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
+  const values = samples.flatMap((sample) => (
+    sample.sampledAt >= viewport.from
+    && sample.sampledAt <= viewport.to
+    && typeof sample.memoryUtilizationPercent === "number"
+    && Number.isFinite(sample.memoryUtilizationPercent)
+      ? [sample.memoryUtilizationPercent]
+      : []
+  ));
+  if (!values.length) return { min: 0, max: 100 };
+  const observedMin = Math.min(...values);
+  const observedMax = Math.max(...values);
+  const observedSpan = observedMax - observedMin;
+  const span = Math.max(5, observedSpan * 1.5);
+  const center = (observedMin + observedMax) / 2;
+  let min = Math.max(0, center - span / 2);
+  let max = Math.min(100, center + span / 2);
+  if (max - min < span) {
+    if (min === 0) max = Math.min(100, span);
+    else min = Math.max(0, 100 - span);
+  }
+  return { min: Math.floor(min * 10) / 10, max: Math.ceil(max * 10) / 10 };
 }
 
 export type TimelinePalette = {
@@ -194,10 +219,6 @@ export function timelineHoverTooltipHtml(
   return timelineTooltipHtml(entries.length ? entries : [{ axisValue: tooltipTimestamp }], clusters, span, formatDate);
 }
 
-function markerColor(cluster: MarkerCluster, palette: TimelinePalette) {
-  return palette[cluster.tone];
-}
-
 export function buildTimelineChartOption({
   samples,
   query,
@@ -222,21 +243,24 @@ export function buildTimelineChartOption({
   now: number;
 }): EChartsCoreOption {
   const grid = timelineChartGridForEnabled(enabled);
-  const percentageEnabled = enabled.cpuUtilizationPercent || enabled.memoryUtilizationPercent;
+  const cpuEnabled = enabled.cpuUtilizationPercent;
+  const memoryEnabled = enabled.memoryUtilizationPercent;
   const networkEnabled = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
   const playersEnabled = enabled.playersOnline;
   const yAxis: Array<Record<string, unknown>> = [];
-  let percentageAxis = -1;
+  let cpuAxis = -1;
+  let memoryAxis = -1;
   let networkAxis = -1;
   let playersAxis = -1;
-  if (percentageEnabled) {
-    percentageAxis = yAxis.length;
+  let rightAxisOffset = 0;
+  if (cpuEnabled) {
+    cpuAxis = yAxis.length;
     yAxis.push({
       type: "value",
       position: "left",
       min: 0,
       max: 100,
-      name: enabled.cpuUtilizationPercent && enabled.memoryUtilizationPercent ? "CPU / Memory" : enabled.cpuUtilizationPercent ? "CPU" : "Memory",
+      name: "CPU",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.border } },
       axisTick: { show: false },
@@ -244,11 +268,30 @@ export function buildTimelineChartOption({
       splitLine: { lineStyle: { color: palette.border, type: "dashed", opacity: 0.7 } }
     });
   }
+  if (memoryEnabled) {
+    memoryAxis = yAxis.length;
+    const bounds = adaptiveMemoryAxisBounds(samples, viewport);
+    yAxis.push({
+      type: "value",
+      position: "right",
+      offset: rightAxisOffset,
+      min: bounds.min,
+      max: bounds.max,
+      name: "Memory %",
+      nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
+      axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },
+      axisTick: { show: false },
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => `${value.toFixed(1)}%` },
+      splitLine: { show: false }
+    });
+    rightAxisOffset += 52;
+  }
   if (playersEnabled) {
     playersAxis = yAxis.length;
     yAxis.push({
       type: "value",
       position: "right",
+      offset: rightAxisOffset,
       min: 0,
       minInterval: 1,
       name: "Players",
@@ -258,13 +301,14 @@ export function buildTimelineChartOption({
       axisLabel: { color: palette.textMuted, formatter: (value: number) => `${Math.round(value)}` },
       splitLine: { show: false }
     });
+    rightAxisOffset += 48;
   }
   if (networkEnabled) {
     networkAxis = yAxis.length;
     yAxis.push({
       type: "value",
       position: "right",
-      offset: playersEnabled ? 48 : 0,
+      offset: rightAxisOffset,
       min: 0,
       name: "Network",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
@@ -276,8 +320,8 @@ export function buildTimelineChartOption({
   }
   if (!yAxis.length) yAxis.push({ type: "value", show: false, min: 0, max: 1 });
   const metricSeries: Array<{ key: SeriesKey; name: string; yAxisIndex: number; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
-    { key: "cpuUtilizationPercent", name: "CPU", yAxisIndex: percentageAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
-    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: percentageAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
+    { key: "cpuUtilizationPercent", name: "CPU", yAxisIndex: cpuAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
+    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: memoryAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
     { key: "networkRxBytesPerSecond", name: "Network In", yAxisIndex: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
     { key: "networkTxBytesPerSecond", name: "Network Out", yAxisIndex: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
     { key: "playersOnline", name: "Players", yAxisIndex: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }
@@ -286,16 +330,7 @@ export function buildTimelineChartOption({
     xAxis: number;
     lineStyle: { color: string; type: "solid" | "dashed"; width: number; opacity: number };
     label: { show: boolean; formatter?: string; color?: string; position?: string };
-  }> = clusters.map((cluster) => ({
-    xAxis: cluster.occurredAt,
-    lineStyle: {
-      color: markerColor(cluster, palette),
-      type: cluster.markers.every((marker) => marker.tone === "planned") ? "dashed" as const : "solid" as const,
-      width: Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75),
-      opacity: 0.84
-    },
-    label: { show: false }
-  }));
+  }> = [];
   if (now >= viewport.from && now <= viewport.to) {
     markerLines.push({
       xAxis: now,

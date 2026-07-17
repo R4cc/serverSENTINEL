@@ -298,6 +298,34 @@ describe("mod health", () => {
     expect(html).toContain("/api/modrinth/icons/lithium.png");
     expect(html).toContain("0.14.8");
     expect(html).toContain("0.15.0");
+    expect(html.indexOf("Lithium")).toBeLessThan(html.indexOf("modUpdatesListItem--placeholder"));
+    expect(html.match(/modUpdatesListItem--placeholder/g)).toHaveLength(2);
+  });
+
+  it("fills all predefined update slots before adding placeholders", () => {
+    const entries = Array.from({ length: 3 }, (_, index): ModUpdatePlanEntry => ({
+      filename: `mod-${index}.jar`,
+      displayName: `Mod ${index}`,
+      iconUrl: undefined,
+      currentVersion: "1.0.0",
+      currentFilename: `mod-${index}.jar`,
+      targetVersion: "1.1.0",
+      targetFilename: `mod-${index}-1.1.0.jar`,
+      channel: "release",
+      status: "safe_update",
+      reason: "Compatible update",
+      safeBatchEligible: true,
+      acknowledgementRequired: false,
+      enabled: true
+    }));
+    const html = renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: updatePlan({ safeUpdates: 3 }, entries),
+      onOpenMods: () => undefined
+    }));
+
+    expect(html).not.toContain("modUpdatesListItem--placeholder");
+    expect(html.indexOf("Mod 0")).toBeLessThan(html.indexOf("Mod 1"));
+    expect(html.indexOf("Mod 1")).toBeLessThan(html.indexOf("Mod 2"));
   });
 });
 

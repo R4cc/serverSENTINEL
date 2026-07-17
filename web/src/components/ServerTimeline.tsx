@@ -218,12 +218,11 @@ function clusterIsImportant(cluster: MarkerCluster) {
 }
 
 function estimatedMarkerLabelWidth(cluster: MarkerCluster) {
-  if (!clusterIsImportant(cluster)) return 30;
   const display = cluster.markers.length > 1
     ? { primary: `${cluster.markers.length} events` }
     : timelineMarkerDisplayLabel(cluster.markers[0]);
   const longestLine = Math.max(display.primary.length, display.secondary?.length ?? 0);
-  return Math.min(184, Math.max(108, 46 + longestLine * 6));
+  return Math.min(220, Math.max(108, 46 + longestLine * 6));
 }
 
 export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000, laneCount = 2): PositionedMarkerCluster[] {
@@ -360,7 +359,6 @@ export function ServerTimeline({
   const [selectedCluster, setSelectedCluster] = useState<MarkerCluster | null>(null);
   const [annotationRailWidth, setAnnotationRailWidth] = useState(1_000);
   const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
-  const [hoveredClusterId, setHoveredClusterId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
     cpuUtilizationPercent: true,
     memoryUtilizationPercent: true,
@@ -719,8 +717,7 @@ export function ServerTimeline({
               ? { primary: `${cluster.markers.length} events` }
               : timelineMarkerDisplayLabel(cluster.markers[0]);
             const important = clusterIsImportant(cluster);
-            const expanded = important || hoveredClusterId === cluster.id || selectedCluster?.id === cluster.id;
-            const labelTop = 2 + cluster.lane * 29;
+            const labelTop = 2 + cluster.lane * 32;
             return (
               <div
                 key={cluster.id}
@@ -734,16 +731,12 @@ export function ServerTimeline({
                 />
                 <button
                   type="button"
-                  className={`timelineAnnotationLabel${cluster.alignEnd ? " align-end" : ""}${expanded ? " is-expanded" : ""}${important ? " is-important" : ""}`}
+                  className={`timelineAnnotationLabel is-expanded${cluster.alignEnd ? " align-end" : ""}${important ? " is-important" : ""}`}
                   style={{ top: `${labelTop}px` }}
                   title={markerTitle(cluster, formatDate)}
                   aria-label={markerTitle(cluster, formatDate)}
                   aria-expanded={selectedCluster?.id === cluster.id}
                   aria-controls="server-timeline-annotation-popover"
-                  onPointerEnter={() => setHoveredClusterId(cluster.id)}
-                  onPointerLeave={() => setHoveredClusterId((current) => current === cluster.id ? null : current)}
-                  onFocus={() => setHoveredClusterId(cluster.id)}
-                  onBlur={() => setHoveredClusterId((current) => current === cluster.id ? null : current)}
                   onClick={() => {
                     setHoverTooltip(null);
                     setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);

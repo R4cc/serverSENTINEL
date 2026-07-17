@@ -3,6 +3,7 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey } from "./ServerTimeline";
 import {
   buildTimelineChartOption,
+  adaptiveMemoryAxisBounds,
   dataZoomWindow,
   defaultTimelinePalette,
   escapeTimelineHtml,
@@ -71,7 +72,7 @@ describe("server timeline chart windows", () => {
 });
 
 describe("server timeline ECharts option", () => {
-  it("assigns three axes, retains nulls as gaps, and configures modified-wheel zoom", () => {
+  it("assigns distinct axes, retains nulls as gaps, and configures modified-wheel zoom", () => {
     const option = buildTimelineChartOption({
       samples: [sample],
       query: { from: 0, to: 20_000 },
@@ -92,16 +93,15 @@ describe("server timeline ECharts option", () => {
     };
     expect(option.animation).toBe(false);
     expect(option).not.toHaveProperty("tooltip");
-    expect(option.yAxis).toHaveLength(2);
+    expect(option.yAxis).toHaveLength(3);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
     expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.data).toEqual([[10_000, "-"]]);
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.connectNulls).toBe(false);
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.24, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.emphasis).toEqual({ disabled: true });
     expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.lineStyle?.type).toBe("solid");
-    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(2);
-    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.width).toBe(2.5);
-    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("solid");
+    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(1);
+    expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("dashed");
     expect(option.xAxis.axisLabel.formatter(10_000)).toBe("10000");
   });
 
@@ -135,8 +135,20 @@ describe("server timeline ECharts option", () => {
       reducedMotion: false,
       now: 30_000
     }) as { yAxis: Array<{ name?: string }>; series: Array<{ id: string; step?: string }> };
-    expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU / Memory", "Players"]);
+    expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU", "Memory %", "Players"]);
     expect(option.series.find((series) => series.id === "playersOnline")?.step).toBe("end");
+  });
+
+  it("uses a clearly bounded adaptive memory axis for visible samples", () => {
+    const stableMemory = [
+      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 66.1 },
+      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 66.8 },
+      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 92 }
+    ];
+    const bounds = adaptiveMemoryAxisBounds(stableMemory, { from: 5_000, to: 25_000 });
+    expect(bounds.max - bounds.min).toBeGreaterThanOrEqual(5);
+    expect(bounds.min).toBeGreaterThan(60);
+    expect(bounds.max).toBeLessThan(70);
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {

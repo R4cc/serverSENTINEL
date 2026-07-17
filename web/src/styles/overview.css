@@ -394,8 +394,8 @@
   z-index: 2;
   top: 0;
   right: 24px;
+  bottom: 38px;
   left: 56px;
-  height: 60px;
   pointer-events: none;
 }
 
@@ -470,7 +470,7 @@
 
 .timelineAnnotationLabel.is-expanded {
   width: max-content;
-  max-width: 184px;
+  max-width: 220px;
   min-width: 108px;
   padding: 0 8px 0 2px;
 }
@@ -498,7 +498,6 @@
 .timelineAnnotationMarker.tone-server { --annotation-color: var(--timeline-server); }
 .timelineAnnotationMarker.tone-automation,
 .timelineAnnotationMarker.tone-planned { --annotation-color: var(--timeline-schedule); }
-.timelineAnnotationMarker.is-planned .timelineAnnotationConnector { background: repeating-linear-gradient(to bottom, var(--annotation-color) 0 5px, transparent 5px 9px); }
 .timelineAnnotationMarker.is-planned .timelineAnnotationGlyph { border-style: dashed; background: var(--surface-muted); }
 .timelineAnnotationLabel[aria-expanded="true"] { border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
 .timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-14px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
@@ -758,6 +757,11 @@
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sentinel-warning) 5%, var(--surface-muted));
   padding: 7px 9px;
+}
+
+.modUpdatesListItem--placeholder {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-muted) 68%, transparent);
 }
 
 .modUpdatesListItem > img,

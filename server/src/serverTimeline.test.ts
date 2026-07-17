@@ -30,12 +30,26 @@ describe("server timeline resource points", () => {
     const points = timelineResourcePoints([
       sample(0, 1_000, 1_000),
       sample(5_000, 100, 100),
-      sample(25_000, 500, 500),
-      sample(30_000, 600, 600, { available: false, running: false })
-    ], 0, 30_000, 100);
+      sample(40_000, 500, 500),
+      sample(45_000, 600, 600, { available: false, running: false })
+    ], 0, 45_000, 100);
     expect(points[1].networkRxBytesPerSecond).toBeNull();
     expect(points.some((point) => point.sampledAt === 10_000 && point.cpuPercent === null)).toBe(true);
     expect(points.at(-1)?.cpuPercent).toBeNull();
+  });
+
+  it("keeps resource series continuous through ordinary remote-collector jitter", () => {
+    const points = timelineResourcePoints([
+      sample(0, 100, 100),
+      sample(20_000, 500, 700)
+    ], 0, 20_000, 100);
+    expect(points).toHaveLength(2);
+    expect(points[1]).toMatchObject({
+      cpuUtilizationPercent: 5,
+      memoryUtilizationPercent: 25,
+      networkRxBytesPerSecond: 20,
+      networkTxBytesPerSecond: 30
+    });
   });
 
   it("caps dense histories through aggregation", () => {

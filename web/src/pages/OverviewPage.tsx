@@ -21,6 +21,7 @@ import { modIconSource } from '../utils/appHelpers';
 import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
+const modUpdateCardSlotCount = 3;
 
 function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!dockerSocketMounted) return "Unavailable";
@@ -206,7 +207,8 @@ export function ModHealthPanel({
 
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
-  const visibleUpdates = availableUpdates.slice(0, 3);
+  const visibleUpdates = availableUpdates.slice(0, modUpdateCardSlotCount);
+  const placeholderCount = modUpdateCardSlotCount - visibleUpdates.length;
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   if (updateCount === 0) {
     return (
@@ -273,6 +275,15 @@ export function ModHealthPanel({
               </span>
             </span>
           ))}
+          {Array.from({ length: placeholderCount }, (_, index) => (
+            <span className="modUpdatesListItem modUpdatesListItem--placeholder" key={`placeholder-${index}`}>
+              <SkeletonBlock className="modUpdatesIconSkeleton" />
+              <span className="modUpdatesListCopy">
+                <SkeletonBlock className="modUpdatesNameSkeleton" />
+                <SkeletonBlock className="modUpdatesVersionSkeleton" />
+              </span>
+            </span>
+          ))}
         </span>
         {remainingUpdates > 0 && <small className="modUpdatesRemaining">+{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}</small>}
       </span>
@@ -297,7 +308,7 @@ function ModHealthPanelSkeleton() {
           <SkeletonBlock className="modUpdatesChevronSkeleton" />
         </span>
         <span className="modUpdatesList">
-          {Array.from({ length: 3 }, (_, index) => (
+          {Array.from({ length: modUpdateCardSlotCount }, (_, index) => (
             <span className="modUpdatesListItem" key={index}>
               <SkeletonBlock className="modUpdatesIconSkeleton" />
               <span className="modUpdatesListCopy">

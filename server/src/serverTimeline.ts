@@ -10,7 +10,11 @@ import type {
 } from "./types.js";
 import { nextCronRun } from "./core.js";
 
-const gapThresholdMs = 15_000;
+// The collector targets five-second samples, but remote node calls can occasionally
+// arrive late without the underlying stats becoming unavailable. Only break the
+// chart after six missed collection intervals so normal transport jitter does not
+// turn otherwise continuous resource series into a dotted-looking line.
+const gapThresholdMs = 30_000;
 
 function finite(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;

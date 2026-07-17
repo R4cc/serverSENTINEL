@@ -81,11 +81,11 @@ describe("server timeline markers", () => {
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
   });
 
-  it("keeps compact routine markers in one lane when their full labels would have collided", () => {
+  it("staggers routine marker labels when their always-visible text would collide", () => {
     const clusters = clusterTimelineMarkers(timelineMarkers(response()), 0, 60_000, 24);
     clusters[1].occurredAt = 13_000;
     const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
-    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
+    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
   });
 
   it("separates the player action from the full player-name subtitle", () => {
