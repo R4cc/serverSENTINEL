@@ -95,6 +95,28 @@ describe("server timeline markers", () => {
     expect(timelineMarkers(value).map((marker) => marker.label)).toEqual(["Alex left", "Alex joined", "Restart scheduled"]);
   });
 
+  it("collapses repeated player events within ten minutes into one counted marker", () => {
+    const value = response();
+    value.schedules = [];
+    value.events = Array.from({ length: 9 }, (_, index) => ({
+      ...value.events[1],
+      id: `leave-${index}`,
+      occurredAt: 10_000 + index * 30_000,
+      timestamp: new Date(10_000 + index * 30_000).toISOString()
+    }));
+
+    const markers = timelineMarkers(value);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toMatchObject({ occurrences: 9, occurredAt: 250_000, label: "Alex left" });
+
+    const html = renderToStaticMarkup(createElement(TimelineAnnotationPopoverItem, {
+      marker: markers[0],
+      formatDate: () => "01.01.2026, 00:04",
+      onOpenSchedule: vi.fn()
+    }));
+    expect(html).toContain("×9");
+  });
+
   it("clusters colliding markers without dropping their contents", () => {
     const markers = timelineMarkers(response());
     const clusters = clusterTimelineMarkers(markers, 0, 60_000, 6);

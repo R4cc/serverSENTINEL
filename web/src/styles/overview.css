@@ -493,6 +493,29 @@
   opacity: 1;
 }
 
+.timelineAnnotationOccurrenceBadge,
+.eventOccurrenceBadge {
+  position: absolute;
+  z-index: 2;
+  top: -6px;
+  right: -8px;
+  min-width: 22px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface-raised);
+  border-radius: 999px;
+  background: var(--annotation-color, var(--accent));
+  color: white;
+  padding: 0 5px;
+  font-size: 9px;
+  font-weight: var(--weight-title);
+  line-height: 1;
+  box-shadow: var(--shadow-xs);
+  white-space: nowrap;
+}
+
 .timelineAnnotationLabel.is-stack {
   height: auto;
   min-height: 0;
@@ -656,6 +679,7 @@
 .serverTimelineAnnotationPopoverItem.tone-planned { --annotation-color: var(--timeline-schedule); }
 
 .serverTimelineAnnotationPopoverGlyph {
+  position: relative;
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
@@ -1177,6 +1201,7 @@
 }
 
 .overviewPage .eventsPanel .eventIcon {
+  position: relative;
   width: 34px;
   height: 34px;
   display: grid;
@@ -1186,6 +1211,16 @@
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
   color: var(--accent);
 }
+
+.overviewPage .eventsPanel .eventOccurrenceBadge {
+  top: -5px;
+  right: -9px;
+  background: var(--accent);
+}
+
+.overviewPage .eventsPanel .eventRow.success .eventOccurrenceBadge { background: var(--sentinel-success); }
+.overviewPage .eventsPanel .eventRow.warning .eventOccurrenceBadge { background: var(--sentinel-warning); }
+.overviewPage .eventsPanel .eventRow.error .eventOccurrenceBadge { background: var(--sentinel-danger); }
 
 .overviewPage .eventsPanel .eventIcon svg {
   width: 20px;

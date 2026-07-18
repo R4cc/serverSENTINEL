@@ -131,14 +131,14 @@ export const PERMISSION_GROUPS: Array<{ title: string; permissions: Array<{ key:
     ]
   },
   {
-    title: "Mods",
+    title: "Mods and plugins",
     permissions: [
-      { key: "mods.view", label: "View mods" },
-      { key: "mods.install", label: "Install mods from Modrinth" },
-      { key: "mods.upload", label: "Upload jar mods" },
-      { key: "mods.enableDisable", label: "Enable / disable mods" },
-      { key: "mods.remove", label: "Remove mods" },
-      { key: "mods.update", label: "Update mods" }
+      { key: "mods.view", label: "View mods and plugins" },
+      { key: "mods.install", label: "Install from Modrinth" },
+      { key: "mods.upload", label: "Upload mod and plugin jars" },
+      { key: "mods.enableDisable", label: "Enable / disable mods and plugins" },
+      { key: "mods.remove", label: "Remove mods and plugins" },
+      { key: "mods.update", label: "Update mods and plugins" }
     ]
   },
   {
@@ -203,7 +203,7 @@ export type FileManagerPermission = "view" | "download" | "edit" | "rename" | "u
 
 export function isModsPublicPath(path: string) {
   const normalized = normalizePublicPath(path);
-  return normalized === "/mods" || normalized.startsWith("/mods/");
+  return normalized === "/mods" || normalized.startsWith("/mods/") || normalized === "/plugins" || normalized.startsWith("/plugins/");
 }
 
 export function isServerPropertiesPath(path: string) {

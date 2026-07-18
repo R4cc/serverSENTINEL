@@ -16,6 +16,8 @@ const server: ManagedServer = {
   hasDockerContainer: true,
   runtimeProfile: {
     minecraftVersion: "1.21.4",
+    runtimeType: "fabric",
+    runtimeVersion: "0.16.10",
     loader: "fabric",
     loaderVersion: "0.16.10",
     javaMajorVersion: 21,
@@ -61,7 +63,8 @@ describe("ServerEditForm", () => {
     for (const name of [
       "displayName",
       "minecraftVersion",
-      "loaderVersion",
+      "runtimeType",
+      "runtimeVersion",
       "javaArgs",
       "serverPort",
       "queryPort",
@@ -93,5 +96,28 @@ describe("ServerEditForm", () => {
     expect(html).toContain("-XX:+UseG1GC");
     expect(html).toContain("Additional port bindings");
     expect(html).not.toMatch(/<details[^>]*disabled/);
+  });
+
+  it("renders runtime-neutral version controls for a Paper profile without offering Fabric builds", () => {
+    const paperServer: ManagedServer = {
+      ...server,
+      runtimeProfile: {
+        ...server.runtimeProfile,
+        runtimeType: "paper",
+        runtimeVersion: "1.21.4-232",
+        loader: undefined,
+        loaderVersion: undefined,
+        jarProvider: "papermc",
+        jarArtifact: { filename: "paper.jar" }
+      }
+    };
+    const html = renderToStaticMarkup(
+      <ServerEditForm server={paperServer} versions={versions} totalMemory={16 * 1024 * 1024 * 1024} onSubmit={vi.fn()} />
+    );
+
+    expect(html).toContain("Paper build");
+    expect(html).toContain("1.21.4-232");
+    expect(html).not.toContain("Fabric Loader version");
+    expect(html).not.toContain("0.16.10");
   });
 });

@@ -101,8 +101,8 @@ export function serverConfigValidation(form: FormData, existingNames: string[], 
   if (options.requireRuntime && !trimFormValue(form, "minecraftVersion")) {
     errors.push({ field: "minecraftVersion", message: "Choose a supported Minecraft version." });
   }
-  if (options.requireRuntime && !trimFormValue(form, "loaderVersion")) {
-    errors.push({ field: "loaderVersion", message: "Choose a Fabric loader version or keep the recommended option." });
+  if (options.requireRuntime && !trimFormValue(form, "runtimeVersion") && !trimFormValue(form, "loaderVersion")) {
+    errors.push({ field: "runtimeVersion", message: "Choose a runtime version or keep the recommended option." });
   }
   const port = trimFormValue(form, "serverPort");
   if (port) {

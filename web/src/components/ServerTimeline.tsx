@@ -6,7 +6,7 @@ import type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker
 } from "../types";
-import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from "../utils/serverEvents";
+import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
 import { EventIcon } from "./EventIcon";
 import {
@@ -43,6 +43,7 @@ export type TimelineMarker = {
   label: string;
   tone: "join" | "leave" | "server" | "automation" | "planned";
   event?: ServerTimelineEvent;
+  occurrences?: number;
   reconnect?: {
     player: string;
     durationSeconds: number;
@@ -64,9 +65,11 @@ export function TimelineAnnotationPopoverItem({
     <>
       <span className="serverTimelineAnnotationPopoverGlyph" aria-hidden="true">
         {timelineMarkerGlyph(marker)}
+        {marker.occurrences && marker.occurrences > 1 && <span className="timelineAnnotationOccurrenceBadge">×{marker.occurrences}</span>}
       </span>
       <span className="serverTimelineAnnotationPopoverItemBody">
         <strong>{marker.label}</strong>
+        {marker.occurrences && marker.occurrences > 1 && <span className="srOnly">{marker.occurrences} occurrences</span>}
         {marker.schedule && <small>Open Schedules</small>}
       </span>
       <time className="serverTimelineAnnotationPopoverTimestamp" dateTime={new Date(marker.occurredAt).toISOString()}>
@@ -134,12 +137,26 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
   if (!data) return [];
   const eventMarkers: TimelineMarker[] = [];
   const events = [...data.events].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
-  for (let index = 0; index < events.length; index += 1) {
-    const event = events[index];
-    const next = events[index + 1];
+  const repeatedGroups = groupNearbyRepeatedEvents(events, (event) => event.occurredAt);
+  for (let index = 0; index < repeatedGroups.length; index += 1) {
+    const repeated = repeatedGroups[index];
+    const event = repeated.at(-1)!;
+    const nextGroup = repeatedGroups[index + 1];
+    const next = nextGroup?.length === 1 ? nextGroup[0] : undefined;
     const player = playerEventSubject(event);
     const nextPlayer = next ? playerEventSubject(next) : "";
     const reconnectDuration = next ? next.occurredAt - event.occurredAt : Number.POSITIVE_INFINITY;
+    if (repeated.length > 1) {
+      eventMarkers.push({
+        id: `repeated:${repeated.map((item) => item.id).join(":")}`,
+        occurredAt: event.occurredAt,
+        label: event.message,
+        tone: eventTone(event),
+        event,
+        occurrences: repeated.length
+      });
+      continue;
+    }
     if (
       event.eventType === "player_left"
       && next?.eventType === "player_joined"
@@ -277,7 +294,8 @@ function estimatedMarkerLabelWidth(cluster: MarkerCluster) {
   const displays = preview.markers.map(timelineMarkerDisplayLabel);
   const overflowLabel = preview.remaining > 0 ? `${preview.remaining} more ${preview.remaining === 1 ? "event" : "events"}` : "";
   const longestLine = Math.max(overflowLabel.length, ...displays.flatMap((display) => [display.primary.length, display.secondary?.length ?? 0]));
-  return Math.min(220, Math.max(108, 46 + longestLine * 6));
+  const occurrenceWidth = preview.markers.some((marker) => (marker.occurrences ?? 1) > 1) ? 24 : 0;
+  return Math.min(220, Math.max(108, 46 + occurrenceWidth + longestLine * 6));
 }
 
 function estimatedMarkerLabelHeight(cluster: MarkerCluster) {
@@ -340,7 +358,11 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
 }
 
 function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number | Date) => string) {
-  return cluster.markers.map((marker) => `${formatDate(marker.occurredAt)} — ${marker.label}`).join("\n");
+  return cluster.markers.map((marker) => `${formatDate(marker.occurredAt)} — ${marker.label}${marker.occurrences && marker.occurrences > 1 ? ` (×${marker.occurrences})` : ""}`).join("\n");
+}
+
+function timelineClusterOccurrenceCount(cluster: MarkerCluster) {
+  return cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
 }
 
 function timelineMarkerGlyph(marker: TimelineMarker) {
@@ -845,7 +867,10 @@ export function ServerTimeline({
                         const rowLabel = timelineMarkerDisplayLabel(marker);
                         return (
                           <span className={`timelineAnnotationPreviewRow tone-${marker.tone}`} key={marker.id} aria-hidden="true">
-                            <span className="timelineAnnotationGlyph">{timelineMarkerGlyph(marker)}</span>
+                            <span className="timelineAnnotationGlyph">
+                              {timelineMarkerGlyph(marker)}
+                              {marker.occurrences && marker.occurrences > 1 && <span className="timelineAnnotationOccurrenceBadge">×{marker.occurrences}</span>}
+                            </span>
                             <span className="timelineAnnotationLabelText">
                               <strong>{rowLabel.primary}</strong>
                               {rowLabel.secondary && <small>{rowLabel.secondary}</small>}
@@ -861,7 +886,10 @@ export function ServerTimeline({
                     </>
                   ) : (
                     <>
-                      <span className="timelineAnnotationGlyph" aria-hidden="true">{timelineMarkerGlyph(cluster.markers[0])}</span>
+                      <span className="timelineAnnotationGlyph" aria-hidden="true">
+                        {timelineMarkerGlyph(cluster.markers[0])}
+                        {cluster.markers[0].occurrences && cluster.markers[0].occurrences > 1 && <span className="timelineAnnotationOccurrenceBadge">×{cluster.markers[0].occurrences}</span>}
+                      </span>
                       <span className="timelineAnnotationLabelText" aria-hidden="true">
                         <strong>{displayLabel.primary}</strong>
                         {displayLabel.secondary && <small>{displayLabel.secondary}</small>}
@@ -882,7 +910,7 @@ export function ServerTimeline({
           >
             <div className="serverTimelineAnnotationPopoverHeader">
               <div>
-                <strong>{selectedCluster.markers.length} {selectedCluster.markers.length === 1 ? "event" : "events"}</strong>
+                <strong>{timelineClusterOccurrenceCount(selectedCluster)} {timelineClusterOccurrenceCount(selectedCluster) === 1 ? "event" : "events"}</strong>
                 <span>{formatDate(selectedCluster.occurredAt)}</span>
               </div>
               <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>

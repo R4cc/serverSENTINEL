@@ -1,4 +1,7 @@
 import type { InstalledMod, ModCompatibility, ModrinthHit, ModrinthInstallVersion } from "../../types";
+import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
+
+type HealthTerminology = Pick<ManagedContentTerminology, "singular" | "runtimeName">;
 
 type ModHealthKey =
   | "healthy"
@@ -32,24 +35,28 @@ type CompatibilityAssessment = {
 
 const riskyReasonPattern = /client[- ]only|wrong loader|version mismatch|not marked for minecraft|unsupported|incompatible/i;
 
-function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMetadata = true): CompatibilityAssessment {
+function compatibilityAssessment(
+  compatibility?: ModCompatibility,
+  hasManagedMetadata = true,
+  terminology: HealthTerminology = fabricContentTerminology
+): CompatibilityAssessment {
   if (!compatibility) {
     return {
       kind: "unknown",
       shortDescription: "Compatibility is unknown.",
       detailDescription: hasManagedMetadata
-        ? "serverSENTINEL could not load enough compatibility metadata for this mod."
-        : "This manually uploaded mod has no verified Modrinth compatibility metadata."
+        ? `serverSENTINEL could not load enough compatibility metadata for this ${terminology.singular}.`
+        : `This manually uploaded ${terminology.singular} has no verified Modrinth compatibility metadata.`
     };
   }
 
-  const explicitlyRisky = ["no_fabric", "no_minecraft_version", "incompatible"].includes(compatibility.status)
+  const explicitlyRisky = ["no_fabric", "no_compatible_loader", "no_minecraft_version", "incompatible"].includes(compatibility.status)
     || compatibility.serverSide === "unsupported"
     || riskyReasonPattern.test(compatibility.reason || "");
   if (explicitlyRisky) {
     return {
       kind: "not_recommended",
-      shortDescription: "This mod may not be safe for this server.",
+      shortDescription: `This ${terminology.singular} may not be safe for this server.`,
       detailDescription: compatibility.reason || "The loader, Minecraft version, or server-side support does not match this server."
     };
   }
@@ -61,7 +68,7 @@ function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMet
     return {
       kind: "review",
       shortDescription: "Compatibility needs review.",
-      detailDescription: compatibility.reason || "serverSENTINEL cannot fully verify server-side support for this mod."
+      detailDescription: compatibility.reason || `serverSENTINEL cannot fully verify server-side support for this ${terminology.singular}.`
     };
   }
 
@@ -69,14 +76,14 @@ function compatibilityAssessment(compatibility?: ModCompatibility, hasManagedMet
     return {
       kind: "healthy",
       shortDescription: "Compatible with this server.",
-      detailDescription: compatibility.reason || "The installed version matches this server’s Fabric and Minecraft target."
+      detailDescription: compatibility.reason || `The installed version matches this server’s ${terminology.runtimeName} and Minecraft target.`
     };
   }
 
   return {
     kind: hasManagedMetadata ? "review" : "unknown",
     shortDescription: hasManagedMetadata ? "Compatibility needs review." : "Compatibility is unknown.",
-    detailDescription: compatibility.reason || "serverSENTINEL cannot verify this mod’s compatibility."
+    detailDescription: compatibility.reason || `serverSENTINEL cannot verify this ${terminology.singular}’s compatibility.`
   };
 }
 
@@ -98,7 +105,7 @@ function hasAcknowledgedCurrentReview(mod: InstalledMod) {
   return Boolean(mod.modrinth?.reviewAcknowledgedVersionId && mod.modrinth.reviewAcknowledgedVersionId === mod.modrinth.versionId);
 }
 
-export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
+export function getInstalledModHealth(mod: InstalledMod, terminology: HealthTerminology = fabricContentTerminology): InstalledModHealth {
   if (mod.dependencyHealth?.status === "missing" && mod.dependencyHealth.missing.length > 0) {
     const count = mod.dependencyHealth.missing.length;
     return {
@@ -118,10 +125,10 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
   const assessment = forcedRisk
     ? {
       kind: "not_recommended" as const,
-      shortDescription: "This mod was installed with a compatibility override.",
-      detailDescription: mod.modrinth?.overrideReason || mod.modrinth?.incompatibilityReason || "Compatibility safeguards were overridden when this mod was installed."
+      shortDescription: `This ${terminology.singular} was installed with a compatibility override.`,
+      detailDescription: mod.modrinth?.overrideReason || mod.modrinth?.incompatibilityReason || `Compatibility safeguards were overridden when this ${terminology.singular} was installed.`
     }
-    : compatibilityAssessment(mod.compatibility, Boolean(mod.modrinth));
+    : compatibilityAssessment(mod.compatibility, Boolean(mod.modrinth), terminology);
   const updateAvailable = hasAvailableUpdate(mod);
   const latestVersion = mod.versionInfo?.latestVersion;
 
@@ -144,7 +151,7 @@ export function getInstalledModHealth(mod: InstalledMod): InstalledModHealth {
       key: "safe_update_available",
       label: "Update available",
       shortDescription: `A safe update${latestVersion ? ` to ${latestVersion}` : ""} is available.`,
-      detailDescription: "The available update matches this server’s verified Fabric and Minecraft target.",
+      detailDescription: `The available update matches this server’s verified ${terminology.runtimeName} and Minecraft target.`,
       tone: "update",
       needsAttention: false,
       hasSafeUpdate: true,
@@ -236,8 +243,8 @@ function choiceHealth(assessment: CompatibilityAssessment): ModChoiceHealth {
   return { label: "Unknown", shortDescription: assessment.shortDescription, detailDescription: assessment.detailDescription, tone: "unknown", safeToRunDirectly: false, requiresAcknowledgement: true, primaryActionLabel: "Review" };
 }
 
-export function getSearchResultHealth(mod: ModrinthHit): ModChoiceHealth {
-  return choiceHealth(compatibilityAssessment(mod.compatibility, true));
+export function getSearchResultHealth(mod: ModrinthHit, terminology: HealthTerminology = fabricContentTerminology): ModChoiceHealth {
+  return choiceHealth(compatibilityAssessment(mod.compatibility, true, terminology));
 }
 
 export function getInstallVersionHealth(version: ModrinthInstallVersion): ModChoiceHealth {

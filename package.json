@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "workspaces": [
     "shared",
@@ -11,6 +11,7 @@
     "dev:server": "npm --workspace server run dev",
     "dev:web": "npm --workspace web run dev",
     "build": "npm run check:versions && npm --workspace shared run build && npm --workspace server run build && npm --workspace web run build",
+    "pretest": "npm --workspace shared run build",
     "test": "npm --workspace server run test && npm --workspace web run test",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:server": "npm --workspace server run test",

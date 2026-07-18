@@ -1,11 +1,12 @@
 import { config } from "../config.js";
 import { appUserAgentFor } from "../buildInfo.js";
 import { assertMcJarsArtifactUrl } from "../http/outboundUrls.js";
-import type { ServerRuntimeProfile } from "../types.js";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import type { ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
 import {
   minecraftJavaMajorVersion,
   RuntimeResolutionError,
-  type RuntimeLoaderVersion,
+  type RuntimeVersion,
   type RuntimeMinecraftVersion,
   type ServerJarProvider
 } from "./profile.js";
@@ -38,10 +39,28 @@ type CacheEntry<T> = {
   value: T;
 };
 
+type McJarsRuntimeAdapter = {
+  runtimeType: ServerRuntimeType;
+  apiProject: string;
+  displayName: string;
+  versionName: string;
+  artifactFilename: string;
+};
+
+const runtimeAdapters: Partial<Record<ServerRuntimeType, McJarsRuntimeAdapter>> = {
+  fabric: {
+    runtimeType: "fabric",
+    apiProject: "FABRIC",
+    displayName: "Fabric",
+    versionName: "Fabric loader",
+    artifactFilename: serverRuntimeDefinition("fabric").serverJarFilename
+  }
+};
+
 const successTtlMs = 15 * 60_000;
 const failureTtlMs = 30_000;
 const userAgent = appUserAgentFor("MCJars runtime provider");
-const mcjarsReachabilityMessage = "serverSENTINEL could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again.";
+const mcjarsReachabilityMessage = "serverSENTINEL could not reach MCJars to fetch Minecraft server files. Check internet access from the panel or node host, then try again.";
 
 function withDetails(error: RuntimeResolutionError, details: string) {
   (error as RuntimeResolutionError & { details?: string }).details = details;
@@ -58,10 +77,11 @@ export class McJarsProvider implements ServerJarProvider {
     private readonly fetchImpl: typeof fetch = fetch
   ) {}
 
-  async listMinecraftVersions(options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]> {
-    const body = await this.cached("fabric-builds", () => this.request<{ success?: boolean; builds?: Record<string, McJarsVersionEntry> }>("/api/v2/builds/FABRIC"), options?.forceRefresh);
+  async listMinecraftVersions(runtimeType: ServerRuntimeType, options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]> {
+    const adapter = this.adapter(runtimeType);
+    const body = await this.cached(`${runtimeType}-builds`, () => this.request<{ success?: boolean; builds?: Record<string, McJarsVersionEntry> }>(`/api/v2/builds/${adapter.apiProject}`), options?.forceRefresh);
     if (!body.success || !body.builds || typeof body.builds !== "object") {
-      throw new RuntimeResolutionError("provider_unavailable", "MCJars did not return a usable Fabric version list");
+      throw new RuntimeResolutionError("provider_unavailable", `MCJars did not return a usable ${adapter.displayName} version list`);
     }
     return Object.entries(body.builds)
       .map(([id, entry]) => this.normalizeMinecraftVersion(id, entry))
@@ -69,51 +89,55 @@ export class McJarsProvider implements ServerJarProvider {
       .sort((a, b) => (b.releasedAt ?? "").localeCompare(a.releasedAt ?? ""));
   }
 
-  async listFabricLoaderVersions(minecraftVersion: string, options?: { forceRefresh?: boolean }): Promise<RuntimeLoaderVersion[]> {
-    const builds = await this.fabricBuildsForVersion(minecraftVersion, options?.forceRefresh);
+  async listRuntimeVersions(runtimeType: ServerRuntimeType, minecraftVersion: string, options?: { forceRefresh?: boolean }): Promise<RuntimeVersion[]> {
+    const adapter = this.adapter(runtimeType);
+    const builds = await this.buildsForVersion(adapter, minecraftVersion, options?.forceRefresh);
     return builds.map((build, index) => ({
       id: String(build.id ?? build.uuid ?? `${build.projectVersionId ?? build.name}-${build.buildNumber ?? index}`),
-      loaderVersion: stringValue(build.projectVersionId ?? build.name, "MCJars Fabric loader version"),
+      runtimeVersion: stringValue(build.projectVersionId ?? build.name, `MCJars ${adapter.versionName} version`),
       stable: build.experimental !== true,
       recommended: index === 0,
       buildId: build.uuid ?? (build.id === undefined ? undefined : String(build.id))
     }));
   }
 
-  async resolveFabricServerJar(input: {
+  async resolveServerJar(input: {
+    runtimeType: ServerRuntimeType;
     minecraftVersion: string;
-    loaderVersion?: string;
+    runtimeVersion?: string;
     preferStable?: boolean;
     forceRefresh?: boolean;
   }): Promise<ServerRuntimeProfile> {
+    const adapter = this.adapter(input.runtimeType);
     const minecraftVersion = input.minecraftVersion.trim();
     if (!minecraftVersion) {
       throw new RuntimeResolutionError("unsupported_minecraft_version", "Minecraft version is required");
     }
-    const builds = await this.fabricBuildsForVersion(minecraftVersion, input.forceRefresh);
-    const wantedLoader = input.loaderVersion?.trim();
-    const selected = wantedLoader && wantedLoader !== "latest"
-      ? builds.find((build) => build.projectVersionId === wantedLoader || build.name === wantedLoader || String(build.id) === wantedLoader || build.uuid === wantedLoader)
+    const builds = await this.buildsForVersion(adapter, minecraftVersion, input.forceRefresh);
+    const wantedRuntimeVersion = input.runtimeVersion?.trim();
+    const selected = wantedRuntimeVersion && wantedRuntimeVersion !== "latest"
+      ? builds.find((build) => build.projectVersionId === wantedRuntimeVersion || build.name === wantedRuntimeVersion || String(build.id) === wantedRuntimeVersion || build.uuid === wantedRuntimeVersion)
       : builds.find((build) => input.preferStable === false || build.experimental !== true) ?? builds[0];
     if (!selected) {
       throw new RuntimeResolutionError(
-        wantedLoader ? "invalid_loader_version" : "no_fabric_artifact",
-        wantedLoader ? `Fabric loader ${wantedLoader} is not available for Minecraft ${minecraftVersion}` : `MCJars has no Fabric server artifact for Minecraft ${minecraftVersion}`
+        wantedRuntimeVersion ? "invalid_runtime_version" : "no_runtime_artifact",
+        wantedRuntimeVersion ? `${adapter.versionName} ${wantedRuntimeVersion} is not available for Minecraft ${minecraftVersion}` : `MCJars has no ${adapter.displayName} server artifact for Minecraft ${minecraftVersion}`
       );
     }
-    const downloadUrl = assertMcJarsArtifactUrl(this.fabricDownloadUrl(selected), this.baseUrl);
-    const loaderVersion = stringValue(selected.projectVersionId ?? selected.name, "MCJars Fabric loader version");
+    const downloadUrl = assertMcJarsArtifactUrl(this.downloadUrl(selected, adapter), this.baseUrl);
+    const runtimeVersion = stringValue(selected.projectVersionId ?? selected.name, `MCJars ${adapter.versionName} version`);
     const javaMajorVersion = minecraftJavaMajorVersion(minecraftVersion);
     const artifactId = selected.uuid ?? (selected.id === undefined ? undefined : String(selected.id));
     return {
       minecraftVersion,
-      loader: "fabric",
-      loaderVersion,
+      runtimeType: adapter.runtimeType,
+      runtimeVersion,
+      ...(adapter.runtimeType === "fabric" ? { loader: "fabric" as const, loaderVersion: runtimeVersion } : {}),
       javaMajorVersion,
       jarProvider: this.id,
       jarArtifact: {
         id: artifactId,
-        filename: "fabric-server-launch.jar",
+        filename: adapter.artifactFilename,
         downloadUrl,
         sizeBytes: typeof selected.jarSize === "number" ? selected.jarSize : undefined
       },
@@ -122,14 +146,37 @@ export class McJarsProvider implements ServerJarProvider {
     };
   }
 
-  private async fabricBuildsForVersion(minecraftVersion: string, forceRefresh?: boolean) {
-    const body = await this.cached(`fabric-builds:${minecraftVersion}`, () => this.request<{ success?: boolean; builds?: McJarsBuild[] }>(`/api/v2/builds/FABRIC/${encodeURIComponent(minecraftVersion)}`), forceRefresh);
+  /** @deprecated Compatibility wrapper for older internal callers. */
+  async listFabricLoaderVersions(minecraftVersion: string, options?: { forceRefresh?: boolean }) {
+    const versions = await this.listRuntimeVersions("fabric", minecraftVersion, options);
+    return versions.map((version) => ({ ...version, loaderVersion: version.runtimeVersion }));
+  }
+
+  /** @deprecated Compatibility wrapper for older internal callers. */
+  resolveFabricServerJar(input: { minecraftVersion: string; loaderVersion?: string; preferStable?: boolean; forceRefresh?: boolean }) {
+    return this.resolveServerJar({
+      runtimeType: "fabric",
+      minecraftVersion: input.minecraftVersion,
+      runtimeVersion: input.loaderVersion,
+      preferStable: input.preferStable,
+      forceRefresh: input.forceRefresh
+    });
+  }
+
+  private adapter(runtimeType: ServerRuntimeType) {
+    const adapter = runtimeAdapters[runtimeType];
+    if (!adapter) throw new RuntimeResolutionError("unsupported_runtime", `MCJars provisioning for ${runtimeType} is not enabled yet`);
+    return adapter;
+  }
+
+  private async buildsForVersion(adapter: McJarsRuntimeAdapter, minecraftVersion: string, forceRefresh?: boolean) {
+    const body = await this.cached(`${adapter.runtimeType}-builds:${minecraftVersion}`, () => this.request<{ success?: boolean; builds?: McJarsBuild[] }>(`/api/v2/builds/${adapter.apiProject}/${encodeURIComponent(minecraftVersion)}`), forceRefresh);
     if (!body.success || !Array.isArray(body.builds)) {
-      throw new RuntimeResolutionError("provider_unavailable", `MCJars did not return Fabric builds for Minecraft ${minecraftVersion}`);
+      throw new RuntimeResolutionError("provider_unavailable", `MCJars did not return ${adapter.displayName} builds for Minecraft ${minecraftVersion}`);
     }
-    const builds = body.builds.filter((build) => build.type === undefined || build.type === "FABRIC");
+    const builds = body.builds.filter((build) => build.type === undefined || build.type === adapter.apiProject);
     if (builds.length === 0) {
-      throw new RuntimeResolutionError("no_fabric_artifact", `MCJars has no Fabric builds for Minecraft ${minecraftVersion}`);
+      throw new RuntimeResolutionError("no_runtime_artifact", `MCJars has no ${adapter.displayName} builds for Minecraft ${minecraftVersion}`);
     }
     return builds;
   }
@@ -151,10 +198,10 @@ export class McJarsProvider implements ServerJarProvider {
     };
   }
 
-  private fabricDownloadUrl(build: McJarsBuild) {
-    const mcJarsUrl = stringValue(build.jarUrl, "MCJars Fabric jar URL");
+  private downloadUrl(build: McJarsBuild, adapter: McJarsRuntimeAdapter) {
+    const mcJarsUrl = stringValue(build.jarUrl, `MCJars ${adapter.displayName} jar URL`);
     if (!mcJarsUrl.startsWith("https://")) {
-      throw new RuntimeResolutionError("no_fabric_artifact", "MCJars returned a Fabric artifact without a HTTPS download URL");
+      throw new RuntimeResolutionError("no_runtime_artifact", `MCJars returned a ${adapter.displayName} artifact without a HTTPS download URL`);
     }
     return mcJarsUrl;
   }
@@ -206,9 +253,7 @@ export class McJarsProvider implements ServerJarProvider {
 
 function stringValue(value: unknown, field: string) {
   if (typeof value !== "string" || !value.trim()) {
-    throw new RuntimeResolutionError("no_fabric_artifact", `${field} is missing`);
+    throw new RuntimeResolutionError("no_runtime_artifact", `${field} is missing`);
   }
   return value.trim();
 }
-
-export const defaultServerJarProvider = new McJarsProvider();

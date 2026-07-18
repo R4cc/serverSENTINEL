@@ -41,7 +41,13 @@ export const nodeCapabilities = [
   "mods.upload",
   "mods.enableDisable",
   "mods.remove",
-  "mods.liveMutation"
+  "mods.liveMutation",
+  "content.list",
+  "content.install",
+  "content.upload",
+  "content.enableDisable",
+  "content.remove",
+  "content.liveMutation"
 ] as const;
 
 export type NodeCapability = typeof nodeCapabilities[number];

@@ -10,14 +10,15 @@ import type {
   ServerStatus
 } from '../types';
 import { formatUptime } from '../utils/resourceFormatting';
-import { fabricLoaderVersionInfo, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
+import { serverRuntimeDefinition } from '@serversentinel/contracts';
+import { formatRelativeTimestamp, minecraftVersionInfo, runtimeVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, StatusBadge } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
-import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
+import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const modUpdateCardSlotCount = 3;
@@ -90,7 +91,8 @@ export function OverviewSummary({
           ? `${playerSnapshot.online} / ${playerSnapshot.maxPlayers}`
           : String(playerSnapshot.online);
   const minecraftVersion = minecraftVersionInfo(server);
-  const fabricLoaderVersion = fabricLoaderVersionInfo(server);
+  const runtimeVersion = runtimeVersionInfo(server);
+  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
   const resourceFallback = running ? "Collecting" : "Not running";
   const normalizedCpu = latestResourceSample?.cpuUtilizationPercent
@@ -114,8 +116,8 @@ export function OverviewSummary({
         <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)}</strong>
       </div>
       <div className="summaryTile">
-        <span>Fabric</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(fabricLoaderVersion)}</strong>
+        <span>{runtime.displayName}</span>
+        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)}</strong>
       </div>
       <div className="summaryTile">
         <span>Uptime</span>
@@ -194,15 +196,21 @@ export function ModHealthPanel({
   updatePlan,
   loading = false,
   canView = true,
-  onOpenMods
+  onOpenMods,
+  contentPlural = "mods",
+  contentPluralTitle = "Mods"
 }: {
   updatePlan: ModUpdatePlan | null;
   loading?: boolean;
   canView?: boolean;
   onOpenMods: () => void;
+  contentPlural?: "mods" | "plugins";
+  contentPluralTitle?: "Mods" | "Plugins";
 }) {
   if (!canView) return null;
-  if (loading || !updatePlan) return <ModHealthPanelSkeleton />;
+  if (loading || !updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} contentPluralTitle={contentPluralTitle} />;
+  const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
+  const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
 
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
@@ -214,11 +222,11 @@ export function ModHealthPanel({
         type="button"
         className="panel modsHealthPanel modUpdatesCard modUpdatesCard--healthy"
         onClick={onOpenMods}
-        aria-label="Open Mods, no mod updates available"
+        aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
       >
         <span className="modUpdatesCompact">
           <span className="modUpdatesHeaderCopy">
-            <strong>Mod updates</strong>
+            <strong>{contentSingularTitle} updates</strong>
             <small>No updates available</small>
           </span>
           <strong><AppIcon name="check" /></strong>
@@ -226,7 +234,7 @@ export function ModHealthPanel({
         <span className="modUpdatesWide" aria-hidden="true">
           <span className="modUpdatesWideHeader">
             <span className="modUpdatesHeaderCopy">
-              <strong>Mod updates</strong>
+              <strong>{contentSingularTitle} updates</strong>
               <small>No updates available</small>
             </span>
             <AppIcon name="chevronRight" />
@@ -235,7 +243,7 @@ export function ModHealthPanel({
             <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
             <span>
               <strong>Everything is up to date</strong>
-              <small>New mod updates will appear here.</small>
+              <small>New {contentSingular} updates will appear here.</small>
             </span>
           </span>
         </span>
@@ -248,11 +256,11 @@ export function ModHealthPanel({
       type="button"
       className="panel modsHealthPanel modUpdatesCard"
       onClick={onOpenMods}
-      aria-label={`Open Mods, ${updateCount} mod update${updateCount === 1 ? "" : "s"} available`}
+      aria-label={`Open ${contentPluralTitle}, ${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`}
     >
       <span className="modUpdatesCompact">
         <span className="modUpdatesHeaderCopy">
-          <strong>Mod updates</strong>
+          <strong>{contentSingularTitle} updates</strong>
           <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
         </span>
         <strong>{updateCount}</strong>
@@ -260,7 +268,7 @@ export function ModHealthPanel({
       <span className="modUpdatesWide" aria-hidden="true">
         <span className="modUpdatesWideHeader">
           <span className="modUpdatesHeaderCopy">
-            <strong>Mod updates</strong>
+            <strong>{contentSingularTitle} updates</strong>
             <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
           </span>
           <AppIcon name="chevronRight" />
@@ -286,13 +294,15 @@ export function ModHealthPanel({
   );
 }
 
-function ModHealthPanelSkeleton() {
+function ModHealthPanelSkeleton({ contentPlural = "mods" }: { contentPlural?: "mods" | "plugins"; contentPluralTitle?: "Mods" | "Plugins" }) {
+  const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
+  const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
   return (
     <section className="panel modsHealthPanel modUpdatesCard modUpdatesCardSkeleton" aria-busy="true">
-      <LoadingLabel>Loading mod updates</LoadingLabel>
+      <LoadingLabel>Loading {contentSingular} updates</LoadingLabel>
       <span className="modUpdatesCompact" aria-hidden="true">
         <span className="modUpdatesHeaderCopy">
-          <strong>Mod updates</strong>
+          <strong>{contentSingularTitle} updates</strong>
           <small>Checking for updates</small>
         </span>
         <SkeletonBlock className="modUpdatesCountSkeleton" />
@@ -300,7 +310,7 @@ function ModHealthPanelSkeleton() {
       <span className="modUpdatesWide modUpdatesWideSkeleton" aria-hidden="true">
         <span className="modUpdatesWideHeader">
           <span className="modUpdatesHeaderCopy">
-            <strong>Mod updates</strong>
+            <strong>{contentSingularTitle} updates</strong>
             <small>Checking for updates</small>
           </span>
           <SkeletonBlock className="modUpdatesChevronSkeleton" />
@@ -488,11 +498,27 @@ function defaultEventDetails(event: ServerEvent) {
 
 export function groupRecentEvents(events: ServerEvent[], now = new Date()): RecentEventGroup[] {
   const groups: RecentEventGroup[] = [];
+  const repeatedGroups = groupNearbyRepeatedEvents(events, (event) => eventDate(event.timestamp, now)?.getTime() ?? null);
 
-  for (let index = 0; index < events.length; index += 1) {
-    const event = events[index];
-    const next = events[index + 1];
+  for (let index = 0; index < repeatedGroups.length; index += 1) {
+    const repeated = repeatedGroups[index];
+    const event = repeated[0];
+    const nextGroup = repeatedGroups[index + 1];
+    const next = nextGroup?.length === 1 ? nextGroup[0] : undefined;
     const duration = next ? secondsBetween(event, next, now) : null;
+
+    if (repeated.length > 1) {
+      groups.push({
+        id: repeated.map((item) => item.id).join(":"),
+        kind: event.eventType,
+        severity: event.severity,
+        title: event.text,
+        details: defaultEventDetails(event),
+        timestamp: event.timestamp,
+        events: repeated
+      });
+      continue;
+    }
 
     if (
       event.eventType === "player_joined"
@@ -534,27 +560,14 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
       continue;
     }
 
-    const repeatable = ["exception_caught", "server_overloaded", "server_crashed", "mod_disabled"].includes(event.eventType);
-    const repeated = [event];
-    if (repeatable) {
-      while (events[index + 1]?.signature === event.signature) {
-        const repeatedDuration = secondsBetween(event, events[index + 1], now);
-        if (repeatedDuration === null || repeatedDuration > 60) break;
-        repeated.push(events[index + 1]);
-        index += 1;
-      }
-    }
-
     groups.push({
-      id: repeated.map((item) => item.id).join(":"),
+      id: event.id,
       kind: event.eventType,
       severity: event.severity,
       title: event.text,
-      details: repeated.length > 1
-        ? `${defaultEventDetails(event) ?? "The same event was logged"} · ${repeated.length} occurrences within a minute`
-        : defaultEventDetails(event),
+      details: defaultEventDetails(event),
       timestamp: event.timestamp,
-      events: repeated
+      events: [event]
     });
   }
 
@@ -601,7 +614,7 @@ function relatedEventLabel(group: RecentEventGroup) {
   if (group.events.length < 2) return null;
   return group.kind === "player_reconnected" || group.kind === "server_restarted"
     ? `${group.events.length} related events`
-    : `${group.events.length} occurrences`;
+    : null;
 }
 
 export function RecentEventsPanel({
@@ -688,10 +701,18 @@ export function RecentEventsPanel({
                 const relatedLabel = relatedEventLabel(group);
                 return (
                   <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
-                    <span className="eventIcon" aria-hidden="true"><EventIcon kind={group.kind} /></span>
+                    <span className="eventIcon" aria-hidden="true">
+                      <EventIcon kind={group.kind} />
+                      {group.events.length > 1 && group.kind !== "player_reconnected" && group.kind !== "server_restarted" && (
+                        <span className="eventOccurrenceBadge">×{group.events.length}</span>
+                      )}
+                    </span>
                     <div className="eventCopy">
                       <strong>{presentation.title}</strong>
                       {presentation.subject && <span className="eventSubject">{presentation.subject}</span>}
+                      {group.events.length > 1 && group.kind !== "player_reconnected" && group.kind !== "server_restarted" && (
+                        <span className="srOnly">{group.events.length} occurrences</span>
+                      )}
                       {(presentation.details || relatedLabel) && (
                         <span className="eventDetailLine">
                           {presentation.details && <span>{presentation.details}</span>}

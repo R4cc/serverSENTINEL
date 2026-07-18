@@ -304,6 +304,8 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     storageName: "Browser demo",
     runtimeProfile: {
       minecraftVersion: "1.21.4",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
       loader: "fabric",
       loaderVersion: "0.16.10",
       javaMajorVersion: 21,
@@ -332,6 +334,11 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
     resolvedVersions: {
       minecraftVersion: {
         version: "1.21.4",
+        source: "demo",
+        lastCheckedAt: new Date(demoStartedAt).toISOString()
+      },
+      runtimeVersion: {
+        version: "0.16.10",
         source: "demo",
         lastCheckedAt: new Date(demoStartedAt).toISOString()
       },

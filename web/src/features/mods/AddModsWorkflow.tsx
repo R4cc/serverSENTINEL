@@ -9,8 +9,10 @@ import { getSearchResultHealth } from "./modHealth";
 import { ModIconImage } from "./ModIconImage";
 import { ModInstallReview } from "./ModInstallReview";
 import { ModStatusBadge } from "./ModStatusBadge";
+import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 
 type Props = {
+  terminology?: ManagedContentTerminology;
   query: string;
   results: ModrinthHit[];
   total: number;
@@ -47,31 +49,32 @@ type Props = {
 };
 
 export function AddModsWorkflow(props: Props) {
+  const terminology = props.terminology ?? fabricContentTerminology;
   if (props.installState) {
-    return <ModInstallReview state={props.installState} selected={props.selectedVersion} requiredDependencies={props.installState.mode === "switch" ? [] : props.requiredDependencies} canContinue={props.canContinue} locked={props.locked} lockedReason={props.installState.mode === "switch" ? "Mod version changes require the server to be stopped." : "Mod changes require the server to be stopped."} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
+    return <ModInstallReview terminology={terminology} state={props.installState} selected={props.selectedVersion} requiredDependencies={props.installState.mode === "switch" ? [] : props.requiredDependencies} canContinue={props.canContinue} locked={props.locked} lockedReason={props.installState.mode === "switch" ? `${terminology.singularTitle} version changes require the server to be stopped.` : `${terminology.singularTitle} changes require the server to be stopped.`} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
   }
 
   const installedIds = new Set(props.installedMods.map((mod) => mod.modrinth?.projectId).filter(Boolean));
   return (
     <div className="modsAddWorkflow">
       <div className="modsDrawerHeader">
-        <div><small>Add mods</small><h2>Find a Fabric mod</h2><p>Results are matched to this server automatically.</p></div>
-        <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label="Close add mods"><AppIcon name="x" /></Button>
+        <div><small>Add {terminology.plural}</small><h2>Find a {terminology.runtimeName} {terminology.singular}</h2><p>Results are matched to this server automatically.</p></div>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label={`Close add ${terminology.plural}`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
-          <label><AppIcon name="search" /><span className="srOnly">Search</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search by mod name…" disabled={!props.configured || props.versionsUnknown} /></label>
+          <label><AppIcon name="search" /><span className="srOnly">Search</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} /></label>
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
         </div>
         <div className={`modsSafeSearchNote ${props.showIncompatibleResults ? "warning" : ""}`}>
           <AppIcon name="shield" />
-          <span>{props.showIncompatibleResults ? "Incompatible mods may fail to load or crash the server. Install only if you know the mod works anyway." : "Showing compatible Fabric server mods for this server."}</span>
+          <span>{props.showIncompatibleResults ? `Incompatible ${terminology.plural} may fail to load or crash the server. Install only if you know the ${terminology.singular} works anyway.` : `Showing compatible ${terminology.runtimeName} server ${terminology.plural} for this server.`}</span>
         </div>
         <label className="modsCompatibilityToggle">
           <input type="checkbox" checked={props.showIncompatibleResults} onChange={(event) => props.onShowIncompatibleResultsChange(event.target.checked)} disabled={!props.configured || props.versionsUnknown} />
-          <span><strong>Show incompatible mods</strong><small>Includes mods that are not marked compatible with this server version.</small></span>
+          <span><strong>Show incompatible {terminology.plural}</strong><small>Includes {terminology.plural} that are not marked compatible with this server version.</small></span>
         </label>
-        {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message="Add a Modrinth API key in Settings to search and install mods." />}
+        {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message={`Add a Modrinth API key in Settings to search and install ${terminology.plural}.`} />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
         {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and serverSENTINEL will recommend the safest release." />}
@@ -79,16 +82,16 @@ export function AddModsWorkflow(props: Props) {
           <EmptyState
             compact
             className="modsWorkspaceEmpty"
-            title={props.showIncompatibleResults ? "No matching mods found" : "No compatible mods found"}
-            message={props.showIncompatibleResults ? "Try a shorter or different search." : "Try a different search, or show incompatible mods if you want to review risky matches."}
+            title={props.showIncompatibleResults ? `No matching ${terminology.plural} found` : `No compatible ${terminology.plural} found`}
+            message={props.showIncompatibleResults ? "Try a shorter or different search." : `Try a different search, or show incompatible ${terminology.plural} if you want to review risky matches.`}
           />
         )}
         <div className="modsSearchResults" aria-busy={props.searching}>
-          {props.searching && <LoadingLabel>Searching for mods</LoadingLabel>}
-          {props.loadingMore && <LoadingLabel>Loading more mods</LoadingLabel>}
+          {props.searching && <LoadingLabel>Searching for {terminology.plural}</LoadingLabel>}
+          {props.loadingMore && <LoadingLabel>Loading more {terminology.plural}</LoadingLabel>}
           {props.searching && Array.from({ length: 4 }, (_, index) => <ModSearchResultSkeleton key={index} />)}
           {!props.searching && props.results.map((mod) => {
-            const health = getSearchResultHealth(mod);
+            const health = getSearchResultHealth(mod, terminology);
             const installed = installedIds.has(mod.project_id);
             const icon = modIconSource(mod.icon_url);
             const riskNote = props.showIncompatibleResults && !health.safeToRunDirectly
@@ -96,7 +99,7 @@ export function AddModsWorkflow(props: Props) {
               : "";
             return (
               <article key={mod.project_id} className="modsResultCard">
-                <ModIconImage src={icon} fallback="MOD" />
+                <ModIconImage src={icon} fallback={terminology.iconFallback} />
                 <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
                 {riskNote && <span className="modsResultRiskNote">{riskNote}</span>}
                 <Button variant={health.safeToRunDirectly ? "primary" : "secondary"} compact onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</Button>

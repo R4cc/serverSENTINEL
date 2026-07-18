@@ -23,11 +23,29 @@ export type ModrinthCompatibilityMatch = ModCompatibility & {
 export type CompatibilityResolverOptions = {
   projectId: string;
   minecraftVersion: string;
-  loader: string;
+  loader?: string;
+  loaders?: readonly string[];
+  runtimeName?: string;
+  contentKind?: "mod" | "plugin";
   channel: ReleaseChannel;
 };
 
 export type VersionCompatibilityOptions = Omit<CompatibilityResolverOptions, "projectId">;
+
+function compatibilityLoaders(options: Pick<CompatibilityResolverOptions, "loader" | "loaders">) {
+  return Array.from(new Set([...(options.loaders ?? []), ...(options.loader ? [options.loader] : [])]));
+}
+
+function versionMatchesLoader(version: ModrinthVersion, options: Pick<CompatibilityResolverOptions, "loader" | "loaders">) {
+  const loaders = compatibilityLoaders(options);
+  return loaders.length > 0 && version.loaders.some((loader) => loaders.includes(loader));
+}
+
+function compatibilityDescription(options: VersionCompatibilityOptions) {
+  const runtimeName = options.runtimeName ?? (options.loader === "fabric" ? "Fabric" : "server");
+  const contentKind = options.contentKind ?? (options.loader === "fabric" ? "mod" : "project");
+  return { runtimeName, contentKind };
+}
 
 type TimedCacheEntry<T> = {
   value: T;
@@ -245,7 +263,7 @@ export function latestCompatibleProjectVersion(
   return versions
     .filter((version) => (
       allowedForChannel(version, options.channel)
-      && version.loaders.includes(options.loader)
+      && versionMatchesLoader(version, options)
       && minecraftVersionsInclude(version.game_versions, options.minecraftVersion)
       && modrinthJarFile(version)
     ))
@@ -268,12 +286,14 @@ export function modrinthVersionIsNewer(left: ModrinthVersion, right?: ModrinthVe
 function compatibleResult(
   version: ModrinthVersion,
   file: ModrinthJarFile,
+  options: VersionCompatibilityOptions,
   projectSides?: { server_side?: string; client_side?: string }
 ): ModrinthCompatibilityMatch {
+  const { runtimeName, contentKind } = compatibilityDescription(options);
   return {
     status: "compatible",
     compatible: true,
-    reason: "Compatible server-side Fabric mod",
+    reason: `Compatible server-side ${runtimeName} ${contentKind}`,
     matchedVersionId: version.id,
     matchedVersionNumber: version.version_number,
     matchedVersionType: versionChannel(version.version_type),
@@ -320,7 +340,7 @@ export function resolveCompatibilityFromVersions(
   options: VersionCompatibilityOptions,
   projectSides?: { server_side?: string; client_side?: string }
 ): ModrinthCompatibilityMatch {
-  const loaderVersions = versions.filter((version) => version.loaders.includes(options.loader));
+  const loaderVersions = versions.filter((version) => versionMatchesLoader(version, options));
   const loaderAndGameVersions = loaderVersions.filter((version) => minecraftVersionsInclude(version.game_versions, options.minecraftVersion));
   const loaderGameJarVersions = loaderAndGameVersions.filter((version) => modrinthJarFile(version));
   const matchingVersion = loaderGameJarVersions.find((version) => allowedForChannel(version, options.channel));
@@ -335,7 +355,7 @@ export function resolveCompatibilityFromVersions(
     if (serverSide === "unknown") {
       return incompatible("unknown", "Server-side support could not be verified", matchingVersion, projectSides);
     }
-    return compatibleResult(matchingVersion, matchingFile, projectSides);
+    return compatibleResult(matchingVersion, matchingFile, options, projectSides);
   }
 
   const fallbackVersion = loaderGameJarVersions[0]
@@ -345,7 +365,9 @@ export function resolveCompatibilityFromVersions(
     ?? versions.find((version) => modrinthJarFile(version));
 
   if (loaderVersions.length === 0) {
-    return incompatible("no_fabric", "No Fabric version available", fallbackVersion, projectSides);
+    const { runtimeName } = compatibilityDescription(options);
+    const legacyFabricStatus = options.loader === "fabric" && !options.loaders;
+    return incompatible(legacyFabricStatus ? "no_fabric" : "no_compatible_loader", legacyFabricStatus ? "No Fabric version available" : `No ${runtimeName}-compatible version available`, fallbackVersion, projectSides);
   }
   if (loaderAndGameVersions.length === 0) {
     return incompatible("no_minecraft_version", `Not available for Minecraft ${options.minecraftVersion}`, fallbackVersion, projectSides);
@@ -356,16 +378,17 @@ export function resolveCompatibilityFromVersions(
   return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion, projectSides);
 }
 
-export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; minecraftVersion?: string }, options: { forceRefresh?: boolean } = {}) {
-  const cacheKey = `${projectId}|${filters?.loader ?? ""}|${filters?.minecraftVersion ?? ""}`;
+export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; loaders?: readonly string[]; minecraftVersion?: string }, options: { forceRefresh?: boolean } = {}) {
+  const loaders = compatibilityLoaders(filters ?? {});
+  const cacheKey = `${projectId}|${loaders.slice().sort().join(",")}|${filters?.minecraftVersion ?? ""}`;
   const cached = projectVersionsCache.get(cacheKey);
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
   const pending = projectVersionsRequestCache.get(cacheKey);
   if (pending) return pending;
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);
   url.searchParams.set("include_changelog", "false");
-  if (filters?.loader) {
-    url.searchParams.set("loaders", JSON.stringify([filters.loader]));
+  if (loaders.length > 0) {
+    url.searchParams.set("loaders", JSON.stringify(loaders));
   }
   if (filters?.minecraftVersion) {
     url.searchParams.set("game_versions", JSON.stringify(minecraftVersionFacetValues(filters.minecraftVersion)));
@@ -400,6 +423,7 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
 
     const filteredVersions = await fetchProjectVersions(options.projectId, {
       loader: options.loader,
+      loaders: options.loaders,
       minecraftVersion: options.minecraftVersion
     });
     const filteredResult = resolveCompatibilityFromVersions(filteredVersions, options, projectSides);

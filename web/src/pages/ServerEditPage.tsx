@@ -1,8 +1,9 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import type { FabricVersions, ManagedServer } from "../types";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { api } from "../api";
+import type { FabricVersions, ManagedServer, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
-  fabricLoaderVersionInfo,
   isValidServerPort,
   maxServerPort,
   memoryArgs,
@@ -10,6 +11,7 @@ import {
   minServerPort,
   parseJavaMemoryArgs,
   parseMaxMemoryGb,
+  runtimeVersionInfo,
   versionSourceLabel,
   versionValue
 } from "../utils/format";
@@ -185,10 +187,17 @@ export function ServerEditForm({
   const memoryBounds = useMemo(() => memoryBoundsForNode(totalMemory), [totalMemory]);
   const formId = `server-settings-form-${server.id}`;
   const [displayName, setDisplayName] = useState(server.displayName);
+  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
   const [minecraftVersion, setMinecraftVersion] = useState(server.runtimeProfile.minecraftVersion);
-  const [loaderVersion, setLoaderVersion] = useState(server.runtimeProfile.loaderVersion ?? "");
+  const [runtimeVersion, setRuntimeVersion] = useState(server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion ?? "");
+  const [availableMinecraftVersions, setAvailableMinecraftVersions] = useState(() => runtime.type === "fabric"
+    ? versions.game
+    : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" as const }]);
+  const [availableRuntimeVersions, setAvailableRuntimeVersions] = useState<RuntimeVersion[]>(() => runtime.type === "fabric"
+    ? versions.loader.map((version) => ({ id: version.version, runtimeVersion: version.version, stable: version.stable }))
+    : []);
   const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
-  const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar");
+  const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename);
   const [dockerContainer, setDockerContainer] = useState(server.dockerContainer || "");
   const [minimumHeapGb, setMinimumHeapGb] = useState(() => clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max));
   const [maximumHeapGb, setMaximumHeapGb] = useState(() => clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max));
@@ -202,17 +211,58 @@ export function ServerEditForm({
   const [startOnNodeStart, setStartOnNodeStart] = useState(server.startOnNodeStart ?? false);
   const [resetVersion, setResetVersion] = useState(0);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
-  const detectedFabricLoaderVersion = fabricLoaderVersionInfo(server);
+  const detectedRuntimeVersion = runtimeVersionInfo(server);
   const serverPortValid = isValidServerPort(serverPort);
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
   const memoryWarning = maximumHeapGb > memoryBounds.max * 0.8;
-  const currentMinecraftVersionListed = versions.game.some((version) => version.version === minecraftVersion);
-  const currentLoaderVersionListed = !loaderVersion || versions.loader.some((version) => version.version === loaderVersion);
+  const currentMinecraftVersionListed = availableMinecraftVersions.some((version) => version.version === minecraftVersion);
+  const currentRuntimeVersionListed = !runtimeVersion || availableRuntimeVersions.some((version) => version.runtimeVersion === runtimeVersion);
 
   useEffect(() => {
     resetFormState();
   }, [server.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ versions: Array<{ id: string; type?: "release" | "snapshot" | "unknown"; supported?: boolean; recommended?: boolean }> }>(`/api/runtime/${runtime.type}/minecraft-versions`)
+      .then((result) => {
+        if (!cancelled) setAvailableMinecraftVersions(result.versions.map((version) => ({
+          version: version.id,
+          stable: version.type === "release" && version.supported !== false,
+          recommended: version.recommended,
+          type: version.type ?? "unknown"
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableMinecraftVersions(runtime.type === "fabric"
+          ? versions.game
+          : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" }]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime.type, server.id, server.runtimeProfile.minecraftVersion, versions.game]);
+
+  useEffect(() => {
+    if (!minecraftVersion) {
+      setAvailableRuntimeVersions([]);
+      return;
+    }
+    let cancelled = false;
+    api<{ runtimeVersions: RuntimeVersion[] }>(`/api/runtime/${runtime.type}/versions?minecraftVersion=${encodeURIComponent(minecraftVersion)}`)
+      .then((result) => {
+        if (!cancelled) setAvailableRuntimeVersions(result.runtimeVersions);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableRuntimeVersions(runtime.type === "fabric"
+          ? versions.loader.map((version) => ({ id: version.version, runtimeVersion: version.version, stable: version.stable }))
+          : []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [minecraftVersion, runtime.type, versions.loader]);
 
   useEffect(() => {
     setServerPort(serverPortForServer(server));
@@ -231,9 +281,9 @@ export function ServerEditForm({
     const nextMinimum = clampNumber(nextMemory.xmsGb ?? nextMaximum, memoryBounds.min, nextMaximum);
     setDisplayName(server.displayName);
     setMinecraftVersion(server.runtimeProfile.minecraftVersion);
-    setLoaderVersion(server.runtimeProfile.loaderVersion ?? "");
+    setRuntimeVersion(server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion ?? "");
     setDockerImage(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
-    setServerJar(server.runtimeProfile.jarArtifact.filename || "fabric-server-launch.jar");
+    setServerJar(server.runtimeProfile.jarArtifact.filename);
     setDockerContainer(server.dockerContainer || "");
     setMinimumHeapGb(nextMinimum);
     setMaximumHeapGb(nextMaximum);
@@ -280,6 +330,7 @@ export function ServerEditForm({
           </div>
         )}
         <fieldset disabled={disabled}>
+          <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
             <div className="propertiesSection" aria-labelledby="properties-general-title">
               <h2 id="properties-general-title">General</h2>
@@ -290,24 +341,27 @@ export function ServerEditForm({
                 </label>
                 <label>
                   Minecraft version
-                  <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
+                  <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
+                    setMinecraftVersion(event.target.value);
+                    setRuntimeVersion("");
+                  }}>
                     {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
-                    {versions.game.length ? versions.game.map((version) => (
+                    {runtime.managedProvisioning && availableMinecraftVersions.length ? availableMinecraftVersions.map((version) => (
                       <option key={version.version} value={version.version}>{version.version}</option>
                     )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
                   </select>
                   <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
                 </label>
                 <label>
-                  Fabric loader version
-                  <select name="loaderVersion" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
-                    <option value="">Latest stable</option>
-                    {loaderVersion && !currentLoaderVersionListed && <option value={loaderVersion}>{loaderVersion}</option>}
-                    {versions.loader.map((version) => (
-                      <option key={version.version} value={version.version}>{version.version}</option>
+                  {runtime.versionLabel}
+                  <select name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
+                    {runtime.managedProvisioning && <option value="">Latest stable</option>}
+                    {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
+                    {runtime.managedProvisioning && availableRuntimeVersions.map((version) => (
+                      <option key={version.id} value={version.runtimeVersion}>{version.runtimeVersion}{version.stable === false ? " (Development)" : ""}</option>
                     ))}
                   </select>
-                  <span className="fieldHint">Current: {versionValue(detectedFabricLoaderVersion)} ({versionSourceLabel(detectedFabricLoaderVersion.source)})</span>
+                  <span className="fieldHint">Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</span>
                 </label>
               </div>
               <label className="propertiesStartupToggle">

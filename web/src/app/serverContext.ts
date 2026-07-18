@@ -1,7 +1,8 @@
 import { useMemo } from "react";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { demoServer, demoServerId } from "../demo";
 import type { AppState, ContextNode, ManagedServer, ScheduledExecution, ServerStatus } from "../types";
-import { fabricLoaderVersionInfo, minecraftVersionInfo, versionValue } from "../utils/format";
+import { minecraftVersionInfo, runtimeVersionInfo, versionValue } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { defaultContextNode, emptyPanelContextNode } from "./appConfig";
 import { demoFixtureModrinthConfigured, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
@@ -65,9 +66,10 @@ export function useServerContext(input: {
 
   const usableContextNodes = useMemo(() => contextNodes.filter(isNodeRuntimeUsable), [contextNodes]);
   const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";
-  const activeFabricLoaderVersion = activeServer ? versionValue(fabricLoaderVersionInfo(activeServer)) : "Unknown";
-  const activeModContext = `Fabric ${activeFabricLoaderVersion === "Unknown" ? "unknown" : activeFabricLoaderVersion} - Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
-  const activeModVersionsUnknown = activeFabricLoaderVersion === "Unknown" || activeMinecraftVersion === "Unknown";
+  const activeRuntimeVersion = activeServer ? versionValue(runtimeVersionInfo(activeServer)) : "Unknown";
+  const activeRuntimeDefinition = activeServer ? serverRuntimeDefinition(activeServer.runtimeProfile.runtimeType) : undefined;
+  const activeModContext = `${activeRuntimeDefinition?.displayName ?? "Runtime"} ${activeRuntimeVersion === "Unknown" ? "unknown" : activeRuntimeVersion} - Minecraft ${activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}`;
+  const activeModVersionsUnknown = activeRuntimeVersion === "Unknown" || activeMinecraftVersion === "Unknown";
   const activeStatus = input.status?.server.id === activeServer?.id ? input.status : null;
   const activeNodeRuntimeBlocked = Boolean(activeServer && !activeServerIsDemo && !isNodeRuntimeUsable(activeNode));
   const activeNodeBlockReason = nodeBlockReason(activeNode);
@@ -86,7 +88,9 @@ export function useServerContext(input: {
     activeNode,
     usableContextNodes,
     activeMinecraftVersion,
-    activeFabricLoaderVersion,
+    activeRuntimeVersion,
+    activeFabricLoaderVersion: activeRuntimeVersion,
+    activeRuntimeDefinition,
     activeModContext,
     activeModVersionsUnknown,
     activeStatus,

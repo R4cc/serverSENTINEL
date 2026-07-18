@@ -85,6 +85,7 @@ export function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpda
   const risky = forced
     || serverSide === "unsupported"
     || compatibilityStatus === "no_fabric"
+    || compatibilityStatus === "no_compatible_loader"
     || compatibilityStatus === "no_minecraft_version"
     || compatibilityStatus === "incompatible";
   const uncertain = !compatibility

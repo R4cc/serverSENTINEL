@@ -1,4 +1,5 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData } from "./demo";
@@ -30,6 +31,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
+import { managedContentTerminology } from "./features/mods/contentTerminology";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
@@ -75,7 +77,7 @@ function consoleLine(text: string) {
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
-const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
+const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
 const activePageStorageKey = "serversentinel-active-page";
 const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
@@ -337,6 +339,7 @@ export default function App() {
     activeNode,
     usableContextNodes,
     activeMinecraftVersion,
+    activeRuntimeDefinition,
     activeModContext,
     activeModVersionsUnknown,
     activeStatus,
@@ -346,6 +349,8 @@ export default function App() {
     activeServerUsesInternalNode,
     activeServerDockerSocketMounted
   } = useServerContext({ appState, activeServerId, status, demoMode, demoSchedules });
+  const supportsManagedMods = activeRuntimeDefinition?.managedContent === true;
+  const managedContent = managedContentTerminology(activeServer?.runtimeProfile.runtimeType ?? "fabric");
   const applicationReady = appStateLoaded || demoMode;
   const permissionUser = appState.currentUser ?? authSession?.user ?? null;
   const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
@@ -361,6 +366,10 @@ export default function App() {
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
+
+  useEffect(() => {
+    if (activePage === "mods" && activeServer && !supportsManagedMods) setActivePage("overview");
+  }, [activePage, activeServer, supportsManagedMods]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && activeServer.id === demoServerId) return demoTimelineData(demoRunning, demoSchedules, from, to);
@@ -482,12 +491,12 @@ export default function App() {
         : !activeStatus
           ? "Server status is still loading."
           : isAnyModJobRunning
-            ? "A mod operation is already running."
+            ? `A ${managedContent.singular} operation is already running.`
             : !canInstallMods
               ? "Server management permission is required."
               : !effectiveAppState.modrinthApiConfigured
-                ? "Add a Modrinth API key in Settings before searching for mods."
-                : "Search Modrinth for compatible Fabric mods.";
+                ? `Add a Modrinth API key in Settings before searching for ${managedContent.plural}.`
+                : `Search Modrinth for compatible ${managedContent.runtimeName} ${managedContent.plural}.`;
   const uploadModDisabledReason = isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
@@ -497,8 +506,8 @@ export default function App() {
           : !activeStatus
             ? "Server status is still loading."
             : isAnyModJobRunning
-              ? "A mod operation is already running."
-              : "Upload a local Fabric mod file.";
+              ? `A ${managedContent.singular} operation is already running.`
+              : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
   const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
   const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
@@ -544,7 +553,7 @@ export default function App() {
     refreshModsAfterFilesChange: () => refreshModsAfterFileMutationRef.current()
   });
   const modsWorkspace = useModsWorkspace({
-    activeServer,
+    activeServer: supportsManagedMods ? activeServer : undefined,
     activePage,
     activeServerIsDemo,
     activeServerUsesInternalNode,
@@ -1602,6 +1611,7 @@ export default function App() {
     setNotice("");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const requestedRuntimeType = form.get("runtimeType") === "paper" ? "paper" : "fabric";
     const errors = serverConfigValidation(form, appState.servers.map((server) => server.displayName), undefined, { requireNode: true, requireEula: true, requireRuntime: true });
     if (setValidationNotice(formElement, errors, (message) => {
       setNotice(message);
@@ -1630,9 +1640,13 @@ export default function App() {
         body: JSON.stringify({
           displayName: form.get("displayName"),
           runtime: {
-            loader: "fabric",
+            runtimeType: requestedRuntimeType,
+            runtimeVersion: form.get("runtimeVersion"),
             minecraftVersion: form.get("minecraftVersion"),
-            loaderVersion: form.get("loaderVersion"),
+            ...(requestedRuntimeType === "fabric" ? {
+              loader: "fabric",
+              loaderVersion: form.get("runtimeVersion")
+            } : {}),
             serverJar: form.get("serverJar")
           },
           dockerContainer: form.get("dockerContainer"),
@@ -1703,15 +1717,18 @@ export default function App() {
       return;
     }
     setServerSettingsSaving(true);
+    const editRuntimeType = form.get("runtimeType") === "paper" ? "paper" : "fabric";
+    const editRuntimeVersion = form.get("runtimeVersion") || undefined;
     try {
       const server = await api<ManagedServer>(`/api/servers/${activeServer.id}`, {
         method: "PUT",
         body: JSON.stringify({
           displayName: form.get("displayName"),
           runtime: {
-            loader: "fabric",
+            runtimeType: editRuntimeType,
+            runtimeVersion: editRuntimeVersion,
+            ...(editRuntimeType === "fabric" ? { loader: "fabric", loaderVersion: editRuntimeVersion } : {}),
             minecraftVersion: form.get("minecraftVersion"),
-            loaderVersion: form.get("loaderVersion"),
             serverJar: form.get("serverJar")
           },
           dockerContainer: form.get("dockerContainer"),
@@ -2182,7 +2199,7 @@ export default function App() {
         : provisioningNavigationReason;
   const noManagedServersMessage = panelOnlyMode && usableContextNodes.length === 0
     ? "No node is connected yet. Add a node first so serverSENTINEL has a host where it can create Minecraft servers."
-    : "No managed servers have been created yet. Create one to set up Fabric files and start managing a Minecraft server from this panel.";
+    : "No managed servers have been created yet. Create one to set up its runtime files and start managing a Minecraft server from this panel.";
   const addNodeDisabledReason = demoMode
     ? "Exit demo mode before adding real nodes."
     : isProvisioning
@@ -2227,7 +2244,7 @@ export default function App() {
     overview: "Overview",
     console: "Console",
     files: "Files",
-    mods: "Mods",
+    mods: managedContent.pluralTitle,
     schedule: "Schedules",
     properties: "Properties",
     settings: "Settings",
@@ -2329,10 +2346,12 @@ export default function App() {
                 <SidebarIcon name="files" />
                 <span className="navLabel">Files</span>
               </button>
-              <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open mods"}>
-                <SidebarIcon name="mods" />
-                <span className="navLabel">Mods</span>
-              </button>
+              {supportsManagedMods && (
+                <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : `Open ${managedContent.plural}`}>
+                  <SidebarIcon name="mods" />
+                  <span className="navLabel">{managedContent.pluralTitle}</span>
+                </button>
+              )}
               <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
                 <SidebarIcon name="schedule" />
                 <span className="navLabel">Schedules</span>
@@ -2429,6 +2448,7 @@ export default function App() {
                 {effectiveAppState.servers.map((server) => {
                   const lockedByDemo = demoMode && server.id !== demoServerId;
                   const minecraftVersion = versionValue(minecraftVersionInfo(server));
+                  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
                   return (
                     <button
                       key={server.id}
@@ -2446,7 +2466,7 @@ export default function App() {
                       <span className="serverListTitleRow">
                         <strong>{server.displayName}</strong>
                       </span>
-                      <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - Fabric</span>
+                      <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - {runtime.displayName}</span>
                       {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
                     </button>
                   );
@@ -2612,7 +2632,7 @@ export default function App() {
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <EmptyState
             title="No server selected"
-            message="A server exists, but none is open right now. Choose one from the Servers page to view its console, files, mods, and settings."
+            message="A server exists, but none is open right now. Choose one from the Servers page to view its console, files, managed content, and settings."
             action={<Button onClick={() => setActivePage("servers")}>Open servers</Button>}
           />
         )}
@@ -2651,7 +2671,7 @@ export default function App() {
                           </small>
                           <span aria-hidden="true" className="serverStripSeparator">·</span>
                           <small className="serverStripMeta">
-                            Fabric {activeServer.runtimeProfile.loaderVersion || "unknown"}
+                            {activeRuntimeDefinition?.displayName ?? "Runtime"} {activeServer.runtimeProfile.runtimeVersion || "unknown"}
                           </small>
                           <span aria-hidden="true" className="serverStripSeparator">·</span>
                           <small className="serverStripMeta">
@@ -2778,8 +2798,10 @@ export default function App() {
                   <ModHealthPanel
                     updatePlan={modsWorkspace.data.updatePlan}
                     loading={modsWorkspace.state.updatePlanLoading}
-                    canView={canViewMods}
+                    canView={canViewMods && supportsManagedMods}
                     onOpenMods={() => setActivePage("mods")}
+                    contentPlural={managedContent.plural}
+                    contentPluralTitle={managedContent.pluralTitle}
                   />
                   <SchedulePanel
                     schedules={activeServer.schedules ?? []}
@@ -2841,10 +2863,11 @@ export default function App() {
               </Suspense>
             )}
 
-            {activePage === "mods" && (
-              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading mods" page="mods" />}>
+            {activePage === "mods" && supportsManagedMods && (
+              <Suspense fallback={<FeaturePageLoadingSkeleton label={`Loading ${managedContent.plural}`} page="mods" />}>
                 <ModsPage
                 workspace={modsWorkspace}
+                runtimeType={activeServer.runtimeProfile.runtimeType}
                 restartRequiredChanges={activeServer.restartRequiredChanges}
                 serverContext={{
                   minecraftVersion: activeServer.runtimeProfile.minecraftVersion || "Unknown",

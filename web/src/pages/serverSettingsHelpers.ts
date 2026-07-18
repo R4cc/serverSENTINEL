@@ -142,10 +142,10 @@ export function runtimeMinecraftOptions(versions: FabricVersions, showSnapshots:
 }
 
 export function preferredMinecraftVersion(options: CreateWizardMinecraftVersion[]) {
-  return options.find((version) => version.version === "1.21.6")?.version
+  return options.find((version) => version.recommended)?.version
     || options.find((version) => version.type === undefined || version.type === "release")?.version
     || options[0]?.version
-    || "1.21.6";
+    || "";
 }
 
 export function clampNumber(value: number, min: number, max: number) {

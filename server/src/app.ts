@@ -14,6 +14,7 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { inflateRawSync } from "node:zlib";
 import { fetch } from "undici";
 import { totalmem } from "node:os";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "./config.js";
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { currentUserForRequest, type AuthenticatedRequest } from "./auth/requestAuthentication.js";
@@ -58,7 +59,8 @@ import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime } from "./nodes/types.js";
-import { defaultServerJarProvider } from "./runtime/mcjarsProvider.js";
+import { defaultServerJarProvider } from "./runtime/serverJarProvider.js";
+import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "./runtime/artifact.js";
 import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
 import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "./zipArchive.js";
 import {
@@ -87,7 +89,7 @@ import { registerStaticFrontend } from "./staticFrontend.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { registerOperationsRoutes } from "./routes/operationsRoutes.js";
 import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
-import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./http/outboundUrls.js";
+import { assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
@@ -177,6 +179,7 @@ import type {
   ScheduledRunDetails,
   ScheduledRunStepDetails,
   ServerRuntimeProfile,
+  ServerRuntimeType,
   Session,
   StoredUser
 } from "./types.js";
@@ -213,10 +216,11 @@ export function nodeUpdateAlreadyCurrent(node: Pick<ManagedNode, "agentVersion" 
   return !requestedImage?.trim() && node.agentVersion === version && (buildId ? node.buildId === buildId : true);
 }
 
-export function modrinthSearchFacets(loader: string, minecraftVersion: string, compatibilityFilter: "compatible" | "incompatible" | "all") {
-  const facets: string[][] = [["project_type:mod"]];
+export function modrinthSearchFacets(loaders: string | readonly string[], minecraftVersion: string, compatibilityFilter: "compatible" | "incompatible" | "all", projectType: "mod" | "plugin" = "mod") {
+  const compatibleLoaders = typeof loaders === "string" ? [loaders] : Array.from(loaders);
+  const facets: string[][] = [[`project_type:${projectType}`]];
   if (compatibilityFilter !== "all" && compatibilityFilter !== "incompatible") {
-    facets.push([`categories:${loader}`]);
+    facets.push(compatibleLoaders.map((loader) => `categories:${loader}`));
     facets.push(minecraftVersionFacetValues(minecraftVersion).map((value) => `versions:${value}`));
     facets.push(["server_side:required", "server_side:optional"]);
   }
@@ -290,6 +294,9 @@ type CreateServerInput = {
   nodeId?: string;
   displayName?: string;
   runtime?: {
+    runtimeType?: string;
+    runtimeVersion?: string;
+    /** Legacy Fabric request fields. */
     loader?: string;
     minecraftVersion?: string;
     loaderVersion?: string;
@@ -306,6 +313,9 @@ type CreateServerInput = {
 
 type VersionMetadata = {
   minecraftVersion?: string;
+  runtimeType?: ServerRuntimeType;
+  runtimeVersion?: string;
+  /** Legacy Fabric metadata field. */
   fabricLoaderVersion?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -313,16 +323,39 @@ type VersionMetadata = {
 
 function runtimeSelection(input: unknown) {
   const runtime = asObject(input, "runtime");
-  const loader = optionalString(runtime.loader, "runtime.loader") || "fabric";
-  if (loader !== "fabric") {
-    throw new Error("Only Fabric runtime profiles are supported");
+  const canonicalRuntimeType = optionalString(runtime.runtimeType, "runtime.runtimeType");
+  const legacyLoader = optionalString(runtime.loader, "runtime.loader");
+  if (canonicalRuntimeType && legacyLoader && canonicalRuntimeType !== legacyLoader) {
+    throw new Error("runtime.loader must match runtime.runtimeType");
   }
+  const runtimeTypeValue = canonicalRuntimeType || legacyLoader || "fabric";
+  if (runtimeTypeValue !== "fabric" && runtimeTypeValue !== "paper") {
+    throw new Error("runtime.runtimeType must be fabric or paper");
+  }
+  const runtimeType: ServerRuntimeType = runtimeTypeValue;
+  const canonicalRuntimeVersion = optionalString(runtime.runtimeVersion, "runtime.runtimeVersion");
+  const legacyLoaderVersion = optionalString(runtime.loaderVersion, "runtime.loaderVersion");
+  if (canonicalRuntimeVersion && legacyLoaderVersion && canonicalRuntimeVersion !== legacyLoaderVersion) {
+    throw new Error("runtime.loaderVersion must match runtime.runtimeVersion");
+  }
+  const runtimeVersion = canonicalRuntimeVersion || legacyLoaderVersion;
   return {
-    loader,
+    runtimeType,
+    runtimeVersion,
+    // Compatibility aliases for the existing provisioning payload during the migration window.
+    loader: runtimeType,
     minecraftVersion: optionalString(runtime.minecraftVersion, "runtime.minecraftVersion"),
-    loaderVersion: optionalString(runtime.loaderVersion, "runtime.loaderVersion"),
+    loaderVersion: runtimeVersion,
     serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
   };
+}
+
+function parseServerRuntimeType(value: unknown, field = "runtimeType"): ServerRuntimeType {
+  const runtimeType = requiredString(value, field);
+  if (runtimeType !== "fabric" && runtimeType !== "paper") {
+    throw new Error(`${field} must be fabric or paper`);
+  }
+  return runtimeType;
 }
 
 export type DockerHostPortBinding = {
@@ -939,7 +972,9 @@ async function writeVersionMetadataFile(server: ManagedServer) {
   const targetRuntime = runtimeTarget(server);
   const metadata: VersionMetadata = {
     minecraftVersion: targetRuntime.minecraftVersion,
-    fabricLoaderVersion: targetRuntime.loaderVersion,
+    runtimeType: targetRuntime.runtimeType,
+    runtimeVersion: targetRuntime.runtimeVersion,
+    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: targetRuntime.runtimeVersion } : {}),
     createdAt: now,
     updatedAt: now
   };
@@ -976,6 +1011,8 @@ export function readZipEntry(buffer: Buffer, entryName: string) {
 }
 
 async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
+  const targetRuntime = runtimeTarget(server);
+  if (targetRuntime.runtimeType !== "fabric") return {};
   try {
     const jarPath = await validateExistingInsideServer(server, runtimeTarget(server).serverJar);
     const jarStat = await stat(jarPath);
@@ -985,6 +1022,8 @@ async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<Ver
     const values = parseServerProperties(installProperties.toString("utf8"));
     return {
       minecraftVersion: values["game-version"],
+      runtimeType: "fabric",
+      runtimeVersion: values["fabric-loader-version"],
       fabricLoaderVersion: values["fabric-loader-version"]
     };
   } catch {
@@ -992,15 +1031,54 @@ async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<Ver
   }
 }
 
-function detectVersionsFromLogText(logText: string): VersionMetadata {
+export function detectVersionsFromLogText(logText: string, runtimeType: ServerRuntimeType = "fabric"): VersionMetadata {
   const minecraftMatches = [...logText.matchAll(/Starting minecraft server version\s+([^\s]+)/gi)];
-  const loaderMatches = [
-    ...logText.matchAll(/Loading Fabric Loader\s+([^\s]+)/gi),
-    ...logText.matchAll(/Fabric Loader[^0-9]*(\d+(?:\.\d+)+(?:[-+][\w.-]+)?)/gi)
-  ];
+  const runtimeVersion = runtimeType === "fabric"
+    ? [
+        ...logText.matchAll(/Loading Fabric Loader\s+([^\s]+)/gi),
+        ...logText.matchAll(/Fabric Loader[^0-9]*(\d+(?:\.\d+)+(?:[-+][\w.-]+)?)/gi)
+      ].at(-1)?.[1]
+    : detectedPaperBuild(logText);
   return {
     minecraftVersion: minecraftMatches.at(-1)?.[1],
-    fabricLoaderVersion: loaderMatches.at(-1)?.[1]
+    runtimeType,
+    runtimeVersion,
+    ...(runtimeType === "fabric" ? { fabricLoaderVersion: runtimeVersion } : {})
+  };
+}
+
+function detectedPaperBuild(logText: string) {
+  const token = [...logText.matchAll(/(?:This server is running|Starting) Paper version\s+([^\s]+)/gi)].at(-1)?.[1];
+  if (!token) return undefined;
+  if (/^\d+$/.test(token)) return token;
+  return token.match(/^(?:git-)?paper-(\d+)/i)?.[1]
+    ?? token.match(/^\d+(?:\.\d+){1,2}-(\d+)/)?.[1]
+    ?? token;
+}
+
+function supportsManagedMods(server: Pick<ManagedServer, "runtimeProfile">) {
+  const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
+  return runtime.managedContent;
+}
+
+function requireManagedModsRuntime(server: Pick<ManagedServer, "runtimeProfile">) {
+  if (supportsManagedMods(server)) return;
+  const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
+  throw new Error(`${runtime.displayName} does not advertise managed ${runtime.contentKind}.`);
+}
+
+function managedContentRuntime(server: Pick<ManagedServer, "runtimeProfile">) {
+  requireManagedModsRuntime(server);
+  const target = runtimeTarget(server);
+  const definition = serverRuntimeDefinition(target.runtimeType);
+  const singular: "mod" | "plugin" = definition.contentKind === "plugins" ? "plugin" : "mod";
+  return {
+    target,
+    definition,
+    directory: definition.contentDirectory,
+    singular,
+    plural: definition.contentKind,
+    loaders: definition.compatibleModrinthLoaders
   };
 }
 
@@ -1013,22 +1091,24 @@ async function detectVersionsFromLogs(server: ManagedServer) {
     .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
     .map((result) => result.value)
     .join("\n");
-  return detectVersionsFromLogText(text);
+  return detectVersionsFromLogText(text, runtimeTarget(server).runtimeType);
 }
 
 async function resolveServerVersions(server: ManagedServer): Promise<ResolvedServerVersions> {
   const lastCheckedAt = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
   const detected = await detectVersionsFromLauncherJar(server);
-  const logs = detected.minecraftVersion && detected.fabricLoaderVersion
+  const logs = detected.minecraftVersion && detected.runtimeVersion
     ? {}
     : await detectVersionsFromLogs(server);
 
   const minecraftSource = detected.minecraftVersion ? "detected" : logs.minecraftVersion ? "log" : targetRuntime.minecraftVersion ? "profile" : "unknown";
-  const fabricSource = detected.fabricLoaderVersion ? "detected" : logs.fabricLoaderVersion ? "log" : targetRuntime.loaderVersion ? "profile" : "unknown";
+  const runtimeSource = detected.runtimeVersion ? "detected" : logs.runtimeVersion ? "log" : targetRuntime.runtimeVersion ? "profile" : "unknown";
+  const runtimeVersion = versionResolution(detected.runtimeVersion || logs.runtimeVersion || targetRuntime.runtimeVersion, runtimeSource, lastCheckedAt);
   return {
     minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || targetRuntime.minecraftVersion, minecraftSource, lastCheckedAt),
-    fabricLoaderVersion: versionResolution(detected.fabricLoaderVersion || logs.fabricLoaderVersion || targetRuntime.loaderVersion, fabricSource, lastCheckedAt)
+    runtimeVersion,
+    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: runtimeVersion } : {})
   };
 }
 
@@ -1056,7 +1136,10 @@ async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promi
     runtimeProfile: runtimeProfileForServer(server),
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
       minecraftVersion: versionResolution(runtimeTarget(server).minecraftVersion, runtimeTarget(server).minecraftVersion ? "profile" : "unknown", new Date().toISOString()),
-      fabricLoaderVersion: versionResolution(runtimeTarget(server).loaderVersion, runtimeTarget(server).loaderVersion ? "profile" : "unknown", new Date().toISOString())
+      runtimeVersion: versionResolution(runtimeTarget(server).runtimeVersion, runtimeTarget(server).runtimeVersion ? "profile" : "unknown", new Date().toISOString()),
+      ...(runtimeTarget(server).runtimeType === "fabric" ? {
+        fabricLoaderVersion: versionResolution(runtimeTarget(server).runtimeVersion, runtimeTarget(server).runtimeVersion ? "profile" : "unknown", new Date().toISOString())
+      } : {})
     }
   };
 }
@@ -1444,7 +1527,8 @@ function toPublicPath(server: ManagedServer, absolutePath: string) {
 
 function isModsPath(server: ManagedServer, absolutePath: string) {
   const publicPath = toPublicPath(server, absolutePath);
-  return publicPath === "/mods" || publicPath.startsWith("/mods/");
+  const directory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
+  return publicPath === `/${directory}` || publicPath.startsWith(`/${directory}/`);
 }
 
 function isServerSettingsFile(server: ManagedServer, absolutePath: string) {
@@ -1737,9 +1821,10 @@ function isMissingPathError(error: unknown) {
 }
 
 async function modIconUrl(server: ManagedServer, filename: string) {
+  const { directory } = managedContentRuntime(server);
   let iconsDir: string;
   try {
-    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+    iconsDir = await validateExistingInsideServer(server, `${directory}/.serversentinel-icons`);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
     return undefined;
@@ -1752,9 +1837,10 @@ async function modIconUrl(server: ManagedServer, filename: string) {
 }
 
 async function deleteModIcon(server: ManagedServer, filename: string) {
+  const { directory } = managedContentRuntime(server);
   let iconsDir: string;
   try {
-    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+    iconsDir = await validateExistingInsideServer(server, `${directory}/.serversentinel-icons`);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
     return;
@@ -1786,6 +1872,7 @@ function iconContentType(filename: string) {
 }
 
 async function persistModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
+  const { directory, plural } = managedContentRuntime(server);
   if (!iconUrl) return;
   let safeIconUrl: string;
   try {
@@ -1794,7 +1881,7 @@ async function persistModIcon(server: ManagedServer, filename: string, iconUrl?:
     return;
   }
   const response = await fetch(safeIconUrl, {
-    headers: { "User-Agent": appUserAgentFor("Fabric mod manager") },
+    headers: { "User-Agent": appUserAgentFor(`${plural} manager`) },
     signal: AbortSignal.timeout(modrinthAssetTimeoutMs),
     redirect: "error"
   });
@@ -1803,10 +1890,10 @@ async function persistModIcon(server: ManagedServer, filename: string, iconUrl?:
   if (!/^image\/(png|jpeg|webp|gif)(?:;|$)/i.test(contentType)) return;
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > 1024 * 1024) return;
-  await validateExistingInsideServer(server, "mods");
-  const iconsDir = ensureInsideServer(server, "mods/.serversentinel-icons");
+  await validateExistingInsideServer(server, directory);
+  const iconsDir = ensureInsideServer(server, `${directory}/.serversentinel-icons`);
   await mkdir(iconsDir, { recursive: true });
-  await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+  await validateExistingInsideServer(server, `${directory}/.serversentinel-icons`);
   await deleteModIcon(server, filename);
   const iconPath = await ensureWritableResolvedInsideServer(server, join(iconsDir, `${modIconKey(filename)}${iconExtension(safeIconUrl, response.headers.get("content-type"))}`));
   await writeFile(iconPath, bytes);
@@ -1884,7 +1971,7 @@ async function downloadModrinthIcon(normalizedUrl: string) {
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(normalizedUrl, {
-      headers: { "User-Agent": appUserAgentFor("Fabric mod manager") },
+      headers: { "User-Agent": appUserAgentFor("managed content catalog") },
       signal: AbortSignal.timeout(modrinthAssetTimeoutMs),
       redirect: "error"
     });
@@ -3259,45 +3346,49 @@ function streamDockerLogs(server: ManagedServer, client: Client) {
   return request;
 }
 
-async function downloadFabricServerJar(server: ManagedServer) {
+async function downloadServerJar(server: ManagedServer) {
   const profile = runtimeProfileForServer(server);
+  const runtime = serverRuntimeDefinition(profile.runtimeType);
   const artifact = profile?.jarArtifact;
   const downloadUrl = artifact?.downloadUrl;
   const filename = artifact?.filename;
   if (!profile || !filename) {
-    throw new Error("A resolved Fabric runtime profile is required before downloading the server jar");
+    throw new Error(`A resolved ${runtime.displayName} runtime profile is required before downloading the server jar`);
   }
   if (!downloadUrl) {
-    throw new Error("The runtime profile does not include a Fabric server jar download URL");
+    throw new Error(`The runtime profile does not include a ${runtime.displayName} server jar download URL`);
   }
-  const safeDownloadUrl = assertMcJarsArtifactUrl(downloadUrl, config.mcjarsBaseUrl);
+  const safeDownloadUrl = assertRuntimeArtifactUrl(profile, config.mcjarsBaseUrl);
 
   const target = ensureInsideServer(server, filename);
   const startedAt = Date.now();
-  logInfo({ ...serverLogFields(server), minecraftVersion: profile.minecraftVersion, loaderVersion: profile.loaderVersion, jarProvider: profile.jarProvider, filename }, "Downloading Fabric server launcher");
+  logInfo({ ...serverLogFields(server), runtimeType: profile.runtimeType, minecraftVersion: profile.minecraftVersion, runtimeVersion: profile.runtimeVersion, jarProvider: profile.jarProvider, filename }, `Downloading ${runtime.displayName} server runtime`);
   const response = await fetch(safeDownloadUrl, {
     headers: {
-      "User-Agent": appUserAgentFor("Fabric runtime downloader")
+      "User-Agent": appUserAgentFor(`${runtime.displayName} runtime downloader`)
     },
     signal: AbortSignal.timeout(60_000),
     redirect: "error"
   });
   if (!response.ok || !response.body) {
     const body = !response.ok ? await response.text().catch(() => "") : "";
-    const details = `Fabric server launcher download failed\nurl=${downloadUrl}\nstatus=${response.status} ${response.statusText}\nbody=${body || "(empty)"}`;
-    const error = detailedError(new Error(`Fabric server download failed: ${response.status} ${response.statusText}`), details);
-    logError({ ...serverLogFields(server), downloadUrl, statusCode: response.status, responseBody: body || undefined, errorDetails: details, durationMs: durationSince(startedAt) }, "Fabric server launcher download failed");
+    const details = `${runtime.displayName} server runtime download failed\nurl=${downloadUrl}\nstatus=${response.status} ${response.statusText}\nbody=${body || "(empty)"}`;
+    const error = detailedError(new Error(`${runtime.displayName} server download failed: ${response.status} ${response.statusText}`), details);
+    logError({ ...serverLogFields(server), runtimeType: profile.runtimeType, downloadUrl, statusCode: response.status, responseBody: body || undefined, errorDetails: details, durationMs: durationSince(startedAt) }, `${runtime.displayName} server runtime download failed`);
     throw error;
   }
-  await pipeline(
-    Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>),
-    createWriteStream(target)
-  );
+  const declaredSize = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredSize) && declaredSize > maxRuntimeArtifactBytes) {
+    throw new Error(`Downloaded ${runtime.displayName} server artifact exceeds ${Math.floor(maxRuntimeArtifactBytes / 1024 / 1024)} MiB`);
+  }
+  const content = await readRuntimeArtifact(response);
+  verifyRuntimeArtifact(profile, content);
+  await writeFile(target, content);
   const downloaded = await stat(target);
   if (!downloaded.isFile() || downloaded.size === 0) {
-    throw new Error("Fabric server launcher download did not produce a runnable jar");
+    throw new Error(`${runtime.displayName} server download did not produce a runnable jar`);
   }
-  logInfo({ ...serverLogFields(server), filename, size: downloaded.size, durationMs: durationSince(startedAt) }, "Fabric server launcher downloaded");
+  logInfo({ ...serverLogFields(server), runtimeType: profile.runtimeType, filename, size: downloaded.size, durationMs: durationSince(startedAt) }, `${runtime.displayName} server runtime downloaded`);
 }
 
 async function createServerFiles(
@@ -3309,11 +3400,12 @@ async function createServerFiles(
 ) {
   report?.(35, "Creating server folders");
   await mkdir(server.serverDir, { recursive: true });
-  await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
+  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
+  await mkdir(ensureInsideServer(server, runtime.contentDirectory), { recursive: true });
   await mkdir(ensureInsideServer(server, "logs"), { recursive: true });
   logInfo(serverLogFields(server), "Managed server files created");
-  report?.(45, "Downloading Fabric server launcher");
-  await downloadFabricServerJar(server);
+  report?.(45, `Downloading ${runtime.displayName} server runtime`);
+  await downloadServerJar(server);
   report?.(65, "Writing Minecraft configuration");
   await updateServerProperties(server, {
     "server-port": serverPort,
@@ -3333,6 +3425,10 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
   report?.(5, "Validating server settings");
   const displayName = input.displayName?.trim();
   const selectedRuntime = runtimeSelection(input.runtime);
+  const runtimeDefinition = serverRuntimeDefinition(selectedRuntime.runtimeType);
+  if (!runtimeDefinition.managedProvisioning) {
+    throw new Error(`${runtimeDefinition.displayName} provisioning is not available yet. Existing profiles can be imported for lifecycle compatibility, but new servers cannot be created with this runtime.`);
+  }
   const minecraftVersion = selectedRuntime.minecraftVersion;
   if (!displayName || displayName.length > 80 || !minecraftVersion) {
     throw new Error("Display name and Minecraft version are required");
@@ -3353,10 +3449,11 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     throw new Error("Generated server id already has a storage directory");
   }
 
-  report?.(25, "Resolving Fabric versions");
-  const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
+  report?.(25, `Resolving ${runtimeDefinition.displayName} versions`);
+  const runtimeProfile = await serverJarProvider.resolveServerJar({
+    runtimeType: selectedRuntime.runtimeType,
     minecraftVersion,
-    loaderVersion: selectedRuntime.loaderVersion || "latest",
+    runtimeVersion: selectedRuntime.runtimeVersion || "latest",
     preferStable: true
   });
   const serverJar = selectedRuntime.serverJar || runtimeProfile.jarArtifact.filename;
@@ -3393,7 +3490,7 @@ async function createManagedServer(input: CreateServerInput, report?: (progress:
     updatedAt: now
   };
 
-  logInfo({ ...serverLogFields(server), jobId, minecraftVersion: runtimeProfileForRecord.minecraftVersion, loaderVersion: runtimeProfileForRecord.loaderVersion, jarProvider: runtimeProfileForRecord.jarProvider }, "Fabric runtime profile resolved for provisioning");
+  logInfo({ ...serverLogFields(server), jobId, runtimeType: runtimeProfileForRecord.runtimeType, minecraftVersion: runtimeProfileForRecord.minecraftVersion, runtimeVersion: runtimeProfileForRecord.runtimeVersion, jarProvider: runtimeProfileForRecord.jarProvider }, `${runtimeDefinition.displayName} runtime profile resolved for provisioning`);
   let saved = false;
   try {
     await createServerFiles(server, input.acceptEula, serverPort, queryPort, report);
@@ -4089,22 +4186,34 @@ async function localUpdateServer(serverId: string, input: unknown) {
     }
     const currentRuntime = runtimeProfileForServer(current);
     const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
+    const runtimeType = selectedRuntime?.runtimeType || currentRuntime.runtimeType;
+    const runtimeDefinition = serverRuntimeDefinition(runtimeType);
     const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
     if (!minecraftVersion) {
       throw new Error("Minecraft version is required");
     }
-    const requestedLoaderVersion = selectedRuntime?.loaderVersion || currentRuntime.loaderVersion || "latest";
-    const serverJar = selectedRuntime?.serverJar || currentRuntime.jarArtifact.filename || "fabric-server-launch.jar";
-    const shouldResolveRuntime = selectedRuntime?.minecraftVersion !== undefined || selectedRuntime?.loaderVersion !== undefined;
+    const runtimeFamilyChanged = runtimeType !== currentRuntime.runtimeType || minecraftVersion !== currentRuntime.minecraftVersion;
+    const requestedRuntimeVersion = selectedRuntime?.runtimeVersion || (runtimeFamilyChanged ? "latest" : currentRuntime.runtimeVersion || "latest");
+    const serverJar = selectedRuntime?.serverJar
+      || (runtimeType !== currentRuntime.runtimeType ? runtimeDefinition.serverJarFilename : currentRuntime.jarArtifact.filename);
+    const shouldResolveRuntime = Boolean(selectedRuntime && (
+      selectedRuntime.runtimeType !== currentRuntime.runtimeType
+      || (selectedRuntime.minecraftVersion !== undefined && selectedRuntime.minecraftVersion !== currentRuntime.minecraftVersion)
+      || (selectedRuntime.runtimeVersion !== undefined && selectedRuntime.runtimeVersion !== currentRuntime.runtimeVersion)
+    ));
+    if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) {
+      throw new Error(`${runtimeDefinition.displayName} version changes are not available until its runtime provider is enabled`);
+    }
     const resolvedRuntime = shouldResolveRuntime
-      ? await serverJarProvider.resolveFabricServerJar({
+      ? await serverJarProvider.resolveServerJar({
+          runtimeType,
           minecraftVersion,
-          loaderVersion: requestedLoaderVersion,
+          runtimeVersion: requestedRuntimeVersion,
           preferStable: true
         })
       : currentRuntime;
     if (!resolvedRuntime) {
-      throw new Error("A Fabric runtime profile is required before changing server settings");
+      throw new Error("A runtime profile is required before changing server settings");
     }
     const runtimeProfile: ServerRuntimeProfile = {
       ...resolvedRuntime,
@@ -4142,7 +4251,8 @@ async function localUpdateServer(serverId: string, input: unknown) {
     const startOnNodeStart = optionalStrictBoolean(body.startOnNodeStart, "startOnNodeStart", current.startOnNodeStart ?? false);
 
     const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
-      || currentRuntime.loaderVersion !== runtimeProfile.loaderVersion
+      || currentRuntime.runtimeType !== runtimeProfile.runtimeType
+      || currentRuntime.runtimeVersion !== runtimeProfile.runtimeVersion
       || currentRuntime.jarArtifact.filename !== serverJar
       || current.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
     const containerConfigChanged = current.dockerContainer !== dockerContainer
@@ -4164,7 +4274,7 @@ async function localUpdateServer(serverId: string, input: unknown) {
     };
 
     if (jarChanged) {
-      await downloadFabricServerJar(updated);
+      await downloadServerJar(updated);
     }
     if (containerConfigChanged && dockerAvailable() && !status.running) {
       const networkingConfig = minecraftContainerNetworkingConfig(await inspectDockerContainer(current).catch(() => null));
@@ -4440,7 +4550,7 @@ app.addHook("preHandler", async (request) => {
   }
   const demoMode = await isDemoModeRequest(request);
   if (demoMode) {
-    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/fabric/"))) {
+    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/"))) {
       return;
     }
     const error = new Error("Demo mode is active. Disable demo mode before managing real servers.") as Error & { statusCode?: number };
@@ -4897,24 +5007,32 @@ app.get("/api/fabric/versions", async (request) => {
   if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
-  const game = await serverJarProvider.listMinecraftVersions();
+  const game = await serverJarProvider.listMinecraftVersions("fabric");
   const latestGame = game.find((version) => version.type === "release") ?? game[0];
-  const loader = latestGame ? await serverJarProvider.listFabricLoaderVersions(latestGame.id).catch(() => []) : [];
+  const loader = latestGame ? await serverJarProvider.listRuntimeVersions("fabric", latestGame.id).catch(() => []) : [];
   return {
     game: game.map((version) => ({ version: version.id, stable: version.type === "release" && version.supported, type: version.type ?? "unknown" })),
-    loader: loader.slice(0, 20).map((version) => ({ version: version.loaderVersion, stable: version.stable !== false })),
+    loader: loader.slice(0, 20).map((version) => ({ version: version.runtimeVersion, stable: version.stable !== false })),
     installer: []
   };
 });
 
-app.get("/api/runtime/fabric/minecraft-versions", async (request) => {
+app.get("/api/runtime/types", async (request) => {
+  if (!isDemoModeRequest(request)) await requireRequestPermission(request, "servers.view");
+  return {
+    runtimes: (["fabric", "paper"] as const).map((runtimeType) => serverRuntimeDefinition(runtimeType))
+  };
+});
+
+app.get<{ Params: { runtimeType: string } }>("/api/runtime/:runtimeType/minecraft-versions", async (request) => {
   if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
-  return { versions: await serverJarProvider.listMinecraftVersions() };
+  const runtimeType = parseServerRuntimeType(request.params.runtimeType);
+  return { runtimeType, versions: await serverJarProvider.listMinecraftVersions(runtimeType) };
 });
 
-app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
+app.get<{ Params: { runtimeType: string }; Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/:runtimeType/versions", async (request) => {
   if (!isDemoModeRequest(request)) {
     await requireRequestPermission(request, "servers.create");
   }
@@ -4922,25 +5040,41 @@ app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/
   if (!minecraftVersion) {
     throw new Error("minecraftVersion is required");
   }
+  const runtimeType = parseServerRuntimeType(request.params.runtimeType);
   return {
+    runtimeType,
     minecraftVersion,
-    loaderVersions: await serverJarProvider.listFabricLoaderVersions(minecraftVersion, { forceRefresh: request.query.refresh === "true" })
+    runtimeVersions: await serverJarProvider.listRuntimeVersions(runtimeType, minecraftVersion, { forceRefresh: request.query.refresh === "true" })
   };
 });
 
-app.post<{ Body: { minecraftVersion?: string; loaderVersion?: string; preferStable?: boolean; refresh?: boolean } }>("/api/runtime/fabric/resolve", async (request) => {
+app.post<{ Params: { runtimeType: string }; Body: { minecraftVersion?: string; runtimeVersion?: string; loaderVersion?: string; preferStable?: boolean; refresh?: boolean } }>("/api/runtime/:runtimeType/resolve", async (request) => {
   await requireRequestPermission(request, "servers.create");
   const minecraftVersion = request.body.minecraftVersion?.trim();
   if (!minecraftVersion) {
     throw new Error("minecraftVersion is required");
   }
-  const runtimeProfile = await serverJarProvider.resolveFabricServerJar({
+  const runtimeType = parseServerRuntimeType(request.params.runtimeType);
+  const runtimeProfile = await serverJarProvider.resolveServerJar({
+    runtimeType,
     minecraftVersion,
-    loaderVersion: request.body.loaderVersion?.trim() || "latest",
+    runtimeVersion: request.body.runtimeVersion?.trim() || request.body.loaderVersion?.trim() || "latest",
     preferStable: request.body.preferStable !== false,
     forceRefresh: request.body.refresh === true
   });
   return { runtimeProfile, warnings: [] };
+});
+
+// Legacy Fabric endpoints remain available while older web clients roll forward.
+app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
+  if (!isDemoModeRequest(request)) await requireRequestPermission(request, "servers.create");
+  const minecraftVersion = request.query.minecraftVersion?.trim();
+  if (!minecraftVersion) throw new Error("minecraftVersion is required");
+  const versions = await serverJarProvider.listRuntimeVersions("fabric", minecraftVersion, { forceRefresh: request.query.refresh === "true" });
+  return {
+    minecraftVersion,
+    loaderVersions: versions.map((version) => ({ ...version, loaderVersion: version.runtimeVersion }))
+  };
 });
 
 registerOperationsRoutes(app, {
@@ -5086,9 +5220,14 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
   const server = await getServer(request.params.id);
   await requireServerStoppedForMutableConfiguration(server);
   const runtimeProfile = runtimeProfileForServer(server);
-  const refreshed = await serverJarProvider.resolveFabricServerJar({
+  const runtimeDefinition = serverRuntimeDefinition(runtimeProfile.runtimeType);
+  if (!runtimeDefinition.managedProvisioning) {
+    throw new Error(`${runtimeDefinition.displayName} runtime refresh is not available until its provider is enabled`);
+  }
+  const refreshed = await serverJarProvider.resolveServerJar({
+    runtimeType: runtimeProfile.runtimeType,
     minecraftVersion: runtimeProfile.minecraftVersion,
-    loaderVersion: runtimeProfile.loaderVersion || "latest",
+    runtimeVersion: runtimeProfile.runtimeVersion || "latest",
     preferStable: true,
     forceRefresh: request.body.refresh === true
   });
@@ -5348,7 +5487,7 @@ function requireNoRunningFileExtraction(serverId: string) {
 
 function archiveOutputPermission(path: string): Permission {
   if (path === "/server.properties") return "servers.editSettings";
-  if (path === "/mods" || path.startsWith("/mods/")) return "mods.upload";
+  if (path === "/mods" || path.startsWith("/mods/") || path === "/plugins" || path.startsWith("/plugins/")) return "mods.upload";
   return "files.upload";
 }
 
@@ -6012,7 +6151,8 @@ async function localDeleteFile(server: ManagedServer, target: string, recursive:
   } else {
     throw new Error("Only files and directories can be deleted from the browser file manager");
   }
-  if (publicPath.startsWith("/mods/") && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
+  const contentDirectory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
+  if (publicPath.startsWith(`/${contentDirectory}/`) && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
     await deleteModIcon(server, basename(publicPath));
   }
   logInfo({ ...serverLogFields(server), path: publicPath, recursive: recursive === "true", action: "delete_file" }, "Server file deleted");
@@ -6043,6 +6183,7 @@ function normalizeModPreferences(value: unknown): Record<string, ModPreference> 
 }
 
 function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
+  const content = managedContentRuntime(server);
   if (!metadata) {
     return { status: "unknown", compatible: false, reason: "Server-side support unknown" };
   }
@@ -6055,8 +6196,8 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
       status: "incompatible",
       compatible: false,
       reason: metadata.installedWithForceIncompatible
-        ? (metadata.incompatibilityReason ? `This mod was force installed: ${metadata.incompatibilityReason}` : "Client-only mod; server-side support is unsupported")
-        : "Client-only mod; server-side support is unsupported",
+        ? (metadata.incompatibilityReason ? `This ${content.singular} was force installed: ${metadata.incompatibilityReason}` : `Client-only ${content.singular}; server-side support is unsupported`)
+        : `Client-only ${content.singular}; server-side support is unsupported`,
       serverSide,
       clientSide
     };
@@ -6066,20 +6207,26 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
       status: "unknown",
       compatible: false,
       reason: metadata.installedWithForceIncompatible
-        ? (metadata.incompatibilityReason ? `This mod was force installed: ${metadata.incompatibilityReason}` : "Server-side support could not be verified")
+        ? (metadata.incompatibilityReason ? `This ${content.singular} was force installed: ${metadata.incompatibilityReason}` : "Server-side support could not be verified")
         : "Server-side support could not be verified",
       serverSide,
       clientSide
     };
   }
-  if (!metadata.loaders.includes("fabric")) {
-    return { status: "no_fabric", compatible: false, reason: "This mod does not advertise Fabric support.", serverSide, clientSide };
+  if (!metadata.loaders.some((loader) => content.loaders.includes(loader))) {
+    return {
+      status: content.definition.type === "fabric" ? "no_fabric" : "no_compatible_loader",
+      compatible: false,
+      reason: `This ${content.singular} does not advertise ${content.definition.displayName} compatibility.`,
+      serverSide,
+      clientSide
+    };
   }
   if (target.minecraftVersion && !minecraftVersionsInclude(metadata.gameVersions, target.minecraftVersion)) {
     return {
       status: "no_minecraft_version",
       compatible: false,
-      reason: `This mod was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${target.minecraftVersion}.`,
+      reason: `This ${content.singular} was installed for Minecraft ${metadata.gameVersions.join(", ") || "unknown"}, but this server is ${target.minecraftVersion}.`,
       serverSide,
       clientSide
     };
@@ -6089,8 +6236,8 @@ function installedModCompatibility(server: ManagedServer, metadata?: InstalledMo
       status: "incompatible",
       compatible: false,
       reason: metadata.incompatibilityReason
-        ? `This mod was force installed: ${metadata.incompatibilityReason}`
-        : "This mod was force installed even though serverSENTINEL could not confirm compatibility.",
+        ? `This ${content.singular} was force installed: ${metadata.incompatibilityReason}`
+        : `This ${content.singular} was force installed even though serverSENTINEL could not confirm compatibility.`,
       serverSide,
       clientSide
     };
@@ -6103,7 +6250,7 @@ function installedModReviewCanBeAcknowledged(server: ManagedServer, metadata?: I
   if (metadata.reviewAcknowledgedVersionId === metadata.versionId) return false;
   if (metadata.installedWithForceIncompatible || metadata.forceIncompatible || metadata.overrideMinecraftVersion || metadata.incompatibilityReason || metadata.overrideReason) return false;
   const target = runtimeTarget(server);
-  if (!metadata.loaders.includes("fabric")) return false;
+  if (!metadata.loaders.some((loader) => managedContentRuntime(server).loaders.includes(loader))) return false;
   if (target.minecraftVersion && !minecraftVersionsInclude(metadata.gameVersions, target.minecraftVersion)) return false;
   const compatibility = installedModCompatibility(server, metadata);
   return compatibility.status === "unknown"
@@ -6133,10 +6280,13 @@ type InstalledModUpdateInfo = {
 
 async function lookupModrinthUpdateForCurrent(server: ManagedServer, current: InstalledModUpdateCurrent | undefined, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
   const targetRuntime = runtimeTarget(server);
+  const content = managedContentRuntime(server);
   if (!targetRuntime.minecraftVersion) return null;
   if (!current?.project_id) return null;
   const versionFilter = {
-    loader: "fabric",
+    loaders: content.loaders,
+    runtimeName: content.definition.displayName,
+    contentKind: content.singular,
     minecraftVersion: targetRuntime.minecraftVersion
   };
   const versions = await fetchProjectVersions(current.project_id, versionFilter, options);
@@ -6155,7 +6305,7 @@ async function lookupModrinthUpdateForCurrent(server: ManagedServer, current: In
   }
   if (currentVersion
     && allowedForChannel(currentVersion, preferredChannel)
-    && currentVersion.loaders.includes(versionFilter.loader)
+    && currentVersion.loaders.some((loader) => content.loaders.includes(loader))
     && minecraftVersionsInclude(currentVersion.game_versions, versionFilter.minecraftVersion)
     && modrinthJarFile(currentVersion)
     && modrinthVersionIsNewer(currentVersion, target)
@@ -6247,9 +6397,11 @@ async function withTrackedModMutation<T>(server: ManagedServer, action: () => Pr
       if (running) {
         if (server.nodeId !== localNodeId) {
           const node = findServerNode(server, await readNodes());
-          if (!node || !nodeAdvertisesCapability(node, "mods.liveMutation")) {
+          const liveMutationCapability = runtimeTarget(server).runtimeType === "fabric" ? "mods.liveMutation" : "content.liveMutation";
+          if (!node || !nodeAdvertisesCapability(node, liveMutationCapability)) {
             const nodeName = node?.name || server.nodeId;
-            throw new Error(`Node ${nodeName} must be updated and restarted before mods can be changed while the server is running. Update the node agent, or stop the Minecraft server before changing mods.`);
+            const plural = managedContentRuntime(server).plural;
+            throw new Error(`Node ${nodeName} must be updated and restarted before ${plural} can be changed while the server is running. Update the node agent, or stop the Minecraft server before changing ${plural}.`);
           }
         }
         baseline = snapshotMods(await listModsWithPanelMetadata(server));
@@ -6489,8 +6641,9 @@ async function listModsWithPanelMetadata(server: ManagedServer, options: { force
 }
 
 async function localListMods(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
-  await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
-  const modsDir = await validateExistingInsideServer(server, "mods");
+  const { directory } = managedContentRuntime(server);
+  await mkdir(ensureInsideServer(server, directory), { recursive: true });
+  const modsDir = await validateExistingInsideServer(server, directory);
   const entries = await readdir(modsDir, { withFileTypes: true });
   const prefs = await readModPreferences(server);
   let prefsModified = false;
@@ -6569,10 +6722,11 @@ async function localListMods(server: ManagedServer, options: { forceRefresh?: bo
 }
 
 async function localModIcon(server: ManagedServer, filenameInput: unknown) {
+  const { directory } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   let iconsDir: string;
   try {
-    iconsDir = await validateExistingInsideServer(server, "mods/.serversentinel-icons");
+    iconsDir = await validateExistingInsideServer(server, `${directory}/.serversentinel-icons`);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
     return null;
@@ -6584,12 +6738,13 @@ async function localModIcon(server: ManagedServer, filenameInput: unknown) {
 }
 
 async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
+  const { directory, singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const enabled = requireStrictBoolean(enabledInput, "enabled");
-  const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join("mods", filename)))
+  const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join(directory, filename)))
     ? `${filename}.disabled`
     : filename;
-  const source = await validateExistingInsideServer(server, join("mods", sourceName));
+  const source = await validateExistingInsideServer(server, join(directory, sourceName));
   const targetName = enabled
     ? sourceName.replace(/\.jar\.disabled$/, ".jar")
     : sourceName.endsWith(".jar.disabled")
@@ -6598,7 +6753,7 @@ async function localToggleMod(server: ManagedServer, filenameInput: unknown, ena
   if (sourceName === targetName) {
     return { ok: true, filename: targetName, enabled };
   }
-  const target = await ensureWritableInsideServer(server, join("mods", safeInstalledModFilename(targetName)));
+  const target = await ensureWritableInsideServer(server, join(directory, safeInstalledModFilename(targetName)));
   await rename(source, target);
   const prefs = await readModPreferences(server);
   if (prefs[sourceName]) {
@@ -6609,13 +6764,14 @@ async function localToggleMod(server: ManagedServer, filenameInput: unknown, ena
     delete prefs[sourceName];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, "Mod state changed");
+  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} state changed`);
   return { ok: true, filename: basename(target), enabled };
 }
 
 async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
+  const { directory, singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
-  const target = await validateExistingInsideServer(server, join("mods", filename));
+  const target = await validateExistingInsideServer(server, join(directory, filename));
   await rm(target, { force: true });
   await deleteModIcon(server, filename);
   const prefs = await readModPreferences(server);
@@ -6623,27 +6779,28 @@ async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
     delete prefs[filename];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, "Mod removed");
+  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} removed`);
   return { ok: true, filename };
 }
 
 async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown) {
+  const { directory, singular } = managedContentRuntime(server);
   const startedAt = Date.now();
   let filename: string | undefined;
   try {
     filename = safeModFilename(safeInstalledModFilename(filenameInput as string | undefined));
-    logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, "Manual mod upload started");
+    logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, `Manual ${singular} upload started`);
     const contentBase64 = validateBase64Content(contentBase64Input);
     const content = Buffer.from(contentBase64, "base64");
     if (!content.length || content.length > modFileSizeLimit) {
-      throw new Error(`Uploaded mod must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+      throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
     }
     assertJarBuffer(content);
-    await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
-    await validateExistingInsideServer(server, "mods");
-    const destination = await ensureWritableInsideServer(server, join("mods", filename));
+    await mkdir(ensureInsideServer(server, directory), { recursive: true });
+    await validateExistingInsideServer(server, directory);
+    const destination = await ensureWritableInsideServer(server, join(directory, filename));
     if (existsSync(destination)) {
-      throw new Error("A mod with that filename already exists");
+      throw new Error(`A ${singular} with that filename already exists`);
     }
     await writeFile(destination, content);
     await deleteModIcon(server, filename);
@@ -6652,43 +6809,86 @@ async function localUploadMod(server: ManagedServer, filenameInput: unknown, con
       prefs[filename] = { channel: normalizeReleaseChannel(prefs[filename].channel) };
       await writeModPreferences(server, prefs);
     }
-    logInfo({ ...serverLogFields(server), filename: basename(destination), size: content.length, durationMs: durationSince(startedAt), action: "upload_mod", status: "succeeded" }, "Manual mod upload succeeded");
+    logInfo({ ...serverLogFields(server), filename: basename(destination), size: content.length, durationMs: durationSince(startedAt), action: "upload_mod", status: "succeeded" }, `Manual ${singular} upload succeeded`);
     return { ok: true, filename: basename(destination), path: toPublicPath(server, destination) };
   } catch (error) {
-    logOperationFailure({ ...serverLogFields(server), filename, durationMs: durationSince(startedAt), action: "upload_mod", status: "failed" }, "Manual mod upload failed", error);
+    logOperationFailure({ ...serverLogFields(server), filename, durationMs: durationSince(startedAt), action: "upload_mod", status: "failed" }, `Manual ${singular} upload failed`, error);
     throw error;
   }
 }
 
 async function downloadModrinthJar(file: NonNullable<ReturnType<typeof modrinthJarFile>>) {
   if (!file.url.startsWith("https://")) {
-    throw new Error("Refusing to download a non-HTTPS mod file");
+    throw new Error("Refusing to download a non-HTTPS Modrinth JAR");
   }
   if (file.size && file.size > modFileSizeLimit) {
-    throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+    throw new Error(`Modrinth JAR is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
   }
   const response = await modrinthFetch(file.url);
   if (!response.ok) {
-    throw new Error(`Mod download failed: ${response.statusText}`);
+    throw new Error(`Modrinth JAR download failed: ${response.statusText}`);
   }
   const contentLength = Number(response.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
-    throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+    throw new Error(`Modrinth JAR is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
   }
   const content = Buffer.from(await response.arrayBuffer());
   if (!content.length || content.length > modFileSizeLimit) {
-    throw new Error(`Mod download must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+    throw new Error(`Modrinth JAR must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
   }
   assertJarBuffer(content);
   const expectedSha1 = file.hashes?.sha1;
   if (expectedSha1 && createHash("sha1").update(content).digest("hex") !== expectedSha1) {
-    throw new Error("Downloaded mod hash did not match Modrinth metadata");
+    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
   }
   const expectedSha512 = file.hashes?.sha512;
   if (expectedSha512 && createHash("sha512").update(content).digest("hex") !== expectedSha512) {
-    throw new Error("Downloaded mod hash did not match Modrinth metadata");
+    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
   }
   return content;
+}
+
+async function replaceManagedContentJar(
+  server: ManagedServer,
+  currentFilename: string,
+  targetFilename: string,
+  content: Buffer,
+  enabled: boolean
+) {
+  const runtime = runtimeForServer(server);
+  const { directory } = managedContentRuntime(server);
+  const source = await runtime.resolveExistingPath(server, `${directory}/${currentFilename}`);
+  const backupName = `.serversentinel-${randomUUID()}.backup`;
+  const backupPath = `${directory}/${backupName}`;
+  await runtime.renameFile(server, source, backupName);
+
+  let finalFilename = targetFilename;
+  try {
+    await runtime.uploadMod(server, targetFilename, content.toString("base64"));
+    if (!enabled) {
+      const toggled = await runtime.toggleMod(server, targetFilename, false) as { filename?: string };
+      finalFilename = toggled.filename || `${targetFilename}.disabled`;
+    }
+    const backup = await runtime.resolveExistingPath(server, backupPath);
+    await runtime.deleteFile(server, backup, undefined);
+    return finalFilename;
+  } catch (error) {
+    for (const candidate of new Set([targetFilename, `${targetFilename}.disabled`, finalFilename])) {
+      try {
+        const created = await runtime.resolveExistingPath(server, `${directory}/${candidate}`);
+        await runtime.deleteFile(server, created, undefined);
+      } catch {
+        // An upload can reach disk before a remote response fails, so always try cleanup.
+      }
+    }
+    try {
+      const backup = await runtime.resolveExistingPath(server, backupPath);
+      await runtime.renameFile(server, backup, currentFilename);
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], `Failed to replace ${currentFilename} and restore the previous file`);
+    }
+    throw error;
+  }
 }
 
 function modsFromListResult(result: unknown) {
@@ -6715,6 +6915,7 @@ async function buildModUpdatePlan(server: ManagedServer, options: { forceRefresh
 }
 
 async function updateModrinthMod(server: ManagedServer, input: unknown) {
+  const contentDefinition = managedContentRuntime(server);
   const startedAt = Date.now();
   const body = asObject(input, "mod update request");
   const filename = safeInstalledModFilename(requiredString(body.filename, "filename"));
@@ -6726,15 +6927,17 @@ async function updateModrinthMod(server: ManagedServer, input: unknown) {
     const currentMod = mods.find((mod) => mod.filename === filename);
     const metadata = remoteModMetadata(currentMod?.modrinth);
     if (!currentMod || !metadata) {
-      throw new Error("Installed Modrinth metadata could not be found for that mod");
+      throw new Error(`Installed Modrinth metadata could not be found for that ${contentDefinition.singular}`);
     }
 
     const targetRuntime = runtimeTarget(server);
-    if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
-      throw new Error("A resolved Fabric runtime profile is required before updating mods");
+    if (!targetRuntime.minecraftVersion) {
+      throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before updating ${contentDefinition.plural}`);
     }
     const versionFilter = {
-      loader: targetRuntime.loader,
+      loaders: contentDefinition.loaders,
+      runtimeName: contentDefinition.definition.displayName,
+      contentKind: contentDefinition.singular,
       minecraftVersion: targetRuntime.minecraftVersion
     };
     const versions = await fetchProjectVersions(metadata.projectId, versionFilter, { forceRefresh: true });
@@ -6751,6 +6954,7 @@ async function updateModrinthMod(server: ManagedServer, input: unknown) {
     }
 
     const targetFilename = safeModFilename(safeInstalledModFilename(file.filename));
+    const currentEnabled = !filename.endsWith(".disabled");
     const existingTarget = mods.find((mod) => mod.filename === targetFilename || mod.filename === `${targetFilename}.disabled`);
     if (existingTarget && existingTarget.filename !== filename) {
       await runtime.removeMod(server, filename);
@@ -6759,16 +6963,34 @@ async function updateModrinthMod(server: ManagedServer, input: unknown) {
     }
 
     const content = await downloadModrinthJar(file);
-    if (targetFilename === filename) {
-      await runtime.removeMod(server, filename);
-      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
-    } else {
-      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
-      await runtime.removeMod(server, filename);
-    }
+    const finalFilename = await replaceManagedContentJar(server, filename, targetFilename, content, currentEnabled);
+    const prefs = await readModPreferences(server);
+    delete prefs[filename];
+    delete prefs[targetFilename];
+    delete prefs[`${targetFilename}.disabled`];
+    prefs[finalFilename] = {
+      channel: selectedChannel,
+      modrinth: {
+        ...metadata,
+        filename: finalFilename,
+        versionId: latest.id,
+        versionNumber: latest.version_number,
+        versionType: versionChannel(latest.version_type),
+        gameVersions: latest.game_versions,
+        loaders: latest.loaders,
+        hashes: file.hashes,
+        installedAt: new Date().toISOString(),
+        installedWithForceIncompatible: false,
+        incompatibilityReason: undefined,
+        overrideMinecraftVersion: undefined,
+        overrideReason: undefined,
+        forceIncompatible: false
+      }
+    };
+    await writeModPreferences(server, prefs);
 
-    logInfo({ ...serverLogFields(server), filename, targetFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, "Mod update succeeded");
-    return { ok: true, filename: targetFilename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
+    logInfo({ ...serverLogFields(server), filename, targetFilename: finalFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, `${contentDefinition.singular === "plugin" ? "Plugin" : "Mod"} update succeeded`);
+    return { ok: true, filename: finalFilename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
   } catch (error) {
     logOperationFailure({ ...serverLogFields(server), filename, action: "update_mod", status: "failed", durationMs: durationSince(startedAt) }, "Mod update failed", error);
     throw error;
@@ -6776,27 +6998,27 @@ async function updateModrinthMod(server: ManagedServer, input: unknown) {
 }
 
 async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
+  const contentDefinition = managedContentRuntime(server);
   const startedAt = Date.now();
   const request = parseModrinthSwitchVersionRequest(input);
-  const runtime = runtimeForServer(server);
   try {
     const listResult = await listModsWithPanelMetadata(server, { forceRefresh: true });
     const mods = modsFromListResult(listResult);
     const currentMod = mods.find((mod) => mod.filename === request.filename);
     const metadata = remoteModMetadata(currentMod?.modrinth);
     if (!currentMod || !metadata) {
-      throw new Error("Installed Modrinth metadata could not be found for that mod");
+      throw new Error(`Installed Modrinth metadata could not be found for that ${contentDefinition.singular}`);
     }
 
     const targetRuntime = runtimeTarget(server);
-    if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
-      throw new Error("A resolved Fabric runtime profile is required before switching mod versions");
+    if (!targetRuntime.minecraftVersion) {
+      throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before switching ${contentDefinition.singular} versions`);
     }
 
     const [project, filteredVersions] = await Promise.all([
       fetchProject(metadata.projectId),
       fetchProjectVersions(metadata.projectId, {
-        loader: targetRuntime.loader,
+        loaders: contentDefinition.loaders,
         minecraftVersion: targetRuntime.minecraftVersion
       }, { forceRefresh: true })
     ]);
@@ -6814,14 +7036,14 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
     if (!file) {
       throw new Error("No installable .jar file was found for that version");
     }
-    if (!selectedVersion.loaders.includes(targetRuntime.loader)) {
-      throw new Error("The selected version is not a Fabric version");
+    if (!selectedVersion.loaders.some((loader) => contentDefinition.loaders.includes(loader))) {
+      throw new Error(`The selected version is not compatible with ${contentDefinition.definition.displayName}`);
     }
     const projectSides = { server_side: project.server_side, client_side: project.client_side };
     const serverSide = project.server_side;
     const serverSupported = modrinthServerSideSupported(serverSide);
     if (serverSide === "unsupported") {
-      throw new Error("Client-only mods cannot be installed on the server");
+      throw new Error(`Client-only ${contentDefinition.plural} cannot be installed on the server`);
     }
     if (!serverSupported) {
       throw new Error("Server-side support could not be verified for that version");
@@ -6833,26 +7055,16 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
 
     const targetFilename = safeModFilename(safeInstalledModFilename(file.filename));
     const currentEnabled = !request.filename.endsWith(".disabled");
-    const finalFilename = currentEnabled ? targetFilename : `${targetFilename}.disabled`;
     const existingTarget = mods.find((mod) => (
       mod.filename === targetFilename
       || mod.filename === `${targetFilename}.disabled`
     ));
     if (existingTarget && existingTarget.filename !== request.filename) {
-      throw new Error("A mod with that filename already exists");
+      throw new Error(`A ${contentDefinition.singular} with that filename already exists`);
     }
 
     const content = await downloadModrinthJar(file);
-    if (request.filename === targetFilename || request.filename === `${targetFilename}.disabled`) {
-      await runtime.removeMod(server, request.filename);
-      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
-    } else {
-      await runtime.uploadMod(server, targetFilename, content.toString("base64"));
-      await runtime.removeMod(server, request.filename);
-    }
-    if (!currentEnabled) {
-      await runtime.toggleMod(server, targetFilename, false);
-    }
+    const finalFilename = await replaceManagedContentJar(server, request.filename, targetFilename, content, currentEnabled);
 
     const compatible = matchesMinecraft && serverSupported;
     const incompatibilityReason = compatible
@@ -6866,7 +7078,7 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
       projectSides,
       minecraftVersion: targetRuntime.minecraftVersion,
       compatible,
-      reason: compatible ? "Compatible server-side Fabric mod" : incompatibilityReason ?? "Switched with compatibility override"
+      reason: compatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : incompatibilityReason ?? "Switched with compatibility override"
     });
 
     const prefs = await readModPreferences(server);
@@ -6925,7 +7137,7 @@ async function acknowledgeInstalledModReview(server: ManagedServer, input: unkno
     throw new Error("Installed Modrinth metadata could not be found for that mod");
   }
   if (!installedModReviewCanBeAcknowledged(server, metadata)) {
-    throw new Error("Only installed Modrinth mods that need review can be acknowledged");
+    throw new Error(`Only installed Modrinth ${managedContentRuntime(server).plural} that need review can be acknowledged`);
   }
 
   const acknowledgedAt = new Date().toISOString();
@@ -7033,6 +7245,9 @@ async function planRequiredModrinthInstalls(input: {
   rootVersion: ModrinthVersion;
   minecraftVersion: string;
   channel: ReleaseChannel;
+  loaders: readonly string[];
+  runtimeName: string;
+  contentKind: "mod" | "plugin";
 }) {
   const planned = new Map<string, PlannedModInstall>();
   const optionalDependencies: OptionalModDependency[] = [];
@@ -7054,10 +7269,10 @@ async function planRequiredModrinthInstalls(input: {
     if (!file) {
       throw new Error(`Required dependency ${project.title || projectId} has no installable .jar file for this runtime`);
     }
-    const hasFabric = version.loaders.includes("fabric");
+    const hasCompatibleLoader = version.loaders.some((loader) => input.loaders.includes(loader));
     const matchesMinecraft = minecraftVersionsInclude(version.game_versions, input.minecraftVersion);
-    if (!hasFabric) {
-      throw new Error(`Required dependency ${project.title || projectId} is not available for Fabric`);
+    if (!hasCompatibleLoader) {
+      throw new Error(`Required dependency ${project.title || projectId} is not available for ${input.runtimeName}`);
     }
     if (!matchesMinecraft) {
       throw new Error(`Required dependency ${project.title || projectId} is not available for Minecraft ${input.minecraftVersion}`);
@@ -7069,7 +7284,7 @@ async function planRequiredModrinthInstalls(input: {
       projectSides,
       minecraftVersion: input.minecraftVersion,
       compatible: true,
-      reason: dependencyType === "root" ? "Compatible server-side Fabric mod" : "Compatible required dependency"
+      reason: dependencyType === "root" ? `Compatible server-side ${input.runtimeName} ${input.contentKind}` : "Compatible required dependency"
     });
 
     for (const dependency of version.dependencies ?? []) {
@@ -7097,11 +7312,11 @@ async function planRequiredModrinthInstalls(input: {
       }
       const dependencyProject = await fetchProject(dependencyProjectId);
       dependencyVersion ??= (await fetchProjectVersions(dependencyProjectId, {
-        loader: "fabric",
+        loaders: input.loaders,
         minecraftVersion: input.minecraftVersion
       })).find((candidate) => allowedForChannel(candidate, input.channel) && modrinthJarFile(candidate));
       if (!dependencyVersion) {
-        throw new Error(`Required dependency ${dependencyProject.title || dependencyProjectId} has no compatible Fabric version for Minecraft ${input.minecraftVersion}`);
+        throw new Error(`Required dependency ${dependencyProject.title || dependencyProjectId} has no compatible ${input.runtimeName} version for Minecraft ${input.minecraftVersion}`);
       }
       await planVersion(dependencyProjectId, dependencyProject, dependencyVersion, "required");
     }
@@ -7125,14 +7340,15 @@ async function planRequiredModrinthInstalls(input: {
 }
 
 async function localInstallMod(server: ManagedServer, input: unknown) {
+  const contentDefinition = managedContentRuntime(server);
   const startedAt = Date.now();
   const install = parseModrinthInstallRequest(input);
   const projectId = install.projectId;
   const forceIncompatible = install.forceIncompatible;
   try {
     const targetRuntime = runtimeTarget(server);
-    if (!projectId || !targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
-      throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
+    if (!projectId || !targetRuntime.minecraftVersion) {
+      throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before installing compatible ${contentDefinition.plural}`);
     }
     const minecraftVersion = targetRuntime.minecraftVersion;
     const selectedChannel = install.channel;
@@ -7155,7 +7371,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       })
       : versions.find((version) => (
         allowedForChannel(version, selectedChannel)
-        && version.loaders.includes("fabric")
+        && version.loaders.some((loader) => contentDefinition.loaders.includes(loader))
         && minecraftVersionsInclude(version.game_versions, minecraftVersion)
         && modrinthJarFile(version)
         && modrinthServerSideSupported(project.server_side)
@@ -7167,18 +7383,18 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       throw new Error("The selected version is outside the requested release channel");
     }
     const file = modrinthJarFile(selectedVersion);
-    const hasFabric = selectedVersion.loaders.includes("fabric");
+    const hasCompatibleLoader = selectedVersion.loaders.some((loader) => contentDefinition.loaders.includes(loader));
     const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, minecraftVersion);
     const serverSide = project.server_side;
     const serverSupported = modrinthServerSideSupported(serverSide);
     if (!file) {
       throw new Error("No installable .jar file was found for that version");
     }
-    if (!hasFabric) {
-      throw new Error("The selected version is not a Fabric version");
+    if (!hasCompatibleLoader) {
+      throw new Error(`The selected version is not compatible with ${contentDefinition.definition.displayName}`);
     }
     if (serverSide === "unsupported") {
-      throw new Error("Client-only mods cannot be installed on the server");
+      throw new Error(`Client-only ${contentDefinition.plural} cannot be installed on the server`);
     }
     if (serverSide === "unknown" && !forceIncompatible) {
       throw new Error("Server-side support is unknown. Confirm the risk before installing.");
@@ -7189,7 +7405,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     if (!matchesMinecraft && !install.overrideMinecraftVersion) {
       throw new Error(`This version is not marked for Minecraft ${minecraftVersion}. Confirm the Minecraft version override before installing.`);
     }
-    const compatible = hasFabric && matchesMinecraft && serverSupported;
+    const compatible = hasCompatibleLoader && matchesMinecraft && serverSupported;
     const incompatibilityReason = compatible
       ? undefined
       : !matchesMinecraft
@@ -7203,7 +7419,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       projectSides,
       minecraftVersion,
       compatible,
-      reason: compatible ? "Compatible server-side Fabric mod" : incompatibilityReason ?? "Installed with compatibility override"
+      reason: compatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : incompatibilityReason ?? "Installed with compatibility override"
     });
     logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, compatibility: compatibility.status, forceIncompatible, action: "modrinth_install" }, "Modrinth compatibility decision");
     if (!compatibility.compatible && !forceIncompatible) {
@@ -7216,7 +7432,10 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
           rootProject: project,
           rootVersion: selectedVersion,
           minecraftVersion,
-          channel: selectedChannel
+          channel: selectedChannel,
+          loaders: contentDefinition.loaders,
+          runtimeName: contentDefinition.definition.displayName,
+          contentKind: contentDefinition.singular
         })
       : {
           installs: [{
@@ -7233,8 +7452,8 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       installPlan.installs = installPlan.installs.filter((planned) => planned.dependencyType === "required");
     }
 
-    await mkdir(ensureInsideServer(server, "mods"), { recursive: true });
-    await validateExistingInsideServer(server, "mods");
+    await mkdir(ensureInsideServer(server, contentDefinition.directory), { recursive: true });
+    await validateExistingInsideServer(server, contentDefinition.directory);
     const installed: Array<{ projectId: string; version: string; filename: string; dependencyType: "root" | "required"; path: string }> = [];
     const previousPrefs = await readModPreferences(server);
     const prefs = { ...previousPrefs };
@@ -7250,10 +7469,10 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
       if (planned.file.size && planned.file.size > modFileSizeLimit) {
         throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
       }
-      const destination = await ensureWritableInsideServer(server, join("mods", safeModFilename(planned.file.filename)));
+      const destination = await ensureWritableInsideServer(server, join(contentDefinition.directory, safeModFilename(planned.file.filename)));
       if (existsSync(destination)) {
         if (planned.dependencyType === "required") continue;
-        throw new Error("A mod with that filename already exists");
+        throw new Error(`A ${contentDefinition.singular} with that filename already exists`);
       }
       const temporaryDestination = `${destination}.serversentinel-${randomUUID()}.tmp`;
       const downloadResponse = await modrinthFetch(planned.file.url);
@@ -7356,6 +7575,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/api/servers/:id/mods", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
   const options = { forceRefresh: request.query.forceRefresh === "true" };
   const listed = await listModsWithPanelMetadata(server, options);
   return publicInstalledModsResult(await enrichInstalledModDependencies(listed, { fetchMetadata: options.forceRefresh }));
@@ -7364,6 +7584,7 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
   const channel = optionalReleaseChannel(request.query.channel);
   if (channel) return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel });
   if (request.query.forceRefresh === "true") return modUpdatePlanCoordinator.refresh(server);
@@ -7373,6 +7594,7 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?
 app.get<{ Params: { id: string }; Querystring: { filename?: string; v?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
   const icon = await runtimeForServer(server).modIcon(server, request.query.filename);
   if (!icon) {
     reply.code(404);
@@ -7394,13 +7616,15 @@ app.get<{ Querystring: { url?: string } }>("/api/modrinth/icon", async (request,
 app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.toggle",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Updating mod state",
-    successTask: "Mod state updated"
+    task: `Updating ${contentName} state`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} state updated`
   }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled)));
 });
 
@@ -7408,26 +7632,30 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
 app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api/servers/:id/mods", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.remove",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Removing mod",
-    successTask: "Mod removed"
+    task: `Removing ${contentName}`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} removed`
   }, () => runtimeForServer(server).removeMod(server, request.query.filename)));
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.upload",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Uploading mod",
-    successTask: "Mod uploaded"
+    task: `Uploading ${contentName}`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} uploaded`
   }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64)));
 });
 
@@ -7446,28 +7674,31 @@ function classifyModrinthInstallVersion(input: {
   projectSides: { server_side?: string; client_side?: string };
   recommended: boolean;
   dependencyProjects: Map<string, ModrinthProject>;
+  loaders: readonly string[];
+  runtimeName: string;
+  contentKind: "mod" | "plugin";
 }) {
   const file = modrinthJarFile(input.version);
-  const hasFabric = input.version.loaders.includes("fabric");
+  const hasCompatibleLoader = input.version.loaders.some((loader) => input.loaders.includes(loader));
   const matchesMinecraft = minecraftVersionsInclude(input.version.game_versions, input.minecraftVersion);
   const serverSide = input.projectSides.server_side;
   const serverSupported = modrinthServerSideSupported(serverSide);
-  const selectable = Boolean(file && hasFabric && serverSupported);
+  const selectable = Boolean(file && hasCompatibleLoader && serverSupported);
   const compatible = selectable && matchesMinecraft;
   let status: ModrinthInstallVersionStatus = compatible ? "compatible" : "version_mismatch";
   let statusLabel = compatible ? "Compatible" : "Version mismatch";
   let reason = compatible
-    ? "Compatible Fabric server mod"
+    ? `Compatible ${input.runtimeName} server ${input.contentKind}`
     : `Not marked for Minecraft ${input.minecraftVersion}`;
 
   if (!file) {
     status = "no_installable_jar";
     statusLabel = "No installable jar";
     reason = "No installable .jar file was found";
-  } else if (!hasFabric) {
+  } else if (!hasCompatibleLoader) {
     status = "wrong_loader";
     statusLabel = "Wrong loader";
-    reason = "This version is not for Fabric";
+    reason = `This version is not compatible with ${input.runtimeName}`;
   } else if (serverSide === "unsupported") {
     status = "client_only";
     statusLabel = "Client-only";
@@ -7515,9 +7746,11 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
   await requireRequestPermission(request, "mods.view");
   const projectId = validateModrinthProjectId(request.params.projectId);
   const server = await getServer(request.query.serverId);
+  requireManagedModsRuntime(server);
   const targetRuntime = runtimeTarget(server);
-  if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
-    throw new Error("A resolved Fabric runtime profile is required before reviewing mod versions");
+  const contentDefinition = managedContentRuntime(server);
+  if (!targetRuntime.minecraftVersion) {
+    throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before reviewing ${contentDefinition.singular} versions`);
   }
   const selectedChannel = optionalReleaseChannel(request.query.channel);
   const startedAt = Date.now();
@@ -7545,7 +7778,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
       client_side: project.client_side
     };
     const firstCompatibleId = allowedVersions.find((version) => (
-      version.loaders.includes("fabric")
+      version.loaders.some((loader) => contentDefinition.loaders.includes(loader))
       && minecraftVersionsInclude(version.game_versions, targetRuntime.minecraftVersion!)
       && modrinthJarFile(version)
       && modrinthServerSideSupported(project.server_side)
@@ -7555,7 +7788,10 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
       minecraftVersion: targetRuntime.minecraftVersion!,
       projectSides,
       recommended: version.id === firstCompatibleId,
-      dependencyProjects
+      dependencyProjects,
+      loaders: contentDefinition.loaders,
+      runtimeName: contentDefinition.definition.displayName,
+      contentKind: contentDefinition.singular
     }));
     const compatibleVersions = classified.filter((version) => version.compatible);
     const otherVersions = classified.filter((version) => !version.compatible);
@@ -7574,7 +7810,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
         serverId: server.id,
         serverName: server.displayName,
         minecraftVersion: targetRuntime.minecraftVersion,
-        loader: targetRuntime.loader
+        loader: contentDefinition.definition.displayName
       },
       channel: selectedChannel,
       compatibleVersions,
@@ -7593,9 +7829,11 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     return { hits: [], status: "no_project_found" };
   }
   const server = await getServer(request.query.serverId);
+  requireManagedModsRuntime(server);
   const targetRuntime = runtimeTarget(server);
-  if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") {
-    throw new Error("A resolved Fabric runtime profile is required before searching compatible mods");
+  const contentDefinition = managedContentRuntime(server);
+  if (!targetRuntime.minecraftVersion) {
+    throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before searching compatible ${contentDefinition.plural}`);
   }
   const minecraftVersion = targetRuntime.minecraftVersion;
   const selectedChannel = optionalReleaseChannel(request.query.channel);
@@ -7617,16 +7855,19 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
       }
     }
     url.searchParams.set("offset", String(offset));
-    url.searchParams.set("facets", JSON.stringify(modrinthSearchFacets(targetRuntime.loader, minecraftVersion, compatibilityFilter ?? "compatible")));
+    url.searchParams.set("facets", JSON.stringify(modrinthSearchFacets(contentDefinition.loaders, minecraftVersion, compatibilityFilter ?? "compatible", contentDefinition.definition.modrinthProjectType)));
     const searchResponse = await searchModrinth(url.toString());
     let body = searchResponse.body;
     const compatibility = (hit: ModrinthProject) => {
-      const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
+      const loaderMatches = hit.categories?.some((loader) => contentDefinition.loaders.includes(loader)) === true;
       const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
       const serverMatches = modrinthServerSideSupported(hit.server_side);
       return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
     };
-    const searchableHits = (body.hits ?? []).filter((hit) => !hit.project_type || hit.project_type === "mod");
+    const searchableHits = (body.hits ?? []).filter((hit) => {
+      const projectTypes = hit.all_project_types ?? (hit.project_type ? [hit.project_type] : []);
+      return projectTypes.length === 0 || projectTypes.includes(contentDefinition.definition.modrinthProjectType);
+    });
     const filtered = searchableHits.filter((hit) => {
       const match = compatibility(hit);
       if (compatibilityFilter === "all") return true;
@@ -7638,7 +7879,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
     const hits = (body.hits ?? []).map((hit) => {
       const projectId = hit.project_id || hit.id;
       const serverSide = hit.server_side;
-      const loaderMatches = hit.categories?.includes(targetRuntime.loader) === true;
+      const loaderMatches = hit.categories?.some((loader) => contentDefinition.loaders.includes(loader)) === true;
       const versionMatches = minecraftVersionsInclude(hit.versions ?? [], minecraftVersion);
       const serverSupported = modrinthServerSideSupported(serverSide);
       const compatible = loaderMatches && versionMatches && serverSupported;
@@ -7656,8 +7897,8 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
           ? {
               status: "compatible",
               compatible: true,
-              reason: "Matches this Fabric server search",
-              matchedLoaders: [targetRuntime.loader],
+              reason: `Matches this ${contentDefinition.definition.displayName} server search`,
+              matchedLoaders: contentDefinition.loaders,
               matchedGameVersions: [minecraftVersion],
               serverSide,
               clientSide: hit.client_side
@@ -7667,7 +7908,7 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
                 status: "unknown",
                 compatible: false,
                 reason: "Server-side support could not be verified",
-                matchedLoaders: [targetRuntime.loader],
+                matchedLoaders: contentDefinition.loaders,
                 matchedGameVersions: [minecraftVersion],
                 serverSide,
                 clientSide: hit.client_side
@@ -7676,11 +7917,11 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
                 status: "incompatible",
                 compatible: false,
                 reason: !loaderMatches
-                  ? "No Fabric release was found for this project"
+                  ? `No ${contentDefinition.definition.displayName}-compatible release was found for this project`
                   : !versionMatches
                     ? `No release was found for Minecraft ${minecraftVersion}`
-                    : "Client-only mod; server-side support is unsupported",
-                matchedLoaders: [targetRuntime.loader],
+                    : `Client-only ${contentDefinition.singular}; server-side support is unsupported`,
+                matchedLoaders: contentDefinition.loaders,
                 matchedGameVersions: [minecraftVersion],
                 serverSide,
                 clientSide: hit.client_side
@@ -7698,58 +7939,67 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
 app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChannel } }>("/api/modrinth/update", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Updating mod",
-    successTask: "Mod updated"
+    task: `Updating ${contentName}`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} updated`
   }, () => updateModrinthMod(server, request.body)));
 });
 
 app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/switch-version", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Switching mod version",
-    successTask: "Mod version switched"
+    task: `Switching ${contentName} version`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} version switched`
   }, () => switchModrinthModVersion(server, request.body)));
 });
 
 app.post<{ Body: { serverId?: string; filename?: string } }>("/api/modrinth/acknowledge-review", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withModMutationLock(server.id, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Acknowledging mod review",
-    successTask: "Mod review acknowledged"
+    task: `Acknowledging ${contentName} review`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} review acknowledged`
   }, () => acknowledgeInstalledModReview(server, request.body)));
 });
 
 app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseChannel } }>("/api/modrinth/update-safe", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
+  const contentPlural = managedContentRuntime(server).plural;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.batchUpdate",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Updating mods",
-    successTask: "Mod update batch complete"
+    task: `Updating ${contentPlural}`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} update batch complete`
   }, async () => {
     const channel = optionalReleaseChannel(request.body.channel);
     const filenames = request.body.filenames === undefined
       ? undefined
       : asArray(request.body.filenames, "filenames").map((filename) => safeInstalledModFilename(requiredString(filename, "filename")));
-    if (filenames && filenames.length > 100) throw new Error("A safe update batch is limited to 100 mods");
+    if (filenames && filenames.length > 100) throw new Error(`A safe update batch is limited to 100 ${managedContentRuntime(server).plural}`);
     const startedAt = Date.now();
     const plan = await buildModUpdatePlan(server, { forceRefresh: true, channel });
     const result = await executeSafeUpdatePlan(plan, filenames, (entry) => updateModrinthMod(server, { filename: entry.filename, channel }));
@@ -7776,12 +8026,13 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
     const install = parseModrinthInstallRequest(input);
     if (!install.versionId) throw new Error("A valid Modrinth version id is required");
     const targetRuntime = runtimeTarget(server);
-    if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
+    const contentDefinition = managedContentRuntime(server);
+    if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${contentDefinition.definition.displayName} runtime profile is required before installing compatible ${contentDefinition.plural}`);
 
     const [project, versions] = await Promise.all([
       fetchProject(install.projectId),
       fetchProjectVersions(install.projectId, {
-        loader: targetRuntime.loader,
+        loaders: contentDefinition.loaders,
         minecraftVersion: targetRuntime.minecraftVersion
       }, { forceRefresh: true })
     ]);
@@ -7792,7 +8043,7 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       versions
     });
     const selectedIsCompatible = Boolean(allowedForChannel(selectedVersion, install.channel)
-      && selectedVersion.loaders.includes(targetRuntime.loader)
+      && selectedVersion.loaders.some((loader) => contentDefinition.loaders.includes(loader))
       && minecraftVersionsInclude(selectedVersion.game_versions, targetRuntime.minecraftVersion)
       && modrinthJarFile(selectedVersion)
       && modrinthServerSideSupported(project.server_side));
@@ -7815,14 +8066,17 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       projectSides,
       minecraftVersion: targetRuntime.minecraftVersion,
       compatible: selectedIsCompatible,
-      reason: selectedIsCompatible ? "Compatible server-side Fabric mod" : "Installed with compatibility override"
+      reason: selectedIsCompatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : "Installed with compatibility override"
     });
     const installPlan = selectedIsCompatible ? await planRequiredModrinthInstalls({
       rootProjectId: install.projectId,
       rootProject: project,
       rootVersion: selectedVersion,
       minecraftVersion: targetRuntime.minecraftVersion,
-      channel: install.channel
+      channel: install.channel,
+      loaders: contentDefinition.loaders,
+      runtimeName: contentDefinition.definition.displayName,
+      contentKind: contentDefinition.singular
     }) : { installs: [{ projectId: install.projectId, project, version: selectedVersion, file, compatibility, dependencyType: "root" as const }], optionalDependencies: [] as OptionalModDependency[] };
     if (install.dependenciesOnly) {
       installPlan.installs = installPlan.installs.filter((planned) => planned.dependencyType === "required");
@@ -7841,7 +8095,7 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       const filename = safeModFilename(safeInstalledModFilename(planned.file.filename));
       if (installedFilenames.has(filename) || installedFilenames.has(`${filename}.disabled`)) {
         if (planned.dependencyType === "required") continue;
-        throw new Error("A mod with that filename already exists");
+        throw new Error(`A ${contentDefinition.singular} with that filename already exists`);
       }
       staged.push({ planned, filename, content: await downloadModrinthJar(planned.file) });
     }
@@ -7902,19 +8156,22 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
+  requireManagedModsRuntime(server);
+  const contentName = managedContentRuntime(server).singular;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
-    task: "Installing mod",
-    successTask: "Mod installed"
+    task: `Installing ${contentName}`,
+    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} installed`
   }, () => installModWithRemoteVersionFallback(server, request.body)));
 });
 
 app.post<{ Params: { id: string }; Body: { filename?: string } }>("/api/servers/:id/mods/install-dependencies", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
   const filename = safeInstalledModFilename(requiredString(request.body.filename, "filename"));
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.install",
@@ -8079,7 +8336,7 @@ if (config.runtimeMode === "all-in-one") serversRepository.markStartOnNodeStart(
 runtimeStateCoordinator.start();
 modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
   intervalMs: modUpdateCheckIntervalMs,
-  readServers,
+  readServers: async () => (await readServers()).filter(supportsManagedMods),
   buildPlan: (server, options) => buildModUpdatePlan(server, options),
   cache: new ModUpdatePlanRepository(storageDatabase),
   onError: (error, server) => {

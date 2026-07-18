@@ -1,9 +1,8 @@
 import type {
   JavaMajorVersion,
-  LoaderType,
   ManagedServer,
-  ServerJarProviderId,
-  ServerRuntimeProfile
+  ServerRuntimeProfile,
+  ServerRuntimeType
 } from "../types.js";
 
 export type RuntimeMinecraftVersion = {
@@ -11,24 +10,28 @@ export type RuntimeMinecraftVersion = {
   type?: "release" | "snapshot" | "unknown";
   supported: boolean;
   javaMajorVersion: JavaMajorVersion;
+  recommended?: boolean;
   releasedAt?: string;
 };
 
-export type RuntimeLoaderVersion = {
+export type RuntimeVersion = {
   id: string;
-  loaderVersion: string;
+  runtimeVersion: string;
   stable?: boolean;
   recommended?: boolean;
   buildId?: string;
 };
 
+/** @deprecated Use RuntimeVersion. */
+export type RuntimeLoaderVersion = RuntimeVersion;
+
 export type ServerJarProvider = {
-  id: ServerJarProviderId;
-  listMinecraftVersions(options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]>;
-  listFabricLoaderVersions(minecraftVersion: string, options?: { forceRefresh?: boolean }): Promise<RuntimeLoaderVersion[]>;
-  resolveFabricServerJar(input: {
+  listMinecraftVersions(runtimeType: ServerRuntimeType, options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]>;
+  listRuntimeVersions(runtimeType: ServerRuntimeType, minecraftVersion: string, options?: { forceRefresh?: boolean }): Promise<RuntimeVersion[]>;
+  resolveServerJar(input: {
+    runtimeType: ServerRuntimeType;
     minecraftVersion: string;
-    loaderVersion?: string;
+    runtimeVersion?: string;
     preferStable?: boolean;
     forceRefresh?: boolean;
   }): Promise<ServerRuntimeProfile>;
@@ -38,10 +41,10 @@ export class RuntimeResolutionError extends Error {
   constructor(
     readonly code:
       | "unsupported_minecraft_version"
-      | "unsupported_loader"
+      | "unsupported_runtime"
       | "provider_unavailable"
-      | "no_fabric_artifact"
-      | "invalid_loader_version"
+      | "no_runtime_artifact"
+      | "invalid_runtime_version"
       | "unsupported_java_version",
     message: string
   ) {
@@ -67,7 +70,7 @@ export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVe
   }
   if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
   if (minor >= 18) return 17;
-  throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for Fabric servers");
+  throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for managed runtimes");
 }
 
 export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {
@@ -85,14 +88,22 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
     throw new Error("server.runtimeProfile.jarArtifact must be an object");
   }
   const artifactRecord = artifact as Record<string, unknown>;
-  const loader = profile.loader;
-  if (loader !== "fabric") {
-    throw new RuntimeResolutionError("unsupported_loader", "Only Fabric runtime profiles are supported");
+  const runtimeType = profile.runtimeType ?? profile.loader;
+  if (runtimeType !== "fabric" && runtimeType !== "paper") {
+    throw new RuntimeResolutionError("unsupported_runtime", "server.runtimeProfile.runtimeType must be fabric or paper");
+  }
+  const runtimeVersion = stringField(profile.runtimeVersion ?? profile.loaderVersion, "server.runtimeProfile.runtimeVersion");
+  if (profile.runtimeType !== undefined && profile.loader !== undefined && profile.runtimeType !== profile.loader) {
+    throw new Error("server.runtimeProfile legacy loader does not match runtimeType");
+  }
+  if (profile.runtimeVersion !== undefined && profile.loaderVersion !== undefined && profile.runtimeVersion !== profile.loaderVersion) {
+    throw new Error("server.runtimeProfile legacy loaderVersion does not match runtimeVersion");
   }
   const jarProvider = profile.jarProvider;
-  if (jarProvider !== "mcjars") {
-    throw new Error("server.runtimeProfile.jarProvider must be mcjars");
+  if (jarProvider !== "mcjars" && jarProvider !== "papermc") {
+    throw new Error("server.runtimeProfile.jarProvider must be mcjars or papermc");
   }
+  assertRuntimeProvider(runtimeType, jarProvider, "server.runtimeProfile.jarProvider");
   const javaMajorVersion = profile.javaMajorVersion;
   if (javaMajorVersion !== 17 && javaMajorVersion !== 21 && javaMajorVersion !== 25) {
     throw new RuntimeResolutionError("unsupported_java_version", "Unsupported Java major version in runtime profile");
@@ -106,8 +117,9 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
       : "compatible";
   return {
     minecraftVersion: stringField(profile.minecraftVersion, "server.runtimeProfile.minecraftVersion"),
-    loader,
-    loaderVersion: stringField(profile.loaderVersion, "server.runtimeProfile.loaderVersion"),
+    runtimeType,
+    runtimeVersion,
+    ...(runtimeType === "fabric" ? { loader: "fabric" as const, loaderVersion: runtimeVersion } : {}),
     javaMajorVersion,
     jarProvider,
     jarArtifact: {
@@ -125,13 +137,31 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
 
 export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile">) {
   const profile = runtimeProfileForServer(server);
+  const runtimeType = profile.runtimeType ?? profile.loader ?? "fabric";
+  const runtimeVersion = profile.runtimeVersion ?? profile.loaderVersion ?? "";
   return {
     profile,
     minecraftVersion: profile.minecraftVersion,
-    loader: profile.loader as LoaderType,
-    loaderVersion: profile.loaderVersion,
+    runtimeType,
+    runtimeVersion,
+    // Compatibility aliases keep existing Fabric-only call sites and older node payloads working
+    // while the rest of the application moves to runtime-neutral terminology.
+    loader: runtimeType,
+    loaderVersion: runtimeVersion,
     serverJar: profile.jarArtifact.filename
   };
+}
+
+export function assertRuntimeProvider(
+  runtimeType: ServerRuntimeType,
+  jarProvider: "mcjars" | "papermc",
+  field = "jarProvider"
+) {
+  const expected = runtimeType === "paper" ? "papermc" : "mcjars";
+  if (jarProvider !== expected) {
+    throw new Error(`${field} must be ${expected} for ${runtimeType}`);
+  }
+  return jarProvider;
 }
 
 function stringField(value: unknown, field: string) {

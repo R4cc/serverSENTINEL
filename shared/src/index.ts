@@ -89,15 +89,74 @@ export type RestartRequiredChange = {
   action: RestartRequiredModAction;
 };
 
+export const serverRuntimeTypes = ["fabric", "paper"] as const;
+export type ServerRuntimeType = typeof serverRuntimeTypes[number];
+
+/** @deprecated Use ServerRuntimeType. Kept for rolling compatibility with older integrations. */
 export type LoaderType = "fabric";
-export type ServerJarProviderId = "mcjars";
+export type RuntimeContentKind = "mods" | "plugins";
+
+export type ServerRuntimeDefinition = {
+  type: ServerRuntimeType;
+  displayName: string;
+  description: string;
+  versionLabel: string;
+  serverJarFilename: string;
+  contentKind: RuntimeContentKind;
+  contentDirectory: string;
+  modrinthLoader: string;
+  compatibleModrinthLoaders: readonly string[];
+  modrinthProjectType: "mod" | "plugin";
+  managedProvisioning: boolean;
+  managedContent: boolean;
+};
+
+export const serverRuntimeDefinitions: Readonly<Record<ServerRuntimeType, ServerRuntimeDefinition>> = {
+  fabric: {
+    type: "fabric",
+    displayName: "Fabric",
+    description: "Lightweight and modular modding framework.",
+    versionLabel: "Fabric Loader version",
+    serverJarFilename: "fabric-server-launch.jar",
+    contentKind: "mods",
+    contentDirectory: "mods",
+    modrinthLoader: "fabric",
+    compatibleModrinthLoaders: ["fabric"],
+    modrinthProjectType: "mod",
+    managedProvisioning: true,
+    managedContent: true
+  },
+  paper: {
+    type: "paper",
+    displayName: "Paper",
+    description: "High-performance server runtime with a plugin ecosystem.",
+    versionLabel: "Paper build",
+    serverJarFilename: "paper.jar",
+    contentKind: "plugins",
+    contentDirectory: "plugins",
+    modrinthLoader: "paper",
+    compatibleModrinthLoaders: ["paper", "bukkit", "spigot"],
+    modrinthProjectType: "plugin",
+    managedProvisioning: true,
+    managedContent: true
+  }
+};
+
+export function serverRuntimeDefinition(type: ServerRuntimeType): ServerRuntimeDefinition {
+  return serverRuntimeDefinitions[type];
+}
+export type ServerJarProviderId = "mcjars" | "papermc";
 export type JavaMajorVersion = 17 | 21 | 25;
 export type RuntimeCompatibilityStatus = "compatible" | "unsupported" | "unknown";
 
 export type ServerRuntimeProfile = {
   minecraftVersion: string;
-  loader: LoaderType;
-  loaderVersion: string;
+  runtimeType: ServerRuntimeType;
+  runtimeVersion: string;
+  /** @deprecated Legacy Fabric profile field, emitted temporarily for older nodes and exports. */
+  loader?: LoaderType;
+  /** @deprecated Legacy Fabric profile field, emitted temporarily for older nodes and exports. */
+  loaderVersion?: string;
   javaMajorVersion: JavaMajorVersion;
   jarProvider: ServerJarProviderId;
   jarArtifact: {
@@ -201,7 +260,9 @@ export type VersionResolution = {
 
 export type ResolvedServerVersions = {
   minecraftVersion: VersionResolution;
-  fabricLoaderVersion: VersionResolution;
+  runtimeVersion: VersionResolution;
+  /** @deprecated Legacy Fabric response field, emitted temporarily for older web clients. */
+  fabricLoaderVersion?: VersionResolution;
 };
 
 export type ServerEvent = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertMcJarsArtifactUrl, assertModrinthUrl } from "./outboundUrls.js";
+import { assertMcJarsArtifactUrl, assertModrinthUrl, assertPaperMcArtifactUrl } from "./outboundUrls.js";
 
 describe("outbound URL restrictions", () => {
   it("allows only credential-free HTTPS Modrinth hosts", () => {
@@ -15,5 +15,11 @@ describe("outbound URL restrictions", () => {
     expect(assertMcJarsArtifactUrl("https://cdn.provider.example/server.jar", "https://provider.example")).toBe("https://cdn.provider.example/server.jar");
     expect(() => assertMcJarsArtifactUrl("https://127.0.0.1/server.jar", "https://mcjars.app")).toThrow("MCJars artifact URL");
     expect(() => assertMcJarsArtifactUrl("https://evil.example/server.jar", "https://mcjars.app")).toThrow("configured MCJars host");
+  });
+
+  it("limits Paper artifacts to official PaperMC hosts", () => {
+    expect(assertPaperMcArtifactUrl("https://fill-data.papermc.io/v1/objects/hash/paper.jar")).toBe("https://fill-data.papermc.io/v1/objects/hash/paper.jar");
+    expect(() => assertPaperMcArtifactUrl("https://papermc.io.evil.example/paper.jar")).toThrow("papermc.io host");
+    expect(() => assertPaperMcArtifactUrl("http://fill-data.papermc.io/paper.jar")).toThrow("HTTPS");
   });
 });

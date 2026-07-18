@@ -15,7 +15,7 @@ function hello(overrides: Record<string, unknown> = {}) {
     nodeId: "node-1",
     nodeSecret: "secret",
     nodeName: "Remote Node",
-    agentVersion: "1.4.0",
+    agentVersion: "1.5.0",
     buildId: "commit-sha",
     startupId: "startup-id",
     protocolVersion: nodeProtocolVersion,
@@ -55,7 +55,7 @@ describe("node protocol v3", () => {
     const capabilities = [...nodeCapabilities.filter((capability) => capability !== "server.players.read"), "server.queryMetrics"];
     const legacy = normalizeNodeHello(hello({
       protocolVersion: nodeUpgradeProtocolVersion,
-      agentVersion: "1.4.0",
+      agentVersion: "1.5.0",
       capabilities
     }));
     expect(legacy.protocolVersion).toBe("2.0");

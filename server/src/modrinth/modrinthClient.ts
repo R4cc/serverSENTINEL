@@ -25,7 +25,7 @@ export function configureModrinthApiKeyProvider(provider: () => Promise<string>)
 
 export function modrinthRequestHeaders(url: string, apiKey: string) {
   const headers: Record<string, string> = {
-    "User-Agent": appUserAgentFor("managed Fabric server panel")
+    "User-Agent": appUserAgentFor("managed content panel")
   };
   const authorization = isModrinthApiUrl(url) ? modrinthAuthorizationHeader(apiKey) : "";
   if (authorization) {

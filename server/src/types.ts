@@ -43,6 +43,7 @@ export type {
   ServerTimelineScheduleMarker,
   ServerJarProviderId,
   ServerRuntimeProfile,
+  ServerRuntimeType,
   VersionResolution,
   VersionSource
 } from "@serversentinel/contracts";
@@ -104,7 +105,7 @@ export type RestartRequiredModSnapshot = {
   sha1: string;
 };
 
-export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";
+export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
 
 export type ModCompatibility = {
   status: ModCompatibilityStatus;
@@ -141,6 +142,7 @@ export type ModrinthProject = {
   project_id?: string;
   id?: string;
   project_type?: string;
+  all_project_types?: string[];
   slug?: string;
   title?: string;
   description?: string;

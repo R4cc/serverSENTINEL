@@ -35,6 +35,9 @@ describe("file manager permissions", () => {
     expect(fileManagerPermissionForPath("/mods/Fabric API.jar", "edit")).toBe("mods.enableDisable");
     expect(fileManagerPermissionForPath("/mods/Fabric API.jar", "upload")).toBe("mods.upload");
     expect(fileManagerPermissionForPath("/mods/Fabric API.jar", "delete")).toBe("mods.remove");
+    expect(fileManagerPermissionForPath("/plugins/EssentialsX.jar", "view")).toBe("mods.view");
+    expect(fileManagerPermissionForPath("/plugins/EssentialsX.jar", "upload")).toBe("mods.upload");
+    expect(fileManagerPermissionForPath("/plugins/EssentialsX.jar", "delete")).toBe("mods.remove");
   });
 
   it("requires server settings permission to edit server.properties", () => {
