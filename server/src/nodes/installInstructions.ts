@@ -2,17 +2,10 @@ import type { NodeInstallInstructions } from "./apiTypes.js";
 import { shellQuote } from "../docker/shell.js";
 import { nodeProtocolVersion } from "./protocol.js";
 
-export function nodeDataMount(hostPath?: string) {
+function nodeDataMountParts(hostPath?: string) {
   const value = hostPath?.trim() || "/var/lib/serversentinel";
-  return value.includes(":") ? value : `${value}:/data`;
-}
-
-export function nodeDataMountParts(hostPath?: string) {
-  const mount = nodeDataMount(hostPath);
+  const mount = value.includes(":") ? value : `${value}:/data`;
   const separator = mount.indexOf(":");
-  if (separator === -1) {
-    return { mount, hostSource: mount, containerTarget: "/data" };
-  }
   return {
     mount,
     hostSource: mount.slice(0, separator),

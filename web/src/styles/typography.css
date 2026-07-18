@@ -413,12 +413,6 @@ textarea,
 }
 
 
-.switchStateLabel {
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-badge);
-}
-
 .selectionSummary {
   color: var(--text-muted);
   font-size: var(--type-meta-size);

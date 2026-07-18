@@ -70,7 +70,6 @@
 .modsUpdateActionLabel { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 26px; padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: var(--weight-button); }
 .modsReviewAction { color: #7440d9; }
 .modsWorkspaceSwitch { justify-content: center; }
-.modsWorkspaceSwitch .switchStateLabel { display: none; }
 .modsWorkspaceSwitchVersionButton { display: grid; place-items: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
 .modsWorkspaceSwitchVersionButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .modsWorkspaceEmpty { display: grid; place-items: center; min-height: 150px; padding: 28px; text-align: center; }

@@ -35,25 +35,23 @@ export function optionalCompatibilityFilter(value: unknown) {
   badRequest("Compatibility filter must be all, compatible, or incompatible");
 }
 
-export function validateServerId(id: unknown) {
+function validateId(id: unknown, message: string) {
   if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid server id is required");
+    badRequest(message);
   }
   return id;
+}
+
+export function validateServerId(id: unknown) {
+  return validateId(id, "A valid server id is required");
 }
 
 export function validateScheduleId(id: unknown) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid schedule id is required");
-  }
-  return id;
+  return validateId(id, "A valid schedule id is required");
 }
 
 export function validateOperationId(id: unknown) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) {
-    badRequest("A valid operation id is required");
-  }
-  return id;
+  return validateId(id, "A valid operation id is required");
 }
 
 export function validateNodeName(name: unknown) {

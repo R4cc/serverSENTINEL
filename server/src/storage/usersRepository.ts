@@ -132,25 +132,7 @@ export class UsersRepository {
         createdAt: existing?.created_at?.trim() || desired.createdAt
       });
 
-      if (existing) {
-        database.prepare(`
-          UPDATE users SET username = ?, password_hash = ?, salt = ?, role_preset = ?,
-            permissions_json = ?, server_access_json = ?, created_at = ?, updated_at = ?
-          WHERE id = ?
-        `).run(
-          repaired.username,
-          repaired.passwordHash,
-          repaired.salt,
-          repaired.rolePreset,
-          JSON.stringify(repaired.permissions),
-          repaired.serverAccess ? JSON.stringify(repaired.serverAccess) : null,
-          repaired.createdAt,
-          repaired.updatedAt,
-          repaired.id
-        );
-      } else {
-        this.save(database, repaired, false);
-      }
+      this.save(database, repaired, Boolean(existing));
       return repaired;
     });
   }

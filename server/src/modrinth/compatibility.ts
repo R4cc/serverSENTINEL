@@ -1,5 +1,5 @@
 import { modrinthFetch } from "./modrinthClient.js";
-import type { ModCompatibility, ModrinthVersion, ReleaseChannel } from "../types.js";
+import type { ModCompatibility, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 
 const channelRank: Record<ReleaseChannel, number> = { release: 0, beta: 1, alpha: 2 };
 
@@ -38,8 +38,8 @@ const projectCacheTtlMs = 60 * 60 * 1000;
 const projectVersionsCacheTtlMs = 5 * 60 * 1000;
 const modrinthMetadataCacheMaxEntries = 500;
 
-const projectCache = new Map<string, TimedCacheEntry<any>>();
-const projectRequestCache = new Map<string, Promise<any>>();
+const projectCache = new Map<string, TimedCacheEntry<ModrinthProject>>();
+const projectRequestCache = new Map<string, Promise<ModrinthProject>>();
 const versionCache = new Map<string, TimedCacheEntry<ModrinthVersion>>();
 const projectVersionsCache = new Map<string, TimedCacheEntry<ModrinthVersion[]>>();
 const projectVersionsRequestCache = new Map<string, Promise<ModrinthVersion[]>>();
@@ -62,7 +62,7 @@ function setBoundedCache<T>(cache: Map<string, TimedCacheEntry<T>>, key: string,
   }
 }
 
-export async function fetchProject(projectId: string): Promise<any> {
+export async function fetchProject(projectId: string): Promise<ModrinthProject> {
   const cached = projectCache.get(projectId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const pending = projectRequestCache.get(projectId);
@@ -71,7 +71,7 @@ export async function fetchProject(projectId: string): Promise<any> {
   const request = (async () => {
     try {
       const response = await modrinthFetch(url);
-      const data = await response.json();
+      const data = await response.json() as ModrinthProject;
       setBoundedCache(projectCache, projectId, { value: data, expiresAt: Date.now() + projectCacheTtlMs });
       return data;
     } catch (error) {
@@ -85,11 +85,11 @@ export async function fetchProject(projectId: string): Promise<any> {
   return request;
 }
 
-export async function fetchProjects(projectIds: string[]): Promise<Map<string, any>> {
+export async function fetchProjects(projectIds: string[]): Promise<Map<string, ModrinthProject>> {
   const ids = Array.from(new Set(projectIds.filter(Boolean)));
-  const resolved = new Map<string, any>();
+  const resolved = new Map<string, ModrinthProject>();
   const missing: string[] = [];
-  const stale = new Map<string, any>();
+  const stale = new Map<string, ModrinthProject>();
   const now = Date.now();
   for (const id of ids) {
     const cached = projectCache.get(id);
@@ -105,7 +105,7 @@ export async function fetchProjects(projectIds: string[]): Promise<Map<string, a
       const url = new URL("https://api.modrinth.com/v2/projects");
       url.searchParams.set("ids", JSON.stringify(chunk));
       const response = await modrinthFetch(url.toString());
-      const projects = await response.json() as Array<{ id?: string; project_id?: string }>;
+      const projects = await response.json() as ModrinthProject[];
       for (const project of projects) {
         const id = project.id || project.project_id;
         if (!id) continue;

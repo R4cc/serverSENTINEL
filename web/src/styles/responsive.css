@@ -186,7 +186,6 @@
 
 .workspaceActions,
 .buttonRow,
-.fileActions,
 .fileToolbar {
     align-items: stretch;
     flex-direction: column;
@@ -194,7 +193,6 @@
 
 .workspaceActions button,
 .buttonRow button,
-.fileActions button,
 .fileToolbar button,
 .keyFormActions button,
 .keyFormConfigured button {
@@ -389,16 +387,6 @@
 
 
 
-
-.switchStateLabel {
-  color: var(--text-soft);
-  font-size: 11px;
-  letter-spacing: var(--tracking-label);
-}
-
-.switchStateLabel.enabled {
-  color: var(--sentinel-success);
-}
 
 /* Switch styling */
 .switch {
@@ -1019,7 +1007,6 @@ button:disabled,
   text-overflow: ellipsis;
 }
 
-.uiForm,
 .appForm,
 .userModalForm,
 .keyForm {

@@ -17,7 +17,7 @@ type AuthRoutesContext = {
     create(session: Session): void;
     delete(id: string): void;
     deleteForUser(userId: string): number;
-    deleteExpired?(cutoffCreatedAt: string): number;
+    deleteExpired(cutoffCreatedAt: string): number;
   };
   users: {
     list(): StoredUser[];
@@ -47,12 +47,8 @@ type AuthRoutesContext = {
   logWarn(fields: Record<string, unknown>, message: string): void;
 };
 
-function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }, trustProxy: boolean) {
-  return requestUsesPublicHttps(request, trustProxy);
-}
-
 function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
-  context.sessions.deleteExpired?.(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
+  context.sessions.deleteExpired(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
 }
 
 export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesContext) {
@@ -97,7 +93,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const sessionId = randomBytes(32).toString("base64url");
     context.users.createFirst(user, { id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
-    const isSecure = requestIsSecure(request, context.trustProxy);
+    const isSecure = requestUsesPublicHttps(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
     return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo: false, user: context.publicUser(user) };
@@ -119,7 +115,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const now = new Date().toISOString();
     context.sessions.create({ id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
-    const isSecure = requestIsSecure(request, context.trustProxy);
+    const isSecure = requestUsesPublicHttps(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
     context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
     const demo = context.demoEnabled && context.isDemoUser(user);
@@ -131,7 +127,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     if (sessionId) {
       context.sessions.delete(sessionId);
     }
-    reply.header("Set-Cookie", context.sessionCookie("", 0, requestIsSecure(request, context.trustProxy)));
+    reply.header("Set-Cookie", context.sessionCookie("", 0, requestUsesPublicHttps(request, context.trustProxy)));
     context.logInfo({ action: "logout" }, "User logged out");
     return { ok: true };
   });

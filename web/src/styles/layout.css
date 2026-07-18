@@ -696,10 +696,6 @@ button .buttonIcon {
   color: var(--sentinel-warning);
 }
 
-.warn {
-  color: var(--sentinel-warning);
-}
-
 .runtimeBadge.running {
   border-color: var(--sentinel-success);
 }

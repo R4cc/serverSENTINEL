@@ -1924,7 +1924,7 @@ async function ensureModrinthIconForFile(server: ManagedServer, filename: string
   if (await modIconUrl(server, filename)) return;
   try {
     if (metadata?.projectId) {
-      const project = await fetchProject(metadata.projectId) as { icon_url?: string | null };
+      const project = await fetchProject(metadata.projectId);
       await saveModIcon(server, filename, project.icon_url);
       return;
     }
@@ -1933,7 +1933,7 @@ async function ensureModrinthIconForFile(server: ManagedServer, filename: string
     const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
     const version = await versionResponse.json() as { project_id?: string };
     if (!version.project_id) return;
-    const project = await fetchProject(version.project_id) as { icon_url?: string | null };
+    const project = await fetchProject(version.project_id);
     await saveModIcon(server, filename, project.icon_url);
   } catch {
     // Non-Modrinth/manual mods simply keep the generic JAR icon.
@@ -6308,7 +6308,7 @@ async function loadBatchVersionsFromSha1(hashes: string[]) {
 }
 
 async function batchProjects(projectIds: string[]) {
-  return await fetchProjects(projectIds) as Map<string, ModrinthProject>;
+  return await fetchProjects(projectIds);
 }
 
 async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
@@ -6424,7 +6424,7 @@ async function enrichInstalledModDependencies(result: unknown, options: { fetchM
   let projects = new Map<string, ModrinthProject>();
   if (options.fetchMetadata !== false) {
     try {
-      projects = await fetchProjects(projectIds) as Map<string, ModrinthProject>;
+      projects = await fetchProjects(projectIds);
     } catch {
       // Project names and icons are optional; dependency identifiers remain actionable.
     }
@@ -6776,7 +6776,7 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
     }
 
     const [project, filteredVersions] = await Promise.all([
-      fetchProject(metadata.projectId) as Promise<ModrinthProject>,
+      fetchProject(metadata.projectId),
       fetchProjectVersions(metadata.projectId, {
         loader: targetRuntime.loader,
         minecraftVersion: targetRuntime.minecraftVersion
@@ -7077,7 +7077,7 @@ async function planRequiredModrinthInstalls(input: {
       if (!dependencyProjectId) {
         throw new Error(`Required dependency for ${project.title || projectId} does not include a project id`);
       }
-      const dependencyProject = await fetchProject(dependencyProjectId) as ModrinthProject;
+      const dependencyProject = await fetchProject(dependencyProjectId);
       dependencyVersion ??= (await fetchProjectVersions(dependencyProjectId, {
         loader: "fabric",
         minecraftVersion: input.minecraftVersion
@@ -7121,7 +7121,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     logInfo({ ...serverLogFields(server), projectId, versionId: install.versionId, channel: selectedChannel, forceIncompatible, overrideMinecraftVersion: install.overrideMinecraftVersion, action: "modrinth_install" }, "Modrinth install started");
 
     const [project, versions] = await Promise.all([
-      fetchProject(projectId) as Promise<ModrinthProject>,
+      fetchProject(projectId),
       fetchProjectVersions(projectId, undefined, { forceRefresh: true })
     ]);
     const projectSides = { server_side: project.server_side, client_side: project.client_side };
@@ -7507,7 +7507,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
 
   try {
     const [project, versions] = await Promise.all([
-      fetchProject(projectId) as Promise<ModrinthProject>,
+      fetchProject(projectId),
       fetchProjectVersions(projectId)
     ]);
     const allowedVersions = versions.filter((version) => allowedForChannel(version, selectedChannel));
@@ -7517,7 +7517,7 @@ app.get<{ Params: { projectId: string }; Querystring: { serverId?: string; chann
     const dependencyProjects = new Map<string, ModrinthProject>();
     try {
       for (const [dependencyProjectId, dependencyProject] of await fetchProjects(dependencyProjectIds)) {
-        dependencyProjects.set(dependencyProjectId, dependencyProject as ModrinthProject);
+        dependencyProjects.set(dependencyProjectId, dependencyProject);
       }
     } catch {
       // Dependency names are helpful for the modal, but should not block version selection.
@@ -7761,7 +7761,7 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
     if (!targetRuntime.minecraftVersion || targetRuntime.loader !== "fabric") throw new Error("A resolved Fabric runtime profile is required before installing compatible mods");
 
     const [project, versions] = await Promise.all([
-      fetchProject(install.projectId) as Promise<ModrinthProject>,
+      fetchProject(install.projectId),
       fetchProjectVersions(install.projectId, {
         loader: targetRuntime.loader,
         minecraftVersion: targetRuntime.minecraftVersion

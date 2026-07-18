@@ -1166,22 +1166,6 @@
   letter-spacing: var(--tracking-badge);
 }
 
-.addNodeIcon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  stroke: none;
-}
-
-.addNodeIcon .buttonIcon {
-  width: 24px;
-  height: 24px;
-}
-
 .installTabs .uiButton {
   min-height: var(--control-height-compact);
 }
@@ -1431,7 +1415,6 @@
 
 .nodeServerIcon,
 .nodePlayerIcon,
-.addNodeIcon,
 .serverStripIcon {
   border-color: var(--border-muted);
   background: var(--surface-muted);

@@ -2230,26 +2230,6 @@
   background-clip: padding-box;
 }
 
-.eventMarker {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  justify-self: center;
-}
-
-.eventRow.success .eventMarker {
-  background: var(--sentinel-success);
-}
-
-.eventRow.warning .eventMarker {
-  background: var(--sentinel-warning);
-}
-
-.eventRow.error .eventMarker {
-  background: var(--sentinel-danger);
-}
-
 .eventRow strong {
   font-size: 14px;
   line-height: 1.35;
