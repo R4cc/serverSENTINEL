@@ -51,6 +51,45 @@ export type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
+export function TimelineAnnotationPopoverItem({
+  marker,
+  formatDate,
+  onOpenSchedule
+}: {
+  marker: TimelineMarker;
+  formatDate: (value: string | number | Date) => string;
+  onOpenSchedule: (marker: TimelineMarker) => void;
+}) {
+  const content = (
+    <>
+      <span className="serverTimelineAnnotationPopoverGlyph" aria-hidden="true">
+        {timelineMarkerGlyph(marker)}
+      </span>
+      <span className="serverTimelineAnnotationPopoverItemBody">
+        <strong>{marker.label}</strong>
+        {marker.schedule && <small>Open Schedules</small>}
+      </span>
+      <time className="serverTimelineAnnotationPopoverTimestamp" dateTime={new Date(marker.occurredAt).toISOString()}>
+        {formatDate(marker.occurredAt)}
+      </time>
+    </>
+  );
+
+  if (marker.schedule) {
+    return (
+      <button
+        type="button"
+        className={`serverTimelineAnnotationPopoverItem is-interactive tone-${marker.tone}`}
+        onClick={() => onOpenSchedule(marker)}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={`serverTimelineAnnotationPopoverItem tone-${marker.tone}`}>{content}</div>;
+}
+
 type AnnotationKey = "player" | "server" | "automation" | "planned";
 
 type TimelineHoverTooltip = {
@@ -360,7 +399,6 @@ export function ServerTimeline({
   formatShortTime,
   formatDate,
   onLatestSample,
-  onOpenConsole,
   onOpenSchedules
 }: {
   loadTimeline: LoadTimeline;
@@ -368,7 +406,6 @@ export function ServerTimeline({
   formatShortTime: (value: string | number | Date) => string;
   formatDate: (value: string | number | Date) => string;
   onLatestSample?: (sample?: ServerTimelineResourcePoint) => void;
-  onOpenConsole: () => void;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
   const initialSpan = timelineRanges[2].milliseconds;
@@ -527,14 +564,11 @@ export function ServerTimeline({
 
   const activateMarker = useCallback((marker: TimelineMarker) => {
     const schedule = marker.schedule;
-    if (!schedule) {
-      onOpenConsole();
-      return;
-    }
+    if (!schedule) return;
     if (schedule.kind === "run" && schedule.runId) onOpenSchedules({ kind: "completed-run", scheduleId: schedule.scheduleId, runId: schedule.runId });
     else if (schedule.kind === "active" && schedule.runId) onOpenSchedules({ kind: "active-run", scheduleId: schedule.scheduleId, runId: schedule.runId });
     else onOpenSchedules({ kind: "schedule", scheduleId: schedule.scheduleId });
-  }, [onOpenConsole, onOpenSchedules]);
+  }, [onOpenSchedules]);
 
   const selectPreset = (range: TimelineRange, nextLive = liveRef.current) => {
     const span = timelineRanges.find((candidate) => candidate.label === range)?.milliseconds ?? initialSpan;
@@ -839,20 +873,12 @@ export function ServerTimeline({
             </div>
             <div className="serverTimelineAnnotationPopoverList">
               {selectedCluster.markers.map((marker) => (
-                <button
-                  type="button"
-                  className={`serverTimelineAnnotationPopoverItem tone-${marker.tone}`}
+                <TimelineAnnotationPopoverItem
                   key={marker.id}
-                  onClick={() => activateMarker(marker)}
-                >
-                  <span className="serverTimelineAnnotationPopoverGlyph" aria-hidden="true">
-                    {timelineMarkerGlyph(marker)}
-                  </span>
-                  <span>
-                    <strong>{marker.label}</strong>
-                    <small>Open {marker.schedule ? "Schedules" : "Console"}</small>
-                  </span>
-                </button>
+                  marker={marker}
+                  formatDate={formatDate}
+                  onOpenSchedule={activateMarker}
+                />
               ))}
             </div>
           </section>

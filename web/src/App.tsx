@@ -2754,7 +2754,6 @@ export default function App() {
                         formatShortTime={formatDisplayShortTime}
                         formatDate={formatDisplayDate}
                         onLatestSample={setTimelineLatestSample}
-                        onOpenConsole={() => setActivePage("console")}
                         onOpenSchedules={(target) => {
                           setScheduleNavigationTarget(target ?? null);
                           setActivePage("schedule");

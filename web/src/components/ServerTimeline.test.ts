@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import type { ServerTimelineResponse } from "../types";
 import {
   clusterTimelineMarkers,
   mergeTimelineResponses,
   positionTimelineClusters,
+  TimelineAnnotationPopoverItem,
   timelineAnnotationGridTop,
   timelineMarkers,
   timelineMarkerDisplayLabel,
@@ -28,6 +31,37 @@ function response(): ServerTimelineResponse {
 }
 
 describe("server timeline markers", () => {
+  it("renders event popover rows as non-interactive entries with absolute timestamps", () => {
+    const marker = timelineMarkers(response())[0];
+    const html = renderToStaticMarkup(
+      createElement(TimelineAnnotationPopoverItem, {
+        marker,
+        formatDate: () => "01.01.2026, 00:00",
+        onOpenSchedule: vi.fn()
+      })
+    );
+
+    expect(html).toContain("01.01.2026, 00:00");
+    expect(html).toContain("<time");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("Open Console");
+  });
+
+  it("keeps schedule popover rows interactive while showing their absolute timestamps", () => {
+    const marker = timelineMarkers(response()).find((candidate) => candidate.schedule)!;
+    const html = renderToStaticMarkup(
+      createElement(TimelineAnnotationPopoverItem, {
+        marker,
+        formatDate: () => "01.01.2026, 00:01",
+        onOpenSchedule: vi.fn()
+      })
+    );
+
+    expect(html).toContain("<button");
+    expect(html).toContain("Open Schedules");
+    expect(html).toContain("01.01.2026, 00:01");
+  });
+
   it("maps player and schedule annotations to distinct non-color labels", () => {
     const markers = timelineMarkers(response());
     expect(markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left", "Restart scheduled"]);
