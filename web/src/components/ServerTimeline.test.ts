@@ -103,6 +103,19 @@ describe("server timeline markers", () => {
     expect(clusters[0]).toMatchObject({ slot: 1, slotCount: 6 });
   });
 
+  it("keeps nearby marker groups stable as a fixed-width viewport pans", () => {
+    const marker = timelineMarkers(response())[0];
+    const markers = [
+      { ...marker, id: "first", occurredAt: 20_000 },
+      { ...marker, id: "second", occurredAt: 29_000 },
+      { ...marker, id: "third", occurredAt: 45_000 }
+    ];
+    const before = clusterTimelineMarkers(markers, 0, 60_000, 6);
+    const after = clusterTimelineMarkers(markers, 1_000, 61_000, 6);
+    expect(before.map((cluster) => ({ id: cluster.id, markers: cluster.markers.map((item) => item.id) })))
+      .toEqual(after.map((cluster) => ({ id: cluster.id, markers: cluster.markers.map((item) => item.id) })));
+  });
+
   it("previews four clustered events and reports the remaining count", () => {
     const marker = timelineMarkers(response())[0];
     const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, label: `Event ${index + 1}` }));
@@ -139,6 +152,19 @@ describe("server timeline markers", () => {
     clusters[1].occurredAt = 13_000;
     const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
+  });
+
+  it("keeps nearby marker lanes stable when panning crosses label alignment thresholds", () => {
+    const marker = timelineMarkers(response())[0];
+    const markers = [
+      { ...marker, event: undefined, id: "first", label: "A very long nearby timeline event label", occurredAt: 54_000 },
+      { ...marker, event: undefined, id: "second", label: "Another very long nearby timeline event label", occurredAt: 57_000 }
+    ];
+    const clusters = clusterTimelineMarkers(markers, 0, 60_000, 24);
+    const before = positionTimelineClusters(clusters, 0, 60_000, 1_000);
+    const after = positionTimelineClusters(clusters, 5_000, 65_000, 1_000);
+    expect(before.map((cluster) => cluster.alignEnd)).not.toEqual(after.map((cluster) => cluster.alignEnd));
+    expect(before.map((cluster) => cluster.lane)).toEqual(after.map((cluster) => cluster.lane));
   });
 
   it("separates the player action from the full player-name subtitle", () => {

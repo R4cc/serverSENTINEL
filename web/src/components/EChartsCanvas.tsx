@@ -37,7 +37,15 @@ export type TimelineDataZoomEvent = {
   batch?: TimelineDataZoomEvent[];
 };
 
-export function createChartOptionScheduler(apply: (option: EChartsCoreOption) => void) {
+export function timelineChartInteractionOption(option: EChartsCoreOption): EChartsCoreOption {
+  const yAxis = (option as { yAxis?: EChartsCoreOption["yAxis"] }).yAxis;
+  return yAxis === undefined ? {} : { animation: false, yAxis };
+}
+
+export function createChartOptionScheduler(
+  apply: (option: EChartsCoreOption) => void,
+  applyDuringInteraction?: (option: EChartsCoreOption) => void
+) {
   let interacting = false;
   let pending: EChartsCoreOption | undefined;
   return {
@@ -47,6 +55,7 @@ export function createChartOptionScheduler(apply: (option: EChartsCoreOption) =>
     update(option: EChartsCoreOption) {
       if (interacting) {
         pending = option;
+        applyDuringInteraction?.(option);
         return;
       }
       apply(option);
@@ -93,7 +102,10 @@ export function EChartsCanvas({
     if (!container) return;
     const chart = init(container, undefined, timelineChartInitOptions);
     chartRef.current = chart;
-    const optionScheduler = createChartOptionScheduler((next) => chart.setOption(next, timelineChartSetOptionOptions));
+    const optionScheduler = createChartOptionScheduler(
+      (next) => chart.setOption(next, timelineChartSetOptionOptions),
+      (next) => chart.setOption(timelineChartInteractionOption(next), { replaceMerge: ["yAxis"] })
+    );
     optionSchedulerRef.current = optionScheduler;
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
     chart.on("datazoom", handleDataZoom);

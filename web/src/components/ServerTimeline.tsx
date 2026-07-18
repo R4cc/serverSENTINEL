@@ -185,28 +185,33 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
 export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, to: number, slots = 24): MarkerCluster[] {
   if (!markers.length || to <= from) return [];
   const bucketMs = Math.max(1, (to - from) / slots);
-  const buckets = new Map<number, TimelineMarker[]>();
-  for (const marker of markers) {
-    if (marker.occurredAt < from || marker.occurredAt > to) continue;
-    const bucket = Math.max(0, Math.min(slots - 1, Math.floor((marker.occurredAt - from) / bucketMs)));
-    const existing = buckets.get(bucket) ?? [];
-    existing.push(marker);
-    buckets.set(bucket, existing);
+  const visible = markers
+    .filter((marker) => marker.occurredAt >= from && marker.occurredAt <= to)
+    .sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
+  const groups: TimelineMarker[][] = [];
+  for (const marker of visible) {
+    const current = groups.at(-1);
+    const previous = current?.at(-1);
+    if (!current || !previous || marker.occurredAt - previous.occurredAt >= bucketMs) groups.push([marker]);
+    else current.push(marker);
   }
-  return [...buckets.entries()].map(([bucket, grouped]) => ({
-    id: `cluster:${bucket}:${grouped.map((marker) => marker.id).join(":")}`,
-    occurredAt: Math.round(grouped.reduce((total, marker) => total + marker.occurredAt, 0) / grouped.length),
-    markers: grouped,
-    tone: grouped.length === 1
-      ? grouped[0].tone
-      : grouped.some((marker) => marker.tone === "server")
-        ? "server"
-        : grouped.some((marker) => marker.tone === "automation")
-          ? "automation"
-          : grouped[0].tone,
-    slot: bucket,
-    slotCount: slots
-  }));
+  return groups.map((grouped) => {
+    const occurredAt = Math.round(grouped.reduce((total, marker) => total + marker.occurredAt, 0) / grouped.length);
+    return {
+      id: `cluster:${grouped.map((marker) => marker.id).join(":")}`,
+      occurredAt,
+      markers: grouped,
+      tone: grouped.length === 1
+        ? grouped[0].tone
+        : grouped.some((marker) => marker.tone === "server")
+          ? "server"
+          : grouped.some((marker) => marker.tone === "automation")
+            ? "automation"
+            : grouped[0].tone,
+      slot: Math.max(0, Math.min(slots - 1, Math.floor((occurredAt - from) / bucketMs))),
+      slotCount: slots
+    };
+  });
 }
 
 export type PositionedMarkerCluster = MarkerCluster & {
@@ -290,8 +295,11 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
     const center = availableWidth * leftPercent / 100;
     const labelWidth = estimatedMarkerLabelWidth(cluster);
     const alignEnd = center + labelWidth - 12 > availableWidth + 120;
-    const start = alignEnd ? center - labelWidth + 12 : center - 12;
-    const end = alignEnd ? center + 12 : center + labelWidth - 12;
+    // Allocate lanes around the event anchor rather than around the label's
+    // current left/right alignment. The interval then translates with a pan,
+    // so crossing the edge-alignment threshold cannot reshuffle nearby labels.
+    const start = center - labelWidth / 2;
+    const end = center + labelWidth / 2;
     let lane = laneEnds.findIndex((laneEnd) => laneEnd + 6 <= start);
     if (lane < 0) lane = laneEnds.indexOf(Math.min(...laneEnds));
     laneEnds[lane] = end;
