@@ -45,6 +45,13 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).not.toContain(".automationTimeline");
   });
 
+  it("keeps upcoming schedule hover states subtle with clean outer corners", () => {
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:first-child\s*\{[^}]*border-radius:\s*var\(--radius-sm\) var\(--radius-sm\) 0 0;/s);
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:last-child\s*\{[^}]*border-radius:\s*0 0 var\(--radius-sm\) var\(--radius-sm\);/s);
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:only-child\s*\{[^}]*border-radius:\s*var\(--radius-sm\);/s);
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:hover:not\(:disabled\)\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-accent-soft\) 54%, var\(--surface-raised\)\);[^}]*color:\s*var\(--text\);[^}]*transform:\s*none;/s);
+  });
+
   it("expands mod update previews progressively on large overview layouts", () => {
     expect(overviewStyles).toMatch(/\.modUpdatesList\s*\{[^}]*grid-auto-rows:\s*52px;[^}]*align-content:\s*start;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesListCopy > strong\s*\{[^}]*line-height:\s*17px;/s);
