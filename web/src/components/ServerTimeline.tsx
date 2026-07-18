@@ -383,6 +383,7 @@ export function ServerTimeline({
   const [selectedCluster, setSelectedCluster] = useState<MarkerCluster | null>(null);
   const [annotationRailWidth, setAnnotationRailWidth] = useState(1_000);
   const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
+  const [chartInteracting, setChartInteracting] = useState(false);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
     cpuUtilizationPercent: true,
     memoryUtilizationPercent: true,
@@ -509,7 +510,11 @@ export function ServerTimeline({
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
     [annotationRailWidth, clusters, viewport.from, viewport.to]
   );
-  const annotationGridTop = useMemo(() => timelineAnnotationGridTop(positionedClusters), [positionedClusters]);
+  const nextAnnotationGridTop = useMemo(() => timelineAnnotationGridTop(positionedClusters), [positionedClusters]);
+  // Panning changes annotation clusters continuously. Keep their reserved rail
+  // height fixed until the gesture ends so the chart does not bounce vertically.
+  const stableAnnotationGridTopRef = useRef(nextAnnotationGridTop);
+  const annotationGridTop = chartInteracting ? stableAnnotationGridTopRef.current : nextAnnotationGridTop;
   const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
   const chartGrid = useMemo(() => timelineChartGridForEnabled(enabled, annotationGridTop), [annotationGridTop, enabled]);
@@ -636,6 +641,12 @@ export function ServerTimeline({
     setHoverTooltip((current) => current ? { ...current, pinned: !current.pinned } : current);
   }, []);
 
+  const handleChartInteractionChange = useCallback((interacting: boolean) => {
+    if (interacting) stableAnnotationGridTopRef.current = nextAnnotationGridTop;
+    setChartInteracting(interacting);
+    if (interacting) hideHoverTooltip();
+  }, [hideHoverTooltip, nextAnnotationGridTop]);
+
   const chartOption = useMemo(() => buildTimelineChartOption({
     samples: data?.samples ?? [],
     query,
@@ -727,7 +738,14 @@ export function ServerTimeline({
         aria-label="Server resource and event timeline"
         style={{ "--timeline-annotation-extra": `${annotationGridTop - timelineChartGrid.top}px` } as React.CSSProperties}
       >
-        <EChartsCanvas option={chartOption} onDataZoom={handleDataZoom} onPointerMove={handleChartPointerMove} onPointerLeave={hideHoverTooltip} onClick={pinHoverTooltip} />
+        <EChartsCanvas
+          option={chartOption}
+          onDataZoom={handleDataZoom}
+          onInteractionChange={handleChartInteractionChange}
+          onPointerMove={handleChartPointerMove}
+          onPointerLeave={hideHoverTooltip}
+          onClick={pinHoverTooltip}
+        />
         {hoverTooltip && <span
           className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
           style={{ left: hoverTooltip.x, top: chartGrid.top, bottom: chartGrid.bottom }}

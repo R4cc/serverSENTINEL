@@ -3,16 +3,14 @@ import type {
   ManagedServer,
   ModUpdatePlan,
   PlayerSnapshot,
-  ScheduledActiveRun,
   ScheduledExecution,
   ScheduleNavigationTarget,
-  ScheduledRun,
   ServerActivity,
   ServerEvent,
   ServerStatus
 } from '../types';
 import { formatUptime } from '../utils/resourceFormatting';
-import { fabricLoaderVersionInfo, minecraftVersionInfo, versionValue } from '../utils/format';
+import { fabricLoaderVersionInfo, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, StatusBadge } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon } from '../components/FileTypeIcon';
@@ -23,6 +21,8 @@ import { playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const modUpdateCardSlotCount = 3;
+const upcomingScheduleDisplayLimit = 4;
+const upcomingScheduleWindowMs = 24 * 60 * 60 * 1000;
 
 function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!dockerSocketMounted) return "Unavailable";
@@ -137,12 +137,6 @@ export function OverviewSummary({
   );
 }
 
-function snapshotAge(sampledAt: string) {
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(sampledAt).getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  return `${Math.floor(seconds / 60)}m ago`;
-}
-
 export function ActivePlayersPanel({
   snapshot,
   running,
@@ -178,7 +172,11 @@ export function ActivePlayersPanel({
             </div>
           ))}
         </div>
-        {snapshot.state === "stale" && <small>Last verified {snapshotAge(snapshot.sampledAt)}. {snapshot.message}</small>}
+        {snapshot.state === "stale" && (
+          <small className="activePlayerUpdatedAt">
+            Updated {formatRelativeTimestamp(snapshot.sampledAt).toLocaleLowerCase()}
+          </small>
+        )}
       </div>
     );
   }
@@ -314,30 +312,31 @@ function ModHealthPanelSkeleton() {
   );
 }
 
-export type AutomationSnapshot = {
-  active?: ScheduledActiveRun;
-  next?: ScheduledExecution;
-  recent?: ScheduledRun;
+export type UpcomingScheduleSnapshot = {
+  schedules: ScheduledExecution[];
+  remainingInNext24Hours: number;
 };
 
-export function buildAutomationSnapshot(schedules: ScheduledExecution[], now = new Date()): AutomationSnapshot {
-  const active = schedules.flatMap((schedule) => schedule.activeRuns ?? [])
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
-  const next = schedules
-    .filter((schedule) => schedule.enabled && schedule.nextRunAt && new Date(schedule.nextRunAt).getTime() >= now.getTime())
-    .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime())[0];
-  const recent = schedules.flatMap((schedule) => schedule.recentRuns?.length
-    ? schedule.recentRuns
-    : schedule.lastRunAt ? [{
-      id: `${schedule.id}:${schedule.lastRunAt}`,
-      scheduleId: schedule.id,
-      scheduleName: schedule.name,
-      status: schedule.lastStatus ?? "unknown",
-      message: schedule.lastMessage,
-      ranAt: schedule.lastRunAt
-    }] : [])
-    .sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime())[0];
-  return { active, next, recent };
+export function buildUpcomingScheduleSnapshot(schedules: ScheduledExecution[], now = new Date()): UpcomingScheduleSnapshot {
+  const nowTime = now.getTime();
+  const futureSchedules = schedules
+    .filter((schedule) => {
+      if (!schedule.enabled || !schedule.nextRunAt) return false;
+      const nextRunTime = new Date(schedule.nextRunAt).getTime();
+      return Number.isFinite(nextRunTime) && nextRunTime > nowTime;
+    })
+    .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime());
+  const schedulesInNext24Hours = futureSchedules.filter((schedule) => (
+    new Date(schedule.nextRunAt!).getTime() <= nowTime + upcomingScheduleWindowMs
+  ));
+  const visibleSchedules = schedulesInNext24Hours.length > 0
+    ? schedulesInNext24Hours.slice(0, upcomingScheduleDisplayLimit)
+    : futureSchedules.slice(0, 1);
+
+  return {
+    schedules: visibleSchedules,
+    remainingInNext24Hours: Math.max(0, schedulesInNext24Hours.length - visibleSchedules.length)
+  };
 }
 
 export function formatRelativeScheduleTime(value: string, now = new Date()) {
@@ -349,22 +348,7 @@ export function formatRelativeScheduleTime(value: string, now = new Date()) {
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 
-function scheduleStatus(status?: string) {
-  const normalized = (status ?? "").toLowerCase();
-  if (normalized === "success" || normalized === "succeeded") return { label: "Succeeded", tone: "success" as const };
-  if (normalized === "failed") return { label: "Failed", tone: "danger" as const };
-  if (normalized === "skipped" || normalized === "cancelled") return { label: normalized === "skipped" ? "Skipped" : "Cancelled", tone: "warning" as const };
-  return { label: "Unknown", tone: "neutral" as const };
-}
-
-function activeRunDetail(run: ScheduledActiveRun) {
-  if (run.waitingUntil) return `Waiting ${formatRelativeScheduleTime(run.waitingUntil)}`;
-  if (run.currentStep) return run.currentStep;
-  if (run.currentStepIndex !== undefined) return `Step ${run.currentStepIndex + 1} of ${run.stepCount}`;
-  return run.message || "In progress";
-}
-
-export function AutomationPanel({
+export function SchedulePanel({
   schedules,
   canView = true,
   formatDate,
@@ -377,83 +361,50 @@ export function AutomationPanel({
   relativeTimestamps?: boolean;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
-  const snapshot = buildAutomationSnapshot(schedules);
-  const recentStatus = scheduleStatus(snapshot.recent?.status);
-  const recentTime = snapshot.recent
-    ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.recent.ranAt) : formatDate(snapshot.recent.ranAt)
-    : "";
-  const nextTime = snapshot.next?.nextRunAt
-    ? relativeTimestamps ? formatRelativeScheduleTime(snapshot.next.nextRunAt) : formatDate(snapshot.next.nextRunAt)
-    : "Not scheduled";
+  const snapshot = buildUpcomingScheduleSnapshot(schedules);
   return (
-    <section className="panel automationPanel overviewOperationsPanel">
+    <section className="panel schedulePanel overviewOperationsPanel">
       <PanelHeader
-        title="Automation"
+        title="Schedule"
         actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
       />
       {!canView ? (
-        <EmptyState compact title="Automation unavailable" message="View schedules permission is required." />
+        <EmptyState compact title="Schedules unavailable" message="View schedules permission is required." />
       ) : schedules.length === 0 ? (
         <EmptyState compact title="No schedules configured" message="Create recurring console actions from Schedules." />
+      ) : snapshot.schedules.length === 0 ? (
+        <EmptyState compact title="No upcoming schedules" message="Enabled schedules will appear here when their next run is planned." />
       ) : (
-        <div className={`automationTimeline${snapshot.active ? " hasActiveRun" : ""}`}>
-          {snapshot.recent && (
+        <div className="scheduleUpcoming">
+          <span className="scheduleUpcomingLabel">Next up</span>
+          <div className="scheduleUpcomingList">
+            {snapshot.schedules.map((schedule) => {
+              const nextRunAt = schedule.nextRunAt!;
+              const nextTime = relativeTimestamps ? formatRelativeScheduleTime(nextRunAt) : formatDate(nextRunAt);
+              return (
+                <button
+                  key={schedule.id}
+                  type="button"
+                  className="scheduleUpcomingItem"
+                  onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
+                  aria-label={`Open ${schedule.name}, next run ${nextTime}`}
+                >
+                  <strong>{schedule.name}</strong>
+                  <time dateTime={nextRunAt} title={relativeTimestamps ? formatDate(nextRunAt) : undefined}>{nextTime}</time>
+                  <AppIcon name="chevronRight" />
+                </button>
+              );
+            })}
+          </div>
+          {snapshot.remainingInNext24Hours > 0 && (
             <button
               type="button"
-              className={`automationTimelineItem automationTimelineItem--past tone-${recentStatus.tone}`}
-              onClick={() => onOpenSchedules({ kind: "completed-run", scheduleId: snapshot.recent!.scheduleId, runId: snapshot.recent!.id })}
-              aria-label={`View details for ${snapshot.recent.scheduleName}, ${recentStatus.label}, ${recentTime}`}
+              className="scheduleUpcomingMore"
+              onClick={() => onOpenSchedules()}
             >
-              <span className="automationTimelineNode" aria-hidden="true" />
-              <span className="automationTimelineCopy">
-                <span className="automationTimelineLabel">Last run</span>
-                <strong>{snapshot.recent.scheduleName}</strong>
-                <time className="automationTimelineMeta" dateTime={snapshot.recent.ranAt} title={relativeTimestamps ? formatDate(snapshot.recent.ranAt) : undefined}>{recentTime}</time>
-              </span>
-              <span className={`automationTimelineStatus tone-${recentStatus.tone}`} aria-hidden="true">
-                {recentStatus.tone === "success" ? <AppIcon name="check" /> : recentStatus.tone === "danger" ? <AppIcon name="x" /> : recentStatus.tone === "warning" ? "!" : "?"}
-              </span>
-              <AppIcon name="chevronRight" />
+              {snapshot.remainingInNext24Hours} more {snapshot.remainingInNext24Hours === 1 ? "schedule" : "schedules"} in the next 24 hours
             </button>
           )}
-          {snapshot.active ? (
-            <button
-              type="button"
-              className="automationTimelineItem automationTimelineItem--active"
-              onClick={() => onOpenSchedules({ kind: "active-run", scheduleId: snapshot.active!.scheduleId, runId: snapshot.active!.id })}
-              aria-label={`Open active run ${snapshot.active.scheduleName}, ${activeRunDetail(snapshot.active)}`}
-            >
-              <span className="automationTimelineNode" aria-hidden="true" />
-              <span className="automationTimelineCopy">
-                <span className="automationTimelineLabel">Running now</span>
-                <strong>{snapshot.active.scheduleName}</strong>
-                <span className="automationTimelineMeta">{activeRunDetail(snapshot.active)}</span>
-              </span>
-              <AppIcon name="chevronRight" />
-            </button>
-          ) : (
-            <div className="automationTimelineNow" aria-label="Now">
-              <span className="automationTimelineNode" aria-hidden="true" />
-              <span>Now</span>
-            </div>
-          )}
-          {snapshot.next && (
-            <button
-              type="button"
-              className="automationTimelineItem automationTimelineItem--future"
-              onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: snapshot.next!.id })}
-              aria-label={`Open ${snapshot.next.name}, next run ${nextTime}`}
-            >
-              <span className="automationTimelineNode" aria-hidden="true" />
-              <span className="automationTimelineCopy">
-                <span className="automationTimelineLabel">Next up</span>
-                <strong>{snapshot.next.name}</strong>
-                <time className="automationTimelineMeta" dateTime={snapshot.next.nextRunAt} title={relativeTimestamps && snapshot.next.nextRunAt ? formatDate(snapshot.next.nextRunAt) : undefined}>{nextTime}</time>
-              </span>
-              <AppIcon name="chevronRight" />
-            </button>
-          )}
-          {!snapshot.active && !snapshot.next && !snapshot.recent && <EmptyState compact title="No automation activity yet" message="Enabled schedules will appear here when they run." />}
         </div>
       )}
     </section>

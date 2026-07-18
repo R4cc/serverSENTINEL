@@ -39,11 +39,10 @@ describe("global stylesheet entry point", () => {
     expect(primitiveStyles).toMatch(/\.applicationSkeletonWideTile\s*\{[^}]*display:\s*none;/s);
   });
 
-  it("aligns the compact automation rail with every timeline node", () => {
-    expect(overviewStyles).toMatch(/\.automationTimeline::before\s*\{[^}]*top:\s*41px;[^}]*bottom:\s*41px;[^}]*left:\s*13px;/s);
-    expect(overviewStyles).toMatch(/\.automationTimelineItem\s*\{[^}]*grid-template-columns:\s*20px[^}]*border:\s*var\(--border-subtle\)[^}]*padding:\s*9px 8px 9px 3px;/s);
-    expect(overviewStyles).toMatch(/\.automationTimelineNow\s*\{[^}]*grid-template-columns:\s*20px[^}]*padding-left:\s*4px;/s);
-    expect(overviewStyles).not.toMatch(/@container[^\{]*\{[^}]*\.automationTimeline/s);
+  it("keeps upcoming schedules in a compact borderless list", () => {
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingItem\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto 16px;[^}]*border:\s*0;[^}]*border-bottom:\s*var\(--border-subtle\)[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).toMatch(/\.scheduleUpcomingMore\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).not.toContain(".automationTimeline");
   });
 
   it("expands mod update previews progressively on large overview layouts", () => {

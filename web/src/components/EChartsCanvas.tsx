@@ -68,12 +68,14 @@ export function createChartOptionScheduler(apply: (option: EChartsCoreOption) =>
 export function EChartsCanvas({
   option,
   onDataZoom,
+  onInteractionChange,
   onPointerMove,
   onPointerLeave,
   onClick
 }: {
   option: EChartsCoreOption;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
+  onInteractionChange?: (interacting: boolean) => void;
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
@@ -82,7 +84,9 @@ export function EChartsCanvas({
   const chartRef = useRef<EChartsType | null>(null);
   const optionSchedulerRef = useRef<ReturnType<typeof createChartOptionScheduler> | null>(null);
   const onDataZoomRef = useRef(onDataZoom);
+  const onInteractionChangeRef = useRef(onInteractionChange);
   onDataZoomRef.current = onDataZoom;
+  onInteractionChangeRef.current = onInteractionChange;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -94,8 +98,19 @@ export function EChartsCanvas({
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
     chart.on("datazoom", handleDataZoom);
     const renderer = chart.getZr();
-    const startInteraction = () => optionScheduler.startInteraction();
-    const finishInteraction = () => optionScheduler.finishInteraction();
+    let interacting = false;
+    const startInteraction = () => {
+      if (interacting) return;
+      interacting = true;
+      optionScheduler.startInteraction();
+      onInteractionChangeRef.current?.(true);
+    };
+    const finishInteraction = () => {
+      if (!interacting) return;
+      interacting = false;
+      optionScheduler.finishInteraction();
+      onInteractionChangeRef.current?.(false);
+    };
     renderer.on("mousedown", startInteraction);
     renderer.on("mouseup", finishInteraction);
     renderer.on("globalout", finishInteraction);
@@ -108,6 +123,7 @@ export function EChartsCanvas({
       renderer.off("mouseup", finishInteraction);
       renderer.off("globalout", finishInteraction);
       chart.off("datazoom", handleDataZoom);
+      interacting = false;
       optionScheduler.cancel();
       chart.dispose();
       if (chartRef.current === chart) chartRef.current = null;

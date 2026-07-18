@@ -25,7 +25,7 @@ import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPri
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useWideTimelineViewport } from "./components/useMobileViewport";
-import { ActivePlayersPanel, AutomationPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel } from "./pages/OverviewPage";
+import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
@@ -2771,7 +2771,7 @@ export default function App() {
                     canView={canViewMods}
                     onOpenMods={() => setActivePage("mods")}
                   />
-                  <AutomationPanel
+                  <SchedulePanel
                     schedules={activeServer.schedules ?? []}
                     canView={canViewSchedules}
                     formatDate={formatDisplayDate}

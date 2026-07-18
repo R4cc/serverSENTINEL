@@ -5,8 +5,7 @@ import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "..
 import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
 import {
   ActivePlayersPanel,
-  AutomationPanel,
-  buildAutomationSnapshot,
+  buildUpcomingScheduleSnapshot,
   eventDate,
   formatRelativeEventTime,
   formatRelativeScheduleTime,
@@ -14,7 +13,8 @@ import {
   groupRecentEventsByTime,
   ModHealthPanel,
   OverviewSummary,
-  recentEventPresentation
+  recentEventPresentation,
+  SchedulePanel
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -139,17 +139,18 @@ describe("active player states", () => {
     expect(html).toContain(">Steve</");
   });
 
-  it("keeps the complete roster and labels stale snapshots", () => {
+  it("keeps the complete roster and shows when stale snapshots were updated", () => {
     const html = render({
-      ...live(),
+      ...live({ sampledAt: new Date(Date.now() - 60_000).toISOString() }),
       state: "stale",
       lastAttemptAt: new Date().toISOString(),
       code: "QUERY_TIMEOUT",
       message: "Minecraft Query timed out"
     });
     expect(html).toContain(">Alex</");
-    expect(html).toContain("Last verified");
-    expect(html).toContain("Minecraft Query timed out");
+    expect(html).toContain("Updated 1 minute ago");
+    expect(html).not.toContain("Last verified");
+    expect(html).not.toContain("Minecraft Query timed out");
   });
 });
 
@@ -329,28 +330,42 @@ describe("mod health", () => {
   });
 });
 
-describe("automation summary", () => {
+describe("upcoming schedule summary", () => {
   const now = new Date("2026-07-11T12:00:00.000Z");
+  const upcomingAt = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-  it("selects the newest active run, nearest enabled run, and latest completed run", () => {
-    const snapshot = buildAutomationSnapshot([
-      schedule({
-        nextRunAt: "2026-07-11T15:00:00.000Z",
-        activeRuns: [{ id: "active", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "running", startedAt: "2026-07-11T11:58:00.000Z", stepCount: 2, cancellable: true }],
-        recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "failed", ranAt: "2026-07-11T10:00:00.000Z" }]
-      }),
-      schedule({ id: "schedule-2", name: "Sooner", nextRunAt: "2026-07-11T13:00:00.000Z" }),
-      schedule({ id: "disabled", name: "Disabled", enabled: false, nextRunAt: "2026-07-11T12:30:00.000Z" })
+  it("shows up to four enabled future schedules from the next 24 hours", () => {
+    const snapshot = buildUpcomingScheduleSnapshot([
+      schedule({ id: "schedule-6", nextRunAt: "2026-07-11T18:00:00.000Z" }),
+      schedule({ id: "schedule-1", nextRunAt: "2026-07-11T13:00:00.000Z" }),
+      schedule({ id: "schedule-3", nextRunAt: "2026-07-11T15:00:00.000Z" }),
+      schedule({ id: "schedule-5", nextRunAt: "2026-07-11T17:00:00.000Z" }),
+      schedule({ id: "schedule-2", nextRunAt: "2026-07-11T14:00:00.000Z" }),
+      schedule({ id: "schedule-4", nextRunAt: "2026-07-11T16:00:00.000Z" }),
+      schedule({ id: "past", nextRunAt: "2026-07-11T11:59:00.000Z" }),
+      schedule({ id: "disabled", enabled: false, nextRunAt: "2026-07-11T12:30:00.000Z" })
     ], now);
 
-    expect(snapshot.active?.id).toBe("active");
-    expect(snapshot.next?.id).toBe("schedule-2");
-    expect(snapshot.recent?.status).toBe("failed");
+    expect(snapshot.schedules.map(({ id }) => id)).toEqual(["schedule-1", "schedule-2", "schedule-3", "schedule-4"]);
+    expect(snapshot.remainingInNext24Hours).toBe(2);
   });
 
-  it("handles disabled-only and empty schedules", () => {
-    expect(buildAutomationSnapshot([schedule({ enabled: false })], now)).toEqual({ active: undefined, next: undefined, recent: undefined });
-    expect(buildAutomationSnapshot([], now)).toEqual({ active: undefined, next: undefined, recent: undefined });
+  it("still shows the nearest future schedule when it is beyond the 24-hour window", () => {
+    const snapshot = buildUpcomingScheduleSnapshot([
+      schedule({ id: "later", nextRunAt: "2026-07-13T12:00:00.000Z" }),
+      schedule({ id: "nearest", nextRunAt: "2026-07-12T13:00:00.000Z" })
+    ], now);
+
+    expect(snapshot.schedules.map(({ id }) => id)).toEqual(["nearest"]);
+    expect(snapshot.remainingInNext24Hours).toBe(0);
+  });
+
+  it("handles disabled-only, invalid, past, and empty schedules", () => {
+    const emptySnapshot = { schedules: [], remainingInNext24Hours: 0 };
+    expect(buildUpcomingScheduleSnapshot([schedule({ enabled: false })], now)).toEqual(emptySnapshot);
+    expect(buildUpcomingScheduleSnapshot([schedule({ nextRunAt: "invalid" })], now)).toEqual(emptySnapshot);
+    expect(buildUpcomingScheduleSnapshot([schedule({ nextRunAt: "2026-07-11T11:59:00.000Z" })], now)).toEqual(emptySnapshot);
+    expect(buildUpcomingScheduleSnapshot([], now)).toEqual(emptySnapshot);
   });
 
   it("formats upcoming and completed times", () => {
@@ -360,62 +375,49 @@ describe("automation summary", () => {
 
   it("renders empty and permission-limited states", () => {
     const props = { schedules: [], formatDate: String, onOpenSchedules: () => undefined };
-    expect(renderToStaticMarkup(createElement(AutomationPanel, props))).toContain("No schedules configured");
-    expect(renderToStaticMarkup(createElement(AutomationPanel, { ...props, canView: false }))).toContain("View schedules permission is required");
+    expect(renderToStaticMarkup(createElement(SchedulePanel, props))).toContain("No schedules configured");
+    expect(renderToStaticMarkup(createElement(SchedulePanel, { ...props, canView: false }))).toContain("View schedules permission is required");
   });
 
-  it("renders past, active, and future automation as an interactive chronological timeline", () => {
-    const html = renderToStaticMarkup(createElement(AutomationPanel, {
-      schedules: [schedule({
-        nextRunAt: "2099-07-11T13:00:00.000Z",
-        activeRuns: [{ id: "active", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "running", startedAt: "2026-07-11T11:58:00.000Z", stepCount: 2, currentStep: "Saving world", cancellable: true }],
-        recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "success", ranAt: "2026-07-11T10:00:00.000Z" }]
-      })],
+  it("renders at most four upcoming schedules and summarizes the rest", () => {
+    const html = renderToStaticMarkup(createElement(SchedulePanel, {
+      schedules: Array.from({ length: 6 }, (_, index) => schedule({
+        id: `schedule-${index}`,
+        name: `Task ${index}`,
+        nextRunAt: upcomingAt(index + 1),
+        activeRuns: index === 0 ? [{ id: "active", scheduleId: "schedule-0", scheduleName: "Past activity", status: "running", startedAt: "2026-07-11T11:58:00.000Z", stepCount: 2, currentStep: "Saving world", cancellable: true }] : [],
+        recentRuns: index === 0 ? [{ id: "recent", scheduleId: "schedule-0", scheduleName: "Past activity", status: "success", ranAt: "2026-07-11T10:00:00.000Z" }] : []
+      })),
       formatDate: (timestamp) => new Date(timestamp).toISOString(),
       onOpenSchedules: () => undefined
     }));
 
-    expect(html).toContain("automationTimelineItem--past");
-    expect(html).toContain("automationTimelineItem--active");
-    expect(html).toContain("automationTimelineItem--future");
-    expect(html).toContain("automationTimelineStatus tone-success");
-    expect(html).not.toContain("uiStatusBadge uiStatusBadge--success");
-    expect(html).toContain('aria-label="View details for Nightly restart, Succeeded');
-    expect(html).toContain('aria-label="Open active run Nightly restart, Saving world"');
-    expect(html).toContain('aria-label="Open Nightly restart, next run');
-    expect(html.indexOf("Last run")).toBeLessThan(html.indexOf("Running now"));
-    expect(html.indexOf("Running now")).toBeLessThan(html.indexOf("Next up"));
-  });
-
-  it("marks failed completed runs with a danger border and compact status marker", () => {
-    const html = renderToStaticMarkup(createElement(AutomationPanel, {
-      schedules: [schedule({
-        nextRunAt: "2099-07-11T13:00:00.000Z",
-        recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "failed", ranAt: "2026-07-11T10:00:00.000Z" }]
-      })],
-      formatDate: (timestamp) => new Date(timestamp).toISOString(),
-      onOpenSchedules: () => undefined
-    }));
-
-    expect(html).toContain("automationTimelineItem--past tone-danger");
-    expect(html).toContain("automationTimelineStatus tone-danger");
-    expect(html).toContain('aria-label="View details for Nightly restart, Failed');
+    expect(html).toContain(">Schedule<");
+    expect(html).toContain(">Next up<");
+    expect((html.match(/class="scheduleUpcomingItem"/g) ?? []).length).toBe(4);
+    expect(html).toContain("2 more schedules in the next 24 hours");
+    expect(html).not.toContain("Task 4");
+    expect(html).not.toContain("Task 5");
+    expect(html).not.toContain("Past activity");
+    expect(html).not.toContain("Last run");
+    expect(html).not.toContain("Running now");
   });
 
   it("uses the full configured date and time when relative timestamps are disabled", () => {
+    const nextRunAt = upcomingAt(2);
     const value = schedule({
-      nextRunAt: "2099-07-11T13:00:00.000Z",
+      nextRunAt,
       recentRuns: [{ id: "recent", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "success", ranAt: "2026-07-11T10:00:00.000Z" }]
     });
-    const html = renderToStaticMarkup(createElement(AutomationPanel, {
+    const html = renderToStaticMarkup(createElement(SchedulePanel, {
       schedules: [value],
       formatDate: (timestamp) => `FULL ${new Date(timestamp).toISOString()}`,
       relativeTimestamps: false,
       onOpenSchedules: () => undefined
     }));
 
-    expect(html).toContain("FULL 2099-07-11T13:00:00.000Z");
-    expect(html).toContain("FULL 2026-07-11T10:00:00.000Z");
+    expect(html).toContain(`FULL ${nextRunAt}`);
+    expect(html).not.toContain("FULL 2026-07-11T10:00:00.000Z");
     expect(html).not.toContain(" ago");
   });
 });
