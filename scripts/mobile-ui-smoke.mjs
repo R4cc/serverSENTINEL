@@ -237,6 +237,32 @@ async function assertPageDocumentScroll(page, title, label) {
   assert(result.shellTop === 0, `${label}: shell became a competing scroll surface`);
 }
 
+async function assertConsoleViewportOwnership(page, label) {
+  await openPage(page, "console");
+  await page.locator(".minecraftTerminal").waitFor();
+  const result = await page.evaluate(() => {
+    const shell = document.querySelector(".appShell");
+    const workspace = document.querySelector(".workspacePage-console");
+    const terminal = document.querySelector(".minecraftTerminal");
+    const owner = document.scrollingElement;
+    if (!(shell instanceof HTMLElement) || !(workspace instanceof HTMLElement) || !(terminal instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
+    return {
+      missing: false,
+      documentHeight: owner.scrollHeight,
+      documentViewportHeight: owner.clientHeight,
+      documentTop: owner.scrollTop,
+      shellOverflow: getComputedStyle(shell).overflow,
+      workspaceOverflow: getComputedStyle(workspace).overflow,
+      terminalHeight: terminal.getBoundingClientRect().height
+    };
+  });
+  assert(!result.missing, `${label}: console viewport surfaces are missing`);
+  assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: console leaks into document scrolling: ${JSON.stringify(result)}`);
+  assert(result.documentTop === 0, `${label}: console document is scrolled`);
+  assert(result.shellOverflow === "hidden" && result.workspaceOverflow === "hidden", `${label}: console shell is not viewport-contained: ${JSON.stringify(result)}`);
+  assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
+}
+
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -296,9 +322,10 @@ async function runProfile(engine, profile, label) {
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .overflowButton"], label);
     await assertFloatingSurfaces(page, label);
 
-    for (const title of ["overview", "files", "mods", "schedules", "console", "properties", "nodes", "settings"]) {
+    for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);
     }
+    await assertConsoleViewportOwnership(page, `${label} console`);
     await assertEditableFontSizes(page, `${label} settings`);
 
     await openPage(page, "files");
@@ -339,7 +366,7 @@ async function runProfile(engine, profile, label) {
     const initialHeight = profile.viewport.height;
     await page.setViewportSize({ width: profile.viewport.width, height: initialHeight - 80 });
     await page.waitForTimeout(100);
-    assertNativeScrollShell(await shellMetrics(page), `${label} resized visual viewport`);
+    await assertConsoleViewportOwnership(page, `${label} resized console viewport`);
 
     await context.close();
     console.log(`mobile smoke passed: ${label}`);

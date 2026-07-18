@@ -357,6 +357,10 @@
   box-shadow: 0 28px 80px rgb(0 0 0 / 0.18);
 }
 
+.nodeModalBackdrop {
+  z-index: 100;
+}
+
 .nodeModalHeader,
 .nodeModalBody {
   padding: var(--space-5);
@@ -369,6 +373,119 @@
 .nodeModalBody {
   display: grid;
   gap: var(--space-4);
+}
+
+.nodeConnectionSetup {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  padding: var(--space-4);
+}
+
+.nodeConnectionIntro {
+  display: grid;
+  grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.nodeConnectionIntro h3,
+.nodeConnectionIntro p,
+.panelAddressSuggestion p {
+  margin: 0;
+}
+
+.nodeConnectionIntro h3 {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.nodeConnectionIntro p,
+.panelAddressSuggestion p,
+.nodeModalBody .fieldHint {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.nodeConnectionIntro p {
+  margin-top: var(--space-1);
+}
+
+.nodeConnectionDirection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.nodeConnectionDirection span {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2);
+  font-size: 12px;
+  font-weight: var(--weight-title);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.nodeConnectionDirection span:last-child {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border-muted));
+  color: var(--accent);
+}
+
+.nodeConnectionDirection b {
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.nodeModalBody .fieldHint {
+  display: block;
+}
+
+.panelAddressSuggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  padding: var(--space-3);
+}
+
+.panelAddressSuggestion.warning {
+  border-left-color: var(--sentinel-warning);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
+}
+
+.panelAddressSuggestion > div {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.panelAddressSuggestionLabel {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--weight-title);
+}
+
+.panelAddressSuggestion code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
 }
 
 .nodeModalFooter {
@@ -615,6 +732,21 @@
 
 .addNodeModalActions.success {
   justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .nodeConnectionSetup {
+    padding: var(--space-3);
+  }
+
+  .nodeConnectionIntro,
+  .panelAddressSuggestion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panelAddressSuggestion .uiButton {
+    width: 100%;
+  }
 }
 
 

@@ -983,9 +983,9 @@ export default function App() {
         }
         socket.close();
       }
-      if (message.type === "status") {
+      if (message.type === "status" || message.type === "heartbeat") {
         markConsoleLive();
-        void refreshStatus(serverId);
+        if (message.type === "status") void refreshStatus(serverId);
       }
       if (message.type === "empty") {
         markConsoleLive();
@@ -2560,7 +2560,7 @@ export default function App() {
             canManageNodes={canManageUsers}
             busy={Boolean(nodeBusyId)}
             busyNodeId={nodeBusyId}
-            defaultPanelUrl={currentPanelUrl()}
+            browserPanelUrl={currentPanelUrl()}
             selectedNode={nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null}
             nodeOperations={nodeOperations}
             nodeOperationNow={nodeOperationNow}

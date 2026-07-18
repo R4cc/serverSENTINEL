@@ -375,14 +375,11 @@ function readTimelinePalette(element: HTMLElement): TimelinePalette {
 
 function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) {
   const [palette, setPalette] = useState(defaultTimelinePalette);
-  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => {
-      setReducedMotion(media.matches);
       const next = readTimelinePalette(panel);
       setPalette((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
     };
@@ -390,15 +387,11 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
     const shell = panel.closest(".appShell");
     if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["class", "style"] });
-    media.addEventListener("change", update);
     update();
-    return () => {
-      observer.disconnect();
-      media.removeEventListener("change", update);
-    };
+    return () => observer.disconnect();
   }, [panelRef]);
 
-  return { palette, reducedMotion };
+  return palette;
 }
 
 export function ServerTimeline({
@@ -451,7 +444,8 @@ export function ServerTimeline({
   const requestIdRef = useRef(0);
   const navigationTimerRef = useRef<number | undefined>(undefined);
   const hoverFrameRef = useRef<number | undefined>(undefined);
-  const { palette, reducedMotion } = useTimelinePresentation(panelRef);
+  const palette = useTimelinePresentation(panelRef);
+  const navigationPendingRef = useRef(false);
 
   const setViewport = useCallback((next: TimelineWindow) => {
     viewportRef.current = next;
@@ -463,7 +457,12 @@ export function ServerTimeline({
     setLive(next);
   }, []);
 
-  const loadWindow = useCallback(async (nextViewport: TimelineWindow, nextLive: boolean, options: { showLoading?: boolean; incremental?: boolean } = {}) => {
+  const loadWindow = useCallback(async (nextViewport: TimelineWindow, nextLive: boolean, options: {
+    showLoading?: boolean;
+    incremental?: boolean;
+    commitViewport?: boolean;
+    onCommit?: () => void;
+  } = {}) => {
     const query = timelineQueryWindow(nextViewport, nextLive);
     const current = dataRef.current;
     const now = Date.now();
@@ -487,15 +486,20 @@ export function ServerTimeline({
         : { ...response, from: query.from, to: query.to };
       if (!incremental) lastFullLoadRef.current = now;
       dataRef.current = next;
+      if (options.commitViewport) setViewport(nextViewport);
       setData(next);
+      options.onCommit?.();
       onLatestSample?.(next.latest);
       setError("");
     } catch (requestError) {
       if (requestId === requestIdRef.current) setError((requestError as Error).message || "Timeline data is unavailable");
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if (requestId === requestIdRef.current) {
+        if (options.commitViewport) navigationPendingRef.current = false;
+        setLoading(false);
+      }
     }
-  }, [loadTimeline, onLatestSample]);
+  }, [loadTimeline, onLatestSample, setViewport]);
 
   useEffect(() => {
     void loadWindow(viewportRef.current, true, { showLoading: true });
@@ -509,7 +513,7 @@ export function ServerTimeline({
   useEffect(() => {
     if (!live) return;
     const interval = window.setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || navigationPendingRef.current) return;
       const span = viewportRef.current.to - viewportRef.current.from;
       const next = liveTimelineWindow(span);
       setClockNow(Date.now());
@@ -587,11 +591,16 @@ export function ServerTimeline({
     setSelection(range);
     setSelectedCluster(null);
     setHoverTooltip(null);
-    setLastPreset(range);
-    setLiveMode(nextLive);
     setClockNow(Date.now());
-    setViewport(next);
-    void loadWindow(next, nextLive, { showLoading: true });
+    navigationPendingRef.current = true;
+    void loadWindow(next, nextLive, {
+      showLoading: true,
+      commitViewport: true,
+      onCommit: () => {
+        setLastPreset(range);
+        setLiveMode(nextLive);
+      }
+    });
   };
 
   const jumpToNow = () => selectPreset(lastPreset, true);
@@ -698,10 +707,9 @@ export function ServerTimeline({
     palette,
     formatTime,
     formatShortTime,
-    reducedMotion,
     now: clockNow,
     gridTop: annotationGridTop
-  }), [annotationGridTop, clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, reducedMotion, viewport]);
+  }), [annotationGridTop, clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, viewport]);
 
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>

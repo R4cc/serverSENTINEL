@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
@@ -8,7 +8,7 @@ import { defaultNodeDataPath } from "../app/appConfig";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
 
-type AddNodeInput = {
+export type AddNodeInput = {
   name: string;
   panelUrl: string;
   dataMount: string;
@@ -76,7 +76,18 @@ function compareVersions(left?: string, right?: string) {
   return 0;
 }
 
-function validateAddNodeInput(input: AddNodeInput) {
+function nodePanelAddressHostProblem(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.startsWith("127.")) {
+    return "localhost and loopback addresses point back to the node itself. Use this panel's LAN, VPN, or public address instead.";
+  }
+  if (host === "0.0.0.0" || host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:0" || host === "0:0:0:0:0:0:0:1") {
+    return "This address cannot be used by another computer. Use this panel's LAN, VPN, or public address instead.";
+  }
+  return "";
+}
+
+export function validateAddNodeInput(input: AddNodeInput) {
   const name = input.name.trim();
   const panelUrl = input.panelUrl.trim();
   const dataMount = input.dataMount.trim();
@@ -84,18 +95,20 @@ function validateAddNodeInput(input: AddNodeInput) {
     return "Node name must be 80 characters or fewer.";
   }
   if (!panelUrl) {
-    return "Panel URL is required so the node can connect back.";
+    return "Enter the address this node will use to reach the panel.";
   }
   try {
     const url = new URL(panelUrl);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return "Panel URL must start with http:// or https://.";
+      return "Panel address must start with http:// or https://.";
     }
     if (url.username || url.password) {
-      return "Panel URL cannot include a username or password.";
+      return "Panel address cannot include a username or password.";
     }
+    const hostProblem = nodePanelAddressHostProblem(url.hostname);
+    if (hostProblem) return hostProblem;
   } catch {
-    return "Panel URL must be a valid URL reachable from the node host.";
+    return "Enter a complete panel address, such as https://panel.example.com or http://192.168.1.50:8080.";
   }
   if (!dataMount) {
     return "Data folder is required.";
@@ -254,9 +267,9 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
   );
 }
 
-function AddNodeModal({
+export function AddNodeModal({
   busy,
-  defaultPanelUrl,
+  browserPanelUrl,
   created,
   currentNode,
   installMethod,
@@ -268,7 +281,7 @@ function AddNodeModal({
   formatDate
 }: {
   busy: boolean;
-  defaultPanelUrl: string;
+  browserPanelUrl: string;
   created: CreateNodeResponse | null;
   currentNode?: ManagedNode;
   installMethod: "compose" | "run";
@@ -280,13 +293,11 @@ function AddNodeModal({
   formatDate: (value: string | number | Date) => string;
 }) {
   const [name, setName] = useState("");
-  const [panelUrl, setPanelUrl] = useState(defaultPanelUrl);
+  const [panelUrl, setPanelUrl] = useState("");
   const [dataMount, setDataMount] = useState(defaultNodeDataPath);
   const [formError, setFormError] = useState("");
-
-  useEffect(() => {
-    if (!panelUrl) setPanelUrl(defaultPanelUrl);
-  }, [defaultPanelUrl, panelUrl]);
+  const browserAddressProblem = validateAddNodeInput({ name: "", panelUrl: browserPanelUrl, dataMount: defaultNodeDataPath });
+  const browserAddressUsable = !browserAddressProblem;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -309,14 +320,14 @@ function AddNodeModal({
   const canClose = !busy;
 
   return (
-    <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+    <div className="modalBackdrop nodeModalBackdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && canClose) onClose();
     }}>
       <DialogSurface className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
         <header className="nodeModalHeader">
           <div>
             <h2 id="add-node-title">Add node</h2>
-            <p>Create a remote node and connect it to this panel.</p>
+            <p>Connect another computer to this ServerSentinel panel.</p>
           </div>
           <Button
             variant="secondary"
@@ -338,11 +349,46 @@ function AddNodeModal({
               <label>
                 Node name
                 <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
+                <span className="fieldHint">A friendly name for the computer that will run your Minecraft servers.</span>
               </label>
-              <label>
-                Panel URL reachable from the node
-                <input name="panelUrl" value={panelUrl} onChange={(event) => setPanelUrl(event.target.value)} placeholder="https://panel.example.com" required />
-              </label>
+              <section className="nodeConnectionSetup" aria-labelledby="node-connection-title">
+                <div className="nodeConnectionIntro">
+                  <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
+                    <span>Node computer</span>
+                    <b aria-hidden="true">→</b>
+                    <span>This panel</span>
+                  </div>
+                  <div>
+                    <h3 id="node-connection-title">How the node connects</h3>
+                    <p>The node opens a connection to this panel so you can manage servers on that computer. It needs an address for this panel that works from the node computer.</p>
+                  </div>
+                </div>
+                <label htmlFor="node-panel-address">
+                  Panel address for this node
+                  <input
+                    id="node-panel-address"
+                    name="panelUrl"
+                    value={panelUrl}
+                    onChange={(event) => setPanelUrl(event.target.value)}
+                    placeholder="https://panel.example.com or http://192.168.1.50:8080"
+                    aria-describedby="node-panel-address-hint"
+                    required
+                  />
+                  <span className="fieldHint" id="node-panel-address-hint">This is the panel's address, not the new node's address. Include the port when your panel uses one.</span>
+                </label>
+                <div className={`panelAddressSuggestion ${browserAddressUsable ? "" : "warning"}`}>
+                  <div>
+                    <span className="panelAddressSuggestionLabel">Address used by this browser</span>
+                    <code>{browserPanelUrl}</code>
+                    <p>{browserAddressUsable
+                      ? "This may work if the node computer can open the same address."
+                      : "This browser is using a local-only address. A Docker node would point that address back at itself, not at this panel."}</p>
+                  </div>
+                  {browserAddressUsable && (
+                    <Button type="button" variant="secondary" compact onClick={() => setPanelUrl(browserPanelUrl)}>Use this address</Button>
+                  )}
+                </div>
+              </section>
               <label>
                 <span className="fieldLabelWithInfo">
                   Data folder on node
@@ -356,7 +402,7 @@ function AddNodeModal({
                 <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
               </label>
               <div className="nodeModalFooter inline">
-                <Button type="submit" reserveLabel="Create pending node">{busy ? "Creating..." : "Create pending node"}</Button>
+                <Button type="submit" reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
                 <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
               </div>
             </fieldset>
@@ -383,7 +429,7 @@ export function NodesPage({
   canManageNodes,
   busy,
   busyNodeId,
-  defaultPanelUrl,
+  browserPanelUrl,
   selectedNode,
   nodeOperations,
   nodeOperationNow,
@@ -420,7 +466,7 @@ export function NodesPage({
   canManageNodes: boolean;
   busy: boolean;
   busyNodeId: string;
-  defaultPanelUrl: string;
+  browserPanelUrl: string;
   selectedNode: ManagedNode | null;
   nodeOperations: Record<string, NodeOperation>;
   nodeOperationNow: number;
@@ -647,7 +693,7 @@ export function NodesPage({
       )}
 
       {installResult && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
+        <div className="modalBackdrop nodeModalBackdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClearInstall();
         }}>
           <DialogSurface className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
@@ -668,7 +714,7 @@ export function NodesPage({
       {addNodeOpen && (
         <AddNodeModal
           busy={busy}
-          defaultPanelUrl={defaultPanelUrl}
+          browserPanelUrl={browserPanelUrl}
           created={addNodeResult}
           currentNode={addNodeCurrent}
           installMethod={installMethod}
