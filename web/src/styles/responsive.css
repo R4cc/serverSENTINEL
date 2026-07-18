@@ -418,7 +418,7 @@
   position: absolute;
 }
 
-.slider {
+.switch .slider {
   position: relative;
   display: inline-block;
   width: 38px;
@@ -429,7 +429,7 @@
   transition: all 200ms ease;
 }
 
-.slider::before {
+.switch .slider::before {
   content: "";
   position: absolute;
   height: 12px;
