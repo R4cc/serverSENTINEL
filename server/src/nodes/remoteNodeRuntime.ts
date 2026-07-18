@@ -340,8 +340,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     }
   }
 
-  serverLogs(server: ManagedServer) {
-    return this.command(server, "server.logs.recent");
+  serverLogs(server: ManagedServer, lineLimit?: number) {
+    return this.command(server, "server.logs.recent", lineLimit === undefined ? undefined : { limit: lineLimit });
   }
 
   readPlayerObservation(server: ManagedServer) {

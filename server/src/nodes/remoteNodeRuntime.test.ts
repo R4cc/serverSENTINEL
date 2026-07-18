@@ -80,6 +80,33 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("passes the selected console history limit to remote nodes", async () => {
+    const node = testNode();
+    const calls: Array<{ command: string; payload: unknown }> = [];
+    const connections = {
+      request: async (_node: ManagedNode, command: string, payload: unknown) => {
+        calls.push({ command, payload });
+        return { text: "", source: "logs/latest.log" };
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    await runtime.serverLogs(testServer(), 5_000);
+
+    expect(calls).toEqual([{
+      command: "server.logs.recent",
+      payload: expect.objectContaining({ limit: 5_000 })
+    }]);
+  });
+
   it("sends file moves to remote nodes with normalized source and destination paths", async () => {
     const node = testNode();
     const calls: Array<{ command: string; payload: unknown }> = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendConsoleEntries, consoleReconnectDelay, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
+import { appendConsoleEntries, consoleReconnectDelay, consoleSnapshotLines, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
 
 describe("console pipeline", () => {
   it("reconciles overlapping snapshots and preserves live lines received during loading", () => {
@@ -13,6 +13,15 @@ describe("console pipeline", () => {
   it("deduplicates appended entries and enforces the history limit", () => {
     expect(appendConsoleEntries(["a", "b"], ["b", "c"], 3)).toEqual(["a", "b", "c"]);
     expect(appendConsoleEntries(["a", "b", "c"], ["d"], 3)).toEqual(["b", "c", "d"]);
+  });
+
+  it("keeps the configured number of snapshot lines instead of truncating to 200", () => {
+    const snapshot = Array.from({ length: 1_200 }, (_, index) => `line-${index}`).join("\n");
+
+    expect(consoleSnapshotLines(snapshot, 5_000)).toHaveLength(1_200);
+    expect(consoleSnapshotLines(snapshot, 1_000)).toEqual(
+      Array.from({ length: 1_000 }, (_, index) => `line-${index + 200}`)
+    );
   });
 
   it("recognizes structured and legacy offline messages", () => {

@@ -12,7 +12,7 @@ import { usePreferencesState } from "./app/appState";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
-import { appendConsoleEntries, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { appendConsoleEntries, consoleReconnectDelay, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
@@ -229,6 +229,7 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const logsRef = useRef<string[]>([]);
+  const consoleScrollbackRef = useRef(consoleScrollback);
   const fileWorkspaceServerIdRef = useRef("");
   const refreshModsAfterFileMutationRef = useRef<() => Promise<unknown> | unknown>(() => undefined);
   const activeServerIdRef = useRef("");
@@ -644,6 +645,15 @@ export default function App() {
   }, [logs]);
 
   useEffect(() => {
+    consoleScrollbackRef.current = consoleScrollback;
+    setLogs((current) => {
+      const next = current.slice(-consoleScrollback);
+      logsRef.current = next;
+      return next;
+    });
+  }, [consoleScrollback]);
+
+  useEffect(() => {
     if (!appStateLoaded || demoMode || !panelOnlyMode || panelFirstRunPromptedRef.current) return;
     if (effectiveAppState.servers.length > 0 || usableContextNodes.length > 0) return;
     panelFirstRunPromptedRef.current = true;
@@ -950,7 +960,7 @@ export default function App() {
       if (message.type === "log") {
         markConsoleLive();
         setLogs((current) => {
-          const next = appendConsoleEntries(current, [message.text ?? ""]);
+          const next = appendConsoleEntries(current, [message.text ?? ""], consoleScrollbackRef.current);
           logsRef.current = next;
           return next;
         });
@@ -1488,12 +1498,13 @@ export default function App() {
     const startLogs = logsRef.current;
     setConsoleLoading(startLogs.length === 0);
     try {
-      const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs`);
+      const limit = consoleScrollbackRef.current;
+      const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs?limit=${limit}`);
       if (activeServerIdRef.current !== serverId) return;
-      const lines = result.text.split(/\r?\n/).filter(Boolean).slice(-200);
+      const lines = consoleSnapshotLines(result.text, limit);
       const nextLogs = lines.map((line) => consoleLine(line));
       setLogs((current) => {
-        const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, current);
+        const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, current, limit);
         logsRef.current = reconciled;
         return reconciled;
       });
@@ -2029,10 +2040,10 @@ export default function App() {
         setStatus(demoStatus(activeServer, nextRunning));
         setResourceSamples([demoStats(nextRunning)]);
         setLogs((current) => [
-          ...current.slice(-496),
+          ...current,
           consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
           consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
-        ]);
+        ].slice(-consoleScrollbackRef.current));
         showRuntimeFeedback(action);
         notify("success", `Demo server ${completedLabel}`);
         return;
@@ -2072,7 +2083,7 @@ export default function App() {
               : command.startsWith("say ")
                 ? `[Server] ${command.slice(4)}`
                 : `Executed demo command: ${command}`;
-        setLogs((current) => [...current.slice(-498), consoleLine(`[demo] ${response}`)]);
+        setLogs((current) => [...current, consoleLine(`[demo] ${response}`)].slice(-consoleScrollbackRef.current));
         setCommandHistory((current) => appendCommandHistory(current, command));
         return;
       }

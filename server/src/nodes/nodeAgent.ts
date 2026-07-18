@@ -8,6 +8,7 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
+import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
@@ -1025,9 +1026,12 @@ async function fileRead(server: ManagedServer, path: unknown, preview = false) {
   return preview ? { path: publicPath(root, target), preview: "text", content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() } : { path: publicPath(root, target), content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() };
 }
 
-async function readRecentServerLogs(server: ManagedServer) {
+async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
   try {
     const target = await inside(server, "logs/latest.log");
+    if (lineLimit !== undefined) {
+      return { text: await readConsoleLogTail(target, lineLimit), source: "logs/latest.log" as const };
+    }
     const handle = await open(target, "r");
     try {
       const fileStat = await handle.stat();
@@ -1042,7 +1046,8 @@ async function readRecentServerLogs(server: ManagedServer) {
     }
   } catch {
     const name = encodeURIComponent(containerName(server));
-    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=300`)).toString("utf8");
+    const tail = lineLimit === undefined ? 300 : consoleLogLineLimit(lineLimit);
+    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`)).toString("utf8");
     return { text, source: "docker" as const };
   }
 }
@@ -1334,7 +1339,10 @@ async function handleCommand(command: string, payload: any) {
     const networks = Object.values(stats.networks ?? {}) as Array<{ rx_bytes?: number; tx_bytes?: number }>;
     return { available: true, running: true, cpuPercent, cpuCapacityCores, memoryUsageBytes: stats.memory_stats?.usage ?? 0, memoryLimitBytes: stats.memory_stats?.limit ?? 0, networkRxBytes: networks.reduce((sum, n) => sum + (n.rx_bytes ?? 0), 0), networkTxBytes: networks.reduce((sum, n) => sum + (n.tx_bytes ?? 0), 0), sampledAt: new Date().toISOString() };
   }
-  if (command === "server.logs.recent") return readRecentServerLogs(server);
+  if (command === "server.logs.recent") {
+    const lineLimit = payload?.limit === undefined ? undefined : consoleLogLineLimit(payload.limit);
+    return readRecentServerLogs(server, lineLimit);
+  }
   if (command === "server.console.send") {
     const commandText = typeof payload?.command === "string" ? payload.command.trim() : "";
     if (!commandText) throw new Error("Console command is required");

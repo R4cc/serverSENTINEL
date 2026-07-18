@@ -28,13 +28,20 @@ function overlapLength(left: string[], right: string[]) {
   return 0;
 }
 
-export function appendConsoleEntries(current: string[], incoming: string[], limit = 500) {
+export function consoleSnapshotLines(text: string, limit = 5_000) {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/);
+  if (lines.at(-1) === "") lines.pop();
+  return lines.slice(-limit);
+}
+
+export function appendConsoleEntries(current: string[], incoming: string[], limit = 5_000) {
   if (!incoming.length) return current.slice(-limit);
   const overlap = overlapLength(current, incoming);
   return [...current, ...incoming.slice(overlap)].slice(-limit);
 }
 
-export function reconcileConsoleSnapshot(start: string[], snapshot: string[], current: string[], limit = 500) {
+export function reconcileConsoleSnapshot(start: string[], snapshot: string[], current: string[], limit = 5_000) {
   const startStillPresent = start.length <= current.length && start.every((line, index) => current[index] === line);
   const liveTail = startStillPresent ? current.slice(start.length) : [];
   if (!snapshot.length) return liveTail.length ? appendConsoleEntries([], liveTail, limit) : [];

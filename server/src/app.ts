@@ -19,6 +19,7 @@ import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { currentUserForRequest, type AuthenticatedRequest } from "./auth/requestAuthentication.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
+import { consoleLogLineLimit, readConsoleLogTail } from "./consoleLogs.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
@@ -2665,13 +2666,14 @@ async function sendDockerStdinCommand(server: ManagedServer, command: string) {
   return { ok: true };
 }
 
-async function dockerRecentLogs(server: ManagedServer) {
+async function dockerRecentLogs(server: ManagedServer, lineLimit = 200) {
   if (!dockerControlConfigured(server)) {
     throw new Error("Console logs are not configured for this managed server instance");
   }
+  const tail = consoleLogLineLimit(lineLimit, 200);
   const response = await dockerBufferRequest(
     "GET",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=200`,
+    `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}`,
     200
   );
   return stripDockerLogHeaders(response).toString("utf8");
@@ -2762,8 +2764,9 @@ function readFileRange(filePath: string, start: number, end: number) {
   });
 }
 
-async function readLatestServerLog(server: ManagedServer) {
+async function readLatestServerLog(server: ManagedServer, lineLimit?: number) {
   const logPath = await validateExistingInsideServer(server, "logs/latest.log");
+  if (lineLimit !== undefined) return readConsoleLogTail(logPath, lineLimit);
   const logStat = await stat(logPath);
   if (!logStat.isFile()) {
     throw new Error("logs/latest.log is not a file");
@@ -4245,11 +4248,11 @@ async function localStreamConsole(server: ManagedServer, client: unknown, onClos
   onClose(streamLatestServerLog(server, consoleClient));
 }
 
-async function localServerLogs(server: ManagedServer) {
+async function localServerLogs(server: ManagedServer, lineLimit?: number) {
   if (dockerControlConfigured(server) && dockerAvailable()) {
-    return { text: await dockerRecentLogs(server), source: "docker" };
+    return { text: await dockerRecentLogs(server, lineLimit), source: "docker" };
   }
-  return { text: await readLatestServerLog(server), source: "logs/latest.log" };
+  return { text: await readLatestServerLog(server, lineLimit), source: "logs/latest.log" };
 }
 
 let activeAppReservation: symbol | undefined;
@@ -5202,10 +5205,10 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   }
 });
 
-app.get<{ Params: { id: string } }>("/api/servers/:id/logs", async (request) => {
+app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/servers/:id/logs", async (request) => {
   await requireRequestPermission(request, "console.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).serverLogs(server);
+  return runtimeForServer(server).serverLogs(server, consoleLogLineLimit(request.query.limit));
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/stats", async (request) => {
