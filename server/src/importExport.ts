@@ -9,6 +9,7 @@ import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import type { SettingsRepository } from "./storage/settingsRepository.js";
 import { parseDockerPorts } from "./core.js";
+import { assertRuntimeProvider } from "./runtime/profile.js";
 
 export const exportArtifactType = "serversentinel.export";
 export const exportArtifactSchemaVersion = 3;
@@ -313,6 +314,8 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
 function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
   rejectUnsupportedKeys(profile, [
     "minecraftVersion",
+    "runtimeType",
+    "runtimeVersion",
     "loader",
     "loaderVersion",
     "javaMajorVersion",
@@ -322,12 +325,24 @@ function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
     "resolvedAt"
   ], label);
   stringValue(profile.minecraftVersion, `${label}.minecraftVersion`);
-  stringValue(profile.loader, `${label}.loader`);
-  stringValue(profile.loaderVersion, `${label}.loaderVersion`);
+  const runtimeType = stringValue(profile.runtimeType ?? profile.loader, `${label}.runtimeType`);
+  const runtimeVersion = stringValue(profile.runtimeVersion ?? profile.loaderVersion, `${label}.runtimeVersion`);
+  if (runtimeType !== "fabric" && runtimeType !== "paper") throw new Error(`${label}.runtimeType must be fabric or paper`);
+  if (profile.runtimeType !== undefined && profile.loader !== undefined && profile.runtimeType !== profile.loader) {
+    throw new Error(`${label}.loader must match runtimeType`);
+  }
+  if (profile.runtimeVersion !== undefined && profile.loaderVersion !== undefined && profile.runtimeVersion !== profile.loaderVersion) {
+    throw new Error(`${label}.loaderVersion must match runtimeVersion`);
+  }
+  void runtimeVersion;
   if (typeof profile.javaMajorVersion !== "number" || !Number.isInteger(profile.javaMajorVersion)) {
     throw new Error(`${label}.javaMajorVersion must be an integer`);
   }
-  stringValue(profile.jarProvider, `${label}.jarProvider`);
+  const jarProvider = stringValue(profile.jarProvider, `${label}.jarProvider`);
+  if (jarProvider !== "mcjars" && jarProvider !== "papermc") {
+    throw new Error(`${label}.jarProvider must be mcjars or papermc`);
+  }
+  assertRuntimeProvider(runtimeType, jarProvider, `${label}.jarProvider`);
   if (!isPlainObject(profile.jarArtifact)) throw new Error(`${label}.jarArtifact must be a JSON object`);
   rejectUnsupportedKeys(profile.jarArtifact, ["id", "filename", "downloadUrl", "sha1", "sha256", "sizeBytes"], `${label}.jarArtifact`);
   optionalStringValue(profile.jarArtifact.id, `${label}.jarArtifact.id`);

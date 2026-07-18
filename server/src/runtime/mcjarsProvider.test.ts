@@ -20,7 +20,7 @@ describe("MCJars runtime provider", () => {
       }
     }));
 
-    const versions = await provider.listMinecraftVersions();
+    const versions = await provider.listMinecraftVersions("fabric");
 
     expect(versions.map((version) => version.id)).toEqual(["1.21.4", "1.20.4"]);
     expect(versions[0]).toMatchObject({ javaMajorVersion: 21, supported: true, type: "release" });
@@ -47,8 +47,10 @@ describe("MCJars runtime provider", () => {
       });
     });
 
-    await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4", loaderVersion: "0.16.10" })).resolves.toMatchObject({
+    await expect(provider.resolveServerJar({ runtimeType: "fabric", minecraftVersion: "1.21.4", runtimeVersion: "0.16.10" })).resolves.toMatchObject({
       minecraftVersion: "1.21.4",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
       loader: "fabric",
       loaderVersion: "0.16.10",
       javaMajorVersion: 21,
@@ -90,8 +92,8 @@ describe("MCJars runtime provider", () => {
       ]
     }));
 
-    await expect(provider.resolveFabricServerJar({ minecraftVersion: "26.1.2", loaderVersion: "latest", preferStable: true })).resolves.toMatchObject({
-      loaderVersion: "0.19.3",
+    await expect(provider.resolveServerJar({ runtimeType: "fabric", minecraftVersion: "26.1.2", runtimeVersion: "latest", preferStable: true })).resolves.toMatchObject({
+      runtimeVersion: "0.19.3",
       jarArtifact: {
         downloadUrl: "https://versions.mcjars.app/download/fabric/26.1.2/0.19.3/1.1.1.jar"
       }
@@ -101,7 +103,7 @@ describe("MCJars runtime provider", () => {
   it("reports provider failures as runtime resolution errors", async () => {
     const provider = new McJarsProvider("https://mcjars.test", undefined, async () => jsonResponse({ error: "down" }, 503));
 
-    await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4" })).rejects.toMatchObject({
+    await expect(provider.resolveServerJar({ runtimeType: "fabric", minecraftVersion: "1.21.4" })).rejects.toMatchObject({
       code: "provider_unavailable",
       message: "MCJars is currently unavailable (503). Try again in a moment."
     });
@@ -112,9 +114,16 @@ describe("MCJars runtime provider", () => {
       throw new Error("fetch failed");
     });
 
-    await expect(provider.resolveFabricServerJar({ minecraftVersion: "1.21.4" })).rejects.toMatchObject({
+    await expect(provider.resolveServerJar({ runtimeType: "fabric", minecraftVersion: "1.21.4" })).rejects.toMatchObject({
       code: "provider_unavailable",
-      message: "serverSENTINEL could not reach MCJars to fetch Fabric server files. Check internet access from the panel or node host, then try again."
+      message: "serverSENTINEL could not reach MCJars to fetch Minecraft server files. Check internet access from the panel or node host, then try again."
+    });
+  });
+
+  it("rejects registered runtimes whose provider adapter is not enabled", async () => {
+    const provider = new McJarsProvider("https://mcjars.test", undefined, async () => jsonResponse({}));
+    await expect(provider.resolveServerJar({ runtimeType: "paper", minecraftVersion: "1.21.4" })).rejects.toMatchObject({
+      code: "unsupported_runtime"
     });
   });
 });

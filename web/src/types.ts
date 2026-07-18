@@ -81,6 +81,15 @@ export type ManagedServerPort = {
   advanced?: boolean;
 };
 
+export type RuntimeVersion = {
+  id: string;
+  runtimeVersion: string;
+  stable?: boolean;
+  recommended?: boolean;
+  buildId?: string;
+};
+
+/** @deprecated Legacy Fabric endpoint response. */
 export type RuntimeLoaderVersion = {
   id: string;
   loaderVersion: string;
@@ -304,7 +313,7 @@ export type FileEditLease = {
 };
 
 export type ModCompatibility = {
-  status: "compatible" | "no_fabric" | "no_minecraft_version" | "incompatible" | "unknown";
+  status: "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
   compatible: boolean;
   reason: string;
   matchedVersionId?: string;
@@ -381,7 +390,7 @@ export type ModrinthInstallVersionsResponse = {
     serverId: string;
     serverName: string;
     minecraftVersion: string;
-    loader: "Fabric" | "fabric";
+    loader: string;
   };
   channel: ReleaseChannel;
   compatibleVersions: ModrinthInstallVersion[];
@@ -441,7 +450,7 @@ export type InstalledMod = {
 };
 
 export type FabricVersions = {
-  game: Array<{ version: string; stable: boolean; type?: "release" | "snapshot" | "unknown" }>;
+  game: Array<{ version: string; stable: boolean; recommended?: boolean; type?: "release" | "snapshot" | "unknown" }>;
   loader: Array<{ version: string; stable: boolean }>;
   installer: Array<{ version: string; stable: boolean }>;
 };

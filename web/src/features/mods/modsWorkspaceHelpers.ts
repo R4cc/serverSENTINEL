@@ -1,4 +1,5 @@
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
+import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 import { validateJarFilename } from "../../utils/validation";
 
 type ModUploadCandidate = Pick<File, "name" | "size">;
@@ -11,12 +12,12 @@ export function filterInstalledMods(mods: InstalledMod[], query: string) {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-export function validateModUploadSelection(file: ModUploadCandidate | undefined, installedMods: InstalledMod[]): ModUploadSelection {
+export function validateModUploadSelection(file: ModUploadCandidate | undefined, installedMods: InstalledMod[], terminology: ManagedContentTerminology = fabricContentTerminology): ModUploadSelection {
   if (!file) return { kind: "cancelled" };
   const filenameError = validateJarFilename(file.name);
   if (filenameError) return { kind: "error", message: filenameError };
-  if (file.size <= 0 || file.size > 128 * 1024 * 1024) return { kind: "error", message: "Uploaded mod must be between 1 byte and 128 MiB." };
-  if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) return { kind: "error", message: "A mod with that filename is already installed." };
+  if (file.size <= 0 || file.size > 128 * 1024 * 1024) return { kind: "error", message: `Uploaded ${terminology.singular} must be between 1 byte and 128 MiB.` };
+  if (installedMods.some((mod) => mod.filename === file.name || mod.filename === `${file.name}.disabled`)) return { kind: "error", message: `A ${terminology.singular} with that filename is already installed.` };
   return { kind: "ready", file };
 }
 
@@ -53,14 +54,14 @@ export function selectedInstallFlags(version: ModrinthInstallVersion) {
   };
 }
 
-export function safeBatchUpdateFeedback(result: SafeBatchUpdateResult) {
+export function safeBatchUpdateFeedback(result: SafeBatchUpdateResult, terminology: ManagedContentTerminology = fabricContentTerminology) {
   const { updated, skipped, failed } = result.counts;
   const hasIssues = skipped > 0 || failed > 0;
   return {
     status: failed > 0 ? "failed" as const : "succeeded" as const,
     title: hasIssues
       ? updated > 0 ? "Safe updates partially completed" : "No safe updates were applied"
-      : `${updated} safe ${updated === 1 ? "mod" : "mods"} updated`,
+      : `${updated} safe ${updated === 1 ? terminology.singular : terminology.plural} updated`,
     summary: `${updated} updated · ${skipped} skipped · ${failed} failed`
   };
 }

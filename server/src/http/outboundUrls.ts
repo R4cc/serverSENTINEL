@@ -38,3 +38,11 @@ export function assertMcJarsArtifactUrl(value: string, baseUrl: string) {
   }
   return parsed.toString();
 }
+
+export function assertPaperMcArtifactUrl(value: string) {
+  const parsed = parseSecureUrl(value, "PaperMC artifact URL");
+  if (!sameOrSubdomain(parsed.hostname, "papermc.io")) {
+    throw new Error("PaperMC artifact URL must use a papermc.io host or one of its subdomains");
+  }
+  return parsed.toString();
+}

@@ -1,7 +1,7 @@
 export const appVersion = process.env.npm_package_version ?? "1.4.0";
 
 export function appUserAgentFor(component: string) {
-  return `serverSENTINEL/${appVersion} (${component})`;
+  return `serverSENTINEL/${appVersion} (${component}; https://github.com/R4cc/serverSENTINEL)`;
 }
 
 function normalizeBuildId(value?: string) {

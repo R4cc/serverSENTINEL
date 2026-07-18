@@ -8,8 +8,10 @@ import { applyUpdatePlanEntry, updatePlanEntryForMod } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 import { ModStatusBadge } from "./ModStatusBadge";
+import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 
 type Props = {
+  terminology?: ManagedContentTerminology;
   mods: InstalledMod[];
   restartRequiredChanges?: RestartRequiredChange[];
   query: string;
@@ -39,7 +41,7 @@ function restartChangeMatchesMod(mod: InstalledMod, change: RestartRequiredChang
   return change.identity === identity || Boolean(change.filename && canonicalModFilename(change.filename) === filename);
 }
 
-export function InstalledModsList({ mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
+export function InstalledModsList({ terminology = fabricContentTerminology, mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const visible = filterInstalledMods(mods, query);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
@@ -52,7 +54,7 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
     <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">
       <div className="modsWorkspaceListHeader">
         <div>
-          <h3 id="installed-mods-title">Installed mods</h3>
+          <h3 id="installed-mods-title">Installed {terminology.plural}</h3>
           <span>{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : `${mods.length} total`}</span>
         </div>
         <label className="modsWorkspaceSearch">
@@ -76,16 +78,16 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
       >
         {draggingFiles && <div className="modsWorkspaceDropOverlay" role="status"><AppIcon name="fileUp" /><strong>Drop JAR files to upload</strong></div>}
         <div className="modsWorkspaceTableHead" aria-hidden="true">
-          <span>Mod</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
+          <span>{terminology.singularTitle}</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
         </div>
-        {initialLoading && <LoadingLabel>Loading installed mods</LoadingLabel>}
+        {initialLoading && <LoadingLabel>Loading installed {terminology.plural}</LoadingLabel>}
         {initialLoading ? (
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
-          <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? "No matching mods" : "No mods installed yet"} message={mods.length ? "Try a different search." : "Add a compatible Fabric mod or upload a jar to get started."} />
+          <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
         ) : visible.map((mod) => {
           const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
-          const health = getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate));
+          const health = getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology);
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
           const requiresRestart = restartRequiredChanges.some((change) => restartChangeMatchesMod(mod, change));
@@ -130,7 +132,7 @@ export function InstalledModsList({ mods, restartRequiredChanges = [], query, bu
                   <span className="slider" />
                 </label>
               </div>
-              <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => onSwitchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : "Only Modrinth-managed mods can switch versions"}><AppIcon name="switch" /></Button>
+              <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => onSwitchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : `Only Modrinth-managed ${terminology.plural} can switch versions`}><AppIcon name="switch" /></Button>
             </article>
           );
         })}

@@ -38,6 +38,26 @@ function resolve(
 }
 
 describe("Modrinth compatibility resolver", () => {
+  it.each(["paper", "bukkit", "spigot"])("accepts a %s plugin release for Paper", (loader) => {
+    const result = resolveCompatibilityFromVersions(
+      [version({ id: `${loader}-plugin`, loaders: [loader], game_versions: ["1.21.4"] })],
+      { loaders: ["paper", "bukkit", "spigot"], runtimeName: "Paper", contentKind: "plugin", minecraftVersion: "1.21.4", channel: "release" },
+      { server_side: "required" }
+    );
+
+    expect(result).toMatchObject({ status: "compatible", compatible: true, reason: "Compatible server-side Paper plugin" });
+  });
+
+  it("rejects runtime-specific plugin releases that are not compatible with Paper", () => {
+    const result = resolveCompatibilityFromVersions(
+      [version({ id: "folia-plugin", loaders: ["folia"], game_versions: ["1.21.4"] })],
+      { loaders: ["paper", "bukkit", "spigot"], runtimeName: "Paper", contentKind: "plugin", minecraftVersion: "1.21.4", channel: "release" },
+      { server_side: "required" }
+    );
+
+    expect(result).toMatchObject({ status: "no_compatible_loader", compatible: false, reason: "No Paper-compatible version available" });
+  });
+
   it("accepts a Fabric-only compatible version", () => {
     const result = resolve([version({ id: "fabric-release", loaders: ["fabric"], game_versions: ["1.21.4"] })]);
 

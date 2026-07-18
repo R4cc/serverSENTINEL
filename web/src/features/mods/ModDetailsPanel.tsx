@@ -8,6 +8,7 @@ import { getInstalledModHealth, modVersion } from "./modHealth";
 import { applyUpdatePlanEntry } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { DialogSurface } from "../../components/DialogSurface";
+import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 
 function technicalValue(value?: string) {
   if (!value) return "Unknown";
@@ -19,6 +20,7 @@ function technicalTone(value?: string) {
 }
 
 type Props = {
+  terminology?: ManagedContentTerminology;
   mod: InstalledMod;
   locked: boolean;
   reviewAcknowledgementLocked: boolean;
@@ -33,8 +35,8 @@ type Props = {
   updatePlanEntry?: ModUpdatePlanEntry | null;
 };
 
-export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
-  const health = getInstalledModHealth(applyUpdatePlanEntry(mod, updatePlanEntry ?? null));
+export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
+  const health = getInstalledModHealth(applyUpdatePlanEntry(mod, updatePlanEntry ?? null), terminology);
   const icon = modIconSource(mod.iconUrl);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);
@@ -87,7 +89,7 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, depe
           <ModIconImage src={icon} fallback="JAR" />
           <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
         </div>
-        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label="Close mod details"><AppIcon name="x" /></Button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label={`Close ${terminology.singular} details`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
@@ -167,7 +169,7 @@ export function ModDetailsPanel({ mod, locked, reviewAcknowledgementLocked, depe
               {hasPlannedUpdate && updatePlanEntry?.targetFilename && <div><dt>Available filename</dt><dd>{updatePlanEntry.targetFilename}</dd></div>}
               {mod.modrinth && <><div><dt>Project ID</dt><dd>{mod.modrinth.projectId}</dd></div><div><dt>Version ID</dt><dd>{mod.modrinth.versionId}</dd></div><div><dt>Installed</dt><dd>{formatDate(mod.modrinth.installedAt)}</dd></div><div><dt>Game versions</dt><dd>{mod.modrinth.gameVersions.join(", ") || "Unknown"}</dd></div><div><dt>Loaders</dt><dd>{mod.modrinth.loaders.join(", ") || "Unknown"}</dd></div></>}
             </dl>
-            {mod.modrinth && <a href={`https://modrinth.com/mod/${mod.modrinth.projectId}`} target="_blank" rel="noreferrer">View on Modrinth</a>}
+            {mod.modrinth && <a href={`https://modrinth.com/${terminology.modrinthProjectType}/${mod.modrinth.projectId}`} target="_blank" rel="noreferrer">View on Modrinth</a>}
           </details>
       </div>
       <div className="modsDrawerFooter">

@@ -10,6 +10,7 @@ import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResult
 import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
+import { managedContentTerminology } from "./contentTerminology";
 
 const modSearchDebounceMs = 650;
 
@@ -171,6 +172,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     isProvisioning, canManage, canInstall, modsLocked, toggleLocked, notify, setNotice,
     setActiveJobs, handleStaleSession, refreshFiles, refreshServerState, requestConfirmation
   } = inputs;
+  const terminology = managedContentTerminology(activeServer?.runtimeProfile.runtimeType ?? "fabric");
   const demoFixture = readModsDemoFixture();
 
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
@@ -243,7 +245,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
     } catch (error) {
       if (handleStaleSession(error)) return;
-      const message = errorMessage(error, "Could not load installed mods. Check the server mods folder and retry.");
+      const message = errorMessage(error, `Could not load installed ${terminology.plural}. Check the server ${terminology.directory} folder and retry.`);
       if (activeServerIdRef.current === serverId) {
         setModsError(message);
         if (options.notifyOnError) {
@@ -287,7 +289,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return plan;
     } catch (error) {
       if (handleStaleSession(error)) return null;
-      const message = errorMessage(error, "Could not build the mod update plan.");
+      const message = errorMessage(error, `Could not build the ${terminology.singular} update plan.`);
       if (activeServerIdRef.current === serverId) {
         setUpdatePlanError(message);
         if (options.notifyOnError) notify("error", message);
@@ -317,7 +319,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     await Promise.all([
       loadInstalledMods(serverId, options),
       loadUpdatePlan(serverId, options),
-      refreshFiles(serverId, "/mods"),
+      refreshFiles(serverId, `/${terminology.directory}`),
       refreshServerState()
     ]);
   }
@@ -617,17 +619,17 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function uploadModFile(file: File) {
     if (modsLocked || !canManage || !activeServer) return;
-    const selection = validateModUploadSelection(file, installedMods);
+    const selection = validateModUploadSelection(file, installedMods, terminology);
     if (selection.kind === "cancelled") return;
     if (selection.kind === "error") { notify("error", selection.message); return; }
     setNotice("");
     const jobId = `upload-${file.name}-${Date.now()}`;
-    setActiveJobs((current) => [...current, { id: jobId, type: "mod-upload", status: "running", title: "Uploading mod", subject: file.name, progress: 10, task: "Reading file", dismissible: false }]);
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-upload", status: "running", title: `Uploading ${terminology.singular}`, subject: file.name, progress: 10, task: "Reading file", dismissible: false }]);
     if (activeServerIsDemo) {
       try {
         await new Promise((resolve) => window.setTimeout(resolve, 500)); patchJob(jobId, { progress: 40, task: "Uploading jar" });
-        await new Promise((resolve) => window.setTimeout(resolve, 800)); patchJob(jobId, { progress: 70, task: "Saving mod file" });
-        await new Promise((resolve) => window.setTimeout(resolve, 400)); patchJob(jobId, { progress: 95, task: "Refreshing installed mods" });
+        await new Promise((resolve) => window.setTimeout(resolve, 800)); patchJob(jobId, { progress: 70, task: `Saving ${terminology.singular} file` });
+        await new Promise((resolve) => window.setTimeout(resolve, 400)); patchJob(jobId, { progress: 95, task: `Refreshing installed ${terminology.plural}` });
         const mod = uploadedManualMod(file);
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
@@ -641,12 +643,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const content = bufferToBase64(await file.arrayBuffer());
       patchJob(jobId, { progress: 40, task: "Uploading jar" });
       await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: JSON.stringify({ filename: file.name, contentBase64: content }) });
-      patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
+      patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh ${terminology.singular} list`, error: (error as Error).message, dismissible: true });
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
@@ -667,12 +669,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setNotice("");
     setInstallState((current) => current ? { ...current, installing: true, error: "" } : current);
     const jobId = `${switchMode ? "switch" : "install"}-${projectId}-${selectedVersion.id}-${Date.now()}`;
-    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: switchMode ? "Switching mod version" : "Installing mod", subject: `${title} ${selectedVersion.versionNumber}`, progress: 10, task: "Resolving version", dismissible: false }]);
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: switchMode ? `Switching ${terminology.singular} version` : `Installing ${terminology.singular}`, subject: `${title} ${selectedVersion.versionNumber}`, progress: 10, task: "Resolving version", dismissible: false }]);
     if (activeServerIsDemo) {
       try {
         await new Promise((resolve) => window.setTimeout(resolve, 600)); patchJob(jobId, { progress: 40, task: "Resolving version" });
         await new Promise((resolve) => window.setTimeout(resolve, 800)); patchJob(jobId, { progress: 70, task: "Downloading jar" });
-        await new Promise((resolve) => window.setTimeout(resolve, 600)); patchJob(jobId, { progress: 90, task: "Saving mod file" });
+        await new Promise((resolve) => window.setTimeout(resolve, 600)); patchJob(jobId, { progress: 90, task: `Saving ${terminology.singular} file` });
         await new Promise((resolve) => window.setTimeout(resolve, 400));
         const filename = selectedVersion.file?.filename || `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || projectId}-demo.jar`;
         const mod: InstalledMod = {
@@ -708,7 +710,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       });
       setInstallState(null);
       if (switchMode) setAddOpen(false);
-      patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
+      patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         const requiredCount = "installed" in result ? result.installed?.filter((item) => item.dependencyType === "required").length ?? 0 : 0;
@@ -716,14 +718,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         const switchedVersion = "version" in result ? result.version : selectedVersion.versionNumber;
         notify("success", switchMode ? `Switched ${title} to ${switchedVersion}` : requiredCount ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `${switchMode ? `Switched ${title}` : `Installed ${title}`}, but failed to refresh mod list`, error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "succeeded", progress: 100, task: `${switchMode ? `Switched ${title}` : `Installed ${title}`}, but failed to refresh ${terminology.singular} list`, error: (error as Error).message, dismissible: true });
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
       const message = (error as Error).message;
       setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
       setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
-      void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
+      void refreshUpdates(true); void refreshFiles(activeServer.id, `/${terminology.directory}`);
     }
   }
 
@@ -749,7 +751,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         method: "POST",
         body: JSON.stringify({ filename: mod.filename })
       });
-      patchJob(jobId, { progress: 90, task: "Refreshing mod health" });
+      patchJob(jobId, { progress: 90, task: `Refreshing ${terminology.singular} health` });
       await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
       removeJob(jobId);
       const changed = result.installed.length + result.enabled.length;
@@ -782,7 +784,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     const oldFilename = mod.filename;
     const plannedChannel = updatePlan?.updates.find((entry) => entry.filename === mod.filename)?.channel;
     const jobId = `update-${mod.modrinth.projectId}-${Date.now()}`;
-    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Updating mod", subject: title, progress: 10, task: "Checking compatibility", dismissible: false }]);
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: `Updating ${terminology.singular}`, subject: title, progress: 10, task: "Checking compatibility", dismissible: false }]);
     if (activeServerIsDemo) {
       try {
         await new Promise((resolve) => window.setTimeout(resolve, 600)); patchJob(jobId, { progress: 45, task: "Downloading update" });
@@ -802,18 +804,18 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       patchJob(jobId, { progress: 30, task: "Downloading new version" });
       const result = await api<{ version: string; upToDate?: boolean }>("/api/modrinth/update", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: oldFilename, channel: plannedChannel || mod.preferredChannel || "release" }) });
-      patchJob(jobId, { progress: 90, task: "Refreshing installed mods" });
+      patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       const successMessage = result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`;
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         finishJobWithNotification(jobId, "success", successMessage);
       } catch (error) {
-        finishJobWithNotification(jobId, "warning", `${successMessage}, but failed to refresh mod list`);
+        finishJobWithNotification(jobId, "warning", `${successMessage}, but failed to refresh ${terminology.singular} list`);
       }
     } catch (error) {
       const message = (error as Error).message;
       setNotice(message); finishJobWithNotification(jobId, "error", message);
-      void refreshUpdates(true); void refreshFiles(activeServer.id, "/mods");
+      void refreshUpdates(true); void refreshFiles(activeServer.id, `/${terminology.directory}`);
     }
   }
 
@@ -822,13 +824,13 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     const plan = updatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
     const safeEntries = plan?.updates.filter((entry) => entry.status === "safe_update" && entry.safeBatchEligible) ?? [];
     if (!safeEntries.length) {
-      notify("info", "No safe mod updates are available.");
+      notify("info", `No safe ${terminology.singular} updates are available.`);
       return;
     }
     setBatchUpdateRunning(true);
     setNotice("");
     const jobId = `update-safe-${activeServer.id}-${Date.now()}`;
-    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Updating safe mods", subject: `${safeEntries.length} ${safeEntries.length === 1 ? "mod" : "mods"}`, progress: 10, task: "Validating update plan", dismissible: false }]);
+    setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: `Updating safe ${terminology.plural}`, subject: `${safeEntries.length} ${safeEntries.length === 1 ? terminology.singular : terminology.plural}`, progress: 10, task: "Validating update plan", dismissible: false }]);
     try {
       let result: SafeBatchUpdateResult;
       if (activeServerIsDemo) {
@@ -869,7 +871,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
       await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
-      const feedback = safeBatchUpdateFeedback(result);
+      const feedback = safeBatchUpdateFeedback(result, terminology);
       const issueDetails = [
         ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
         ...result.failed.map((entry) => `${entry.filename} failed: ${entry.reason}`)
@@ -877,7 +879,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       patchJob(jobId, { status: feedback.status, title: feedback.title, progress: 100, task: feedback.summary, error: issueDetails || undefined, dismissible: true });
       window.setTimeout(() => removeJob(jobId), 5000);
     } catch (error) {
-      const message = errorMessage(error, "Safe mod updates failed.");
+      const message = errorMessage(error, `Safe ${terminology.singular} updates failed.`);
       setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Safe updates failed", error: message, dismissible: true });
       void refreshUpdates(true);
     } finally {
@@ -900,9 +902,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           const nextFilename = result.filename || currentFilename;
           setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
           currentFilename = nextFilename;
-          void Promise.all([refreshFiles(activeServer.id, "/mods"), refreshServerState()]);
+          void Promise.all([refreshFiles(activeServer.id, `/${terminology.directory}`), refreshServerState()]);
         } catch (error) {
-          const message = `Failed to toggle mod ${displayName}: ${(error as Error).message}`;
+          const message = `Failed to toggle ${terminology.singular} ${displayName}: ${(error as Error).message}`;
           setNotice(message); notify("error", message);
           const rollback = !runEnabled;
           setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, enabled: rollback } : mod));
@@ -934,10 +936,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setNotice("");
     const confirmed = await requestConfirmation({
       title: `Remove ${mod.displayName}?`,
-      description: "Remove this installed mod from the server.",
+      description: `Remove this installed ${terminology.singular} from the server.`,
       details: mod.filename,
-      warning: "The mod file will be deleted from the server's mods folder.",
-      confirmLabel: "Remove mod",
+      warning: `The ${terminology.singular} file will be deleted from the server's ${terminology.directory} folder.`,
+      confirmLabel: `Remove ${terminology.singular}`,
       variant: "critical"
     });
     if (!confirmed) return;
@@ -951,7 +953,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       notify("success", `Removed ${mod.displayName}`); setDetailsModKey("");
       await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
     } catch (error) {
-      const message = errorMessage(error, "Could not remove the mod.");
+      const message = errorMessage(error, `Could not remove the ${terminology.singular}.`);
       setNotice(message); notify("error", message);
     }
   }
@@ -980,7 +982,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         loadUpdatePlan(activeServer.id, { forceRefresh: true, notifyOnError: true })
       ]);
     } catch (error) {
-      const message = errorMessage(error, "Could not acknowledge the mod review.");
+      const message = errorMessage(error, `Could not acknowledge the ${terminology.singular} review.`);
       setNotice(message);
       notify("error", message);
       throw error;

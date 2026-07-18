@@ -1,5 +1,6 @@
 import { basename, dirname } from "node:path";
 import { Readable } from "node:stream";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
@@ -9,6 +10,7 @@ import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, Run
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
+import { runtimeTarget } from "../runtime/profile.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -403,9 +405,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return publicRemotePath(absolutePath);
   }
 
-  isModsPath(_server: ManagedServer, absolutePath: string) {
+  isModsPath(server: ManagedServer, absolutePath: string) {
     const path = publicRemotePath(absolutePath);
-    return path === "/mods" || path.startsWith("/mods/");
+    const directory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
+    return path === `/${directory}` || path.startsWith(`/${directory}/`);
   }
 
   isServerSettingsFile(_server: ManagedServer, absolutePath: string) {
@@ -510,7 +513,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   listMods(server: ManagedServer, options?: { forceRefresh?: boolean }) {
-    return this.command(server, "mods.list", options?.forceRefresh ? { forceRefresh: true } : undefined, modsListCommandTimeoutMs);
+    const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
+    return this.command(server, `${prefix}.list`, options?.forceRefresh ? { forceRefresh: true } : undefined, modsListCommandTimeoutMs);
   }
 
   async modIcon(): Promise<ModIconResult | null> {
@@ -518,18 +522,22 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown) {
-    return this.command(server, "mods.enableDisable", { filename, enabled });
+    const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
+    return this.command(server, `${prefix}.enableDisable`, { filename, enabled });
   }
 
   removeMod(server: ManagedServer, filename: unknown) {
-    return this.command(server, "mods.remove", { filename });
+    const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
+    return this.command(server, `${prefix}.remove`, { filename });
   }
 
   uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown) {
-    return this.command(server, "mods.upload", { filename, contentBase64 }, transferCommandTimeoutMs);
+    const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
+    return this.command(server, `${prefix}.upload`, { filename, contentBase64 }, transferCommandTimeoutMs);
   }
 
   installMod(server: ManagedServer, input: unknown) {
-    return this.command(server, "mods.install", input, modrinthCommandTimeoutMs);
+    const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
+    return this.command(server, `${prefix}.install`, input, modrinthCommandTimeoutMs);
   }
 }

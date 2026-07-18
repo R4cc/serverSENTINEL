@@ -40,7 +40,8 @@ import {
   nodeWithLiveConnectionStatus,
   isMinecraftStopCommand,
   defaultInternalNode,
-  startConsoleHeartbeat
+  startConsoleHeartbeat,
+  detectVersionsFromLogText
 } from "./app.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
@@ -73,6 +74,26 @@ describe("local runtime metadata", () => {
     expect(defaultInternalNode("2026-07-18T00:00:00.000Z")).toMatchObject({
       protocolVersion: nodeProtocolVersion,
       capabilities: [...nodeCapabilities]
+    });
+  });
+});
+
+describe("runtime version detection", () => {
+  it("keeps Fabric detection compatible and selects Paper log patterns by runtime", () => {
+    expect(detectVersionsFromLogText("Loading Fabric Loader 0.16.10", "fabric")).toMatchObject({
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
+      fabricLoaderVersion: "0.16.10"
+    });
+    expect(detectVersionsFromLogText("This server is running Paper version 1.21.4-232", "paper")).toEqual({
+      minecraftVersion: undefined,
+      runtimeType: "paper",
+      runtimeVersion: "232"
+    });
+    expect(detectVersionsFromLogText("Starting Paper version git-Paper-418", "paper")).toEqual({
+      minecraftVersion: undefined,
+      runtimeType: "paper",
+      runtimeVersion: "418"
     });
   });
 });
@@ -202,6 +223,15 @@ describe("Modrinth search facets", () => {
 
   it("keeps all-result searches limited only to mods", () => {
     expect(modrinthSearchFacets("fabric", "1.21.4", "all")).toEqual([["project_type:mod"]]);
+  });
+
+  it("searches the Paper-compatible plugin ecosystem as one loader facet", () => {
+    expect(modrinthSearchFacets(["paper", "bukkit", "spigot"], "1.21.4", "compatible", "plugin")).toEqual([
+      ["project_type:plugin"],
+      ["categories:paper", "categories:bukkit", "categories:spigot"],
+      ["versions:1.21.4", "versions:1.21.x"],
+      ["server_side:required", "server_side:optional"]
+    ]);
   });
 
   it("treats the matching version and immutable build as already current", () => {

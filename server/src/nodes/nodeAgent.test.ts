@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,8 @@ let mockSendDockerContainerStdinLine: ReturnType<typeof vi.fn>;
 function testRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.4",
+    runtimeType: "fabric",
+    runtimeVersion: "0.16.10",
     loader: "fabric",
     loaderVersion: "0.16.10",
     javaMajorVersion: 21,
@@ -25,6 +27,24 @@ function testRuntimeProfile(): ServerRuntimeProfile {
     jarArtifact: {
       filename: "fabric-server-launch.jar",
       downloadUrl: "https://example.invalid/fabric-server-launch.jar"
+    },
+    compatibilityStatus: "compatible",
+    resolvedAt: new Date().toISOString()
+  };
+}
+
+function paperRuntimeProfile(): ServerRuntimeProfile {
+  return {
+    minecraftVersion: "1.21.11",
+    runtimeType: "paper",
+    runtimeVersion: "132",
+    javaMajorVersion: 21,
+    jarProvider: "papermc",
+    jarArtifact: {
+      filename: "paper.jar",
+      downloadUrl: "https://fill-data.papermc.io/v1/objects/hash/paper.jar",
+      sha256: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba",
+      sizeBytes: 54_846_016
     },
     compatibilityStatus: "compatible",
     resolvedAt: new Date().toISOString()
@@ -170,6 +190,24 @@ describe("remote node recent server logs", () => {
     expect(result.text).toContain("Alex joined the game");
     expect(result.text).not.toContain("old-marker");
     expect(mockDockerBufferRequest).not.toHaveBeenCalled();
+  });
+
+  it("creates Paper records and container commands without Fabric aliases", () => {
+    const { server } = hooks.createdServerRecord({
+      nodeId: "node-id",
+      displayName: "Paper Survival",
+      runtime: { runtimeType: "paper", minecraftVersion: "1.21.11", runtimeVersion: "132" },
+      acceptEula: true
+    }, paperRuntimeProfile());
+
+    expect(server.runtimeProfile).toMatchObject({
+      runtimeType: "paper",
+      runtimeVersion: "132",
+      jarProvider: "papermc",
+      jarArtifact: { filename: "paper.jar" }
+    });
+    expect(server.runtimeProfile).not.toHaveProperty("loader");
+    expect(hooks.minecraftContainerCommand(server)).toContain("paper.jar");
   });
 
   it("falls back to recent Docker logs when latest.log is unavailable", async () => {
@@ -529,6 +567,43 @@ describe("remote node file operation safety", () => {
 });
 
 describe("remote node mod upload safety", () => {
+  it("rejects mod commands for Paper profiles before touching the mods directory", async () => {
+    const server = testServer();
+    server.runtimeProfile = {
+      ...server.runtimeProfile,
+      runtimeType: "paper",
+      runtimeVersion: "1.21.4-232",
+      loader: undefined,
+      loaderVersion: undefined,
+      jarArtifact: { filename: "paper.jar" }
+    };
+
+    await expect(hooks.handleCommand("mods.list", { server })).rejects.toThrow("Paper servers use plugins");
+  });
+
+  it("lists and mutates Paper plugins through managed content commands without touching mods", async () => {
+    const server = testServer();
+    server.runtimeProfile = {
+      ...server.runtimeProfile,
+      runtimeType: "paper",
+      runtimeVersion: "232",
+      loader: undefined,
+      loaderVersion: undefined,
+      jarArtifact: { filename: "paper.jar" }
+    };
+    const pluginsDir = join(tempRoot, "servers", server.storageName!, "plugins");
+    await mkdir(pluginsDir, { recursive: true });
+    const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
+    await hooks.handleCommand("content.upload", { server, filename: "essentialsx.jar", contentBase64: jar.toString("base64") });
+    const listed = await hooks.handleCommand("content.list", { server }) as { mods: Array<{ filename: string }> };
+    await hooks.handleCommand("content.enableDisable", { server, filename: "essentialsx.jar", enabled: false });
+
+    expect(listed.mods.map((plugin) => plugin.filename)).toEqual(["essentialsx.jar"]);
+    expect(await readFile(join(pluginsDir, "essentialsx.jar.disabled"))).toEqual(jar);
+    await expect(stat(join(tempRoot, "servers", server.storageName!, "mods"))).rejects.toThrow();
+  });
+
   it("allows mod uploads when runtime status is unavailable", async () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });

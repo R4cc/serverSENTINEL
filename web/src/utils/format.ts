@@ -140,8 +140,16 @@ export function minecraftVersionInfo(server: ManagedServer) {
   return bestVersion(server.resolvedVersions?.minecraftVersion, server.runtimeProfile.minecraftVersion);
 }
 
+export function runtimeVersionInfo(server: ManagedServer) {
+  return bestVersion(
+    server.resolvedVersions?.runtimeVersion ?? server.resolvedVersions?.fabricLoaderVersion,
+    server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion
+  );
+}
+
+/** @deprecated Use runtimeVersionInfo. */
 export function fabricLoaderVersionInfo(server: ManagedServer) {
-  return bestVersion(server.resolvedVersions?.fabricLoaderVersion, server.runtimeProfile.loaderVersion);
+  return runtimeVersionInfo(server);
 }
 
 export function versionValue(version: VersionResolution | undefined) {

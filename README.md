@@ -6,11 +6,11 @@ serverSENTINEL is a web panel for running and managing Minecraft servers and the
 
 * Create and configure Minecraft servers
 * Start, stop, and restart servers
-* Search for and install mods through the Modrinth API
-* Get notified when a *compatible* mod update is available and update in one click
+* Search for and install Fabric mods or Paper plugins through the Modrinth API
+* Get notified when a *compatible* mod or plugin update is available and update in one click
 * View the live console and send commands
 * Browse, upload, edit, and manage server files
-* Add existing mod files and manage installed mods
+* Add existing mod or plugin files and manage installed content
 * Schedule commands and server actions
 * Manage multiple nodes from one panel
 * Manage users, roles, and permissions
@@ -154,7 +154,7 @@ npm run build
 
 ## Known Limitations
 
-- Server creation is currently focused on Fabric.
+- Managed server creation and runtime-appropriate Modrinth content management support both Fabric and Paper.
 - Existing external Minecraft servers are not the primary management model.
 - Modrinth integration does not fully resolve mod dependencies or conflicts.
 

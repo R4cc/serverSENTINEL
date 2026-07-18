@@ -13,6 +13,7 @@ import {
   groupRecentEventsByTime,
   ModHealthPanel,
   OverviewSummary,
+  RecentEventsPanel,
   recentEventPresentation,
   SchedulePanel
 } from "./OverviewPage";
@@ -201,7 +202,7 @@ describe("recent event grouping", () => {
     expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
   });
 
-  it("collapses repeated operational warnings while keeping unrelated player activity separate", () => {
+  it("collapses adjacent matching events within ten minutes while keeping unrelated player activity separate", () => {
     const overload = { text: "Server is falling behind", signature: "server_overloaded", severity: "warning" as const, details: "Running 100 ticks behind" };
     const groups = groupRecentEvents([
       serverEvent("server_overloaded", "2026-07-11T12:00:20.000Z", overload),
@@ -211,8 +212,47 @@ describe("recent event grouping", () => {
 
     expect(groups).toHaveLength(2);
     expect(groups[0].events).toHaveLength(2);
-    expect(groups[0].details).toContain("2 occurrences within a minute");
+    expect(groups[0].details).toBe("Running 100 ticks behind");
     expect(groups[1].title).toBe("Alex joined");
+  });
+
+  it("shows one recent-event row with an occurrence badge for repeated player disconnects", () => {
+    const events = Array.from({ length: 9 }, (_, index) => serverEvent("player_left", new Date(now.getTime() - index * 30_000).toISOString(), {
+      id: `left-${index}`,
+      text: "Oliverano left",
+      subject: "Oliverano",
+      signature: "player_left:oliverano",
+      severity: "warning"
+    }));
+    const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
+      events,
+      formatDate: String,
+      onOpenConsole: () => undefined,
+      requestConfirmation: async () => false
+    }));
+
+    expect((html.match(/class="eventRow warning/g) ?? [])).toHaveLength(1);
+    expect(html).toContain('class="srOnly">9 occurrences');
+    expect(html).toContain("×9");
+  });
+
+  it("starts a new occurrence group at the ten-minute boundary", () => {
+    const groups = groupRecentEvents([
+      serverEvent("player_left", "2026-07-11T12:00:00.000Z", { signature: "player_left:alex", subject: "Alex" }),
+      serverEvent("player_left", "2026-07-11T11:50:00.000Z", { signature: "player_left:alex", subject: "Alex" })
+    ], now);
+
+    expect(groups).toHaveLength(2);
+  });
+
+  it("does not extend one occurrence burst past ten minutes through chaining", () => {
+    const groups = groupRecentEvents([
+      serverEvent("player_left", "2026-07-11T12:00:00.000Z", { signature: "player_left:alex", subject: "Alex" }),
+      serverEvent("player_left", "2026-07-11T11:51:00.000Z", { signature: "player_left:alex", subject: "Alex" }),
+      serverEvent("player_left", "2026-07-11T11:42:00.000Z", { signature: "player_left:alex", subject: "Alex" })
+    ], now);
+
+    expect(groups.map((group) => group.events.length)).toEqual([2, 1]);
   });
 });
 

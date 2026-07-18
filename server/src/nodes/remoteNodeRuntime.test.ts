@@ -52,6 +52,22 @@ function testServer(): ManagedServer {
   };
 }
 
+function paperServer(): ManagedServer {
+  const server = testServer();
+  return {
+    ...server,
+    runtimeProfile: {
+      ...server.runtimeProfile,
+      runtimeType: "paper",
+      runtimeVersion: "232",
+      loader: undefined,
+      loaderVersion: undefined,
+      jarProvider: "papermc",
+      jarArtifact: { filename: "paper.jar" }
+    }
+  };
+}
+
 function runtimeWithRecorder(result: unknown = { ok: true }) {
   const calls: Array<{ command: string; timeoutMs?: number }> = [];
   const node = testNode();
@@ -80,6 +96,18 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("uses canonical managed-content commands for Paper and legacy mod commands for Fabric", async () => {
+    const { runtime, calls } = runtimeWithRecorder({ mods: [] });
+
+    await runtime.listMods(testServer());
+    await runtime.listMods(paperServer());
+    await runtime.toggleMod(paperServer(), "example.jar", false);
+
+    expect(calls.map((call) => call.command)).toEqual(["mods.list", "content.list", "content.enableDisable"]);
+    expect(runtime.isModsPath(paperServer(), "/plugins/example.jar")).toBe(true);
+    expect(runtime.isModsPath(paperServer(), "/mods/example.jar")).toBe(false);
+  });
+
   it("passes the selected console history limit to remote nodes", async () => {
     const node = testNode();
     const calls: Array<{ command: string; payload: unknown }> = [];

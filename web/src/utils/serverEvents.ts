@@ -1,4 +1,34 @@
 export const playerReconnectWindowMs = 30_000;
+export const repeatedEventWindowMs = 10 * 60 * 1_000;
+
+export function groupNearbyRepeatedEvents<T extends { signature: string }>(
+  events: T[],
+  occurredAt: (event: T) => number | null,
+  windowMs = repeatedEventWindowMs
+) {
+  const groups: T[][] = [];
+
+  for (const event of events) {
+    const current = groups.at(-1);
+    const first = current?.[0];
+    const firstTime = first ? occurredAt(first) : null;
+    const eventTime = occurredAt(event);
+    if (
+      current
+      && first
+      && first.signature === event.signature
+      && firstTime !== null
+      && eventTime !== null
+      && Math.abs(eventTime - firstTime) < windowMs
+    ) {
+      current.push(event);
+    } else {
+      groups.push([event]);
+    }
+  }
+
+  return groups;
+}
 
 export function playerEventSubject(event: {
   eventType: string;
