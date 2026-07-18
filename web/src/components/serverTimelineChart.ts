@@ -19,32 +19,13 @@ export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>,
   };
 }
 
-export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
-  const points = samples.flatMap((sample) => (
+export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[]) {
+  const values = samples.flatMap((sample) => (
     typeof sample.memoryUtilizationPercent === "number"
     && Number.isFinite(sample.memoryUtilizationPercent)
-      ? [{ sampledAt: sample.sampledAt, value: sample.memoryUtilizationPercent }]
+      ? [sample.memoryUtilizationPercent]
       : []
-  )).sort((left, right) => left.sampledAt - right.sampledAt);
-  const values = points.flatMap((point) => (
-    point.sampledAt >= viewport.from && point.sampledAt <= viewport.to ? [point.value] : []
   ));
-  for (const edge of [viewport.from, viewport.to]) {
-    let before: (typeof points)[number] | undefined;
-    for (let index = points.length - 1; index >= 0; index -= 1) {
-      if (points[index].sampledAt > edge) continue;
-      before = points[index];
-      break;
-    }
-    const after = points.find((point) => point.sampledAt >= edge);
-    if (!before || !after) continue;
-    if (before.sampledAt === after.sampledAt) {
-      values.push(before.value);
-      continue;
-    }
-    const progress = (edge - before.sampledAt) / (after.sampledAt - before.sampledAt);
-    values.push(before.value + (after.value - before.value) * progress);
-  }
   if (!values.length) return { min: 0, max: 100 };
   const observedMin = Math.min(...values);
   const observedMax = Math.max(...values);
@@ -248,7 +229,6 @@ export function buildTimelineChartOption({
   palette,
   formatTime,
   formatShortTime,
-  reducedMotion,
   now,
   gridTop
 }: {
@@ -260,7 +240,6 @@ export function buildTimelineChartOption({
   palette: TimelinePalette;
   formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
-  reducedMotion: boolean;
   now: number;
   gridTop?: number;
 }): EChartsCoreOption {
@@ -270,14 +249,15 @@ export function buildTimelineChartOption({
   const networkEnabled = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
   const playersEnabled = enabled.playersOnline;
   const yAxis: Array<Record<string, unknown>> = [];
-  let cpuAxis = -1;
-  let memoryAxis = -1;
-  let networkAxis = -1;
-  let playersAxis = -1;
+  let cpuAxis = "";
+  let memoryAxis = "";
+  let networkAxis = "";
+  let playersAxis = "";
   let rightAxisOffset = 0;
   if (cpuEnabled) {
-    cpuAxis = yAxis.length;
+    cpuAxis = "timeline-cpu-axis";
     yAxis.push({
+      id: cpuAxis,
       type: "value",
       position: "left",
       min: 0,
@@ -291,9 +271,10 @@ export function buildTimelineChartOption({
     });
   }
   if (memoryEnabled) {
-    memoryAxis = yAxis.length;
-    const bounds = adaptiveMemoryAxisBounds(samples, viewport);
+    memoryAxis = "timeline-memory-axis";
+    const bounds = adaptiveMemoryAxisBounds(samples);
     yAxis.push({
+      id: memoryAxis,
       type: "value",
       position: "right",
       offset: rightAxisOffset,
@@ -309,8 +290,9 @@ export function buildTimelineChartOption({
     rightAxisOffset += 52;
   }
   if (playersEnabled) {
-    playersAxis = yAxis.length;
+    playersAxis = "timeline-players-axis";
     yAxis.push({
+      id: playersAxis,
       type: "value",
       position: "right",
       offset: rightAxisOffset,
@@ -326,8 +308,9 @@ export function buildTimelineChartOption({
     rightAxisOffset += 48;
   }
   if (networkEnabled) {
-    networkAxis = yAxis.length;
+    networkAxis = "timeline-network-axis";
     yAxis.push({
+      id: networkAxis,
       type: "value",
       position: "right",
       offset: rightAxisOffset,
@@ -340,13 +323,15 @@ export function buildTimelineChartOption({
       splitLine: { show: false }
     });
   }
-  if (!yAxis.length) yAxis.push({ type: "value", show: false, min: 0, max: 1 });
-  const metricSeries: Array<{ key: SeriesKey; name: string; yAxisIndex: number; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
-    { key: "cpuUtilizationPercent", name: "CPU", yAxisIndex: cpuAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
-    { key: "memoryUtilizationPercent", name: "Memory", yAxisIndex: memoryAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
-    { key: "networkRxBytesPerSecond", name: "Network In", yAxisIndex: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
-    { key: "networkTxBytesPerSecond", name: "Network Out", yAxisIndex: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
-    { key: "playersOnline", name: "Players", yAxisIndex: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }
+  const emptyAxis = "timeline-empty-axis";
+  if (!yAxis.length) yAxis.push({ id: emptyAxis, type: "value", show: false, min: 0, max: 1 });
+  const annotationAxis = cpuAxis || memoryAxis || playersAxis || networkAxis || emptyAxis;
+  const metricSeries: Array<{ key: SeriesKey; name: string; yAxisId: string; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
+    { key: "cpuUtilizationPercent", name: "CPU", yAxisId: cpuAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
+    { key: "memoryUtilizationPercent", name: "Memory", yAxisId: memoryAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
+    { key: "networkRxBytesPerSecond", name: "Network In", yAxisId: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
+    { key: "networkTxBytesPerSecond", name: "Network Out", yAxisId: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
+    { key: "playersOnline", name: "Players", yAxisId: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }
   ];
   const markerLines: Array<{
     xAxis: number;
@@ -362,13 +347,14 @@ export function buildTimelineChartOption({
   }
 
   return {
-    animation: !reducedMotion,
+    animation: false,
     aria: {
       enabled: true,
       description: `Server resource timeline with ${samples.length} samples and ${clusters.reduce((total, cluster) => total + cluster.markers.length, 0)} annotations.`
     },
-    grid: { ...grid, containLabel: false },
+    grid: { id: "timeline-grid", ...grid, containLabel: false },
     xAxis: {
+      id: "timeline-time-axis",
       type: "time",
       min: query.from,
       max: query.to,
@@ -399,7 +385,7 @@ export function buildTimelineChartOption({
         id: series.key,
         name: series.name,
         type: "line" as const,
-        yAxisIndex: series.yAxisIndex,
+        yAxisId: series.yAxisId,
         data: samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
         symbol: "none",
         showSymbol: false,
@@ -411,13 +397,13 @@ export function buildTimelineChartOption({
         lineStyle: { color: series.color, width: series.width, opacity: series.opacity, type: series.dash ?? "solid", cap: "round", join: "round" },
         itemStyle: { color: series.color },
         emphasis: { disabled: true },
-        animation: !reducedMotion
+        animation: false
       })),
       {
         id: "timeline-annotations",
         name: "Timeline annotations",
         type: "line",
-        yAxisIndex: 0,
+        yAxisId: annotationAxis,
         data: [[query.from, 0], [query.to, 0]],
         showSymbol: false,
         silent: true,

@@ -82,20 +82,20 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: (value) => `short:${value}`,
-      reducedMotion: true,
       now: 12_000
     }) as {
       animation: boolean;
       yAxis: unknown[];
       dataZoom: Array<{ startValue: number; endValue: number; zoomOnMouseWheel: string }>;
       xAxis: { axisLabel: { formatter: (value: number) => string } };
-      series: Array<{ id: string; yAxisIndex: number; data: Array<[number, number | string]>; symbol?: string; silent?: boolean; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; lineStyle?: { type?: string }; emphasis?: { disabled: boolean }; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
+      series: Array<{ id: string; yAxisId: string; data: Array<[number, number | string]>; symbol?: string; silent?: boolean; smooth?: number; smoothMonotone?: string; connectNulls?: boolean; lineStyle?: { type?: string }; emphasis?: { disabled: boolean }; markLine?: { data: Array<{ lineStyle: { type: string; width: number } }> } }>;
     };
     expect(option.animation).toBe(false);
     expect(option).not.toHaveProperty("tooltip");
     expect(option.yAxis).toHaveLength(3);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
     expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.data).toEqual([[10_000, "-"]]);
+    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.yAxisId).toBe("timeline-memory-axis");
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.connectNulls).toBe(false);
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.24, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.emphasis).toEqual({ disabled: true });
@@ -115,7 +115,6 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: String,
-      reducedMotion: false,
       now: 30_000
     }) as { yAxis: unknown[]; series: Array<{ id: string }> };
     expect(option.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
@@ -132,33 +131,32 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: String,
       formatShortTime: String,
-      reducedMotion: false,
       now: 30_000
     }) as { yAxis: Array<{ name?: string }>; series: Array<{ id: string; step?: string }> };
     expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU", "Memory %", "Players"]);
     expect(option.series.find((series) => series.id === "playersOnline")?.step).toBe("end");
   });
 
-  it("uses a clearly bounded adaptive memory axis for visible samples", () => {
+  it("uses a clearly bounded adaptive memory axis for the loaded sample buffer", () => {
     const stableMemory = [
       { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 66.1 },
       { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 66.8 },
       { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 67.2 }
     ];
-    const bounds = adaptiveMemoryAxisBounds(stableMemory, { from: 5_000, to: 25_000 });
+    const bounds = adaptiveMemoryAxisBounds(stableMemory);
     expect(bounds.max - bounds.min).toBeGreaterThanOrEqual(5);
     expect(bounds.min).toBeGreaterThan(60);
     expect(bounds.max).toBeLessThan(70);
   });
 
-  it("includes interpolated viewport edges so entering and leaving memory lines remain visible", () => {
+  it("keeps every loaded memory value inside one stable pan domain", () => {
     const crossingMemory = [
       { ...sample, sampledAt: 0, memoryUtilizationPercent: 20 },
       { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 60 },
       { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 65 },
       { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 5 }
     ];
-    const bounds = adaptiveMemoryAxisBounds(crossingMemory, { from: 5_000, to: 25_000 });
+    const bounds = adaptiveMemoryAxisBounds(crossingMemory);
     expect(bounds.min).toBeLessThan(35);
     expect(bounds.max).toBeGreaterThan(65);
   });
@@ -167,7 +165,7 @@ describe("server timeline ECharts option", () => {
     const bounds = adaptiveMemoryAxisBounds([
       { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 0 },
       { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 100 }
-    ], { from: 10_000, to: 20_000 });
+    ]);
     expect(bounds).toEqual({ min: -0.5, max: 100.5 });
   });
 
@@ -181,7 +179,6 @@ describe("server timeline ECharts option", () => {
       palette: defaultTimelinePalette,
       formatTime: (value) => `seconds:${value}`,
       formatShortTime: (value) => `minutes:${value}`,
-      reducedMotion: false,
       now: 5_000_000
     }) as { xAxis: { axisLabel: { formatter: (value: number) => string } } };
     expect(option.xAxis.axisLabel.formatter(10_000)).toBe("minutes:10000");
