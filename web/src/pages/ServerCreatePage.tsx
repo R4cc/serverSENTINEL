@@ -72,7 +72,9 @@ export function ManagedServerForm({
   const [runtimeVersion, setRuntimeVersion] = useState("");
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState(versions.game);
+  const [loadedMinecraftRuntimeType, setLoadedMinecraftRuntimeType] = useState<ServerRuntimeType>("fabric");
   const [compatibleRuntimeVersions, setCompatibleRuntimeVersions] = useState<RuntimeVersion[]>([]);
+  const [loadedRuntimeVersionsKey, setLoadedRuntimeVersionsKey] = useState("");
   const [minimumHeapGb, setMinimumHeapGb] = useState(2);
   const [maximumHeapGb, setMaximumHeapGb] = useState(8);
   const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(2, 8));
@@ -101,7 +103,14 @@ export function ManagedServerForm({
   const javaArgsError = validateJavaArgs(javaArgs);
   const identityReady = !displayNameError;
   const nextDisabled = provisioning || placementBlocked || !identityReady;
-  const minecraftOptions = useMemo(() => runtimeMinecraftOptions({ ...versions, game: runtimeMinecraftVersions }, showSnapshots), [runtimeMinecraftVersions, showSnapshots, versions]);
+  const minecraftVersionsLoading = loadedMinecraftRuntimeType !== runtimeType;
+  const minecraftOptions = useMemo(() => (
+    runtimeType === "paper" && runtimeMinecraftVersions.length === 0
+      ? []
+      : runtimeMinecraftOptions({ ...versions, game: runtimeMinecraftVersions }, showSnapshots)
+  ), [runtimeMinecraftVersions, runtimeType, showSnapshots, versions]);
+  const runtimeVersionsKey = `${runtimeType}:${minecraftVersion}`;
+  const runtimeVersionsLoading = Boolean(minecraftVersion) && loadedRuntimeVersionsKey !== runtimeVersionsKey;
   const runtimeOptions = useMemo(() => {
     const source = compatibleRuntimeVersions.length > 0
       ? compatibleRuntimeVersions
@@ -119,7 +128,11 @@ export function ManagedServerForm({
   }, [compatibleRuntimeVersions, runtimeType, showSnapshots, versions.loader]);
   const recommendedRuntime = runtimeOptions.find((version) => version.recommended) || runtimeOptions.find((version) => version.stable !== false) || runtimeOptions[0];
   const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
-  const runtimeCompatible = runtimeDefinition.managedProvisioning && Boolean(minecraftVersion && runtimeVersion);
+  const runtimeCompatible = runtimeDefinition.managedProvisioning
+    && !minecraftVersionsLoading
+    && !runtimeVersionsLoading
+    && Boolean(minecraftVersion && runtimeVersion)
+    && runtimeOptions.some((version) => version.runtimeVersion === runtimeVersion);
   const usedPortKeys = useMemo(() => usedPortKeysForNode(selectedNode), [selectedNode]);
   const serverPortValid = isValidServerPort(serverPort);
   const queryPortValid = isValidServerPort(queryPort);
@@ -181,10 +194,14 @@ export function ManagedServerForm({
             recommended: version.recommended,
             type: version.type ?? "unknown"
           })));
+          setLoadedMinecraftRuntimeType(runtimeType);
         }
       })
       .catch(() => {
-        if (!cancelled) setRuntimeMinecraftVersions(runtimeType === "fabric" ? versions.game : []);
+        if (!cancelled) {
+          setRuntimeMinecraftVersions(runtimeType === "fabric" ? versions.game : []);
+          setLoadedMinecraftRuntimeType(runtimeType);
+        }
       });
     return () => {
       cancelled = true;
@@ -194,6 +211,7 @@ export function ManagedServerForm({
   useEffect(() => {
     if (minecraftOptions.some((version) => version.version === minecraftVersion)) return;
     setMinecraftVersion(preferredMinecraftVersion(minecraftOptions));
+    setRuntimeVersion("");
   }, [minecraftOptions, minecraftVersion]);
 
   useEffect(() => {
@@ -211,15 +229,22 @@ export function ManagedServerForm({
   useEffect(() => {
     if (!minecraftVersion) {
       setCompatibleRuntimeVersions([]);
+      setLoadedRuntimeVersionsKey("");
       return;
     }
     let cancelled = false;
     api<{ runtimeType: ServerRuntimeType; minecraftVersion: string; runtimeVersions: RuntimeVersion[] }>(`/api/runtime/${runtimeType}/versions?minecraftVersion=${encodeURIComponent(minecraftVersion)}`)
       .then((result) => {
-        if (!cancelled) setCompatibleRuntimeVersions(result.runtimeVersions);
+        if (!cancelled) {
+          setCompatibleRuntimeVersions(result.runtimeVersions);
+          setLoadedRuntimeVersionsKey(`${runtimeType}:${minecraftVersion}`);
+        }
       })
       .catch(() => {
-        if (!cancelled) setCompatibleRuntimeVersions([]);
+        if (!cancelled) {
+          setCompatibleRuntimeVersions([]);
+          setLoadedRuntimeVersionsKey(`${runtimeType}:${minecraftVersion}`);
+        }
       });
     return () => {
       cancelled = true;
@@ -227,9 +252,10 @@ export function ManagedServerForm({
   }, [minecraftVersion, runtimeType]);
 
   useEffect(() => {
+    if (runtimeVersionsLoading) return;
     if (runtimeOptions.some((version) => version.runtimeVersion === runtimeVersion)) return;
     setRuntimeVersion(recommendedRuntime?.runtimeVersion || runtimeOptions[0]?.runtimeVersion || "");
-  }, [recommendedRuntime, runtimeOptions, runtimeVersion]);
+  }, [recommendedRuntime, runtimeOptions, runtimeVersion, runtimeVersionsLoading]);
 
   useEffect(() => {
     if (!serverJarCustomized) setServerJar(runtimeDefinition.serverJarFilename);
@@ -435,17 +461,24 @@ export function ManagedServerForm({
             runtimeVersion={runtimeVersion}
             runtimeOptions={runtimeOptions}
             recommendedRuntimeVersion={recommendedRuntime?.runtimeVersion || ""}
+            minecraftVersionsLoading={minecraftVersionsLoading}
+            runtimeVersionsLoading={runtimeVersionsLoading}
             showSnapshots={showSnapshots}
             javaVersion={summaryJavaVersion}
             runtimeCompatible={runtimeCompatible}
             onRuntimeTypeChange={(value) => {
+              if (value === runtimeType) return;
               setRuntimeType(value);
               setRuntimeMinecraftVersions([]);
               setCompatibleRuntimeVersions([]);
+              setLoadedRuntimeVersionsKey("");
               setMinecraftVersion("");
               setRuntimeVersion("");
             }}
-            onMinecraftVersionChange={setMinecraftVersion}
+            onMinecraftVersionChange={(value) => {
+              setMinecraftVersion(value);
+              setRuntimeVersion("");
+            }}
             onRuntimeVersionChange={setRuntimeVersion}
             onShowSnapshotsChange={setShowSnapshots}
           />
@@ -592,6 +625,8 @@ export function RuntimeWizardStep({
   runtimeVersion,
   runtimeOptions,
   recommendedRuntimeVersion,
+  minecraftVersionsLoading = false,
+  runtimeVersionsLoading = false,
   showSnapshots,
   javaVersion,
   runtimeCompatible,
@@ -607,6 +642,8 @@ export function RuntimeWizardStep({
   runtimeVersion: string;
   runtimeOptions: RuntimeVersion[];
   recommendedRuntimeVersion: string;
+  minecraftVersionsLoading?: boolean;
+  runtimeVersionsLoading?: boolean;
   showSnapshots: boolean;
   javaVersion: 17 | 21 | 25;
   runtimeCompatible: boolean;
@@ -631,6 +668,7 @@ export function RuntimeWizardStep({
             name="minecraftVersion"
             value={minecraftVersion}
             onChange={(event) => onMinecraftVersionChange(event.target.value)}
+            disabled={minecraftVersionsLoading || minecraftOptions.length === 0}
             required
           >
             {minecraftOptions.map((version) => (
@@ -639,7 +677,13 @@ export function RuntimeWizardStep({
               </option>
             ))}
           </select>
-          {runtimeOptions.length === 0 && (
+          {minecraftVersionsLoading && (
+            <span className="fieldHint" role="status">Loading available {runtimeDefinition.displayName} Minecraft versions...</span>
+          )}
+          {runtimeVersionsLoading && (
+            <span className="fieldHint" role="status">Loading compatible {runtimeDefinition.displayName} builds...</span>
+          )}
+          {!minecraftVersionsLoading && !runtimeVersionsLoading && Boolean(minecraftVersion) && runtimeOptions.length === 0 && (
             <span className="fieldHint" role="status">
               No stable {runtimeDefinition.displayName} build is available for this Minecraft version. Choose another Minecraft version or enable development builds.
             </span>
@@ -698,6 +742,7 @@ export function RuntimeWizardStep({
             name="runtimeVersion"
             value={runtimeVersion}
             onChange={(event) => onRuntimeVersionChange(event.target.value)}
+            disabled={runtimeVersionsLoading || runtimeOptions.length === 0}
             required
           >
             {runtimeOptions.map((version) => (
