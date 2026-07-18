@@ -2780,6 +2780,28 @@ textarea:hover:not(:disabled),
     overscroll-behavior-y: auto;
   }
 
+  .appShell:has(.workspacePage-console),
+  .sidebarCollapsed.appShell:has(.workspacePage-console) {
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    grid-template-rows: 68px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .workspacePage-console {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  .workspacePage-console.workspaceServerPage > .tabPage:has(.consolePanel) {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+  }
+
   .nodesPage.nodeDetailsOpen > .nodesToolbar,
   .nodesPage.nodeDetailsOpen > .nodesGrid {
     display: none;

@@ -99,5 +99,7 @@ describe("global stylesheet entry point", () => {
     expect(nativeScrollRules).toMatch(/\.appShell,[^{]*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
     expect(nativeScrollRules).toMatch(/\.mobileNavigationOpen\.appShell\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
     expect(nativeScrollRules).toMatch(/\.nodesPage\s*>\s*\.nodeDrawerBackdrop\s+\.nodeDrawerBody\s*\{[^}]*overflow:\s*visible;/s);
+    expect(nativeScrollRules).toMatch(/\.appShell:has\(\.workspacePage-console\)[^{]*\{[^}]*height:\s*var\(--visual-viewport-height, 100dvh\);[^}]*overflow:\s*hidden;/s);
+    expect(nativeScrollRules).toMatch(/\.workspacePage-console\s*\{[^}]*height:\s*100%;[^}]*overflow:\s*hidden;/s);
   });
 });

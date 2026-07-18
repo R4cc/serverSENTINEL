@@ -38,8 +38,11 @@ import {
   dockerNetworkingConfigFromInspect,
   minecraftContainerNetworkingConfig,
   nodeWithLiveConnectionStatus,
-  isMinecraftStopCommand
+  isMinecraftStopCommand,
+  defaultInternalNode,
+  startConsoleHeartbeat
 } from "./app.js";
+import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -62,6 +65,38 @@ describe("live node connectivity", () => {
 
   it("restores online state from an authoritative live socket", () => {
     expect(nodeWithLiveConnectionStatus({ ...remoteNode, status: "offline" }, true).status).toBe("online");
+  });
+});
+
+describe("local runtime metadata", () => {
+  it("advertises the current protocol and capabilities for the internal node", () => {
+    expect(defaultInternalNode("2026-07-18T00:00:00.000Z")).toMatchObject({
+      protocolVersion: nodeProtocolVersion,
+      capabilities: [...nodeCapabilities]
+    });
+  });
+});
+
+describe("console stream heartbeat", () => {
+  it("keeps idle browser streams active and stops cleanly", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));
+    try {
+      const messages: string[] = [];
+      const stop = startConsoleHeartbeat({ readyState: 1, send: (message) => messages.push(message) }, 1_000);
+
+      vi.advanceTimersByTime(2_000);
+      expect(messages.map((message) => JSON.parse(message))).toEqual([
+        { type: "heartbeat", at: "2026-07-18T00:00:01.000Z" },
+        { type: "heartbeat", at: "2026-07-18T00:00:02.000Z" }
+      ]);
+
+      stop();
+      vi.advanceTimersByTime(1_000);
+      expect(messages).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -510,6 +545,10 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(event!.signature).toBe("server_started");
   });
 
+  it("does not report startup progress as a completed server start", () => {
+    expect(parseLogEvent("[12:34:55] [Server thread/INFO]: Starting minecraft server version 26.2", "logs/latest.log", 2)).toBeNull();
+  });
+
   it("removes socket addresses from player disconnect events", () => {
     const line = "[21:40:51] [Server thread/INFO]: MCArchive (/62.210.101.98:15415) lost connection: Disconnected";
     const event = parseLogEvent(line, "logs/latest.log", 4);
@@ -521,9 +560,9 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
   it("compacts duplicate same-second recent events", () => {
     const reference = new Date(2026, 4, 29, 15, 0, 0);
     const events = [
-      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "logs/latest.log", 1, reference),
-      parseLogEvent("[14:15:01] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 2, reference),
-      parseLogEvent("[14:15:02] [Server thread/INFO]: Starting minecraft server version 1.21.4", "docker", 3, reference)
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Done (5.132s)! For help, type \"help\"", "logs/latest.log", 1, reference),
+      parseLogEvent("[14:15:01] [Server thread/INFO]: Done (5.132s)! For help, type \"help\"", "docker", 2, reference),
+      parseLogEvent("[14:15:02] [Server thread/INFO]: Done (5.132s)! For help, type \"help\"", "docker", 3, reference)
     ].filter((event): event is ServerEvent => Boolean(event));
     const compacted = compactRecentEvents(events, 10);
     const first = new Date(reference);

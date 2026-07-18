@@ -52,7 +52,7 @@ import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeAdvertisesCapability, normalizeNodeHello } from "./nodes/protocol.js";
+import { nodeAdvertisesCapability, nodeCapabilities, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
@@ -342,6 +342,15 @@ type Client = {
   readyState: number;
 };
 
+export function startConsoleHeartbeat(client: Client, intervalMs = consoleHeartbeatIntervalMs) {
+  const timer = setInterval(() => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({ type: "heartbeat", at: new Date().toISOString() }));
+    }
+  }, intervalMs);
+  return () => clearInterval(timer);
+}
+
 type DownloadIntentEntry = {
   name: string;
   path: string;
@@ -405,6 +414,7 @@ const resourceStatsPollMs = 5_000;
 const resourceStatsHistoryWindowMs = 24 * 60 * 60 * 1000;
 const timelineEventPollMs = 10_000;
 const timelineHistoryWindowMs = 24 * 60 * 60 * 1000;
+const consoleHeartbeatIntervalMs = 15_000;
 const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
@@ -730,7 +740,7 @@ function compareVersionStrings(left?: string, right?: string) {
   return 0;
 }
 
-function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
+export function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
   return {
     id: localNodeId,
     name: "Internal Node",
@@ -742,6 +752,8 @@ function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
     lastSeenAt: now,
     agentVersion: appVersion,
     buildId: appBuildId,
+    protocolVersion: nodeProtocolVersion,
+    capabilities: [...nodeCapabilities],
     totalMemory: totalmem()
   };
 }
@@ -767,6 +779,8 @@ function ensureDefaultInternalNode(nodes: ManagedNode[]) {
     isInternal: true,
     agentVersion: appVersion,
     buildId: appBuildId,
+    protocolVersion: nodeProtocolVersion,
+    capabilities: [...nodeCapabilities],
     updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
     lastSeenAt: current.lastSeenAt ?? now,
     totalMemory: totalmem()
@@ -2978,7 +2992,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     });
   }
 
-  if (/Done \([^)]+\)! For help, type "help"/i.test(message) || /Starting minecraft server/i.test(message)) {
+  if (/Done \([^)]+\)! For help, type "help"/i.test(message)) {
     return eventFromParsedLine({
       eventType: "server_started",
       severity: "success",
@@ -5188,12 +5202,16 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   const client = socket as unknown as Client;
   const url = new URL(request.url, "http://localhost");
   const serverId = url.searchParams.get("serverId") ?? undefined;
+  let stopHeartbeat: (() => void) | undefined;
   try {
     await requireRequestPermission(request, "console.view");
     const server = await getServer(serverId);
+    stopHeartbeat = startConsoleHeartbeat(client);
+    socket.on("close", stopHeartbeat);
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
     await runtimeForServer(server).streamConsole(server, client, (cleanup) => socket.on("close", cleanup));
   } catch (error) {
+    stopHeartbeat?.();
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
     const streamError = error as Error & { code?: string };
     client.send(JSON.stringify({
