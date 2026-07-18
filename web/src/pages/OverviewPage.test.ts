@@ -229,6 +229,10 @@ describe("mod health", () => {
     expect(loadingHtml).toContain("modsHealthPanel");
     expect(loadingHtml).toContain("modUpdatesCardSkeleton");
     expect(loadingHtml).toContain("Loading mod updates");
+    expect(loadingHtml).toContain("<strong>Mod updates</strong>");
+    expect(loadingHtml).toContain("Checking for updates");
+    expect(loadingHtml).not.toContain("modUpdatesTitleSkeleton");
+    expect(loadingHtml).not.toContain("modUpdatesWideTitleSkeleton");
     expect(loadingHtml).toContain("modUpdatesCompact");
     expect(loadingHtml).toContain("modUpdatesWideSkeleton");
     expect(render(updatePlan({ safeUpdates: 1 }), true, true)).toContain("modUpdatesCardSkeleton");
@@ -244,12 +248,13 @@ describe("mod health", () => {
 
     const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
     expect(healthyHtml).toContain("modUpdatesCard--healthy");
-    expect(healthyHtml).toContain("No mod updates available");
+    expect(healthyHtml).toContain("<strong>Mod updates</strong>");
+    expect(healthyHtml).toContain("No updates available");
     expect(healthyHtml).toContain("Everything is up to date");
     expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
     expect(attentionHtml).toContain("modUpdatesCard--healthy");
-    expect(attentionHtml).toContain("No mod updates available");
+    expect(attentionHtml).toContain("No updates available");
     expect(attentionHtml).not.toContain("attention");
     expect(attentionHtml).not.toContain("review");
     expect(attentionHtml).not.toContain("installed");
@@ -265,7 +270,8 @@ describe("mod health", () => {
 
     const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
     expect(html).toContain("<button");
-    expect(html).toContain("Mod updates available");
+    expect(html).toContain("<strong>Mod updates</strong>");
+    expect(html).toContain("3 updates available");
     expect(html).toContain("<strong>3</strong>");
     expect(html).toContain("Open Mods, 3 mod updates available");
     expect(html).not.toContain("installed");

@@ -788,22 +788,28 @@
   gap: var(--space-3);
 }
 
-.modUpdatesWideHeader > span {
+.modUpdatesHeaderCopy {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
-.modUpdatesWideHeader strong {
+.modUpdatesHeaderCopy > strong {
+  overflow: hidden;
+  margin: 0;
   color: var(--text);
-  font-size: 14px;
-  font-weight: var(--weight-title);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.modUpdatesWideHeader small,
+.modUpdatesHeaderCopy > small,
 .modUpdatesRemaining {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-helper-size);
+  line-height: 1.45;
 }
 
 .modUpdatesWideHeader > svg {
@@ -879,16 +885,6 @@
   justify-self: start;
 }
 
-.modUpdatesWideTitleSkeleton {
-  width: 156px;
-  height: 14px;
-}
-
-.modUpdatesWideMetaSkeleton {
-  width: 112px;
-  height: 11px;
-}
-
 .modUpdatesChevronSkeleton {
   width: 18px;
   height: 18px;
@@ -915,21 +911,10 @@
   cursor: default;
 }
 
-.modUpdatesTitleSkeleton {
-  width: min(168px, 72%);
-  height: 14px;
-}
-
 .modUpdatesCountSkeleton {
   width: 42px;
   height: 42px;
   border-radius: 999px;
-}
-
-.modUpdatesCompact > span {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: var(--weight-title);
 }
 
 .modUpdatesCompact > strong {

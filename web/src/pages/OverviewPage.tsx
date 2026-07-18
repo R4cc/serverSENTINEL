@@ -217,12 +217,15 @@ export function ModHealthPanel({
         aria-label="Open Mods, no mod updates available"
       >
         <span className="modUpdatesCompact">
-          <span>No mod updates available</span>
+          <span className="modUpdatesHeaderCopy">
+            <strong>Mod updates</strong>
+            <small>No updates available</small>
+          </span>
           <strong><AppIcon name="check" /></strong>
         </span>
         <span className="modUpdatesWide" aria-hidden="true">
           <span className="modUpdatesWideHeader">
-            <span>
+            <span className="modUpdatesHeaderCopy">
               <strong>Mod updates</strong>
               <small>No updates available</small>
             </span>
@@ -248,14 +251,17 @@ export function ModHealthPanel({
       aria-label={`Open Mods, ${updateCount} mod update${updateCount === 1 ? "" : "s"} available`}
     >
       <span className="modUpdatesCompact">
-        <span>Mod updates available</span>
+        <span className="modUpdatesHeaderCopy">
+          <strong>Mod updates</strong>
+          <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
+        </span>
         <strong>{updateCount}</strong>
       </span>
       <span className="modUpdatesWide" aria-hidden="true">
         <span className="modUpdatesWideHeader">
-          <span>
-            <strong>Mod updates available</strong>
-            <small>{updateCount} update{updateCount === 1 ? "" : "s"} ready to view</small>
+          <span className="modUpdatesHeaderCopy">
+            <strong>Mod updates</strong>
+            <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
           </span>
           <AppIcon name="chevronRight" />
         </span>
@@ -285,14 +291,17 @@ function ModHealthPanelSkeleton() {
     <section className="panel modsHealthPanel modUpdatesCard modUpdatesCardSkeleton" aria-busy="true">
       <LoadingLabel>Loading mod updates</LoadingLabel>
       <span className="modUpdatesCompact" aria-hidden="true">
-        <SkeletonBlock className="modUpdatesTitleSkeleton" />
+        <span className="modUpdatesHeaderCopy">
+          <strong>Mod updates</strong>
+          <small>Checking for updates</small>
+        </span>
         <SkeletonBlock className="modUpdatesCountSkeleton" />
       </span>
       <span className="modUpdatesWide modUpdatesWideSkeleton" aria-hidden="true">
         <span className="modUpdatesWideHeader">
-          <span>
-            <SkeletonBlock className="modUpdatesWideTitleSkeleton" />
-            <SkeletonBlock className="modUpdatesWideMetaSkeleton" />
+          <span className="modUpdatesHeaderCopy">
+            <strong>Mod updates</strong>
+            <small>Checking for updates</small>
           </span>
           <SkeletonBlock className="modUpdatesChevronSkeleton" />
         </span>
