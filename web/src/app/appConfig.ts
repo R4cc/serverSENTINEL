@@ -1,6 +1,6 @@
 import type { ActivePage, AppState, ManagedNode } from "../types";
 
-export const appVersion = "1.4.0";
+export const appVersion = "1.5.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";

@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/web",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@serversentinel/contracts": "1.4.0",
+    "@serversentinel/contracts": "1.5.0",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.0",
