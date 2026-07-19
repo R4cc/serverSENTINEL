@@ -5,12 +5,14 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
-import { assertNodeSupports } from "./protocol.js";
-import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter } from "./types.js";
+import { assertNodeSupports, nodeAdvertisesCapability, nodeAdvertisesFeature, type ServerObservationSection } from "./protocol.js";
+import type { RemoteObservationCoordinator } from "./observationCoordinator.js";
+import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter, RuntimeUploadSource } from "./types.js";
 import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
+import { config } from "../config.js";
 
 type ConsoleClient = {
   send: (payload: string) => void;
@@ -29,6 +31,7 @@ const transferCommandTimeoutMs = 2 * 60 * 1000;
 const modsListCommandTimeoutMs = 30_000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
 const archiveCommandTimeoutMs = 30 * 60 * 1000;
+const legacyTransferDecodedLimitBytes = 72 * 1024 * 1024;
 
 function normalizeRemotePath(path: string) {
   const value = path || ".";
@@ -215,7 +218,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     private readonly publicServerFn: PublicServerFn,
     private readonly persistServer: PersistServerFn,
     private readonly updateServerRecord: UpdateServerRecordFn,
-    private readonly deleteServerRecord: DeleteServerRecordFn
+    private readonly deleteServerRecord: DeleteServerRecordFn,
+    private readonly observations?: RemoteObservationCoordinator
   ) {
     this.nodeId = nodeId;
   }
@@ -235,6 +239,53 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.connections.request(node, command, { server, ...(payload as Record<string, unknown> | undefined) }, timeoutMs);
   }
 
+  private async supportsObservations(server: ManagedServer) {
+    const node = await this.lookupNode(server.nodeId);
+    return Boolean(node && this.connections.isConnected(node.id) && nodeAdvertisesCapability(node, "server.observe"));
+  }
+
+  private invalidateObservations(server: ManagedServer, sections?: ServerObservationSection[]) {
+    this.observations?.invalidate(server.id, sections);
+  }
+
+  private async binaryTransferNode(server: ManagedServer) {
+    const node = await this.lookupNode(server.nodeId);
+    return node && nodeAdvertisesFeature(node, "binary-transfer") && this.connections.isConnected(node.id) ? node : undefined;
+  }
+
+  private legacyUploadBuffer(contentBase64: unknown) {
+    if (typeof contentBase64 !== "string" || contentBase64.length % 4 !== 0 || !/^[a-zA-Z0-9+/]*={0,2}$/.test(contentBase64)) throw new Error("Uploaded content must be valid base64");
+    const estimatedBytes = Math.floor(contentBase64.length * 3 / 4);
+    if (estimatedBytes > legacyTransferDecodedLimitBytes) {
+      throw new Error("This upload is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
+    }
+    return Buffer.from(contentBase64, "base64");
+  }
+
+  private isUploadSource(value: unknown): value is RuntimeUploadSource {
+    return Boolean(value && typeof value === "object" && "stream" in value && (value as RuntimeUploadSource).stream);
+  }
+
+  private async bufferUploadSource(source: RuntimeUploadSource, limit: number) {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const raw of source.stream) {
+      const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      size += chunk.byteLength;
+      if (size > limit) throw new Error("This upload is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks, size);
+  }
+
+  private async mutation<T>(server: ManagedServer, sections: ServerObservationSection[], operation: Promise<T>) {
+    try {
+      return await operation;
+    } finally {
+      this.invalidateObservations(server, sections);
+    }
+  }
+
   async createServer(input: unknown): Promise<ManagedServer> {
     const result = await this.command({ id: "pending", nodeId: this.nodeId } as ManagedServer, "server.create", { input }, provisioningCommandTimeoutMs) as ManagedServer;
     await this.persistServer(result);
@@ -243,6 +294,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
     const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
+    this.invalidateObservations(server);
     await this.updateServerRecord(result);
     return result;
   }
@@ -253,13 +305,18 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return result;
   }
 
-  serverStatus(server: ManagedServer) {
+  async serverStatus(server: ManagedServer) {
+    if (this.observations && await this.supportsObservations(server)) {
+      return this.observations.read(server, "status", 6_000);
+    }
     return this.command(server, "server.inspect");
   }
 
   async lifecycle(server: ManagedServer, action: RuntimeAction) {
     const command = action === "start" ? "server.start" : action === "stop" ? "server.stop" : "server.restart";
+    this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
     const result = await this.command(server, command);
+    this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
     if (action !== "start" && action !== "restart") return result;
 
     await new Promise((resolve) => setTimeout(resolve, 1_500));
@@ -342,19 +399,35 @@ export class RemoteNodeRuntime implements NodeRuntime {
     }
   }
 
-  serverLogs(server: ManagedServer, lineLimit?: number) {
+  async serverLogs(server: ManagedServer, lineLimit?: number) {
+    if (this.observations && lineLimit === undefined && await this.supportsObservations(server)) {
+      return this.observations.read(server, "logs", 11_000);
+    }
     return this.command(server, "server.logs.recent", lineLimit === undefined ? undefined : { limit: lineLimit });
   }
 
-  readPlayerObservation(server: ManagedServer) {
+  async readPlayerObservation(server: ManagedServer) {
+    if (this.observations && await this.supportsObservations(server)) {
+      return this.observations.read(server, "players", 11_000) as Promise<PlayerObservation>;
+    }
     return this.command(server, "server.players.read") as Promise<PlayerObservation>;
   }
 
-  serverStats(server: ManagedServer) {
+  async serverStats(server: ManagedServer) {
+    if (this.observations && await this.supportsObservations(server)) {
+      return this.observations.read(server, "stats", 6_000);
+    }
     return this.command(server, "server.stats");
   }
 
   async serverOverview(server: ManagedServer) {
+    if (this.observations && await this.supportsObservations(server)) {
+      const observed = await this.observations.readMany(server, ["logs", "status", "overviewFiles"], 11_000);
+      const logs = (observed.logs ?? { text: "", source: "docker" }) as { text?: string; source?: ServerEvent["source"] };
+      const status = (observed.status ?? {}) as { docker?: { running?: boolean; startedAt?: string; finishedAt?: string } };
+      const files = (observed.overviewFiles ?? {}) as { properties?: string; eula?: string };
+      return this.buildOverview(server, logs, status, files.properties ?? "", files.eula ?? "", observed.logs !== undefined);
+    }
     const [logsResult, statusResult, propertiesResult, eulaResult] = await Promise.allSettled([
       this.serverLogs(server) as Promise<{ text?: string; source?: ServerEvent["source"] }>,
       this.serverStatus(server) as Promise<{ docker?: { running?: boolean; startedAt?: string; finishedAt?: string } }>,
@@ -362,6 +435,25 @@ export class RemoteNodeRuntime implements NodeRuntime {
       this.readFile(server, "eula.txt") as Promise<{ content?: string }>
     ]);
     const logs = logsResult.status === "fulfilled" ? logsResult.value : { text: "", source: "docker" as const };
+    const status = statusResult.status === "fulfilled" ? statusResult.value : {};
+    return this.buildOverview(
+      server,
+      logs,
+      status,
+      propertiesResult.status === "fulfilled" ? propertiesResult.value.content ?? "" : "",
+      eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "",
+      logsResult.status === "fulfilled"
+    );
+  }
+
+  private buildOverview(
+    server: ManagedServer,
+    logs: { text?: string; source?: ServerEvent["source"] },
+    status: { docker?: { running?: boolean; startedAt?: string; finishedAt?: string } },
+    propertiesText: string,
+    eulaText: string,
+    eventsAvailable: boolean
+  ) {
     let logText = logs.text ?? "";
     const source = logs.source === "logs/latest.log" ? "logs/latest.log" : "docker";
     const parsedEvents = logText
@@ -369,9 +461,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       .map((line, index) => parseRemoteLogEvent(line, source, index))
       .filter((event): event is ServerEvent => Boolean(event));
     const reversedEvents = [...parsedEvents].reverse();
-    const status = statusResult.status === "fulfilled" ? statusResult.value : {};
-    const props = parseServerProperties(propertiesResult.status === "fulfilled" ? propertiesResult.value.content : "");
-    const eulaText = eulaResult.status === "fulfilled" ? eulaResult.value.content ?? "" : "";
+    const props = parseServerProperties(propertiesText);
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
       lastStartedAt: validDockerTimestamp(status.docker?.startedAt) ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
@@ -383,7 +473,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
     };
     return {
       events: compactRecentEvents(parsedEvents, 20),
-      eventsStatus: logsResult.status === "fulfilled" ? "ok" : "unavailable",
+      eventsStatus: eventsAvailable ? "ok" : "unavailable",
       activity,
       logSources: logText ? [{ source, text: logText }] : []
     };
@@ -429,7 +519,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
+    const binaryNode = await this.binaryTransferNode(server);
+    if (binaryNode) return this.connections.download(binaryNode, "files.download", { server, path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
     const result = await this.command(server, "files.download", { path: normalizeRemotePath(target) }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
+    if (result.size > legacyTransferDecodedLimitBytes) throw new Error("This download is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
     return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
   }
 
@@ -454,7 +547,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<FileDownloadResult> {
+    const binaryNode = await this.binaryTransferNode(server);
+    if (binaryNode) return this.connections.download(binaryNode, "files.archive.download", { server, path: normalizeRemotePath(archivePath), entryPath }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
     const result = await this.command(server, "files.archive.download", { path: normalizeRemotePath(archivePath), entryPath }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
+    if (result.size > legacyTransferDecodedLimitBytes) throw new Error("This archive entry is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
     return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
   }
 
@@ -485,31 +581,45 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   writeFile(server: ManagedServer, target: string, content: unknown) {
-    return this.command(server, "files.write", { path: normalizeRemotePath(target), content });
+    return this.mutation(server, ["overviewFiles", "logs"], this.command(server, "files.write", { path: normalizeRemotePath(target), content }));
   }
 
   createFolder(server: ManagedServer, parent: string, name: unknown) {
-    return this.command(server, "files.mkdir", { parent: normalizeRemotePath(parent), name });
+    return this.mutation(server, ["overviewFiles"], this.command(server, "files.mkdir", { parent: normalizeRemotePath(parent), name }));
   }
 
-  uploadFile(server: ManagedServer, parent: string, filename: unknown, contentBase64: unknown) {
-    return this.command(server, "files.upload", { parent: normalizeRemotePath(parent), filename, contentBase64 }, transferCommandTimeoutMs);
+  async uploadFile(server: ManagedServer, parent: string, filename: unknown, contentBase64: unknown | RuntimeUploadSource) {
+    const binaryNode = await this.binaryTransferNode(server);
+    if (binaryNode) {
+      const decoded = this.isUploadSource(contentBase64) ? undefined : this.legacyUploadBuffer(contentBase64);
+      const content = this.isUploadSource(contentBase64) ? contentBase64 : { stream: Readable.from(decoded!), size: decoded!.byteLength };
+      if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
+      const result = await this.connections.upload(binaryNode, "files.upload", { server, parent: normalizeRemotePath(parent), filename }, content.stream, content.size, transferCommandTimeoutMs);
+      this.invalidateObservations(server, ["overviewFiles", "logs"]);
+      return result;
+    }
+    const legacyBase64 = this.isUploadSource(contentBase64)
+      ? (await this.bufferUploadSource(contentBase64, legacyTransferDecodedLimitBytes)).toString("base64")
+      : (this.legacyUploadBuffer(contentBase64), contentBase64);
+    const result = await this.command(server, "files.upload", { parent: normalizeRemotePath(parent), filename, contentBase64: legacyBase64 }, transferCommandTimeoutMs);
+    this.invalidateObservations(server, ["overviewFiles", "logs"]);
+    return result;
   }
 
   renameFile(server: ManagedServer, source: string, name: unknown) {
-    return this.command(server, "files.rename", { path: normalizeRemotePath(source), name });
+    return this.mutation(server, ["overviewFiles", "logs"], this.command(server, "files.rename", { path: normalizeRemotePath(source), name }));
   }
 
   moveFile(server: ManagedServer, source: string, destinationParent: string) {
-    return this.command(server, "files.move", { path: normalizeRemotePath(source), destinationPath: normalizeRemotePath(destinationParent) });
+    return this.mutation(server, ["overviewFiles", "logs"], this.command(server, "files.move", { path: normalizeRemotePath(source), destinationPath: normalizeRemotePath(destinationParent) }));
   }
 
   duplicateFile(server: ManagedServer, source: string, name: unknown) {
-    return this.command(server, "files.copy", { path: normalizeRemotePath(source), name, parent: normalizeRemotePath(dirname(source)) });
+    return this.mutation(server, ["overviewFiles", "logs"], this.command(server, "files.copy", { path: normalizeRemotePath(source), name, parent: normalizeRemotePath(dirname(source)) }));
   }
 
   deleteFile(server: ManagedServer, target: string, recursive: unknown) {
-    return this.command(server, "files.delete", { path: normalizeRemotePath(target), recursive });
+    return this.mutation(server, ["overviewFiles", "logs"], this.command(server, "files.delete", { path: normalizeRemotePath(target), recursive }));
   }
 
   listMods(server: ManagedServer, options?: { forceRefresh?: boolean }) {
@@ -523,21 +633,31 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown) {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
-    return this.command(server, `${prefix}.enableDisable`, { filename, enabled });
+    return this.mutation(server, ["logs"], this.command(server, `${prefix}.enableDisable`, { filename, enabled }));
   }
 
   removeMod(server: ManagedServer, filename: unknown) {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
-    return this.command(server, `${prefix}.remove`, { filename });
+    return this.mutation(server, ["logs"], this.command(server, `${prefix}.remove`, { filename }));
   }
 
-  uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown) {
+  async uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown | RuntimeUploadSource) {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
-    return this.command(server, `${prefix}.upload`, { filename, contentBase64 }, transferCommandTimeoutMs);
+    const binaryNode = await this.binaryTransferNode(server);
+    if (binaryNode) {
+      const decoded = this.isUploadSource(contentBase64) ? undefined : this.legacyUploadBuffer(contentBase64);
+      const content = this.isUploadSource(contentBase64) ? contentBase64 : { stream: Readable.from(decoded!), size: decoded!.byteLength };
+      if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
+      return this.mutation(server, ["logs"], this.connections.upload(binaryNode, `${prefix}.upload`, { server, filename }, content.stream, content.size, transferCommandTimeoutMs));
+    }
+    const legacyBase64 = this.isUploadSource(contentBase64)
+      ? (await this.bufferUploadSource(contentBase64, legacyTransferDecodedLimitBytes)).toString("base64")
+      : (this.legacyUploadBuffer(contentBase64), contentBase64);
+    return this.mutation(server, ["logs"], this.command(server, `${prefix}.upload`, { filename, contentBase64: legacyBase64 }, transferCommandTimeoutMs));
   }
 
   installMod(server: ManagedServer, input: unknown) {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
-    return this.command(server, `${prefix}.install`, input, modrinthCommandTimeoutMs);
+    return this.mutation(server, ["logs"], this.command(server, `${prefix}.install`, input, modrinthCommandTimeoutMs));
   }
 }

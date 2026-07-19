@@ -67,6 +67,44 @@ export function createChartOptionScheduler(apply: (option: EChartsCoreOption) =>
   };
 }
 
+type ChartPointerPosition = { offsetX?: number; offsetY?: number };
+
+export function createChartInteractionTracker(onStart: () => void, onFinish: () => void, threshold = 3) {
+  let pointerDown: { x: number; y: number } | undefined;
+  let dragging = false;
+  const coordinates = (event: unknown) => {
+    const position = event as ChartPointerPosition;
+    const x = Number(position?.offsetX);
+    const y = Number(position?.offsetY);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : undefined;
+  };
+  const finish = () => {
+    pointerDown = undefined;
+    if (!dragging) return;
+    dragging = false;
+    onFinish();
+  };
+  return {
+    pointerDown(event: unknown) {
+      pointerDown = coordinates(event);
+      dragging = false;
+    },
+    pointerMove(event: unknown) {
+      const current = coordinates(event);
+      if (!pointerDown || !current || dragging) return;
+      if (Math.hypot(current.x - pointerDown.x, current.y - pointerDown.y) < threshold) return;
+      dragging = true;
+      onStart();
+    },
+    pointerUp: finish,
+    pointerOut: finish,
+    cancel() {
+      pointerDown = undefined;
+      dragging = false;
+    }
+  };
+}
+
 export function EChartsCanvas({
   option,
   onDataZoom,
@@ -100,32 +138,28 @@ export function EChartsCanvas({
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
     chart.on("datazoom", handleDataZoom);
     const renderer = chart.getZr();
-    let interacting = false;
-    const startInteraction = () => {
-      if (interacting) return;
-      interacting = true;
+    const interactionTracker = createChartInteractionTracker(() => {
       optionScheduler.startInteraction();
       onInteractionChangeRef.current?.(true);
-    };
-    const finishInteraction = () => {
-      if (!interacting) return;
-      interacting = false;
+    }, () => {
       optionScheduler.finishInteraction();
       onInteractionChangeRef.current?.(false);
-    };
-    renderer.on("mousedown", startInteraction);
-    renderer.on("mouseup", finishInteraction);
-    renderer.on("globalout", finishInteraction);
+    });
+    renderer.on("mousedown", interactionTracker.pointerDown);
+    renderer.on("mousemove", interactionTracker.pointerMove);
+    renderer.on("mouseup", interactionTracker.pointerUp);
+    renderer.on("globalout", interactionTracker.pointerOut);
     const resizeObserver = new ResizeObserver(() => chart.resize());
     resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
-      renderer.off("mousedown", startInteraction);
-      renderer.off("mouseup", finishInteraction);
-      renderer.off("globalout", finishInteraction);
+      renderer.off("mousedown", interactionTracker.pointerDown);
+      renderer.off("mousemove", interactionTracker.pointerMove);
+      renderer.off("mouseup", interactionTracker.pointerUp);
+      renderer.off("globalout", interactionTracker.pointerOut);
       chart.off("datazoom", handleDataZoom);
-      interacting = false;
+      interactionTracker.cancel();
       optionScheduler.cancel();
       chart.dispose();
       if (chartRef.current === chart) chartRef.current = null;

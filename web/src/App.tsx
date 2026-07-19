@@ -956,7 +956,7 @@ export default function App() {
       setConsoleError("");
     }
 
-    socket.onopen = () => undefined;
+    socket.onopen = markConsoleLive;
     socket.onmessage = (event) => {
       let message: { type?: string; source?: string; text?: string; message?: string; code?: string; retryable?: boolean };
       try {

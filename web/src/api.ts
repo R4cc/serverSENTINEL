@@ -40,9 +40,10 @@ export async function apiErrorFromResponse(response: Response, fallback?: string
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const multipartBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
-    ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+    ...(init?.body === undefined || multipartBody ? {} : { "Content-Type": "application/json" }),
     ...(init?.headers as Record<string, string> | undefined)
   };
   let response: Response;

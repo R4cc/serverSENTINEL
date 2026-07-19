@@ -14,6 +14,8 @@ type TimelineEventCollectorOptions = {
   onError?: (error: unknown, server?: ManagedServer) => void;
 };
 
+const futureEventToleranceMs = 5 * 60 * 1000;
+
 function eventKey(event: ServerEvent) {
   return createHash("sha1")
     .update([event.source, event.timestamp, event.signature, event.message, event.details ?? ""].join("\u0000"))
@@ -64,12 +66,13 @@ export class TimelineEventCollector {
       const text = typeof result?.text === "string" ? result.text : "";
       const source = result?.source === "logs/latest.log" ? "logs/latest.log" : "docker";
       const referenceDate = new Date();
-      const cutoff = referenceDate.getTime() - this.options.retentionMs;
+      const referenceTime = referenceDate.getTime();
+      const cutoff = referenceTime - this.options.retentionMs;
       text.split(/\r?\n/).forEach((line, index) => {
         const event = this.options.parseLine(line, source, index, referenceDate);
         if (!event?.timestamp) return;
         const occurredAt = new Date(event.timestamp).getTime();
-        if (!Number.isFinite(occurredAt) || occurredAt < cutoff) return;
+        if (!Number.isFinite(occurredAt) || occurredAt < cutoff || occurredAt > referenceTime + futureEventToleranceMs) return;
         this.options.repository.append(server.id, eventKey(event), { ...event, occurredAt });
       });
     } catch (error) {

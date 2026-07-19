@@ -3,7 +3,7 @@ import { api, apiErrorFromResponse } from "../../api";
 import { demoListing, demoServerId } from "../../demo";
 import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser, ZipArchiveListing, ZipExtractionPlan } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
-import { bufferToBase64, isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
+import { isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
 import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { clearDeletedFileState, defaultDuplicateName, errorMessage, fileNameValidation, publicPathContains } from "../../utils/appHelpers";
@@ -121,7 +121,8 @@ export function useFilesWorkspace({
       fileLeaseBusy,
       fileLeaseMessage,
       discardEditorRequest,
-      canEditSelectedPath
+      canEditSelectedPath,
+      editDisabledReason
     },
     actions: {
       openFile,
@@ -149,6 +150,8 @@ export function useFilesWorkspace({
     isProvisioning,
     dockerOperationalLock,
     runtimeControlsDisabledReason,
+    serverRequiresStoppedForMutableConfig,
+    stoppedServerMutationMessage,
     permissionUser,
     formatDisplayDate,
     notify,
@@ -685,10 +688,13 @@ export function useFilesWorkspace({
         setDemoFiles(nextFiles);
         setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
-        const contentBase64 = bufferToBase64(await file.arrayBuffer());
+        const form = new FormData();
+        form.append("path", listing.path);
+        form.append("size", String(file.size));
+        form.append("file", file, file.name);
         await api(`/api/servers/${activeServer.id}/files/upload`, {
           method: "POST",
-          body: JSON.stringify({ path: listing.path, filename: file.name, contentBase64 })
+          body: form
         });
         await loadFiles(activeServer.id, listing.path);
       }
@@ -1168,6 +1174,7 @@ export function useFilesWorkspace({
       canViewCurrentFiles,
       canUploadToCurrentPath,
       canEditSelectedPath,
+      editDisabledReason,
       canOpenSelectedFile,
       canOpenSelectedZip,
       canExtractSelectedZip,

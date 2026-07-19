@@ -111,12 +111,14 @@ export type ManagedNode = {
   agentVersion?: string;
   buildId?: string;
   protocolVersion?: string;
+  protocolMode?: "current" | "fallback" | "update-only" | "incompatible";
   dockerStatus?: string;
   dataPathStatus?: string;
   totalMemory?: number;
   joinTokenExpiresAt?: string;
   hasPendingJoinToken?: boolean;
   capabilities?: string[];
+  features?: string[];
 };
 
 export type ContextNode = ManagedNode & {

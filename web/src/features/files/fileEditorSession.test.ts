@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../../api";
 import type { FileEditLease, FileEntry } from "../../types";
-import { fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
+import { fileEditBlockedReason, fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
 
 describe("file editor session helpers", () => {
+  it("blocks editing server.properties while mutable configuration requires a stopped server", () => {
+    const message = "Stop the server before changing mods, plugins, or server properties.";
+
+    expect(fileEditBlockedReason("/server.properties", true, message)).toBe(message);
+    expect(fileEditBlockedReason("/plugins/example/config.yml", true, message)).toBe("");
+    expect(fileEditBlockedReason("/server.properties", false, message)).toBe("");
+  });
+
   it("describes unsupported editor entries", () => {
     const directory = { type: "directory", size: 0 } as FileEntry;
     const largeFile = { type: "file", size: 2 * 1024 * 1024 + 1 } as FileEntry;

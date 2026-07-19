@@ -55,4 +55,19 @@ describe("TimelineEventCollector", () => {
     expect(append).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledOnce();
   });
+
+  it("rejects events whose timestamps are implausibly far in the future", async () => {
+    const append = vi.fn();
+    const collector = new TimelineEventCollector({
+      intervalMs: 10_000,
+      retentionMs: 24 * 60 * 60 * 1000,
+      readServers: async () => [{ id: "server-1" }] as ManagedServer[],
+      readLogs: async () => ({ text: "line", source: "docker" }),
+      parseLine: () => event(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
+      repository: { append, prune: vi.fn() } as never
+    });
+
+    await collector.collectAll();
+    expect(append).not.toHaveBeenCalled();
+  });
 });

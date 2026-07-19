@@ -186,6 +186,7 @@ export type ManagedNode = {
   buildId?: string;
   protocolVersion?: string;
   capabilities?: string[];
+  features?: string[];
   dockerStatus?: string;
   dataPathStatus?: string;
   totalMemory?: number;
@@ -196,6 +197,7 @@ export type ManagedNode = {
 
 export type PublicNode = Omit<ManagedNode, "secretHash" | "joinTokenHash"> & {
   hasPendingJoinToken?: boolean;
+  protocolMode?: "current" | "fallback" | "update-only" | "incompatible";
 };
 
 export type ManagedServer = {

@@ -89,6 +89,20 @@ describe("api error contract", () => {
 });
 
 describe("runtime-controlled demo mode", () => {
+  it("leaves multipart content type generation to the browser", async () => {
+    mockWindow();
+    mockFetch(Response.json({ ok: true }));
+    const body = new FormData();
+    body.append("file", new Blob(["data"]), "test.txt");
+
+    await api("/api/test", { method: "POST", body });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/test", expect.objectContaining({
+      body,
+      headers: expect.not.objectContaining({ "Content-Type": expect.anything() })
+    }));
+  });
+
   it("never sends a client-controlled demo header", async () => {
     const storage = mockWindow(fakeStorage({ [demoLocalStorageKey]: "true" }));
     mockFetch(Response.json({ ok: true }));

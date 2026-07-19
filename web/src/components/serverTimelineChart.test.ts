@@ -8,6 +8,7 @@ import {
   defaultTimelinePalette,
   escapeTimelineHtml,
   liveTimelineWindow,
+  liveTimelineFutureRatio,
   nearestTimelineSample,
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
@@ -48,10 +49,11 @@ const clusters: MarkerCluster[] = [{
 }];
 
 describe("server timeline chart windows", () => {
-  it("places now at the right edge of a live viewport and buffers one span behind it", () => {
+  it("reserves future headroom for planned schedules and buffers one span behind a live viewport", () => {
     const viewport = liveTimelineWindow(1_000, 10_000);
-    expect(viewport).toEqual({ from: 9_000, to: 10_000 });
-    expect(timelineQueryWindow(viewport, true)).toEqual({ from: 8_000, to: 10_000 });
+    expect(liveTimelineFutureRatio).toBe(0.1);
+    expect(viewport).toEqual({ from: 9_100, to: 10_100 });
+    expect(timelineQueryWindow(viewport, true)).toEqual({ from: 8_100, to: 10_100 });
   });
 
   it("buffers historical viewports on both sides and caps full-day queries", () => {

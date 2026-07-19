@@ -34,6 +34,7 @@ const timelineRanges = [
 
 type TimelineRange = typeof timelineRanges[number]["label"];
 type TimelineSelection = TimelineRange | "custom";
+const defaultTimelineRange: TimelineRange = "1h";
 export type SeriesKey = "cpuUtilizationPercent" | "memoryUtilizationPercent" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
@@ -147,17 +148,6 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
     const player = playerEventSubject(event);
     const nextPlayer = next ? playerEventSubject(next) : "";
     const reconnectDuration = next ? next.occurredAt - event.occurredAt : Number.POSITIVE_INFINITY;
-    if (repeated.length > 1) {
-      eventMarkers.push({
-        id: `repeated:${repeated.map((item) => item.id).join(":")}`,
-        occurredAt: event.occurredAt,
-        label: event.message,
-        tone: eventTone(event),
-        event,
-        occurrences: repeated.length
-      });
-      continue;
-    }
     if (
       event.eventType === "player_left"
       && next?.eventType === "player_joined"
@@ -178,6 +168,17 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
         }
       });
       index += 1;
+      continue;
+    }
+    if (repeated.length > 1) {
+      eventMarkers.push({
+        id: `repeated:${repeated.map((item) => item.id).join(":")}`,
+        occurredAt: event.occurredAt,
+        label: event.message,
+        tone: eventTone(event),
+        event,
+        occurrences: repeated.length
+      });
       continue;
     }
     eventMarkers.push({
@@ -209,8 +210,8 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
   const groups: TimelineMarker[][] = [];
   for (const marker of visible) {
     const current = groups.at(-1);
-    const previous = current?.at(-1);
-    if (!current || !previous || marker.occurredAt - previous.occurredAt >= bucketMs) groups.push([marker]);
+    const first = current?.[0];
+    if (!current || !first || marker.occurredAt - first.occurredAt >= bucketMs) groups.push([marker]);
     else current.push(marker);
   }
   return groups.map((grouped) => {
@@ -337,7 +338,15 @@ function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
   return [...new Map(items.map((item) => [key(item), item])).values()];
 }
 
+function timelineEventIdentity(event: ServerTimelineEvent) {
+  return [event.source, event.occurredAt, event.signature, event.message, event.details ?? ""].join("\u0000");
+}
+
 export function mergeTimelineResponses(current: ServerTimelineResponse, incoming: ServerTimelineResponse, from: number, to: number): ServerTimelineResponse {
+  const incomingGeneratedAt = new Date(incoming.generatedAt).getTime();
+  const retainedSchedules = Number.isFinite(incomingGeneratedAt)
+    ? current.schedules.filter((marker) => marker.kind !== "upcoming" || marker.occurredAt > incomingGeneratedAt)
+    : current.schedules;
   return {
     ...incoming,
     from,
@@ -346,11 +355,11 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
     samples: uniqueBy([...current.samples, ...incoming.samples], (point) => point.sampledAt)
       .filter((point) => point.sampledAt >= from && point.sampledAt <= to)
       .sort((left, right) => left.sampledAt - right.sampledAt),
-    events: uniqueBy([...current.events, ...incoming.events], (event) => event.id)
+    events: uniqueBy([...current.events, ...incoming.events], timelineEventIdentity)
       .filter((event) => event.occurredAt >= from && event.occurredAt <= to)
       .sort((left, right) => left.occurredAt - right.occurredAt),
     schedules: incoming.scheduleAnnotationsAvailable
-      ? uniqueBy([...current.schedules, ...incoming.schedules], (marker) => marker.id)
+      ? uniqueBy([...retainedSchedules, ...incoming.schedules], (marker) => marker.id)
           .filter((marker) => marker.occurredAt >= from && marker.occurredAt <= to)
           .sort((left, right) => left.occurredAt - right.occurredAt)
       : [],
@@ -432,9 +441,9 @@ export function ServerTimeline({
   onLatestSample?: (sample?: ServerTimelineResourcePoint) => void;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
-  const initialSpan = timelineRanges[2].milliseconds;
-  const [selection, setSelection] = useState<TimelineSelection>("1h");
-  const [lastPreset, setLastPreset] = useState<TimelineRange>("1h");
+  const initialSpan = timelineRanges.find((range) => range.label === defaultTimelineRange)!.milliseconds;
+  const [selection, setSelection] = useState<TimelineSelection>(defaultTimelineRange);
+  const [lastPreset, setLastPreset] = useState<TimelineRange>(defaultTimelineRange);
   const [live, setLive] = useState(true);
   const [viewport, setViewportState] = useState<TimelineWindow>(() => liveTimelineWindow(initialSpan));
   const [data, setData] = useState<ServerTimelineResponse | null>(null);
@@ -611,7 +620,6 @@ export function ServerTimeline({
     const center = (current.from + current.to) / 2;
     const historicalTo = Math.min(Date.now(), center + span / 2);
     const next = nextLive ? liveTimelineWindow(span) : { from: historicalTo - span, to: historicalTo };
-    setSelection(range);
     setSelectedCluster(null);
     setHoverTooltip(null);
     setClockNow(Date.now());
@@ -620,6 +628,7 @@ export function ServerTimeline({
       showLoading: true,
       commitViewport: true,
       onCommit: () => {
+        setSelection(range);
         setLastPreset(range);
         setLiveMode(nextLive);
       }
@@ -797,13 +806,13 @@ export function ServerTimeline({
         </div>
         <div className="serverTimelineNavigation">
           {!live && <Button variant="secondary" compact onClick={jumpToNow}>Jump to now</Button>}
-          <Button variant="secondary" compact onClick={resetView} disabled={live && selection !== "custom"}>Reset view</Button>
+          <Button variant="secondary" compact onClick={resetView} disabled={selection !== "custom"}>Reset view</Button>
           <Button variant="secondary" compact onClick={() => pan(-1)} aria-label="Earlier timeline window">‹</Button>
           <Button variant="secondary" compact onClick={() => pan(1)} aria-label="Later timeline window" disabled={live}>›</Button>
         </div>
       </div>
       {error && <div className="serverTimelineNotice tone-warning">{error}. Previously loaded data is still shown.</div>}
-      {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were grouped because this window exceeds the annotation limit.</div>}
+      {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were omitted because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
       <div
         className="serverTimelineChart"

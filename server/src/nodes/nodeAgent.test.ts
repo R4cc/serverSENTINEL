@@ -33,6 +33,16 @@ function testRuntimeProfile(): ServerRuntimeProfile {
   };
 }
 
+describe("node reconnect backoff", () => {
+  it("stays within one and thirty seconds while growing exponentially", () => {
+    expect(hooks.nodeReconnectDelayMs(0, () => 0)).toBe(1_000);
+    expect(hooks.nodeReconnectDelayMs(1, () => 1)).toBe(2_000);
+    expect(hooks.nodeReconnectDelayMs(4, () => 1)).toBe(16_000);
+    expect(hooks.nodeReconnectDelayMs(20, () => 1)).toBe(30_000);
+    expect(hooks.nodeReconnectDelayMs(20, () => 0)).toBe(1_000);
+  });
+});
+
 function paperRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.11",

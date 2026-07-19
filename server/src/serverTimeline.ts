@@ -103,19 +103,22 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
     if (current.playersOnline !== null) cachedPlayersOnline = current.playersOnline;
     if (sample.sampledAt < from) continue;
     if (containsLongGap) {
-      output.push({
-        sampledAt: Math.max(from, previous.sampledAt + 5_000),
-        available: false,
-        running: false,
-        cpuPercent: null,
-        cpuUtilizationPercent: null,
-        memoryUsageBytes: null,
-        memoryLimitBytes: null,
-        memoryUtilizationPercent: null,
-        playersOnline: null,
-        networkRxBytesPerSecond: null,
-        networkTxBytesPerSecond: null
-      });
+      const gapAt = Math.max(from, previous.sampledAt + 5_000);
+      if (gapAt < sample.sampledAt) {
+        output.push({
+          sampledAt: gapAt,
+          available: false,
+          running: false,
+          cpuPercent: null,
+          cpuUtilizationPercent: null,
+          memoryUsageBytes: null,
+          memoryLimitBytes: null,
+          memoryUtilizationPercent: null,
+          playersOnline: null,
+          networkRxBytesPerSecond: null,
+          networkTxBytesPerSecond: null
+        });
+      }
     }
     output.push(current);
   }

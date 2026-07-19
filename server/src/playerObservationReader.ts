@@ -7,7 +7,9 @@ type ObservationInput = {
   instanceId?: string;
   props: Record<string, string>;
   endpoint: MinecraftQueryEndpoint | null;
+  fallbackEndpoints?: MinecraftQueryEndpoint[];
   now?: () => Date;
+  queryServer?: typeof queryMinecraftServer;
 };
 
 function configuredMaxPlayers(props: Record<string, string>) {
@@ -53,25 +55,33 @@ export async function readMinecraftPlayerObservation(input: ObservationInput): P
       message: "The Minecraft Query endpoint could not be resolved"
     };
   }
-  try {
-    const result = await queryMinecraftServer(input.endpoint.host, input.endpoint.port);
-    return {
-      state: "live",
-      instanceId,
-      online: result.playersOnline,
-      maxPlayers: result.maxPlayers ?? maxPlayers,
-      names: result.playerNames,
-      sampledAt
-    };
-  } catch (error) {
-    const code = error instanceof MinecraftQueryError ? error.code : "QUERY_TIMEOUT";
-    return {
-      state: "unavailable",
-      instanceId,
-      maxPlayers,
-      attemptedAt: sampledAt,
-      code,
-      message: error instanceof Error ? error.message : "Minecraft Query failed"
-    };
+  const queryServer = input.queryServer ?? queryMinecraftServer;
+  let lastError: unknown;
+  const endpoints = [input.endpoint, ...(input.fallbackEndpoints ?? [])]
+    .filter((endpoint, index, candidates): endpoint is MinecraftQueryEndpoint => Boolean(endpoint)
+      && candidates.findIndex((candidate) => candidate?.host === endpoint?.host && candidate?.port === endpoint?.port) === index);
+  for (const endpoint of endpoints) {
+    try {
+      const result = await queryServer(endpoint.host, endpoint.port);
+      return {
+        state: "live",
+        instanceId,
+        online: result.playersOnline,
+        maxPlayers: result.maxPlayers ?? maxPlayers,
+        names: result.playerNames,
+        sampledAt
+      };
+    } catch (error) {
+      lastError = error;
+    }
   }
+  const code = lastError instanceof MinecraftQueryError ? lastError.code : "QUERY_TIMEOUT";
+  return {
+    state: "unavailable",
+    instanceId,
+    maxPlayers,
+    attemptedAt: sampledAt,
+    code,
+    message: lastError instanceof Error ? lastError.message : "Minecraft Query failed"
+  };
 }

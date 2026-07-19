@@ -15,8 +15,8 @@ import {
   timelineMarkerPreview
 } from "./ServerTimeline";
 
-describe("server timeline range controls", () => {
-  it("offers a three-hour preset between one and six hours", () => {
+describe("server timeline controls", () => {
+  it("renders the three-hour preset and keeps reset disabled for an unmodified preset", () => {
     const html = renderToStaticMarkup(createElement(ServerTimeline, {
       loadTimeline: vi.fn(),
       formatTime: String,
@@ -26,6 +26,7 @@ describe("server timeline range controls", () => {
     }));
 
     expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
   });
 });
 
@@ -101,6 +102,21 @@ describe("server timeline markers", () => {
     expect(timelineMarkerDisplayLabel(markers[0])).toEqual({ primary: "Player reconnected", secondary: "Alex" });
   });
 
+  it("still combines a reconnect when duplicate disconnect lines precede the join", () => {
+    const value = response();
+    value.schedules = [];
+    value.events = [
+      { ...value.events[1], id: "left-first", occurredAt: 10_000, timestamp: "2026-01-01T00:00:10.000Z" },
+      { ...value.events[1], id: "left-duplicate", occurredAt: 11_000, timestamp: "2026-01-01T00:00:11.000Z" },
+      { ...value.events[0], id: "joined-again", occurredAt: 17_000, timestamp: "2026-01-01T00:00:17.000Z" }
+    ];
+
+    expect(timelineMarkers(value)).toMatchObject([{
+      label: "Alex reconnected",
+      reconnect: { player: "Alex", durationSeconds: 6 }
+    }]);
+  });
+
   it("keeps longer disconnects as separate leave and join markers", () => {
     const value = response();
     value.events = [
@@ -138,6 +154,20 @@ describe("server timeline markers", () => {
     expect(clusters).toHaveLength(2);
     expect(clusters[0].markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left"]);
     expect(clusters[0]).toMatchObject({ slot: 1, slotCount: 6 });
+  });
+
+  it("does not chain adjacent markers into a cluster spanning multiple buckets", () => {
+    const marker = timelineMarkers(response())[0];
+    const clusters = clusterTimelineMarkers([
+      { ...marker, id: "first", occurredAt: 0 },
+      { ...marker, id: "second", occurredAt: 59 },
+      { ...marker, id: "third", occurredAt: 118 }
+    ], 0, 360, 6);
+
+    expect(clusters.map((cluster) => cluster.markers.map((item) => item.id))).toEqual([
+      ["first", "second"],
+      ["third"]
+    ]);
   });
 
   it("keeps nearby marker groups stable as a fixed-width viewport pans", () => {
@@ -242,5 +272,24 @@ describe("server timeline markers", () => {
     expect(merged.events.map((event) => event.id)).toEqual(["leave"]);
     expect(merged.schedules).toHaveLength(1);
     expect(merged.from).toBe(15_000);
+  });
+
+  it("deduplicates an event when its rolling log-tail line index changes", () => {
+    const current = response();
+    current.events = [{ ...current.events[0], id: "logs-199-old" }];
+    const incoming = response();
+    incoming.events = [{ ...current.events[0], id: "logs-198-new" }];
+
+    expect(mergeTimelineResponses(current, incoming, 0, 60_000).events.map((event) => event.id)).toEqual(["logs-198-new"]);
+  });
+
+  it("removes an upcoming marker after its scheduled time passes", () => {
+    const current = response();
+    current.schedules = [{ id: "upcoming", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 50_000, kind: "upcoming", status: "upcoming" }];
+    const incoming = response();
+    incoming.generatedAt = new Date(60_000).toISOString();
+    incoming.schedules = [];
+
+    expect(mergeTimelineResponses(current, incoming, 0, 60_000).schedules).toEqual([]);
   });
 });
