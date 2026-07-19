@@ -22,7 +22,7 @@ import { currentUserForRequest, type AuthenticatedRequest } from "./auth/request
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "./consoleLogs.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
 import {
@@ -2679,7 +2679,18 @@ async function dockerAction(server: ManagedServer, action: "start" | "stop" | "r
         throw new Error(`Container ${dockerContainerName(server)} is not managed by serverSENTINEL; refusing to control it`);
       }
     }
-    await dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
+    const requestAction = () => dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
+    try {
+      await requestAction();
+    } catch (error) {
+      if ((action !== "start" && action !== "restart") || !isMissingDockerNetworkError(error)) throw error;
+      const existing = await inspectDockerContainer(server);
+      const networkingConfig = minecraftContainerNetworkingConfig(existing, await currentContainerInspect().catch(() => null));
+      logWarn({ ...serverLogFields(server), action }, "Recreating managed Docker container after its network attachment became stale");
+      await removeManagedDockerContainer(server);
+      await ensureDockerContainer(server, networkingConfig);
+      await requestAction();
+    }
     if (action === "start" || action === "restart") {
       await new Promise((resolve) => setTimeout(resolve, 1_500));
       const status = await dockerStatus(server);

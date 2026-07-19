@@ -24,6 +24,11 @@ export function dockerErrorMessage(body: string, statusCode?: number) {
   return `Docker API returned ${statusCode ?? "an error"}`;
 }
 
+export function isMissingDockerNetworkError(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /\bnetwork\s+[a-f0-9]{12,64}\s+not found\b/i.test(message);
+}
+
 export function dockerJsonBody<T>(body: string): T {
   if (!body) return {} as T;
   try {

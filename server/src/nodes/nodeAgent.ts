@@ -11,7 +11,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
-import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -419,6 +419,30 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
     const networkingConfig = minecraftContainerNetworkingConfig(details) ?? preferredNetworkingConfig;
     await removeManagedContainer(server);
     await createContainer(server, networkingConfig);
+  }
+}
+
+async function recreateContainerAfterMissingNetwork(server: ManagedServer) {
+  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  const networkingConfig = minecraftContainerNetworkingConfig(details, await inspectCurrentContainer().catch(() => null));
+  await removeManagedContainer(server);
+  await createContainer(server, networkingConfig);
+}
+
+async function requestContainerLifecycleAction(server: ManagedServer, action: "start" | "restart", signal?: AbortSignal) {
+  const name = encodeURIComponent(containerName(server));
+  const path = action === "start" ? `/containers/${name}/start` : `/containers/${name}/restart?t=10`;
+  const expectedStatus = action === "start" ? [204, 304] : 204;
+  const request = () => signal ? dockerRequest("POST", path, expectedStatus, signal) : dockerRequest("POST", path, expectedStatus);
+  signal?.throwIfAborted();
+  try {
+    await request();
+  } catch (error) {
+    if (!isMissingDockerNetworkError(error)) throw error;
+    signal?.throwIfAborted();
+    await recreateContainerAfterMissingNetwork(server);
+    signal?.throwIfAborted();
+    await request();
   }
 }
 
@@ -1539,9 +1563,17 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   }
   if (command === "server.inspect") return runtimeStatus(server);
   if (command === "server.players.read") return playerObservation(server);
-  if (command === "server.start") { await ensureContainer(server); signal?.throwIfAborted(); await (signal ? dockerRequest("POST", `/containers/${name}/start`, [204, 304], signal) : dockerRequest("POST", `/containers/${name}/start`, [204, 304])); return runtimeStatus(server); }
+  if (command === "server.start") {
+    await ensureContainer(server);
+    await requestContainerLifecycleAction(server, "start", signal);
+    return runtimeStatus(server);
+  }
   if (command === "server.stop") { signal?.throwIfAborted(); await (signal ? dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304], signal) : dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304])); return runtimeStatus(server); }
-  if (command === "server.restart") { await ensureContainer(server); signal?.throwIfAborted(); await (signal ? dockerRequest("POST", `/containers/${name}/restart?t=10`, 204, signal) : dockerRequest("POST", `/containers/${name}/restart?t=10`, 204)); return runtimeStatus(server); }
+  if (command === "server.restart") {
+    await ensureContainer(server);
+    await requestContainerLifecycleAction(server, "restart", signal);
+    return runtimeStatus(server);
+  }
   if (command === "server.stats") return resourceStats(server);
   if (command === "server.logs.recent") {
     const lineLimit = payload?.limit === undefined ? undefined : consoleLogLineLimit(payload.limit);
