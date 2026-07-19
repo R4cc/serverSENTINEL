@@ -6,6 +6,7 @@ import {
   clusterTimelineMarkers,
   mergeTimelineResponses,
   positionTimelineClusters,
+  ServerTimeline,
   TimelineAnnotationPopoverItem,
   timelineAnnotationGridTop,
   timelineMarkers,
@@ -13,6 +14,20 @@ import {
   timelineMarkerIsImportant,
   timelineMarkerPreview
 } from "./ServerTimeline";
+
+describe("server timeline range controls", () => {
+  it("offers a three-hour preset between one and six hours", () => {
+    const html = renderToStaticMarkup(createElement(ServerTimeline, {
+      loadTimeline: vi.fn(),
+      formatTime: String,
+      formatShortTime: String,
+      formatDate: String,
+      onOpenSchedules: vi.fn()
+    }));
+
+    expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
+  });
+});
 
 function response(): ServerTimelineResponse {
   return {

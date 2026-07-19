@@ -1,7 +1,7 @@
 import { serverRuntimeDefinitions } from "@serversentinel/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { RuntimeWizardStep } from "./ServerCreatePage";
+import { createServerReviewSummary, RuntimeWizardStep } from "./ServerCreatePage";
 
 function renderPaperRuntime(input: { runtimeVersion?: string; noStableBuild?: boolean; loading?: boolean; minecraftLoading?: boolean } = {}) {
   const runtimeVersion = input.runtimeVersion ?? "132";
@@ -39,6 +39,8 @@ describe("RuntimeWizardStep", () => {
     expect(html).toContain("Paper build");
     expect(html).toContain("132 (Recommended)");
     expect(html).toContain("plugin ecosystem");
+    expect(html).toContain("Server JAR filename");
+    expect(html).not.toContain("Server JAR source");
     expect(html).toMatch(/aria-pressed="true"[^>]*title="Use Paper"/);
     expect(html).not.toMatch(/aria-pressed="true"[^>]*disabled/);
   });
@@ -62,5 +64,12 @@ describe("RuntimeWizardStep", () => {
 
     expect(html).toContain("Loading available Paper Minecraft versions");
     expect(html).not.toContain("No stable Paper build is available");
+  });
+});
+
+describe("server creation review", () => {
+  it("describes the stopped post-creation lifecycle accurately", () => {
+    expect(createServerReviewSummary).toContain("remain stopped until you start it");
+    expect(createServerReviewSummary).not.toContain("launch your Minecraft server");
   });
 });

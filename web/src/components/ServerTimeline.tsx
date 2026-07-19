@@ -27,6 +27,7 @@ const timelineRanges = [
   { label: "5m", milliseconds: 5 * 60 * 1000 },
   { label: "15m", milliseconds: 15 * 60 * 1000 },
   { label: "1h", milliseconds: 60 * 60 * 1000 },
+  { label: "3h", milliseconds: 3 * 60 * 60 * 1000 },
   { label: "6h", milliseconds: 6 * 60 * 60 * 1000 },
   { label: "24h", milliseconds: 24 * 60 * 60 * 1000 }
 ] as const;
