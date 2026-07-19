@@ -16,6 +16,16 @@ describe("scheduled command log capture", () => {
     });
   });
 
+  it("removes terminal control sequences from captured command output", () => {
+    expect(captureScheduledCommandLogs(
+      "baseline\n",
+      "baseline\n\u001b[?2004h> list\u001b[?2004l\n\u001b[32mThere are 0 of a max of 20 players online\u001b[0m\n"
+    )).toEqual({
+      logCaptureStatus: "captured",
+      logs: ["> list", "There are 0 of a max of 20 players online"]
+    });
+  });
+
   it("reports empty and unreliable captures explicitly", () => {
     expect(captureScheduledCommandLogs("same\n", "same\n")).toEqual({ logCaptureStatus: "empty", logs: [] });
     expect(captureScheduledCommandLogs(undefined, "new\n")).toEqual({ logCaptureStatus: "unavailable" });

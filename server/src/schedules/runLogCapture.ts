@@ -7,9 +7,18 @@ export type ScheduledCommandLogCapture = {
 };
 
 function lines(text: string) {
-  const result = text.replace(/\r\n?/g, "\n").split("\n");
+  const result = text.replace(/\r\n?/g, "\n").split("\n").map(sanitizeTerminalEntry);
   if (result.at(-1) === "") result.pop();
   return result;
+}
+
+function sanitizeTerminalEntry(entry: string) {
+  return entry
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u001b[@-_]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "")
+    .trim();
 }
 
 function boundedEntries(entries: string[]) {

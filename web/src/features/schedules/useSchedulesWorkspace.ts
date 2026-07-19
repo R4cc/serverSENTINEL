@@ -72,7 +72,7 @@ export function useSchedulesWorkspace({
     if (activeServerIsDemo) {
       const schedule = createDemoSchedule(patch, clientId(), new Date().toISOString());
       setDemoSchedules((current) => [schedule, ...current]);
-      notify("success", "Demo scheduled execution created");
+      notify("success", "Demo schedule created");
       setBusy(false);
       return true;
     }
@@ -87,7 +87,7 @@ export function useSchedulesWorkspace({
           enabled: patch.enabled
         })
       });
-      notify("success", "Scheduled execution created");
+      notify("success", "Schedule created");
       await refreshApp();
       return true;
     } catch (createError) {
@@ -145,7 +145,7 @@ export function useSchedulesWorkspace({
     if (locked || !activeServer) return;
     const confirmed = await requestConfirmation({
       title: `Delete ${schedule.name}?`,
-      description: "Delete this scheduled execution and its configured actions.",
+      description: "Delete this schedule and its configured actions.",
       warning: "This action cannot be undone.",
       confirmLabel: "Delete schedule",
       variant: "critical"

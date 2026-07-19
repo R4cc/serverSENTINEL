@@ -1,4 +1,4 @@
-export type ConsoleConnectionState = "connecting" | "live" | "reconnecting" | "offline" | "error";
+export type ConsoleConnectionState = "connecting" | "live" | "polling" | "reconnecting" | "offline" | "error";
 
 export type ConsoleUnavailableMessage = {
   message?: string;

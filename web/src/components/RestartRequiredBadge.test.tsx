@@ -21,4 +21,10 @@ describe("RestartRequiredBadge", () => {
     expect(html).toContain("Mods have changed");
     expect(html).not.toContain("<ul>");
   });
+
+  it("uses plugin terminology for Paper servers", () => {
+    const html = renderToStaticMarkup(<RestartRequiredBadge runtimeType="paper" />);
+    expect(html).toContain("Plugins have changed");
+    expect(html).not.toContain("Mods have changed");
+  });
 });

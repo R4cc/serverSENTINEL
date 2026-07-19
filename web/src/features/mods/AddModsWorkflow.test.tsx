@@ -153,6 +153,32 @@ describe("AddModsWorkflow", () => {
 });
 
 describe("ModInstallReview", () => {
+  it("does not replace installation progress with a stop-server warning", () => {
+    const version = { ...incompatibleVersion(), compatible: true, requiresMinecraftAcknowledgement: false };
+    const html = renderToStaticMarkup(
+      <ModInstallReview
+        state={{ ...installState(version, 2, true), installing: true }}
+        selected={version}
+        requiredDependencies={[]}
+        canContinue
+        locked
+        formatDate={() => "Jan 1, 2026"}
+        onClose={noop}
+        onChannelChange={noop}
+        onRetry={noop}
+        onSelect={noop}
+        onToggleAdvanced={noop}
+        onAcknowledge={noop}
+        onContinue={noop}
+        onBack={noop}
+        onInstall={noop}
+      />
+    );
+
+    expect(html).toContain("Installing...");
+    expect(html).not.toContain("Stop the server to install");
+  });
+
   it("keeps incompatible selected versions disabled until acknowledgement is present", () => {
     const version = incompatibleVersion();
     const html = renderToStaticMarkup(
