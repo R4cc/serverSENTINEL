@@ -148,6 +148,7 @@
   padding: 0;
   text-align: left;
   white-space: normal;
+  overflow: hidden;
 }
 
 .modUpdatesCard:not(.modUpdatesCardSkeleton):hover {
@@ -365,21 +366,48 @@
 }
 
 .modUpdatesCardOpen {
+  width: 100%;
   min-width: 0;
   align-self: stretch;
   display: grid;
   align-items: center;
+  justify-content: stretch;
+  justify-items: stretch;
   border: 0;
+  border-radius: inherit;
   background: transparent;
   color: inherit;
   padding: var(--space-4);
   font: inherit;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
+}
+
+.modUpdatesCardOpen:hover:not(:disabled),
+.modUpdatesCardOpen:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.modUpdatesCardOpen:focus-visible {
+  outline-offset: -4px;
 }
 
 .modUpdatesRefreshButton {
   margin-right: var(--space-4);
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text-muted);
+}
+
+.modUpdatesRefreshButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
 }
 
 .modUpdatesRefreshButton > svg {
@@ -845,6 +873,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
 }
 
 .modUpdatesHeaderCopy {
@@ -1014,8 +1044,8 @@
 }
 
 .modUpdatesCard--healthy .modUpdatesHealthyState {
-  border-color: color-mix(in srgb, var(--sentinel-success) 24%, var(--border-muted));
-  background: color-mix(in srgb, var(--sentinel-success) 5%, var(--surface-muted));
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface-muted));
 }
 
 .modUpdatesHealthyIcon {
