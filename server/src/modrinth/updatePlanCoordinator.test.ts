@@ -5,6 +5,23 @@ import { ModUpdatePlanCoordinator } from "./updatePlanCoordinator.js";
 
 const server = { id: "server-a" } as ManagedServer;
 
+function updateSource(filename: string, resolved = true) {
+  return {
+    filename,
+    displayName: filename,
+    enabled: true,
+    preferredChannel: "release",
+    compatibility: { status: "compatible", compatible: true, serverSide: "required" },
+    modrinth: { projectId: `project-${filename}`, versionNumber: "1.0.0" },
+    versionInfo: resolved ? {
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      latestFilename: filename,
+      upToDate: false
+    } : undefined
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -43,6 +60,67 @@ describe("ModUpdatePlanCoordinator", () => {
     await coordinator.refresh(server);
     await expect(coordinator.refresh(server)).rejects.toThrow("Modrinth unavailable");
     expect(coordinator.get(server.id)).toBe(plan);
+  });
+
+  it("keeps the last complete plan when a later scan only resolves some known mods", async () => {
+    const previous = createModUpdatePlan(server.id, [
+      updateSource("one.jar"),
+      updateSource("two.jar"),
+      updateSource("three.jar")
+    ]);
+    const incomplete = createModUpdatePlan(server.id, [
+      updateSource("one.jar"),
+      updateSource("two.jar", false),
+      updateSource("three.jar", false)
+    ]);
+    const cache = {
+      get: vi.fn(() => previous),
+      set: vi.fn()
+    };
+    const coordinator = new ModUpdatePlanCoordinator({
+      intervalMs: 60_000,
+      readServers: async () => [server],
+      buildPlan: vi.fn(async () => incomplete),
+      cache
+    });
+
+    await expect(coordinator.refresh(server)).rejects.toThrow("Could not resolve update metadata for 2 known mods");
+    expect(cache.set).not.toHaveBeenCalled();
+    expect(coordinator.get(server.id)).toBe(previous);
+    expect(coordinator.get(server.id)?.counts.safeUpdates).toBe(3);
+  });
+
+  it("still caches complete plans containing unrecognized local mods", async () => {
+    const complete = createModUpdatePlan(server.id, [
+      updateSource("known.jar"),
+      { filename: "manual.jar", displayName: "Manual mod", enabled: true }
+    ]);
+    const cache = { get: vi.fn(() => null), set: vi.fn() };
+    const coordinator = new ModUpdatePlanCoordinator({
+      intervalMs: 60_000,
+      readServers: async () => [server],
+      buildPlan: vi.fn(async () => complete),
+      cache
+    });
+
+    await expect(coordinator.refresh(server)).resolves.toBe(complete);
+    expect(cache.set).toHaveBeenCalledWith(complete);
+    expect(coordinator.get(server.id)?.counts.unknown).toBe(1);
+  });
+
+  it("caches a first scan when a known mod has no prior resolved result", async () => {
+    const initial = createModUpdatePlan(server.id, [updateSource("known.jar", false)]);
+    const cache = { get: vi.fn(() => null), set: vi.fn() };
+    const coordinator = new ModUpdatePlanCoordinator({
+      intervalMs: 60_000,
+      readServers: async () => [server],
+      buildPlan: vi.fn(async () => initial),
+      cache
+    });
+
+    await expect(coordinator.refresh(server)).resolves.toBe(initial);
+    expect(cache.set).toHaveBeenCalledWith(initial);
+    expect(coordinator.get(server.id)?.counts.unknown).toBe(1);
   });
 
   it("restores and replaces the last successful plan through a durable cache", async () => {

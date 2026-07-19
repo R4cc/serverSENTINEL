@@ -99,6 +99,25 @@ describe("runtime version detection", () => {
 });
 
 describe("console stream heartbeat", () => {
+  it("keeps the default interval comfortably below proxy idle cutoffs", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));
+    try {
+      const messages: string[] = [];
+      const stop = startConsoleHeartbeat({ readyState: 1, send: (message) => messages.push(message) });
+
+      vi.advanceTimersByTime(10_000);
+      expect(messages.map((message) => JSON.parse(message))).toEqual([
+        { type: "heartbeat", at: "2026-07-18T00:00:05.000Z" },
+        { type: "heartbeat", at: "2026-07-18T00:00:10.000Z" }
+      ]);
+
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps idle browser streams active and stops cleanly", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));

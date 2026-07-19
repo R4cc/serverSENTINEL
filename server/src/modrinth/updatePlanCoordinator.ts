@@ -8,6 +8,17 @@ type ModUpdatePlanCache = {
   set: (plan: ModUpdatePlan) => void;
 };
 
+function regressedKnownUpdates(previous: ModUpdatePlan | null, next: ModUpdatePlan) {
+  if (!previous) return [];
+  const previousByProject = new Map(previous.updates.flatMap((entry) => entry.projectId ? [[entry.projectId, entry] as const] : []));
+  const previousByFilename = new Map(previous.updates.map((entry) => [entry.filename, entry]));
+  return next.updates.filter((entry) => {
+    if (!entry.projectId || entry.status !== "unknown") return false;
+    const prior = previousByProject.get(entry.projectId) ?? previousByFilename.get(entry.filename);
+    return prior !== undefined && prior.status !== "unknown";
+  });
+}
+
 export class ModUpdatePlanCoordinator {
   private readonly plans = new Map<string, ModUpdatePlan>();
   private readonly inFlight = new Map<string, Promise<ModUpdatePlan>>();
@@ -50,8 +61,13 @@ export class ModUpdatePlanCoordinator {
   refresh(server: ManagedServer) {
     const pending = this.inFlight.get(server.id);
     if (pending) return pending;
+    const previous = this.get(server.id);
     const request = this.options.buildPlan(server, { forceRefresh: true })
       .then((plan) => {
+        const unresolved = regressedKnownUpdates(previous, plan);
+        if (unresolved.length) {
+          throw new Error(`Could not resolve update metadata for ${unresolved.length} known ${unresolved.length === 1 ? "mod" : "mods"}`);
+        }
         this.plans.set(server.id, plan);
         try {
           this.options.cache?.set(plan);
