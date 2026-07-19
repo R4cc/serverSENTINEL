@@ -2846,6 +2846,7 @@ export default function App() {
                     loading={modsWorkspace.state.updatePlanLoading}
                     canView={canViewMods && supportsManagedMods}
                     onOpenMods={() => setActivePage("mods")}
+                    onRefresh={() => void modsWorkspace.actions.refresh()}
                     contentPlural={managedContent.plural}
                     contentPluralTitle={managedContent.pluralTitle}
                   />

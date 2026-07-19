@@ -197,6 +197,7 @@ export function ModHealthPanel({
   loading = false,
   canView = true,
   onOpenMods,
+  onRefresh,
   contentPlural = "mods",
   contentPluralTitle = "Mods"
 }: {
@@ -204,6 +205,7 @@ export function ModHealthPanel({
   loading?: boolean;
   canView?: boolean;
   onOpenMods: () => void;
+  onRefresh?: () => void;
   contentPlural?: "mods" | "plugins";
   contentPluralTitle?: "Mods" | "Plugins";
 }) {
@@ -218,79 +220,95 @@ export function ModHealthPanel({
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   if (updateCount === 0) {
     return (
+      <section className="panel modsHealthPanel modUpdatesCard modUpdatesCard--healthy">
+        <button
+          type="button"
+          className="modUpdatesCardOpen"
+          onClick={onOpenMods}
+          aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
+        >
+          <span className="modUpdatesCompact">
+            <span className="modUpdatesHeaderCopy">
+              <strong>{contentSingularTitle} updates</strong>
+              <small>No updates available</small>
+            </span>
+            <strong><AppIcon name="check" /></strong>
+          </span>
+          <span className="modUpdatesWide" aria-hidden="true">
+            <span className="modUpdatesWideHeader">
+              <span className="modUpdatesHeaderCopy">
+                <strong>{contentSingularTitle} updates</strong>
+                <small>No updates available</small>
+              </span>
+              <AppIcon name="chevronRight" />
+            </span>
+            <span className="modUpdatesHealthyState">
+              <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
+              <span>
+                <strong>Everything is up to date</strong>
+                <small>New {contentSingular} updates will appear here.</small>
+              </span>
+            </span>
+          </span>
+        </button>
+        <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel modsHealthPanel modUpdatesCard">
       <button
         type="button"
-        className="panel modsHealthPanel modUpdatesCard modUpdatesCard--healthy"
+        className="modUpdatesCardOpen"
         onClick={onOpenMods}
-        aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
+        aria-label={`Open ${contentPluralTitle}, ${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`}
       >
         <span className="modUpdatesCompact">
           <span className="modUpdatesHeaderCopy">
             <strong>{contentSingularTitle} updates</strong>
-            <small>No updates available</small>
+            <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
           </span>
-          <strong><AppIcon name="check" /></strong>
+          <strong>{updateCount}</strong>
         </span>
         <span className="modUpdatesWide" aria-hidden="true">
           <span className="modUpdatesWideHeader">
             <span className="modUpdatesHeaderCopy">
               <strong>{contentSingularTitle} updates</strong>
-              <small>No updates available</small>
+              <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
             </span>
             <AppIcon name="chevronRight" />
           </span>
-          <span className="modUpdatesHealthyState">
-            <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
-            <span>
-              <strong>Everything is up to date</strong>
-              <small>New {contentSingular} updates will appear here.</small>
-            </span>
+          <span className="modUpdatesList">
+            {visibleUpdates.map((entry) => (
+              <span className="modUpdatesListItem" key={entry.filename}>
+                <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
+                <span className="modUpdatesListCopy">
+                  <strong>{entry.displayName}</strong>
+                  <small>
+                    {entry.currentVersion && <span>{entry.currentVersion}</span>}
+                    {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
+                    <span>{entry.targetVersion ?? "Update available"}</span>
+                  </small>
+                </span>
+              </span>
+            ))}
           </span>
+          {remainingUpdates > 0 && <small className="modUpdatesRemaining">+{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}</small>}
         </span>
       </button>
-    );
-  }
+      <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />
+    </section>
+  );
+}
 
+function ModUpdatesRefreshButton({ contentPlural, onRefresh }: { contentPlural: "mods" | "plugins"; onRefresh?: () => void }) {
+  if (!onRefresh) return null;
+  const label = `Recheck ${contentPlural} for updates`;
   return (
-    <button
-      type="button"
-      className="panel modsHealthPanel modUpdatesCard"
-      onClick={onOpenMods}
-      aria-label={`Open ${contentPluralTitle}, ${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`}
-    >
-      <span className="modUpdatesCompact">
-        <span className="modUpdatesHeaderCopy">
-          <strong>{contentSingularTitle} updates</strong>
-          <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
-        </span>
-        <strong>{updateCount}</strong>
-      </span>
-      <span className="modUpdatesWide" aria-hidden="true">
-        <span className="modUpdatesWideHeader">
-          <span className="modUpdatesHeaderCopy">
-            <strong>{contentSingularTitle} updates</strong>
-            <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
-          </span>
-          <AppIcon name="chevronRight" />
-        </span>
-        <span className="modUpdatesList">
-          {visibleUpdates.map((entry) => (
-            <span className="modUpdatesListItem" key={entry.filename}>
-              <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
-              <span className="modUpdatesListCopy">
-                <strong>{entry.displayName}</strong>
-                <small>
-                  {entry.currentVersion && <span>{entry.currentVersion}</span>}
-                  {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
-                  <span>{entry.targetVersion ?? "Update available"}</span>
-                </small>
-              </span>
-            </span>
-          ))}
-        </span>
-        {remainingUpdates > 0 && <small className="modUpdatesRemaining">+{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}</small>}
-      </span>
-    </button>
+    <Button variant="ghost" iconOnly compact className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label}>
+      <AppIcon name="refresh" />
+    </Button>
   );
 }
 
