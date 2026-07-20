@@ -22,7 +22,7 @@ function hello(overrides: Record<string, unknown> = {}) {
     nodeId: "node-1",
     nodeSecret: "secret",
     nodeName: "Remote Node",
-    agentVersion: "1.5.1",
+    agentVersion: "1.5.2",
     buildId: "commit-sha",
     startupId: "startup-id",
     protocolVersion: nodeProtocolVersion,

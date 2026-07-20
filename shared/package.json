@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/contracts",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "types": "dist/index.d.ts",
@@ -16,6 +16,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }

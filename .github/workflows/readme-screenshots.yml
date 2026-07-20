@@ -3,7 +3,7 @@ name: README screenshots
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - web/**
       - server/**
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: readme-screenshots-main
+  group: readme-screenshots-dev
   cancel-in-progress: true
 
 permissions:
@@ -33,10 +33,10 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:cf0daee9b994042e011bc29f20cdff1a9f682a039b43fcd738f7d8a9d3bcd9d6
 
     steps:
-      - name: Checkout main
+      - name: Checkout dev
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: main
+          ref: dev
 
       - name: Set up Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -55,7 +55,7 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: automation/readme-screenshots
-          base: main
+          base: dev
           delete-branch: true
           add-paths: docs/screenshots/*.png
           commit-message: "docs: refresh README screenshots"
