@@ -41,9 +41,11 @@ import {
   isMinecraftStopCommand,
   defaultInternalNode,
   startConsoleHeartbeat,
-  detectVersionsFromLogText
+  detectVersionsFromLogText,
+  uploadManagedContentBuffer
 } from "./app.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
+import type { RuntimeUploadSource } from "./nodes/types.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
@@ -75,6 +77,33 @@ describe("local runtime metadata", () => {
       protocolVersion: nodeProtocolVersion,
       capabilities: [...nodeCapabilities]
     });
+  });
+});
+
+describe("managed content replacement", () => {
+  it("uploads panel-downloaded updates through the runtime streaming path", async () => {
+    const server = {
+      id: "server-1",
+      nodeId: "node-1",
+      serverDir: "/srv/servers/server-1",
+      runtimeProfile: { runtimeType: "fabric" }
+    } as ManagedServer;
+    const content = Buffer.concat([Buffer.from("PK\x03\x04"), Buffer.alloc(9 * 1024 * 1024)]);
+    let uploaded: RuntimeUploadSource | undefined;
+    const runtime = {
+      uploadMod: vi.fn(async (_server: ManagedServer, _filename: unknown, source: unknown) => {
+        uploaded = source as RuntimeUploadSource;
+        return { ok: true };
+      })
+    };
+
+    await expect(uploadManagedContentBuffer(runtime, server, "new.jar", content)).resolves.toEqual({ ok: true });
+
+    expect(runtime.uploadMod).toHaveBeenCalledWith(server, "new.jar", expect.objectContaining({ size: content.byteLength }));
+    expect(uploaded).toBeDefined();
+    const streamed = await streamToBuffer(uploaded!.stream);
+    expect(streamed.byteLength).toBe(content.byteLength);
+    expect(streamed.equals(content)).toBe(true);
   });
 });
 
