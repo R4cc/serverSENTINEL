@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.2 - 2026-07-20
+
+- Migrated the build and type-check pipeline to the TypeScript 7 native compiler while retaining the TypeScript 6 compatibility API used by the SQL safety test.
+
 ## 1.5.1 - 2026-07-19
 
 - Added panel-first node protocol 3.1 with negotiated request cancellation and binary-transfer features, bounded control frames and concurrency, heartbeat liveness, duplicate-session replacement, and jittered reconnect backoff.
