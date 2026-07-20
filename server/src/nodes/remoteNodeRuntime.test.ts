@@ -97,7 +97,7 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
-  it("uses the live node's negotiated features for streamed mod uploads", async () => {
+  it("uses the live node's negotiated features for 17 MiB streamed mod uploads", async () => {
     const storedNode = testNode();
     const liveNode = { ...storedNode, features: [...nodeFeatures] };
     const uploaded: Array<{ command: string; size: number; content: Buffer }> = [];
@@ -120,7 +120,8 @@ describe("RemoteNodeRuntime command timeouts", () => {
       async () => undefined,
       async () => undefined
     );
-    const content = Buffer.concat([Buffer.from("PK\x03\x04"), Buffer.alloc(9 * 1024 * 1024)]);
+    const content = Buffer.alloc(17 * 1024 * 1024);
+    Buffer.from("PK\x03\x04").copy(content);
 
     await expect(runtime.uploadMod(testServer(), "fabric-api.jar", { stream: Readable.from([content]), size: content.byteLength })).resolves.toEqual({ ok: true });
 
