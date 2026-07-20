@@ -638,6 +638,18 @@ export function validateBase64Content(value: unknown, allowEmpty = false, label 
   return value;
 }
 
+export function uploadManagedContentBuffer(
+  runtime: Pick<NodeRuntime, "uploadMod">,
+  server: ManagedServer,
+  filename: string,
+  content: Buffer
+) {
+  return runtime.uploadMod(server, filename, {
+    stream: Readable.from([content]),
+    size: content.byteLength
+  } satisfies RuntimeUploadSource);
+}
+
 function assertJarBuffer(buffer: Buffer) {
   if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b || ![0x03, 0x05, 0x07].includes(buffer[2])) {
     badRequest("Uploaded mod must be a valid .jar file");
@@ -6948,7 +6960,7 @@ async function replaceManagedContentJar(
 
   let finalFilename = targetFilename;
   try {
-    await runtime.uploadMod(server, targetFilename, content.toString("base64"));
+    await uploadManagedContentBuffer(runtime, server, targetFilename, content);
     if (!enabled) {
       const toggled = await runtime.toggleMod(server, targetFilename, false) as { filename?: string };
       finalFilename = toggled.filename || `${targetFilename}.disabled`;
@@ -8186,7 +8198,7 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
     }
     try {
       for (const { planned, filename, content } of staged) {
-      const written = await runtime.uploadMod(server, filename, content.toString("base64")) as { path?: string };
+      const written = await uploadManagedContentBuffer(runtime, server, filename, content) as { path?: string };
       createdFilenames.push(filename);
       installedProjectIds.add(planned.projectId);
       installedFilenames.add(filename);
