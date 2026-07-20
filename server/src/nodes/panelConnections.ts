@@ -88,6 +88,11 @@ export class PanelNodeConnections {
     return this.connected.has(nodeId);
   }
 
+  connectedNode(nodeId: string) {
+    const connected = this.connected.get(nodeId);
+    return connected && connected.socket.readyState === connected.socket.OPEN ? connected.node : undefined;
+  }
+
   close() {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = undefined;
