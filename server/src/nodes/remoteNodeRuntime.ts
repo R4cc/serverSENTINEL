@@ -249,8 +249,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   private async binaryTransferNode(server: ManagedServer) {
-    const node = await this.lookupNode(server.nodeId);
-    return node && nodeAdvertisesFeature(node, "binary-transfer") && this.connections.isConnected(node.id) ? node : undefined;
+    const node = this.connections.connectedNode(server.nodeId);
+    return node && nodeAdvertisesFeature(node, "binary-transfer") ? node : undefined;
   }
 
   private legacyUploadBuffer(contentBase64: unknown) {

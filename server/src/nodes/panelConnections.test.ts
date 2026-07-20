@@ -40,6 +40,19 @@ function emitJson(socket: FakeSocket, value: unknown) {
 }
 
 describe("PanelNodeConnections", () => {
+  it("exposes negotiated metadata only for the active node connection", () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    const connected = node();
+
+    connections.connect(connected, socket as unknown as WebSocket);
+    expect(connections.connectedNode(connected.id)).toBe(connected);
+
+    socket.close();
+    expect(connections.connectedNode(connected.id)).toBeUndefined();
+    connections.close();
+  });
+
   it("sends cancellation on deadline and safely ignores a late response", async () => {
     const connections = new PanelNodeConnections();
     const socket = new FakeSocket();

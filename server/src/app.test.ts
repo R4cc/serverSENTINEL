@@ -50,6 +50,7 @@ import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
 import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
+import { managedContentFileSizeLimit } from "./managedContentLimits.js";
 
 describe("live node connectivity", () => {
   const remoteNode: ManagedNode = {
@@ -81,14 +82,16 @@ describe("local runtime metadata", () => {
 });
 
 describe("managed content replacement", () => {
-  it("uploads panel-downloaded updates through the runtime streaming path", async () => {
+  it("streams 17 MiB panel-downloaded updates within the shared 128 MiB limit", async () => {
     const server = {
       id: "server-1",
       nodeId: "node-1",
       serverDir: "/srv/servers/server-1",
       runtimeProfile: { runtimeType: "fabric" }
     } as ManagedServer;
-    const content = Buffer.concat([Buffer.from("PK\x03\x04"), Buffer.alloc(9 * 1024 * 1024)]);
+    expect(managedContentFileSizeLimit).toBe(128 * 1024 * 1024);
+    const content = Buffer.alloc(17 * 1024 * 1024);
+    Buffer.from("PK\x03\x04").copy(content);
     let uploaded: RuntimeUploadSource | undefined;
     const runtime = {
       uploadMod: vi.fn(async (_server: ManagedServer, _filename: unknown, source: unknown) => {

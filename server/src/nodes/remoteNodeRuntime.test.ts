@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, ServerRuntimeProfile } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
-import { nodeCapabilities, nodeProtocolVersion } from "./protocol.js";
+import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { RemoteNodeRuntime } from "./remoteNodeRuntime.js";
 
 function testRuntimeProfile(): ServerRuntimeProfile {
@@ -72,6 +72,7 @@ function runtimeWithRecorder(result: unknown = { ok: true }) {
   const calls: Array<{ command: string; timeoutMs?: number }> = [];
   const node = testNode();
   const connections = {
+    connectedNode: () => undefined,
     request: async (_node: ManagedNode, command: string, _payload: unknown, timeoutMs?: number) => {
       calls.push({ command, timeoutMs });
       return result;
@@ -96,6 +97,39 @@ async function drain(stream: Readable) {
 }
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("uses the live node's negotiated features for 17 MiB streamed mod uploads", async () => {
+    const storedNode = testNode();
+    const liveNode = { ...storedNode, features: [...nodeFeatures] };
+    const uploaded: Array<{ command: string; size: number; content: Buffer }> = [];
+    const connections = {
+      connectedNode: (nodeId: string) => nodeId === liveNode.id ? liveNode : undefined,
+      upload: async (_node: ManagedNode, command: string, _payload: unknown, stream: Readable, size: number) => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+        uploaded.push({ command, size, content: Buffer.concat(chunks) });
+        return { ok: true };
+      },
+      request: async () => { throw new Error("streamed upload fell back to a control message"); }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      storedNode.id,
+      async () => storedNode,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+    const content = Buffer.alloc(17 * 1024 * 1024);
+    Buffer.from("PK\x03\x04").copy(content);
+
+    await expect(runtime.uploadMod(testServer(), "fabric-api.jar", { stream: Readable.from([content]), size: content.byteLength })).resolves.toEqual({ ok: true });
+
+    expect(uploaded).toHaveLength(1);
+    expect(uploaded[0]).toMatchObject({ command: "mods.upload", size: content.byteLength });
+    expect(uploaded[0].content.equals(content)).toBe(true);
+  });
+
   it("uses canonical managed-content commands for Paper and legacy mod commands for Fabric", async () => {
     const { runtime, calls } = runtimeWithRecorder({ mods: [] });
 

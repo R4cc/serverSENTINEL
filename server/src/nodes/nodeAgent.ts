@@ -17,6 +17,7 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { ModHashCache } from "../modHashCache.js";
+import { managedContentFileSizeLimit } from "../managedContentLimits.js";
 import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -108,7 +109,7 @@ const nodeUpdateDir = config.paths.nodeUpdatesDir;
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const fileUploadSizeLimit = 32 * 1024 * 1024;
-const uploadLimit = 128 * 1024 * 1024;
+const uploadLimit = managedContentFileSizeLimit;
 const recentLogTailBytes = 128 * 1024;
 const zipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const reconnectBaseDelayMs = 1000;
