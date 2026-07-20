@@ -7,16 +7,14 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     loading: false,
     themePreference: "system",
     relativeTimestamps: true,
-    dateLocalePreference: "user",
-    numberLocalePreference: "user",
+    regionalFormatPreference: "user",
     displayTimeZonePreference: "panel",
     panelTimeZone: "Europe/Vienna",
     browserTimeZone: "Europe/Vienna",
     displayTimeZone: "Europe/Vienna",
     onThemeChange: vi.fn(),
     onRelativeTimestampsChange: vi.fn(),
-    onDateLocaleChange: vi.fn(),
-    onNumberLocaleChange: vi.fn(),
+    onRegionalFormatChange: vi.fn(),
     onDisplayTimeZoneChange: vi.fn(),
     rememberConsoleHistory: true,
     consoleFontSize: 13,
@@ -82,6 +80,22 @@ describe("SettingsPage", () => {
     expect(html).toContain(">peach</option>");
     expect(html).not.toContain("Make serverSENTINEL work your way");
     expect(html).not.toContain("Personal + panel settings");
+  });
+
+  it("uses one regional format with examples and plain-language time zones", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      regionalFormatPreference: "en-US",
+      browserTimeZone: "America/New_York"
+    })} />);
+
+    expect(html).toContain('aria-label="Regional format"');
+    expect(html).not.toContain('aria-label="Date format"');
+    expect(html).not.toContain('aria-label="Number format"');
+    expect(html).toContain("Example: Jul 20, 2026, 4:30 PM · 12,345.67");
+    expect(html).toContain("Panel time — Europe/Vienna");
+    expect(html).toContain("This device — America/New_York");
+    expect(html).toContain("Schedules continue to use Europe/Vienna");
+    expect(html).toContain('aria-live="polite"');
   });
 
   it("only exposes user management when the permission-backed category is available", () => {

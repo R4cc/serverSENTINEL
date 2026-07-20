@@ -3,9 +3,10 @@ import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
+import multipart from "@fastify/multipart";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -21,7 +22,7 @@ import { currentUserForRequest, type AuthenticatedRequest } from "./auth/request
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "./consoleLogs.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "./docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "./docker/dockerLogs.js";
 import { shellQuote } from "./docker/shell.js";
 import {
@@ -53,12 +54,12 @@ import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
-import { nodeAdvertisesCapability, nodeCapabilities, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
+import { nodeAdvertisesCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMode, nodeProtocolVersion, normalizeNodeHello } from "./nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "./nodes/protocol.js";
 import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
-import type { NodeRuntime } from "./nodes/types.js";
+import type { NodeRuntime, RuntimeUploadSource } from "./nodes/types.js";
 import { defaultServerJarProvider } from "./runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "./runtime/artifact.js";
 import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
@@ -73,7 +74,7 @@ import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } 
 import { parseServerProperties, serializeServerProperties } from "./runtime/serverProperties.js";
 import { summarizeRuntimeExit } from "./runtimeErrors.js";
 import { captureScheduledCommandLogs } from "./schedules/runLogCapture.js";
-import { resolveMinecraftQueryEndpoint } from "./queryEndpoint.js";
+import { resolveMinecraftQueryEndpoints } from "./queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "./playerObservationReader.js";
 import { PlayerSnapshotCoordinator } from "./playerSnapshots.js";
 import {
@@ -94,6 +95,7 @@ import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
+import { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
 import { sameOriginFailure } from "./http/requestOrigin.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
@@ -447,7 +449,7 @@ const resourceStatsPollMs = 5_000;
 const resourceStatsHistoryWindowMs = 24 * 60 * 60 * 1000;
 const timelineEventPollMs = 10_000;
 const timelineHistoryWindowMs = 24 * 60 * 60 * 1000;
-const consoleHeartbeatIntervalMs = 15_000;
+const consoleHeartbeatIntervalMs = 5_000;
 const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
@@ -787,6 +789,7 @@ export function defaultInternalNode(now = new Date().toISOString()): ManagedNode
     buildId: appBuildId,
     protocolVersion: nodeProtocolVersion,
     capabilities: [...nodeCapabilities],
+    features: [...nodeFeatures],
     totalMemory: totalmem()
   };
 }
@@ -814,6 +817,7 @@ function ensureDefaultInternalNode(nodes: ManagedNode[]) {
     buildId: appBuildId,
     protocolVersion: nodeProtocolVersion,
     capabilities: [...nodeCapabilities],
+    features: [...nodeFeatures],
     updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
     lastSeenAt: current.lastSeenAt ?? now,
     totalMemory: totalmem()
@@ -828,6 +832,7 @@ function publicNode(node: ManagedNode): PublicNode {
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
     ...publicFields,
+    protocolMode: normalized.isInternal ? "current" : nodeProtocolMode(normalized.protocolVersion),
     hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
   };
 }
@@ -948,6 +953,7 @@ let resourceStatsRepository: ResourceStatsRepository;
 let timelineEventsRepository: TimelineEventsRepository;
 let runtimeStateCoordinator: RuntimeStateCoordinator | undefined;
 let playerSnapshotCoordinator: PlayerSnapshotCoordinator | undefined;
+let remoteObservationCoordinator: RemoteObservationCoordinator | undefined;
 
 function runtimeForServer(server: ManagedServer): NodeRuntime {
   if (!runtimeRegistry) {
@@ -2673,7 +2679,18 @@ async function dockerAction(server: ManagedServer, action: "start" | "stop" | "r
         throw new Error(`Container ${dockerContainerName(server)} is not managed by serverSENTINEL; refusing to control it`);
       }
     }
-    await dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
+    const requestAction = () => dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
+    try {
+      await requestAction();
+    } catch (error) {
+      if ((action !== "start" && action !== "restart") || !isMissingDockerNetworkError(error)) throw error;
+      const existing = await inspectDockerContainer(server);
+      const networkingConfig = minecraftContainerNetworkingConfig(existing, await currentContainerInspect().catch(() => null));
+      logWarn({ ...serverLogFields(server), action }, "Recreating managed Docker container after its network attachment became stale");
+      await removeManagedDockerContainer(server);
+      await ensureDockerContainer(server, networkingConfig);
+      await requestAction();
+    }
     if (action === "start" || action === "restart") {
       await new Promise((resolve) => setTimeout(resolve, 1_500));
       const status = await dockerStatus(server);
@@ -3236,11 +3253,11 @@ async function readLocalPlayerObservation(server: ManagedServer) {
   const minecraftInspect = dockerControlConfigured(server) ? await inspectDockerContainer(server).catch(() => null) : null;
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running && dockerAvailable() ? await currentContainerInspect().catch(() => null) : null;
-  const endpoint = running ? resolveMinecraftQueryEndpoint(server, props, minecraftInspect, callerInspect) : null;
+  const [endpoint = null, ...fallbackEndpoints] = running ? resolveMinecraftQueryEndpoints(server, props, minecraftInspect, callerInspect) : [];
   const instanceId = minecraftInspect?.Id
     ? `${minecraftInspect.Id}:${minecraftInspect.State?.StartedAt ?? "not-started"}`
     : undefined;
-  return readMinecraftPlayerObservation({ running, instanceId, props, endpoint });
+  return readMinecraftPlayerObservation({ running, instanceId, props, endpoint, fallbackEndpoints });
 }
 
 function streamLatestServerLog(server: ManagedServer, client: Client) {
@@ -3529,7 +3546,7 @@ async function recordOperation<T>(
   return operationService.run(input, action);
 }
 
-const stoppedServerMutationMessage = "Stop the server before changing mods or server properties.";
+const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
 const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "server.stop", "server.restart"]);
 const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 
@@ -4400,6 +4417,7 @@ const app = Fastify({
 });
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;
+  panelNodeConnections.close();
 });
 try {
 app.decorateRequest("authenticatedUser", null);
@@ -4472,7 +4490,8 @@ await app.register(rateLimit, {
   max: 600,
   timeWindow: "1 minute"
 });
-await app.register(websocket);
+await app.register(multipart, { limits: { files: 1, fields: 4 } });
+await app.register(websocket, { options: { perMessageDeflate: false, maxPayload: nodeProtocolControlMessageMaxBytes } });
 
 app.addHook("onRequest", async (request, reply) => {
   if (request.url.startsWith("/ws/")) {
@@ -4898,6 +4917,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
           buildId: hello.buildId,
           protocolVersion: hello.protocolVersion,
           capabilities: hello.capabilities,
+          features: hello.features,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory
@@ -4925,6 +4945,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
           buildId: hello.buildId,
           protocolVersion: hello.protocolVersion,
           capabilities: hello.capabilities,
+          features: hello.features,
           dockerStatus: hello.dockerStatus,
           dataPathStatus: hello.dataPathStatus,
           totalMemory: optionalNodeTotalMemory(hello.totalMemory) ?? node.totalMemory,
@@ -4946,10 +4967,15 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       nodeId: acceptedNode.id,
       nodeSecret: issuedSecret,
       accepted: true,
+      protocolVersion: hello.protocolVersion,
+      features: hello.protocolVersion === nodeProtocolVersion ? hello.features.filter((feature) => nodeFeatures.includes(feature)) : [],
       timeZone: config.timeZone
     };
     ws.send(JSON.stringify(welcome));
     panelNodeConnections.connect(acceptedNode, ws);
+    void remoteObservationCoordinator?.refreshNode(acceptedNode.id).catch((error) => {
+      logDebug({ nodeId: acceptedNode!.id, ...errorLogFields(error), category: "node_observation" }, "Remote observation refresh deferred after reconnect");
+    });
     if (hello.startupId) {
       const metadataKey = `node.startup.${acceptedNode.id}`;
       const previousStartupId = storageDatabase.metadata(metadataKey);
@@ -5733,6 +5759,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const file = await readFileWithRevision(runtime, server, target);
   if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
   const path = await fileEditLockPath(runtime, server, target);
@@ -5772,6 +5799,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   if (!request.body.leaseId) {
     const error = new Error("A valid file edit lease is required") as Error & { statusCode?: number; code?: string };
     error.statusCode = 409;
@@ -5797,18 +5825,39 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   return runtime.createFolder(server, parent, request.body.name);
 });
 
+async function multipartUpload(request: FastifyRequest, maximumBytes: number) {
+  const part = await request.file({ limits: { fileSize: maximumBytes, files: 1 } });
+  if (!part) throw new Error("Upload file is required");
+  const field = (name: string) => {
+    const raw = part.fields[name];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value && value.type === "field" && typeof value.value === "string" ? value.value : undefined;
+  };
+  const declaredSize = Number(field("size"));
+  if (!Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > maximumBytes) {
+    part.file.destroy();
+    throw new Error(`Upload size must be between 0 and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`);
+  }
+  return {
+    path: field("path"),
+    filename: part.filename,
+    content: { stream: part.file, size: declaredSize } satisfies RuntimeUploadSource
+  };
+}
+
 app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
-  const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
+  const uploadRequest = request.isMultipart() ? await multipartUpload(request, fileUploadSizeLimit) : undefined;
+  const parent = await runtime.resolveExistingPath(server, uploadRequest?.path ?? request.body?.path ?? ".");
   if (server.nodeId === localNodeId) {
     const parentStat = await stat(parent);
     if (!parentStat.isDirectory()) {
       throw new Error("Upload path is not a directory");
     }
   }
-  const filename = safeFileManagerName(request.body.filename);
+  const filename = safeFileManagerName(uploadRequest?.filename ?? request.body?.filename);
   const target = join(parent, filename);
   const uploadPermission: Permission = runtime.isServerSettingsFile(server, target)
     ? "servers.editSettings"
@@ -5818,7 +5867,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
   await requireFilePathPermission(request, server, parent, uploadPermission);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
-  const upload = () => runtime.uploadFile(server, parent, filename, request.body.contentBase64);
+  const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest?.content ?? request.body?.contentBase64);
   return touchesMods ? withTrackedModMutation(server, upload) : upload();
 });
 
@@ -6058,24 +6107,56 @@ async function localCreateFolder(server: ManagedServer, parent: string, name: un
   return { ok: true, path: toPublicPath(server, target) };
 }
 
-async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, contentBase64: unknown) {
+function isRuntimeUploadSource(value: unknown): value is RuntimeUploadSource {
+  return Boolean(value && typeof value === "object" && "stream" in value && (value as RuntimeUploadSource).stream);
+}
+
+async function writeRuntimeUpload(target: string, input: unknown, maximumBytes: number, allowEmpty: boolean, label: string, validateTemporary?: (path: string) => Promise<void>) {
+  const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
+  let size = 0;
+  try {
+    if (isRuntimeUploadSource(input)) {
+      if (input.size !== undefined && (!Number.isSafeInteger(input.size) || input.size < (allowEmpty ? 0 : 1) || input.size > maximumBytes)) {
+        throw new Error(`${label} must be between ${allowEmpty ? 0 : 1} bytes and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`);
+      }
+      const counter = new Transform({
+        transform(chunk, _encoding, callback) {
+          size += Buffer.byteLength(chunk);
+          callback(size > maximumBytes ? new Error(`${label} is larger than ${Math.floor(maximumBytes / 1024 / 1024)} MiB`) : undefined, chunk);
+        }
+      });
+      await pipeline(input.stream, counter, createWriteStream(temporary, { flags: "wx" }));
+      if (input.size !== undefined && input.size !== size) throw new Error(`${label} declared ${input.size} bytes but streamed ${size}`);
+      if (!allowEmpty && size === 0) throw new Error(`${label} cannot be empty`);
+    } else {
+      const validContentBase64 = validateBase64Content(input, allowEmpty, label);
+      const content = Buffer.from(validContentBase64, "base64");
+      size = content.byteLength;
+      if (size > maximumBytes || (!allowEmpty && size === 0)) throw new Error(`${label} must be between ${allowEmpty ? 0 : 1} bytes and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`);
+      await writeFile(temporary, content, { flag: "wx" });
+    }
+    await validateTemporary?.(temporary);
+    await rename(temporary, target);
+    return size;
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, contentBase64: unknown | RuntimeUploadSource) {
   const parentStat = await stat(parent);
   if (!parentStat.isDirectory()) {
     throw new Error("Upload path is not a directory");
   }
   const filename = safeFileManagerName(filenameInput as string | undefined);
-  const validContentBase64 = validateBase64Content(contentBase64, true, "Uploaded file content");
-  const content = Buffer.from(validContentBase64, "base64");
-  if (content.length > fileUploadSizeLimit) {
-    throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
-  }
   const target = await ensureWritableResolvedInsideServer(server, join(parent, filename));
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
-  await writeFile(target, content);
-  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), size: content.length, action: "upload_file" }, "Server file uploaded");
-  return { ok: true, path: toPublicPath(server, target), size: content.length };
+  const size = await writeRuntimeUpload(target, contentBase64, fileUploadSizeLimit, true, "Uploaded file content");
+  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), size, action: "upload_file" }, "Server file uploaded");
+  return { ok: true, path: toPublicPath(server, target), size };
 }
 
 async function localRenameFile(server: ManagedServer, source: string, name: unknown) {
@@ -6783,33 +6864,36 @@ async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
   return { ok: true, filename };
 }
 
-async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown) {
+async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown | RuntimeUploadSource) {
   const { directory, singular } = managedContentRuntime(server);
   const startedAt = Date.now();
   let filename: string | undefined;
   try {
     filename = safeModFilename(safeInstalledModFilename(filenameInput as string | undefined));
     logInfo({ ...serverLogFields(server), filename, action: "upload_mod" }, `Manual ${singular} upload started`);
-    const contentBase64 = validateBase64Content(contentBase64Input);
-    const content = Buffer.from(contentBase64, "base64");
-    if (!content.length || content.length > modFileSizeLimit) {
-      throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-    }
-    assertJarBuffer(content);
     await mkdir(ensureInsideServer(server, directory), { recursive: true });
     await validateExistingInsideServer(server, directory);
     const destination = await ensureWritableInsideServer(server, join(directory, filename));
     if (existsSync(destination)) {
       throw new Error(`A ${singular} with that filename already exists`);
     }
-    await writeFile(destination, content);
+    const size = await writeRuntimeUpload(destination, contentBase64Input, modFileSizeLimit, false, `Uploaded ${singular}`, async (temporary) => {
+      const headerHandle = await open(temporary, "r");
+      try {
+        const header = Buffer.alloc(4);
+        const { bytesRead } = await headerHandle.read(header, 0, 4, 0);
+        assertJarBuffer(header.subarray(0, bytesRead));
+      } finally {
+        await headerHandle.close();
+      }
+    });
     await deleteModIcon(server, filename);
     const prefs = await readModPreferences(server);
     if (prefs[filename]?.modrinth) {
       prefs[filename] = { channel: normalizeReleaseChannel(prefs[filename].channel) };
       await writeModPreferences(server, prefs);
     }
-    logInfo({ ...serverLogFields(server), filename: basename(destination), size: content.length, durationMs: durationSince(startedAt), action: "upload_mod", status: "succeeded" }, `Manual ${singular} upload succeeded`);
+    logInfo({ ...serverLogFields(server), filename: basename(destination), size, durationMs: durationSince(startedAt), action: "upload_mod", status: "succeeded" }, `Manual ${singular} upload succeeded`);
     return { ok: true, filename: basename(destination), path: toPublicPath(server, destination) };
   } catch (error) {
     logOperationFailure({ ...serverLogFields(server), filename, durationMs: durationSince(startedAt), action: "upload_mod", status: "failed" }, `Manual ${singular} upload failed`, error);
@@ -7649,6 +7733,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
   const contentName = managedContentRuntime(server).singular;
+  const uploadRequest = request.isMultipart() ? await multipartUpload(request, modFileSizeLimit) : undefined;
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.upload",
     serverId: server.id,
@@ -7656,7 +7741,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     createdBy: user.id,
     task: `Uploading ${contentName}`,
     successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} uploaded`
-  }, () => runtimeForServer(server).uploadMod(server, request.body.filename, request.body.contentBase64)));
+  }, () => runtimeForServer(server).uploadMod(server, uploadRequest?.filename ?? request.body?.filename, uploadRequest?.content ?? request.body?.contentBase64)));
 });
 
 type ModrinthInstallVersionStatus =
@@ -8260,6 +8345,11 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   uploadMod: localUploadMod,
   installMod: localInstallMod
 }) : undefined;
+remoteObservationCoordinator = new RemoteObservationCoordinator({
+  readServers: listManagedServers,
+  lookupNode: async (nodeId) => (await readNodes()).find((node) => node.id === nodeId),
+  connections: panelNodeConnections
+});
 runtimeRegistry = new NodeRuntimeRegistry(
   localRuntime,
   (nodeId) => new RemoteNodeRuntime(
@@ -8275,9 +8365,11 @@ runtimeRegistry = new NodeRuntimeRegistry(
     },
     async (serverId) => {
       serversRepository.delete(serverId);
-    }
+    },
+    remoteObservationCoordinator
   )
 );
+remoteObservationCoordinator.start();
 playerSnapshotCoordinator = new PlayerSnapshotCoordinator({
   pollMs: 10_000,
   staleMs: 5 * 60 * 1000,
@@ -8374,6 +8466,7 @@ timelineEventCollector = new TimelineEventCollector({
 });
 timelineEventCollector.start();
 app.addHook("onClose", async () => {
+  remoteObservationCoordinator?.stop();
   runtimeStateCoordinator?.stop();
   modUpdatePlanCoordinator?.stop();
   resourceStatsCollector?.stop();

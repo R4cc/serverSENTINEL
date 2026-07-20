@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedNode, NodeOperation } from "../types";
-import { advanceNodeOperation, nodeRestartImpactMessage } from "./nodes";
+import { advanceNodeOperation, isNodeRuntimeUsable, nodeBlockReason, nodeRestartImpactMessage, nodeWarnings } from "./nodes";
 
 const graceMs = 5 * 60 * 1000;
 
@@ -115,5 +115,20 @@ describe("nodeRestartImpactMessage", () => {
 
     expect(message).toContain("stay online and reachable");
     expect(message).toContain("Panel and its controls will be temporarily unavailable");
+  });
+});
+
+describe("node protocol modes", () => {
+  it("keeps protocol 3.0 fallback nodes usable while recommending an update", () => {
+    const fallback = node({ protocolVersion: "3.0", protocolMode: "fallback", dockerStatus: "available" });
+    expect(isNodeRuntimeUsable(fallback)).toBe(true);
+    expect(nodeBlockReason(fallback)).toBe("");
+    expect(nodeWarnings(fallback)).toContain("This node is using protocol 3.0 fallback. Update it to enable optimized monitoring and transfers.");
+  });
+
+  it("blocks update-only protocol 2.0 nodes from server management", () => {
+    const updateOnly = node({ protocolVersion: "2.0", protocolMode: "update-only", dockerStatus: "available" });
+    expect(isNodeRuntimeUsable(updateOnly)).toBe(false);
+    expect(nodeBlockReason(updateOnly)).toBe("Node update required");
   });
 });

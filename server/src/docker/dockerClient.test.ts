@@ -23,6 +23,15 @@ describe("Docker client helpers", () => {
     expect(dockerErrorMessage("", 404)).toBe("Docker API returned 404");
   });
 
+  it("recognizes only missing Docker network IDs as recoverable", async () => {
+    const { isMissingDockerNetworkError } = await import("./dockerClient.js");
+
+    expect(isMissingDockerNetworkError(new Error("failed to set up container networking: network 9c7a2a2e5e03dca3d89e9bac010850b4658bcfde2e91fd46877cca771984972c not found"))).toBe(true);
+    expect(isMissingDockerNetworkError("network deadbeefcafe not found")).toBe(true);
+    expect(isMissingDockerNetworkError(new Error("network minecraft not found"))).toBe(false);
+    expect(isMissingDockerNetworkError(new Error("No such container"))).toBe(false);
+  });
+
   it("parses successful JSON bodies and rejects malformed responses", async () => {
     const { dockerJsonBody } = await import("./dockerClient.js");
     expect(dockerJsonBody<{ Id: string }>(JSON.stringify({ Id: "abc" }))).toEqual({ Id: "abc" });

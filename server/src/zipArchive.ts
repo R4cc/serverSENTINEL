@@ -312,7 +312,9 @@ export async function extractZipArchive(input: {
   conflictPolicy: "replace" | "skip";
   limits: ZipArchiveLimits;
   report?: (progress: number, task: string) => void;
+  signal?: AbortSignal;
 }): Promise<ZipExtractionResult> {
+  input.signal?.throwIfAborted();
   const plan = await planZipExtraction(input.archivePath, input.destinationPath, input.limits);
   if (plan.blocked.length) throw zipError(`ZIP extraction is blocked by ${plan.blocked[0].path}`, "zip_extraction_blocked");
   const conflictPaths = new Set(plan.conflicts.map((entry) => resolve(entry.path)));
@@ -325,6 +327,7 @@ export async function extractZipArchive(input: {
   let completedBytes = 0;
 
   for (const directory of index.entries.filter((entry) => entry.type === "directory").sort((a, b) => a.path.length - b.path.length)) {
+    input.signal?.throwIfAborted();
     const target = join(input.destinationPath, ...directory.path.split("/"));
     if (!await existingStat(target)) {
       await mkdir(target, { recursive: false });
@@ -333,6 +336,7 @@ export async function extractZipArchive(input: {
   }
 
   for (const entry of index.entries.filter((candidate) => candidate.type === "file")) {
+    input.signal?.throwIfAborted();
     const target = join(input.destinationPath, ...entry.path.split("/"));
     const conflict = conflictPaths.has(resolve(target));
     if (conflict && input.conflictPolicy === "skip") {
@@ -349,7 +353,7 @@ export async function extractZipArchive(input: {
       if (entry.encrypted) throw zipError(`Archive entry ${entry.path} is encrypted`, "zip_encrypted");
       if (entry.unsupported) throw zipError(`Archive entry ${entry.path} uses an unsupported compression method`, "zip_compression_unsupported");
       const opened = await openIndexedZipEntryStream(input.archivePath, entry);
-      await pipeline(opened.stream, createWriteStream(temporary, { flags: "wx" }));
+      await pipeline(opened.stream, createWriteStream(temporary, { flags: "wx" }), { signal: input.signal });
       if (conflict) await rename(target, backup);
       try {
         await rename(temporary, target);

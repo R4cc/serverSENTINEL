@@ -38,6 +38,16 @@ describe("server timeline resource points", () => {
     expect(points.at(-1)?.cpuPercent).toBeNull();
   });
 
+  it("does not emit a synthetic gap at the same timestamp as the first visible sample", () => {
+    const points = timelineResourcePoints([
+      sample(0, 100, 100),
+      sample(40_000, 500, 500)
+    ], 40_000, 40_000, 100);
+
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({ sampledAt: 40_000, available: true, running: true });
+  });
+
   it("keeps resource series continuous through ordinary remote-collector jitter", () => {
     const points = timelineResourcePoints([
       sample(0, 100, 100),

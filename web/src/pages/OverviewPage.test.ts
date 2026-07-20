@@ -320,6 +320,19 @@ describe("mod health", () => {
     expect(html).not.toContain("Attention");
   });
 
+  it("offers a separate refresh action without nesting it in the card link", () => {
+    const html = renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: updatePlan({ safeUpdates: 1 }),
+      onOpenMods: () => undefined,
+      onRefresh: () => undefined
+    }));
+
+    expect(html).toContain('class="modUpdatesCardOpen"');
+    expect(html).toContain('aria-label="Recheck mods for updates"');
+    expect(html).toContain('<path d="M20 6v5h-5"></path>');
+    expect(html).toContain('</button><button aria-label="Recheck mods for updates"');
+  });
+
   it("includes update names, icons, and version transitions for the wide layout", () => {
     const entry: ModUpdatePlanEntry = {
       filename: "lithium.jar",

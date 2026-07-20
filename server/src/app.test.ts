@@ -99,6 +99,25 @@ describe("runtime version detection", () => {
 });
 
 describe("console stream heartbeat", () => {
+  it("keeps the default interval comfortably below proxy idle cutoffs", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));
+    try {
+      const messages: string[] = [];
+      const stop = startConsoleHeartbeat({ readyState: 1, send: (message) => messages.push(message) });
+
+      vi.advanceTimersByTime(10_000);
+      expect(messages.map((message) => JSON.parse(message))).toEqual([
+        { type: "heartbeat", at: "2026-07-18T00:00:05.000Z" },
+        { type: "heartbeat", at: "2026-07-18T00:00:10.000Z" }
+      ]);
+
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps idle browser streams active and stops cleanly", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));
@@ -508,7 +527,7 @@ describe("public installed mods DTO", () => {
 });
 
 describe("mutable server configuration guard", () => {
-  const message = "Stop the server before changing mods or server properties.";
+  const message = "Stop the server before changing mods, plugins, or server properties.";
 
   it("allows mod and property mutations only for stopped-like runtime states", () => {
     expect(mutableServerConfigurationBlockedReason({ docker: { running: false, state: "exited" } })).toBe("");
@@ -809,7 +828,7 @@ describe("node install instructions", () => {
       joinToken: "join-token"
     });
 
-    expect(install.protocolVersion).toBe("3.0");
+    expect(install.protocolVersion).toBe("3.1");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DATA_DIR).toBe("/data");
     expect(install.dockerCompose.environment.SERVERSENTINEL_DOCKER_DATA_DIR).toBe("/var/lib/serversentinel");
     expect(install.dockerCompose.environment.TZ).toBe(process.env.TZ);
@@ -1012,6 +1031,18 @@ describe("Minecraft Query endpoint resolution", () => {
       NetworkSettings: { Networks: { panel: { NetworkID: "net-panel", IPAddress: "172.22.0.2", Gateway: "172.22.0.1" } } }
     });
     expect(endpoint).toMatchObject({ host: "172.22.0.1", port: 32566, source: "published-host" });
+  });
+
+  it("keeps container and Docker host candidates when caller inspection is unavailable", async () => {
+    const { resolveMinecraftQueryEndpoints } = await import("./queryEndpoint.js");
+    const endpoints = resolveMinecraftQueryEndpoints(server(), {}, {
+      NetworkSettings: { Networks: { app: { NetworkID: "net1", IPAddress: "172.20.0.5", Gateway: "172.20.0.1" } } }
+    }, null);
+
+    expect(endpoints).toEqual([
+      expect.objectContaining({ host: "172.20.0.5", port: 25566, source: "container-network" }),
+      expect.objectContaining({ host: "172.20.0.1", port: 32566, source: "published-host" })
+    ]);
   });
 
   it("returns null when query is not configured", async () => {

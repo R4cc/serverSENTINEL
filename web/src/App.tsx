@@ -4,7 +4,7 @@ import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
@@ -204,10 +204,8 @@ export default function App() {
     setThemePreference,
     demoMode,
     setDemoMode,
-    dateLocalePreference,
-    setDateLocalePreference,
-    numberLocalePreference,
-    setNumberLocalePreference,
+    regionalFormatPreference,
+    setRegionalFormatPreference,
     displayTimeZonePreference,
     setDisplayTimeZonePreference,
     relativeTimestamps,
@@ -403,6 +401,8 @@ export default function App() {
       ? { tone: "warning", message: "Status temporarily unavailable — retrying automatically." }
       : activePage === "console" && consoleConnectionState === "reconnecting"
         ? { tone: "warning", message: "Reconnecting console…" }
+        : activePage === "console" && consoleConnectionState === "polling"
+          ? { tone: "warning", message: "Live stream unavailable — polling console logs." }
         : activePage === "console" && consoleConnectionState === "error"
           ? { tone: "error", message: consoleError || "Console stream is unavailable." }
           : activePage === "console" && (consoleConnectionState === "connecting" || consoleLoading)
@@ -508,15 +508,14 @@ export default function App() {
             : isAnyModJobRunning
               ? `A ${managedContent.singular} operation is already running.`
               : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
-  const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
-  const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
+  const resolvedRegionalFormatLocale = resolveRegionalFormatLocale(regionalFormatPreference);
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
   const browserTimeZone = useMemo(() => detectedBrowserTimeZone(), []);
   const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedRegionalFormatLocale), [resolvedRegionalFormatLocale]);
 
   function formatDisplayDate(value: string | number | Date) {
     return dateTimeFormatter.format(new Date(value));
@@ -924,15 +923,51 @@ export default function App() {
     let closedByCleanup = false;
     let reconnectScheduled = false;
     let allowReconnect = true;
+    let pollingAvailable = false;
+    let pollingInFlight = false;
+    let pollingInterval: number | null = null;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}`);
+
+    function stopPolling() {
+      pollingAvailable = false;
+      if (pollingInterval !== null) {
+        window.clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    async function pollConsoleLogs() {
+      if (pollingInFlight || document.hidden || activeServerIdRef.current !== serverId) return;
+      pollingInFlight = true;
+      try {
+        pollingAvailable = await refreshConsoleLogs(serverId);
+        if (pollingAvailable && !closedByCleanup && activeServerIdRef.current === serverId) {
+          if (consoleReconnectNoticeTimeoutRef.current !== null) {
+            window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
+            consoleReconnectNoticeTimeoutRef.current = null;
+          }
+          setConsoleConnectionState("polling");
+        }
+      } finally {
+        pollingInFlight = false;
+      }
+    }
+
+    function startPolling() {
+      if (pollingInterval !== null) return;
+      void pollConsoleLogs();
+      pollingInterval = window.setInterval(() => void pollConsoleLogs(), 2_000);
+    }
+
     function scheduleReconnect() {
       if (!allowReconnect || reconnectScheduled || closedByCleanup || activeServerIdRef.current !== serverId) return;
       reconnectScheduled = true;
+      startPolling();
       if (consoleReconnectNoticeTimeoutRef.current === null) {
         consoleReconnectNoticeTimeoutRef.current = window.setTimeout(() => {
           consoleReconnectNoticeTimeoutRef.current = null;
-          if (activeServerIdRef.current === serverId) setConsoleConnectionState("reconnecting");
+          if (!pollingAvailable && activeServerIdRef.current === serverId) setConsoleConnectionState("reconnecting");
         }, 3_000);
       }
       const delay = consoleReconnectDelay(consoleReconnectAttemptRef.current);
@@ -947,6 +982,7 @@ export default function App() {
 
     function markConsoleLive() {
       if (activeServerIdRef.current !== serverId) return;
+      stopPolling();
       consoleReconnectAttemptRef.current = 0;
       if (consoleReconnectNoticeTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
@@ -956,7 +992,7 @@ export default function App() {
       setConsoleError("");
     }
 
-    socket.onopen = () => undefined;
+    socket.onopen = markConsoleLive;
     socket.onmessage = (event) => {
       let message: { type?: string; source?: string; text?: string; message?: string; code?: string; retryable?: boolean };
       try {
@@ -1009,6 +1045,11 @@ export default function App() {
         window.clearTimeout(consoleReconnectTimeoutRef.current);
         consoleReconnectTimeoutRef.current = null;
       }
+      if (consoleReconnectNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
+        consoleReconnectNoticeTimeoutRef.current = null;
+      }
+      stopPolling();
       socket.close();
     };
   }, [activeServer?.id, activePage, consoleStreamVersion, demoMode, activeNodeRuntimeBlocked, activeNodeBlockMessage]);
@@ -1493,8 +1534,8 @@ export default function App() {
     }
   }
 
-  async function refreshConsoleLogs(serverId = activeServer?.id) {
-    if (!serverId) return;
+  async function refreshConsoleLogs(serverId = activeServer?.id): Promise<boolean> {
+    if (!serverId) return false;
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
         setLogs((current) => current.length ? current : [
@@ -1502,14 +1543,14 @@ export default function App() {
           consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
         ]);
       }
-      return;
+      return true;
     }
     const startLogs = logsRef.current;
     setConsoleLoading(startLogs.length === 0);
     try {
       const limit = consoleScrollbackRef.current;
       const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs?limit=${limit}`);
-      if (activeServerIdRef.current !== serverId) return;
+      if (activeServerIdRef.current !== serverId) return false;
       const lines = consoleSnapshotLines(result.text, limit);
       const nextLogs = lines.map((line) => consoleLine(line));
       setLogs((current) => {
@@ -1517,8 +1558,9 @@ export default function App() {
         logsRef.current = reconciled;
         return reconciled;
       });
+      return true;
     } catch (error) {
-      if (handleStaleSession(error)) return;
+      if (handleStaleSession(error)) return false;
       if (activeServerIdRef.current === serverId) {
         setConsoleError(errorMessage(error, "Could not load console logs. Runtime logs may be unavailable."));
         if (error instanceof ApiError && error.code === "NODE_OFFLINE") {
@@ -1526,6 +1568,7 @@ export default function App() {
           void refreshNodeConnectivity();
         }
       }
+      return false;
     } finally {
       if (activeServerIdRef.current === serverId) setConsoleLoading(false);
     }
@@ -2525,16 +2568,14 @@ export default function App() {
             loading={settingsDataLoading}
             themePreference={themePreference}
             relativeTimestamps={relativeTimestamps}
-            dateLocalePreference={dateLocalePreference}
-            numberLocalePreference={numberLocalePreference}
+            regionalFormatPreference={regionalFormatPreference}
             displayTimeZonePreference={displayTimeZonePreference}
             panelTimeZone={panelTimeZone}
             browserTimeZone={browserTimeZone}
             displayTimeZone={displayTimeZone}
             onThemeChange={setThemePreference}
             onRelativeTimestampsChange={setRelativeTimestamps}
-            onDateLocaleChange={setDateLocalePreference}
-            onNumberLocaleChange={setNumberLocalePreference}
+            onRegionalFormatChange={setRegionalFormatPreference}
             onDisplayTimeZoneChange={setDisplayTimeZonePreference}
             rememberConsoleHistory={rememberConsoleHistory}
             consoleFontSize={consoleFontSize}
@@ -2656,7 +2697,7 @@ export default function App() {
                       <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                         {lastKnownRuntimeLabel}
                       </StatusBadge>
-                      {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} />}
+                      {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} runtimeType={activeServer.runtimeProfile.runtimeType} />}
                     </div>
                     <div className="serverStripMetaRow">
                       {serverStripHealth ? (
@@ -2800,6 +2841,7 @@ export default function App() {
                     loading={modsWorkspace.state.updatePlanLoading}
                     canView={canViewMods && supportsManagedMods}
                     onOpenMods={() => setActivePage("mods")}
+                    onRefresh={() => void modsWorkspace.actions.refresh()}
                     contentPlural={managedContent.plural}
                     contentPluralTitle={managedContent.pluralTitle}
                   />

@@ -3,7 +3,6 @@ import { api, ApiError } from "../../api";
 import { demoSearchResults, demoServerId } from "../../demo";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import type { ModInstallModalState } from "../../app/uiState";
-import { bufferToBase64 } from "../../utils/files";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
 import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
@@ -640,9 +639,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return;
     }
     try {
-      const content = bufferToBase64(await file.arrayBuffer());
       patchJob(jobId, { progress: 40, task: "Uploading jar" });
-      await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: JSON.stringify({ filename: file.name, contentBase64: content }) });
+      const form = new FormData();
+      form.append("size", String(file.size));
+      form.append("file", file, file.name);
+      await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: form });
       patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       try {
         await refreshModsWorkspace(activeServer.id, { forceRefresh: true });

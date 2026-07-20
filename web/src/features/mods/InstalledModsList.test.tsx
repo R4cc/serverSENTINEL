@@ -55,6 +55,31 @@ describe("InstalledModsList", () => {
     expect(html).not.toContain("update to");
   });
 
+  it("shows mods with available updates before up-to-date mods", () => {
+    const upToDate = mod({
+      filename: "alpha.jar",
+      displayName: "Alpha",
+      modrinth: { ...mod().modrinth!, projectId: "alpha", filename: "alpha.jar" },
+      versionInfo: { currentVersion: "1.0.0", latestVersion: "1.0.0", upToDate: true }
+    });
+    const reviewUpdate = mod({
+      filename: "beta.jar",
+      displayName: "Beta",
+      compatibility: { status: "unknown", compatible: false, reason: "Server-side support unknown", serverSide: "unknown" },
+      modrinth: { ...mod().modrinth!, projectId: "beta", filename: "beta.jar" },
+      versionInfo: { currentVersion: "1.0.0", latestVersion: "2.0.0", upToDate: false }
+    });
+    const safeUpdate = mod({ filename: "zeta.jar", displayName: "Zeta" });
+    const installed = [upToDate, safeUpdate, reviewUpdate];
+    const html = renderInstalledMods(installed);
+
+    expect(html.match(/aria-label="Open details for [^"]+"/g)).toEqual([
+      'aria-label="Open details for Beta"',
+      'aria-label="Open details for Zeta"',
+      'aria-label="Open details for Alpha"'
+    ]);
+  });
+
   it("falls back when the target update version is missing", () => {
     const installed = mod({ versionInfo: { currentVersion: "0.154.0+26.2", upToDate: false } });
     const updatePlan: ModUpdatePlan = {

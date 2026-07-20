@@ -1,4 +1,4 @@
-import type { DisplayTimeZonePreference, ManagedServer, ServerStatus, ThemePreference, LocalePreference, VersionResolution, VersionSource } from '../types';
+import type { DisplayTimeZonePreference, ManagedServer, RegionalFormatPreference, ServerStatus, ThemePreference, VersionResolution, VersionSource } from '../types';
 import { isThemePreference } from "../features/settings/themePreferences";
 
 export const defaultServerPort = 25565;
@@ -184,15 +184,39 @@ export function themePreferenceFromStoredValue(value: string | null): ThemePrefe
   return isThemePreference(value) ? value : "system";
 }
 
-export function readLocalePreference(key: "serversentinel-date-locale" | "serversentinel-number-locale"): LocalePreference {
+const regionalFormatStorageKey = "serversentinel-regional-format";
+const legacyDateLocaleStorageKey = "serversentinel-date-locale";
+const legacyNumberLocaleStorageKey = "serversentinel-number-locale";
+
+function isRegionalFormatPreference(value: string | null): value is RegionalFormatPreference {
+  return value === "user" || value === "en-US" || value === "en-GB" || value === "de-DE" || value === "fr-FR" || value === "ja-JP";
+}
+
+export function regionalFormatPreferenceFromStoredValues(
+  regionalFormat: string | null,
+  legacyDateLocale: string | null,
+  legacyNumberLocale: string | null
+): RegionalFormatPreference {
+  if (regionalFormat !== null) return isRegionalFormatPreference(regionalFormat) ? regionalFormat : "user";
+  if (isRegionalFormatPreference(legacyDateLocale) && legacyDateLocale !== "user") return legacyDateLocale;
+  if (isRegionalFormatPreference(legacyNumberLocale) && legacyNumberLocale !== "user") return legacyNumberLocale;
+  return "user";
+}
+
+export function readRegionalFormatPreference(storage: Pick<Storage, "getItem"> = window.localStorage): RegionalFormatPreference {
   try {
-    const saved = window.localStorage.getItem(key);
-    return saved === "en-US" || saved === "en-GB" || saved === "de-DE" || saved === "fr-FR" || saved === "ja-JP" || saved === "user"
-      ? saved
-      : "user";
+    return regionalFormatPreferenceFromStoredValues(
+      storage.getItem(regionalFormatStorageKey),
+      storage.getItem(legacyDateLocaleStorageKey),
+      storage.getItem(legacyNumberLocaleStorageKey)
+    );
   } catch {
     return "user";
   }
+}
+
+export function resolveRegionalFormatLocale(preference: RegionalFormatPreference) {
+  return preference === "user" ? undefined : preference;
 }
 
 export function readDisplayTimeZonePreference(): DisplayTimeZonePreference {

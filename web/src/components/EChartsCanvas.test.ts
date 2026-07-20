@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EChartsCoreOption } from "echarts/core";
-import { createChartOptionScheduler, timelineChartSetOptionOptions } from "./EChartsCanvas";
+import { createChartInteractionTracker, createChartOptionScheduler, timelineChartSetOptionOptions } from "./EChartsCanvas";
 
 describe("timeline chart option application", () => {
   it("atomically replaces chart components while preserving their stable identities", () => {
@@ -41,5 +41,31 @@ describe("timeline chart option scheduling", () => {
     scheduler.cancel();
     scheduler.finishInteraction();
     expect(apply).not.toHaveBeenCalled();
+  });
+});
+
+describe("timeline chart interaction tracking", () => {
+  it("does not start a drag interaction for a click", () => {
+    const start = vi.fn();
+    const finish = vi.fn();
+    const tracker = createChartInteractionTracker(start, finish);
+    tracker.pointerDown({ offsetX: 20, offsetY: 30 });
+    tracker.pointerUp();
+    expect(start).not.toHaveBeenCalled();
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it("starts after pointer movement and finishes once on release", () => {
+    const start = vi.fn();
+    const finish = vi.fn();
+    const tracker = createChartInteractionTracker(start, finish);
+    tracker.pointerDown({ offsetX: 20, offsetY: 30 });
+    tracker.pointerMove({ offsetX: 21, offsetY: 31 });
+    tracker.pointerMove({ offsetX: 28, offsetY: 30 });
+    tracker.pointerMove({ offsetX: 40, offsetY: 30 });
+    tracker.pointerUp();
+    tracker.pointerOut();
+    expect(start).toHaveBeenCalledOnce();
+    expect(finish).toHaveBeenCalledOnce();
   });
 });

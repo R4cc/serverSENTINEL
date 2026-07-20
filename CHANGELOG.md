@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 - 2026-07-19
+
+- Added panel-first node protocol 3.1 with negotiated request cancellation and binary-transfer features, bounded control frames and concurrency, heartbeat liveness, duplicate-session replacement, and jittered reconnect backoff.
+- Consolidated remote monitoring into batched `server.observe` requests with shared panel caching, one reused container inspection per server, partial section errors, and cursor-based log deltas. Protocol 3.0 nodes retain the existing individual commands.
+- Added SHA-256-verified streamed file, archive-entry, mod, and plugin transfers plus multipart HTTP uploads. Legacy JSON uploads remain compatible, while protocol 3.0 transfers above 72 MiB return an update-required error.
+- Classified nodes as current, fallback, update-only, or incompatible so protocol 3.0 remains usable with an update recommendation and protocol 2.0 remains available only as a self-update bridge.
+
 ## 1.4.0 - 2026-07-17
 
 - Improved Server Timeline event annotations with stacked previews for up to four clustered events and a remaining-event indicator.

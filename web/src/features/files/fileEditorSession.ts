@@ -1,6 +1,11 @@
 import { ApiError } from "../../api";
 import type { FileEditLease, FileEntry } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
+import { isServerPropertiesPath } from "../../utils/permissions";
+
+export function fileEditBlockedReason(path: string, serverRequiresStoppedForMutableConfig: boolean, stoppedServerMutationMessage: string) {
+  return serverRequiresStoppedForMutableConfig && isServerPropertiesPath(path) ? stoppedServerMutationMessage : "";
+}
 
 export function unsupportedEditorMessage(entry: FileEntry) {
   if (entry.type !== "file") return "Folders cannot be edited in the browser editor.";

@@ -59,7 +59,7 @@ function isNodeDockerUsable(node: ManagedNode) {
 export function isNodeRuntimeUsable(node: ManagedNode) {
   return node.status === "online"
     && isNodeDockerUsable(node)
-    && (node.isInternal || node.protocolVersion === "3.0");
+    && (node.isInternal || node.protocolMode === "current" || node.protocolMode === "fallback" || node.protocolVersion === "3.1" || node.protocolVersion === "3.0");
 }
 
 export function nodeRestartImpactMessage(node: ManagedNode) {
@@ -77,7 +77,7 @@ export function nodeBlockReason(node: ManagedNode) {
   if (node.hasPendingJoinToken && node.status === "unknown") return "Waiting for node to join";
   if (node.status === "offline") return "Node offline";
   if (node.status === "unknown") return "Node has not connected yet";
-  if (!node.isInternal && node.protocolVersion !== "3.0") return "Node update required";
+  if (!node.isInternal && !isNodeRuntimeUsable({ ...node, dockerStatus: "available" })) return "Node update required";
   if (node.dockerStatus === "unavailable") return "Docker is unavailable on this node";
   if (!node.dockerStatus || node.dockerStatus === "unknown") return "Docker status is unknown";
   if (node.dataPathStatus === "missing") return "Node data path is missing";
@@ -90,7 +90,8 @@ export function nodeWarnings(node: ManagedNode) {
   else if (node.hasPendingJoinToken) warnings.push("Join token pending. Run the install command before it expires.");
   if (node.status === "offline") warnings.push("Node is offline.");
   if (node.status === "unknown") warnings.push("Node has not connected yet.");
-  if (!node.isInternal && node.status === "online" && node.protocolVersion !== "3.0") warnings.push("Update this node before managing its servers.");
+  if (!node.isInternal && node.status === "online" && node.protocolMode === "fallback") warnings.push("This node is using protocol 3.0 fallback. Update it to enable optimized monitoring and transfers.");
+  if (!node.isInternal && node.status === "online" && node.protocolMode !== "fallback" && !isNodeRuntimeUsable({ ...node, dockerStatus: "available" })) warnings.push("Update this node before managing its servers.");
   if (node.dockerStatus === "unavailable") warnings.push("Docker is unavailable.");
   if (!node.dockerStatus || node.dockerStatus === "unknown") warnings.push("Docker availability is unknown.");
   if (node.dataPathStatus && node.dataPathStatus !== "ready") warnings.push(nodeDataPathLabel(node));

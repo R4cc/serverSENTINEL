@@ -111,12 +111,14 @@ export type ManagedNode = {
   agentVersion?: string;
   buildId?: string;
   protocolVersion?: string;
+  protocolMode?: "current" | "fallback" | "update-only" | "incompatible";
   dockerStatus?: string;
   dataPathStatus?: string;
   totalMemory?: number;
   joinTokenExpiresAt?: string;
   hasPendingJoinToken?: boolean;
   capabilities?: string[];
+  features?: string[];
 };
 
 export type ContextNode = ManagedNode & {
@@ -528,6 +530,6 @@ export type ScheduleNavigationTarget =
 
 export type ThemePreference = "light" | "dark" | "system" | "xander" | "mint" | "nightlight" | "peach";
 
-export type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
+export type RegionalFormatPreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
 
 export type DisplayTimeZonePreference = "panel" | "browser" | "utc";

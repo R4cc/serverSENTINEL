@@ -24,6 +24,11 @@ export function dockerErrorMessage(body: string, statusCode?: number) {
   return `Docker API returned ${statusCode ?? "an error"}`;
 }
 
+export function isMissingDockerNetworkError(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /\bnetwork\s+[a-f0-9]{12,64}\s+not found\b/i.test(message);
+}
+
 export function dockerJsonBody<T>(body: string): T {
   if (!body) return {} as T;
   try {
@@ -41,7 +46,7 @@ async function dockerSocketRequest(
   method: DockerMethod,
   path: string,
   expectedStatus: number | number[],
-  options: { payload?: string; timeoutMs?: number } = {}
+  options: { payload?: string; timeoutMs?: number; signal?: AbortSignal } = {}
 ) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
@@ -56,6 +61,7 @@ async function dockerSocketRequest(
         path,
         method,
         timeout: options.timeoutMs ?? 15000,
+        signal: options.signal,
         headers: payload === undefined ? undefined : {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(payload)
@@ -86,23 +92,25 @@ async function dockerSocketRequest(
 export async function dockerRequest<T>(
   method: "GET" | "POST" | "DELETE",
   path: string,
-  expectedStatus: number | number[] = [200, 204, 304]
+  expectedStatus: number | number[] = [200, 204, 304],
+  signal?: AbortSignal
 ): Promise<T> {
-  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus)).toString("utf8"));
+  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { signal })).toString("utf8"));
 }
 
-export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000) {
-  return dockerSocketRequest(method, path, expectedStatus, { timeoutMs });
+export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000, signal?: AbortSignal) {
+  return dockerSocketRequest(method, path, expectedStatus, { timeoutMs, signal });
 }
 
 export async function dockerJsonRequest<T>(
   method: "GET" | "POST",
   path: string,
   body: unknown,
-  expectedStatus: number | number[] = [200, 201, 204, 304]
+  expectedStatus: number | number[] = [200, 201, 204, 304],
+  signal?: AbortSignal
 ): Promise<T> {
   const payload = JSON.stringify(body);
-  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { payload })).toString("utf8"));
+  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { payload, signal })).toString("utf8"));
 }
 
 export async function sendDockerContainerStdinLine(containerName: string, line: string, options: DockerStdinOptions = {}) {

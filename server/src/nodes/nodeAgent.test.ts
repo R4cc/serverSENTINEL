@@ -33,6 +33,16 @@ function testRuntimeProfile(): ServerRuntimeProfile {
   };
 }
 
+describe("node reconnect backoff", () => {
+  it("stays within one and thirty seconds while growing exponentially", () => {
+    expect(hooks.nodeReconnectDelayMs(0, () => 0)).toBe(1_000);
+    expect(hooks.nodeReconnectDelayMs(1, () => 1)).toBe(2_000);
+    expect(hooks.nodeReconnectDelayMs(4, () => 1)).toBe(16_000);
+    expect(hooks.nodeReconnectDelayMs(20, () => 1)).toBe(30_000);
+    expect(hooks.nodeReconnectDelayMs(20, () => 0)).toBe(1_000);
+  });
+});
+
 function paperRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.11",
@@ -76,6 +86,7 @@ async function loadHooks() {
     dockerErrorMessage: (body: string, statusCode?: number) => body || `Docker API returned ${statusCode ?? "an error"}`,
     dockerJsonRequest: mockDockerJsonRequest,
     dockerRequest: mockDockerRequest,
+    isMissingDockerNetworkError: (error: unknown) => /\bnetwork\s+[a-f0-9]{12,64}\s+not found\b/i.test(error instanceof Error ? error.message : typeof error === "string" ? error : ""),
     sendDockerContainerStdinLine: mockSendDockerContainerStdinLine
   }));
   return (await import("./nodeAgent.js")).__nodeAgentTestHooks;
@@ -327,6 +338,78 @@ describe("remote node Docker container recreation", () => {
       [201, 409]
     );
     expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-survival/start", [204, 304]);
+  });
+
+  it("recreates and retries a managed container whose Docker network ID became stale", async () => {
+    mockDockerAvailable = true;
+    mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    await mkdir(join(tempRoot, "servers", server.storageName!), { recursive: true });
+    await writeFile(join(tempRoot, "servers", server.storageName!, "fabric-server-launch.jar"), "jar");
+    let recreated = false;
+    let running = false;
+    let startAttempts = 0;
+    const inspect = () => ({
+      Id: recreated ? "recreated-container-id" : "stale-container-id",
+      State: { Running: running, Status: running ? "running" : "exited" },
+      Config: {
+        Labels: {
+          "serversentinel.managed": "true",
+          "serversentinel.serverId": server.id,
+          "serversentinel.config-hash": hooks.runtimeConfigHash(server)
+        },
+        OpenStdin: true,
+        AttachStdin: true
+      },
+      HostConfig: { RestartPolicy: { Name: "no" } },
+      NetworkSettings: {
+        Networks: {
+          app: {
+            Aliases: ["survival"],
+            NetworkID: recreated ? "current-network-id" : "missing-network-id"
+          }
+        }
+      }
+    });
+    mockDockerJsonRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === "/containers/create?name=serversentinel-survival") {
+        recreated = true;
+        return {};
+      }
+      throw new Error(`Unexpected Docker JSON request ${path}`);
+    });
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/serversentinel-survival/json") return inspect();
+      if (method === "DELETE" && path === "/containers/serversentinel-survival?force=1") return {};
+      if (method === "POST" && path === "/containers/serversentinel-survival/start") {
+        startAttempts += 1;
+        if (startAttempts === 1) {
+          throw new Error("failed to set up container networking: network 9c7a2a2e5e03dca3d89e9bac010850b4658bcfde2e91fd46877cca771984972c not found");
+        }
+        running = true;
+        return {};
+      }
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+
+    const status = await hooks.handleCommand("server.start", { server }) as { docker: { running: boolean } };
+
+    expect(status.docker.running).toBe(true);
+    expect(startAttempts).toBe(2);
+    expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", "/containers/serversentinel-survival?force=1", [204, 404]);
+    expect(mockDockerJsonRequest).toHaveBeenCalledWith(
+      "POST",
+      "/containers/create?name=serversentinel-survival",
+      expect.objectContaining({
+        HostConfig: expect.objectContaining({ Binds: [`${join(tempRoot, "servers", server.storageName!)}:/data`] }),
+        NetworkingConfig: {
+          EndpointsConfig: {
+            app: { Aliases: ["survival"], IPAMConfig: undefined, DriverOpts: undefined }
+          }
+        }
+      }),
+      [201, 409]
+    );
   });
 
   it("carries custom networks across a stopped port-edit recreate", async () => {

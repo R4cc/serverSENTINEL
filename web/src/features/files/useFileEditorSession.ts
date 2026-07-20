@@ -6,7 +6,7 @@ import { isEditableFile } from "../../utils/files";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { errorMessage } from "../../utils/appHelpers";
-import { fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
+import { fileEditBlockedReason, fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
 
 export type FileArchiveContext = {
   archivePath: string;
@@ -30,6 +30,8 @@ type FileEditorSessionInputs = {
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
   runtimeControlsDisabledReason: string;
+  serverRequiresStoppedForMutableConfig: boolean;
+  stoppedServerMutationMessage: string;
   permissionUser: PublicUser | null;
   formatDisplayDate: (value: string | number | Date) => string;
   notify: Notify;
@@ -53,6 +55,8 @@ export function useFileEditorSession({
   isProvisioning,
   dockerOperationalLock,
   runtimeControlsDisabledReason,
+  serverRequiresStoppedForMutableConfig,
+  stoppedServerMutationMessage,
   permissionUser,
   formatDisplayDate,
   notify,
@@ -79,7 +83,9 @@ export function useFileEditorSession({
   const [discardEditorRequest, setDiscardEditorRequest] = useState<DiscardEditorRequest | null>(null);
   const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
+  const editDisabledReason = fileEditBlockedReason(selectedPath, serverRequiresStoppedForMutableConfig, stoppedServerMutationMessage);
   const canEditSelectedPath = !archiveContext
+    && !editDisabledReason
     && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
   function releaseFileLease(lease = fileEditLease) {
@@ -278,6 +284,11 @@ export function useFileEditorSession({
       return;
     }
     if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
+    if (editDisabledReason) {
+      setFileLeaseMessage(editDisabledReason);
+      notify("warning", editDisabledReason);
+      return;
+    }
     if (!canEditSelectedPath) {
       const message = "Edit permission is required to modify this file.";
       setFileLeaseMessage(message);
@@ -395,7 +406,8 @@ export function useFileEditorSession({
       fileLeaseBusy,
       fileLeaseMessage,
       discardEditorRequest,
-      canEditSelectedPath
+      canEditSelectedPath,
+      editDisabledReason
     },
     actions: {
       openFile,

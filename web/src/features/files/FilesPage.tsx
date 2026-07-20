@@ -78,6 +78,7 @@ export function FilesPage({
     canViewCurrentFiles,
     canUploadToCurrentPath,
     canEditSelectedPath,
+    editDisabledReason,
     canOpenSelectedFile,
     canOpenSelectedZip,
     canExtractSelectedZip,
@@ -667,7 +668,7 @@ export function FilesPage({
         editBusy={fileLeaseBusy}
         editMessage={fileLeaseMessage}
         editDisabled={Boolean(archiveContext) || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-        editDisabledReason={archiveContext ? "ZIP archive contents are read-only. Extract this file before editing it." : ""}
+        editDisabledReason={archiveContext ? "ZIP archive contents are read-only. Extract this file before editing it." : editDisabledReason}
         readOnlyOnly={Boolean(archiveContext)}
         editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
         saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}

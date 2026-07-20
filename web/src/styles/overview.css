@@ -134,22 +134,24 @@
 }
 
 .modUpdatesCard {
+  position: relative;
   width: 100%;
   min-width: 0;
   min-height: 72px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: 0;
   border-color: color-mix(in srgb, var(--sentinel-warning) 42%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
   color: var(--text);
-  padding: var(--space-4);
+  padding: 0;
   text-align: left;
   white-space: normal;
+  overflow: hidden;
 }
 
-.modUpdatesCard:hover:not(:disabled) {
+.modUpdatesCard:not(.modUpdatesCardSkeleton):hover {
   border-color: color-mix(in srgb, var(--sentinel-warning) 64%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-warning) 13%, var(--surface-raised));
   color: var(--text);
@@ -361,6 +363,56 @@
   height: calc(clamp(340px, 26vw, 400px) + var(--timeline-annotation-extra, 0px));
   min-height: calc(340px + var(--timeline-annotation-extra, 0px));
   color: var(--text-muted);
+}
+
+.modUpdatesCardOpen {
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
+  display: grid;
+  align-items: center;
+  justify-content: stretch;
+  justify-items: stretch;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  padding: var(--space-4);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.modUpdatesCardOpen:hover:not(:disabled),
+.modUpdatesCardOpen:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.modUpdatesCardOpen:focus-visible {
+  outline-offset: -4px;
+}
+
+.modUpdatesRefreshButton {
+  margin-right: var(--space-4);
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text-muted);
+}
+
+.modUpdatesRefreshButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.modUpdatesRefreshButton > svg {
+  width: 17px;
+  height: 17px;
 }
 
 .serverTimelineEChart {
@@ -797,7 +849,7 @@
   background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
 }
 
-.overviewDashboardGrid > .modUpdatesCard--healthy:hover:not(:disabled) {
+.overviewDashboardGrid > .modUpdatesCard--healthy:hover {
   border-color: color-mix(in srgb, var(--sentinel-success) 58%, var(--border-panel));
   background: color-mix(in srgb, var(--sentinel-success) 11%, var(--surface-raised));
 }
@@ -821,6 +873,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-muted);
 }
 
 .modUpdatesHeaderCopy {
@@ -944,6 +998,7 @@
 
 .modUpdatesCardSkeleton {
   cursor: default;
+  padding: var(--space-4);
 }
 
 .modUpdatesCountSkeleton {
@@ -989,8 +1044,8 @@
 }
 
 .modUpdatesCard--healthy .modUpdatesHealthyState {
-  border-color: color-mix(in srgb, var(--sentinel-success) 24%, var(--border-muted));
-  background: color-mix(in srgb, var(--sentinel-success) 5%, var(--surface-muted));
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface-muted));
 }
 
 .modUpdatesHealthyIcon {
@@ -1503,6 +1558,22 @@
     display: block;
   }
 
+  .modUpdatesCardOpen {
+    width: 100%;
+    height: 100%;
+  }
+
+  .modUpdatesRefreshButton {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+  }
+
+  .modUpdatesWideHeader {
+    padding-right: 40px;
+  }
+
   .modUpdatesCompact {
     display: none;
   }
@@ -1566,6 +1637,22 @@
   .modUpdatesCard {
     min-height: 280px;
     display: block;
+  }
+
+  .modUpdatesCardOpen {
+    width: 100%;
+    height: 100%;
+  }
+
+  .modUpdatesRefreshButton {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+  }
+
+  .modUpdatesWideHeader {
+    padding-right: 40px;
   }
 
   .modUpdatesCompact {

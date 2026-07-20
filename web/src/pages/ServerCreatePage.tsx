@@ -37,6 +37,8 @@ import {
 } from "./serverSettingsHelpers";
 import { MemoryNumberInput, MemoryRangeControl } from "./ServerSettingsShared";
 
+export const createServerReviewSummary = "serverSENTINEL will download the required files and prepare the server. It will remain stopped until you start it from the panel. This process may take a few minutes.";
+
 export function ManagedServerForm({
   nodes = [],
   preferredNodeId = "",
@@ -804,7 +806,7 @@ function RuntimeSummary({
         <RuntimeSummaryItem label="Server runtime" value={runtimeDefinition.displayName} icon="loader" />
         <RuntimeSummaryItem label={runtimeDefinition.versionLabel} value={runtimeVersion || "Choose version"} />
         <RuntimeSummaryItem label="Java version" value={`Java ${javaVersion}`} icon="java" />
-        <RuntimeSummaryItem label="Server JAR source" value={runtimeDefinition.serverJarFilename} />
+        <RuntimeSummaryItem label="Server JAR filename" value={runtimeDefinition.serverJarFilename} />
         <RuntimeSummaryItem label="Compatibility" value={runtimeCompatible ? "Compatible" : "Incomplete"} tone={runtimeCompatible ? "ok" : "warning"} />
       </div>
     </section>
@@ -1366,7 +1368,7 @@ function ReviewCreateWizardStep({
           <strong id="review-summary-title">Summary</strong>
           <div className="reviewInfoCallout">
             <span className="reviewInfoIcon" aria-hidden="true">i</span>
-            <p>Once the server is created, serverSENTINEL will download the required files, start the container, and launch your Minecraft server. This process may take a few minutes.</p>
+            <p>{createServerReviewSummary}</p>
           </div>
         </section>
       </div>

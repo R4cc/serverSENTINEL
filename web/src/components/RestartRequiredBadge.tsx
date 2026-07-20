@@ -1,4 +1,5 @@
 import { useId } from "react";
+import type { ServerRuntimeType } from "@serversentinel/contracts";
 import type { RestartRequiredChange } from "../types";
 import { StatusBadge } from "./UiPrimitives";
 
@@ -10,15 +11,16 @@ const actionLabels: Record<RestartRequiredChange["action"], string> = {
   updated: "Updated"
 };
 
-export function RestartRequiredBadge({ changes = [] }: { changes?: RestartRequiredChange[] }) {
+export function RestartRequiredBadge({ changes = [], runtimeType = "fabric" }: { changes?: RestartRequiredChange[]; runtimeType?: ServerRuntimeType }) {
   const tooltipId = useId();
+  const contentLabel = runtimeType === "paper" ? "Plugins" : "Mods";
   return (
     <span className="restartRequirement">
       <StatusBadge tone="warning" className="restartRequirementBadge" tabIndex={0} aria-describedby={tooltipId}>
         Restart required
       </StatusBadge>
       <span className="restartRequirementTooltip" id={tooltipId} role="tooltip">
-        <strong>Mods have changed.</strong>
+        <strong>{contentLabel} have changed.</strong>
         <span>Restart the server to apply the changes.</span>
         {changes.length > 0 && (
           <ul>

@@ -42,7 +42,19 @@ function restartChangeMatchesMod(mod: InstalledMod, change: RestartRequiredChang
 }
 
 export function InstalledModsList({ terminology = fabricContentTerminology, mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
-  const visible = filterInstalledMods(mods, query);
+  const visible = filterInstalledMods(mods, query)
+    .map((mod) => {
+      const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
+      return {
+        mod,
+        plannedUpdate,
+        health: getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology),
+        updateAvailable: plannedUpdate
+          ? plannedUpdate.status === "safe_update" || plannedUpdate.status === "needs_review"
+          : mod.versionInfo?.upToDate === false && Boolean(mod.versionInfo.latestVersion)
+      };
+    })
+    .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable));
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 
@@ -85,9 +97,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
-        ) : visible.map((mod) => {
-          const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
-          const health = getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology);
+        ) : visible.map(({ mod, plannedUpdate, health }) => {
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
           const requiresRestart = restartRequiredChanges.some((change) => restartChangeMatchesMod(mod, change));

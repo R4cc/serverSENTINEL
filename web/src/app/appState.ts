@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { initialDemoFiles, initialDemoSchedules } from "../demo";
 import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
-import type { DisplayTimeZonePreference, InstalledMod, LocalePreference, ScheduledExecution, ThemePreference } from "../types";
-import { readDisplayTimeZonePreference, readLocalePreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
+import type { DisplayTimeZonePreference, InstalledMod, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
+import { readDisplayTimeZonePreference, readRegionalFormatPreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 import {
   clearStoredCommandHistory,
@@ -25,8 +25,7 @@ function writePreference(key: string, value: string) {
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [demoMode, setDemoMode] = useState(() => readStoredDemoMode());
-  const [dateLocalePreference, setDateLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-date-locale"));
-  const [numberLocalePreference, setNumberLocalePreference] = useState<LocalePreference>(() => readLocalePreference("serversentinel-number-locale"));
+  const [regionalFormatPreference, setRegionalFormatPreference] = useState<RegionalFormatPreference>(() => readRegionalFormatPreference());
   const [displayTimeZonePreference, setDisplayTimeZonePreference] = useState<DisplayTimeZonePreference>(() => readDisplayTimeZonePreference());
   const [relativeTimestamps, setRelativeTimestamps] = useState(() => readRelativeTimestampsPreference());
   const [rememberConsoleHistory, setRememberConsoleHistory] = useState(() => readConsoleHistoryEnabled());
@@ -56,12 +55,8 @@ export function usePreferencesState() {
   }, [themePreference]);
 
   useEffect(() => {
-    writePreference("serversentinel-date-locale", dateLocalePreference);
-  }, [dateLocalePreference]);
-
-  useEffect(() => {
-    writePreference("serversentinel-number-locale", numberLocalePreference);
-  }, [numberLocalePreference]);
+    writePreference("serversentinel-regional-format", regionalFormatPreference);
+  }, [regionalFormatPreference]);
 
   useEffect(() => {
     writePreference("serversentinel-display-time-zone", displayTimeZonePreference);
@@ -96,10 +91,8 @@ export function usePreferencesState() {
     setThemePreference,
     demoMode,
     setDemoMode,
-    dateLocalePreference,
-    setDateLocalePreference,
-    numberLocalePreference,
-    setNumberLocalePreference,
+    regionalFormatPreference,
+    setRegionalFormatPreference,
     displayTimeZonePreference,
     setDisplayTimeZonePreference,
     relativeTimestamps,

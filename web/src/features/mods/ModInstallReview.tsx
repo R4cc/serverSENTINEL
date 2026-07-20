@@ -60,7 +60,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
           <ModIconImage src={icon} fallback={terminology.iconFallback} />
           <div><strong>{title}</strong><span>For {state.data?.target.loader || terminology.runtimeName} {state.data?.target.minecraftVersion || ""}</span></div>
         </div>
-        {locked && <InlineState tone="info" title={`Stop the server to install ${terminology.plural}`} message={lockedReason || `${terminology.singularTitle} changes require the server to be stopped.`} />}
+        {locked && !state.installing && <InlineState tone="info" title={`Stop the server to install ${terminology.plural}`} message={lockedReason || `${terminology.singularTitle} changes require the server to be stopped.`} />}
         {state.loading && <><LoadingLabel>Loading available {terminology.singular} versions</LoadingLabel><ModInstallVersionSkeleton /></>}
         {!state.loading && state.error && <InlineState tone="error" title="Versions unavailable" message={state.error} actionLabel="Refresh" onAction={onRetry} busy={state.loading} />}
         {!state.loading && state.data && state.step === 1 && (
