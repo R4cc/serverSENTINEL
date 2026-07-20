@@ -291,6 +291,9 @@ describe("mod health", () => {
     expect(healthyHtml).toContain("<strong>Mod updates</strong>");
     expect(healthyHtml).toContain("No updates available");
     expect(healthyHtml).toContain("Everything is up to date");
+    expect(healthyHtml).toContain("modUpdatesListItem modUpdatesListItem--healthy");
+    expect(healthyHtml).toContain("modUpdatesListCopy");
+    expect(healthyHtml).not.toContain("modUpdatesHealthyState");
     expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
     expect(attentionHtml).toContain("modUpdatesCard--healthy");

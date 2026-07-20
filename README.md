@@ -128,6 +128,46 @@ docker compose logs serversentinel
 
 The defaults work as-is. To customize the port, time zone, image, or optional API settings, copy [`.env.example`](.env.example) to `.env` before starting the container.
 
+### All-in-one Docker Compose
+
+You can also create a `docker-compose.yml` with the following configuration and run `docker compose up -d`:
+
+```yaml
+services:
+  serversentinel:
+    image: nl2109/serversentinel:1.5.2
+    container_name: serversentinel
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      SS_MODE: ${SS_MODE:-all-in-one}
+      SERVERSENTINEL_DATA_DIR: /data
+      SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
+      SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:1.5.2}
+      SERVERSENTINEL_ENABLE_DEMO: ${SERVERSENTINEL_ENABLE_DEMO:-false}
+      SERVERSENTINEL_TRUST_PROXY: ${SERVERSENTINEL_TRUST_PROXY:-false}
+      SERVERSENTINEL_SETUP_TOKEN: ${SERVERSENTINEL_SETUP_TOKEN:-}
+      MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
+      MCJARS_BASE_URL: ${MCJARS_BASE_URL:-https://mcjars.app}
+      MCJARS_API_KEY: ${MCJARS_API_KEY:-}
+      DOCKER_SOCKET: ${DOCKER_SOCKET:-/var/run/docker.sock}
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - serversentinel-data:/data
+      - minecraft-servers:/data/servers
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  serversentinel-data:
+  minecraft-servers:
+    name: serversentinel-minecraft-servers
+```
+
+All-in-one mode requires access to the Docker socket so serverSENTINEL can create, start, and stop Minecraft containers. Only mount the socket in a trusted environment.
+
 ## First Run
 
 1. Create the initial administrator with the setup token.

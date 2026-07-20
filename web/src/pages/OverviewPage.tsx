@@ -242,11 +242,13 @@ export function ModHealthPanel({
               </span>
               <AppIcon name="chevronRight" />
             </span>
-            <span className="modUpdatesHealthyState">
-              <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
-              <span>
-                <strong>Everything is up to date</strong>
-                <small>New {contentSingular} updates will appear here.</small>
+            <span className="modUpdatesList">
+              <span className="modUpdatesListItem modUpdatesListItem--healthy">
+                <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
+                <span className="modUpdatesListCopy">
+                  <strong>Everything is up to date</strong>
+                  <small><span>New {contentSingular} updates will appear here.</span></small>
+                </span>
               </span>
             </span>
           </span>
