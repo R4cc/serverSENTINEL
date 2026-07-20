@@ -530,6 +530,6 @@ export type ScheduleNavigationTarget =
 
 export type ThemePreference = "light" | "dark" | "system" | "xander" | "mint" | "nightlight" | "peach";
 
-export type LocalePreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
+export type RegionalFormatPreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
 
 export type DisplayTimeZonePreference = "panel" | "browser" | "utc";

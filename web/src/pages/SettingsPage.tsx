@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import type { DisplayTimeZonePreference, LocalePreference, PublicUser, ThemePreference } from "../types";
+import type { DisplayTimeZonePreference, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
@@ -8,6 +8,7 @@ import { ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/AuthPanel";
 import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
+import { resolveRegionalFormatLocale } from "../utils/format";
 
 type SettingsCategory = "appearance" | "console" | "integrations" | "users" | "system";
 
@@ -34,16 +35,14 @@ export type SettingsPageProps = {
   loading: boolean;
   themePreference: ThemePreference;
   relativeTimestamps: boolean;
-  dateLocalePreference: LocalePreference;
-  numberLocalePreference: LocalePreference;
+  regionalFormatPreference: RegionalFormatPreference;
   displayTimeZonePreference: DisplayTimeZonePreference;
   panelTimeZone: string;
   browserTimeZone: string;
   displayTimeZone: string;
   onThemeChange(value: ThemePreference): void;
   onRelativeTimestampsChange(value: boolean): void;
-  onDateLocaleChange(value: LocalePreference): void;
-  onNumberLocaleChange(value: LocalePreference): void;
+  onRegionalFormatChange(value: RegionalFormatPreference): void;
   onDisplayTimeZoneChange(value: DisplayTimeZonePreference): void;
   rememberConsoleHistory: boolean;
   consoleFontSize: ConsoleFontSize;
@@ -73,6 +72,8 @@ const categoryDetails: Record<SettingsCategory, { label: string; description: st
   users: { label: "Users", description: "Accounts, roles, and permissions" },
   system: { label: "System", description: "Panel health, runtime, and diagnostics" }
 };
+
+const regionalFormatExampleInstant = new Date("2026-07-20T14:30:00.000Z");
 
 function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -128,6 +129,24 @@ export function SettingsPage(props: SettingsPageProps) {
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(props.initialCategory ?? "appearance");
   const selectedCategory = categories.includes(activeCategory) ? activeCategory : "appearance";
   const systemSummary = summarizeSettingsSystemInfo(props.systemInfo);
+  const resolvedRegionalFormatLocale = resolveRegionalFormatLocale(props.regionalFormatPreference);
+  const regionalFormatExample = useMemo(() => {
+    const date = new Intl.DateTimeFormat(resolvedRegionalFormatLocale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: props.displayTimeZone
+    }).format(regionalFormatExampleInstant);
+    const number = new Intl.NumberFormat(resolvedRegionalFormatLocale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(12_345.67);
+    return `${date} · ${number}`;
+  }, [props.displayTimeZone, resolvedRegionalFormatLocale]);
+  const timeZoneExample = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: props.displayTimeZone
+  }).format(regionalFormatExampleInstant), [props.displayTimeZone, resolvedRegionalFormatLocale]);
 
   function handleCategoryKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -160,20 +179,21 @@ export function SettingsPage(props: SettingsPageProps) {
           <PreferenceRow title="Relative timestamps" description="Show times as “2 hours ago” instead of the full date and time.">
             <Toggle checked={props.relativeTimestamps} onChange={props.onRelativeTimestampsChange} label="Use relative timestamps" stateLabel={props.relativeTimestamps ? "Relative" : "Full date and time"} />
           </PreferenceRow>
-          <PreferenceRow title="Date format" description="Control how dates and times are displayed.">
-            <select aria-label="Date format" value={props.dateLocalePreference} onChange={(event) => props.onDateLocaleChange(event.target.value as LocalePreference)}>
-              <option value="user">Use browser default</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="de-DE">Deutsch (Deutschland)</option><option value="fr-FR">Français (France)</option><option value="ja-JP">日本語 (日本)</option>
-            </select>
+          <PreferenceRow title="Regional format" description="Use one regional convention for dates, times, and numbers.">
+            <div className="settingsHubControlStack">
+              <select aria-label="Regional format" value={props.regionalFormatPreference} onChange={(event) => props.onRegionalFormatChange(event.target.value as RegionalFormatPreference)}>
+                <option value="user">Browser default</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="de-DE">Deutsch (Deutschland)</option><option value="fr-FR">Français (France)</option><option value="ja-JP">日本語 (日本)</option>
+              </select>
+              <span className="settingsHubPreferenceExample" aria-live="polite">Example: {regionalFormatExample}</span>
+            </div>
           </PreferenceRow>
-          <PreferenceRow title="Display time zone" description={<>Show timestamps in {props.displayTimeZone}. Cron schedules continue to use {props.panelTimeZone}.</>}>
-            <select aria-label="Display time zone" value={props.displayTimeZonePreference} onChange={(event) => props.onDisplayTimeZoneChange(event.target.value as DisplayTimeZonePreference)}>
-              <option value="panel">Panel default ({props.panelTimeZone})</option><option value="browser">Browser local ({props.browserTimeZone})</option><option value="utc">UTC</option>
-            </select>
-          </PreferenceRow>
-          <PreferenceRow title="Number format" description="Control numeric formatting across metrics.">
-            <select aria-label="Number format" value={props.numberLocalePreference} onChange={(event) => props.onNumberLocaleChange(event.target.value as LocalePreference)}>
-              <option value="user">Use browser default</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="de-DE">Deutsch (Deutschland)</option><option value="fr-FR">Français (France)</option><option value="ja-JP">日本語 (日本)</option>
-            </select>
+          <PreferenceRow title="Time zone" description={<>Choose which time zone timestamps use. Schedules continue to use {props.panelTimeZone}.</>}>
+            <div className="settingsHubControlStack">
+              <select aria-label="Time zone" value={props.displayTimeZonePreference} onChange={(event) => props.onDisplayTimeZoneChange(event.target.value as DisplayTimeZonePreference)}>
+                <option value="panel">Panel time — {props.panelTimeZone}</option><option value="browser">This device — {props.browserTimeZone}</option><option value="utc">UTC</option>
+              </select>
+              <span className="settingsHubPreferenceExample" aria-live="polite">Showing {props.displayTimeZone}. Example: {timeZoneExample}</span>
+            </div>
           </PreferenceRow>
         </div>
       </>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRelativeTimestamp, formatTimestampForFilename, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, themePreferenceFromStoredValue } from "./format";
+import { formatRelativeTimestamp, formatTimestampForFilename, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
 
 describe("theme preference", () => {
   it("defaults to the system theme while preserving a saved choice", () => {
@@ -23,6 +23,30 @@ describe("display time zone preference", () => {
     expect(resolveDisplayTimeZone("panel", "Europe/Vienna", "America/New_York")).toBe("Europe/Vienna");
     expect(resolveDisplayTimeZone("browser", "Europe/Vienna", "America/New_York")).toBe("America/New_York");
     expect(resolveDisplayTimeZone("utc", "Europe/Vienna", "America/New_York")).toBe("UTC");
+  });
+});
+
+describe("regional format preference", () => {
+  it("uses the unified preference before legacy values", () => {
+    expect(regionalFormatPreferenceFromStoredValues("fr-FR", "en-US", "de-DE")).toBe("fr-FR");
+    expect(regionalFormatPreferenceFromStoredValues("invalid", "en-US", "de-DE")).toBe("user");
+  });
+
+  it("migrates the date preference first and falls back to the number preference", () => {
+    expect(regionalFormatPreferenceFromStoredValues(null, "en-US", "de-DE")).toBe("en-US");
+    expect(regionalFormatPreferenceFromStoredValues(null, "user", "de-DE")).toBe("de-DE");
+    expect(regionalFormatPreferenceFromStoredValues(null, null, "ja-JP")).toBe("ja-JP");
+    expect(regionalFormatPreferenceFromStoredValues(null, "invalid", "invalid")).toBe("user");
+  });
+
+  it("falls back to the browser default when storage is unavailable", () => {
+    const unavailableStorage = { getItem: () => { throw new Error("Storage unavailable"); } };
+    expect(readRegionalFormatPreference(unavailableStorage)).toBe("user");
+  });
+
+  it("resolves browser default and explicit locales", () => {
+    expect(resolveRegionalFormatLocale("user")).toBeUndefined();
+    expect(resolveRegionalFormatLocale("en-GB")).toBe("en-GB");
   });
 });
 

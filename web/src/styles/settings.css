@@ -226,6 +226,24 @@
   min-height: 44px;
 }
 
+.settingsHubControlStack {
+  width: min(100%, 310px);
+  display: grid;
+  gap: 7px;
+}
+
+.settingsHubControlStack > select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.settingsHubPreferenceExample {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: right;
+}
+
 .settingsHubControl > .uiButton {
   min-height: 44px;
 }
@@ -581,12 +599,17 @@
   }
 
   .settingsHubControl > select,
+  .settingsHubControlStack,
   .settingsHubControl > .uiButton,
   .settingsHubControl .keyForm,
   .settingsHubControl .keyFormActions .uiButton,
   .settingsHubControl .keyFormConfigured .uiButton {
     width: 100%;
     max-width: none;
+  }
+
+  .settingsHubPreferenceExample {
+    text-align: left;
   }
 
   .settingsHubToggle {

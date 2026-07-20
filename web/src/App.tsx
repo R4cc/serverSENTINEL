@@ -4,7 +4,7 @@ import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
@@ -204,10 +204,8 @@ export default function App() {
     setThemePreference,
     demoMode,
     setDemoMode,
-    dateLocalePreference,
-    setDateLocalePreference,
-    numberLocalePreference,
-    setNumberLocalePreference,
+    regionalFormatPreference,
+    setRegionalFormatPreference,
     displayTimeZonePreference,
     setDisplayTimeZonePreference,
     relativeTimestamps,
@@ -510,15 +508,14 @@ export default function App() {
             : isAnyModJobRunning
               ? `A ${managedContent.singular} operation is already running.`
               : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
-  const resolvedDateLocale = dateLocalePreference === "user" ? undefined : dateLocalePreference;
-  const resolvedNumberLocale = numberLocalePreference === "user" ? undefined : numberLocalePreference;
+  const resolvedRegionalFormatLocale = resolveRegionalFormatLocale(regionalFormatPreference);
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
   const browserTimeZone = useMemo(() => detectedBrowserTimeZone(), []);
   const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedDateLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedDateLocale, displayTimeZone]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedNumberLocale), [resolvedNumberLocale]);
+  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedRegionalFormatLocale), [resolvedRegionalFormatLocale]);
 
   function formatDisplayDate(value: string | number | Date) {
     return dateTimeFormatter.format(new Date(value));
@@ -2571,16 +2568,14 @@ export default function App() {
             loading={settingsDataLoading}
             themePreference={themePreference}
             relativeTimestamps={relativeTimestamps}
-            dateLocalePreference={dateLocalePreference}
-            numberLocalePreference={numberLocalePreference}
+            regionalFormatPreference={regionalFormatPreference}
             displayTimeZonePreference={displayTimeZonePreference}
             panelTimeZone={panelTimeZone}
             browserTimeZone={browserTimeZone}
             displayTimeZone={displayTimeZone}
             onThemeChange={setThemePreference}
             onRelativeTimestampsChange={setRelativeTimestamps}
-            onDateLocaleChange={setDateLocalePreference}
-            onNumberLocaleChange={setNumberLocalePreference}
+            onRegionalFormatChange={setRegionalFormatPreference}
             onDisplayTimeZoneChange={setDisplayTimeZonePreference}
             rememberConsoleHistory={rememberConsoleHistory}
             consoleFontSize={consoleFontSize}
