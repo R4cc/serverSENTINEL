@@ -46,7 +46,9 @@ export function MinecraftTerminal({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const initialRenderCompleteRef = useRef(false);
   const previousEntriesRef = useRef<string[]>([]);
+  const entriesRef = useRef(entries);
   const logDecoderRef = useRef(new MinecraftLogStreamDecoder());
   const canSendCommandsRef = useRef(canSendCommands);
   const commandHistoryRef = useRef(commandHistory);
@@ -57,6 +59,8 @@ export function MinecraftTerminal({
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
   const promptVisibleRef = useRef(false);
+
+  entriesRef.current = entries;
 
   useEffect(() => {
     canSendCommandsRef.current = canSendCommands;
@@ -143,24 +147,31 @@ export function MinecraftTerminal({
       terminal.scrollToBottom();
       if (terminal.element) terminal.element.scrollTop = 0;
     };
-    const handleViewportResize = () => {
-      window.requestAnimationFrame(() => {
+    let fitFrame: number | null = null;
+    const scheduleFit = () => {
+      if (fitFrame !== null) return;
+      fitFrame = window.requestAnimationFrame(() => {
+        fitFrame = null;
         fit();
-        keepFocusedPromptVisible();
       });
+    };
+    const handleViewportResize = () => {
+      scheduleFit();
+      window.requestAnimationFrame(keepFocusedPromptVisible);
     };
     const handleTerminalFocus = () => {
       window.requestAnimationFrame(keepFocusedPromptVisible);
     };
 
-    handleViewportResize();
     visualViewport?.addEventListener("resize", handleViewportResize);
     window.addEventListener("resize", handleViewportResize);
     terminal.textarea?.addEventListener("focus", handleTerminalFocus);
 
-    const initialRenderFrame = window.requestAnimationFrame(() => {
+    fitFrame = window.requestAnimationFrame(() => {
+      fitFrame = null;
       fit();
-      writeEntries([], entries);
+      initialRenderCompleteRef.current = true;
+      writeEntries([], entriesRef.current);
       if (canSendCommandsRef.current) writePrompt();
       terminal.write("", () => {
         if (terminalRef.current !== terminal) return;
@@ -169,14 +180,14 @@ export function MinecraftTerminal({
       });
     });
 
-    const resizeObserver = new ResizeObserver(() => fit());
+    const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
 
     disposables.push(terminal.onData(handleTerminalData));
     terminal.attachCustomKeyEventHandler(handleTerminalKey);
 
     return () => {
-      window.cancelAnimationFrame(initialRenderFrame);
+      if (fitFrame !== null) window.cancelAnimationFrame(fitFrame);
       resizeObserver.disconnect();
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchmove", handleTouchMove);
@@ -188,6 +199,7 @@ export function MinecraftTerminal({
       disposables.forEach((disposable) => disposable.dispose());
       fitAddonRef.current = null;
       terminalRef.current = null;
+      initialRenderCompleteRef.current = false;
       terminal.dispose();
     };
   }, []);
@@ -201,7 +213,7 @@ export function MinecraftTerminal({
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal) return;
+    if (!terminal || !initialRenderCompleteRef.current) return;
     terminal.options.fontSize = fontSize;
     window.requestAnimationFrame(() => {
       try {
@@ -214,19 +226,19 @@ export function MinecraftTerminal({
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal) return;
+    if (!terminal || !initialRenderCompleteRef.current) return;
     terminal.options.scrollback = scrollback;
   }, [scrollback]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal) return;
+    if (!terminal || !initialRenderCompleteRef.current) return;
     writeEntries(previousEntriesRef.current, entries);
   }, [entries]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal) return;
+    if (!terminal || !initialRenderCompleteRef.current) return;
     if (canSendCommands) {
       if (!promptVisibleRef.current) writePrompt();
       return;

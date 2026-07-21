@@ -169,6 +169,7 @@ export default function App() {
   const [overviewError, setOverviewError] = useState("");
   const [statusError, setStatusError] = useState("");
   const [consoleLoading, setConsoleLoading] = useState(false);
+  const [consoleSnapshotReadyServerId, setConsoleSnapshotReadyServerId] = useState("");
   const [consoleError, setConsoleError] = useState("");
   const [consoleConnectionState, setConsoleConnectionState] = useState<ConsoleConnectionState>("connecting");
   const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
@@ -866,6 +867,7 @@ export default function App() {
     if (serverChanged) {
       logsRef.current = [];
       setLogs([]);
+      setConsoleSnapshotReadyServerId("");
       setStatusError("");
       setConsoleError("");
       setConsoleConnectionState("connecting");
@@ -887,6 +889,7 @@ export default function App() {
       ];
       logsRef.current = demoLogs;
       setLogs(demoLogs);
+      setConsoleSnapshotReadyServerId(activeServer.id);
       setConsoleConnectionState("live");
       return;
     }
@@ -900,6 +903,7 @@ export default function App() {
       setOverviewLoading(false);
       filesWorkspace.actions.setFilesLoading(false);
       setConsoleLoading(false);
+      setConsoleSnapshotReadyServerId(activeServer.id);
       filesWorkspace.actions.setListing({ path: "/", entries: [] });
       return;
     }
@@ -1332,6 +1336,8 @@ export default function App() {
     setResourceSamples([]);
     setConsoleError("");
     filesWorkspace.actions.setFilesError("");
+    consoleLogServerIdRef.current = "";
+    setConsoleSnapshotReadyServerId("");
     setLogs([]);
     filesWorkspace.actions.clearWorkspace();
     notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
@@ -1437,6 +1443,8 @@ export default function App() {
     setAppStateLoaded(false);
     setActiveServerId("");
     setStatus(null);
+    consoleLogServerIdRef.current = "";
+    setConsoleSnapshotReadyServerId("");
     setLogs([]);
     staleSessionLogoutRef.current = false;
     staleSessionSuppressUntilRef.current = 0;
@@ -1542,6 +1550,7 @@ export default function App() {
           consoleLine("[demo] Starting minecraft server version 1.21.4"),
           consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
         ]);
+        setConsoleSnapshotReadyServerId(serverId);
       }
       return true;
     }
@@ -1570,7 +1579,10 @@ export default function App() {
       }
       return false;
     } finally {
-      if (activeServerIdRef.current === serverId) setConsoleLoading(false);
+      if (activeServerIdRef.current === serverId) {
+        setConsoleLoading(false);
+        setConsoleSnapshotReadyServerId(serverId);
+      }
     }
   }
 
@@ -2873,19 +2885,23 @@ export default function App() {
                     </div>}
                   />
                   <div className="terminal">
-                    <Suspense fallback={<TerminalLoadingSkeleton />}>
-                      <MinecraftTerminal
-                        entries={logs}
-                        canSendCommands={canSendConsoleCommands}
-                        disabledReason={consoleCommandDisabledReason}
-                        commandHistory={commandHistory}
-                        fontSize={consoleFontSize}
-                        scrollback={consoleScrollback}
-                        onCommand={(command) => {
-                          void sendCommand(command);
-                        }}
-                      />
-                    </Suspense>
+                    {consoleSnapshotReadyServerId !== activeServer.id ? (
+                      <TerminalLoadingSkeleton />
+                    ) : (
+                      <Suspense fallback={<TerminalLoadingSkeleton />}>
+                        <MinecraftTerminal
+                          entries={logs}
+                          canSendCommands={canSendConsoleCommands}
+                          disabledReason={consoleCommandDisabledReason}
+                          commandHistory={commandHistory}
+                          fontSize={consoleFontSize}
+                          scrollback={consoleScrollback}
+                          onCommand={(command) => {
+                            void sendCommand(command);
+                          }}
+                        />
+                      </Suspense>
+                    )}
                   </div>
                 </section>
               </section>
