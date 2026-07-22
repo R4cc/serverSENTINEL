@@ -4,7 +4,7 @@
 
 Upgrade the panel before the nodes. The upgraded panel operates protocol 3.1 nodes in current mode, keeps protocol 3.0 nodes fully usable through their legacy commands, and accepts protocol 2.0 nodes only long enough to invoke node self-update. Upgrade protocol 3.0 nodes when practical to enable batched monitoring, cancellation, heartbeat enforcement, and streamed binary transfers.
 
-Protocol 3.1 limits JSON control frames to 8 MiB, active commands to 64, ordinary streams to 32, binary transfers to four, observation batches to 32 servers, and binary chunks to 256 KiB. Regular file uploads remain limited to 32 MiB and managed mod/plugin uploads to 128 MiB. The configured panel download limit applies to remote downloads. Protocol 3.0 JSON/base64 transfers above 72 MiB are rejected with an update-required error before they can approach the WebSocket message limit.
+Protocol 3.1 limits JSON control frames to 8 MiB, active commands to 64, ordinary streams to 32, binary transfers to four, observation batches to 32 servers, and binary chunks to 256 KiB. Regular file uploads are limited to 256 MiB and managed mod/plugin uploads to 128 MiB. The configured panel download limit applies to remote downloads. Protocol 3.0 JSON/base64 transfers above 72 MiB are rejected with an update-required error before they can approach the WebSocket message limit.
 
 The existing JSON upload request bodies and download URLs remain compatible. The bundled web client now uses multipart uploads, and the panel streams multipart file parts into local temporary sibling files or protocol 3.1 binary transfers. Uploads are committed by atomic rename only after size, type, and SHA-256 checks pass; partial data is removed after cancellation, disconnect, failure, or shutdown.
 

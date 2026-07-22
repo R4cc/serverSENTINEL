@@ -87,7 +87,7 @@ export function timelinePlayerActivity(input: {
     seenPlayers.add(key);
   }
 
-  const onlineNames = input.snapshot?.state === "live"
+  const onlineNames = input.snapshot?.state === "live" || input.snapshot?.state === "stale"
     ? input.snapshot.names.map((name) => rememberName(name).player)
     : [];
   const onlineKeys = new Set(onlineNames.map(playerKey));
