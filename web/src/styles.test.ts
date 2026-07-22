@@ -78,6 +78,22 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).not.toContain(".automationTimeline");
   });
 
+  it("leaves room for descenders in truncated overview metric values", () => {
+    expect(overviewStyles).toMatch(
+      /\.overviewSummary \.uiMetricTileCopy > strong\s*\{[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*2px;[^}]*text-overflow:\s*ellipsis;/s
+    );
+  });
+
+  it("uses pointer-positioned glow colors for every overview status family", () => {
+    expect(overviewStyles).toMatch(/\.statusGlowTile\.running\s*\{\s*--status-glow-color:\s*var\(--sentinel-success\);/s);
+    expect(overviewStyles).toMatch(/\.statusGlowTile\.warning\s*\{\s*--status-glow-color:\s*var\(--sentinel-warning\);/s);
+    expect(overviewStyles).toMatch(/\.statusGlowTile\.stopped,\s*\.overviewSummary \.statusGlowTile\.danger\s*\{\s*--status-glow-color:\s*var\(--sentinel-danger\);/s);
+    expect(overviewStyles).toMatch(/\.statusGlowTile::before\s*\{[^}]*display:\s*block;[^}]*z-index:\s*0;[^}]*radial-gradient\(\s*circle 150px at var\(--status-glow-x\) var\(--status-glow-y\)/s);
+    expect(overviewStyles).toMatch(/\.statusGlowTile > \.uiMetricTileMarker,\s*\.overviewSummary \.statusGlowTile > \.uiMetricTileCopy\s*\{[^}]*z-index:\s*1;/s);
+    expect(overviewStyles).toMatch(/\.statusGlowTile:hover,\s*\.overviewSummary \.statusGlowTile\[data-glow-active="true"\]\s*\{[^}]*translateY\(-2px\)[^}]*rotateX\(var\(--status-tilt-x\)\)/s);
+    expect(overviewStyles).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.statusGlowTile\[data-glow-active="true"\],[\s\S]*?transform:\s*none;/s);
+  });
+
   it("keeps upcoming schedule hover states subtle with clean outer corners", () => {
     expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:first-child\s*\{[^}]*border-radius:\s*var\(--radius-sm\) var\(--radius-sm\) 0 0;/s);
     expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:last-child\s*\{[^}]*border-radius:\s*0 0 var\(--radius-sm\) var\(--radius-sm\);/s);

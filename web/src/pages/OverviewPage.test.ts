@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "../demo";
-import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
+import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent, ServerStatus } from "../types";
 import {
   ActivePlayersPanel,
   buildUpcomingScheduleSnapshot,
@@ -15,7 +15,8 @@ import {
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
-  SchedulePanel
+  SchedulePanel,
+  statusGlowGeometry
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -115,6 +116,50 @@ describe("overview summary", () => {
     expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
+  });
+
+  it.each<[
+    string,
+    string,
+    string,
+    { running?: boolean; lifecycleState?: ServerStatus["lifecycle"]["state"]; socketMounted?: boolean }
+  ]>([
+    ["running", "success", "Running", { running: true }],
+    ["stopped", "danger", "Stopped", { running: false }],
+    ["warning", "warning", "Recovering (1/3)", { lifecycleState: "recovering" }],
+    ["danger", "danger", "Crash loop", { lifecycleState: "crash-loop" }],
+    ["neutral", "neutral", "Unavailable", { socketMounted: false }]
+  ])("gives the %s status family its reactive semantic tone", (stateClass, metricTone, label, setup) => {
+    const server = demoServer();
+    const running = setup.running ?? true;
+    const baseStatus = demoStatus(server, running);
+    const status = setup.lifecycleState
+      ? { ...baseStatus, lifecycle: { ...baseStatus.lifecycle, state: setup.lifecycleState } }
+      : baseStatus;
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status,
+      dockerSocketMounted: setup.socketMounted ?? true,
+      activity: demoOverviewData(running).activity,
+      playerSnapshot: demoPlayerSnapshot(running)
+    }));
+
+    expect(html).toContain(`statusGlowTile ${stateClass}`);
+    expect(html).toContain(`uiMetricTile--${metricTone}`);
+    expect(html).toContain(`>${label}</span>`);
+  });
+
+  it("maps pointer position to a clamped glow origin and subtle card tilt", () => {
+    expect(statusGlowGeometry(150, 75, { left: 100, top: 50, width: 200, height: 100 })).toEqual({
+      xPercent: 25,
+      yPercent: 25,
+      rotateX: 0.375,
+      rotateY: -0.375
+    });
+    expect(statusGlowGeometry(600, -20, { left: 100, top: 50, width: 200, height: 100 })).toMatchObject({
+      xPercent: 100,
+      yPercent: 0
+    });
   });
 });
 

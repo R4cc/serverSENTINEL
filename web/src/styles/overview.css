@@ -1487,6 +1487,86 @@ button.overviewCardRow:focus-visible {
   box-shadow: none;
 }
 
+.overviewSummary .statusGlowTile {
+  --status-glow-color: var(--sentinel-info);
+  --status-glow-x: 50%;
+  --status-glow-y: 50%;
+  --status-tilt-x: 0deg;
+  --status-tilt-y: 0deg;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--status-glow-color) 7%, var(--surface-raised));
+  transform: perspective(640px) rotateX(var(--status-tilt-x)) rotateY(var(--status-tilt-y));
+  transform-style: preserve-3d;
+  transition:
+    border-color var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-slow) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-spring);
+  will-change: transform;
+}
+
+.overviewSummary .statusGlowTile.running { --status-glow-color: var(--sentinel-success); }
+.overviewSummary .statusGlowTile.warning { --status-glow-color: var(--sentinel-warning); }
+.overviewSummary .statusGlowTile.stopped,
+.overviewSummary .statusGlowTile.danger { --status-glow-color: var(--sentinel-danger); }
+
+.overviewSummary .statusGlowTile::before {
+  content: "";
+  display: block;
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 150px at var(--status-glow-x) var(--status-glow-y),
+    color-mix(in srgb, var(--status-glow-color) 28%, transparent),
+    color-mix(in srgb, var(--status-glow-color) 10%, transparent) 38%,
+    transparent 72%
+  );
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) ease;
+  pointer-events: none;
+}
+
+.overviewSummary .statusGlowTile > .uiMetricTileMarker,
+.overviewSummary .statusGlowTile > .uiMetricTileCopy {
+  position: relative;
+  z-index: 1;
+}
+
+.overviewSummary .statusGlowTile:hover,
+.overviewSummary .statusGlowTile[data-glow-active="true"] {
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--status-glow-color) 58%, var(--border-panel));
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--status-glow-color) 20%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--status-glow-color) 13%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
+  transform: perspective(640px) translateY(-2px) rotateX(var(--status-tilt-x)) rotateY(var(--status-tilt-y));
+}
+
+.overviewSummary .statusGlowTile:hover::before,
+.overviewSummary .statusGlowTile[data-glow-active="true"]::before {
+  opacity: 1;
+}
+
+.overviewSummary .statusGlowTile .uiMetricTileMarker {
+  transition:
+    background var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-base) ease,
+    transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.overviewSummary .statusGlowTile:hover .uiMetricTileMarker,
+.overviewSummary .statusGlowTile[data-glow-active="true"] .uiMetricTileMarker {
+  background: color-mix(in srgb, var(--status-glow-color) 34%, transparent);
+  box-shadow:
+    inset 0 0 0 8px color-mix(in srgb, var(--status-glow-color) 12%, transparent),
+    0 0 18px color-mix(in srgb, var(--status-glow-color) 42%, transparent);
+  transform: scaleY(1.12);
+}
+
 .resourceMetricLabel > span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -1521,8 +1601,22 @@ button.overviewCardRow:focus-visible {
   color: var(--sentinel-danger);
 }
 
+.overviewSummary .summaryTile.state.warning .summaryStatusText {
+  color: var(--status-warning-foreground);
+}
+
 .overviewSummary .summaryTile.state.neutral .summaryStatusText {
-  color: var(--text);
+  color: var(--status-neutral-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overviewSummary .statusGlowTile,
+  .overviewSummary .statusGlowTile:hover,
+  .overviewSummary .statusGlowTile[data-glow-active="true"],
+  .overviewSummary .statusGlowTile .uiMetricTileMarker {
+    transition: none;
+    transform: none;
+  }
 }
 
 .resourceRow,
@@ -1659,7 +1753,6 @@ button.overviewCardRow:focus-visible {
     gap: 10px;
     padding: var(--space-3);
     border-color: var(--border-panel);
-    background: var(--surface-raised);
     box-shadow: none;
   }
 
@@ -1673,6 +1766,7 @@ button.overviewCardRow:focus-visible {
   .overviewSummary .uiMetricTileCopy > strong {
     display: block;
     overflow: hidden;
+    padding-bottom: 2px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }

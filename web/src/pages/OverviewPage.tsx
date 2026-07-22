@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type {
   ManagedServer,
   ModUpdatePlan,
@@ -59,6 +59,38 @@ function summaryMetricTone(status: ServerStatus | null, dockerSocketMounted: boo
   if (tone === "warning") return "warning" as const;
   if (tone === "danger" || tone === "stopped") return "danger" as const;
   return "neutral" as const;
+}
+
+export function statusGlowGeometry(
+  clientX: number,
+  clientY: number,
+  bounds: Pick<DOMRect, "left" | "top" | "width" | "height">
+) {
+  const normalizedX = Math.min(1, Math.max(0, (clientX - bounds.left) / Math.max(bounds.width, 1)));
+  const normalizedY = Math.min(1, Math.max(0, (clientY - bounds.top) / Math.max(bounds.height, 1)));
+
+  return {
+    xPercent: normalizedX * 100,
+    yPercent: normalizedY * 100,
+    rotateX: (0.5 - normalizedY) * 1.5,
+    rotateY: (normalizedX - 0.5) * 1.5
+  };
+}
+
+function updateStatusGlow(event: ReactPointerEvent<HTMLElement>) {
+  const tile = event.currentTarget;
+  const geometry = statusGlowGeometry(event.clientX, event.clientY, tile.getBoundingClientRect());
+  tile.dataset.glowActive = "true";
+  tile.style.setProperty("--status-glow-x", `${geometry.xPercent.toFixed(2)}%`);
+  tile.style.setProperty("--status-glow-y", `${geometry.yPercent.toFixed(2)}%`);
+  tile.style.setProperty("--status-tilt-x", `${geometry.rotateX.toFixed(2)}deg`);
+  tile.style.setProperty("--status-tilt-y", `${geometry.rotateY.toFixed(2)}deg`);
+}
+
+function resetStatusGlow(event: ReactPointerEvent<HTMLElement>) {
+  delete event.currentTarget.dataset.glowActive;
+  event.currentTarget.style.setProperty("--status-tilt-x", "0deg");
+  event.currentTarget.style.setProperty("--status-tilt-y", "0deg");
 }
 
 function OverviewCard({
@@ -139,10 +171,13 @@ export function OverviewSummary({
     <section className="overviewSummary" aria-busy={loading}>
       {loading && <LoadingLabel>Loading server summary</LoadingLabel>}
       <MetricTile
-        className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}
+        className={`summaryTile state statusGlowTile ${summaryTone(status, dockerSocketMounted)}`}
         label="Status"
         tone={summaryMetricTone(status, dockerSocketMounted)}
         value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
+        onPointerEnter={updateStatusGlow}
+        onPointerMove={updateStatusGlow}
+        onPointerLeave={resetStatusGlow}
       />
       <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
       <MetricTile className="summaryTile" label={runtime.displayName} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)} />
