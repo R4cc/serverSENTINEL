@@ -454,7 +454,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .serverTimelinePlayerAxis,
-.serverTimelinePlayerRow {
+.serverTimelinePlayerGroupBody {
   display: grid;
   grid-template-columns: var(--timeline-label-gutter) minmax(0, 1fr);
 }
@@ -529,21 +529,35 @@ button.overviewCardRow:focus-visible {
   font-weight: var(--weight-meta);
 }
 
-.serverTimelinePlayerRow {
-  min-height: 40px;
-  border-bottom: 1px solid var(--border-muted);
+.serverTimelinePlayerGroupBody { min-height: 40px; }
+
+.serverTimelinePlayerIdentities,
+.serverTimelinePlayerChart {
+  min-width: 0;
+  height: 100%;
 }
 
-.serverTimelinePlayerGroup:last-child .serverTimelinePlayerRow:last-child { border-bottom: 0; }
+.serverTimelinePlayerIdentities {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.serverTimelinePlayerChart {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-raised) 96%, var(--surface-muted));
+}
 
 .serverTimelinePlayerIdentity {
   min-width: 0;
+  height: 40px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-muted);
 }
+
+.serverTimelinePlayerIdentity:last-child { border-bottom-color: transparent; }
 
 .serverTimelinePlayerIdentity strong {
   min-width: 0;
@@ -577,85 +591,6 @@ button.overviewCardRow:focus-visible {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-
-.serverTimelinePlayerTrack {
-  position: relative;
-  min-width: 0;
-  margin-right: 24px;
-  overflow: hidden;
-  background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(16.666% - 1px), var(--border-muted) calc(16.666% - 1px), var(--border-muted) 16.666%);
-}
-
-.serverTimelineNowLine {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  border-left: 1px dashed var(--accent);
-  pointer-events: none;
-}
-
-.serverTimelineSession {
-  --session-color: var(--timeline-leave);
-  position: absolute;
-  z-index: 2;
-  top: 21px;
-  height: 2px;
-  min-width: 2px;
-  border-radius: 999px;
-  background: var(--session-color);
-  color: var(--session-color);
-  outline: none;
-}
-
-.serverTimelineSession.tone-online { --session-color: var(--timeline-join); }
-
-.serverTimelineSession::before,
-.serverTimelineSession::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  transform: translateY(-50%);
-  border: 1.5px solid var(--session-color);
-  border-radius: 999px;
-  background: var(--surface-raised);
-}
-
-.serverTimelineSession::before { left: -3px; background: var(--session-color); }
-.serverTimelineSession::after { right: -3px; }
-.serverTimelineSession.is-open::after { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 16%, transparent); }
-.serverTimelineSession.is-start-clipped::before { width: 8px; height: 2px; left: 0; border: 0; border-radius: 0; background: linear-gradient(to right, transparent, var(--session-color)); }
-.serverTimelineSession.is-end-clipped::after { width: 8px; height: 2px; right: 0; border: 0; border-radius: 0; background: linear-gradient(to left, transparent, var(--session-color)); }
-.serverTimelineSession:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 22%, transparent); }
-
-.serverTimelineSessionDuration,
-.serverTimelineSessionTime {
-  position: absolute;
-  z-index: 2;
-  color: var(--text);
-  font-size: 9px;
-  line-height: 1;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.serverTimelineSessionDuration {
-  top: -5px;
-  left: 50%;
-  transform: translate(-50%, -100%);
-  padding: 1px 4px;
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--text);
-  font-weight: var(--weight-title);
-}
-
-.serverTimelineSessionTime { top: 7px; color: var(--text-muted); }
-.serverTimelineSessionTime.is-start { left: 0; transform: translateX(-20%); }
-.serverTimelineSessionTime.is-end { right: 0; transform: translateX(20%); }
 
 .serverTimelinePlayerEmpty {
   min-height: 64px;

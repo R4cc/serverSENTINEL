@@ -11,6 +11,14 @@ import type {
 import { groupNearbyRepeatedEvents } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
 import { EventIcon } from "./EventIcon";
+import {
+  buildPlayerTimelineChartOption,
+  formatTimelineDuration,
+  playerTimelineRowHeight,
+  timelineSessionGeometry,
+  type PlayerTimelineRow,
+  type TimelineSessionGeometry
+} from "./playerTimelineChart";
 import { RuntimeControlIcon } from "./RuntimeControls";
 import {
   buildTimelineChartOption,
@@ -49,20 +57,9 @@ type MetricBand = {
   prominent: boolean;
 };
 
-export type TimelinePlayerRow = {
-  player: string;
-  online: boolean;
-  sessions: ServerTimelinePlayerSession[];
-};
-
-export type TimelineSessionGeometry = {
-  leftPercent: number;
-  widthPercent: number;
-  startClipped: boolean;
-  endClipped: boolean;
-  lowerBound: boolean;
-  durationMs: number;
-};
+export type TimelinePlayerRow = PlayerTimelineRow;
+export type { TimelineSessionGeometry };
+export { formatTimelineDuration, timelineSessionGeometry };
 
 export type TimelineMarker = {
   id: string;
@@ -208,31 +205,6 @@ export function timelinePlayerRows(data: ServerTimelineResponse | null, viewport
   return [...rows.values()]
     .map((row) => ({ ...row, sessions: row.sessions.sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id)) }))
     .sort((left, right) => Number(right.online) - Number(left.online) || left.player.localeCompare(right.player, undefined, { sensitivity: "base" }));
-}
-
-export function timelineSessionGeometry(session: ServerTimelinePlayerSession, viewport: TimelineWindow, now: number): TimelineSessionGeometry | null {
-  const sessionEnd = session.endedAt ?? now;
-  const visibleStart = Math.max(session.startedAt, viewport.from);
-  const visibleEnd = Math.min(sessionEnd, viewport.to);
-  if (visibleEnd < visibleStart || viewport.to <= viewport.from) return null;
-  const span = viewport.to - viewport.from;
-  return {
-    leftPercent: (visibleStart - viewport.from) / span * 100,
-    widthPercent: Math.max(0.16, (visibleEnd - visibleStart) / span * 100),
-    startClipped: session.startBoundary === "history-boundary" || session.startedAt < viewport.from,
-    endClipped: session.endBoundary === "history-boundary" || sessionEnd > viewport.to,
-    lowerBound: session.startBoundary === "history-boundary" || session.endBoundary === "history-boundary",
-    durationMs: Math.max(0, sessionEnd - session.startedAt)
-  };
-}
-
-export function formatTimelineDuration(milliseconds: number) {
-  const totalMinutes = Math.max(0, Math.floor(milliseconds / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours) return `${hours}h ${minutes}m`;
-  if (totalMinutes) return `${totalMinutes}m`;
-  return "<1m";
 }
 
 const timelineLifecycleEventTypes = new Set<ServerTimelineEvent["eventType"]>([
@@ -553,8 +525,10 @@ function PlayerStatusIcon({ online }: { online: boolean }) {
 
 function PlayerSessionSection({
   rows,
+  query,
   viewport,
   now,
+  palette,
   formatShortTime,
   onPointerDown,
   onPointerMove,
@@ -562,8 +536,10 @@ function PlayerSessionSection({
   onWheel
 }: {
   rows: TimelinePlayerRow[];
+  query: TimelineWindow;
   viewport: TimelineWindow;
   now: number;
+  palette: TimelinePalette;
   formatShortTime: (value: string | number | Date) => string;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -573,51 +549,27 @@ function PlayerSessionSection({
   const onlineRows = rows.filter((row) => row.online);
   const offlineRows = rows.filter((row) => !row.online);
   const ticks = Array.from({ length: 7 }, (_, index) => viewport.from + (viewport.to - viewport.from) * index / 6);
-  const nowPercent = now >= viewport.from && now <= viewport.to ? (now - viewport.from) / (viewport.to - viewport.from) * 100 : null;
   const renderGroup = (label: string, groupRows: TimelinePlayerRow[], online: boolean) => {
     if (!groupRows.length) return null;
+    const option = buildPlayerTimelineChartOption({ rows: groupRows, query, viewport, now, palette, formatShortTime });
     return (
       <section className={`serverTimelinePlayerGroup tone-${online ? "online" : "offline"}`} aria-label={`${label}, ${groupRows.length} players`}>
         <div className="serverTimelinePlayerGroupHeader">
           <span>{label}</span><small>({groupRows.length})</small>
         </div>
-        {groupRows.map((row) => (
-          <div className="serverTimelinePlayerRow" key={row.player.toLocaleLowerCase()}>
-            <div className="serverTimelinePlayerIdentity">
-              <PlayerStatusIcon online={row.online} />
-              <strong title={row.player}>{row.player}</strong>
-            </div>
-            <div className="serverTimelinePlayerTrack">
-              {nowPercent !== null && <span className="serverTimelineNowLine" style={{ left: `${nowPercent}%` }} aria-hidden="true" />}
-              {row.sessions.map((session) => {
-                const geometry = timelineSessionGeometry(session, viewport, now);
-                if (!geometry) return null;
-                const exactStartVisible = session.startBoundary === "join" && session.startedAt >= viewport.from;
-                const exactEndVisible = (session.endBoundary === "leave" || session.endBoundary === "server-end")
-                  && session.endedAt !== null
-                  && session.endedAt <= viewport.to;
-                const duration = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(geometry.durationMs)}`;
-                const title = `${row.player}: ${exactStartVisible ? formatShortTime(session.startedAt) : "before visible history"} – ${session.endBoundary === "online" ? "online now" : exactEndVisible && session.endedAt !== null ? formatShortTime(session.endedAt) : "outside visible history"}; ${duration}`;
-                return (
-                  <span
-                    className={`serverTimelineSession tone-${row.online ? "online" : "offline"}${session.endBoundary === "online" ? " is-open" : ""}${geometry.startClipped ? " is-start-clipped" : ""}${geometry.endClipped ? " is-end-clipped" : ""}`}
-                    key={session.id}
-                    style={{ left: `${geometry.leftPercent}%`, width: `${geometry.widthPercent}%` }}
-                    tabIndex={0}
-                    title={title}
-                    aria-label={title}
-                  >
-                    {exactStartVisible && <time className="serverTimelineSessionTime is-start" dateTime={new Date(session.startedAt).toISOString()}>{formatShortTime(session.startedAt)}</time>}
-                    <span className="serverTimelineSessionDuration">{duration}</span>
-                    {session.endBoundary === "online"
-                      ? <span className="serverTimelineSessionTime is-end">Now</span>
-                      : exactEndVisible && session.endedAt !== null && <time className="serverTimelineSessionTime is-end" dateTime={new Date(session.endedAt).toISOString()}>{formatShortTime(session.endedAt)}</time>}
-                  </span>
-                );
-              })}
-            </div>
+        <div className="serverTimelinePlayerGroupBody" style={{ height: groupRows.length * playerTimelineRowHeight }}>
+          <div className="serverTimelinePlayerIdentities">
+            {groupRows.map((row) => (
+              <div className="serverTimelinePlayerIdentity" key={row.player.toLocaleLowerCase()}>
+                <PlayerStatusIcon online={row.online} />
+                <strong title={row.player}>{row.player}</strong>
+              </div>
+            ))}
           </div>
-        ))}
+          <div className="serverTimelinePlayerChart" aria-label={`${label} session chart`}>
+            <EChartsCanvas option={option} onDataZoom={() => undefined} />
+          </div>
+        </div>
       </section>
     );
   };
@@ -1215,8 +1167,10 @@ export function ServerTimeline({
         {annotationEnabled.player && (
           <PlayerSessionSection
             rows={playerRows}
+            query={query}
             viewport={viewport}
             now={clockNow}
+            palette={palette}
             formatShortTime={formatShortTime}
             onPointerDown={handleSessionPointerDown}
             onPointerMove={handleSessionPointerMove}

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { LineChart } from "echarts/charts";
+import { CustomChart, LineChart } from "echarts/charts";
 import {
   AriaComponent,
   DataZoomInsideComponent,
@@ -11,6 +11,7 @@ import { SVGRenderer } from "echarts/renderers";
 
 use([
   LineChart,
+  CustomChart,
   AriaComponent,
   DataZoomInsideComponent,
   GridComponent,
