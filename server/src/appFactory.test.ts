@@ -191,7 +191,13 @@ describe("Fastify application factory", () => {
           payload
         });
         expect(response.statusCode, response.body).toBe(403);
-        expect(response.json().message).toBe("You need permission to manage integrations before performing this action.");
+        expect(response.json()).toEqual({
+          error: {
+            code: "PERMISSION_DENIED",
+            message: "You need permission to manage integrations before performing this action.",
+            details: {}
+          }
+        });
       }
     } finally {
       await app.close();

@@ -4443,6 +4443,24 @@ const app = Fastify({
   logController: new LogController({ disableRequestLogging: true }),
   bodyLimit: 180 * 1024 * 1024
 });
+app.setErrorHandler((error, request, reply) => {
+  const expectedUserError = isExpectedUserError(error);
+  const statusCode = errorStatusCode(error, reply, expectedUserError);
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const fields = {
+    ...routeLogFields(request, statusCode),
+    category: errorCategory(error, statusCode),
+    ...errorLogFields(error, statusCode)
+  };
+  if (statusCode >= 500) {
+    app.log.error(fields, "API request failed");
+  } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
+    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
+  } else {
+    app.log.warn(fields, "API request rejected");
+  }
+  reply.code(statusCode).send(publicApiError(error, statusCode));
+});
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;
   panelNodeConnections.close();
@@ -8561,25 +8579,6 @@ app.addHook("onClose", async () => {
 });
 
 await registerStaticFrontend(app);
-
-app.setErrorHandler((error, _request, reply) => {
-  const expectedUserError = isExpectedUserError(error);
-  const statusCode = errorStatusCode(error, reply, expectedUserError);
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const fields = {
-    ...routeLogFields(_request, statusCode),
-    category: errorCategory(error, statusCode),
-    ...errorLogFields(error, statusCode)
-  };
-  if (statusCode >= 500) {
-    app.log.error(fields, "API request failed");
-  } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
-    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
-  } else {
-    app.log.warn(fields, "API request rejected");
-  }
-  reply.code(statusCode).send(publicApiError(error, statusCode));
-});
 
 let scheduleTimer: NodeJS.Timeout | undefined;
 let schedulerClosed = false;
