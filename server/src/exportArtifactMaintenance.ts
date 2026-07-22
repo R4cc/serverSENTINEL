@@ -17,6 +17,8 @@ type ExportArtifactMetadata = {
 export type ExportOperationResult = {
   artifact?: ExportArtifactMetadata;
   artifactPath?: string;
+  serverIds?: string[];
+  includeInstance?: boolean;
   [key: string]: unknown;
 };
 

@@ -23,7 +23,7 @@ async function createRepository() {
   return new UsersRepository(storage);
 }
 
-function storedUser(): StoredUser {
+function storedUser(overrides: Partial<StoredUser> = {}): StoredUser {
   return {
     id: "user-1",
     username: "admin",
@@ -32,7 +32,8 @@ function storedUser(): StoredUser {
     rolePreset: "admin",
     permissions: [...ROLE_PRESETS.admin],
     createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z"
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides
   };
 }
 
@@ -44,5 +45,29 @@ describe("UsersRepository.findById", () => {
 
     expect(repository.findById(user.id)).toEqual(user);
     expect(repository.findById("missing-user")).toBeUndefined();
+  });
+
+  it("upgrades stored Manager and Admin presets with the dedicated export permission", async () => {
+    const repository = await createRepository();
+    const legacyAdmin = storedUser({
+      permissions: ROLE_PRESETS.admin.filter((permission) => permission !== "servers.export")
+    });
+    const legacyManager = storedUser({
+      id: "manager-1",
+      username: "manager",
+      rolePreset: "manager",
+      permissions: ROLE_PRESETS.manager.filter((permission) => permission !== "servers.export")
+    });
+    repository.create(legacyAdmin);
+    repository.create(legacyManager);
+
+    expect(repository.findById(legacyAdmin.id)).toMatchObject({
+      rolePreset: "admin",
+      permissions: expect.arrayContaining(["servers.export"])
+    });
+    expect(repository.findById(legacyManager.id)).toMatchObject({
+      rolePreset: "manager",
+      permissions: expect.arrayContaining(["servers.export"])
+    });
   });
 });

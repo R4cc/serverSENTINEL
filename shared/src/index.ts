@@ -6,6 +6,7 @@ export type Permission =
   | "servers.create"
   | "servers.delete"
   | "servers.editSettings"
+  | "servers.export"
   | "console.view"
   | "console.command"
   | "files.view"

@@ -6,6 +6,7 @@ const ALL_PERMISSIONS = [
   "servers.create",
   "servers.delete",
   "servers.editSettings",
+  "servers.export",
   "console.view",
   "console.command",
   "files.view",
@@ -70,6 +71,7 @@ const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, PermissionKey[]> = {
     "servers.create",
     "servers.delete",
     "servers.editSettings",
+    "servers.export",
     "files.delete"
   ],
   admin: [...ALL_PERMISSIONS]
@@ -81,6 +83,7 @@ export const PERMISSION_DEPENDENCIES: Record<PermissionKey, PermissionKey[]> = {
   "servers.create": ["servers.view"],
   "servers.delete": ["servers.view"],
   "servers.editSettings": ["servers.view"],
+  "servers.export": ["servers.view"],
   "console.view": [],
   "console.command": ["console.view"],
   "files.view": [],
@@ -110,7 +113,8 @@ export const PERMISSION_GROUPS: Array<{ title: string; permissions: Array<{ key:
       { key: "servers.control", label: "Start / stop / restart servers" },
       { key: "servers.create", label: "Create servers" },
       { key: "servers.delete", label: "Delete servers" },
-      { key: "servers.editSettings", label: "Edit server properties" }
+      { key: "servers.editSettings", label: "Edit server properties" },
+      { key: "servers.export", label: "Export server configuration" }
     ]
   },
   {

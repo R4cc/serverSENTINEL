@@ -46,9 +46,16 @@ function normalizeServerAccess(value: unknown): ServerAccess | undefined {
 
 export function normalizeStoredUser(value: unknown): StoredUser {
   const user = asObject(value, "stored user");
-  const permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
-  const inferredPreset = inferRolePreset(permissions);
+  let permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
+  let inferredPreset = inferRolePreset(permissions);
   const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
+  if (rolePreset !== "custom" && !permissions.includes("servers.export")) {
+    const upgradedPermissions = normalizePermissions([...permissions, "servers.export"]);
+    if (inferRolePreset(upgradedPermissions) === rolePreset) {
+      permissions = upgradedPermissions;
+      inferredPreset = rolePreset;
+    }
+  }
   const effectivePreset = rolePreset === "custom" || inferredPreset === rolePreset ? rolePreset : "custom";
   return {
     id: requiredString(user.id, "user.id"),

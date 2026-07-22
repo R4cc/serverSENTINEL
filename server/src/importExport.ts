@@ -2,17 +2,17 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import type { AppSettings, ManagedNode, ManagedServer, ModPreference } from "./types.js";
+import type { ManagedNode, ManagedServer, ModPreference } from "./types.js";
 import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
 import { defaultServerContainerName, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
-import type { SettingsRepository } from "./storage/settingsRepository.js";
 import { parseDockerPorts } from "./core.js";
 import { assertRuntimeProvider } from "./runtime/profile.js";
 
 export const exportArtifactType = "serversentinel.export";
 export const exportArtifactSchemaVersion = 3;
+export const excludedInstanceSecretSettings = ["modrinthApiKey"] as const;
 const maxExportedConfigFileBytes = 2 * 1024 * 1024;
 const excludedServerFileRoots = new Set([
   "backups",
@@ -66,7 +66,7 @@ export type ExportArtifact = {
     };
   };
   instance: {
-    settings: AppSettings;
+    settings: Record<string, never>;
     nodes: Array<Omit<ManagedNode, "secretHash" | "joinTokenHash">>;
   };
   servers: ExportServerEntry[];
@@ -85,6 +85,11 @@ export type ImportValidationResult = {
   warnings: ImportIssue[];
   plan: {
     targetNodeId: string;
+    instanceSettings: {
+      requested: boolean;
+      importable: string[];
+      excludedSecrets: string[];
+    };
     servers: Array<{
       sourceId: string;
       newId: string;
@@ -98,16 +103,17 @@ export type ImportValidationResult = {
 
 type ExportInput = {
   appVersion: string;
-  settings: AppSettings;
   nodes: ManagedNode[];
   servers: ManagedServer[];
   selectedServerIds?: string[];
+  includeInstance?: boolean;
   modPreferencesForServer: (serverId: string) => Record<string, ModPreference>;
   report?: (progress: number, task: string) => void;
 };
 
 type ImportContext = {
   targetNodeId?: string;
+  importInstanceSettings?: boolean;
   nodes: ManagedNode[];
   existingServers: ManagedServer[];
   serversDir: string;
@@ -118,8 +124,6 @@ type ApplyImportContext = ImportContext & {
   storage: StorageDatabase;
   serversRepository: ServersRepository;
   modPreferencesRepository: ModPreferencesRepository;
-  settingsRepository: SettingsRepository;
-  importInstanceSettings?: boolean;
   report?: (progress: number, task: string) => void;
 };
 
@@ -128,7 +132,7 @@ export function exportArtifactFilename(operationId: string) {
 }
 
 export async function createExportArtifact(input: ExportInput): Promise<ExportArtifact> {
-  const selectedIds = input.selectedServerIds?.length ? new Set(input.selectedServerIds) : undefined;
+  const selectedIds = input.selectedServerIds === undefined ? undefined : new Set(input.selectedServerIds);
   const selectedServers = input.servers.filter((server) => !selectedIds || selectedIds.has(server.id));
   if (selectedIds && selectedServers.length !== selectedIds.size) {
     throw new Error("One or more selected servers could not be found");
@@ -161,14 +165,14 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
       appVersion: input.appVersion,
       sqliteSchemaVersion: currentSchemaVersion,
       content: {
-        instance: true,
+        instance: input.includeInstance === true,
         servers: servers.length,
         serverFiles
       }
     },
     instance: {
-      settings: input.settings,
-      nodes: input.nodes.map((node) => ({
+      settings: {},
+      nodes: input.includeInstance === true ? input.nodes.map((node) => ({
         id: node.id,
         name: node.name,
         type: node.type,
@@ -185,7 +189,7 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
         dataPathStatus: node.dataPathStatus,
         totalMemory: node.totalMemory,
         joinTokenExpiresAt: node.joinTokenExpiresAt
-      }))
+      })) : []
     },
     servers
   };
@@ -235,6 +239,10 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; serverSENTINEL 1.3 requires export schema ${exportArtifactSchemaVersion}`);
   if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
   if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
+  rejectUnsupportedKeys(value.instance, ["settings", "nodes"], "instance");
+  if (!isPlainObject(value.instance.settings)) throw new Error("Import instance.settings section is required");
+  rejectUnsupportedKeys(value.instance.settings, [...excludedInstanceSecretSettings], "instance.settings");
+  optionalStringValue(value.instance.settings.modrinthApiKey, "instance.settings.modrinthApiKey");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
   for (const [serverIndex, entry] of value.servers.entries()) {
     if (!isPlainObject(entry)) throw new Error(`Import servers[${serverIndex}] must be an object`);
@@ -269,7 +277,15 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
       }
     }
   }
-  return value as ExportArtifact;
+  return {
+    ...(value as unknown as ExportArtifact),
+    instance: {
+      ...(value.instance as unknown as ExportArtifact["instance"]),
+      // Legacy schema-3 artifacts may contain this credential. It is accepted only
+      // so their server data remains migratable, then removed before validation/apply.
+      settings: {}
+    }
+  };
 }
 
 function assertImportServer(server: Record<string, unknown>, label: string) {
@@ -485,6 +501,13 @@ export function validateImportArtifact(artifact: ExportArtifact, context: Import
   const targetNodeId = context.targetNodeId?.trim() || "";
   const issues: ImportIssue[] = [];
   const warnings: ImportIssue[] = [];
+  const importInstanceSettings = context.importInstanceSettings === true;
+  if (importInstanceSettings) {
+    warnings.push({
+      code: "instance_secrets_excluded",
+      message: "Integration credentials are excluded from server migration data and must be configured manually on the destination"
+    });
+  }
   const targetNode = context.nodes.find((node) => node.id === targetNodeId);
   if (!targetNode) {
     issues.push({ code: "missing_node_target", message: "A valid target node is required before importing servers" });
@@ -567,6 +590,11 @@ export function validateImportArtifact(artifact: ExportArtifact, context: Import
     warnings,
     plan: {
       targetNodeId,
+      instanceSettings: {
+        requested: importInstanceSettings,
+        importable: [],
+        excludedSecrets: [...excludedInstanceSecretSettings]
+      },
       servers: plan
     }
   };
@@ -618,10 +646,6 @@ export async function applyImportArtifact(artifact: ExportArtifact, context: App
           displayName: prepared.remapped.displayName,
           fileCount: prepared.fileCount
         });
-      }
-      if (context.importInstanceSettings !== false) {
-        const key = artifact.instance.settings.modrinthApiKey?.trim();
-        if (key) context.settingsRepository.setModrinthApiKey(key);
       }
     });
   } catch (error) {

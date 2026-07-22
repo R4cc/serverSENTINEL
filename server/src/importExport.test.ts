@@ -139,7 +139,7 @@ function artifact(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
       }
     },
     instance: {
-      settings: { modrinthApiKey: "modrinth-secret" },
+      settings: {},
       nodes: [node()]
     },
     servers: [{
@@ -209,21 +209,38 @@ describe("export/import artifacts", () => {
     const server = managedServer({ serverDir: root, runtimeIntent: "running" });
     const result = await createExportArtifact({
       appVersion: "1.5.0",
-      settings: { modrinthApiKey: "secret" },
       nodes: [node({ secretHash: "not-exported", joinTokenHash: "not-exported" })],
       servers: [server],
+      includeInstance: true,
       modPreferencesForServer: () => ({ "fabric-api.jar": { channel: "release" } })
     });
 
     expect(result.schemaVersion).toBe(exportArtifactSchemaVersion);
+    expect(result.manifest.content.instance).toBe(true);
     expect(result.manifest.content.servers).toBe(1);
     expect(result.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");
     expect(result.servers[0].server.runtimeIntent).toBe("running");
     expect(result.servers[0].server.managedPorts?.[0]).toMatchObject({ externalPort: 25565, protocol: "tcp" });
     expect(result.servers[0].modPreferences).toEqual({ "fabric-api.jar": { channel: "release" } });
+    expect(result.instance.settings).toEqual({});
+    expect(JSON.stringify(result)).not.toContain("modrinthApiKey");
     expect(result.instance.nodes[0]).not.toHaveProperty("secretHash");
     expect(result.instance.nodes[0]).not.toHaveProperty("joinTokenHash");
     expect(result.servers[0].files.map((file) => file.path).sort()).toEqual(["config/fabric-api.properties", "server.properties"]);
+  });
+
+  it("omits instance data and every server from an explicitly empty scoped export", async () => {
+    const result = await createExportArtifact({
+      appVersion: "1.5.0",
+      nodes: [node()],
+      servers: [managedServer()],
+      selectedServerIds: [],
+      modPreferencesForServer: () => ({})
+    });
+
+    expect(result.manifest.content).toMatchObject({ instance: false, servers: 0, serverFiles: 0 });
+    expect(result.instance).toEqual({ settings: {}, nodes: [] });
+    expect(result.servers).toEqual([]);
   });
 
   it("excludes worlds, backups, logs, jars, and oversized config files by default", async () => {
@@ -245,7 +262,6 @@ describe("export/import artifacts", () => {
 
     const result = await createExportArtifact({
       appVersion: "0.8.0",
-      settings: {},
       nodes: [node()],
       servers: [managedServer({ serverDir: root })],
       modPreferencesForServer: () => ({})
@@ -271,6 +287,16 @@ describe("export/import artifacts", () => {
     const world = structuredClone(valid);
     world.servers[0].files[0] = fileEntry("world/level.dat", "world");
     expect(() => assertExportArtifact(world)).toThrow(/excluded|supported configuration file/);
+  });
+
+  it("strips legacy integration credentials while preserving importable server data", () => {
+    const legacyArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
+    legacyArtifact.instance.settings.modrinthApiKey = "must-not-import";
+
+    const parsed = assertExportArtifact(legacyArtifact);
+
+    expect(parsed.instance.settings).toEqual({});
+    expect(parsed.servers).toHaveLength(1);
   });
 
   it("accepts canonical Paper profiles and legacy Fabric profiles during the migration window", () => {
@@ -333,6 +359,11 @@ describe("export/import artifacts", () => {
 
     expect(missingTarget.valid).toBe(false);
     expect(missingTarget.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["missing_node_target", "conflicting_container_name"]));
+    expect(missingTarget.plan.instanceSettings).toEqual({
+      requested: false,
+      importable: [],
+      excludedSecrets: ["modrinthApiKey"]
+    });
 
     const withTarget = validateImportArtifact(artifact({ servers: [{ ...artifact().servers[0], server: managedServer() }] }), {
       targetNodeId: nodeId,
@@ -380,8 +411,7 @@ describe("export/import artifacts", () => {
       tmpDir: join(root, "tmp"),
       storage: repositories.storage,
       serversRepository: repositories.serversRepository,
-      modPreferencesRepository: repositories.modPreferencesRepository,
-      settingsRepository: repositories.settingsRepository
+      modPreferencesRepository: repositories.modPreferencesRepository
     });
 
     const importedId = result.imported[0].serverId;
@@ -397,6 +427,30 @@ describe("export/import artifacts", () => {
     expect(imported.schedules?.[0].recentRuns?.[0].scheduleId).toBe(imported.schedules?.[0].id);
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");
     await expect(stat(join(imported.serverDir, "config", "fabric-api.properties"))).resolves.toMatchObject({ size: 13 });
+  });
+
+  it("never restores the Modrinth credential from server migration data", async () => {
+    const root = await tempRoot("serversentinel-import-secret-exclusion-");
+    const repositories = await createRepositories(root);
+    repositories.settingsRepository.setModrinthApiKey("destination-key");
+    const legacyArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
+    legacyArtifact.instance.settings.modrinthApiKey = "artifact-key";
+    const sanitizedArtifact = assertExportArtifact(legacyArtifact);
+
+    const result = await applyImportArtifact(sanitizedArtifact, {
+      targetNodeId: nodeId,
+      importInstanceSettings: true,
+      nodes: [node()],
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository
+    });
+
+    expect(result.warnings.map((warning) => warning.code)).toContain("instance_secrets_excluded");
+    expect(repositories.settingsRepository.get().modrinthApiKey).toBe("destination-key");
   });
 
   it("rolls back SQLite rows and staged files when import registration fails", async () => {
@@ -417,7 +471,6 @@ describe("export/import artifacts", () => {
           throw new Error("preference write failed");
         }
       } as ModPreferencesRepository,
-      settingsRepository: repositories.settingsRepository
     })).rejects.toThrow("preference write failed");
 
     expect(repositories.serversRepository.list()).toEqual([]);

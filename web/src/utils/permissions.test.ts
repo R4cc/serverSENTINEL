@@ -19,6 +19,12 @@ function userWith(permissions: PublicUser["permissions"]): PublicUser {
 }
 
 describe("file manager permissions", () => {
+  it("exposes server export only to Manager and Admin presets", () => {
+    expect(permissionsForPreset("viewer")).not.toContain("servers.export");
+    expect(permissionsForPreset("manager")).toContain("servers.export");
+    expect(permissionsForPreset("admin")).toContain("servers.export");
+  });
+
   it("maps regular file actions to file permissions", () => {
     expect(fileManagerPermissionForPath("/config/server.yml", "view")).toBe("files.view");
     expect(fileManagerPermissionForPath("/config/server.yml", "download")).toBe("files.download");
