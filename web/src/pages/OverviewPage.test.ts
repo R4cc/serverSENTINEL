@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "../demo";
-import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent } from "../types";
+import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent, ServerStatus } from "../types";
 import {
   ActivePlayersPanel,
   buildUpcomingScheduleSnapshot,
@@ -15,7 +15,8 @@ import {
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
-  SchedulePanel
+  SchedulePanel,
+  statusGlowGeometry
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -92,6 +93,7 @@ describe("overview summary", () => {
     }));
 
     expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(7);
+    expect((html.match(/class="uiMetricTile /g) ?? []).length).toBe(7);
     expect((html.match(/overviewWideSummaryTile/g) ?? []).length).toBe(2);
     expect(html).not.toContain(">Mod updates<");
     expect(html).toContain(">CPU<");
@@ -114,6 +116,50 @@ describe("overview summary", () => {
     expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
+  });
+
+  it.each<[
+    string,
+    string,
+    string,
+    { running?: boolean; lifecycleState?: ServerStatus["lifecycle"]["state"]; socketMounted?: boolean }
+  ]>([
+    ["running", "success", "Running", { running: true }],
+    ["stopped", "danger", "Stopped", { running: false }],
+    ["warning", "warning", "Recovering (1/3)", { lifecycleState: "recovering" }],
+    ["danger", "danger", "Crash loop", { lifecycleState: "crash-loop" }],
+    ["neutral", "neutral", "Unavailable", { socketMounted: false }]
+  ])("gives the %s status family its reactive semantic tone", (stateClass, metricTone, label, setup) => {
+    const server = demoServer();
+    const running = setup.running ?? true;
+    const baseStatus = demoStatus(server, running);
+    const status = setup.lifecycleState
+      ? { ...baseStatus, lifecycle: { ...baseStatus.lifecycle, state: setup.lifecycleState } }
+      : baseStatus;
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status,
+      dockerSocketMounted: setup.socketMounted ?? true,
+      activity: demoOverviewData(running).activity,
+      playerSnapshot: demoPlayerSnapshot(running)
+    }));
+
+    expect(html).toContain(`statusGlowTile ${stateClass}`);
+    expect(html).toContain(`uiMetricTile--${metricTone}`);
+    expect(html).toContain(`>${label}</span>`);
+  });
+
+  it("maps pointer position to a clamped glow origin and subtle card tilt", () => {
+    expect(statusGlowGeometry(150, 75, { left: 100, top: 50, width: 200, height: 100 })).toEqual({
+      xPercent: 25,
+      yPercent: 25,
+      rotateX: 0.375,
+      rotateY: -0.375
+    });
+    expect(statusGlowGeometry(600, -20, { left: 100, top: 50, width: 200, height: 100 })).toMatchObject({
+      xPercent: 100,
+      yPercent: 0
+    });
   });
 });
 
@@ -234,6 +280,9 @@ describe("recent event grouping", () => {
     expect((html.match(/class="eventRow warning/g) ?? [])).toHaveLength(1);
     expect(html).toContain('class="srOnly">9 occurrences');
     expect(html).toContain("×9");
+    expect(html).toContain("<h2>Recent Events</h2>");
+    expect(html).toContain(">View full log</button>");
+    expect(html).not.toContain("eventLogButton");
   });
 
   it("starts a new occurrence group at the ten-minute boundary", () => {
@@ -269,13 +318,18 @@ describe("mod health", () => {
     expect(loadingHtml).toContain("modsHealthPanel");
     expect(loadingHtml).toContain("modUpdatesCardSkeleton");
     expect(loadingHtml).toContain("Loading mod updates");
-    expect(loadingHtml).toContain("<strong>Mod updates</strong>");
+    expect(loadingHtml).toContain("<h2>Mod updates</h2>");
     expect(loadingHtml).toContain("Checking for updates");
     expect(loadingHtml).not.toContain("modUpdatesTitleSkeleton");
     expect(loadingHtml).not.toContain("modUpdatesWideTitleSkeleton");
-    expect(loadingHtml).toContain("modUpdatesCompact");
-    expect(loadingHtml).toContain("modUpdatesWideSkeleton");
-    expect(render(updatePlan({ safeUpdates: 1 }), true, true)).toContain("modUpdatesCardSkeleton");
+    expect(loadingHtml).not.toContain("modUpdatesCompact");
+    expect(loadingHtml).not.toContain("modUpdatesWide");
+    expect((loadingHtml.match(/modUpdatesListItem/g) ?? [])).toHaveLength(1);
+    expect(loadingHtml).toContain("uiSurface");
+    const refreshingHtml = render(updatePlan({ safeUpdates: 1 }), true, true);
+    expect(refreshingHtml).not.toContain("modUpdatesCardSkeleton");
+    expect(refreshingHtml).toContain('aria-busy="true"');
+    expect(refreshingHtml).toContain("Refreshing mod updates");
     expect(render(null, false)).toBe("");
   });
 
@@ -288,7 +342,7 @@ describe("mod health", () => {
 
     const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
     expect(healthyHtml).toContain("modUpdatesCard--healthy");
-    expect(healthyHtml).toContain("<strong>Mod updates</strong>");
+    expect(healthyHtml).toContain("<h2>Mod updates</h2>");
     expect(healthyHtml).toContain("No updates available");
     expect(healthyHtml).toContain("Everything is up to date");
     expect(healthyHtml).toContain("modUpdatesListItem modUpdatesListItem--healthy");
@@ -304,7 +358,7 @@ describe("mod health", () => {
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
   });
 
-  it("renders the clickable update count when updates are available", () => {
+  it("renders an explicit Mods action when updates are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
       canView,
@@ -313,10 +367,10 @@ describe("mod health", () => {
 
     const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
     expect(html).toContain("<button");
-    expect(html).toContain("<strong>Mod updates</strong>");
+    expect(html).toContain("<h2>Mod updates</h2>");
     expect(html).toContain("3 updates available");
-    expect(html).toContain("<strong>3</strong>");
-    expect(html).toContain("Open Mods, 3 mod updates available");
+    expect(html).toContain(">Open Mods</button>");
+    expect(html).not.toContain("modUpdatesCardOpen");
     expect(html).not.toContain("installed");
     expect(html).not.toContain("Safe");
     expect(html).not.toContain("Review");
@@ -330,15 +384,15 @@ describe("mod health", () => {
       onRefresh: () => undefined
     }));
 
-    expect(html).toContain('class="modUpdatesCardOpen"');
+    expect(html).not.toContain('class="modUpdatesCardOpen"');
     expect(html).toContain('aria-label="Recheck mods for updates"');
     expect(html).toContain('<path d="M20 6v5h-5"></path>');
-    expect(html).toContain('<span class="modUpdatesRefreshLabel">Refresh</span>');
+    expect(html).not.toContain('modUpdatesRefreshLabel');
     expect(html).toContain('uiButton--secondary');
-    expect(html).toContain('</button><button aria-label="Recheck mods for updates"');
+    expect(html).toContain('>Open Mods</button>');
   });
 
-  it("includes update names, icons, and version transitions for the wide layout", () => {
+  it("includes individually navigable update rows with icons and version transitions", () => {
     const entry: ModUpdatePlanEntry = {
       filename: "lithium.jar",
       displayName: "Lithium",
@@ -363,6 +417,7 @@ describe("mod health", () => {
     expect(html).toContain("/api/modrinth/icons/lithium.png");
     expect(html).toContain("0.14.8");
     expect(html).toContain("0.15.0");
+    expect(html).toContain('aria-label="Open Lithium update in Mods"');
     expect(html).not.toContain("modUpdatesListItem--placeholder");
     expect(html.match(/modUpdatesListItem/g)).toHaveLength(1);
   });
@@ -458,7 +513,7 @@ describe("upcoming schedule summary", () => {
 
     expect(html).toContain(">Schedule<");
     expect(html).toContain(">Next up<");
-    expect((html.match(/class="scheduleUpcomingItem"/g) ?? []).length).toBe(4);
+    expect((html.match(/class="overviewCardRow scheduleUpcomingItem"/g) ?? []).length).toBe(4);
     expect(html).toContain("2 more schedules in the next 24 hours");
     expect(html).not.toContain("Task 4");
     expect(html).not.toContain("Task 5");

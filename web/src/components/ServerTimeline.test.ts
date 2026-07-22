@@ -4,15 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import type { ServerTimelineResponse } from "../types";
 import {
   clusterTimelineMarkers,
+  formatTimelineDuration,
   mergeTimelineResponses,
   positionTimelineClusters,
   ServerTimeline,
   TimelineAnnotationPopoverItem,
   timelineAnnotationGridTop,
+  timelineClusterIconMarkers,
+  timelineClusterOccurrenceCount,
   timelineMarkers,
   timelineMarkerDisplayLabel,
   timelineMarkerIsImportant,
-  timelineMarkerPreview
+  timelinePlayerRows,
+  timelineSessionGeometry
 } from "./ServerTimeline";
 
 describe("server timeline controls", () => {
@@ -27,6 +31,8 @@ describe("server timeline controls", () => {
 
     expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
+    expect(html).toContain("Player activity");
+    expect(html).not.toContain("serverTimelineSummary");
   });
 });
 
@@ -38,7 +44,8 @@ function response(): ServerTimelineResponse {
     samples: [],
     events: [
       { id: "join", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: "2026-01-01T00:00:10.000Z", occurredAt: 10_000, signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" },
-      { id: "leave", eventType: "player_left", type: "info", severity: "info", text: "Alex left", message: "Alex left", timestamp: "2026-01-01T00:00:11.000Z", occurredAt: 11_000, signature: "player_left:alex", source: "logs/latest.log", subject: "Alex" }
+      { id: "leave", eventType: "player_left", type: "info", severity: "info", text: "Alex left", message: "Alex left", timestamp: "2026-01-01T00:00:11.000Z", occurredAt: 11_000, signature: "player_left:alex", source: "logs/latest.log", subject: "Alex" },
+      { id: "started", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: "2026-01-01T00:00:20.000Z", occurredAt: 20_000, signature: "server_started", source: "logs/latest.log" }
     ],
     schedules: [{ id: "schedule", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 50_000, kind: "upcoming", status: "upcoming" }],
     scheduleAnnotationsAvailable: true,
@@ -78,67 +85,54 @@ describe("server timeline markers", () => {
     expect(html).toContain("01.01.2026, 00:01");
   });
 
-  it("maps player and schedule annotations to distinct non-color labels", () => {
+  it("maps lifecycle and schedule annotations while omitting player messages", () => {
     const markers = timelineMarkers(response());
-    expect(markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left", "Restart scheduled"]);
-    expect(markers.map((marker) => marker.tone)).toEqual(["join", "leave", "planned"]);
+    expect(markers.map((marker) => marker.label)).toEqual(["Server started", "Restart scheduled"]);
+    expect(markers.map((marker) => marker.tone)).toEqual(["server", "planned"]);
+    expect(markers.every((marker) => marker.event?.eventType !== "player_joined" && marker.event?.eventType !== "player_left")).toBe(true);
   });
 
-  it("combines a leave and rejoin within 30 seconds into one reconnect marker", () => {
-    const value = response();
-    value.events = [
-      { ...value.events[1], id: "left-first", occurredAt: 10_000, timestamp: "2026-01-01T00:00:10.000Z" },
-      { ...value.events[0], id: "joined-again", occurredAt: 17_000, timestamp: "2026-01-01T00:00:17.000Z" }
-    ];
-    const markers = timelineMarkers(value);
-    expect(markers).toHaveLength(2);
-    expect(markers[0]).toMatchObject({
-      id: "reconnect:left-first:joined-again",
-      occurredAt: 17_000,
-      label: "Alex reconnected",
-      tone: "join",
-      reconnect: { player: "Alex", durationSeconds: 7 }
-    });
-    expect(timelineMarkerDisplayLabel(markers[0])).toEqual({ primary: "Player reconnected", secondary: "Alex" });
-  });
-
-  it("still combines a reconnect when duplicate disconnect lines precede the join", () => {
+  it("combines a nearby stop and start into one restart marker", () => {
     const value = response();
     value.schedules = [];
     value.events = [
-      { ...value.events[1], id: "left-first", occurredAt: 10_000, timestamp: "2026-01-01T00:00:10.000Z" },
-      { ...value.events[1], id: "left-duplicate", occurredAt: 11_000, timestamp: "2026-01-01T00:00:11.000Z" },
-      { ...value.events[0], id: "joined-again", occurredAt: 17_000, timestamp: "2026-01-01T00:00:17.000Z" }
+      { ...value.events[2], id: "stopped", eventType: "server_stopped", message: "Server stopped", text: "Server stopped", signature: "server_stopped", occurredAt: 10_000 },
+      { ...value.events[2], id: "started-again", occurredAt: 40_000 }
     ];
 
-    expect(timelineMarkers(value)).toMatchObject([{
-      label: "Alex reconnected",
-      reconnect: { player: "Alex", durationSeconds: 6 }
+    const markers = timelineMarkers(value);
+    expect(markers).toMatchObject([{
+      id: "restart:stopped:started-again",
+      occurredAt: 40_000,
+      label: "Server restarted",
+      restart: { durationSeconds: 30 }
     }]);
+    expect(timelineMarkerDisplayLabel(markers[0])).toEqual({ primary: "Server restarted" });
   });
 
-  it("keeps longer disconnects as separate leave and join markers", () => {
+  it("keeps a stop and much later start as separate lifecycle markers", () => {
     const value = response();
+    value.schedules = [];
     value.events = [
-      { ...value.events[1], occurredAt: 10_000 },
-      { ...value.events[0], occurredAt: 41_000 }
+      { ...value.events[2], id: "stopped", eventType: "server_stopped", message: "Server stopped", text: "Server stopped", signature: "server_stopped", occurredAt: 10_000 },
+      { ...value.events[2], id: "started-later", occurredAt: 320_001 }
     ];
-    expect(timelineMarkers(value).map((marker) => marker.label)).toEqual(["Alex left", "Alex joined", "Restart scheduled"]);
+    expect(timelineMarkers(value).map((marker) => marker.label)).toEqual(["Server stopped", "Server started"]);
   });
 
-  it("collapses repeated player events within ten minutes into one counted marker", () => {
+  it("collapses repeated lifecycle events into one counted marker", () => {
     const value = response();
     value.schedules = [];
     value.events = Array.from({ length: 9 }, (_, index) => ({
-      ...value.events[1],
-      id: `leave-${index}`,
+      ...value.events[2],
+      id: `started-${index}`,
       occurredAt: 10_000 + index * 30_000,
       timestamp: new Date(10_000 + index * 30_000).toISOString()
     }));
 
     const markers = timelineMarkers(value);
     expect(markers).toHaveLength(1);
-    expect(markers[0]).toMatchObject({ occurrences: 9, occurredAt: 250_000, label: "Alex left" });
+    expect(markers[0]).toMatchObject({ occurrences: 9, occurredAt: 250_000, label: "Server started" });
 
     const html = renderToStaticMarkup(createElement(TimelineAnnotationPopoverItem, {
       marker: markers[0],
@@ -148,12 +142,13 @@ describe("server timeline markers", () => {
     expect(html).toContain("×9");
   });
 
-  it("clusters colliding markers without dropping their contents", () => {
+  it("clusters colliding lifecycle and schedule events without dropping their icon types", () => {
     const markers = timelineMarkers(response());
-    const clusters = clusterTimelineMarkers(markers, 0, 60_000, 6);
-    expect(clusters).toHaveLength(2);
-    expect(clusters[0].markers.map((marker) => marker.label)).toEqual(["Alex joined", "Alex left"]);
-    expect(clusters[0]).toMatchObject({ slot: 1, slotCount: 6 });
+    markers[1].occurredAt = 21_000;
+    const cluster = clusterTimelineMarkers(markers, 0, 60_000, 6)[0];
+    expect(cluster.markers.map((marker) => marker.label)).toEqual(["Server started", "Restart scheduled"]);
+    expect(timelineClusterOccurrenceCount(cluster)).toBe(2);
+    expect(timelineClusterIconMarkers(cluster).map((marker) => marker.tone)).toEqual(["server", "planned"]);
   });
 
   it("does not chain adjacent markers into a cluster spanning multiple buckets", () => {
@@ -183,61 +178,64 @@ describe("server timeline markers", () => {
       .toEqual(after.map((cluster) => ({ id: cluster.id, markers: cluster.markers.map((item) => item.id) })));
   });
 
-  it("previews four clustered events and reports the remaining count", () => {
+  it("layers at most three icons while retaining the full event count", () => {
     const marker = timelineMarkers(response())[0];
     const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, label: `Event ${index + 1}` }));
     const cluster = clusterTimelineMarkers(markers, 0, 60_000, 1)[0];
-    const preview = timelineMarkerPreview(cluster);
-    expect(preview.markers.map((item) => item.label)).toEqual(["Event 1", "Event 2", "Event 3", "Event 4"]);
-    expect(preview.remaining).toBe(2);
+    expect(timelineClusterIconMarkers(cluster).map((item) => item.label)).toEqual(["Event 1", "Event 2", "Event 3"]);
+    expect(timelineClusterOccurrenceCount(cluster)).toBe(6);
   });
 
-  it("grows the annotation grid to fit stacked event previews", () => {
+  it("keeps every annotation in one fixed-height row", () => {
     const marker = timelineMarkers(response())[0];
     const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, occurredAt: 10_000 + index }));
     const positioned = positionTimelineClusters(clusterTimelineMarkers(markers, 0, 60_000, 1), 0, 60_000);
-    expect(positioned[0]).toMatchObject({ labelTop: 2, labelHeight: 140 });
-    expect(timelineAnnotationGridTop(positioned)).toBe(148);
+    expect(positioned[0]).toMatchObject({ lane: 0, labelTop: 17, labelHeight: 30 });
+    expect(timelineAnnotationGridTop(positioned)).toBe(66);
   });
 
   it("does not pin buffered annotations outside the visible viewport to an edge", () => {
     const markers = timelineMarkers(response());
-    const clusters = clusterTimelineMarkers(markers, 20_000, 40_000, 6);
+    const clusters = clusterTimelineMarkers(markers, 21_000, 40_000, 6);
     expect(clusters).toEqual([]);
   });
 
-  it("positions labels from their exact event time without moving distant labels into separate lanes", () => {
+  it("positions compact icons at their exact event time on the single lane", () => {
     const clusters = clusterTimelineMarkers(timelineMarkers(response()), 0, 60_000, 24);
     const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_800);
-    expect(positioned[0].leftPercent).toBeCloseTo(17.5);
+    expect(positioned[0].leftPercent).toBeCloseTo(33.333);
     expect(positioned[1].leftPercent).toBeCloseTo(83.333);
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
+    expect(positioned.map((cluster) => cluster.inlineLabel)).toEqual(["Server started", "Restart"]);
   });
 
-  it("staggers routine marker labels when their always-visible text would collide", () => {
-    const clusters = clusterTimelineMarkers(timelineMarkers(response()), 0, 60_000, 24);
-    clusters[1].occurredAt = 13_000;
-    const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
-    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
-  });
-
-  it("keeps nearby marker lanes stable when panning crosses label alignment thresholds", () => {
+  it("only shows an inline event label when it fits to the right without colliding", () => {
     const marker = timelineMarkers(response())[0];
-    const markers = [
-      { ...marker, event: undefined, id: "first", label: "A very long nearby timeline event label", occurredAt: 54_000 },
-      { ...marker, event: undefined, id: "second", label: "Another very long nearby timeline event label", occurredAt: 57_000 }
+    const separated = [
+      { ...marker, id: "first", occurredAt: 10_000 },
+      { ...marker, id: "second", occurredAt: 40_000 }
     ];
-    const clusters = clusterTimelineMarkers(markers, 0, 60_000, 24);
-    const before = positionTimelineClusters(clusters, 0, 60_000, 1_000);
-    const after = positionTimelineClusters(clusters, 5_000, 65_000, 1_000);
-    expect(before.map((cluster) => cluster.alignEnd)).not.toEqual(after.map((cluster) => cluster.alignEnd));
-    expect(before.map((cluster) => cluster.lane)).toEqual(after.map((cluster) => cluster.lane));
+    const crowded = [
+      { ...marker, id: "first", occurredAt: 10_000 },
+      { ...marker, id: "second", occurredAt: 14_000 }
+    ];
+
+    expect(positionTimelineClusters(clusterTimelineMarkers(separated, 0, 60_000, 24), 0, 60_000, 1_000).map((cluster) => cluster.inlineLabel))
+      .toEqual(["Server started", "Server started"]);
+    expect(positionTimelineClusters(clusterTimelineMarkers(crowded, 0, 60_000, 24), 0, 60_000, 1_000).map((cluster) => cluster.inlineLabel))
+      .toEqual([null, "Server started"]);
   });
 
-  it("separates the player action from the full player-name subtitle", () => {
-    const marker = timelineMarkers(response())[0];
-    marker.event = { ...marker.event!, subject: "AnExtremelyLongPlayerName" };
-    expect(timelineMarkerDisplayLabel(marker)).toEqual({ primary: "Player joined", secondary: "AnExtremelyLongPlayerName" });
+  it("keeps a compact cluster inside the right edge", () => {
+    const marker = { ...timelineMarkers(response())[0], occurredAt: 59_000, occurrences: 12 };
+    const positioned = positionTimelineClusters(clusterTimelineMarkers([marker], 0, 60_000, 24), 0, 60_000, 300);
+    expect(positioned[0]).toMatchObject({ alignEnd: true, lane: 0 });
+  });
+
+  it("keeps a single marker icon-only when its label would cross the right edge", () => {
+    const marker = { ...timelineMarkers(response())[0], occurredAt: 59_000 };
+    const positioned = positionTimelineClusters(clusterTimelineMarkers([marker], 0, 60_000, 24), 0, 60_000, 300);
+    expect(positioned[0]).toMatchObject({ alignEnd: true, inlineLabel: null });
   });
 
   it("keeps lifecycle and failed automation labels important while routine and planned markers stay compact", () => {
@@ -248,7 +246,6 @@ describe("server timeline markers", () => {
     expect(timelineMarkerIsImportant(markers.find((marker) => marker.event?.eventType === "server_crashed")!)).toBe(true);
     expect(timelineMarkerIsImportant(markers.find((marker) => marker.schedule?.status === "failed")!)).toBe(true);
     expect(timelineMarkerIsImportant(markers.find((marker) => marker.tone === "planned")!)).toBe(false);
-    expect(timelineMarkerIsImportant(markers.find((marker) => marker.tone === "join")!)).toBe(false);
   });
 
   it("omits the schedule legend data when permission-filtered responses contain none", () => {
@@ -269,9 +266,28 @@ describe("server timeline markers", () => {
     incoming.events = [{ ...current.events[1], occurredAt: 50_000 }];
     const merged = mergeTimelineResponses(current, incoming, 15_000, 65_000);
     expect(merged.samples.map((point) => point.sampledAt)).toEqual([20_000, 60_000]);
-    expect(merged.events.map((event) => event.id)).toEqual(["leave"]);
+    expect(merged.events.map((event) => event.id)).toEqual(["started", "leave"]);
     expect(merged.schedules).toHaveLength(1);
     expect(merged.from).toBe(15_000);
+  });
+
+  it("merges open player sessions by stable identity", () => {
+    const current = response();
+    current.playerActivity = {
+      snapshotState: "live",
+      sampledAt: new Date(50_000).toISOString(),
+      onlineNames: ["Alex"],
+      sessions: [{ id: "alex:10", player: "Alex", startedAt: 10_000, endedAt: null, startBoundary: "join", endBoundary: "online" }]
+    };
+    const incoming = response();
+    incoming.playerActivity = {
+      snapshotState: "live",
+      sampledAt: new Date(65_000).toISOString(),
+      onlineNames: [],
+      sessions: [{ id: "alex:10", player: "Alex", startedAt: 10_000, endedAt: 60_000, startBoundary: "join", endBoundary: "leave" }]
+    };
+    const merged = mergeTimelineResponses(current, incoming, 15_000, 65_000);
+    expect(merged.playerActivity).toMatchObject({ onlineNames: [], sessions: [{ id: "alex:10", endedAt: 60_000, endBoundary: "leave" }] });
   });
 
   it("deduplicates an event when its rolling log-tail line index changes", () => {
@@ -291,5 +307,38 @@ describe("server timeline markers", () => {
     incoming.schedules = [];
 
     expect(mergeTimelineResponses(current, incoming, 0, 60_000).schedules).toEqual([]);
+  });
+});
+
+describe("server timeline player sessions", () => {
+  it("groups online players first and keeps offline activity range-relevant", () => {
+    const value = response();
+    value.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["Zoe", "Alex"],
+      sessions: [
+        { id: "zoe", player: "Zoe", startedAt: 5_000, endedAt: null, startBoundary: "join", endBoundary: "online" },
+        { id: "sam", player: "Sam", startedAt: 20_000, endedAt: 30_000, startBoundary: "join", endBoundary: "leave" },
+        { id: "old", player: "OldPlayer", startedAt: -20_000, endedAt: -10_000, startBoundary: "join", endBoundary: "leave" }
+      ]
+    };
+    expect(timelinePlayerRows(value, { from: 0, to: 60_000 }, 50_000).map((row) => [row.player, row.online])).toEqual([
+      ["Alex", true],
+      ["Zoe", true],
+      ["Sam", false]
+    ]);
+  });
+
+  it("clips incomplete sessions and reports lower-bound durations", () => {
+    const geometry = timelineSessionGeometry({
+      id: "clipped",
+      player: "Alex",
+      startedAt: 0,
+      endedAt: null,
+      startBoundary: "history-boundary",
+      endBoundary: "online"
+    }, { from: 10_000, to: 40_000 }, 30_000)!;
+    expect(geometry).toMatchObject({ leftPercent: 0, widthPercent: 66.66666666666666, startClipped: true, endClipped: false, lowerBound: true });
+    expect(formatTimelineDuration(4 * 60 * 60_000 + 25 * 60_000)).toBe("4h 25m");
   });
 });

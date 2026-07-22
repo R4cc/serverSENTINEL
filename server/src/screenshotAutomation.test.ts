@@ -11,4 +11,10 @@ describe("README screenshot automation", () => {
     expect(screenshotScript).toContain('src: url("data:font/woff2;base64,');
     expect(screenshotScript).toMatch(/browser\.newContext\(\{[\s\S]*?bypassCSP:\s*true/);
   });
+
+  it("waits for every rendered timeline chart without requiring a unique SVG", () => {
+    expect(screenshotScript).toContain('timeline.locator(".serverTimelineEChart").first().waitFor()');
+    expect(screenshotScript).toContain('[...charts].every((chart) => chart.querySelector("svg"))');
+    expect(screenshotScript).not.toContain('timeline.locator(".serverTimelineEChart svg").waitFor()');
+  });
 });

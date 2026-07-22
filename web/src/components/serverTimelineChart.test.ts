@@ -14,6 +14,7 @@ import {
   timelineNeedsRefill,
   timelineQueryWindow,
   timelineRetentionMs,
+  timelineMetricBandGrid,
   timelineTooltipHtml
 } from "./serverTimelineChart";
 
@@ -42,10 +43,10 @@ const sample: ServerTimelineResourcePoint = {
 const clusters: MarkerCluster[] = [{
   id: "cluster",
   occurredAt: 10_000,
-  tone: "join",
+  tone: "server",
   slot: 2,
   slotCount: 24,
-  markers: [{ id: "event", occurredAt: 10_000, label: "<Alex> joined & played", tone: "join" }]
+  markers: [{ id: "event", occurredAt: 10_000, label: "<Server> started & recovered", tone: "server" }]
 }];
 
 describe("server timeline chart windows", () => {
@@ -123,6 +124,43 @@ describe("server timeline ECharts option", () => {
     expect(option.yAxis).toHaveLength(2);
   });
 
+  it("builds separate metric bands with an identical shared plot grid", () => {
+    const cpu = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 20_000 },
+      viewport: { from: 5_000, to: 15_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      now: 12_000,
+      gridOverride: timelineMetricBandGrid,
+      seriesKeys: ["cpuUtilizationPercent"]
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    const memory = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 20_000 },
+      viewport: { from: 5_000, to: 15_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      now: 12_000,
+      gridOverride: timelineMetricBandGrid,
+      seriesKeys: ["memoryUtilizationPercent"]
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    expect(cpu.grid).toMatchObject(timelineMetricBandGrid);
+    expect(memory.grid).toMatchObject(timelineMetricBandGrid);
+    expect(cpu.yAxis).toHaveLength(1);
+    expect(memory.yAxis).toHaveLength(1);
+    expect(cpu.yAxis[0].position).toBe("left");
+    expect(memory.yAxis[0].position).toBe("left");
+    expect(cpu.series.some((series) => series.id === "memoryUtilizationPercent")).toBe(false);
+    expect(memory.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
+  });
+
   it("removes unused right axes and gives players an integer step axis only when enabled", () => {
     const option = buildTimelineChartOption({
       samples: [sample],
@@ -188,8 +226,8 @@ describe("server timeline ECharts option", () => {
 
   it("escapes event text rendered into the HTML tooltip", () => {
     const html = timelineTooltipHtml([{ axisValue: 10_000, seriesId: "cpuUtilizationPercent", seriesName: "CPU", value: [10_000, 12.5] }], clusters, 10_000, String);
-    expect(html).toContain("&lt;Alex&gt; joined &amp; played");
-    expect(html).not.toContain("<Alex>");
+    expect(html).toContain("&lt;Server&gt; started &amp; recovered");
+    expect(html).not.toContain("<Server>");
     expect(escapeTimelineHtml('"server"')).toBe("&quot;server&quot;");
   });
 

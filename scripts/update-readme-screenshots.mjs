@@ -129,7 +129,11 @@ async function openPage(page, title, heading) {
 async function waitForOverviewTimeline(page) {
   const timeline = page.locator('.serverTimelinePanel[aria-busy="false"]');
   await timeline.getByRole("heading", { name: "Server Timeline", exact: true }).waitFor();
-  await timeline.locator(".serverTimelineEChart svg").waitFor();
+  await timeline.locator(".serverTimelineEChart").first().waitFor();
+  await page.waitForFunction(() => {
+    const charts = document.querySelectorAll('.serverTimelinePanel[aria-busy="false"] .serverTimelineEChart');
+    return charts.length > 0 && [...charts].every((chart) => chart.querySelector("svg"));
+  });
 }
 
 try {

@@ -88,7 +88,7 @@ describe("ServerEditForm", () => {
     const reason = "Stop the server before changing mods or server properties.";
     const html = renderForm(true, reason);
 
-    expect(html).toContain('class="propertiesLockBanner"');
+    expect(html).toMatch(/class="[^"]*propertiesLockBanner[^"]*"/);
     expect(html).toContain(reason);
     expect(html).toMatch(/<fieldset disabled=""/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Discard changes<\/button>/);

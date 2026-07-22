@@ -22,7 +22,7 @@ import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadi
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
-import { Button, EmptyState, PanelHeader, StatusBadge } from "./components/UiPrimitives";
+import { Banner, Button, EmptyState, PanelHeader, StatusBadge, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useWideTimelineViewport } from "./components/useMobileViewport";
@@ -2457,10 +2457,11 @@ export default function App() {
         </header>
 
         {appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
-          <section className="systemBanner error">
-            <strong>Docker integration is not connected.</strong>
-            <span>Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready.</span>
-          </section>
+          <Banner
+            tone="error"
+            title="Docker integration is not connected."
+            message="Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready."
+          />
         )}
 
         {provisioningError && activePage === "overview" && (
@@ -2476,7 +2477,7 @@ export default function App() {
           </section>
         )}
 
-        {notice && activePage !== "files" && <div className="notice">{notice}</div>}
+        {notice && activePage !== "files" && <Banner tone="info" title={notice} />}
 
         {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
           <Fragment key="application-loading">
@@ -2848,25 +2849,27 @@ export default function App() {
                   )}
 
                   <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
-                  <ModHealthPanel
-                    updatePlan={modsWorkspace.data.updatePlan}
-                    loading={modsWorkspace.state.updatePlanLoading}
-                    canView={canViewMods && supportsManagedMods}
-                    onOpenMods={() => setActivePage("mods")}
-                    onRefresh={() => void modsWorkspace.actions.refresh()}
-                    contentPlural={managedContent.plural}
-                    contentPluralTitle={managedContent.pluralTitle}
-                  />
-                  <SchedulePanel
-                    schedules={activeServer.schedules ?? []}
-                    canView={canViewSchedules}
-                    formatDate={formatDisplayDate}
-                    relativeTimestamps={relativeTimestamps}
-                    onOpenSchedules={(target) => {
-                      setScheduleNavigationTarget(target ?? null);
-                      setActivePage("schedule");
-                    }}
-                  />
+                  <div className="overviewSupportStack">
+                    <ModHealthPanel
+                      updatePlan={modsWorkspace.data.updatePlan}
+                      loading={modsWorkspace.state.updatePlanLoading}
+                      canView={canViewMods && supportsManagedMods}
+                      onOpenMods={() => setActivePage("mods")}
+                      onRefresh={() => void modsWorkspace.actions.refresh()}
+                      contentPlural={managedContent.plural}
+                      contentPluralTitle={managedContent.pluralTitle}
+                    />
+                    <SchedulePanel
+                      schedules={activeServer.schedules ?? []}
+                      canView={canViewSchedules}
+                      formatDate={formatDisplayDate}
+                      relativeTimestamps={relativeTimestamps}
+                      onOpenSchedules={(target) => {
+                        setScheduleNavigationTarget(target ?? null);
+                        setActivePage("schedule");
+                      }}
+                    />
+                  </div>
                   <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
                 </div>
 
@@ -2875,7 +2878,7 @@ export default function App() {
 
             {activePage === "console" && (
               <section className="tabPage layoutWide">
-                <section className="panel consolePanel">
+                <Surface className="consolePanel">
                   <PanelHeader
                     title="Console"
                     actions={<div className="consoleHeaderActions">
@@ -2903,7 +2906,7 @@ export default function App() {
                       </Suspense>
                     )}
                   </div>
-                </section>
+                </Surface>
               </section>
             )}
 

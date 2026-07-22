@@ -557,11 +557,23 @@
   }
 
   .settingsHubCategories {
-    position: sticky;
-    top: 0;
-    z-index: 8;
-    padding-block: var(--space-2);
-    background: var(--surface);
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    overflow: visible;
+    padding: var(--space-2);
+    background: var(--surface-inset);
+    scroll-snap-type: none;
+    scrollbar-width: none;
+  }
+
+  .settingsHubCategories > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 54px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: var(--space-2);
   }
 
   .settingsHubSectionHeader {
@@ -652,5 +664,165 @@
   .settingsHubToggleTrack,
   .settingsHubToggleTrack > span {
     transition: none;
+  }
+}
+
+
+/* Settings cohesion migrated from the former adoption layer */
+/* Settings screen layout --------------------------------------------------- */
+
+.settingsList {
+  max-width: var(--content-max-width);
+  gap: var(--space-3);
+}
+
+.keyForm fieldset,
+.keyFormConfigured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.keyForm {
+  display: block;
+  width: 100%;
+}
+
+.keyForm fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.keyForm label {
+  min-width: 0;
+}
+
+.keyFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.secretPreview {
+  min-width: 0;
+  min-height: var(--control-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.secretPreview code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secretPreview .settingsStatus {
+  flex: 0 0 auto;
+}
+
+.keyFormPending .integrationKeySkeleton {
+  width: min(180px, 52%);
+  height: 14px;
+}
+
+.keyFormPending .integrationActionSkeleton {
+  width: 112px;
+  height: var(--control-height);
+}
+
+.usersSettings {
+  min-height: 232px;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+@media (max-width: 1100px) {
+}
+
+@media (max-width: 760px) {
+  .keyForm fieldset,
+.keyFormConfigured {
+    grid-template-columns: 1fr;
+  }
+
+  .keyFormActions {
+    justify-content: stretch;
+  }
+
+  .keyFormActions .uiButton,
+  .keyFormConfigured .uiButton {
+    flex: 1 1 auto;
+  }
+
+  .secretPreview {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding-block: var(--space-3);
+  }
+
+  .usersSettings {
+    padding: var(--space-3);
+  }
+}
+
+.systemBanner,
+.notice,
+.permissionWarning {
+  border-radius: var(--radius-md);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+
+/* Responsive settings cohesion migrated from the former adoption layer */
+/* Responsive settings layout pass: keep labels, helpers, and controls readable on phones. */
+@media (max-width: 860px) {
+  .settingsList {
+    width: 100%;
+    max-width: none;
+    gap: var(--space-3);
+  }
+
+  .keyForm fieldset,
+  .keyFormConfigured {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .keyFormActions {
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .keyFormActions .uiButton,
+  .keyFormConfigured .uiButton {
+    flex: 1 1 min(160px, 100%);
+  }
+
+  .secretPreview {
+    flex-wrap: wrap;
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .secretPreview code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .usersSettings {
+    padding: var(--space-3);
   }
 }

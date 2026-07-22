@@ -2837,3 +2837,185 @@ textarea:hover:not(:disabled),
     z-index: 2;
   }
 }
+
+
+/* Responsive shell cohesion migrated from the former adoption layer */
+/* Focused responsive shell pass ------------------------------------------- */
+
+@media (min-width: 1101px) and (max-width: 1280px) {
+  :root {
+    --sidebar-width: 232px;
+  }
+
+  .workspace {
+    padding-inline: var(--space-4);
+  }
+
+  .brandLockup h1,
+  .sideNav button,
+  .accountName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brandBlock p,
+  .sideNav small,
+  .settingsVersionText {
+    display: none;
+  }
+
+  .sideNav button {
+    padding-inline: var(--space-2);
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .activeServerStrip {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+  .brandLockup,
+  .sidebarCollapsed .brandLockup {
+    width: var(--sidebar-rail-size) !important;
+    max-width: var(--sidebar-rail-size);
+  }
+
+  .brandLockup > div,
+  .sidebarCollapsed .brandLockup > div {
+    display: none !important;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewPage,
+  .filesPage,
+  .schedulePage,
+  .settingsPage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overviewPage > *,
+.overviewPage > .resourcePanel,
+.overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .overviewSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspacePage-files .filesPage .fileNavBar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "navigation"
+      "breadcrumbs"
+      "actions";
+    gap: var(--space-2);
+    padding: var(--space-2);
+    overflow: hidden;
+  }
+
+  .workspacePage-files .fileNavButtons {
+    grid-area: navigation;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    gap: var(--space-2);
+  }
+
+  .workspacePage-files .fileBreadcrumbs {
+    grid-area: breadcrumbs;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar {
+    grid-area: actions;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(44px, 1fr));
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .workspacePage-files .fileNavButtons .uiButton,
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
+    width: 100%;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding-inline: var(--space-2);
+  }
+
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
+    flex-basis: auto;
+  }
+
+  .workspacePage-files .fileToolbarLabel {
+    display: none;
+  }
+
+  .modsWorkspaceSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modsWorkspaceSummary > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .modsWorkspaceToolbar.uiToolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .modsWorkspaceToolbar .uiToolbarPrimary,
+  .modsWorkspaceToolbar .uiToolbarSecondary {
+    display: block;
+  }
+
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .modsWorkspacePrimaryActions .uiButton,
+  .modsWorkspaceUpdateActions .uiButton {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modsWorkspaceBatchAction {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 360px) {
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modsWorkspaceBatchAction {
+    grid-column: auto;
+  }
+}

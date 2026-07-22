@@ -10,7 +10,7 @@ import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, Schedu
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton } from '../components/TableControls';
-import { Button, EmptyState, PanelHeader } from '../components/UiPrimitives';
+import { Button, EmptyState, PanelHeader, Toolbar } from '../components/UiPrimitives';
 import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
@@ -381,8 +381,9 @@ export function SchedulePage({
 
   return (
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
-      <div className="scheduleWorkspaceToolbar">
-        <Button
+      <Toolbar
+        className="scheduleWorkspaceToolbar"
+        primary={<Button
           className="scheduleAddButton"
           onClick={() => setFormMode({ type: "create" })}
           disabled={disabled}
@@ -390,12 +391,12 @@ export function SchedulePage({
         >
           <AppIcon name="plus" />
           <span>Add schedule</span>
-        </Button>
-        <div className="scheduleWorkspaceContext">
+        </Button>}
+        meta={<div className="scheduleWorkspaceContext">
           <span>Cron timezone</span>
           <strong>{scheduleTimeZone}</strong>
-        </div>
-      </div>
+        </div>}
+      />
 
       {disabled && disabledReason && !saveRunning && (
         <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />

@@ -1,19 +1,36 @@
 @import "./styles/tokens.css";
-@import "./styles/auth.css";
 @import "./styles/themes.css";
+@import "./styles/typography.css";
+@import "./styles/primitives.css";
+@import "./styles/canonical-layout.css";
 @import "./styles/layout.css";
+@import "./styles/auth.css";
 @import "./styles/overview.css";
 @import "./styles/server-properties.css";
 @import "./styles/settings-nodes.css";
 @import "./styles/files-console.css";
-@import "./styles/schedules.css";
-@import "./styles/typography.css";
-@import "./styles/canonical-layout.css";
-@import "./styles/mods.css";
-@import "./styles/core-adoption.css";
 @import "./styles/file-manager.css";
-@import "./styles/confirmation-modal.css";
-@import "./styles/primitives.css";
-@import "./styles/responsive.css";
+@import "./styles/schedules.css";
+@import "./styles/mods.css";
 @import "./styles/settings.css";
+@import "./styles/confirmation-modal.css";
+@import "./styles/responsive.css";
 @import "./styles/motion.css";
+
+.workspaceHeader h2 {
+  font-family: var(--font-page-heading);
+  font-size: clamp(32px, 4.5vw, 72px);
+  font-weight: 650;
+}
+
+@media (max-width: 1366px) {
+  .workspaceHeader h2 {
+    font-size: clamp(20px, 1.75vw, 28px);
+  }
+}
+
+@media (max-width: 720px) {
+  .workspaceHeader h2 {
+    font-size: clamp(20px, 6vw, 27px);
+  }
+}

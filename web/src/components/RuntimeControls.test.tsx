@@ -29,8 +29,10 @@ describe("RuntimeControls", () => {
     expect(html).toContain('aria-label="Container controls"');
     expect(html).toContain('aria-busy="false"');
     expect(html).toContain('data-action="start"');
+    expect(html).toContain('controlGlyph-start');
     expect(html).toContain('aria-label="Start"');
     expect(html).toContain('data-action="restart"');
+    expect(html).toContain('controlGlyph-restart');
     expect(html).toContain('aria-label="Restart unavailable: Start the server before restarting it."');
   });
 

@@ -23,21 +23,89 @@
   align-items: start;
 }
 
-.overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-  grid-template-areas:
-    "summary summary summary summary summary summary summary summary summary summary summary summary"
-    "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-    "players players players players players players automation automation automation automation automation automation"
-    "events events events events events events events events events events events events";
-}
-
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
 .overviewDashboardGrid > .resourcePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
-.overviewDashboardGrid > .modsHealthPanel { grid-area: mods; }
-.overviewDashboardGrid > .schedulePanel { grid-area: automation; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
+
+.overviewSupportStack {
+  display: contents;
+}
+
+.overviewSupportStack > .modsHealthPanel { grid-area: mods; }
+.overviewSupportStack > .schedulePanel { grid-area: automation; }
+
+.overviewCard {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.overviewCard > .uiPanelHeader,
+.overviewCard .uiEmptyState {
+  margin: 0;
+}
+
+.overviewCard > .uiPanelHeader {
+  min-height: 36px;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.overviewCardHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.overviewCardBody,
+.overviewCardList {
+  min-width: 0;
+  min-height: 0;
+}
+
+.overviewCardBody {
+  display: grid;
+  align-content: start;
+}
+
+.overviewCardRow {
+  min-width: 0;
+  min-height: 52px;
+  border: var(--border-subtle) solid transparent;
+  border-bottom-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+button.overviewCardRow {
+  cursor: pointer;
+}
+
+button.overviewCardRow:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 52%, var(--surface-raised));
+  color: var(--text);
+  box-shadow: none;
+  transform: none;
+}
+
+button.overviewCardRow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 
 .overviewDashboardGrid > .overviewSummary {
   display: grid;
@@ -131,24 +199,6 @@
   color: var(--text-muted);
   font-size: 12px;
   text-align: right;
-}
-
-.panel.modUpdatesCard {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  min-height: 72px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0;
-  border-color: var(--border-panel);
-  background: var(--surface-raised);
-  color: var(--text);
-  padding: 0;
-  text-align: left;
-  white-space: normal;
-  overflow: hidden;
 }
 
 .serverTimelinePanel {
@@ -359,44 +409,11 @@
   color: var(--text-muted);
 }
 
-.modUpdatesCardOpen {
-  width: 100%;
-  min-width: 0;
-  align-self: stretch;
-  display: grid;
-  align-items: center;
-  justify-content: stretch;
-  justify-items: stretch;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  color: inherit;
-  padding: var(--space-4);
-  font: inherit;
-  text-align: left;
-  white-space: normal;
-  cursor: pointer;
-}
-
-.modUpdatesCardOpen:hover:not(:disabled),
-.modUpdatesCardOpen:active:not(:disabled) {
-  border-color: transparent;
-  background: transparent;
-  color: inherit;
-  box-shadow: none;
-  transform: none;
-}
-
-.modUpdatesCardOpen:focus-visible {
-  outline-offset: -4px;
-}
-
 .modUpdatesRefreshButton {
   width: var(--control-height-compact);
   min-width: var(--control-height-compact);
   height: var(--control-height-compact);
   min-height: var(--control-height-compact);
-  margin-right: var(--space-4);
   padding: 0;
 }
 
@@ -405,14 +422,287 @@
   height: 17px;
 }
 
-.modUpdatesRefreshLabel {
-  display: none;
-}
-
 .serverTimelineEChart {
   width: 100%;
   height: 100%;
 }
+
+.serverTimelineVisualization {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.serverTimelineAnnotationStage {
+  position: relative;
+  min-height: 66px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
+}
+
+.serverTimelineAnnotationStage .serverTimelineAnnotations { bottom: 0; }
+
+.serverTimelinePlayers,
+.serverTimelineMetricBand {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.serverTimelinePlayerAxis,
+.serverTimelinePlayerRow {
+  display: grid;
+  grid-template-columns: var(--timeline-label-gutter) minmax(0, 1fr);
+}
+
+.serverTimelinePlayerAxis {
+  position: relative;
+  z-index: 4;
+  min-height: 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+.serverTimelinePlayerAxis > span {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.serverTimelinePlayerAxis > div {
+  position: relative;
+  margin-right: 24px;
+}
+
+.serverTimelinePlayerAxis time {
+  position: absolute;
+  top: 7px;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.serverTimelinePlayerAxis time:first-child { transform: none; }
+.serverTimelinePlayerAxis time:last-child { transform: translateX(-100%); }
+
+.serverTimelinePlayerScroller {
+  max-height: 260px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+.serverTimelinePlayerGroup {
+  --player-session-color: var(--timeline-leave);
+  min-width: 0;
+}
+
+.serverTimelinePlayerGroup.tone-online { --player-session-color: var(--timeline-join); }
+
+.serverTimelinePlayerGroupHeader {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--player-session-color);
+  background: color-mix(in srgb, var(--player-session-color) 5%, var(--surface-raised));
+  color: var(--player-session-color);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.serverTimelinePlayerGroupHeader small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-meta);
+}
+
+.serverTimelinePlayerRow {
+  min-height: 40px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.serverTimelinePlayerGroup:last-child .serverTimelinePlayerRow:last-child { border-bottom: 0; }
+
+.serverTimelinePlayerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.serverTimelinePlayerIdentity strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverTimelinePlayerStatus {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+}
+
+.serverTimelinePlayerStatus.tone-online { color: var(--timeline-join); }
+.serverTimelinePlayerStatus.tone-offline { color: var(--timeline-leave); }
+
+.serverTimelinePlayerStatus svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.serverTimelinePlayerTrack {
+  position: relative;
+  min-width: 0;
+  margin-right: 24px;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(16.666% - 1px), var(--border-muted) calc(16.666% - 1px), var(--border-muted) 16.666%);
+}
+
+.serverTimelineNowLine {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed var(--accent);
+  pointer-events: none;
+}
+
+.serverTimelineSession {
+  --session-color: var(--timeline-leave);
+  position: absolute;
+  z-index: 2;
+  top: 21px;
+  height: 2px;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--session-color);
+  color: var(--session-color);
+  outline: none;
+}
+
+.serverTimelineSession.tone-online { --session-color: var(--timeline-join); }
+
+.serverTimelineSession::before,
+.serverTimelineSession::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%);
+  border: 1.5px solid var(--session-color);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.serverTimelineSession::before { left: -3px; background: var(--session-color); }
+.serverTimelineSession::after { right: -3px; }
+.serverTimelineSession.is-open::after { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 16%, transparent); }
+.serverTimelineSession.is-start-clipped::before { width: 8px; height: 2px; left: 0; border: 0; border-radius: 0; background: linear-gradient(to right, transparent, var(--session-color)); }
+.serverTimelineSession.is-end-clipped::after { width: 8px; height: 2px; right: 0; border: 0; border-radius: 0; background: linear-gradient(to left, transparent, var(--session-color)); }
+.serverTimelineSession:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 22%, transparent); }
+
+.serverTimelineSessionDuration,
+.serverTimelineSessionTime {
+  position: absolute;
+  z-index: 2;
+  color: var(--text);
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.serverTimelineSessionDuration {
+  top: -5px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: var(--weight-title);
+}
+
+.serverTimelineSessionTime { top: 7px; color: var(--text-muted); }
+.serverTimelineSessionTime.is-start { left: 0; transform: translateX(-20%); }
+.serverTimelineSessionTime.is-end { right: 0; transform: translateX(20%); }
+
+.serverTimelinePlayerEmpty {
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.serverTimelinePlayerStatusNotice {
+  margin-top: calc(var(--space-3) * -1);
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-subtle));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));
+  color: var(--status-warning-foreground);
+  font-size: 10px;
+}
+
+.serverTimelineMetricBands {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.serverTimelineMetricBand {
+  position: relative;
+  height: 160px;
+}
+
+.serverTimelineMetricBand.is-prominent { height: clamp(220px, 18vw, 300px); }
+
+.serverTimelineMetricBandLabel {
+  position: absolute;
+  z-index: 2;
+  top: 13px;
+  left: 18px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  pointer-events: none;
+}
+
+.serverTimelineMetricBandLabel.tone-cpu { color: var(--timeline-cpu); }
+.serverTimelineMetricBandLabel.tone-memory { color: var(--timeline-memory); }
+.serverTimelineMetricBandLabel.tone-network { color: var(--timeline-network-in); }
+.serverTimelineMetricBandLabel.tone-players { color: var(--timeline-players); }
 
 .serverTimelineHoverTooltip {
   position: absolute;
@@ -423,19 +713,25 @@
 .serverTimelineHoverTooltip.align-end { transform: translateX(-100%); }
 .serverTimelineHoverTooltip.is-pinned .serverTimelineTooltip { border-color: var(--accent); }
 
-.serverTimelineCursor {
+.serverTimelineSharedGuide {
+  --timeline-guide-color: var(--accent);
   position: absolute;
   z-index: 3;
+  bottom: 0;
   width: 1px;
   transform: translateX(-50%);
-  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  background: color-mix(in srgb, var(--timeline-guide-color) 64%, transparent);
   pointer-events: none;
 }
 
-.serverTimelineCursor.is-pinned {
+.serverTimelineSharedGuide.is-pinned {
   width: 2px;
-  background: var(--accent);
+  background: var(--timeline-guide-color);
 }
+
+.serverTimelineSharedGuide.tone-server { --timeline-guide-color: var(--timeline-server); }
+.serverTimelineSharedGuide.tone-automation,
+.serverTimelineSharedGuide.tone-planned { --timeline-guide-color: var(--timeline-schedule); }
 
 .serverTimelineAnnotations {
   position: absolute;
@@ -456,57 +752,67 @@
   pointer-events: none;
 }
 
-.timelineAnnotationConnector {
+.timelineAnnotationCluster {
   position: absolute;
-  z-index: 0;
-  bottom: 0;
-  left: 0;
-  transform: translateX(-50%);
-  background: var(--annotation-color);
-  opacity: 0.84;
-}
-
-.timelineAnnotationLabel {
-  position: absolute;
-  width: 28px;
-  max-width: 28px;
   height: 30px;
   min-width: 28px;
-  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 5px;
-  overflow: hidden;
   transform: translateX(-14px);
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  background: transparent;
   color: var(--text);
-  padding: 0 2px;
-  box-shadow: var(--shadow-xs);
+  padding: 0;
   font: inherit;
-  font-size: 11px;
   font-weight: var(--weight-title);
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
 }
 
-.timelineAnnotationGlyph {
-  position: relative;
-  z-index: 1;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--annotation-color);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--annotation-color);
+.timelineAnnotationCluster.is-multiple {
+  min-width: max-content;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  padding: 1px 8px 1px 2px;
+  box-shadow: var(--shadow-xs);
 }
 
-.timelineAnnotationGlyph svg {
+.timelineAnnotationCluster.is-labeled {
+  width: max-content;
+  padding-right: 6px;
+}
+
+.timelineAnnotationIconStack {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.timelineAnnotationClusterIcon {
+  --cluster-icon-color: var(--timeline-server);
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--cluster-icon-color);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--cluster-icon-color);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+.timelineAnnotationClusterIcon + .timelineAnnotationClusterIcon { margin-left: -9px; }
+.timelineAnnotationClusterIcon.tone-server { --cluster-icon-color: var(--timeline-server); }
+.timelineAnnotationClusterIcon.tone-automation,
+.timelineAnnotationClusterIcon.tone-planned { --cluster-icon-color: var(--timeline-schedule); }
+.timelineAnnotationClusterIcon.tone-planned { border-style: dashed; background: var(--surface-muted); }
+
+.timelineAnnotationClusterIcon svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -516,27 +822,28 @@
   stroke-linejoin: round;
 }
 
-.timelineAnnotationLabelText {
-  width: 0;
-  min-width: 0;
-  display: grid;
-  align-content: center;
-  gap: 1px;
-  overflow: hidden;
-  opacity: 0;
+.timelineAnnotationClusterIcon .controlGlyph-start,
+.timelineAnnotationClusterIcon .controlGlyph-stop {
+  fill: currentColor;
+  stroke: none;
 }
 
-.timelineAnnotationLabel.is-expanded {
-  width: max-content;
-  max-width: 220px;
-  min-width: 108px;
-  padding: 0 8px 0 2px;
+.timelineAnnotationClusterIcon .controlGlyph-restart {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
 }
 
-.timelineAnnotationLabel.is-expanded .timelineAnnotationLabelText {
-  width: auto;
-  flex: 1 1 auto;
-  opacity: 1;
+.timelineAnnotationClusterCount {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+}
+
+.timelineAnnotationClusterLabel {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: var(--weight-title);
 }
 
 .timelineAnnotationOccurrenceBadge,
@@ -562,89 +869,11 @@
   white-space: nowrap;
 }
 
-.timelineAnnotationLabel.is-stack {
-  height: auto;
-  min-height: 0;
-  align-items: stretch;
-  flex-direction: column;
-  gap: 0;
-  border-radius: 15px;
-  padding: 2px;
-}
-
-.timelineAnnotationPreviewRow {
-  --annotation-row-color: var(--annotation-color);
-  min-width: 0;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.timelineAnnotationPreviewRow + .timelineAnnotationPreviewRow,
-.timelineAnnotationMore {
-  border-top: 1px solid var(--border-muted);
-}
-
-.timelineAnnotationPreviewRow .timelineAnnotationGlyph {
-  width: 22px;
-  height: 22px;
-  border-width: 1.5px;
-  border-color: var(--annotation-row-color);
-  color: var(--annotation-row-color);
-}
-
-.timelineAnnotationPreviewRow .timelineAnnotationLabelText {
-  width: auto;
-  flex: 1 1 auto;
-  opacity: 1;
-  text-align: left;
-}
-
-.timelineAnnotationPreviewRow.tone-join { --annotation-row-color: var(--timeline-join); }
-.timelineAnnotationPreviewRow.tone-leave { --annotation-row-color: var(--timeline-leave); }
-.timelineAnnotationPreviewRow.tone-server { --annotation-row-color: var(--timeline-server); }
-.timelineAnnotationPreviewRow.tone-automation,
-.timelineAnnotationPreviewRow.tone-planned { --annotation-row-color: var(--timeline-schedule); }
-
-.timelineAnnotationMore {
-  min-height: 24px;
-  display: flex;
-  align-items: center;
-  padding: 0 7px 0 29px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-meta);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.timelineAnnotationLabelText strong,
-.timelineAnnotationLabelText small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timelineAnnotationLabelText strong { color: var(--text); font-size: 11px; line-height: 1.1; }
-.timelineAnnotationLabelText small { color: var(--text-muted); font-size: 9px; font-weight: var(--weight-meta); line-height: 1.1; }
-
-.timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
-.timelineAnnotationLabel.align-end.is-expanded { padding: 0 2px 0 8px; }
-.timelineAnnotationLabel.is-stack.align-end { flex-direction: column; padding: 2px; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationPreviewRow { flex-direction: row-reverse; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationLabelText { text-align: right; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationMore { justify-content: flex-end; padding: 0 29px 0 7px; }
-.timelineAnnotationMarker.tone-join { --annotation-color: var(--timeline-join); }
-.timelineAnnotationMarker.tone-leave { --annotation-color: var(--timeline-leave); }
-.timelineAnnotationMarker.tone-server { --annotation-color: var(--timeline-server); }
-.timelineAnnotationMarker.tone-automation,
-.timelineAnnotationMarker.tone-planned { --annotation-color: var(--timeline-schedule); }
-.timelineAnnotationMarker.is-planned .timelineAnnotationGlyph { border-style: dashed; background: var(--surface-muted); }
-.timelineAnnotationLabel[aria-expanded="true"] { border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
-.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-14px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
-.timelineAnnotationLabel.align-end:hover:not(:disabled) { transform: translateX(calc(-100% + 14px)) translateY(-1px); }
-.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.timelineAnnotationCluster.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
+.timelineAnnotationCluster.align-end.is-multiple { padding: 1px 2px 1px 8px; }
+.timelineAnnotationCluster[aria-expanded="true"] { background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
+.timelineAnnotationCluster:hover:not(:disabled) { color: var(--text); filter: brightness(1.08); }
+.timelineAnnotationCluster:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .serverTimelineAnnotationPopover {
   position: absolute;
@@ -718,8 +947,6 @@
 }
 
 .serverTimelineAnnotationPopoverItem.is-interactive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.serverTimelineAnnotationPopoverItem.tone-join { --annotation-color: var(--timeline-join); }
-.serverTimelineAnnotationPopoverItem.tone-leave { --annotation-color: var(--timeline-leave); }
 .serverTimelineAnnotationPopoverItem.tone-server { --annotation-color: var(--timeline-server); }
 .serverTimelineAnnotationPopoverItem.tone-automation,
 .serverTimelineAnnotationPopoverItem.tone-planned { --annotation-color: var(--timeline-schedule); }
@@ -832,51 +1059,16 @@
   .serverTimelineChart {
     height: 360px;
   }
+
+  .serverTimelinePlayerScroller { max-height: 220px; }
+  .serverTimelineMetricBand.is-prominent { height: 220px; }
+  .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .serverTimelinePanel * { transition: none !important; animation: none !important; }
 }
 
-.modUpdatesCompact {
-  grid-column: 1 / -1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.modUpdatesWide {
-  display: none;
-}
-
-.modUpdatesWideHeader {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  padding-bottom: var(--space-3);
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-}
-
-.modUpdatesHeaderCopy {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-
-.modUpdatesHeaderCopy > strong {
-  overflow: hidden;
-  margin: 0;
-  color: var(--text);
-  font-size: var(--type-section-title-size);
-  font-weight: var(--weight-heading);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modUpdatesHeaderCopy > small,
 .modUpdatesRemaining {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
@@ -904,10 +1096,6 @@
   background: transparent;
   padding: 7px 2px;
   transition: background-color 150ms ease;
-}
-
-.modUpdatesCardOpen:hover:not(:disabled) .modUpdatesListItem {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }
 
 .modUpdatesListItem > .buttonIcon {
@@ -981,39 +1169,6 @@
 .modUpdatesVersionSkeleton {
   width: min(142px, 34%);
   height: 10px;
-}
-
-.modUpdatesCardSkeleton {
-  cursor: default;
-  padding: var(--space-4);
-}
-
-.modUpdatesCountSkeleton {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-}
-
-.modUpdatesCompact > strong {
-  min-width: 42px;
-  min-height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sentinel-warning) 18%, var(--surface-raised));
-  color: var(--sentinel-warning);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.modUpdatesCard--healthy .modUpdatesCompact > strong {
-  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
-  color: var(--sentinel-success);
-}
-
-.modUpdatesCompact > strong > svg {
-  width: 20px;
-  height: 20px;
 }
 
 .modUpdatesCard--healthy .modUpdatesListItem--healthy {
@@ -1412,12 +1567,6 @@
   }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
 @media (min-width: 721px) and (max-width: 980px) {
   .overviewDashboardGrid {
     grid-template-columns: minmax(0, 1fr);
@@ -1496,67 +1645,6 @@
   }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players players players automation automation automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-}
-
-@media (min-width: 1440px) and (max-width: 2559px) {
-  .overviewDashboardGrid > .modsHealthPanel {
-    align-self: stretch;
-  }
-
-  .modUpdatesCard {
-    min-height: 136px;
-    display: block;
-  }
-
-  .modUpdatesCardOpen {
-    width: 100%;
-    height: 100%;
-  }
-
-  .modUpdatesRefreshButton {
-    position: absolute;
-    top: var(--space-4);
-    right: var(--space-4);
-    width: auto;
-    min-width: 0;
-    margin: 0;
-    padding-inline: var(--space-3);
-  }
-
-  .modUpdatesRefreshLabel {
-    display: inline;
-  }
-
-  .modUpdatesWideHeader {
-    padding-right: 104px;
-  }
-
-  .modUpdatesCompact {
-    display: none;
-  }
-
-  .modUpdatesWide {
-    height: 100%;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    align-content: stretch;
-    gap: var(--space-3);
-  }
-
-  .modUpdatesListItem:nth-child(n + 2),
-  .modUpdatesRemaining {
-    display: none;
-  }
-}
-
 @media (min-width: 2560px) {
   .workspace.workspacePage-overview {
     max-width: none;
@@ -1570,66 +1658,12 @@
     margin-inline: auto;
   }
 
-  .overviewDashboardGrid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players mods mods mods mods automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-
-  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players players players automation automation automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-
   .overviewDashboardGrid > .overviewSummary {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
     display: grid;
-  }
-
-  .overviewDashboardGrid > .modsHealthPanel {
-    align-self: stretch;
-  }
-
-  .modUpdatesCard {
-    min-height: 280px;
-    display: block;
-  }
-
-  .modUpdatesCardOpen {
-    width: 100%;
-    height: 100%;
-  }
-
-  .modUpdatesRefreshButton {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    margin: 0;
-  }
-
-  .modUpdatesWideHeader {
-    padding-right: 40px;
-  }
-
-  .modUpdatesCompact {
-    display: none;
-  }
-
-  .modUpdatesWide {
-    height: 100%;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    align-content: stretch;
-    gap: var(--space-3);
   }
 
   .workspacePage-overview .resourcePanel .resourceRows {
@@ -1657,7 +1691,393 @@
     min-height: 132px;
   }
 
-  .workspacePage-overview .activePlayerGrid {
+}
+
+
+/* Overview cohesion migrated from the former adoption layer */
+/* Core application adoption ------------------------------------------------ */
+
+.overviewSummary .summaryTile {
+  min-height: 64px;
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.overviewSummary .statusGlowTile {
+  --status-glow-color: var(--sentinel-info);
+  --status-glow-x: 50%;
+  --status-glow-y: 50%;
+  --status-tilt-x: 0deg;
+  --status-tilt-y: 0deg;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  cursor: default;
+  background-color: color-mix(in srgb, var(--status-glow-color) 7%, var(--surface-raised));
+  transform: perspective(640px) rotateX(var(--status-tilt-x)) rotateY(var(--status-tilt-y));
+  transform-style: preserve-3d;
+  transition:
+    border-color var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-slow) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-spring);
+  will-change: transform;
+}
+
+.overviewSummary .statusGlowTile.running { --status-glow-color: var(--sentinel-success); }
+.overviewSummary .statusGlowTile.warning { --status-glow-color: var(--sentinel-warning); }
+.overviewSummary .statusGlowTile.stopped,
+.overviewSummary .statusGlowTile.danger { --status-glow-color: var(--sentinel-danger); }
+
+.overviewSummary .statusGlowTile::before {
+  content: "";
+  display: block;
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 150px at var(--status-glow-x) var(--status-glow-y),
+    color-mix(in srgb, var(--status-glow-color) 28%, transparent),
+    color-mix(in srgb, var(--status-glow-color) 10%, transparent) 38%,
+    transparent 72%
+  );
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) ease;
+  pointer-events: none;
+}
+
+.overviewSummary .statusGlowTile > .uiMetricTileMarker,
+.overviewSummary .statusGlowTile > .uiMetricTileCopy {
+  position: relative;
+  z-index: 1;
+}
+
+.overviewSummary .statusGlowTile:hover,
+.overviewSummary .statusGlowTile[data-glow-active="true"] {
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--status-glow-color) 58%, var(--border-panel));
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--status-glow-color) 20%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--status-glow-color) 13%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
+  transform: perspective(640px) translateY(-2px) rotateX(var(--status-tilt-x)) rotateY(var(--status-tilt-y));
+}
+
+.overviewSummary .statusGlowTile:hover::before,
+.overviewSummary .statusGlowTile[data-glow-active="true"]::before {
+  opacity: 1;
+}
+
+.overviewSummary .statusGlowTile .uiMetricTileMarker {
+  transition:
+    background var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-base) ease,
+    transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.overviewSummary .statusGlowTile:hover .uiMetricTileMarker,
+.overviewSummary .statusGlowTile[data-glow-active="true"] .uiMetricTileMarker {
+  background: color-mix(in srgb, var(--status-glow-color) 34%, transparent);
+  box-shadow:
+    inset 0 0 0 8px color-mix(in srgb, var(--status-glow-color) 12%, transparent),
+    0 0 18px color-mix(in srgb, var(--status-glow-color) 42%, transparent);
+  transform: scaleY(1.12);
+}
+
+.resourceMetricLabel > span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.resourceMetricLabel > strong {
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.3;
+}
+
+.overviewSummary .summaryStatusText {
+  color: var(--text);
+  font-size: clamp(16px, 1.35vw, 20px);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.overviewSummary .summaryTile.state.running .summaryStatusText {
+  color: var(--sentinel-success);
+}
+
+.overviewSummary .summaryTile.state.stopped .summaryStatusText,
+.overviewSummary .summaryTile.state.danger .summaryStatusText {
+  color: var(--sentinel-danger);
+}
+
+.overviewSummary .summaryTile.state.warning .summaryStatusText {
+  color: var(--status-warning-foreground);
+}
+
+.overviewSummary .summaryTile.state.neutral .summaryStatusText {
+  color: var(--status-neutral-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overviewSummary .statusGlowTile,
+  .overviewSummary .statusGlowTile:hover,
+  .overviewSummary .statusGlowTile[data-glow-active="true"],
+  .overviewSummary .statusGlowTile .uiMetricTileMarker {
+    transition: none;
+    transform: none;
+  }
+}
+
+.resourceRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.eventRow {
+  min-height: 40px;
+}
+
+.eventRow strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.eventRow small,
+.scheduledRunTime {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.eventHideButton.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.eventHideButton.uiButton:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.resourceScopeControl .uiButton {
+  min-width: 40px;
+  min-height: 30px;
+  height: 30px;
+  padding-inline: var(--space-2);
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-muted);
+}
+
+.resourceScopeControl .uiButton.active {
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton,
+.uiButton.quickActionButton {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  box-shadow: none;
+}
+
+.uiButton.runtimeControlButton.start {
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 80%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
+}
+
+.uiButton.runtimeControlButton.stop {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.uiButton.runtimeControlButton.restart,
+.uiButton.quickActionButton {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.uiButton.runtimeControlButton.restart:hover:not(:disabled),
+.uiButton.quickActionButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton:disabled,
+.uiButton.quickActionButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+@media (min-width: 981px) {
+  .overviewDashboardGrid {
+    grid-template-areas:
+      "summary summary summary summary summary summary summary summary summary summary summary summary"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+      "players players players players players support support support support support support support"
+      "events events events events events events events events events events events events";
+  }
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
+    display: grid;
+  }
+
+  .overviewSupportStack {
+    grid-area: support;
+    min-width: 0;
+    display: grid;
+    align-self: stretch;
+    align-content: start;
+    gap: var(--space-4);
+  }
+
+  .overviewSupportStack > .modsHealthPanel,
+  .overviewSupportStack > .schedulePanel {
+    grid-area: auto;
+  }
+
+  .overviewSummary .summaryTile {
+    min-height: 72px;
+    grid-template-columns: 6px minmax(0, 1fr);
+    gap: 10px;
+    padding: var(--space-3);
+    border-color: var(--border-panel);
+    box-shadow: none;
+  }
+
+  .overviewSummary .uiMetricTileMarker {
+    width: 6px;
+    height: 28px;
+    border-radius: 999px;
+    box-shadow: none;
+  }
+
+  .overviewSummary .uiMetricTileCopy > strong {
+    display: block;
+    overflow: hidden;
+    padding-bottom: 2px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .overviewSummary .summaryStatusText {
+    color: var(--text);
+    font-size: var(--type-card-title-size);
+    text-transform: uppercase;
+  }
+
+  .overviewSummary .summaryTile.state.running .summaryStatusText { color: var(--sentinel-success); }
+  .overviewSummary .summaryTile.state.stopped .summaryStatusText,
+  .overviewSummary .summaryTile.state.danger .summaryStatusText { color: var(--sentinel-danger); }
+
+  .serverTimelinePanel {
+    padding: var(--space-4);
+    border-color: var(--border-panel);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: none;
+  }
+
+  .serverTimelinePanel > .uiPanelHeader {
+    min-height: 36px;
+    padding-bottom: var(--space-3);
+    border-bottom: var(--border-subtle) solid var(--border-row);
+  }
+
+  .playersPanel .overviewCardBody,
+  .activePlayerRoster {
+    height: 100%;
+  }
+
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activePlayerGrid {
+    max-height: 430px;
+    align-content: start;
+  }
+
+  .modUpdatesCard,
+  .schedulePanel {
+    align-self: start;
+  }
+
+  .modUpdatesList,
+  .scheduleUpcomingList {
+    gap: var(--space-1);
+  }
+
+  .modUpdatesListItem,
+  .scheduleUpcomingItem {
+    min-height: 52px;
+    height: 52px;
+  }
+
+  .modUpdatesRemaining {
+    justify-self: start;
+    margin-top: var(--space-1);
+  }
+
+  .eventsPanel {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .overviewPage .eventsPanel .eventRow,
+  .overviewPage .eventsPanel .eventRow.success,
+  .overviewPage .eventsPanel .eventRow.warning,
+  .overviewPage .eventsPanel .eventRow.eventKind--player_reconnected {
+    border-color: var(--border-row);
+    background: transparent;
+  }
+
+  .overviewPage .eventsPanel .eventRow.error {
+    border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
+    background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));
+  }
+}
+
+@media (min-width: 1321px) {
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2000px) {
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

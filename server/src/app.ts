@@ -94,7 +94,7 @@ import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
-import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
+import { timelinePlayerActivity, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
@@ -114,6 +114,12 @@ import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js"
 import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
 import { OperationService, type ForegroundOperationInput } from "./operations/operationService.js";
+import { ExportArtifactMaintenance, exportArtifactExpiresAt, exportOperationResult } from "./exportArtifactMaintenance.js";
+import {
+  assertExportServerAccess,
+  assertInstanceExportAllowed,
+  scopedExportServerIds
+} from "./exportAuthorization.js";
 import { diffModSnapshots, snapshotMods } from "./modRestartState.js";
 import {
   applyImportArtifact,
@@ -426,6 +432,7 @@ let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
 let operationsRepository: OperationsRepository;
 let operationService: OperationService;
+let exportArtifactMaintenance: ExportArtifactMaintenance;
 let storageDatabase: StorageDatabase;
 let modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
 const panelNodeConnections = new PanelNodeConnections();
@@ -454,6 +461,7 @@ const consoleHeartbeatIntervalMs = 5_000;
 const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
+const exportMaintenanceIntervalMs = 15 * 60 * 1000;
 
 type LogFields = Record<string, unknown>;
 
@@ -3798,7 +3806,7 @@ function targetNodeIdFromBody(value: unknown) {
   return targetNodeId;
 }
 
-async function startExportOperation(input: { serverIds?: string[] }, createdBy: string) {
+async function startExportOperation(input: { serverIds?: string[]; includeInstance: boolean }, createdBy: string) {
   return operationService.enqueue<{
     artifact: Awaited<ReturnType<typeof createExportArtifact>>;
     written: Awaited<ReturnType<typeof writeExportArtifact>>;
@@ -3816,22 +3824,30 @@ async function startExportOperation(input: { serverIds?: string[] }, createdBy: 
         filename: written.filename,
         size: written.size,
         sha256: written.sha256,
-        downloadUrl: `/api/exports/${operationId}/download`
+        downloadUrl: `/api/exports/${operationId}/download`,
+        expiresAt: new Date(Date.now() + config.exportRetentionMs).toISOString()
       },
       artifactPath: written.path,
+      serverIds: artifact.servers.map((entry) => entry.server.id),
+      includeInstance: input.includeInstance,
       serverCount: artifact.servers.length,
       serverFileCount: artifact.manifest.content.serverFiles
     }),
     onError: (error, operation) => {
       logError({ operationId: operation.id, action: "export", status: "failed", ...errorLogFields(error) }, "Export operation failed");
+    },
+    onSettled: async (operation) => {
+      if (!await exportArtifactMaintenance.cleanupSettledOperation(operation)) {
+        logWarn({ operationId: operation.id, status: operation.status }, "Could not clean up an incomplete export artifact; periodic maintenance will retry");
+      }
     }
   }, async (operation, report) => {
     const artifact = await createExportArtifact({
       appVersion,
-      settings: settingsRepository.get(),
       nodes: await readNodes(),
       servers: await listManagedServers(),
       selectedServerIds: input.serverIds,
+      includeInstance: input.includeInstance,
       modPreferencesForServer: (serverId) => modPreferencesRepository.list(serverId),
       report
     });
@@ -3840,7 +3856,7 @@ async function startExportOperation(input: { serverIds?: string[] }, createdBy: 
   });
 }
 
-async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings?: boolean }, createdBy: string) {
+async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings: boolean }, createdBy: string) {
   return operationService.enqueue({
     type: "import.run",
     nodeId: input.targetNodeId,
@@ -3864,7 +3880,6 @@ async function startImportOperation(input: { artifactBase64: string; targetNodeI
       storage: storageDatabase,
       serversRepository,
       modPreferencesRepository,
-      settingsRepository,
       importInstanceSettings: input.importInstanceSettings,
       report
     });
@@ -4428,6 +4443,24 @@ const app = Fastify({
   logController: new LogController({ disableRequestLogging: true }),
   bodyLimit: 180 * 1024 * 1024
 });
+app.setErrorHandler((error, request, reply) => {
+  const expectedUserError = isExpectedUserError(error);
+  const statusCode = errorStatusCode(error, reply, expectedUserError);
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const fields = {
+    ...routeLogFields(request, statusCode),
+    category: errorCategory(error, statusCode),
+    ...errorLogFields(error, statusCode)
+  };
+  if (statusCode >= 500) {
+    app.log.error(fields, "API request failed");
+  } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
+    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
+  } else {
+    app.log.warn(fields, "API request rejected");
+  }
+  reply.code(statusCode).send(publicApiError(error, statusCode));
+});
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;
   panelNodeConnections.close();
@@ -4464,15 +4497,39 @@ operationService = new OperationService(operationsRepository, {
   clearRestartRequired: (serverId) => { serversRepository.clearRestartRequired(serverId); },
   errorDetails: detailedErrorMessage
 });
+exportArtifactMaintenance = new ExportArtifactMaintenance(
+  config.exportsDir,
+  operationsRepository,
+  config.exportRetentionMs,
+  operationRetentionMs,
+  operationRetentionMaxRows
+);
 const recoveredOperations = operationsRepository.failIncompleteOnStartup();
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
 }
-const prunedOperations = operationsRepository.deleteFinishedBefore(new Date(Date.now() - operationRetentionMs).toISOString())
-  + operationsRepository.trimFinished(operationRetentionMaxRows);
-if (prunedOperations > 0) {
-  logInfo({ operationCount: prunedOperations, retentionDays: 30, maxRows: operationRetentionMaxRows }, "Pruned old operation records");
-}
+let exportMaintenanceRunning = false;
+const runExportMaintenance = async () => {
+  if (exportMaintenanceRunning) return;
+  exportMaintenanceRunning = true;
+  try {
+    const result = await exportArtifactMaintenance.maintain();
+    if (result.expiredArtifacts || result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations) {
+      logInfo({ ...result, failures: undefined }, "Completed export artifact and operation maintenance");
+    }
+    for (const failure of result.failures) {
+      logWarn(failure, "Export artifact maintenance could not remove an artifact");
+    }
+  } catch (error) {
+    logWarn({ errorDetails: detailedErrorMessage(error) }, "Export artifact maintenance failed; the next scheduled run will retry");
+  } finally {
+    exportMaintenanceRunning = false;
+  }
+};
+await runExportMaintenance();
+const exportMaintenanceTimer = setInterval(() => void runExportMaintenance(), exportMaintenanceIntervalMs);
+exportMaintenanceTimer.unref();
+app.addHook("onClose", async () => { clearInterval(exportMaintenanceTimer); });
 const prunedLeases = fileEditLeasesRepository.pruneExpired();
 if (prunedLeases > 0) {
   logInfo({ leaseCount: prunedLeases }, "Pruned expired file edit leases");
@@ -5123,38 +5180,70 @@ registerOperationsRoutes(app, {
   operations: operationsRepository
 });
 
-app.post<{ Body: { serverIds?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
-  const user = await requireRequestPermission(request, "servers.view");
+app.post<{ Body: { serverIds?: unknown; includeInstance?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.export");
+  const includeInstance = optionalStrictBoolean(request.body?.includeInstance, "includeInstance", false);
+  if (includeInstance) assertInstanceExportAllowed(user);
+  const servers = await listManagedServers();
+  const serverIds = scopedExportServerIds(
+    user,
+    selectedExportServerIds(request.body?.serverIds),
+    servers.map((server) => server.id)
+  );
   return startExportOperation({
-    serverIds: selectedExportServerIds(request.body.serverIds)
+    serverIds,
+    includeInstance
   }, user.id);
 });
 
 app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download", async (request, reply) => {
-  await requireRequestPermission(request, "servers.view");
+  const user = await requireRequestPermission(request, "servers.export");
   const operation = operationsRepository.find(validateOperationId(request.params.operationId));
-  if (!operation || operation.type !== "export.run") {
+  if (!operation || operation.type !== "export.run" || operation.createdBy !== user.id) {
     return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export operation not found"));
   }
   if (operation.status !== "succeeded") {
     throw new Error("Export is not ready for download");
   }
-  const result = operation.result as { artifactPath?: string; artifact?: { filename?: string; size?: number } } | undefined;
+  const expiresAt = exportArtifactExpiresAt(operation, config.exportRetentionMs);
+  if (expiresAt !== undefined && expiresAt <= Date.now()) {
+    await exportArtifactMaintenance.expireOperation(operation).catch((error) => {
+      logWarn({ operationId: operation.id, errorDetails: detailedErrorMessage(error) }, "Could not remove an expired export artifact during download");
+    });
+    return reply.code(410).send(apiErrorResponse("EXPORT_EXPIRED", "Export artifact has expired"));
+  }
+  const result = exportOperationResult(operation);
+  if (!Array.isArray(result.serverIds) || typeof result.includeInstance !== "boolean") {
+    return reply.code(410).send(apiErrorResponse("EXPORT_REGENERATION_REQUIRED", "This export predates current authorization metadata and must be regenerated"));
+  }
+  assertExportServerAccess(user, result.serverIds);
+  if (result.includeInstance) assertInstanceExportAllowed(user);
   const artifactPath = result?.artifactPath;
   if (!artifactPath || !isInsideServersDirectory(config.exportsDir, artifactPath)) {
     throw new Error("Export artifact is not available");
   }
+  try {
+    await stat(artifactPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export artifact is not available"));
+    }
+    throw error;
+  }
   reply.header("content-type", "application/json");
-  reply.header("content-disposition", `attachment; filename="${result?.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
-  if (result?.artifact?.size) reply.header("content-length", String(result.artifact.size));
+  reply.header("content-disposition", `attachment; filename="${result.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
+  if (result.artifact?.size) reply.header("content-length", String(result.artifact.size));
   return reply.send(exportDownloadStream(artifactPath));
 });
 
-app.post<{ Body: { artifactBase64?: string; targetNodeId?: string } }>("/api/imports/validate", destructiveRateLimit, async (request) => {
+app.post<{ Body: { artifactBase64?: string; targetNodeId?: string; importInstanceSettings?: boolean } }>("/api/imports/validate", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.create");
+  const importInstanceSettings = optionalStrictBoolean(request.body.importInstanceSettings, "importInstanceSettings", false);
+  if (importInstanceSettings) await requireRequestPermission(request, "integrations.manage");
   const artifact = parseExportArtifactBase64(request.body.artifactBase64 ?? "");
   return validateImportArtifact(artifact, {
     targetNodeId: typeof request.body.targetNodeId === "string" ? request.body.targetNodeId.trim() : undefined,
+    importInstanceSettings,
     nodes: await readNodes(),
     existingServers: await listManagedServers(),
     serversDir: config.serversDir,
@@ -5164,10 +5253,12 @@ app.post<{ Body: { artifactBase64?: string; targetNodeId?: string } }>("/api/imp
 
 app.post<{ Body: { artifactBase64?: string; targetNodeId?: string; importInstanceSettings?: boolean } }>("/api/imports/apply", destructiveRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.create");
+  const importInstanceSettings = optionalStrictBoolean(request.body.importInstanceSettings, "importInstanceSettings", false);
+  if (importInstanceSettings) await requireRequestPermission(request, "integrations.manage");
   return startImportOperation({
     artifactBase64: request.body.artifactBase64 ?? "",
     targetNodeId: targetNodeIdFromBody(request.body.targetNodeId),
-    importInstanceSettings: request.body.importInstanceSettings
+    importInstanceSettings
   }, user.id);
 });
 
@@ -5452,6 +5543,8 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
   if (to - from > timelineHistoryWindowMs) badRequest("Timeline range cannot exceed 24 hours");
   if (!Number.isInteger(requestedMaxPoints) || requestedMaxPoints < 100) badRequest("Timeline maxPoints must be a whole number of at least 100");
   const maxPoints = Math.min(1_200, requestedMaxPoints);
+  const contextFrom = generatedAt.getTime() - timelineHistoryWindowMs;
+  const timelineEvents = timelineEventsRepository.list(server.id, contextFrom, to);
   const rawSamples = resourceStatsRepository.listRange(server.id, from, to, true);
   const latestRaw = resourceStatsRepository.latest(server.id);
   const samples = timelineResourcePoints(rawSamples, from, to, maxPoints, latestRaw?.cpuCapacityCores);
@@ -5475,8 +5568,16 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
     generatedAt: generatedAt.toISOString(),
     latest,
     samples,
-    events: timelineEventsRepository.list(server.id, from, to),
+    events: timelineEvents.filter((event) => event.occurredAt >= from),
     schedules: scheduleResult.markers,
+    playerActivity: timelinePlayerActivity({
+      events: timelineEvents,
+      snapshot: playerSnapshotCoordinator?.latest(server.id),
+      contextFrom,
+      from,
+      to,
+      now: generatedAt.getTime()
+    }),
     scheduleAnnotationsAvailable,
     truncated: { schedules: scheduleResult.truncated }
   };
@@ -8488,25 +8589,6 @@ app.addHook("onClose", async () => {
 });
 
 await registerStaticFrontend(app);
-
-app.setErrorHandler((error, _request, reply) => {
-  const expectedUserError = isExpectedUserError(error);
-  const statusCode = errorStatusCode(error, reply, expectedUserError);
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const fields = {
-    ...routeLogFields(_request, statusCode),
-    category: errorCategory(error, statusCode),
-    ...errorLogFields(error, statusCode)
-  };
-  if (statusCode >= 500) {
-    app.log.error(fields, "API request failed");
-  } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
-    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
-  } else {
-    app.log.warn(fields, "API request rejected");
-  }
-  reply.code(statusCode).send(publicApiError(error, statusCode));
-});
 
 let scheduleTimer: NodeJS.Timeout | undefined;
 let schedulerClosed = false;

@@ -6,6 +6,7 @@ export const ALL_PERMISSIONS = [
   "servers.create",
   "servers.delete",
   "servers.editSettings",
+  "servers.export",
   "console.view",
   "console.command",
   "files.view",
@@ -35,6 +36,7 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   "servers.create": "create servers",
   "servers.delete": "delete servers",
   "servers.editSettings": "edit server settings",
+  "servers.export": "export server configuration",
   "console.view": "view console",
   "console.command": "send console commands",
   "files.view": "view files",
@@ -115,6 +117,7 @@ export const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, Permission[]> =
     "servers.create",
     "servers.delete",
     "servers.editSettings",
+    "servers.export",
     "files.delete"
   ],
   admin: [...ALL_PERMISSIONS]
@@ -126,6 +129,7 @@ export const PERMISSION_DEPENDENCIES: Record<Permission, Permission[]> = {
   "servers.create": ["servers.view"],
   "servers.delete": ["servers.view"],
   "servers.editSettings": ["servers.view"],
+  "servers.export": ["servers.view"],
   "console.view": [],
   "console.command": ["console.view"],
   "files.view": [],

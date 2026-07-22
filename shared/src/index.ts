@@ -6,6 +6,7 @@ export type Permission =
   | "servers.create"
   | "servers.delete"
   | "servers.editSettings"
+  | "servers.export"
   | "console.view"
   | "console.command"
   | "files.view"
@@ -316,6 +317,22 @@ export type ServerTimelineScheduleMarker = {
   message?: string;
 };
 
+export type ServerTimelinePlayerSession = {
+  id: string;
+  player: string;
+  startedAt: number;
+  endedAt: number | null;
+  startBoundary: "join" | "history-boundary";
+  endBoundary: "leave" | "server-end" | "online" | "history-boundary";
+};
+
+export type ServerTimelinePlayerActivity = {
+  snapshotState: PlayerSnapshot["state"];
+  sampledAt?: string;
+  onlineNames: string[];
+  sessions: ServerTimelinePlayerSession[];
+};
+
 export type ServerTimelineResponse = {
   from: number;
   to: number;
@@ -324,6 +341,7 @@ export type ServerTimelineResponse = {
   samples: ServerTimelineResourcePoint[];
   events: ServerTimelineEvent[];
   schedules: ServerTimelineScheduleMarker[];
+  playerActivity?: ServerTimelinePlayerActivity;
   scheduleAnnotationsAvailable: boolean;
   truncated: { schedules: boolean };
 };

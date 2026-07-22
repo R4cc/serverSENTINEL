@@ -435,14 +435,42 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
   });
   const now = Date.now();
   const eventFixtures = ([
+    { id: "timeline-started", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 48 * 60_000 - 15_000).toISOString(), occurredAt: now - 48 * 60_000 - 15_000, signature: "server_started", source: "logs/latest.log" },
     { id: "timeline-alex-join", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: new Date(now - 48 * 60_000).toISOString(), occurredAt: now - 48 * 60_000, signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" },
     { id: "timeline-overload", eventType: "server_overloaded", type: "warning", severity: "warning", text: "Server is falling behind", message: "Server is falling behind", timestamp: new Date(now - 31 * 60_000).toISOString(), occurredAt: now - 31 * 60_000, signature: "server_overloaded", source: "logs/latest.log" },
     { id: "timeline-exception", eventType: "exception_caught", type: "error", severity: "error", text: "Exception caught: NullPointerException", message: "Exception caught: NullPointerException", timestamp: new Date(now - 31 * 60_000 + 5_000).toISOString(), occurredAt: now - 31 * 60_000 + 5_000, signature: "exception_caught:nullpointerexception", source: "logs/latest.log", subject: "NullPointerException" },
-    { id: "timeline-crash", eventType: "server_crashed", type: "error", severity: "error", text: "Server process crashed", message: "Server process crashed", timestamp: new Date(now - 31 * 60_000 + 10_000).toISOString(), occurredAt: now - 31 * 60_000 + 10_000, signature: "server_crashed", source: "logs/latest.log" },
+    { id: "timeline-restart-stop", eventType: "server_stopped", type: "info", severity: "info", text: "Server stopped", message: "Server stopped", timestamp: new Date(now - 31 * 60_000 + 10_000).toISOString(), occurredAt: now - 31 * 60_000 + 10_000, signature: "server_stopped", source: "logs/latest.log" },
+    { id: "timeline-restart-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 30 * 60_000 - 20_000).toISOString(), occurredAt: now - 30 * 60_000 - 20_000, signature: "server_started", source: "logs/latest.log" },
+    { id: "timeline-crash", eventType: "server_crashed", type: "error", severity: "error", text: "Server process crashed", message: "Server process crashed", timestamp: new Date(now - 15 * 60_000).toISOString(), occurredAt: now - 15 * 60_000, signature: "server_crashed", source: "logs/latest.log" },
+    { id: "timeline-recovery-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 15 * 60_000 + 10_000).toISOString(), occurredAt: now - 15 * 60_000 + 10_000, signature: "server_started", source: "logs/latest.log" },
     { id: "timeline-steve-leave", eventType: "player_left", type: "info", severity: "info", text: "Steve left", message: "Steve left", timestamp: new Date(now - 19 * 60_000).toISOString(), occurredAt: now - 19 * 60_000, signature: "player_left:steve", source: "logs/latest.log", subject: "Steve" },
     { id: "timeline-steve-rejoin", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: new Date(now - 19 * 60_000 + 7_000).toISOString(), occurredAt: now - 19 * 60_000 + 7_000, signature: "player_joined:steve", source: "logs/latest.log", subject: "Steve" },
     { id: "timeline-maya-join", eventType: "player_joined", type: "success", severity: "success", text: "Maya joined", message: "Maya joined", timestamp: new Date(now - 7 * 60_000).toISOString(), occurredAt: now - 7 * 60_000, signature: "player_joined:maya", source: "logs/latest.log", subject: "Maya" }
   ] satisfies ServerTimelineEvent[]).filter((event) => event.occurredAt >= from && event.occurredAt <= to);
+  const demoOnlineNames = running
+    ? ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"]
+    : [];
+  const playerSessions = [
+    ...demoOnlineNames.map((player, index) => ({
+      id: `demo-online:${player.toLowerCase()}`,
+      player,
+      startedAt: now - (58 - index * 3) * 60_000,
+      endedAt: null,
+      startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
+      endBoundary: "online" as const
+    })),
+    ...["Forest_Dweller", "DragonRifle_1", "TheDeadReaper", "Ethanenet", "Itsxapi", "phiki", "Alekschede", "dindingle"].map((player, index) => {
+      const startedAt = now - (54 - index * 5) * 60_000;
+      return {
+        id: `demo-offline:${player.toLowerCase()}`,
+        player,
+        startedAt,
+        endedAt: startedAt + (8 + index * 2) * 60_000,
+        startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
+        endBoundary: "leave" as const
+      };
+    })
+  ].filter((session) => session.startedAt <= to && (session.endedAt ?? now) >= from);
   const scheduleMarkers: ServerTimelineScheduleMarker[] = schedules.flatMap((schedule) => {
     const markers: ServerTimelineScheduleMarker[] = [];
     for (const run of schedule.recentRuns ?? []) {
@@ -464,6 +492,12 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     samples,
     events: eventFixtures,
     schedules: scheduleMarkers.sort((left, right) => left.occurredAt - right.occurredAt),
+    playerActivity: {
+      snapshotState: running ? "live" : "stopped",
+      sampledAt: new Date(now).toISOString(),
+      onlineNames: demoOnlineNames,
+      sessions: playerSessions
+    },
     scheduleAnnotationsAvailable: true,
     truncated: { schedules: false }
   };

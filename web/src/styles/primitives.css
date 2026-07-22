@@ -1,4 +1,140 @@
 /* Shared component behavior. Feature styles should only add contextual modifiers. */
+.uiButton,
+.dangerTextButton,
+.iconButton,
+.iconOnlyButton {
+  min-height: var(--control-height-default);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  gap: var(--space-2);
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1;
+  box-shadow: none;
+}
+
+.uiButton--primary { border-color: var(--text); background: var(--text); color: var(--surface); }
+.uiButton--primary:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); color: var(--swiss-white); transform: none; }
+.uiButton--secondary { border-color: var(--border-muted); background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted)); color: var(--text); }
+.uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
+.uiButton--ghost,
+.textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
+.uiButton--ghost:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled) { border-color: transparent; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--sentinel-accent-strong); transform: none; }
+.uiButton--critical { border-color: var(--sentinel-danger); background: var(--sentinel-danger); color: var(--swiss-white); }
+.uiButton--critical:hover:not(:disabled) { border-color: color-mix(in srgb, var(--sentinel-danger) 78%, var(--text)); background: color-mix(in srgb, var(--sentinel-danger) 84%, var(--text)); color: var(--swiss-white); transform: none; }
+.uiButton--compact { min-height: var(--control-height-compact); padding-inline: var(--space-3); font-size: var(--type-meta-size); }
+.uiButton--icon,
+.iconButton,
+.iconOnlyButton { width: var(--control-icon-button-size); min-width: var(--control-icon-button-size); height: var(--control-icon-button-size); min-height: var(--control-icon-button-size); padding: 0; }
+.uiButton:active:not(:disabled),
+.iconButton:active:not(:disabled),
+.iconOnlyButton:active:not(:disabled) { transform: none; }
+.uiButton:disabled,
+.iconButton:disabled,
+.iconOnlyButton:disabled { opacity: 0.42; box-shadow: none; }
+.uiButton--reserved { justify-content: center; }
+.uiButtonStableContent { display: grid; grid-template-areas: "content"; align-items: center; justify-items: center; min-width: 0; }
+.uiButtonReserveContent,
+.uiButtonVisibleContent { grid-area: content; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; }
+.uiButtonReserveContent { visibility: hidden; pointer-events: none; white-space: nowrap; }
+.uiButtonVisibleContent { max-width: 100%; }
+
+.uiSurface,
+.panel {
+  min-width: 0;
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+.uiSurface--default { padding: var(--space-4); }
+.uiSurface--compact { padding: var(--space-3); }
+.uiSurface--flush { padding: 0; overflow: hidden; }
+.uiSurface--subtle { border-color: var(--border-row); background: var(--surface-inset); }
+
+.uiPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
+.uiPanelHeader--compact { gap: var(--space-2); }
+.uiPanelHeaderCopy { display: grid; gap: var(--space-1); min-width: 0; }
+.uiPanelHeader h2,
+.uiPanelHeader h3,
+.uiPanelHeaderCopy h2,
+.uiPanelHeaderCopy h3 { overflow: hidden; margin: 0; color: var(--text); font-size: var(--type-section-title-size); font-weight: var(--weight-heading); letter-spacing: var(--tracking-ui); line-height: 1.25; text-overflow: ellipsis; }
+.uiPanelHeader--compact h2,
+.uiPanelHeader--compact h3 { font-size: var(--type-card-title-size); }
+.uiPanelHeader p,
+.uiPanelHeaderCopy p { margin: 0; color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
+.uiPanelHeaderActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+
+.uiToolbar { min-height: var(--toolbar-min-height); display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); }
+.uiToolbarPrimary,
+.uiToolbarSecondary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.uiToolbarSecondary { justify-content: flex-end; }
+.uiToolbarMeta { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); white-space: nowrap; }
+
+.uiFormField { min-width: 0; display: grid; align-content: start; gap: var(--space-2); }
+.uiFormFieldLabel { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); color: var(--text); font-size: var(--type-form-label-size); font-weight: var(--weight-strong); }
+.uiFormFieldRequired { color: var(--text-soft); font-size: var(--type-badge-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); text-transform: uppercase; }
+.uiFormFieldDescription,
+.uiFormFieldError { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
+.uiFormFieldError { color: var(--status-danger-foreground); font-weight: var(--weight-meta); }
+.uiFormField--error input,
+.uiFormField--error select,
+.uiFormField--error textarea { border-color: var(--sentinel-danger); }
+.uiFormFieldControl { min-width: 0; }
+
+.uiBanner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; border: var(--border-subtle) solid var(--border-row); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface-raised); }
+.uiBannerCopy { min-width: 0; display: grid; gap: var(--space-1); }
+.uiBannerCopy strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); }
+.uiBannerCopy span { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
+.uiBannerAction { flex: 0 0 auto; }
+.uiBanner--info { border-color: color-mix(in srgb, var(--sentinel-info) 34%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-info) 7%, var(--surface-raised)); }
+.uiBanner--success { border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised)); }
+.uiBanner--warning { border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised)); }
+.uiBanner--error { border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
+
+.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-raised); }
+.uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
+.uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
+.uiMetricTile--success .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-success) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-success) 7%, transparent); }
+.uiMetricTile--warning .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-warning) 17%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
+.uiMetricTile--danger .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-danger) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-danger) 7%, transparent); }
+.uiMetricTileCopy { min-width: 0; display: grid; gap: 3px; }
+.uiMetricTileLabel { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.uiMetricTileCopy strong { min-width: 0; color: var(--text); font-size: var(--type-card-title-size); font-weight: var(--weight-strong); line-height: 1.2; overflow-wrap: anywhere; }
+.uiMetricTileDetail { overflow: hidden; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
+.uiStatusBadge,
+.runtimeBadge,
+.settingsStatus,
+.roleBadge,
+.modsStatusChip { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); width: fit-content; min-height: 24px; border: var(--border-subtle) solid color-mix(in srgb, currentColor 34%, transparent); border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text-muted); font-size: var(--type-badge-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-badge); line-height: 1.1; text-transform: uppercase; white-space: nowrap; }
+.uiStatusBadge--accent { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); }
+.uiStatusBadge--success { background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface)); color: var(--status-success-foreground); }
+.uiStatusBadge--warning { background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface)); color: var(--status-warning-foreground); }
+.uiStatusBadge--danger { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface)); color: var(--status-danger-foreground); }
+
+.uiEmptyState { display: grid; place-items: center; gap: var(--space-2); min-height: 160px; border: var(--border-subtle) dashed var(--border-muted); border-radius: var(--radius-md); padding: var(--space-5); background: var(--surface-inset); color: var(--text-muted); text-align: center; }
+.uiEmptyState--compact { min-height: 96px; padding: var(--space-4); }
+.uiEmptyState strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); }
+.uiEmptyState span { max-width: 58ch; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.5; }
+
+.inlineState { min-height: 64px; border-color: var(--border-row); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface-raised); box-shadow: none; }
+.inlineState strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
+.inlineState span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
+
+.uiSortHeaderButton { min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
+.uiSortHeaderButton:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); transform: none; }
+.uiSortHeaderButton:disabled { cursor: default; opacity: 1; }
+.uiSortIndicator { width: 1em; color: var(--text-soft); font-size: var(--type-meta-size); line-height: 1; text-align: center; }
+
+.buttonIcon,
+.sideIcon,
+.fileTypeIcon svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.sideIcon { width: 20px; height: 20px; }
+.fileTypeIcon svg { width: 22px; height: 22px; }
+
 .actionMenu { position: relative; display: inline-flex; }
 .actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: currentColor; }
 .actionMenuPopover {
@@ -56,6 +192,21 @@
 @media (hover: none), (pointer: coarse) {
   .uiButton, .iconButton, .iconOnlyButton, .actionMenuItem, .fileBreadcrumbs button, .sideNav button { min-height: 44px; }
   .uiButton--icon, .iconButton, .iconOnlyButton, .selectionActionMenu .actionMenuTrigger { width: 44px; min-width: 44px; height: 44px; }
+}
+
+@media (max-width: 720px) {
+  .uiToolbar { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: var(--space-2); }
+  .uiToolbarPrimary,
+  .uiToolbarSecondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .uiToolbarPrimary > :only-child,
+  .uiToolbarSecondary > :only-child { grid-column: 1 / -1; }
+  .uiToolbarPrimary .uiButton,
+  .uiToolbarSecondary .uiButton { width: 100%; }
+  .uiToolbarMeta { white-space: normal; }
+  .uiBanner { align-items: stretch; flex-direction: column; }
+  .uiBannerAction,
+  .uiBannerAction .uiButton { width: 100%; }
+  .uiPanelHeader { align-items: flex-start; }
 }
 .uiSkeleton {
   --skeleton-highlight: rgb(255 255 255 / 0.52);
@@ -229,8 +380,16 @@
   .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (min-width: 981px) {
+  .applicationSkeletonSummary { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .applicationSkeletonWideTile { display: block; }
+  .applicationOverviewPanelGrid {
+    grid-template-areas:
+      "resource resource resource resource resource resource resource resource resource resource resource resource"
+      "players players players players players mods mods mods mods mods mods mods"
+      "players players players players players automation automation automation automation automation automation automation"
+      "events events events events events events events events events events events events";
+  }
 }
 
 @media (min-width: 761px) and (max-width: 980px) {
@@ -248,7 +407,343 @@
   .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
 }
 
-@media (min-width: 2560px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-  .applicationSkeletonWideTile { display: block; }
+/* Shared application patterns migrated from the former adoption layer */
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.fileTableHead .uiSortHeaderButton,
+.scheduleTableHeader .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-2);
+}
+
+.fileNameCell {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+
+.scheduleTableHeader {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.scheduleNameCell strong,
+.scheduledRunItem strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-ui);
+}
+
+.scheduleNameCell small,
+.scheduleCell small,
+.scheduledRunItem small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+}
+
+.scheduleRowActions .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.scheduleRowActions .uiButton--critical {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.scheduleRowActions .uiButton--critical:hover:not(:disabled) {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
+.scheduleNoRows.uiEmptyState,
+.scheduledRunsEmpty.uiEmptyState,
+.eventEmpty.uiEmptyState {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-muted) 66%, var(--surface));
+}
+
+.permissionRow > span,
+.usersTable td {
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+}
+
+.userNameCell strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.authPanel .uiButton,
+.keyForm .uiButton,
+.usersTable .uiButton {
+  min-height: var(--control-height);
+}
+
+.usersTable .uiButton--compact {
+  min-height: var(--control-height-compact);
+}
+
+
+/* Authoritative shared cohesion migrated from the former adoption layer */
+/* Focused UI cohesion pass ------------------------------------------------ */
+
+.uiButton:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.iconOnlyButton:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled),
+.fileBreadcrumbs button:hover:not(:disabled),
+.modsWorkspaceUpdate button:hover:not(:disabled),
+.modsWorkspaceIdentity:hover:not(:disabled),
+.modsVersionList button:hover:not(:disabled),
+.modInstallVersionRow:hover:not(:disabled) {
+  transform: none;
+}
+
+.uiButton,
+.quickActionButton,
+.runtimeControlButton,
+.iconButton,
+.iconOnlyButton {
+  box-shadow: none;
+}
+
+.uiButton--primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.uiButton--secondary:hover:not(:disabled),
+.quickActionButton:hover:not(:disabled),
+.runtimeControlButton.restart:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton--ghost:hover:not(:disabled),
+.textLinkButton:hover:not(:disabled),
+.dangerTextButton:hover:not(:disabled),
+.iconDangerButton:hover:not(:disabled) {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.panel,
+.scheduleTableCard,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodesToolbar,
+.nodeCard,
+.nodeInstallBox,
+.summaryTile {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.panel .panel,
+.modalPanel .panel,
+.nodeModalBody .panel,
+.fileEditorBody .panel {
+  border-color: var(--border-row);
+  background: var(--surface);
+}
+
+.uiPanelHeader,
+.nodeCardHeader,
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeModalHeader,
+.nodeModalFooter,
+.fileEditorHeader,
+.modalHeader,
+.userModalHeader {
+  border-color: var(--border-row);
+}
+
+.uiPanelHeader h2,
+.uiPanelHeaderCopy h2,
+.nodeCardHeader h3,
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeModalHeader h2,
+.fileEditorHeader h2,
+.modalHeader h2,
+.userModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.uiPanelHeader p,
+.uiPanelHeaderCopy p,
+.nodeCardHeader p,
+.modsWorkspaceListHeader span,
+.modsDrawerHeader p,
+.nodeModalHeader p,
+.fileEditorHeader p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+}
+
+.workspaceActions,
+.buttonRow,
+.fileToolbar,
+.selectionActions,
+.modsWorkspaceToolbar,
+.modsWorkspacePrimaryActions,
+.modsWorkspaceUpdateActions,
+.modsDrawerFooter,
+.scheduleRowActions,
+.nodeCardActions,
+.nodeModalFooter,
+.modalFooter,
+.userModalFooter,
+.fileEditorFooter {
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.fileToolbar,
+.nodesToolbar,
+.modsWorkspaceToolbar {
+  min-height: var(--toolbar-min-height);
+  padding: var(--space-3);
+  border-color: var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  box-shadow: none;
+}
+
+.modsWorkspacePage > .modsWorkspaceToolbar {
+  padding-inline: 0;
+  border-inline-width: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.fileToolbar .uiButton,
+.selectionActions .uiButton,
+.scheduleRowActions .uiButton,
+.nodeCardActions .uiButton,
+.fileEditorFooter .uiButton,
+.modalFooter .uiButton,
+.userModalFooter .uiButton {
+  min-height: var(--control-height-compact);
+  white-space: nowrap;
+}
+
+.fileTableRow,
+.modsWorkspaceRow,
+.scheduleTableRow,
+.nodeServerRow,
+.nodeServerMoreRow,
+.eventRow {
+  border-color: var(--border-row);
+  background: var(--surface);
+  box-shadow: none;
+  transition: background var(--control-transition), border-color var(--control-transition), color var(--control-transition), opacity var(--control-transition);
+}
+
+.fileTableRow:hover,
+.modsWorkspaceRow:hover,
+.scheduleTableRow:hover,
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled),
+.eventRow:hover {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
+}
+
+.fileTableRow.selected,
+.runtimeLoaderCard.selected,
+.modInstallVersionRow.selected,
+.modsVersionList button.selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.uiStatusBadge,
+.settingsStatus,
+.runtimeBadge,
+.roleBadge,
+.modsStatusChip,
+.nodeServerState {
+  min-height: 24px;
+  border-width: var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+  line-height: 1.1;
+}
+
+.nodeStatusDot,
+.serverCommandStatusDot,
+.scheduledRunMarker::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+
+.nodeServerIcon,
+.nodePlayerIcon,
+.serverStripIcon {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .workspaceActions,
+.buttonRow,
+.fileToolbar,
+.selectionActions,
+.modsWorkspaceToolbar,
+.modsWorkspacePrimaryActions,
+.modsWorkspaceUpdateActions,
+.nodeCardActions,
+.modalFooter,
+.userModalFooter,
+.fileEditorFooter {
+    align-items: stretch;
+  }
 }

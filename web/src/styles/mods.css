@@ -1,11 +1,11 @@
 /* Cohesive Mods workspace */
 .modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-raised); box-shadow: 0 1px 2px rgb(15 23 42 / 3%); }
-.modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, #3568ef 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, #3568ef 6%, transparent); }
-.modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, #e98a15 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #e98a15 7%, transparent); }
-.modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, #8b5cf6 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #8b5cf6 7%, transparent); }
-.modsWorkspaceMetric.green .modsWorkspaceMetricDot { background: color-mix(in srgb, #159267 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, #159267 7%, transparent); }
+.modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: none; }
+.modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--sentinel-info) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 6%, transparent); }
+.modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-warning) 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
+.modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-accent) 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-accent) 7%, transparent); }
+.modsWorkspaceMetric.green .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-success) 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-success) 7%, transparent); }
 .modsWorkspaceMetric > div { min-width: 0; display: grid; grid-template-rows: auto 20px; align-content: center; }
 .modsWorkspaceMetric small { color: var(--text-muted); font-size: .76rem; }
 .modsWorkspaceMetric strong { display: flex; min-height: 20px; align-items: center; margin: 0; font-size: 1.08rem; line-height: 1.1; }
@@ -42,10 +42,10 @@
 .modsWorkspaceIdentity > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-left: auto; color: var(--text-muted); }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.modsStatusChip.ready { border-color: color-mix(in srgb, #159267 22%, transparent); color: #12805b; background: color-mix(in srgb, #159267 10%, transparent); }
-.modsStatusChip.update { border-color: color-mix(in srgb, #e98a15 24%, transparent); color: #b96305; background: color-mix(in srgb, #e98a15 10%, transparent); }
-.modsStatusChip.review { border-color: color-mix(in srgb, #8b5cf6 24%, transparent); color: #7440d9; background: color-mix(in srgb, #8b5cf6 10%, transparent); }
-.modsStatusChip.not-recommended { border-color: color-mix(in srgb, #d14343 24%, transparent); color: #c23636; background: color-mix(in srgb, #d14343 9%, transparent); }
+.modsStatusChip.ready { border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent); color: var(--status-success-foreground); background: color-mix(in srgb, var(--sentinel-success) 11%, transparent); }
+.modsStatusChip.update { border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent); color: var(--status-warning-foreground); background: color-mix(in srgb, var(--sentinel-warning) 11%, transparent); }
+.modsStatusChip.review { border-color: color-mix(in srgb, var(--sentinel-accent) 34%, transparent); color: var(--sentinel-accent-strong); background: var(--sentinel-accent-soft); }
+.modsStatusChip.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent); color: var(--status-danger-foreground); background: color-mix(in srgb, var(--sentinel-danger) 10%, transparent); }
 .modsStatusChip.unknown { border-color: var(--border); background: var(--surface); }
 
 .modsWorkspaceStatus {
@@ -59,8 +59,8 @@
 .modsUpdateCell { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
 .modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; gap: 7px; line-height: 1.15; }
 .modsUpdateArrow { flex: 0 0 auto; color: var(--text-soft); font-size: .9rem; }
-.modsUpdateVersions strong { overflow: hidden; color: #b96305; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
-.modsUpdateCell.review .modsUpdateVersions strong { color: #7440d9; }
+.modsUpdateVersions strong { overflow: hidden; color: var(--status-warning-foreground); font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
+.modsUpdateCell.review .modsUpdateVersions strong { color: var(--sentinel-accent-strong); }
 .modsWorkspaceUpdate button { padding: 5px 10px; border: 1px solid color-mix(in srgb, currentColor 34%, var(--border)); background: color-mix(in srgb, currentColor 7%, transparent); box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: color-mix(in srgb, currentColor 11%, transparent); }
 .modsWorkspaceUpdate .modsUpdateAction { width: 100%; min-width: 0; justify-content: space-between; overflow: hidden; }
@@ -68,7 +68,7 @@
 .modsUpdateTransition .modsUpdateArrow { color: var(--accent); }
 .modsUpdateTransition strong { overflow: hidden; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
 .modsUpdateActionLabel { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 26px; padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: var(--weight-button); }
-.modsReviewAction { color: #7440d9; }
+.modsReviewAction { color: var(--sentinel-accent-strong); }
 .modsWorkspaceSwitch { justify-content: center; }
 .modsWorkspaceSwitchVersionButton { display: grid; place-items: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
 .modsWorkspaceSwitchVersionButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
@@ -84,8 +84,8 @@
 .modsUpdateSkeleton { width: min(170px, 90%); height: 32px; }
 .modsToggleSkeleton { width: 38px; height: 20px; border-radius: 999px; }
 .modsActionSkeleton { justify-self: center; }
-.modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: rgb(15 23 42 / 38%); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
-.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: 1px solid var(--border); background: var(--surface-raised); box-shadow: -18px 0 50px rgb(15 23 42 / 15%); animation: modsSlideIn .2s ease-out; }
+.modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: var(--overlay); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
+.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: var(--border-subtle) solid var(--border-row); background: var(--surface-raised); box-shadow: var(--shadow-elevated); animation: modsSlideIn .2s ease-out; }
 .modsDetailsDrawer { width: min(440px, 96vw); }
 .modsAddWorkflow { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; }
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
@@ -99,8 +99,8 @@
 .modsAddSearch label { width: 100%; min-width: 0; }
 .modsSearchActivity { min-height: 1em; color: var(--text-muted); font-size: .72rem; text-align: right; }
 .modsSafeSearchNote { display: flex; align-items: center; gap: 7px; margin: 8px 0 18px; color: var(--text-muted); font-size: .76rem; }
-.modsSafeSearchNote svg { width: 15px; color: #159267; }
-.modsSafeSearchNote.warning svg { color: #e98a15; }
+.modsSafeSearchNote svg { width: 15px; color: var(--sentinel-success); }
+.modsSafeSearchNote.warning svg { color: var(--sentinel-warning); }
 .modsCompatibilityToggle { display: flex; align-items: flex-start; gap: 9px; margin: -8px 0 18px; color: var(--text-muted); font-size: .78rem; }
 .modsCompatibilityToggle input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
 .modsCompatibilityToggle span { display: grid; gap: 2px; min-width: 0; }
@@ -114,7 +114,7 @@
 .modsResultContent > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; color: var(--text-muted); font-size: .82rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .modsResultContent small { color: var(--text-muted); font-size: .72rem; }
-.modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: #b96305; font-size: .74rem; line-height: 1.35; }
+.modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: var(--status-warning-foreground); font-size: .74rem; line-height: 1.35; }
 .modsResultCard.isSkeleton { min-height: 94px; background: var(--surface); pointer-events: none; }
 .modsResultCard.isSkeleton .uiSkeleton--icon { width: 42px; height: 42px; }
 .modsResultTitleSkeleton { width: min(190px, 64%); height: 15px; }
@@ -129,21 +129,21 @@
 .modsHealthReasonBanner { display: grid; gap: 4px; margin: 0 0 16px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .modsHealthReasonBanner strong { font-size: .86rem; }
 .modsHealthReasonBanner span { color: var(--text-muted); font-size: .82rem; line-height: 1.45; }
-.modsHealthReasonBanner.ready { border-color: color-mix(in srgb, #159267 32%, var(--border)); background: color-mix(in srgb, #159267 8%, var(--surface-raised)); }
-.modsHealthReasonBanner.ready strong { color: #12805b; }
-.modsHealthReasonBanner.review { border-color: color-mix(in srgb, #e98a15 34%, var(--border)); background: color-mix(in srgb, #e98a15 8%, var(--surface-raised)); }
-.modsHealthReasonBanner.review strong { color: #b96305; }
-.modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, #d14343 34%, var(--border)); background: color-mix(in srgb, #d14343 8%, var(--surface-raised)); }
-.modsHealthReasonBanner.not-recommended strong { color: #c23636; }
+.modsHealthReasonBanner.ready { border-color: color-mix(in srgb, var(--sentinel-success) 32%, var(--border)); background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface-raised)); }
+.modsHealthReasonBanner.ready strong { color: var(--status-success-foreground); }
+.modsHealthReasonBanner.review { border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border)); background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised)); }
+.modsHealthReasonBanner.review strong { color: var(--status-warning-foreground); }
+.modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
+.modsHealthReasonBanner.not-recommended strong { color: var(--status-danger-foreground); }
 .modsDetailsFacts { display: grid; gap: 0; margin: 0; }
 .modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .modsDetailsFacts dt { color: var(--text-muted); font-size: .78rem; font-weight: var(--weight-strong); }
 .modsDetailsFacts dd { overflow-wrap: anywhere; margin: 0; font-size: .82rem; }
 .modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
-.modsCompatibilityCard.ready { border-color: color-mix(in srgb, #159267 28%, var(--border)); background: color-mix(in srgb, #159267 6%, var(--surface-raised)); }
-.modsCompatibilityCard.update { border-color: color-mix(in srgb, #e98a15 28%, var(--border)); background: color-mix(in srgb, #e98a15 6%, var(--surface-raised)); }
-.modsCompatibilityCard.review { border-color: color-mix(in srgb, #8b5cf6 28%, var(--border)); }
-.modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, #d14343 28%, var(--border)); }
+.modsCompatibilityCard.ready { border-color: color-mix(in srgb, var(--sentinel-success) 28%, var(--border)); background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised)); }
+.modsCompatibilityCard.update { border-color: color-mix(in srgb, var(--sentinel-warning) 28%, var(--border)); background: color-mix(in srgb, var(--sentinel-warning) 6%, var(--surface-raised)); }
+.modsCompatibilityCard.review { border-color: color-mix(in srgb, var(--sentinel-accent) 28%, var(--border)); }
+.modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 28%, var(--border)); }
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: 14px; }
 .modsCompatibilityCard summary, .modsTechnicalDetails summary, .modsAdvancedOptions summary, .modsDependencySummary summary { cursor: pointer; color: var(--text-muted); font-size: .8rem; font-weight: var(--weight-strong); }
@@ -155,11 +155,11 @@
 .modsCompatibilityFacts dt { margin-bottom: 6px; color: var(--text-muted); font-size: .69rem; font-weight: var(--weight-heading); letter-spacing: .04em; text-transform: uppercase; }
 .modsCompatibilityFacts dd { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; margin: 0; color: var(--text); font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .modsCompatibilityFacts dd > span { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: .72rem; font-weight: var(--weight-strong); }
-.modsCompatibilityFacts dd > .tone-compatible { border-color: color-mix(in srgb, #159267 48%, var(--border)); color: #087451; background: color-mix(in srgb, #159267 12%, var(--surface)); }
-.modsCompatibilityFacts dd > .tone-required { border-color: color-mix(in srgb, #2878d0 45%, var(--border)); color: #1765b8; background: color-mix(in srgb, #2878d0 11%, var(--surface)); }
-.modsCompatibilityFacts dd > .tone-optional { border-color: color-mix(in srgb, #0d8fa3 42%, var(--border)); color: #08788a; background: color-mix(in srgb, #0d8fa3 10%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-compatible { border-color: color-mix(in srgb, var(--sentinel-success) 48%, var(--border)); color: var(--status-success-foreground); background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-required { border-color: color-mix(in srgb, var(--sentinel-info) 45%, var(--border)); color: var(--sentinel-info); background: color-mix(in srgb, var(--sentinel-info) 11%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-optional { border-color: color-mix(in srgb, var(--sentinel-info) 42%, var(--border)); color: var(--sentinel-info); background: color-mix(in srgb, var(--sentinel-info) 10%, var(--surface)); }
 .modsCompatibilityFacts dd > .tone-unsupported,
-.modsCompatibilityFacts dd > .tone-incompatible { border-color: color-mix(in srgb, #d14343 45%, var(--border)); color: #b62f2f; background: color-mix(in srgb, #d14343 11%, var(--surface)); }
+.modsCompatibilityFacts dd > .tone-incompatible { border-color: color-mix(in srgb, var(--sentinel-danger) 45%, var(--border)); color: var(--status-danger-foreground); background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface)); }
 .modsCompatibilityFacts dd > .tone-unknown { border-color: color-mix(in srgb, var(--text-muted) 38%, var(--border)); color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 7%, var(--surface)); }
 .modsCompatibilityFacts .modsCompatibilityReason dd { color: var(--text-muted); }
 .modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
@@ -168,7 +168,7 @@
 .modsReviewHero { padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .modsReviewHero > div { display: grid; gap: 3px; }
 .modsReviewHero span { color: var(--text-muted); font-size: .8rem; }
-.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, #159267 30%, var(--border)); border-radius: 12px; background: color-mix(in srgb, #159267 6%, var(--surface-raised)); }
+.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, var(--sentinel-success) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised)); }
 .modsRecommendedVersion > div { display: grid; gap: 3px; }
 .modsRecommendedVersion small, .modsRecommendedVersion span { color: var(--text-muted); font-size: .76rem; }
 .modsRecommendedVersion strong { font-size: 1.08rem; }
@@ -183,7 +183,7 @@
 .modsVersionList button:hover:not(:disabled), .modsVersionList button.selected { transform: none; color: inherit; background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .modsVersionList button span:first-child { display: grid; gap: 2px; }
 .modsVersionList small { color: var(--text-muted); }
-.modsRiskAcknowledgement { display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 32%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
+.modsRiskAcknowledgement { display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, var(--sentinel-warning) 32%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
 .modsRiskAcknowledgement input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; }
 .modsRiskAcknowledgement > span { display: block; flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.45; }
 .modsRiskAcknowledgement > span strong { margin-right: 4px; color: var(--text); }
@@ -193,9 +193,9 @@
 .modsReviewLine span { color: var(--text-muted); font-size: .82rem; text-align: right; }
 .modsDependencySummary { padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
 .modsDependencySummary > div { padding: 8px 0 0 18px; font-size: .82rem; }
-.modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, #e98a15 30%, var(--border)); border-radius: 9px; background: color-mix(in srgb, #e98a15 7%, transparent); }
+.modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, var(--sentinel-warning) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
 .modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
-.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, #8b5cf6 30%, var(--border)); border-radius: 11px; background: color-mix(in srgb, #8b5cf6 6%, var(--surface-raised)); }
+.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, var(--sentinel-accent) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-accent) 6%, var(--surface-raised)); }
 .modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsUpdateReview .modsRiskAcknowledgement { margin-top: 4px; }
 .modsUpdateReviewActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
@@ -273,374 +273,346 @@
   .modsReviewLine span { text-align: left; }
 }
 
-/* Shared UI foundation -----------------------------------------------------
-   New primitives use ui* classes. Existing high-traffic classes remain as
-   aliases so page-level work can migrate without visual drift. */
 
-.uiButton,
-.dangerTextButton,
-.iconButton,
-.iconOnlyButton {
-  min-height: var(--control-height);
-  border-radius: var(--radius-sm);
-  padding-inline: var(--control-padding-inline);
-  gap: var(--space-2);
-  font-size: var(--type-button-size);
-  font-weight: var(--weight-button);
-  letter-spacing: var(--tracking-ui);
-  line-height: 1;
-}
+/* Mods cohesion migrated from the former adoption layer */
+/* Mods and Nodes adoption -------------------------------------------------- */
 
-.uiButton--primary {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--surface);
-}
-
-.uiButton--secondary {
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
-  color: var(--text);
-}
-
-.uiButton--secondary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-  transform: none;
-}
-
-.uiButton--ghost,
-.textLinkButton {
-  border-color: transparent;
-  background: transparent;
-  color: var(--accent);
-  box-shadow: none;
-}
-
-.uiButton--ghost:hover:not(:disabled),
-.textLinkButton:hover:not(:disabled) {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--sentinel-accent-strong);
-  transform: none;
-}
-
-.uiButton--critical {
-  border-color: var(--sentinel-danger);
-  background: var(--sentinel-danger);
-  color: var(--swiss-white);
-}
-
-.uiButton--critical:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 78%, var(--text));
-  background: color-mix(in srgb, var(--sentinel-danger) 84%, var(--text));
-  color: var(--swiss-white);
-}
-
-.dangerTextButton,
-.iconDangerButton {
-  border-color: transparent;
-  background: transparent;
-  color: var(--sentinel-danger);
-}
-
-.uiButton--compact {
-  min-height: var(--control-height-compact);
-  padding-inline: var(--space-3);
-  font-size: var(--type-meta-size);
-}
-
-.uiButton--reserved {
-  justify-content: center;
-}
-
-.uiButtonStableContent {
-  display: grid;
-  grid-template-areas: "content";
-  align-items: center;
-  justify-items: center;
-  min-width: 0;
-}
-
-.uiButtonReserveContent,
-.uiButtonVisibleContent {
-  grid-area: content;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.uiButtonReserveContent {
-  visibility: hidden;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-.uiButtonVisibleContent {
-  max-width: 100%;
-}
-
-.uiButton--icon,
-.iconButton,
-.iconOnlyButton {
-  width: var(--control-icon-button-size);
-  min-width: var(--control-icon-button-size);
-  height: var(--control-icon-button-size);
-  min-height: var(--control-icon-button-size);
-  padding: 0;
-}
-
-.uiButton:active:not(:disabled),
-.iconButton:active:not(:disabled),
-.iconOnlyButton:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.uiButton:disabled,
-.iconButton:disabled,
-.iconOnlyButton:disabled {
-  opacity: 0.42;
-  box-shadow: none;
-}
-
-.uiSortHeaderButton,
-.fileTableHead .uiSortHeaderButton,
-.scheduleTableHeader .uiSortHeaderButton {
-  min-height: var(--control-height-compact);
-  justify-content: flex-start;
-  gap: var(--space-1);
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-2);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-align: left;
-  text-transform: uppercase;
-  box-shadow: none;
-}
-
-.uiSortHeaderButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--text);
-  transform: none;
-}
-
-.uiSortHeaderButton:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.uiSortIndicator {
-  width: 1em;
-  color: var(--text-soft);
-  font-size: var(--type-meta-size);
-  line-height: 1;
-  text-align: center;
-}
-
-.uiStatusBadge,
-.runtimeBadge,
-.settingsStatus,
-.roleBadge,
-.modsStatusChip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  width: fit-content;
-  min-height: 24px;
-  border: var(--border-subtle) solid color-mix(in srgb, currentColor 34%, transparent);
-  border-radius: 999px;
-  padding: 4px 9px;
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-badge);
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.uiStatusBadge--accent {
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
-
-.uiStatusBadge--success {
-  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
-  color: var(--status-success-foreground);
-}
-
-.uiStatusBadge--warning {
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
-  color: var(--status-warning-foreground);
-}
-
-.uiStatusBadge--danger {
-  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
-  color: var(--status-danger-foreground);
-}
-
-.switch {
-  gap: var(--space-2);
+.nodeWarnings span {
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
   color: var(--text);
   font-size: var(--type-helper-size);
-  font-weight: var(--weight-meta);
-  line-height: 1.2;
-  text-transform: none;
-}
-
-.switch .slider {
-  width: 38px;
-  height: 20px;
-  flex: 0 0 auto;
-  border-color: var(--border-muted);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 4%, transparent);
-}
-
-.switch input:disabled ~ * {
-  cursor: not-allowed;
-}
-
-.switch:has(input:disabled) {
-  color: var(--text-soft);
-  cursor: not-allowed;
-}
-
-.uiPanelHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.uiPanelHeaderCopy {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.uiPanelHeader h2,
-.uiPanelHeaderCopy h2 {
-  overflow: hidden;
-  margin: 0;
-  font-size: var(--type-section-title-size);
-  font-weight: var(--weight-heading);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-}
-
-.uiPanelHeader p,
-.uiPanelHeaderCopy p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
   line-height: 1.45;
 }
 
-.uiPanelHeaderActions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.uiEmptyState,
-.emptyInline,
-.modsWorkspaceEmpty {
-  color: var(--text-muted);
-}
-
-.uiEmptyState {
-  display: grid;
-  place-items: center;
-  gap: var(--space-2);
-  min-height: 160px;
-  border: var(--border-subtle) dashed var(--border-muted);
+.modsWorkspaceMetric,
+.modsWorkspaceInstalled,
+.modsResultCard,
+.modsReviewHero,
+.modsAdvancedOptions,
+.modsReviewLine,
+.modsDependencySummary,
+.modsCompatibilityCard,
+.nodeCard,
+.nodeInstallBox {
+  border-color: var(--border-panel);
   border-radius: var(--radius-md);
-  padding: var(--space-5);
-  background: color-mix(in srgb, var(--surface-muted) 66%, var(--surface));
-  text-align: center;
-}
-
-.uiEmptyState--compact {
-  min-height: 96px;
-  padding: var(--space-4);
-}
-
-.uiEmptyState strong,
-.emptyInline strong,
-.modsWorkspaceEmpty strong {
-  color: var(--text);
-  font-size: var(--type-row-title-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-ui);
-}
-
-.uiEmptyState span,
-.emptyInline span,
-.modsWorkspaceEmpty span {
-  max-width: 58ch;
-  color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-body);
-  line-height: 1.5;
-}
-
-.inlineState {
-  min-height: 64px;
-  border-color: var(--border-row);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
   background: var(--surface-raised);
   box-shadow: none;
 }
 
-.inlineState strong {
+.modsWorkspaceMetric {
+  min-height: 76px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.modsWorkspaceMetric small,
+.modsWorkspaceTableHead,
+.nodeServerSectionLabel {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceMetric strong,
+.modsWorkspaceIdentity strong,
+.modsResultContent strong,
+.nodeCardTitle h3,
+.nodeServerName {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
   letter-spacing: var(--tracking-ui);
-  line-height: 1.35;
+  line-height: 1.3;
   text-transform: none;
 }
 
-.inlineState span {
+.modsWorkspaceMetric span:last-child,
+.modsWorkspaceIdentity small,
+.modsResultContent p,
+.modsResultContent small,
+.modsDetailsDescription,
+.nodeCardHeader p,
+.nodeInstallHeader p,
+.nodeModalHeader p {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
   line-height: 1.45;
+  text-transform: none;
 }
 
-.buttonIcon,
-.sideIcon,
-.fileTypeIcon svg {
+.modsWorkspaceToolbar .uiButton,
+.modsDrawerFooter .uiButton,
+.modsUpdateReviewActions .uiButton,
+.modsResultCard > .uiButton,
+.nodeCardActions .uiButton,
+.nodeModalFooter .uiButton {
+  white-space: nowrap;
+}
+
+.modsWorkspaceListHeader,
+.modsDrawerHeader,
+.modsDrawerFooter,
+.nodeCardHeader,
+.nodeModalHeader,
+.nodeModalFooter {
+  border-color: var(--border-row);
+}
+
+.modsWorkspaceListHeader h3,
+.modsDrawerHeader h2,
+.nodeInstallHeader h3,
+.nodeModalHeader h2 {
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.modsWorkspaceListHeader > div span,
+.modsDrawerHeader p,
+.modsDrawerHeader small,
+.modsSearchActivity,
+.modsSafeSearchNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.4;
+}
+
+.modsDrawerHeader small {
+  color: var(--accent);
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+}
+
+.modsWorkspaceSearch,
+.modsAddSearch label {
+  min-height: var(--control-height);
+  border-color: var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.modsWorkspaceSearch .buttonIcon,
+.modsAddSearch .buttonIcon,
+.modsSafeSearchNote .buttonIcon {
   width: var(--control-icon-size);
   height: var(--control-icon-size);
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vertical-align: middle;
 }
 
-.sideIcon {
-  width: 20px;
-  height: 20px;
+.modsWorkspaceSearch input,
+.modsAddSearch input {
+  min-height: calc(var(--control-height) - 2px);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-body);
 }
 
-.fileTypeIcon svg {
-  width: 22px;
-  height: 22px;
+.modsSafeSearchNote {
+  gap: var(--space-2);
+}
+
+.modsSafeSearchNote .buttonIcon {
+  color: var(--sentinel-success);
+}
+
+.modsSafeSearchNote.warning .buttonIcon {
+  color: var(--sentinel-warning);
+}
+
+.modsWorkspaceRow {
+  border-color: var(--border-row);
+  transition: background var(--control-transition), opacity var(--control-transition);
+}
+
+.modsWorkspaceRow:hover {
+  background: var(--sentinel-accent-soft);
+}
+
+.modsWorkspaceIdentity {
+  border-radius: var(--radius-sm);
+}
+
+.modsWorkspaceIdentity:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.modsWorkspaceUpdate .uiButton {
+  min-height: var(--control-height-compact);
+  padding-inline: var(--space-2);
+  border-color: color-mix(in srgb, currentColor 34%, var(--border-row));
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.modsWorkspaceUpdate .modsUpdateAction {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 4px 0 9px;
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  color: var(--sentinel-accent-strong);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface));
+}
+
+.modsWorkspaceUpdate .modsUpdateAction:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+  color: var(--sentinel-accent-strong);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 92%, var(--surface));
+}
+
+.modsReviewAction {
+  color: var(--accent);
+}
+
+.modsStatusChip.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
+  color: var(--sentinel-success);
+}
+
+.modsStatusChip.update {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.modsStatusChip.review {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.modsStatusChip.not-recommended {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent);
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.modsStatusChip.unknown {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.modsWorkspaceEmpty.uiEmptyState {
+  min-height: 140px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.modsResultCard {
+  border-color: var(--border-row);
+  padding: var(--space-3);
+}
+
+.modsResultCard:hover:not(.isSkeleton) {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface-raised));
+}
+
+.modsWorkflowDrawer,
+.modsDetailsDrawer {
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+}
+
+.modsDrawerHeader,
+.modsDrawerFooter {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+}
+
+.modsRecommendedVersion,
+.modsCompatibilityCard.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.modsReviewWarning,
+.modsRiskAcknowledgement {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+}
+
+.modsChannelPicker .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.modsChannelPicker .uiButton.active,
+.installTabs .uiButton.active {
+  border-color: var(--accent);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+@media (max-width: 760px) {
+  .modsWorkspaceSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .modsWorkspaceSummary > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .modsWorkspaceMetric.uiMetricTile {
+    min-height: 68px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .modsWorkspaceToolbar.uiToolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .modsWorkspaceToolbar .uiToolbarPrimary,
+  .modsWorkspaceToolbar .uiToolbarSecondary {
+    display: block;
+  }
+
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .modsWorkspacePrimaryActions .uiButton,
+  .modsWorkspaceUpdateActions .uiButton {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modsWorkspaceBatchAction {
+    grid-column: 1 / -1;
+  }
+
+  .modsWorkspaceLastChecked {
+    display: block;
+    padding-inline: var(--space-1);
+    text-align: right;
+  }
+}
+
+@media (max-width: 420px) {
+  .modsWorkspacePrimaryActions,
+  .modsWorkspaceUpdateActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modsWorkspaceBatchAction {
+    grid-column: auto;
+  }
 }

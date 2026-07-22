@@ -1,23 +1,23 @@
 import type { ServerStatus } from '../types';
 import { Button } from './UiPrimitives';
 
-function ControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
+export function RuntimeControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
   if (action === "start") {
     return (
-      <svg className="buttonIcon controlGlyphSVG" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <svg className="buttonIcon controlGlyphSVG controlGlyph-start" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M8 5v14l11-7z" />
       </svg>
     );
   }
   if (action === "stop") {
     return (
-      <svg className="buttonIcon controlGlyphSVG" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <svg className="buttonIcon controlGlyphSVG controlGlyph-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M6 6h12v12H6z" />
       </svg>
     );
   }
   return (
-    <svg className="buttonIcon controlGlyphSVG" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className="buttonIcon controlGlyphSVG controlGlyph-restart" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M21 2v6h-6" />
       <path d="M21 13a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
     </svg>
@@ -74,7 +74,7 @@ export function RuntimeControls({
             title={actionDisabled ? actionReason : `${actionLabel(action)} server`}
             aria-label={actionDisabled && actionReason ? `${actionLabel(action)} unavailable: ${actionReason}` : actionLabel(action)}
           >
-            {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <ControlIcon action={action} />}
+            {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <RuntimeControlIcon action={action} />}
             <span>{actionLabel(action)}</span>
           </Button>
         );

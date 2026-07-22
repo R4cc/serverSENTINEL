@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
+import { Button, EmptyState, PanelHeader, StatusBadge, Surface } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -540,18 +540,18 @@ export function NodesPage({
   return (
     <section className={`pageStack nodesPage layoutBalanced ${selectedDetailsNode ? "nodeDetailsOpen" : ""}`.trim()}>
       {sortedNodes.length > 0 && (
-        <section className="panel nodesToolbar">
-          <div>
-            <h2>Node inventory</h2>
-            <p className="muted">Manage nodes and the servers they host.</p>
-          </div>
-          <div className="buttonRow">
+        <Surface density="compact" className="nodesToolbar">
+          <PanelHeader
+            title="Node inventory"
+            description="Manage nodes and the servers they host."
+            actions={<div className="buttonRow">
             <Button onClick={onOpenAddNode} disabled={busy || !canManageNodes} title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}>Add node</Button>
             <Button variant="secondary" iconOnly className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
               <AppIcon name="refresh" />
             </Button>
-          </div>
-        </section>
+            </div>}
+          />
+        </Surface>
       )}
 
       <section className="nodesGrid">

@@ -105,4 +105,15 @@ describe("runtime role configuration", () => {
       config: { port: 8081 }
     });
   });
+
+  it("configures bounded export artifact retention", async () => {
+    await expect(loadConfig({ SERVERSENTINEL_EXPORT_RETENTION_HOURS: undefined })).resolves.toMatchObject({
+      config: { exportRetentionMs: 24 * 60 * 60 * 1000 }
+    });
+    await expect(loadConfig({ SERVERSENTINEL_EXPORT_RETENTION_HOURS: "72" })).resolves.toMatchObject({
+      config: { exportRetentionMs: 72 * 60 * 60 * 1000 }
+    });
+    await expect(loadConfig({ SERVERSENTINEL_EXPORT_RETENTION_HOURS: "0" })).rejects.toThrow("positive whole number");
+    await expect(loadConfig({ SERVERSENTINEL_EXPORT_RETENTION_HOURS: "8761" })).rejects.toThrow("must not exceed 8760 hours");
+  });
 });

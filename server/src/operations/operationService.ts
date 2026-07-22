@@ -26,7 +26,7 @@ export type QueuedOperationInput<T> = BaseOperationInput<T> & {
   failureFallback: string;
   onStarted?: (operation: OperationRecord) => void;
   onError?: (error: unknown, operation: OperationRecord) => void;
-  onSettled?: (operation: OperationRecord) => void;
+  onSettled?: (operation: OperationRecord) => void | Promise<void>;
 };
 
 type OperationServiceContext = {
@@ -73,7 +73,7 @@ export class OperationService {
         input.onError?.(error, operation);
         this.fail(operation, error, input.failureTask, input.failureFallback);
       })
-      .finally(() => input.onSettled?.(operation));
+      .finally(async () => input.onSettled?.(this.operations.find(operation.id) ?? operation));
     return operation;
   }
 

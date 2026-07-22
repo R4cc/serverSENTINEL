@@ -264,24 +264,51 @@ export class OperationsRepository {
     `).run(now, message, message).changes;
   }
 
-  deleteFinishedBefore(cutoffIso: string) {
-    return this.storage.connection.prepare(`
-      DELETE FROM operations
-      WHERE finished_at IS NOT NULL AND finished_at < ?
-    `).run(cutoffIso).changes;
+  listExportOperations() {
+    return this.storage.connection.prepare<[], OperationRow>(`
+      SELECT * FROM operations
+      WHERE type = 'export.run'
+      ORDER BY created_at DESC
+    `).all().map(operationFromRow);
   }
 
-  trimFinished(maxRows: number) {
+  listFinishedBefore(cutoffIso: string) {
+    return this.storage.connection.prepare<[string], OperationRow>(`
+      SELECT * FROM operations
+      WHERE finished_at IS NOT NULL AND finished_at < ?
+      ORDER BY finished_at ASC, created_at ASC, id ASC
+    `).all(cutoffIso).map(operationFromRow);
+  }
+
+  listFinishedBeyondLimit(maxRows: number) {
     const limit = Math.max(1, Math.floor(maxRows));
-    return this.storage.connection.prepare(`
-      DELETE FROM operations
+    return this.storage.connection.prepare<[number], OperationRow>(`
+      SELECT * FROM operations
       WHERE finished_at IS NOT NULL
-        AND id NOT IN (
-          SELECT id FROM operations
-          WHERE finished_at IS NOT NULL
-          ORDER BY finished_at DESC, created_at DESC, id DESC
-          LIMIT ?
-        )
-    `).run(limit).changes;
+      ORDER BY finished_at DESC, created_at DESC, id DESC
+      LIMIT -1 OFFSET ?
+    `).all(limit).map(operationFromRow);
+  }
+
+  replaceResult(id: string, result: unknown) {
+    this.storage.connection.prepare(`
+      UPDATE operations
+      SET result_json = ?
+      WHERE id = ?
+    `).run(resultJson(result), id);
+    return this.find(id);
+  }
+
+  deleteFinished(ids: string[]) {
+    const statement = this.storage.connection.prepare<[string]>(`
+      DELETE FROM operations
+      WHERE finished_at IS NOT NULL AND id = ?
+    `);
+    const deleteOperations = this.storage.connection.transaction((operationIds: string[]) => {
+      let deleted = 0;
+      for (const id of operationIds) deleted += statement.run(id).changes;
+      return deleted;
+    });
+    return deleteOperations(ids);
   }
 }

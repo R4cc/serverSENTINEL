@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { AppIcon } from "../components/FileTypeIcon";
 import { InlineState } from "../components/InlineState";
-import { Button } from "../components/UiPrimitives";
+import { Banner, Button, Toolbar } from "../components/UiPrimitives";
 import { AddModsWorkflow } from "../features/mods/AddModsWorkflow";
 import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
@@ -58,16 +58,17 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
 
   return (
     <section className="tabPage modsWorkspacePage layoutWide">
-      {!access.modrinthConfigured && <section className="systemBanner accent"><strong>Modrinth search is unavailable.</strong><span>Installed {terminology.singular} management still works. Add an API key in Settings to search and install {terminology.plural}.</span></section>}
+      {!access.modrinthConfigured && <Banner tone="info" title="Modrinth search is unavailable." message={<>Installed {terminology.singular} management still works. Add an API key in Settings to search and install {terminology.plural}.</>} />}
       <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} loading={state.modsLoading} terminology={terminology} />
-      <div className="modsWorkspaceToolbar">
-        <div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>
-        <div className="modsWorkspaceUpdateActions">
-          <span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>
+      <Toolbar
+        className="modsWorkspaceToolbar"
+        primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>}
+        meta={<span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>}
+        secondary={<div className="modsWorkspaceUpdateActions">
           <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? `Waiting for the current ${terminology.singular} change to finish.` : state.updatePlanLoading ? `Checking installed ${terminology.plural} for updates.` : `Check installed ${terminology.plural} for updates.`} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>
           {showSafeBatch && <Button className="modsWorkspaceBatchAction" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch} reserveLabel={`Updating safe ${terminology.plural}…`}>{state.batchUpdateRunning ? `Updating safe ${terminology.plural}…` : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</Button>}
-        </div>
-      </div>
+        </div>}
+      />
       <input ref={uploadRef} className="hiddenInput" type="file" accept=".jar" multiple onChange={actions.uploadMod} />
       {visibleModsError && <InlineState tone="error" title={`Could not load installed ${terminology.plural}`} message={visibleModsError} actionLabel="Retry" onAction={actions.retry} busy={state.modsLoading} />}
       {visibleUpdatePlanError && <InlineState tone="error" title="Could not check updates" message={visibleUpdatePlanError} actionLabel="Retry" onAction={() => void actions.refresh()} busy={state.updatePlanLoading} />}
