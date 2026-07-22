@@ -128,7 +128,10 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*bottom:\s*38px;/s);
-    expect(overviewStyles).toMatch(/\.timelineAnnotationConnector\s*\{[^}]*bottom:\s*0;[^}]*background:\s*var\(--annotation-color\);/s);
+    expect(overviewStyles).toMatch(/\.timelineAnnotationConnector\s*\{[^}]*height:\s*8px;[^}]*background:\s*var\(--annotation-color\);/s);
+    expect(overviewStyles).not.toMatch(/\.timelineAnnotationConnector\s*\{[^}]*bottom:\s*0;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineSharedGuide\s*\{[^}]*bottom:\s*0;[^}]*background:\s*color-mix\(in srgb, var\(--timeline-guide-color\) 64%, transparent\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineSharedGuide\.tone-server\s*\{\s*--timeline-guide-color:\s*var\(--timeline-server\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\s*\{[^}]*max-width:\s*28px;[^}]*transform:\s*translateX\(-14px\);/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\.is-expanded\s*\{[^}]*max-width:\s*220px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationLabel\.is-stack\s*\{[^}]*height:\s*auto;[^}]*flex-direction:\s*column;/s);

@@ -837,10 +837,11 @@ export function ServerTimeline({
   const labelGutter = Math.round(Math.max(180, Math.min(260, visualizationWidth * 0.17)));
   const metricGrid = useMemo(() => ({ ...timelineMetricBandGrid, left: labelGutter }), [labelGutter]);
   const sharedGuide = hoverTooltip
-    ? { x: hoverTooltip.x, pinned: hoverTooltip.pinned, tone: undefined }
+    ? { x: hoverTooltip.x, top: annotationGridTop, pinned: hoverTooltip.pinned, tone: undefined }
     : selectedCluster && selectedPosition
       ? {
           x: metricGrid.left + annotationRailWidth * selectedPosition.leftPercent / 100,
+          top: selectedPosition.labelTop + selectedPosition.labelHeight + 7,
           pinned: true,
           tone: selectedCluster.tone
         }
@@ -1168,8 +1169,8 @@ export function ServerTimeline({
                 style={{ left: `${cluster.leftPercent}%` }}
               >
                 <span
-                  className="timelineAnnotationConnector"
-                  style={{ top: `${cluster.labelTop + cluster.labelHeight / 2}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
+                className="timelineAnnotationConnector"
+                  style={{ top: `${cluster.labelTop + cluster.labelHeight - 1}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
                   aria-hidden="true"
                 />
                 <button
@@ -1285,7 +1286,7 @@ export function ServerTimeline({
         </div>
         {sharedGuide && <span
           className={`serverTimelineSharedGuide${sharedGuide.pinned ? " is-pinned" : ""}${sharedGuide.tone ? ` tone-${sharedGuide.tone}` : ""}`}
-          style={{ left: sharedGuide.x, top: annotationGridTop }}
+          style={{ left: sharedGuide.x, top: sharedGuide.top }}
           aria-hidden="true"
         />}
         {hoverTooltip && (

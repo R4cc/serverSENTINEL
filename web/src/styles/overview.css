@@ -757,9 +757,10 @@ button.overviewCardRow:focus-visible {
 .timelineAnnotationConnector {
   position: absolute;
   z-index: 0;
-  bottom: 0;
   left: 0;
+  height: 8px;
   transform: translateX(-50%);
+  border-radius: 999px;
   background: var(--annotation-color);
   opacity: 0.84;
 }
