@@ -43,10 +43,10 @@ const sample: ServerTimelineResourcePoint = {
 const clusters: MarkerCluster[] = [{
   id: "cluster",
   occurredAt: 10_000,
-  tone: "join",
+  tone: "server",
   slot: 2,
   slotCount: 24,
-  markers: [{ id: "event", occurredAt: 10_000, label: "<Alex> joined & played", tone: "join" }]
+  markers: [{ id: "event", occurredAt: 10_000, label: "<Server> started & recovered", tone: "server" }]
 }];
 
 describe("server timeline chart windows", () => {
@@ -226,8 +226,8 @@ describe("server timeline ECharts option", () => {
 
   it("escapes event text rendered into the HTML tooltip", () => {
     const html = timelineTooltipHtml([{ axisValue: 10_000, seriesId: "cpuUtilizationPercent", seriesName: "CPU", value: [10_000, 12.5] }], clusters, 10_000, String);
-    expect(html).toContain("&lt;Alex&gt; joined &amp; played");
-    expect(html).not.toContain("<Alex>");
+    expect(html).toContain("&lt;Server&gt; started &amp; recovered");
+    expect(html).not.toContain("<Server>");
     expect(escapeTimelineHtml('"server"')).toBe("&quot;server&quot;");
   });
 

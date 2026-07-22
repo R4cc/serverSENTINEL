@@ -8,7 +8,7 @@ import type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker
 } from "../types";
-import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from "../utils/serverEvents";
+import { groupNearbyRepeatedEvents } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
 import { EventIcon } from "./EventIcon";
 import {
@@ -67,11 +67,10 @@ export type TimelineMarker = {
   id: string;
   occurredAt: number;
   label: string;
-  tone: "join" | "leave" | "server" | "automation" | "planned";
+  tone: "server" | "automation" | "planned";
   event?: ServerTimelineEvent;
   occurrences?: number;
-  reconnect?: {
-    player: string;
+  restart?: {
     durationSeconds: number;
     events: [ServerTimelineEvent, ServerTimelineEvent];
   };
@@ -235,41 +234,40 @@ export function formatTimelineDuration(milliseconds: number) {
   return "<1m";
 }
 
-function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
-  if (event.eventType === "player_joined") return "join";
-  if (event.eventType === "player_left") return "leave";
-  return "server";
-}
+const timelineLifecycleEventTypes = new Set<ServerTimelineEvent["eventType"]>([
+  "server_started",
+  "server_stopped",
+  "server_crashed"
+]);
+const timelineRestartWindowMs = 5 * 60_000;
 
 export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMarker[] {
   if (!data) return [];
   const eventMarkers: TimelineMarker[] = [];
-  const events = [...data.events].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
+  const events = data.events
+    .filter((event) => timelineLifecycleEventTypes.has(event.eventType))
+    .sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
   const repeatedGroups = groupNearbyRepeatedEvents(events, (event) => event.occurredAt);
   for (let index = 0; index < repeatedGroups.length; index += 1) {
     const repeated = repeatedGroups[index];
     const event = repeated.at(-1)!;
     const nextGroup = repeatedGroups[index + 1];
-    const next = nextGroup?.length === 1 ? nextGroup[0] : undefined;
-    const player = playerEventSubject(event);
-    const nextPlayer = next ? playerEventSubject(next) : "";
-    const reconnectDuration = next ? next.occurredAt - event.occurredAt : Number.POSITIVE_INFINITY;
+    const next = nextGroup?.at(-1);
+    const restartDuration = next ? next.occurredAt - event.occurredAt : Number.POSITIVE_INFINITY;
     if (
-      event.eventType === "player_left"
-      && next?.eventType === "player_joined"
-      && samePlayerName(player, nextPlayer)
-      && reconnectDuration >= 0
-      && reconnectDuration <= playerReconnectWindowMs
+      event.eventType === "server_stopped"
+      && next?.eventType === "server_started"
+      && restartDuration >= 0
+      && restartDuration <= timelineRestartWindowMs
     ) {
       eventMarkers.push({
-        id: `reconnect:${event.id}:${next.id}`,
+        id: `restart:${repeated.map((item) => item.id).join(":")}:${nextGroup!.map((item) => item.id).join(":")}`,
         occurredAt: next.occurredAt,
-        label: `${nextPlayer} reconnected`,
-        tone: "join",
+        label: "Server restarted",
+        tone: "server",
         event: next,
-        reconnect: {
-          player: nextPlayer,
-          durationSeconds: Math.round(reconnectDuration / 1_000),
+        restart: {
+          durationSeconds: Math.round(restartDuration / 1_000),
           events: [event, next]
         }
       });
@@ -281,7 +279,7 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
         id: `repeated:${repeated.map((item) => item.id).join(":")}`,
         occurredAt: event.occurredAt,
         label: event.message,
-        tone: eventTone(event),
+        tone: "server",
         event,
         occurrences: repeated.length
       });
@@ -291,7 +289,7 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
       id: `event:${event.id}`,
       occurredAt: event.occurredAt,
       label: event.message,
-      tone: eventTone(event),
+      tone: "server",
       event
     });
   }
@@ -357,10 +355,8 @@ function capitalizeTimelineLabel(value: string) {
 }
 
 export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMarkerDisplayLabel {
-  if (marker.reconnect) return { primary: "Player reconnected", secondary: marker.reconnect.player };
+  if (marker.restart) return { primary: "Server restarted" };
   const event = marker.event;
-  if (event?.eventType === "player_joined") return { primary: "Player joined", secondary: event.subject };
-  if (event?.eventType === "player_left") return { primary: "Player left", secondary: event.subject };
   if (event?.eventType === "server_started") return { primary: "Server started" };
   if (event?.eventType === "server_stopped") return { primary: "Server stopped" };
   if (event?.eventType === "server_crashed") return { primary: "Server crashed" };
@@ -386,61 +382,39 @@ export function timelineMarkerIsImportant(marker: TimelineMarker) {
   ].includes(marker.event.eventType));
 }
 
-function clusterIsImportant(cluster: MarkerCluster) {
-  return cluster.markers.some(timelineMarkerIsImportant);
+export const maxTimelineClusterIcons = 3;
+
+export function timelineClusterIconMarkers(cluster: MarkerCluster) {
+  const icons: TimelineMarker[] = [];
+  for (const marker of cluster.markers) {
+    for (let index = 0; index < (marker.occurrences ?? 1) && icons.length < maxTimelineClusterIcons; index += 1) icons.push(marker);
+    if (icons.length === maxTimelineClusterIcons) break;
+  }
+  return icons;
 }
 
-export const maxTimelineMarkerPreviews = 4;
-
-export function timelineMarkerPreview(cluster: MarkerCluster) {
-  const markers = cluster.markers.slice(0, maxTimelineMarkerPreviews);
-  return { markers, remaining: Math.max(0, cluster.markers.length - markers.length) };
-}
-
-function estimatedMarkerLabelWidth(cluster: MarkerCluster) {
-  const preview = timelineMarkerPreview(cluster);
-  const displays = preview.markers.map(timelineMarkerDisplayLabel);
-  const overflowLabel = preview.remaining > 0 ? `${preview.remaining} more ${preview.remaining === 1 ? "event" : "events"}` : "";
-  const longestLine = Math.max(overflowLabel.length, ...displays.flatMap((display) => [display.primary.length, display.secondary?.length ?? 0]));
-  const occurrenceWidth = preview.markers.some((marker) => (marker.occurrences ?? 1) > 1) ? 24 : 0;
-  return Math.min(220, Math.max(108, 46 + occurrenceWidth + longestLine * 6));
-}
-
-function estimatedMarkerLabelHeight(cluster: MarkerCluster) {
-  if (cluster.markers.length === 1) return 30;
-  const preview = timelineMarkerPreview(cluster);
-  return 4 + preview.markers.length * 28 + (preview.remaining > 0 ? 24 : 0);
-}
-
-export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000, laneCount = 3): PositionedMarkerCluster[] {
+export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000): PositionedMarkerCluster[] {
   if (to <= from) return [];
   const availableWidth = Math.max(1, railWidth);
-  const laneEnds = Array.from({ length: laneCount }, () => Number.NEGATIVE_INFINITY);
-  const positioned = clusters.map((cluster) => {
+  return clusters.map((cluster) => {
     const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
     const center = availableWidth * leftPercent / 100;
-    const labelWidth = estimatedMarkerLabelWidth(cluster);
-    const alignEnd = center + labelWidth - 12 > availableWidth;
-    // Reserve the label's full reach on both sides of the event anchor. Labels
-    // normally extend to the right but flip left near the rail edge, so a
-    // centered half-width interval can miss collisions between opposite
-    // alignments. Keeping the reservation symmetric also prevents crossing the
-    // edge-alignment threshold during a pan from reshuffling nearby labels.
-    const labelReach = labelWidth - 14;
-    const start = center - labelReach;
-    const end = center + labelReach;
-    let lane = laneEnds.findIndex((laneEnd) => laneEnd + 6 <= start);
-    if (lane < 0) lane = laneEnds.indexOf(Math.min(...laneEnds));
-    laneEnds[lane] = end;
-    return { ...cluster, leftPercent, lane, alignEnd, labelHeight: estimatedMarkerLabelHeight(cluster) };
+    const occurrenceCount = cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
+    const iconCount = timelineClusterIconMarkers(cluster).length;
+    const buttonWidth = occurrenceCount > 1 ? 58 + String(occurrenceCount).length * 6 + Math.max(0, iconCount - 1) * 9 : 28;
+    return {
+      ...cluster,
+      leftPercent,
+      lane: 0,
+      alignEnd: center + buttonWidth - 14 > availableWidth,
+      labelTop: 17,
+      labelHeight: 30
+    };
   });
-  const laneHeights = Array.from({ length: laneCount }, (_, lane) => Math.max(0, ...positioned.filter((cluster) => cluster.lane === lane).map((cluster) => cluster.labelHeight)));
-  const laneTops = laneHeights.map((_, lane) => 2 + laneHeights.slice(0, lane).reduce((total, height) => total + height + 4, 0));
-  return positioned.map((cluster) => ({ ...cluster, labelTop: laneTops[cluster.lane] }));
 }
 
-export function timelineAnnotationGridTop(clusters: PositionedMarkerCluster[]) {
-  return Math.max(timelineChartGrid.top, ...clusters.map((cluster) => cluster.labelTop + cluster.labelHeight + 6));
+export function timelineAnnotationGridTop(_clusters: PositionedMarkerCluster[]) {
+  return timelineChartGrid.top;
 }
 
 function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
@@ -493,15 +467,13 @@ function markerTitle(cluster: MarkerCluster, formatDate: (value: string | number
   return cluster.markers.map((marker) => `${formatDate(marker.occurredAt)} — ${marker.label}${marker.occurrences && marker.occurrences > 1 ? ` (×${marker.occurrences})` : ""}`).join("\n");
 }
 
-function timelineClusterOccurrenceCount(cluster: MarkerCluster) {
+export function timelineClusterOccurrenceCount(cluster: MarkerCluster) {
   return cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
 }
 
 function timelineMarkerGlyph(marker: TimelineMarker) {
-  if (marker.reconnect) return <EventIcon kind="player_reconnected" />;
-  if (marker.tone === "join") return <EventIcon kind="player_joined" />;
-  if (marker.tone === "leave") return <EventIcon kind="player_left" />;
-  if (marker.tone === "server") return "!";
+  if (marker.restart) return <EventIcon kind="server_restarted" />;
+  if (marker.event) return <EventIcon kind={marker.event.eventType} />;
   return marker.tone === "planned" ? "○" : "▶";
 }
 
@@ -818,10 +790,7 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  const markers = useMemo(() => allMarkers.filter((marker) => {
-    if (marker.tone === "join" || marker.tone === "leave") return annotationEnabled.player;
-    return annotationEnabled[marker.tone];
-  }), [allMarkers, annotationEnabled]);
+  const markers = useMemo(() => allMarkers.filter((marker) => annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
   const positionedClusters = useMemo(
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
@@ -841,7 +810,7 @@ export function ServerTimeline({
     : selectedCluster && selectedPosition
       ? {
           x: metricGrid.left + annotationRailWidth * selectedPosition.leftPercent / 100,
-          top: selectedPosition.labelTop + selectedPosition.labelHeight + 7,
+          top: annotationGridTop,
           pinned: true,
           tone: selectedCluster.tone
         }
@@ -1158,24 +1127,17 @@ export function ServerTimeline({
         <div className="serverTimelineAnnotationStage" style={{ height: annotationGridTop }}>
         <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: metricGrid.left, right: metricGrid.right }}>
           {positionedClusters.map((cluster) => {
-            const stacked = cluster.markers.length > 1;
-            const preview = timelineMarkerPreview(cluster);
-            const displayLabel = timelineMarkerDisplayLabel(cluster.markers[0]);
-            const important = clusterIsImportant(cluster);
+            const occurrenceCount = timelineClusterOccurrenceCount(cluster);
+            const iconMarkers = timelineClusterIconMarkers(cluster);
             return (
               <div
                 key={cluster.id}
-                className={`timelineAnnotationMarker tone-${cluster.tone}${cluster.tone === "planned" ? " is-planned" : ""}`}
+                className={`timelineAnnotationMarker tone-${cluster.tone}`}
                 style={{ left: `${cluster.leftPercent}%` }}
               >
-                <span
-                className="timelineAnnotationConnector"
-                  style={{ top: `${cluster.labelTop + cluster.labelHeight - 1}px`, width: `${Math.min(5, 2.5 + (cluster.markers.length - 1) * 0.75)}px` }}
-                  aria-hidden="true"
-                />
                 <button
                   type="button"
-                  className={`timelineAnnotationLabel is-expanded${stacked ? " is-stack" : ""}${cluster.alignEnd ? " align-end" : ""}${important ? " is-important" : ""}`}
+                  className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.alignEnd ? " align-end" : ""}`}
                   style={{ top: `${cluster.labelTop}px` }}
                   title={markerTitle(cluster, formatDate)}
                   aria-label={markerTitle(cluster, formatDate)}
@@ -1186,41 +1148,14 @@ export function ServerTimeline({
                     setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
                   }}
                 >
-                  {stacked ? (
-                    <>
-                      {preview.markers.map((marker) => {
-                        const rowLabel = timelineMarkerDisplayLabel(marker);
-                        return (
-                          <span className={`timelineAnnotationPreviewRow tone-${marker.tone}`} key={marker.id} aria-hidden="true">
-                            <span className="timelineAnnotationGlyph">
-                              {timelineMarkerGlyph(marker)}
-                              {marker.occurrences && marker.occurrences > 1 && <span className="timelineAnnotationOccurrenceBadge">×{marker.occurrences}</span>}
-                            </span>
-                            <span className="timelineAnnotationLabelText">
-                              <strong>{rowLabel.primary}</strong>
-                              {rowLabel.secondary && <small>{rowLabel.secondary}</small>}
-                            </span>
-                          </span>
-                        );
-                      })}
-                      {preview.remaining > 0 && (
-                        <span className="timelineAnnotationMore" aria-hidden="true">
-                          {preview.remaining} more {preview.remaining === 1 ? "event" : "events"}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="timelineAnnotationGlyph" aria-hidden="true">
-                        {timelineMarkerGlyph(cluster.markers[0])}
-                        {cluster.markers[0].occurrences && cluster.markers[0].occurrences > 1 && <span className="timelineAnnotationOccurrenceBadge">×{cluster.markers[0].occurrences}</span>}
+                  <span className="timelineAnnotationIconStack" aria-hidden="true">
+                    {iconMarkers.map((marker, index) => (
+                      <span className={`timelineAnnotationClusterIcon tone-${marker.tone}`} key={`${marker.id}:${index}`}>
+                        {timelineMarkerGlyph(marker)}
                       </span>
-                      <span className="timelineAnnotationLabelText" aria-hidden="true">
-                        <strong>{displayLabel.primary}</strong>
-                        {displayLabel.secondary && <small>{displayLabel.secondary}</small>}
-                      </span>
-                    </>
-                  )}
+                    ))}
+                  </span>
+                  {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
                 </button>
               </div>
             );

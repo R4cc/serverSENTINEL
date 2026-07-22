@@ -729,8 +729,6 @@ button.overviewCardRow:focus-visible {
   background: var(--timeline-guide-color);
 }
 
-.serverTimelineSharedGuide.tone-join { --timeline-guide-color: var(--timeline-join); }
-.serverTimelineSharedGuide.tone-leave { --timeline-guide-color: var(--timeline-leave); }
 .serverTimelineSharedGuide.tone-server { --timeline-guide-color: var(--timeline-server); }
 .serverTimelineSharedGuide.tone-automation,
 .serverTimelineSharedGuide.tone-planned { --timeline-guide-color: var(--timeline-schedule); }
@@ -754,58 +752,62 @@ button.overviewCardRow:focus-visible {
   pointer-events: none;
 }
 
-.timelineAnnotationConnector {
+.timelineAnnotationCluster {
   position: absolute;
-  z-index: 0;
-  left: 0;
-  height: 8px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: var(--annotation-color);
-  opacity: 0.84;
-}
-
-.timelineAnnotationLabel {
-  position: absolute;
-  width: 28px;
-  max-width: 28px;
   height: 30px;
   min-width: 28px;
-  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 5px;
-  overflow: hidden;
   transform: translateX(-14px);
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  background: transparent;
   color: var(--text);
-  padding: 0 2px;
-  box-shadow: var(--shadow-xs);
+  padding: 0;
   font: inherit;
-  font-size: 11px;
   font-weight: var(--weight-title);
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
 }
 
-.timelineAnnotationGlyph {
-  position: relative;
-  z-index: 1;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--annotation-color);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--annotation-color);
+.timelineAnnotationCluster.is-multiple {
+  min-width: max-content;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  padding: 1px 8px 1px 2px;
+  box-shadow: var(--shadow-xs);
 }
 
-.timelineAnnotationGlyph svg {
+.timelineAnnotationIconStack {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.timelineAnnotationClusterIcon {
+  --cluster-icon-color: var(--timeline-server);
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--cluster-icon-color);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--cluster-icon-color);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+.timelineAnnotationClusterIcon + .timelineAnnotationClusterIcon { margin-left: -9px; }
+.timelineAnnotationClusterIcon.tone-server { --cluster-icon-color: var(--timeline-server); }
+.timelineAnnotationClusterIcon.tone-automation,
+.timelineAnnotationClusterIcon.tone-planned { --cluster-icon-color: var(--timeline-schedule); }
+.timelineAnnotationClusterIcon.tone-planned { border-style: dashed; background: var(--surface-muted); }
+
+.timelineAnnotationClusterIcon svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -815,27 +817,10 @@ button.overviewCardRow:focus-visible {
   stroke-linejoin: round;
 }
 
-.timelineAnnotationLabelText {
-  width: 0;
-  min-width: 0;
-  display: grid;
-  align-content: center;
-  gap: 1px;
-  overflow: hidden;
-  opacity: 0;
-}
-
-.timelineAnnotationLabel.is-expanded {
-  width: max-content;
-  max-width: 220px;
-  min-width: 108px;
-  padding: 0 8px 0 2px;
-}
-
-.timelineAnnotationLabel.is-expanded .timelineAnnotationLabelText {
-  width: auto;
-  flex: 1 1 auto;
-  opacity: 1;
+.timelineAnnotationClusterCount {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: var(--weight-title);
 }
 
 .timelineAnnotationOccurrenceBadge,
@@ -861,89 +846,11 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
-.timelineAnnotationLabel.is-stack {
-  height: auto;
-  min-height: 0;
-  align-items: stretch;
-  flex-direction: column;
-  gap: 0;
-  border-radius: 15px;
-  padding: 2px;
-}
-
-.timelineAnnotationPreviewRow {
-  --annotation-row-color: var(--annotation-color);
-  min-width: 0;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.timelineAnnotationPreviewRow + .timelineAnnotationPreviewRow,
-.timelineAnnotationMore {
-  border-top: 1px solid var(--border-muted);
-}
-
-.timelineAnnotationPreviewRow .timelineAnnotationGlyph {
-  width: 22px;
-  height: 22px;
-  border-width: 1.5px;
-  border-color: var(--annotation-row-color);
-  color: var(--annotation-row-color);
-}
-
-.timelineAnnotationPreviewRow .timelineAnnotationLabelText {
-  width: auto;
-  flex: 1 1 auto;
-  opacity: 1;
-  text-align: left;
-}
-
-.timelineAnnotationPreviewRow.tone-join { --annotation-row-color: var(--timeline-join); }
-.timelineAnnotationPreviewRow.tone-leave { --annotation-row-color: var(--timeline-leave); }
-.timelineAnnotationPreviewRow.tone-server { --annotation-row-color: var(--timeline-server); }
-.timelineAnnotationPreviewRow.tone-automation,
-.timelineAnnotationPreviewRow.tone-planned { --annotation-row-color: var(--timeline-schedule); }
-
-.timelineAnnotationMore {
-  min-height: 24px;
-  display: flex;
-  align-items: center;
-  padding: 0 7px 0 29px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-meta);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.timelineAnnotationLabelText strong,
-.timelineAnnotationLabelText small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timelineAnnotationLabelText strong { color: var(--text); font-size: 11px; line-height: 1.1; }
-.timelineAnnotationLabelText small { color: var(--text-muted); font-size: 9px; font-weight: var(--weight-meta); line-height: 1.1; }
-
-.timelineAnnotationLabel.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
-.timelineAnnotationLabel.align-end.is-expanded { padding: 0 2px 0 8px; }
-.timelineAnnotationLabel.is-stack.align-end { flex-direction: column; padding: 2px; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationPreviewRow { flex-direction: row-reverse; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationLabelText { text-align: right; }
-.timelineAnnotationLabel.is-stack.align-end .timelineAnnotationMore { justify-content: flex-end; padding: 0 29px 0 7px; }
-.timelineAnnotationMarker.tone-join { --annotation-color: var(--timeline-join); }
-.timelineAnnotationMarker.tone-leave { --annotation-color: var(--timeline-leave); }
-.timelineAnnotationMarker.tone-server { --annotation-color: var(--timeline-server); }
-.timelineAnnotationMarker.tone-automation,
-.timelineAnnotationMarker.tone-planned { --annotation-color: var(--timeline-schedule); }
-.timelineAnnotationMarker.is-planned .timelineAnnotationGlyph { border-style: dashed; background: var(--surface-muted); }
-.timelineAnnotationLabel[aria-expanded="true"] { border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
-.timelineAnnotationLabel:hover:not(:disabled) { transform: translateX(-14px) translateY(-1px); border-color: var(--annotation-color); background: color-mix(in srgb, var(--annotation-color) 8%, var(--surface-raised)); color: var(--text); }
-.timelineAnnotationLabel.align-end:hover:not(:disabled) { transform: translateX(calc(-100% + 14px)) translateY(-1px); }
-.timelineAnnotationLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.timelineAnnotationCluster.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
+.timelineAnnotationCluster.align-end.is-multiple { padding: 1px 2px 1px 8px; }
+.timelineAnnotationCluster[aria-expanded="true"] { background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
+.timelineAnnotationCluster:hover:not(:disabled) { color: var(--text); filter: brightness(1.08); }
+.timelineAnnotationCluster:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .serverTimelineAnnotationPopover {
   position: absolute;
@@ -1017,8 +924,6 @@ button.overviewCardRow:focus-visible {
 }
 
 .serverTimelineAnnotationPopoverItem.is-interactive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.serverTimelineAnnotationPopoverItem.tone-join { --annotation-color: var(--timeline-join); }
-.serverTimelineAnnotationPopoverItem.tone-leave { --annotation-color: var(--timeline-leave); }
 .serverTimelineAnnotationPopoverItem.tone-server { --annotation-color: var(--timeline-server); }
 .serverTimelineAnnotationPopoverItem.tone-automation,
 .serverTimelineAnnotationPopoverItem.tone-planned { --annotation-color: var(--timeline-schedule); }
