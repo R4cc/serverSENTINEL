@@ -436,7 +436,7 @@ button.overviewCardRow:focus-visible {
 
 .serverTimelineAnnotationStage {
   position: relative;
-  min-height: 66px;
+  min-height: 48px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
@@ -490,7 +490,9 @@ button.overviewCardRow:focus-visible {
 .serverTimelinePlayerAxis time:last-child { transform: translateX(-100%); }
 
 .serverTimelinePlayerScroller {
-  max-height: 260px;
+  /* Group header (28px) plus six complete 40px rows. Keeping the cap on a
+     row boundary prevents the final visible session label being clipped. */
+  max-height: 268px;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -690,6 +692,7 @@ button.overviewCardRow:focus-visible {
 .timelineAnnotationCluster {
   position: absolute;
   height: 30px;
+  min-height: 30px;
   min-width: 28px;
   display: flex;
   align-items: center;
@@ -806,14 +809,45 @@ button.overviewCardRow:focus-visible {
 
 .timelineAnnotationCluster.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
 .timelineAnnotationCluster.align-end.is-multiple { padding: 1px 2px 1px 8px; }
-.timelineAnnotationCluster[aria-expanded="true"] { background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent); }
-.timelineAnnotationCluster:hover:not(:disabled) { color: var(--text); filter: brightness(1.08); }
+
+/* Timeline markers are icon controls, not primary buttons. Neutralize the
+   global blue button hover/lift and keep feedback local to the event icon. */
+.timelineAnnotationCluster:hover:not(:disabled),
+.timelineAnnotationCluster:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  transform: translateX(-14px);
+  filter: none;
+}
+
+.timelineAnnotationCluster.align-end:hover:not(:disabled),
+.timelineAnnotationCluster.align-end:active:not(:disabled) {
+  transform: translateX(calc(-100% + 14px));
+}
+
+.timelineAnnotationCluster:hover:not(:disabled) .timelineAnnotationClusterIcon {
+  background: color-mix(in srgb, var(--cluster-icon-color) 9%, var(--surface-raised));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cluster-icon-color) 13%, transparent);
+}
+
+.timelineAnnotationCluster.is-multiple:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--annotation-color) 30%, var(--border-subtle));
+  background: color-mix(in srgb, var(--annotation-color) 6%, var(--surface-raised));
+  box-shadow: var(--shadow-xs);
+}
+
+.timelineAnnotationCluster[aria-expanded="true"],
+.timelineAnnotationCluster[aria-expanded="true"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--annotation-color) 10%, var(--surface-raised));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--annotation-color) 18%, transparent);
+}
 .timelineAnnotationCluster:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .serverTimelineAnnotationPopover {
   position: absolute;
   z-index: 5;
-  top: 62px;
+  top: 44px;
   width: min(360px, calc(100% - 24px));
   max-height: 250px;
   display: grid;
@@ -995,7 +1029,8 @@ button.overviewCardRow:focus-visible {
     height: 360px;
   }
 
-  .serverTimelinePlayerScroller { max-height: 220px; }
+  /* Compact desktop keeps five complete rows visible beneath the header. */
+  .serverTimelinePlayerScroller { max-height: 228px; }
   .serverTimelineMetricBand.is-prominent { height: 220px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }

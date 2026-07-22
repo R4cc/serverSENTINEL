@@ -400,7 +400,7 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
       lane: 0,
       alignEnd: showInlineLabel ? false : measurement.alignEnd,
       inlineLabel: showInlineLabel ? measurement.inlineLabel : null,
-      labelTop: 17,
+      labelTop: 9,
       labelHeight: 30
     };
   });

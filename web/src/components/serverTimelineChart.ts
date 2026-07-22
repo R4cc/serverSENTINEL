@@ -4,7 +4,7 @@ import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline"
 
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
 export const liveTimelineFutureRatio = 0.1;
-export const timelineChartGrid = { left: 56, right: 24, top: 66, bottom: 38 } as const;
+export const timelineChartGrid = { left: 56, right: 24, top: 48, bottom: 38 } as const;
 export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 34 } as const;
 
 export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {

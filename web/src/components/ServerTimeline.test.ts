@@ -190,8 +190,8 @@ describe("server timeline markers", () => {
     const marker = timelineMarkers(response())[0];
     const markers = Array.from({ length: 6 }, (_, index) => ({ ...marker, id: `event-${index}`, occurredAt: 10_000 + index }));
     const positioned = positionTimelineClusters(clusterTimelineMarkers(markers, 0, 60_000, 1), 0, 60_000);
-    expect(positioned[0]).toMatchObject({ lane: 0, labelTop: 17, labelHeight: 30 });
-    expect(timelineAnnotationGridTop(positioned)).toBe(66);
+    expect(positioned[0]).toMatchObject({ lane: 0, labelTop: 9, labelHeight: 30 });
+    expect(timelineAnnotationGridTop(positioned)).toBe(48);
   });
 
   it("does not pin buffered annotations outside the visible viewport to an edge", () => {
