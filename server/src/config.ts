@@ -70,6 +70,14 @@ function parseCountLimitEnv(name: string, defaultValue: number) {
   return value;
 }
 
+function parseHourDurationEnv(name: string, defaultValue: number) {
+  const hours = parseCountLimitEnv(name, defaultValue);
+  if (hours > 24 * 365) {
+    throw new Error(`${name} must not exceed 8760 hours`);
+  }
+  return hours * 60 * 60 * 1000;
+}
+
 function parseBooleanEnv(name: string, defaultValue = false) {
   const raw = process.env[name]?.trim().toLowerCase();
   if (!raw) return defaultValue;
@@ -132,6 +140,7 @@ export const config = {
   enableDemo: parseBooleanEnv("SERVERSENTINEL_ENABLE_DEMO"),
   trustProxy: parseBooleanEnv("SERVERSENTINEL_TRUST_PROXY"),
   setupToken: optionalSecretEnv("SERVERSENTINEL_SETUP_TOKEN"),
+  exportRetentionMs: parseHourDurationEnv("SERVERSENTINEL_EXPORT_RETENTION_HOURS", 24),
   fileDownloadMaxBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES", 512 * 1024 * 1024),
   fileDownloadZipThresholdBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES", 128 * 1024 * 1024),
   fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),

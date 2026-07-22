@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { AppSettings, ManagedNode, ManagedServer, ModPreference } from "./types.js";
 import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
@@ -192,13 +192,23 @@ export async function createExportArtifact(input: ExportInput): Promise<ExportAr
 }
 
 export async function writeExportArtifact(path: string, artifact: ExportArtifact) {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  const content = `${JSON.stringify(artifact, null, 2)}\n`;
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await chmod(dirname(path), 0o700);
+  try {
+    await writeFile(temporaryPath, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } catch (error) {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
   return {
     path,
     filename: basename(path),
-    size: (await stat(path)).size,
-    sha256: createHash("sha256").update(await readFile(path)).digest("hex")
+    size: Buffer.byteLength(content),
+    sha256: createHash("sha256").update(content).digest("hex")
   };
 }
 

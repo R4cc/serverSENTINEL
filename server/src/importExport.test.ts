@@ -11,6 +11,7 @@ import {
   exportArtifactSchemaVersion,
   parseExportArtifactBase64,
   validateImportArtifact,
+  writeExportArtifact,
   type ExportArtifact
 } from "./importExport.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
@@ -179,6 +180,21 @@ async function createRepositories(root: string) {
 }
 
 describe("export/import artifacts", () => {
+  it("writes generated artifacts atomically with restrictive permissions", async () => {
+    const root = await tempRoot("serversentinel-export-write-");
+    const path = join(root, "exports", "artifact.json");
+
+    const written = await writeExportArtifact(path, artifact());
+
+    expect(written.path).toBe(path);
+    expect(written.size).toBeGreaterThan(0);
+    expect((await readdir(join(root, "exports"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    if (process.platform !== "win32") {
+      expect((await stat(path)).mode & 0o077).toBe(0);
+      expect((await stat(join(root, "exports"))).mode & 0o077).toBe(0);
+    }
+  });
+
   it.each([1, 2])("rejects legacy schema-%s exports", (schemaVersion) => {
     const legacy = artifact();
     (legacy as { schemaVersion: number }).schemaVersion = schemaVersion;

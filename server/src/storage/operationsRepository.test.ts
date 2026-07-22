@@ -151,11 +151,13 @@ describe("OperationsRepository", () => {
     operations.succeed(recentA.id, {}, "2026-02-01T00:00:01.000Z");
     operations.succeed(recentB.id, {}, "2026-02-02T00:00:01.000Z");
 
-    expect(operations.deleteFinishedBefore("2026-01-15T00:00:00.000Z")).toBe(1);
+    expect(operations.listFinishedBefore("2026-01-15T00:00:00.000Z").map((operation) => operation.id)).toEqual([old.id]);
+    expect(operations.deleteFinished([old.id])).toBe(1);
     expect(operations.find(old.id)).toBeUndefined();
     expect(operations.find(running.id)).toMatchObject({ status: "running" });
 
-    expect(operations.trimFinished(1)).toBe(1);
+    expect(operations.listFinishedBeyondLimit(1).map((operation) => operation.id)).toEqual([recentA.id]);
+    expect(operations.deleteFinished([recentA.id])).toBe(1);
     expect(operations.find(recentA.id)).toBeUndefined();
     expect(operations.find(recentB.id)).toMatchObject({ status: "succeeded" });
     expect(operations.find(running.id)).toMatchObject({ status: "running" });

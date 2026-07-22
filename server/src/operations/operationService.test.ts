@@ -9,6 +9,7 @@ function repository() {
       create: vi.fn(() => operation),
       start: vi.fn(() => operation),
       update: vi.fn(),
+      find: vi.fn(() => operation),
       succeed: vi.fn(),
       fail: vi.fn()
     }
@@ -27,13 +28,15 @@ describe("OperationService", () => {
   });
 
   it("settles queued failures consistently", async () => {
-    const { value } = repository();
+    const { value, operation } = repository();
+    const failed = { ...operation, status: "failed" as const };
+    value.find.mockReturnValue(failed as never);
     const settled = vi.fn();
     const service = new OperationService(value as never, { markRestartRequired: vi.fn(), clearRestartRequired: vi.fn(), errorDetails: () => "details" });
     service.enqueue({ type: "export.run", task: "Queued", failureTask: "Export failed", failureFallback: "Export failed", onSettled: settled }, async () => {
       throw new Error("network failed");
     });
     await vi.waitFor(() => expect(value.fail).toHaveBeenCalledWith("op-1", "network failed", { task: "Export failed", logSummary: "details" }));
-    expect(settled).toHaveBeenCalled();
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(failed));
   });
 });

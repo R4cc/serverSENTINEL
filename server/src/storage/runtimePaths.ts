@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const defaultRuntimeDataDir = "/data";
@@ -38,4 +38,5 @@ export function initializeRuntimeDataRoot(paths: RuntimeDataPaths) {
   for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
     mkdirSync(directory, { recursive: true });
   }
+  chmodSync(paths.exportsDir, 0o700);
 }

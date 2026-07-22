@@ -114,6 +114,7 @@ import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js"
 import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
 import { OperationService, type ForegroundOperationInput } from "./operations/operationService.js";
+import { ExportArtifactMaintenance, exportArtifactExpiresAt, exportOperationResult } from "./exportArtifactMaintenance.js";
 import { diffModSnapshots, snapshotMods } from "./modRestartState.js";
 import {
   applyImportArtifact,
@@ -426,6 +427,7 @@ let fileEditLeasesRepository: FileEditLeasesRepository;
 let modPreferencesRepository: ModPreferencesRepository;
 let operationsRepository: OperationsRepository;
 let operationService: OperationService;
+let exportArtifactMaintenance: ExportArtifactMaintenance;
 let storageDatabase: StorageDatabase;
 let modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
 const panelNodeConnections = new PanelNodeConnections();
@@ -454,6 +456,7 @@ const consoleHeartbeatIntervalMs = 5_000;
 const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
+const exportMaintenanceIntervalMs = 15 * 60 * 1000;
 
 type LogFields = Record<string, unknown>;
 
@@ -3816,7 +3819,8 @@ async function startExportOperation(input: { serverIds?: string[] }, createdBy: 
         filename: written.filename,
         size: written.size,
         sha256: written.sha256,
-        downloadUrl: `/api/exports/${operationId}/download`
+        downloadUrl: `/api/exports/${operationId}/download`,
+        expiresAt: new Date(Date.now() + config.exportRetentionMs).toISOString()
       },
       artifactPath: written.path,
       serverCount: artifact.servers.length,
@@ -3824,6 +3828,11 @@ async function startExportOperation(input: { serverIds?: string[] }, createdBy: 
     }),
     onError: (error, operation) => {
       logError({ operationId: operation.id, action: "export", status: "failed", ...errorLogFields(error) }, "Export operation failed");
+    },
+    onSettled: async (operation) => {
+      if (!await exportArtifactMaintenance.cleanupSettledOperation(operation)) {
+        logWarn({ operationId: operation.id, status: operation.status }, "Could not clean up an incomplete export artifact; periodic maintenance will retry");
+      }
     }
   }, async (operation, report) => {
     const artifact = await createExportArtifact({
@@ -4464,15 +4473,39 @@ operationService = new OperationService(operationsRepository, {
   clearRestartRequired: (serverId) => { serversRepository.clearRestartRequired(serverId); },
   errorDetails: detailedErrorMessage
 });
+exportArtifactMaintenance = new ExportArtifactMaintenance(
+  config.exportsDir,
+  operationsRepository,
+  config.exportRetentionMs,
+  operationRetentionMs,
+  operationRetentionMaxRows
+);
 const recoveredOperations = operationsRepository.failIncompleteOnStartup();
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
 }
-const prunedOperations = operationsRepository.deleteFinishedBefore(new Date(Date.now() - operationRetentionMs).toISOString())
-  + operationsRepository.trimFinished(operationRetentionMaxRows);
-if (prunedOperations > 0) {
-  logInfo({ operationCount: prunedOperations, retentionDays: 30, maxRows: operationRetentionMaxRows }, "Pruned old operation records");
-}
+let exportMaintenanceRunning = false;
+const runExportMaintenance = async () => {
+  if (exportMaintenanceRunning) return;
+  exportMaintenanceRunning = true;
+  try {
+    const result = await exportArtifactMaintenance.maintain();
+    if (result.expiredArtifacts || result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations) {
+      logInfo({ ...result, failures: undefined }, "Completed export artifact and operation maintenance");
+    }
+    for (const failure of result.failures) {
+      logWarn(failure, "Export artifact maintenance could not remove an artifact");
+    }
+  } catch (error) {
+    logWarn({ errorDetails: detailedErrorMessage(error) }, "Export artifact maintenance failed; the next scheduled run will retry");
+  } finally {
+    exportMaintenanceRunning = false;
+  }
+};
+await runExportMaintenance();
+const exportMaintenanceTimer = setInterval(() => void runExportMaintenance(), exportMaintenanceIntervalMs);
+exportMaintenanceTimer.unref();
+app.addHook("onClose", async () => { clearInterval(exportMaintenanceTimer); });
 const prunedLeases = fileEditLeasesRepository.pruneExpired();
 if (prunedLeases > 0) {
   logInfo({ leaseCount: prunedLeases }, "Pruned expired file edit leases");
@@ -5139,14 +5172,29 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
   if (operation.status !== "succeeded") {
     throw new Error("Export is not ready for download");
   }
-  const result = operation.result as { artifactPath?: string; artifact?: { filename?: string; size?: number } } | undefined;
+  const expiresAt = exportArtifactExpiresAt(operation, config.exportRetentionMs);
+  if (expiresAt !== undefined && expiresAt <= Date.now()) {
+    await exportArtifactMaintenance.expireOperation(operation).catch((error) => {
+      logWarn({ operationId: operation.id, errorDetails: detailedErrorMessage(error) }, "Could not remove an expired export artifact during download");
+    });
+    return reply.code(410).send(apiErrorResponse("EXPORT_EXPIRED", "Export artifact has expired"));
+  }
+  const result = exportOperationResult(operation);
   const artifactPath = result?.artifactPath;
   if (!artifactPath || !isInsideServersDirectory(config.exportsDir, artifactPath)) {
     throw new Error("Export artifact is not available");
   }
+  try {
+    await stat(artifactPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export artifact is not available"));
+    }
+    throw error;
+  }
   reply.header("content-type", "application/json");
-  reply.header("content-disposition", `attachment; filename="${result?.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
-  if (result?.artifact?.size) reply.header("content-length", String(result.artifact.size));
+  reply.header("content-disposition", `attachment; filename="${result.artifact?.filename ?? exportArtifactFilename(operation.id)}"`);
+  if (result.artifact?.size) reply.header("content-length", String(result.artifact.size));
   return reply.send(exportDownloadStream(artifactPath));
 });
 
