@@ -440,7 +440,7 @@ const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
 const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
-const fileUploadSizeLimit = 32 * 1024 * 1024;
+const fileUploadSizeLimit = 256 * 1024 * 1024;
 const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
 const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;

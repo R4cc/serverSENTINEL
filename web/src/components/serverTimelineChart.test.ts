@@ -3,7 +3,7 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey } from "./ServerTimeline";
 import {
   buildTimelineChartOption,
-  adaptiveMemoryAxisBounds,
+  memoryAxisMaximum,
   dataZoomWindow,
   defaultTimelinePalette,
   escapeTimelineHtml,
@@ -20,7 +20,7 @@ import {
 
 const enabled: Record<SeriesKey, boolean> = {
   cpuUtilizationPercent: true,
-  memoryUtilizationPercent: true,
+  memoryUsageBytes: true,
   networkRxBytesPerSecond: true,
   networkTxBytesPerSecond: true,
   playersOnline: false
@@ -32,7 +32,7 @@ const sample: ServerTimelineResourcePoint = {
   running: true,
   cpuPercent: 12.5,
   cpuUtilizationPercent: 12.5,
-  memoryUsageBytes: null,
+  memoryUsageBytes: 768,
   memoryLimitBytes: 1_000,
   memoryUtilizationPercent: null,
   playersOnline: 2,
@@ -97,12 +97,12 @@ describe("server timeline ECharts option", () => {
     expect(option).not.toHaveProperty("tooltip");
     expect(option.yAxis).toHaveLength(3);
     expect(option.dataZoom[0]).toMatchObject({ startValue: 5_000, endValue: 15_000, zoomOnMouseWheel: "ctrl" });
-    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.data).toEqual([[10_000, "-"]]);
-    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.yAxisId).toBe("timeline-memory-axis");
+    expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, 768]]);
+    expect(option.series.find((series) => series.id === "memoryUsageBytes")?.yAxisId).toBe("timeline-memory-axis");
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.connectNulls).toBe(false);
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")).toMatchObject({ symbol: "none", silent: true, smooth: 0.24, smoothMonotone: "x" });
     expect(option.series.find((series) => series.id === "cpuUtilizationPercent")?.emphasis).toEqual({ disabled: true });
-    expect(option.series.find((series) => series.id === "memoryUtilizationPercent")?.lineStyle?.type).toBe("solid");
+    expect(option.series.find((series) => series.id === "memoryUsageBytes")?.lineStyle?.type).toBe("solid");
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data).toHaveLength(1);
     expect(option.series.find((series) => series.id === "timeline-annotations")?.markLine?.data[0].lineStyle.type).toBe("dashed");
     expect(option.xAxis.axisLabel.formatter(10_000)).toBe("10000");
@@ -149,7 +149,7 @@ describe("server timeline ECharts option", () => {
       formatShortTime: String,
       now: 12_000,
       gridOverride: timelineMetricBandGrid,
-      seriesKeys: ["memoryUtilizationPercent"]
+      seriesKeys: ["memoryUsageBytes"]
     }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
     expect(cpu.grid).toMatchObject(timelineMetricBandGrid);
     expect(memory.grid).toMatchObject(timelineMetricBandGrid);
@@ -157,7 +157,7 @@ describe("server timeline ECharts option", () => {
     expect(memory.yAxis).toHaveLength(1);
     expect(cpu.yAxis[0].position).toBe("left");
     expect(memory.yAxis[0].position).toBe("left");
-    expect(cpu.series.some((series) => series.id === "memoryUtilizationPercent")).toBe(false);
+    expect(cpu.series.some((series) => series.id === "memoryUsageBytes")).toBe(false);
     expect(memory.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
   });
 
@@ -173,40 +173,43 @@ describe("server timeline ECharts option", () => {
       formatShortTime: String,
       now: 30_000
     }) as { yAxis: Array<{ name?: string }>; series: Array<{ id: string; step?: string }> };
-    expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU", "Memory %", "Players"]);
+    expect(option.yAxis.map((axis) => axis.name)).toEqual(["CPU", "Memory", "Players"]);
     expect(option.series.find((series) => series.id === "playersOnline")?.step).toBe("end");
   });
 
-  it("uses a clearly bounded adaptive memory axis for the loaded sample buffer", () => {
-    const stableMemory = [
-      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 66.1 },
-      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 66.8 },
-      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 67.2 }
+  it("uses the configured memory limit as a normal zero-based chart maximum", () => {
+    const samples = [
+      { ...sample, sampledAt: 10_000, memoryUsageBytes: 600, memoryLimitBytes: 1_024 },
+      { ...sample, sampledAt: 20_000, memoryUsageBytes: 700, memoryLimitBytes: 1_024 }
     ];
-    const bounds = adaptiveMemoryAxisBounds(stableMemory);
-    expect(bounds.max - bounds.min).toBeGreaterThanOrEqual(5);
-    expect(bounds.min).toBeGreaterThan(60);
-    expect(bounds.max).toBeLessThan(70);
+    expect(memoryAxisMaximum(samples)).toBe(1_024);
   });
 
-  it("keeps every loaded memory value inside one stable pan domain", () => {
-    const crossingMemory = [
-      { ...sample, sampledAt: 0, memoryUtilizationPercent: 20 },
-      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 60 },
-      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 65 },
-      { ...sample, sampledAt: 30_000, memoryUtilizationPercent: 5 }
+  it("keeps plotting memory usage when the Docker memory limit is unavailable", () => {
+    const withoutLimit = [
+      { ...sample, sampledAt: 10_000, memoryUsageBytes: 700, memoryLimitBytes: null, memoryUtilizationPercent: null },
+      { ...sample, sampledAt: 20_000, memoryUsageBytes: 800, memoryLimitBytes: null, memoryUtilizationPercent: null }
     ];
-    const bounds = adaptiveMemoryAxisBounds(crossingMemory);
-    expect(bounds.min).toBeLessThan(35);
-    expect(bounds.max).toBeGreaterThan(65);
+    const option = buildTimelineChartOption({
+      samples: withoutLimit,
+      query: { from: 0, to: 30_000 },
+      viewport: { from: 0, to: 30_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      now: 40_000,
+      gridOverride: timelineMetricBandGrid,
+      seriesKeys: ["memoryUsageBytes"]
+    }) as { yAxis: Array<{ min: number; max: number }>; series: Array<{ id: string; data: Array<[number, number]> }> };
+    expect(option.yAxis[0].min).toBe(0);
+    expect(option.yAxis[0].max).toBeGreaterThan(800);
+    expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, 700], [20_000, 800]]);
   });
 
-  it("keeps true percentage endpoints above the rendered chart boundary", () => {
-    const bounds = adaptiveMemoryAxisBounds([
-      { ...sample, sampledAt: 10_000, memoryUtilizationPercent: 0 },
-      { ...sample, sampledAt: 20_000, memoryUtilizationPercent: 100 }
-    ]);
-    expect(bounds).toEqual({ min: -0.5, max: 100.5 });
+  it("adds headroom when usage exceeds the reported memory limit", () => {
+    expect(memoryAxisMaximum([{ ...sample, memoryUsageBytes: 1_200, memoryLimitBytes: 1_000 }])).toBeGreaterThan(1_200);
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {
@@ -234,10 +237,17 @@ describe("server timeline ECharts option", () => {
   it("builds the hover tooltip without asking ECharts to highlight or redraw a series", () => {
     const laterSample = { ...sample, sampledAt: 20_000, cpuUtilizationPercent: 30 };
     expect(nearestTimelineSample([sample, laterSample], 18_000)).toBe(laterSample);
-    const html = timelineHoverTooltipHtml(18_000, [sample, laterSample], { ...enabled, memoryUtilizationPercent: false }, [], 10_000, String);
+    const html = timelineHoverTooltipHtml(18_000, [sample, laterSample], { ...enabled, memoryUsageBytes: false }, [], 10_000, String);
     expect(html).toContain("20000");
     expect(html).toContain("CPU: 30.0%");
     expect(html).toContain("Players: 2 online");
     expect(html).not.toContain("Memory:");
+  });
+
+  it("formats the memory hover row as usage with an optional capacity detail", () => {
+    const html = timelineHoverTooltipHtml(10_000, [sample], enabled, [], 10_000, String);
+    expect(html).toContain("Memory: 768 B");
+    expect(html).toContain("Limit 1000 B");
+    expect(html).not.toContain("Memory: 0.0%");
   });
 });

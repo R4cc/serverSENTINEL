@@ -9,7 +9,7 @@ export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 3
 
 export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
   const cpu = enabled.cpuUtilizationPercent;
-  const memory = enabled.memoryUtilizationPercent;
+  const memory = enabled.memoryUsageBytes;
   const network = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
   const players = enabled.playersOnline;
   const visibleRightAxes = Number(memory) + Number(network) + Number(players);
@@ -21,28 +21,17 @@ export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>,
   };
 }
 
-export function adaptiveMemoryAxisBounds(samples: ServerTimelineResourcePoint[]) {
-  const values = samples.flatMap((sample) => (
-    typeof sample.memoryUtilizationPercent === "number"
-    && Number.isFinite(sample.memoryUtilizationPercent)
-      ? [sample.memoryUtilizationPercent]
-      : []
-  ));
-  if (!values.length) return { min: 0, max: 100 };
-  const observedMin = Math.min(...values);
-  const observedMax = Math.max(...values);
-  const observedSpan = observedMax - observedMin;
-  const span = Math.max(5, observedSpan * 1.5);
-  const center = (observedMin + observedMax) / 2;
-  let min = Math.max(0, center - span / 2);
-  let max = Math.min(100, center + span / 2);
-  if (max - min < span) {
-    if (min === 0) max = Math.min(100, span);
-    else min = Math.max(0, 100 - span);
-  }
-  if (observedMin <= 0) min = -0.5;
-  if (observedMax >= 100) max = 100.5;
-  return { min: Math.floor(min * 10) / 10, max: Math.ceil(max * 10) / 10 };
+export function memoryAxisMaximum(samples: ServerTimelineResourcePoint[]) {
+  const usage = samples.flatMap((sample) => typeof sample.memoryUsageBytes === "number" && Number.isFinite(sample.memoryUsageBytes) ? [sample.memoryUsageBytes] : []);
+  const limits = samples.flatMap((sample) => typeof sample.memoryLimitBytes === "number" && Number.isFinite(sample.memoryLimitBytes) && sample.memoryLimitBytes > 0 ? [sample.memoryLimitBytes] : []);
+  const observed = usage.length ? Math.max(...usage) : 0;
+  const capacity = limits.length ? Math.max(...limits) : 0;
+  const target = Math.max(capacity, observed * 1.1);
+  if (target <= 0) return 1;
+  const gibibyte = 1024 ** 3;
+  const mebibyte = 1024 ** 2;
+  const step = target >= gibibyte ? gibibyte : target >= mebibyte ? 64 * mebibyte : Math.max(1, 2 ** Math.floor(Math.log2(target)));
+  return Math.ceil(target / step) * step;
 }
 
 export type TimelinePalette = {
@@ -142,7 +131,8 @@ function formatBytes(value: number) {
 }
 
 function formatMetric(key: SeriesKey, value: number) {
-  if (key === "cpuUtilizationPercent" || key === "memoryUtilizationPercent") return `${value.toFixed(1)}%`;
+  if (key === "cpuUtilizationPercent") return `${value.toFixed(1)}%`;
+  if (key === "memoryUsageBytes") return formatBytes(value);
   if (key === "playersOnline") return `${Math.round(value)} online`;
   return `${formatBytes(value)}/s`;
 }
@@ -167,7 +157,7 @@ export function timelineTooltipHtml(
   if (!Number.isFinite(timestamp)) return "";
   const rows = entries.flatMap((entry) => {
     const key = String(entry.seriesId ?? "") as SeriesKey;
-    if (!(["cpuUtilizationPercent", "memoryUtilizationPercent", "networkRxBytesPerSecond", "networkTxBytesPerSecond", "playersOnline"] as string[]).includes(key)) return [];
+    if (!(["cpuUtilizationPercent", "memoryUsageBytes", "networkRxBytesPerSecond", "networkTxBytesPerSecond", "playersOnline"] as string[]).includes(key)) return [];
     const pair = Array.isArray(entry.value) ? entry.value : [];
     const value = Number(pair[1]);
     if (!Number.isFinite(value)) return [];
@@ -207,7 +197,7 @@ export function timelineHoverTooltipHtml(
   const tooltipTimestamp = sample?.sampledAt ?? timestamp;
   const names: Record<SeriesKey, string> = {
     cpuUtilizationPercent: "CPU",
-    memoryUtilizationPercent: "Memory",
+    memoryUsageBytes: "Memory",
     networkRxBytesPerSecond: "Network In",
     networkTxBytesPerSecond: "Network Out",
     playersOnline: "Players"
@@ -215,8 +205,8 @@ export function timelineHoverTooltipHtml(
   const entries: TooltipEntry[] = (Object.keys(names) as SeriesKey[]).flatMap((key) => {
     const value = sample?.[key];
     if ((key !== "playersOnline" && !enabled[key]) || typeof value !== "number" || !Number.isFinite(value)) return [];
-    const detail = key === "memoryUtilizationPercent" && typeof sample?.memoryUsageBytes === "number" && typeof sample?.memoryLimitBytes === "number"
-      ? `${formatBytes(sample.memoryUsageBytes)} / ${formatBytes(sample.memoryLimitBytes)}`
+    const detail = key === "memoryUsageBytes" && typeof sample?.memoryLimitBytes === "number" && sample.memoryLimitBytes > 0
+      ? `Limit ${formatBytes(sample.memoryLimitBytes)}`
       : undefined;
     return [{ axisValue: tooltipTimestamp, seriesId: key, seriesName: names[key], value: [tooltipTimestamp, value], detail }];
   });
@@ -253,7 +243,7 @@ export function buildTimelineChartOption({
   const grid = gridOverride ?? timelineChartGridForEnabled(enabled, gridTop);
   const visible = new Set(seriesKeys ?? Object.keys(enabled).filter((key) => enabled[key as SeriesKey]) as SeriesKey[]);
   const cpuEnabled = enabled.cpuUtilizationPercent && visible.has("cpuUtilizationPercent");
-  const memoryEnabled = enabled.memoryUtilizationPercent && visible.has("memoryUtilizationPercent");
+  const memoryEnabled = enabled.memoryUsageBytes && visible.has("memoryUsageBytes");
   const networkEnabled = (enabled.networkRxBytesPerSecond && visible.has("networkRxBytesPerSecond"))
     || (enabled.networkTxBytesPerSecond && visible.has("networkTxBytesPerSecond"));
   const playersEnabled = enabled.playersOnline && visible.has("playersOnline");
@@ -282,20 +272,19 @@ export function buildTimelineChartOption({
   }
   if (memoryEnabled) {
     memoryAxis = "timeline-memory-axis";
-    const bounds = adaptiveMemoryAxisBounds(samples);
     yAxis.push({
       id: memoryAxis,
       type: "value",
       position: separateBand ? "left" : "right",
       offset: rightAxisOffset,
-      min: bounds.min,
-      max: bounds.max,
-      name: separateBand ? "" : "Memory %",
+      min: 0,
+      max: memoryAxisMaximum(samples),
+      name: separateBand ? "" : "Memory",
       nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },
       axisTick: { show: false },
-      axisLabel: { color: palette.textMuted, formatter: (value: number) => value < 0 || value > 100 ? "" : `${value.toFixed(1)}%` },
-      splitLine: { show: false }
+      axisLabel: { color: palette.textMuted, formatter: (value: number) => formatBytes(value) },
+      splitLine: { lineStyle: { color: palette.border, type: "dashed", opacity: 0.55 } }
     });
     rightAxisOffset += 52;
   }
@@ -338,7 +327,7 @@ export function buildTimelineChartOption({
   const annotationAxis = cpuAxis || memoryAxis || playersAxis || networkAxis || emptyAxis;
   const metricSeries: Array<{ key: SeriesKey; name: string; yAxisId: string; color: string; width: number; opacity: number; dash?: "solid" | "dashed"; step?: "end" }> = [
     { key: "cpuUtilizationPercent", name: "CPU", yAxisId: cpuAxis, color: palette.cpu, width: 2.4, opacity: 0.96 },
-    { key: "memoryUtilizationPercent", name: "Memory", yAxisId: memoryAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
+    { key: "memoryUsageBytes", name: "Memory", yAxisId: memoryAxis, color: palette.memory, width: 2.2, opacity: 0.9 },
     { key: "networkRxBytesPerSecond", name: "Network In", yAxisId: networkAxis, color: palette.networkIn, width: 1.25, opacity: 0.52 },
     { key: "networkTxBytesPerSecond", name: "Network Out", yAxisId: networkAxis, color: palette.networkOut, width: 1.25, opacity: 0.52 },
     { key: "playersOnline", name: "Players", yAxisId: playersAxis, color: palette.players, width: 1.6, opacity: 0.72, step: "end" }

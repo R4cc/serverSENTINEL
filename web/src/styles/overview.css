@@ -373,7 +373,7 @@ button.overviewCardRow:focus-visible {
 .timelineSeriesToggle.active > span { background: var(--timeline-toggle-color); }
 .timelineSeriesToggle.active > span::after { opacity: 1; }
 .timelineSeriesToggle.series-cpuUtilizationPercent { --timeline-toggle-color: var(--timeline-cpu); }
-.timelineSeriesToggle.series-memoryUtilizationPercent { --timeline-toggle-color: var(--timeline-memory); }
+.timelineSeriesToggle.series-memoryUsageBytes { --timeline-toggle-color: var(--timeline-memory); }
 .timelineSeriesToggle.series-networkRxBytesPerSecond { --timeline-toggle-color: var(--timeline-network-in); }
 .timelineSeriesToggle.series-networkTxBytesPerSecond { --timeline-toggle-color: var(--timeline-network-out); }
 .timelineSeriesToggle.series-playersOnline { --timeline-toggle-color: var(--timeline-players); }
@@ -391,7 +391,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineTooltipSwatch.series-cpuUtilizationPercent { color: var(--timeline-cpu); }
-.timelineTooltipSwatch.series-memoryUtilizationPercent { color: var(--timeline-memory); }
+.timelineTooltipSwatch.series-memoryUsageBytes { color: var(--timeline-memory); }
 .timelineTooltipSwatch.series-networkRxBytesPerSecond { color: var(--timeline-network-in); }
 .timelineTooltipSwatch.series-networkTxBytesPerSecond { color: var(--timeline-network-out); }
 .timelineTooltipSwatch.series-playersOnline { color: var(--timeline-players); }
@@ -667,7 +667,7 @@ button.overviewCardRow:focus-visible {
 
 .serverTimelinePlayerStatusNotice {
   margin-top: calc(var(--space-3) * -1);
-  padding: 6px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-subtle));
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));

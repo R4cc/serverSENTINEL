@@ -38,7 +38,7 @@ const timelineRanges = [
 type TimelineRange = typeof timelineRanges[number]["label"];
 type TimelineSelection = TimelineRange | "custom";
 const defaultTimelineRange: TimelineRange = "1h";
-export type SeriesKey = "cpuUtilizationPercent" | "memoryUtilizationPercent" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
+export type SeriesKey = "cpuUtilizationPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
 
@@ -141,7 +141,7 @@ export type MarkerCluster = {
 
 const seriesOptions: Array<{ key: SeriesKey; label: string }> = [
   { key: "cpuUtilizationPercent", label: "CPU" },
-  { key: "memoryUtilizationPercent", label: "Memory" },
+  { key: "memoryUsageBytes", label: "Memory" },
   { key: "networkRxBytesPerSecond", label: "Network In" },
   { key: "networkTxBytesPerSecond", label: "Network Out" },
   { key: "playersOnline", label: "Players" }
@@ -675,7 +675,7 @@ export function ServerTimeline({
   const [chartInteracting, setChartInteracting] = useState(false);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
     cpuUtilizationPercent: true,
-    memoryUtilizationPercent: true,
+    memoryUsageBytes: true,
     networkRxBytesPerSecond: false,
     networkTxBytesPerSecond: false,
     playersOnline: false
@@ -841,7 +841,7 @@ export function ServerTimeline({
   const playerRows = useMemo(() => timelinePlayerRows(data, viewport, clockNow), [clockNow, data, viewport]);
   const metricBands = useMemo<MetricBand[]>(() => [
     ...(enabled.cpuUtilizationPercent ? [{ key: "cpu" as const, label: "CPU", series: ["cpuUtilizationPercent" as const], prominent: true }] : []),
-    ...(enabled.memoryUtilizationPercent ? [{ key: "memory" as const, label: "Memory", series: ["memoryUtilizationPercent" as const], prominent: true }] : []),
+    ...(enabled.memoryUsageBytes ? [{ key: "memory" as const, label: "Memory", series: ["memoryUsageBytes" as const], prominent: true }] : []),
     ...(enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond ? [{
       key: "network" as const,
       label: "Network",
@@ -855,7 +855,7 @@ export function ServerTimeline({
   ], [enabled]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
-    const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUtilizationPercent !== null)).length;
+    const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUsageBytes !== null)).length;
     if (available === 0) return "unavailable";
     return "available";
   }, [data]);
@@ -1224,7 +1224,10 @@ export function ServerTimeline({
             onWheel={handleSessionWheel}
           />
         )}
-        {annotationEnabled.player && data?.playerActivity && data.playerActivity.snapshotState !== "live" && data.playerActivity.snapshotState !== "stopped" && (
+        {annotationEnabled.player && data?.playerActivity?.snapshotState === "stale" && (
+          <div className="serverTimelinePlayerStatusNotice">Player status is temporarily stale; showing the last confirmed online players.</div>
+        )}
+        {annotationEnabled.player && data?.playerActivity?.snapshotState === "unavailable" && (
           <div className="serverTimelinePlayerStatusNotice">Current player status is unavailable; retained sessions are shown as offline.</div>
         )}
         <div className="serverTimelineMetricBands">

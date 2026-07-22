@@ -311,6 +311,18 @@ describe("server timeline markers", () => {
 });
 
 describe("server timeline player sessions", () => {
+  it("keeps last-confirmed names online while a snapshot is temporarily stale", () => {
+    const value = response();
+    value.playerActivity = {
+      snapshotState: "stale",
+      sampledAt: new Date(50_000).toISOString(),
+      onlineNames: ["Alex"],
+      sessions: [{ id: "alex", player: "Alex", startedAt: 10_000, endedAt: null, startBoundary: "join", endBoundary: "online" }]
+    };
+
+    expect(timelinePlayerRows(value, { from: 0, to: 60_000 }, 50_000)).toMatchObject([{ player: "Alex", online: true }]);
+  });
+
   it("groups online players first and keeps offline activity range-relevant", () => {
     const value = response();
     value.playerActivity = {

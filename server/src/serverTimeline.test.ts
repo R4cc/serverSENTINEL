@@ -216,7 +216,7 @@ describe("server timeline player activity", () => {
     expect(result.sessions).toMatchObject([{ startedAt: 10, endedAt: 50, endBoundary: "server-end" }]);
   });
 
-  it("uses retained-history boundaries without reporting stale players as online", () => {
+  it("keeps last-confirmed players visible while their snapshot is temporarily stale", () => {
     const result = timelinePlayerActivity({
       contextFrom: 10,
       from: 20,
@@ -234,13 +234,19 @@ describe("server timeline player activity", () => {
         message: "Timed out"
       }
     });
-    expect(result.onlineNames).toEqual([]);
+    expect(result.onlineNames).toEqual(["Robin"]);
     expect(result.sessions).toMatchObject([{
       player: "Robin",
       startedAt: 10,
       endedAt: 40,
       startBoundary: "history-boundary",
       endBoundary: "leave"
+    }, {
+      player: "Robin",
+      startedAt: 40,
+      endedAt: null,
+      startBoundary: "history-boundary",
+      endBoundary: "online"
     }]);
   });
 });

@@ -675,8 +675,8 @@ export function useFilesWorkspace({
       notify("error", nameError);
       return;
     }
-    if (file.size > 32 * 1024 * 1024) {
-      notify("error", "Upload is larger than the 32 MiB file manager limit.");
+    if (file.size > 256 * 1024 * 1024) {
+      notify("error", "Upload is larger than the 256 MiB file manager limit.");
       return;
     }
     setFileOperationBusy("upload");

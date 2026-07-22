@@ -1,6 +1,6 @@
 services:
   serversentinel:
-    image: nl2109/serversentinel:1.5.2
+    image: nl2109/serversentinel:1.5.3
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -11,7 +11,7 @@ services:
       SS_MODE: ${SS_MODE:-all-in-one}
       SERVERSENTINEL_DATA_DIR: /data
       SERVERSENTINEL_SERVERS_DOCKER_VOLUME: serversentinel-minecraft-servers
-      SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:1.5.2}
+      SERVERSENTINEL_NODE_IMAGE: ${SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:1.5.3}
       SERVERSENTINEL_ENABLE_DEMO: ${SERVERSENTINEL_ENABLE_DEMO:-false}
       SERVERSENTINEL_TRUST_PROXY: ${SERVERSENTINEL_TRUST_PROXY:-false}
       SERVERSENTINEL_SETUP_TOKEN: ${SERVERSENTINEL_SETUP_TOKEN:-}

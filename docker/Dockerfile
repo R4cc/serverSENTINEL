@@ -1,4 +1,4 @@
-ARG SS_VERSION=1.5.2
+ARG SS_VERSION=1.5.3
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
