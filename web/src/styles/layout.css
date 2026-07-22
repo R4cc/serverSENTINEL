@@ -1652,3 +1652,434 @@ button .buttonIcon {
   display: grid;
   gap: var(--space-4);
 }
+
+
+/* Server context header cohesion migrated from the former adoption layer */
+/* Compact contextual server command header */
+.activeServerStrip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+}
+
+.activeServerStrip .serverStripPrimary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.themeDark .activeServerStrip {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--surface-muted));
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.22);
+}
+
+.activeServerStrip .serverStripLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripIcon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.activeServerStrip .server-icon-cube {
+  width: 18px;
+  height: 18px;
+}
+
+.activeServerStrip .serverStripInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activeServerStrip .serverStripTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.restartRequirement {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.restartRequirementBadge {
+  cursor: help;
+  outline-offset: 2px;
+  text-transform: none;
+}
+
+.restartRequirementTooltip {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.restartRequirementTooltip ul {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.restartRequirement:hover .restartRequirementTooltip,
+.restartRequirement:focus-within .restartRequirementTooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.activeServerStrip .serverStripTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverListTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.serverListTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverCommandStatusDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-soft);
+}
+
+.serverCommandStatusDot.running,
+.serverCommandStatusDot.starting {
+  background: var(--sentinel-success);
+}
+
+.serverCommandStatusDot.stopped,
+.serverCommandStatusDot.exited {
+  background: var(--sentinel-warning);
+}
+
+.serverCommandStatusDot.neutral {
+  background: var(--text-soft);
+}
+
+.serverCommandStatusDot.offline {
+  background: var(--sentinel-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-danger) 14%, transparent);
+}
+
+.activeServerStrip .runtimeBadge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.activeServerStrip .runtimeBadge.running {
+  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-success) 82%, var(--text));
+}
+
+.activeServerStrip .runtimeBadge.stopped,
+.activeServerStrip .runtimeBadge.exited {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
+}
+
+.activeServerStrip .runtimeBadge.offline {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 42%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-danger) 82%, var(--text));
+}
+
+.activeServerStrip .serverStripMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.activeServerStrip .serverStripHealth {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeServerStrip .serverStripHealth.warning {
+  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
+}
+
+.activeServerStrip .serverStripHealth.error {
+  color: color-mix(in srgb, var(--sentinel-danger) 86%, var(--text));
+}
+
+.serverStripHealthSpinner {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.activeServerStrip .serverStripMeta,
+.activeServerStrip .serverStripSeparator {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+}
+
+.activeServerStrip .serverStripRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.serverRuntimeAlert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--sentinel-danger) 58%, var(--border-row));
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface-raised));
+  color: var(--text);
+}
+
+.activeServerStrip .serverRuntimeAlertIcon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sentinel-danger) 15%, transparent);
+  color: var(--sentinel-danger);
+}
+
+.activeServerStrip .serverRuntimeAlertIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.serverRuntimeAlertCopy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.serverRuntimeAlertCopy strong {
+  color: var(--sentinel-danger);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 1.3;
+}
+
+.serverRuntimeAlertCopy span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: auto;
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertCopy {
+  display: inline-flex;
+}
+
+.activeServerStrip .runtimeControlsCompact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton,
+.activeServerStrip .uiButton.quickActionButton {
+  min-height: 40px;
+  height: 40px;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.start {
+  min-width: 112px;
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--swiss-white);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.stop {
+  min-width: 112px;
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart,
+.activeServerStrip .uiButton.quickActionButton {
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  color: var(--text-soft);
+  opacity: 0.62;
+}
+
+.activeServerStrip .quickActionButton.consoleLink.active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.activeServerStrip .overflowButton {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-color: var(--border-row);
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 980px) {
+  .activeServerStrip .serverStripPrimary {
+    align-items: stretch;
+  }
+
+  .activeServerStrip .serverStripRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .activeServerStrip {
+    padding: var(--space-3);
+  }
+
+  .activeServerStrip .serverStripLeft {
+    align-items: flex-start;
+  }
+
+  .activeServerStrip .serverStripRight,
+  .activeServerStrip .runtimeControlsCompact {
+    width: 100%;
+  }
+
+  .activeServerStrip .uiButton.runtimeControlButton,
+  .activeServerStrip .uiButton.quickActionButton {
+    flex: 1 1 140px;
+  }
+
+  .activeServerStrip .overflowMenuContainer {
+    margin-left: auto;
+  }
+
+  .serverRuntimeAlert {
+    padding: var(--space-3);
+  }
+}

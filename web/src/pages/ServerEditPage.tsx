@@ -16,7 +16,7 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button } from "../components/UiPrimitives";
+import { Banner, Button, FormField } from "../components/UiPrimitives";
 import {
   clampNumber,
   formatManagedPortBindings,
@@ -320,28 +320,18 @@ export function ServerEditForm({
   return (
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={onSubmit} className="serverPropertiesForm">
-        {disabled && disabledReason && (
-          <div className="propertiesLockBanner" role="status">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="5" y="10" width="14" height="10" rx="2" />
-              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-            </svg>
-            <span>{disabledReason}</span>
-          </div>
-        )}
+        {disabled && disabledReason && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
             <div className="propertiesSection" aria-labelledby="properties-general-title">
               <h2 id="properties-general-title">General</h2>
               <div className="propertiesFieldGrid three">
-                <label>
-                  Display name
-                  <input name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
-                </label>
-                <label>
-                  Minecraft version
-                  <select name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
+                <FormField htmlFor="properties-display-name" label="Display name" required>
+                  <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
+                </FormField>
+                <FormField htmlFor="properties-minecraft-version" label="Minecraft version" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
+                  <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
                     setMinecraftVersion(event.target.value);
                     setRuntimeVersion("");
                   }}>
@@ -350,19 +340,16 @@ export function ServerEditForm({
                       <option key={version.version} value={version.version}>{version.version}</option>
                     )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
                   </select>
-                  <span className="fieldHint">Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</span>
-                </label>
-                <label>
-                  {runtime.versionLabel}
-                  <select name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
+                </FormField>
+                <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
+                  <select id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
                     {runtime.managedProvisioning && <option value="">Latest stable</option>}
                     {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
                     {runtime.managedProvisioning && availableRuntimeVersions.map((version) => (
                       <option key={version.id} value={version.runtimeVersion}>{version.runtimeVersion}{version.stable === false ? " (Development)" : ""}</option>
                     ))}
                   </select>
-                  <span className="fieldHint">Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</span>
-                </label>
+                </FormField>
               </div>
               <label className="propertiesStartupToggle">
                 <span className="switch">

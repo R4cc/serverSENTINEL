@@ -1,5 +1,5 @@
 import type { InstalledMod, ModUpdatePlan } from "../../types";
-import { LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { LoadingLabel, MetricTile, SkeletonBlock } from "../../components/UiPrimitives";
 import { getInstalledModHealth } from "./modHealth";
 import { updatePlanEntryForMod } from "./modUpdatePlan";
 import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
@@ -41,13 +41,13 @@ export function ModsSummary({ mods, updatePlan, loading = false, terminology = f
     <section className="modsWorkspaceSummary" aria-label={`${terminology.pluralTitle} status summary`} aria-busy={initialLoading}>
       {initialLoading && <LoadingLabel>Loading {terminology.plural} summary</LoadingLabel>}
       {items.map((item) => (
-        <article key={item.label} className={`modsWorkspaceMetric ${item.tone}`}>
-          <span className="modsWorkspaceMetricDot" aria-hidden="true" />
-          <div>
-            <small>{item.label}</small>
-            <strong>{initialLoading ? <SkeletonBlock className="modsMetricValueSkeleton" /> : item.value}</strong>
-          </div>
-        </article>
+        <MetricTile
+          key={item.label}
+          className={`modsWorkspaceMetric ${item.tone}`}
+          tone={item.tone === "orange" ? "warning" : item.tone === "green" ? "success" : item.tone === "purple" ? "accent" : "neutral"}
+          label={item.label}
+          value={initialLoading ? <SkeletonBlock className="modsMetricValueSkeleton" /> : item.value}
+        />
       ))}
     </section>
   );

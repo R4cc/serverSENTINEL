@@ -12,8 +12,40 @@ const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.cs
 const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "utf8");
 const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
+const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
+  it("loads the design system in an intentional cascade", () => {
+    const orderedImports = [
+      './styles/tokens.css',
+      './styles/themes.css',
+      './styles/typography.css',
+      './styles/primitives.css',
+      './styles/canonical-layout.css',
+      './styles/layout.css',
+      './styles/mods.css',
+      './styles/responsive.css',
+      './styles/motion.css'
+    ];
+
+    const positions = orderedImports.map((entry) => stylesheet.indexOf(entry));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    expect(stylesheet).not.toContain("core-adoption.css");
+  });
+
+  it("keeps global primitives in the shared primitive stylesheet", () => {
+    expect(primitiveStyles).toContain(".uiSurface");
+    expect(primitiveStyles).toContain(".uiToolbar");
+    expect(primitiveStyles).toContain(".uiFormField");
+    expect(primitiveStyles).toContain(".uiBanner");
+    expect(primitiveStyles).toContain(".uiMetricTile");
+    expect(modsStyles).not.toContain("Shared UI foundation");
+    expect(modsStyles).not.toMatch(/(^|\n)\.uiButton--primary\s*\{/);
+    expect(modsStyles).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(/);
+    expect(authStyles).not.toMatch(/:root\.themeDark[\s\S]*?--surface:/);
+  });
+
   it.each([
     "server-properties.css",
     "files-console.css",

@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+import { Banner, Button, EmptyState, FormField, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import { BrandLogo } from './BrandLogo';
 import {
@@ -40,18 +40,12 @@ export function AuthPanel({
             <p>{setupRequired ? "Create the first admin account" : "Sign in to manage servers"}</p>
           </div>
         </div>
-        {notice && <div className="notice">{notice}</div>}
+        {notice && <Banner tone="info" title={notice} />}
         {demoEnabled && (
-          <div className="authSetupBanner" data-testid="demo-credentials">
-            <strong>Demo environment.</strong>
-            <span>Sign in with username <code>demo</code> and password <code>demo</code>. Do not create another user.</span>
-          </div>
+          <Banner tone="info" className="authSetupBanner" data-testid="demo-credentials" title="Demo environment." message={<>Sign in with username <code>demo</code> and password <code>demo</code>. Do not create another user.</>} />
         )}
         {setupRequired && (
-          <div className="authSetupBanner">
-            <strong>First-run setup.</strong>
-            <span>Enter the one-time setup token printed in the panel startup log, then create the admin account.</span>
-          </div>
+          <Banner tone="warning" className="authSetupBanner" title="First-run setup." message="Enter the one-time setup token printed in the panel startup log, then create the admin account." />
         )}
         <form
           onSubmit={onSubmit}
@@ -63,8 +57,7 @@ export function AuthPanel({
         >
           <fieldset>
             {setupRequired && (
-              <label htmlFor="auth-setup-token">
-                Setup token
+              <FormField htmlFor="auth-setup-token" label="Setup token" description="Use the one-time token printed in the panel startup log." required>
                 <input
                   id="auth-setup-token"
                   name="setupToken"
@@ -76,10 +69,9 @@ export function AuthPanel({
                   placeholder="Token from the panel log"
                   spellCheck={false}
                 />
-              </label>
+              </FormField>
             )}
-            <label htmlFor="auth-username">
-              Username
+            <FormField htmlFor="auth-username" label="Username" required>
               <input
                 id="auth-username"
                 name="username"
@@ -93,9 +85,8 @@ export function AuthPanel({
                 autoCapitalize="none"
                 spellCheck={false}
               />
-            </label>
-            <label htmlFor="auth-password">
-              Password
+            </FormField>
+            <FormField htmlFor="auth-password" label="Password" required>
               <input
                 id="auth-password"
                 name="password"
@@ -106,10 +97,9 @@ export function AuthPanel({
                 maxLength={256}
                 placeholder={setupRequired ? "At least 8 characters" : "Password"}
               />
-            </label>
+            </FormField>
             {setupRequired && (
-              <label htmlFor="auth-confirm-password">
-                Confirm password
+              <FormField htmlFor="auth-confirm-password" label="Confirm password" required>
                 <input
                   id="auth-confirm-password"
                   name="confirmPassword"
@@ -120,7 +110,7 @@ export function AuthPanel({
                   maxLength={256}
                   placeholder="Repeat password"
                 />
-              </label>
+              </FormField>
             )}
             <Button type="submit" disabled={busy} reserveLabel={setupRequired ? "Create admin" : "Checking..."}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
           </fieldset>

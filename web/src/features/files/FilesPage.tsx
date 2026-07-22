@@ -344,7 +344,7 @@ export function FilesPage({
       <section className="filesExplorer">
         <section className="panel filesPanel">
           <div className="fileNavBar">
-            <div className="fileNavButtons">
+            <div className="fileNavButtons uiToolbarPrimary">
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
                 <AppIcon name="chevronLeft" />
               </Button>
@@ -358,7 +358,7 @@ export function FilesPage({
                 <AppIcon name="home" />
               </Button>
             </div>
-            <div className="fileBreadcrumbs" aria-label="Current folder" ref={breadcrumbRef}>
+            <div className="fileBreadcrumbs uiToolbarMeta" aria-label="Current folder" ref={breadcrumbRef}>
               {fileBreadcrumbs.map((crumb) => (
                 <button
                   key={`${crumb.kind}:${crumb.path}`}
@@ -374,7 +374,7 @@ export function FilesPage({
                 </button>
               ))}
             </div>
-            <div className="fileToolbar">
+            <div className="fileToolbar uiToolbarSecondary">
               {!archiveContext && <>
                 <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
                 <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>

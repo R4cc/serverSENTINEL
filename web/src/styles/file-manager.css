@@ -433,17 +433,44 @@
   }
 
   .filesPage .fileNavBar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
     padding-inline: var(--space-2);
   }
 
   .filesPage .fileNavButtons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-1);
   }
 
   .filesPage .fileNavButtons .uiButton {
-    width: 44px;
-    min-width: 44px;
+    width: 100%;
+    min-width: 0;
     min-height: 44px;
+  }
+
+  .filesPage .fileBreadcrumbs {
+    grid-row: 2;
+    width: 100%;
+    min-height: 44px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .filesPage .fileToolbar {
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .filesPage .fileToolbar .uiButton {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: var(--space-2);
   }
 
   .filesPage .fileToolbarLabel {

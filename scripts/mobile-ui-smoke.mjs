@@ -228,13 +228,58 @@ async function assertPageDocumentScroll(page, title, label) {
       bodyOverflow: getComputedStyle(document.body).overflowY,
       canOverflow: owner.scrollHeight > owner.clientHeight,
       moved,
-      shellTop: shell.scrollTop
+      shellTop: shell.scrollTop,
+      horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth
     };
   });
   assert(!result.missing, `${label}: document scroll surface is missing`);
   assert(["auto", "scroll", "visible"].includes(result.rootOverflow) && ["auto", "scroll", "visible"].includes(result.bodyOverflow), `${label}: document scrolling is disabled`);
   assert(!result.canOverflow || result.moved, `${label}: document cannot reach overflowing content`);
   assert(result.shellTop === 0, `${label}: shell became a competing scroll surface`);
+  assert(result.horizontalOverflow <= 1, `${label}: page has horizontal overflow (${result.horizontalOverflow}px)`);
+}
+
+async function assertFilesToolbarGeometry(page, label) {
+  const result = await page.evaluate(() => {
+    const navigation = document.querySelector(".fileNavButtons");
+    const breadcrumbs = document.querySelector(".fileBreadcrumbs");
+    const actions = document.querySelector(".fileToolbar");
+    if (!(navigation instanceof HTMLElement) || !(breadcrumbs instanceof HTMLElement) || !(actions instanceof HTMLElement)) return { missing: true };
+    const nav = navigation.getBoundingClientRect();
+    const crumbs = breadcrumbs.getBoundingClientRect();
+    const toolbar = actions.getBoundingClientRect();
+    return {
+      missing: false,
+      navBottom: nav.bottom,
+      crumbsTop: crumbs.top,
+      crumbsBottom: crumbs.bottom,
+      toolbarTop: toolbar.top,
+      navWithinViewport: nav.left >= 0 && nav.right <= innerWidth,
+      crumbsWithinViewport: crumbs.left >= 0 && crumbs.right <= innerWidth,
+      toolbarWithinViewport: toolbar.left >= 0 && toolbar.right <= innerWidth
+    };
+  });
+  assert(!result.missing, `${label}: Files toolbar groups are missing`);
+  assert(result.navBottom <= result.crumbsTop + 1 && result.crumbsBottom <= result.toolbarTop + 1, `${label}: Files toolbar groups overlap: ${JSON.stringify(result)}`);
+  assert(result.navWithinViewport && result.crumbsWithinViewport && result.toolbarWithinViewport, `${label}: Files toolbar leaves the viewport: ${JSON.stringify(result)}`);
+}
+
+async function assertSettingsCategoryGrid(page, label) {
+  const result = await page.locator(".settingsHubCategories").evaluate((element) => {
+    const style = getComputedStyle(element);
+    const buttons = Array.from(element.querySelectorAll("button"));
+    const rows = new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top)));
+    return {
+      display: style.display,
+      columns: style.gridTemplateColumns.split(" ").filter(Boolean).length,
+      rows: rows.size,
+      overflowX: style.overflowX,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth
+    };
+  });
+  assert(result.display === "grid" && result.columns === 2 && result.rows >= 2, `${label}: Settings categories are not a two-column grid: ${JSON.stringify(result)}`);
+  assert(result.scrollWidth <= result.clientWidth + 1, `${label}: Settings categories scroll horizontally: ${JSON.stringify(result)}`);
 }
 
 async function assertConsoleViewportOwnership(page, label) {
@@ -330,6 +375,10 @@ async function runProfile(engine, profile, label) {
 
     await openPage(page, "files");
     await assertTargets(page, [".fileNavButtons .uiButton", ".fileToolbar .uiButton", ".fileTableRow"], `${label} files`);
+    await assertFilesToolbarGeometry(page, `${label} files`);
+
+    await openPage(page, "settings");
+    await assertSettingsCategoryGrid(page, `${label} settings`);
 
     await openPage(page, "mods");
     await assertModsToolbarVisible(page, `${label} mods toolbar`);
@@ -353,6 +402,15 @@ async function runProfile(engine, profile, label) {
     await page.keyboard.press("Escape");
     await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Add schedule", null, { timeout: 2_000 });
+
+    await openPage(page, "nodes");
+    const nodeDetails = page.getByRole("button", { name: "Details", exact: true }).first();
+    await nodeDetails.click();
+    await page.locator(".nodeDetailsDrawer").waitFor();
+    await assertTargets(page, [".nodeDrawerClose"], `${label} node drawer`);
+    await page.getByRole("button", { name: "Close node details" }).click();
+    await page.locator(".nodeDetailsDrawer").waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Details", null, { timeout: 2_000 });
 
     await openPage(page, "console");
     await page.locator(".xterm-helper-textarea").waitFor({ state: "attached" });
@@ -385,7 +443,7 @@ try {
       PORT: String(port),
       SERVERSENTINEL_DATA_DIR: dataDirectory,
       SERVERSENTINEL_ENABLE_DEMO: "true",
-      SS_MODE: "panel",
+      SS_MODE: "all-in-one",
       TZ: "UTC"
     },
     stdio: ["ignore", "pipe", "pipe"]

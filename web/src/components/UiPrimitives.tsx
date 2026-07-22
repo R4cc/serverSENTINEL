@@ -2,6 +2,11 @@ import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactN
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
+type SurfaceElement = "section" | "article" | "aside" | "div";
+type SurfaceDensity = "default" | "compact" | "flush";
+type SurfaceTone = "default" | "subtle";
+type BannerTone = "info" | "success" | "warning" | "error";
+type MetricTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
 function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -56,17 +61,23 @@ export function PanelHeader({
   title,
   description,
   actions,
-  className
+  className,
+  headingLevel = 2,
+  compact = false
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  headingLevel?: 2 | 3;
+  compact?: boolean;
 }) {
+  const Heading = headingLevel === 3 ? "h3" : "h2";
+
   return (
-    <header className={classes("uiPanelHeader", className)}>
+    <header className={classes("uiPanelHeader", compact && "uiPanelHeader--compact", className)}>
       <div className="uiPanelHeaderCopy">
-        <h2>{title}</h2>
+        <Heading>{title}</Heading>
         {description && <p>{description}</p>}
       </div>
       {actions && <div className="uiPanelHeaderActions">{actions}</div>}
@@ -105,4 +116,122 @@ export function SkeletonBlock({
 
 export function LoadingLabel({ children }: { children: ReactNode }) {
   return <span className="srOnly" role="status">{children}</span>;
+}
+
+export function Surface({
+  as = "section",
+  density = "default",
+  tone = "default",
+  className,
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  as?: SurfaceElement;
+  density?: SurfaceDensity;
+  tone?: SurfaceTone;
+}) {
+  const Tag = as;
+  return (
+    <Tag {...props} className={classes("uiSurface", `uiSurface--${density}`, `uiSurface--${tone}`, className)}>
+      {children}
+    </Tag>
+  );
+}
+
+export function Toolbar({
+  primary,
+  secondary,
+  meta,
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
+  primary?: ReactNode;
+  secondary?: ReactNode;
+  meta?: ReactNode;
+}) {
+  return (
+    <div {...props} className={classes("uiToolbar", className)}>
+      {primary && <div className="uiToolbarPrimary">{primary}</div>}
+      {meta && <div className="uiToolbarMeta">{meta}</div>}
+      {secondary && <div className="uiToolbarSecondary">{secondary}</div>}
+    </div>
+  );
+}
+
+export function FormField({
+  label,
+  description,
+  error,
+  required = false,
+  htmlFor,
+  className,
+  children,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
+  label: ReactNode;
+  description?: ReactNode;
+  error?: ReactNode;
+  required?: boolean;
+  htmlFor?: string;
+}) {
+  return (
+    <div {...props} className={classes("uiFormField", Boolean(error) && "uiFormField--error", className)}>
+      <label htmlFor={htmlFor} className="uiFormFieldLabel">
+        <span>{label}</span>
+        {required && <span className="uiFormFieldRequired" aria-hidden="true">Required</span>}
+      </label>
+      {description && <span className="uiFormFieldDescription">{description}</span>}
+      <div className="uiFormFieldControl">{children}</div>
+      {error && <span className="uiFormFieldError" role="alert">{error}</span>}
+    </div>
+  );
+}
+
+export function Banner({
+  tone = "info",
+  title,
+  message,
+  action,
+  className,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  tone?: BannerTone;
+  title: ReactNode;
+  message?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section {...props} role={tone === "error" ? "alert" : props.role} className={classes("uiBanner", `uiBanner--${tone}`, className)}>
+      <div className="uiBannerCopy">
+        <strong>{title}</strong>
+        {message && <span>{message}</span>}
+      </div>
+      {action && <div className="uiBannerAction">{action}</div>}
+    </section>
+  );
+}
+
+export function MetricTile({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+  className,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  label: ReactNode;
+  value: ReactNode;
+  detail?: ReactNode;
+  tone?: MetricTone;
+}) {
+  return (
+    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, className)}>
+      <span className="uiMetricTileMarker" aria-hidden="true" />
+      <div className="uiMetricTileCopy">
+        <span className="uiMetricTileLabel">{label}</span>
+        <strong>{value}</strong>
+        {detail && <span className="uiMetricTileDetail">{detail}</span>}
+      </div>
+    </article>
+  );
 }

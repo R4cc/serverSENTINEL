@@ -2464,7 +2464,7 @@
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(15 23 42 / 38%);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
   animation: nodeDrawerFadeIn 150ms ease-out;
 }
@@ -2477,7 +2477,7 @@
   min-height: 0;
   border-left: 1px solid var(--border-row);
   background: var(--surface-raised);
-  box-shadow: -18px 0 50px rgb(15 23 42 / 15%);
+  box-shadow: var(--shadow-elevated);
   animation: nodeDrawerSlideIn 200ms ease-out;
 }
 
@@ -2929,4 +2929,114 @@
   .nodeOperationBadgeSpinner {
     animation: none;
   }
+}
+
+
+/* Nodes cohesion migrated from the former adoption layer */
+.nodesToolbar,
+.nodeCard {
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.nodesToolbar h2 {
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.nodesRefreshButton.uiButton {
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+}
+
+.nodeCard.online,
+.nodeCard.offline,
+.nodeCard.unknown {
+  box-shadow: none;
+}
+
+.nodeCard.online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised));
+}
+
+.nodeCard.offline {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-danger) 6%, var(--surface-raised));
+}
+
+.nodeStatusPills .uiStatusBadge {
+  min-height: 24px;
+}
+
+.nodeCardActions .uiButton {
+  min-width: 96px;
+}
+
+.nodeUpgradeButton.uiButton {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+.nodeServerRow,
+.nodeServerMoreRow {
+  border-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+}
+
+.nodeServerRow:hover:not(:disabled),
+.nodeServerMoreRow:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-row));
+  background: var(--sentinel-accent-soft);
+}
+
+.nodeServerIcon svg,
+.nodePlayerIcon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeServerState {
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--surface-muted);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-badge);
+}
+
+.installTabs .uiButton {
+  min-height: var(--control-height-compact);
+}
+
+.installCopyButton.uiButton {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-color: rgb(255 255 255 / 0.36);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--terminal-text);
+}
+
+.addNodeStepper {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+  box-shadow: none;
 }
