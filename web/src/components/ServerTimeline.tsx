@@ -412,7 +412,7 @@ function estimatedMarkerLabelHeight(cluster: MarkerCluster) {
   return 4 + preview.markers.length * 28 + (preview.remaining > 0 ? 24 : 0);
 }
 
-export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000, laneCount = 2): PositionedMarkerCluster[] {
+export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000, laneCount = 3): PositionedMarkerCluster[] {
   if (to <= from) return [];
   const availableWidth = Math.max(1, railWidth);
   const laneEnds = Array.from({ length: laneCount }, () => Number.NEGATIVE_INFINITY);
@@ -421,11 +421,14 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
     const center = availableWidth * leftPercent / 100;
     const labelWidth = estimatedMarkerLabelWidth(cluster);
     const alignEnd = center + labelWidth - 12 > availableWidth;
-    // Allocate lanes around the event anchor rather than around the label's
-    // current left/right alignment. The interval then translates with a pan,
-    // so crossing the edge-alignment threshold cannot reshuffle nearby labels.
-    const start = center - labelWidth / 2;
-    const end = center + labelWidth / 2;
+    // Reserve the label's full reach on both sides of the event anchor. Labels
+    // normally extend to the right but flip left near the rail edge, so a
+    // centered half-width interval can miss collisions between opposite
+    // alignments. Keeping the reservation symmetric also prevents crossing the
+    // edge-alignment threshold during a pan from reshuffling nearby labels.
+    const labelReach = labelWidth - 14;
+    const start = center - labelReach;
+    const end = center + labelReach;
     let lane = laneEnds.findIndex((laneEnd) => laneEnd + 6 <= start);
     if (lane < 0) lane = laneEnds.indexOf(Math.min(...laneEnds));
     laneEnds[lane] = end;

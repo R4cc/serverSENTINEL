@@ -226,6 +226,28 @@ describe("server timeline markers", () => {
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
   });
 
+  it("staggers right- and left-aligned labels whose rendered bounds would overlap", () => {
+    const markers = timelineMarkers(response());
+    const join = { ...markers.find((marker) => marker.tone === "join")!, occurredAt: 45_000 };
+    const planned = { ...markers.find((marker) => marker.tone === "planned")!, occurredAt: 54_000 };
+    const positioned = positionTimelineClusters(clusterTimelineMarkers([join, planned], 0, 60_000, 24), 0, 60_000, 940);
+
+    expect(positioned.map((cluster) => cluster.alignEnd)).toEqual([false, true]);
+    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1]);
+  });
+
+  it("uses a third compact lane instead of forcing dense labels to overlap", () => {
+    const marker = timelineMarkers(response()).find((item) => item.tone === "join")!;
+    const markers = [45_000, 50_000, 55_000].map((occurredAt, index) => ({
+      ...marker,
+      id: `dense-${index}`,
+      occurredAt
+    }));
+    const positioned = positionTimelineClusters(clusterTimelineMarkers(markers, 0, 60_000, 24), 0, 60_000, 940);
+
+    expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 1, 2]);
+  });
+
   it("keeps nearby marker lanes stable when panning crosses label alignment thresholds", () => {
     const marker = timelineMarkers(response())[0];
     const markers = [
