@@ -66,9 +66,10 @@ describe("global stylesheet entry point", () => {
     expect(tokenStyles).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
 
-  it("keeps the overview loading summary on the same five-column desktop grid", () => {
-    expect(primitiveStyles).toMatch(/\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(5,/s);
-    expect(primitiveStyles).toMatch(/\.applicationSkeletonWideTile\s*\{[^}]*display:\s*none;/s);
+  it("keeps the overview loading skeleton on the final seven-metric desktop geometry", () => {
+    expect(primitiveStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?\.applicationSkeletonSummary\s*\{[^}]*grid-template-columns:\s*repeat\(7,/s);
+    expect(primitiveStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?\.applicationSkeletonWideTile\s*\{[^}]*display:\s*block;/s);
+    expect(primitiveStyles).toMatch(/\.applicationOverviewPanelGrid\s*\{[^}]*"players players players players players mods mods mods mods mods mods mods"[^}]*"players players players players players automation automation automation automation automation automation automation"/s);
   });
 
   it("keeps upcoming schedules in a compact borderless list", () => {
@@ -84,17 +85,23 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.scheduleUpcomingItem:hover:not\(:disabled\)\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-accent-soft\) 54%, var\(--surface-raised\)\);[^}]*color:\s*var\(--text\);[^}]*transform:\s*none;/s);
   });
 
-  it("expands mod update previews progressively on large overview layouts", () => {
-    expect(overviewStyles).toMatch(/\.panel\.modUpdatesCard\s*\{[^}]*border-color:\s*var\(--border-panel\);[^}]*background:\s*var\(--surface-raised\);[^}]*padding:\s*0;/s);
+  it("uses one desktop card and row language without obsolete Mods branches", () => {
+    expect(overviewStyles).toMatch(/\.overviewCard\s*\{[^}]*border-color:\s*var\(--border-panel\);[^}]*border-radius:\s*var\(--radius-md\);[^}]*box-shadow:\s*none;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesList\s*\{[^}]*grid-auto-rows:\s*52px;[^}]*align-content:\s*start;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesListItem\s*\{[^}]*grid-template-columns:\s*36px minmax\(0, 1fr\) 16px;[^}]*border-bottom:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*transparent;[^}]*padding:\s*7px 2px;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesListCopy > strong\s*\{[^}]*line-height:\s*17px;/s);
-    expect(overviewStyles).toMatch(/\.modUpdatesCardOpen\s*\{[^}]*width:\s*100%;[^}]*justify-items:\s*stretch;/s);
-    expect(overviewStyles).toMatch(/\.modUpdatesCardOpen:hover:not\(:disabled\),[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*none;/s);
-    expect(overviewStyles).toMatch(/\.modUpdatesRefreshLabel\s*\{[^}]*display:\s*none;/s);
-    expect(overviewStyles).toMatch(/@media \(min-width: 1440px\) and \(max-width: 2559px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*136px;[\s\S]*?\.modUpdatesListItem:nth-child\(n \+ 2\),\s*\.modUpdatesRemaining\s*\{[^}]*display:\s*none;/s);
-    expect(overviewStyles).toMatch(/@media \(min-width: 1440px\) and \(max-width: 2559px\)\s*\{[\s\S]*?\.modUpdatesRefreshButton\s*\{[^}]*width:\s*auto;[^}]*padding-inline:\s*var\(--space-3\);[\s\S]*?\.modUpdatesRefreshLabel\s*\{[^}]*display:\s*inline;/s);
-    expect(overviewStyles).toMatch(/@media \(min-width: 2560px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*280px;[\s\S]*?\.modUpdatesWide\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch;/s);
+    expect(overviewStyles).toMatch(/\.modUpdatesListItem,\s*\.scheduleUpcomingItem\s*\{[^}]*min-height:\s*52px;[^}]*height:\s*52px;/s);
+    expect(overviewStyles).not.toContain("modUpdatesCardOpen");
+    expect(overviewStyles).not.toContain("modUpdatesCompact");
+    expect(overviewStyles).not.toContain("modUpdatesWide");
+    expect(overviewStyles).not.toContain("modUpdatesRefreshLabel");
+  });
+
+  it("uses the desktop five-seven support split and neutral event rows", () => {
+    expect(overviewStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?"players players players players players support support support support support support support"/s);
+    expect(overviewStyles).toMatch(/\.overviewSupportStack\s*\{[^}]*grid-area:\s*support;[^}]*display:\s*grid;/s);
+    expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow,\s*[\s\S]*?\.eventRow\.eventKind--player_reconnected\s*\{[^}]*border-color:\s*var\(--border-row\);[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow\.error\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-danger\) 3\.5%, var\(--surface-raised\)\);/s);
   });
 
   it("reserves the unified timeline for widths that can support it", () => {

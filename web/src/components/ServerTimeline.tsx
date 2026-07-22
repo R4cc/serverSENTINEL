@@ -746,6 +746,7 @@ export function ServerTimeline({
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
       <PanelHeader
+        compact
         title="Server Timeline"
         description="Correlate resource usage with player activity, server events, and schedules. Drag to pan; use Ctrl or Command with the wheel to zoom."
         actions={<div className="serverTimelineHeaderControls">

@@ -2849,25 +2849,27 @@ export default function App() {
                   )}
 
                   <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
-                  <ModHealthPanel
-                    updatePlan={modsWorkspace.data.updatePlan}
-                    loading={modsWorkspace.state.updatePlanLoading}
-                    canView={canViewMods && supportsManagedMods}
-                    onOpenMods={() => setActivePage("mods")}
-                    onRefresh={() => void modsWorkspace.actions.refresh()}
-                    contentPlural={managedContent.plural}
-                    contentPluralTitle={managedContent.pluralTitle}
-                  />
-                  <SchedulePanel
-                    schedules={activeServer.schedules ?? []}
-                    canView={canViewSchedules}
-                    formatDate={formatDisplayDate}
-                    relativeTimestamps={relativeTimestamps}
-                    onOpenSchedules={(target) => {
-                      setScheduleNavigationTarget(target ?? null);
-                      setActivePage("schedule");
-                    }}
-                  />
+                  <div className="overviewSupportStack">
+                    <ModHealthPanel
+                      updatePlan={modsWorkspace.data.updatePlan}
+                      loading={modsWorkspace.state.updatePlanLoading}
+                      canView={canViewMods && supportsManagedMods}
+                      onOpenMods={() => setActivePage("mods")}
+                      onRefresh={() => void modsWorkspace.actions.refresh()}
+                      contentPlural={managedContent.plural}
+                      contentPluralTitle={managedContent.pluralTitle}
+                    />
+                    <SchedulePanel
+                      schedules={activeServer.schedules ?? []}
+                      canView={canViewSchedules}
+                      formatDate={formatDisplayDate}
+                      relativeTimestamps={relativeTimestamps}
+                      onOpenSchedules={(target) => {
+                        setScheduleNavigationTarget(target ?? null);
+                        setActivePage("schedule");
+                      }}
+                    />
+                  </div>
                   <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
                 </div>
 

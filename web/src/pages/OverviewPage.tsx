@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   ManagedServer,
   ModUpdatePlan,
@@ -12,7 +12,7 @@ import type {
 import { formatUptime } from '../utils/resourceFormatting';
 import { serverRuntimeDefinition } from '@serversentinel/contracts';
 import { formatRelativeTimestamp, minecraftVersionInfo, runtimeVersionInfo, versionValue } from '../utils/format';
-import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, StatusBadge } from '../components/UiPrimitives';
+import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
@@ -51,6 +51,37 @@ function summaryTone(status: ServerStatus | null, dockerSocketMounted: boolean) 
   if (status.docker.running) return "running";
   if (status.docker.state === "dead") return "danger";
   return "stopped";
+}
+
+function summaryMetricTone(status: ServerStatus | null, dockerSocketMounted: boolean) {
+  const tone = summaryTone(status, dockerSocketMounted);
+  if (tone === "running") return "success" as const;
+  if (tone === "warning") return "warning" as const;
+  if (tone === "danger" || tone === "stopped") return "danger" as const;
+  return "neutral" as const;
+}
+
+function OverviewCard({
+  title,
+  description,
+  actions,
+  className,
+  children,
+  loading = false
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+  children: ReactNode;
+  loading?: boolean;
+}) {
+  return (
+    <Surface className={`overviewCard${className ? ` ${className}` : ""}`} aria-busy={loading || undefined}>
+      <PanelHeader compact title={title} description={description} actions={actions} />
+      {children}
+    </Surface>
+  );
 }
 
 export function OverviewSummary({
@@ -107,34 +138,18 @@ export function OverviewSummary({
   return (
     <section className="overviewSummary" aria-busy={loading}>
       {loading && <LoadingLabel>Loading server summary</LoadingLabel>}
-      <div className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}>
-        <span>Status</span>
-        <strong className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</strong>
-      </div>
-      <div className="summaryTile">
-        <span>Minecraft</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)}</strong>
-      </div>
-      <div className="summaryTile">
-        <span>{runtime.displayName}</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)}</strong>
-      </div>
-      <div className="summaryTile">
-        <span>Uptime</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"}</strong>
-      </div>
-      <div className="summaryTile">
-        <span>Players</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : players}</strong>
-      </div>
-      <div className="summaryTile overviewWideSummaryTile">
-        <span>CPU</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu}</strong>
-      </div>
-      <div className="summaryTile overviewWideSummaryTile">
-        <span>Memory</span>
-        <strong>{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory}</strong>
-      </div>
+      <MetricTile
+        className={`summaryTile state ${summaryTone(status, dockerSocketMounted)}`}
+        label="Status"
+        tone={summaryMetricTone(status, dockerSocketMounted)}
+        value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
+      />
+      <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
+      <MetricTile className="summaryTile" label={runtime.displayName} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)} />
+      <MetricTile className="summaryTile" label="Uptime" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
+      <MetricTile className="summaryTile" label="Players" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : players} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
   );
 }
@@ -184,11 +199,15 @@ export function ActivePlayersPanel({
   }
 
   return (
-    <section className="panel playersPanel overviewOperationsPanel" aria-busy={loading}>
-      <PanelHeader title="Active Players" actions={<StatusBadge tone={available?.state === "stale" ? "warning" : running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>} />
+    <OverviewCard
+      className="playersPanel overviewOperationsPanel"
+      title="Active Players"
+      actions={<StatusBadge tone={available?.state === "stale" ? "warning" : running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>}
+      loading={loading}
+    >
       {loading && <LoadingLabel>Loading active players</LoadingLabel>}
-      {content}
-    </section>
+      <div className="overviewCardBody">{content}</div>
+    </OverviewCard>
   );
 }
 
@@ -210,7 +229,7 @@ export function ModHealthPanel({
   contentPluralTitle?: "Mods" | "Plugins";
 }) {
   if (!canView) return null;
-  if (loading || !updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} contentPluralTitle={contentPluralTitle} />;
+  if (!updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} contentPluralTitle={contentPluralTitle} onOpenMods={onOpenMods} />;
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
 
@@ -218,137 +237,116 @@ export function ModHealthPanel({
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
   const visibleUpdates = availableUpdates.slice(0, modUpdateCardSlotCount);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
-  if (updateCount === 0) {
-    return (
-      <section className="panel modsHealthPanel modUpdatesCard modUpdatesCard--healthy">
-        <button
-          type="button"
-          className="modUpdatesCardOpen"
-          onClick={onOpenMods}
-          aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
-        >
-          <span className="modUpdatesCompact">
-            <span className="modUpdatesHeaderCopy">
-              <strong>{contentSingularTitle} updates</strong>
-              <small>No updates available</small>
-            </span>
-            <strong><AppIcon name="check" /></strong>
-          </span>
-          <span className="modUpdatesWide" aria-hidden="true">
-            <span className="modUpdatesWideHeader">
-              <span className="modUpdatesHeaderCopy">
-                <strong>{contentSingularTitle} updates</strong>
-                <small>No updates available</small>
-              </span>
-            </span>
-            <span className="modUpdatesList">
-              <span className="modUpdatesListItem modUpdatesListItem--healthy">
-                <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
-                <span className="modUpdatesListCopy">
-                  <strong>Everything is up to date</strong>
-                  <small><span>New {contentSingular} updates will appear here.</span></small>
-                </span>
-                <AppIcon name="chevronRight" />
-              </span>
-            </span>
-          </span>
-        </button>
-        <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />
-      </section>
-    );
-  }
+  const description = updateCount === 0
+    ? "No updates available"
+    : `${updateCount} update${updateCount === 1 ? "" : "s"} available`;
+  const actions = (
+    <div className="overviewCardHeaderActions">
+      <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} disabled={loading} />
+      <Button variant="ghost" compact className="textLinkButton" onClick={onOpenMods}>Open {contentPluralTitle}</Button>
+    </div>
+  );
 
   return (
-    <section className="panel modsHealthPanel modUpdatesCard">
-      <button
-        type="button"
-        className="modUpdatesCardOpen"
-        onClick={onOpenMods}
-        aria-label={`Open ${contentPluralTitle}, ${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`}
-      >
-        <span className="modUpdatesCompact">
-          <span className="modUpdatesHeaderCopy">
-            <strong>{contentSingularTitle} updates</strong>
-            <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
-          </span>
-          <strong>{updateCount}</strong>
-        </span>
-        <span className="modUpdatesWide" aria-hidden="true">
-          <span className="modUpdatesWideHeader">
-            <span className="modUpdatesHeaderCopy">
-              <strong>{contentSingularTitle} updates</strong>
-              <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
+    <OverviewCard
+      className={`modsHealthPanel modUpdatesCard${updateCount === 0 ? " modUpdatesCard--healthy" : ""}`}
+      title={`${contentSingularTitle} updates`}
+      description={description}
+      actions={actions}
+      loading={loading}
+    >
+      {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
+      <div className="overviewCardList modUpdatesList">
+        {updateCount === 0 ? (
+          <button
+            type="button"
+            className="overviewCardRow modUpdatesListItem modUpdatesListItem--healthy"
+            onClick={onOpenMods}
+            aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
+          >
+            <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
+            <span className="modUpdatesListCopy">
+              <strong>Everything is up to date</strong>
+              <small>New {contentSingular} updates will appear here.</small>
             </span>
-          </span>
-          <span className="modUpdatesList">
-            {visibleUpdates.map((entry) => (
-              <span className="modUpdatesListItem" key={entry.filename}>
-                <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
-                <span className="modUpdatesListCopy">
-                  <strong>{entry.displayName}</strong>
-                  <small>
-                    {entry.currentVersion && <span>{entry.currentVersion}</span>}
-                    {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
-                    <span>{entry.targetVersion ?? "Update available"}</span>
-                  </small>
-                </span>
-                <AppIcon name="chevronRight" />
-              </span>
-            ))}
-          </span>
-          {remainingUpdates > 0 && <small className="modUpdatesRemaining">+{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}</small>}
-        </span>
-      </button>
-      <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />
-    </section>
+            <AppIcon name="chevronRight" />
+          </button>
+        ) : visibleUpdates.map((entry) => (
+          <button
+            type="button"
+            className="overviewCardRow modUpdatesListItem"
+            key={entry.filename}
+            onClick={onOpenMods}
+            aria-label={`Open ${entry.displayName} update in ${contentPluralTitle}`}
+          >
+            <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
+            <span className="modUpdatesListCopy">
+              <strong>{entry.displayName}</strong>
+              <small>
+                {entry.currentVersion && <span>{entry.currentVersion}</span>}
+                {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
+                <span>{entry.targetVersion ?? "Update available"}</span>
+              </small>
+            </span>
+            <AppIcon name="chevronRight" />
+          </button>
+        ))}
+      </div>
+      {remainingUpdates > 0 && (
+        <Button variant="ghost" compact className="modUpdatesRemaining" onClick={onOpenMods}>
+          +{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}
+        </Button>
+      )}
+    </OverviewCard>
   );
 }
 
-function ModUpdatesRefreshButton({ contentPlural, onRefresh }: { contentPlural: "mods" | "plugins"; onRefresh?: () => void }) {
+function ModUpdatesRefreshButton({ contentPlural, onRefresh, disabled = false }: { contentPlural: "mods" | "plugins"; onRefresh?: () => void; disabled?: boolean }) {
   if (!onRefresh) return null;
   const label = `Recheck ${contentPlural} for updates`;
   return (
-    <Button variant="secondary" compact className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label}>
+    <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label} disabled={disabled}>
       <AppIcon name="refresh" />
-      <span className="modUpdatesRefreshLabel">Refresh</span>
     </Button>
   );
 }
 
-function ModHealthPanelSkeleton({ contentPlural = "mods" }: { contentPlural?: "mods" | "plugins"; contentPluralTitle?: "Mods" | "Plugins" }) {
+function ModHealthPanelSkeleton({
+  contentPlural = "mods",
+  contentPluralTitle = "Mods",
+  onOpenMods
+}: {
+  contentPlural?: "mods" | "plugins";
+  contentPluralTitle?: "Mods" | "Plugins";
+  onOpenMods: () => void;
+}) {
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
   return (
-    <section className="panel modsHealthPanel modUpdatesCard modUpdatesCardSkeleton" aria-busy="true">
+    <OverviewCard
+      className="modsHealthPanel modUpdatesCard modUpdatesCardSkeleton"
+      title={`${contentSingularTitle} updates`}
+      description="Checking for updates"
+      actions={<div className="overviewCardHeaderActions">
+        <Button variant="secondary" compact iconOnly disabled aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
+        <Button variant="ghost" compact className="textLinkButton" onClick={onOpenMods}>Open {contentPluralTitle}</Button>
+      </div>}
+      loading
+    >
       <LoadingLabel>Loading {contentSingular} updates</LoadingLabel>
-      <span className="modUpdatesCompact" aria-hidden="true">
-        <span className="modUpdatesHeaderCopy">
-          <strong>{contentSingularTitle} updates</strong>
-          <small>Checking for updates</small>
-        </span>
-        <SkeletonBlock className="modUpdatesCountSkeleton" />
-      </span>
-      <span className="modUpdatesWide modUpdatesWideSkeleton" aria-hidden="true">
-        <span className="modUpdatesWideHeader">
-          <span className="modUpdatesHeaderCopy">
-            <strong>{contentSingularTitle} updates</strong>
-            <small>Checking for updates</small>
-          </span>
-        </span>
-        <span className="modUpdatesList">
-          {Array.from({ length: modUpdateCardSlotCount }, (_, index) => (
-            <span className="modUpdatesListItem" key={index}>
-              <SkeletonBlock className="modUpdatesIconSkeleton" />
-              <span className="modUpdatesListCopy">
-                <SkeletonBlock className="modUpdatesNameSkeleton" />
-                <SkeletonBlock className="modUpdatesVersionSkeleton" />
-              </span>
-              <SkeletonBlock className="modUpdatesChevronSkeleton" />
+      <div className="overviewCardList modUpdatesList" aria-hidden="true">
+        {Array.from({ length: 1 }, (_, index) => (
+          <div className="overviewCardRow modUpdatesListItem" key={index}>
+            <SkeletonBlock className="modUpdatesIconSkeleton" />
+            <span className="modUpdatesListCopy">
+              <SkeletonBlock className="modUpdatesNameSkeleton" />
+              <SkeletonBlock className="modUpdatesVersionSkeleton" />
             </span>
-          ))}
-        </span>
-      </span>
-    </section>
+            <SkeletonBlock className="modUpdatesChevronSkeleton" />
+          </div>
+        ))}
+      </div>
+    </OverviewCard>
   );
 }
 
@@ -403,12 +401,12 @@ export function SchedulePanel({
 }) {
   const snapshot = buildUpcomingScheduleSnapshot(schedules);
   return (
-    <section className="panel schedulePanel overviewOperationsPanel">
-      <PanelHeader
-        title="Schedule"
-        actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
-      />
-      {!canView ? (
+    <OverviewCard
+      className="schedulePanel overviewOperationsPanel"
+      title="Schedule"
+      actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
+    >
+      <div className="overviewCardBody">{!canView ? (
         <EmptyState compact title="Schedules unavailable" message="View schedules permission is required." />
       ) : schedules.length === 0 ? (
         <EmptyState compact title="No schedules configured" message="Create recurring console actions from Schedules." />
@@ -425,7 +423,7 @@ export function SchedulePanel({
                 <button
                   key={schedule.id}
                   type="button"
-                  className="scheduleUpcomingItem"
+                  className="overviewCardRow scheduleUpcomingItem"
                   onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
                   aria-label={`Open ${schedule.name}, next run ${nextTime}`}
                 >
@@ -446,8 +444,8 @@ export function SchedulePanel({
             </button>
           )}
         </div>
-      )}
-    </section>
+      )}</div>
+    </OverviewCard>
   );
 }
 
@@ -699,11 +697,15 @@ export function RecentEventsPanel({
   }
 
   return (
-    <section className="panel eventsPanel" aria-busy={loading}>
-      <PanelHeader
-        title="Recent Events"
-        actions={hiddenSignatures.length > 0 && <Button variant="ghost" compact className="textLinkButton" onClick={() => setHiddenSignatures([])}>Reset hidden events</Button>}
-      />
+    <OverviewCard
+      className="eventsPanel"
+      title="Recent Events"
+      actions={<div className="overviewCardHeaderActions">
+        {hiddenSignatures.length > 0 && <Button variant="ghost" compact className="textLinkButton" onClick={() => setHiddenSignatures([])}>Reset hidden events</Button>}
+        <Button variant="ghost" compact className="textLinkButton" onClick={onOpenConsole}>View full log</Button>
+      </div>}
+      loading={loading}
+    >
       <div className="eventList">
         {loading && <LoadingLabel>Loading recent events</LoadingLabel>}
         {loading ? Array.from({ length: 5 }, (_, index) => (
@@ -768,7 +770,6 @@ export function RecentEventsPanel({
           />
         )}
       </div>
-      <Button variant="ghost" compact className="textLinkButton eventLogButton" onClick={onOpenConsole}>View full log</Button>
-    </section>
+    </OverviewCard>
   );
 }

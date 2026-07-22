@@ -23,21 +23,89 @@
   align-items: start;
 }
 
-.overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-  grid-template-areas:
-    "summary summary summary summary summary summary summary summary summary summary summary summary"
-    "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-    "players players players players players players automation automation automation automation automation automation"
-    "events events events events events events events events events events events events";
-}
-
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
 .overviewDashboardGrid > .resourcePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
-.overviewDashboardGrid > .modsHealthPanel { grid-area: mods; }
-.overviewDashboardGrid > .schedulePanel { grid-area: automation; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
+
+.overviewSupportStack {
+  display: contents;
+}
+
+.overviewSupportStack > .modsHealthPanel { grid-area: mods; }
+.overviewSupportStack > .schedulePanel { grid-area: automation; }
+
+.overviewCard {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+
+.overviewCard > .uiPanelHeader,
+.overviewCard .uiEmptyState {
+  margin: 0;
+}
+
+.overviewCard > .uiPanelHeader {
+  min-height: 36px;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.overviewCardHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.overviewCardBody,
+.overviewCardList {
+  min-width: 0;
+  min-height: 0;
+}
+
+.overviewCardBody {
+  display: grid;
+  align-content: start;
+}
+
+.overviewCardRow {
+  min-width: 0;
+  min-height: 52px;
+  border: var(--border-subtle) solid transparent;
+  border-bottom-color: var(--border-row);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+button.overviewCardRow {
+  cursor: pointer;
+}
+
+button.overviewCardRow:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 52%, var(--surface-raised));
+  color: var(--text);
+  box-shadow: none;
+  transform: none;
+}
+
+button.overviewCardRow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 
 .overviewDashboardGrid > .overviewSummary {
   display: grid;
@@ -131,24 +199,6 @@
   color: var(--text-muted);
   font-size: 12px;
   text-align: right;
-}
-
-.panel.modUpdatesCard {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  min-height: 72px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0;
-  border-color: var(--border-panel);
-  background: var(--surface-raised);
-  color: var(--text);
-  padding: 0;
-  text-align: left;
-  white-space: normal;
-  overflow: hidden;
 }
 
 .serverTimelinePanel {
@@ -359,54 +409,17 @@
   color: var(--text-muted);
 }
 
-.modUpdatesCardOpen {
-  width: 100%;
-  min-width: 0;
-  align-self: stretch;
-  display: grid;
-  align-items: center;
-  justify-content: stretch;
-  justify-items: stretch;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  color: inherit;
-  padding: var(--space-4);
-  font: inherit;
-  text-align: left;
-  white-space: normal;
-  cursor: pointer;
-}
-
-.modUpdatesCardOpen:hover:not(:disabled),
-.modUpdatesCardOpen:active:not(:disabled) {
-  border-color: transparent;
-  background: transparent;
-  color: inherit;
-  box-shadow: none;
-  transform: none;
-}
-
-.modUpdatesCardOpen:focus-visible {
-  outline-offset: -4px;
-}
-
 .modUpdatesRefreshButton {
   width: var(--control-height-compact);
   min-width: var(--control-height-compact);
   height: var(--control-height-compact);
   min-height: var(--control-height-compact);
-  margin-right: var(--space-4);
   padding: 0;
 }
 
 .modUpdatesRefreshButton > svg {
   width: 17px;
   height: 17px;
-}
-
-.modUpdatesRefreshLabel {
-  display: none;
 }
 
 .serverTimelineEChart {
@@ -838,45 +851,6 @@
   .serverTimelinePanel * { transition: none !important; animation: none !important; }
 }
 
-.modUpdatesCompact {
-  grid-column: 1 / -1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.modUpdatesWide {
-  display: none;
-}
-
-.modUpdatesWideHeader {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  padding-bottom: var(--space-3);
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-}
-
-.modUpdatesHeaderCopy {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-
-.modUpdatesHeaderCopy > strong {
-  overflow: hidden;
-  margin: 0;
-  color: var(--text);
-  font-size: var(--type-section-title-size);
-  font-weight: var(--weight-heading);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modUpdatesHeaderCopy > small,
 .modUpdatesRemaining {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
@@ -904,10 +878,6 @@
   background: transparent;
   padding: 7px 2px;
   transition: background-color 150ms ease;
-}
-
-.modUpdatesCardOpen:hover:not(:disabled) .modUpdatesListItem {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }
 
 .modUpdatesListItem > .buttonIcon {
@@ -981,39 +951,6 @@
 .modUpdatesVersionSkeleton {
   width: min(142px, 34%);
   height: 10px;
-}
-
-.modUpdatesCardSkeleton {
-  cursor: default;
-  padding: var(--space-4);
-}
-
-.modUpdatesCountSkeleton {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-}
-
-.modUpdatesCompact > strong {
-  min-width: 42px;
-  min-height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sentinel-warning) 18%, var(--surface-raised));
-  color: var(--sentinel-warning);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.modUpdatesCard--healthy .modUpdatesCompact > strong {
-  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
-  color: var(--sentinel-success);
-}
-
-.modUpdatesCompact > strong > svg {
-  width: 20px;
-  height: 20px;
 }
 
 .modUpdatesCard--healthy .modUpdatesListItem--healthy {
@@ -1412,12 +1349,6 @@
   }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
 @media (min-width: 721px) and (max-width: 980px) {
   .overviewDashboardGrid {
     grid-template-columns: minmax(0, 1fr);
@@ -1496,67 +1427,6 @@
   }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players players players automation automation automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-}
-
-@media (min-width: 1440px) and (max-width: 2559px) {
-  .overviewDashboardGrid > .modsHealthPanel {
-    align-self: stretch;
-  }
-
-  .modUpdatesCard {
-    min-height: 136px;
-    display: block;
-  }
-
-  .modUpdatesCardOpen {
-    width: 100%;
-    height: 100%;
-  }
-
-  .modUpdatesRefreshButton {
-    position: absolute;
-    top: var(--space-4);
-    right: var(--space-4);
-    width: auto;
-    min-width: 0;
-    margin: 0;
-    padding-inline: var(--space-3);
-  }
-
-  .modUpdatesRefreshLabel {
-    display: inline;
-  }
-
-  .modUpdatesWideHeader {
-    padding-right: 104px;
-  }
-
-  .modUpdatesCompact {
-    display: none;
-  }
-
-  .modUpdatesWide {
-    height: 100%;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    align-content: stretch;
-    gap: var(--space-3);
-  }
-
-  .modUpdatesListItem:nth-child(n + 2),
-  .modUpdatesRemaining {
-    display: none;
-  }
-}
-
 @media (min-width: 2560px) {
   .workspace.workspacePage-overview {
     max-width: none;
@@ -1570,66 +1440,12 @@
     margin-inline: auto;
   }
 
-  .overviewDashboardGrid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players mods mods mods mods automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-
-  .overviewDashboardGrid:not(:has(> .modsHealthPanel)) {
-    grid-template-areas:
-      "summary summary summary summary summary summary summary summary summary summary summary summary"
-      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players players players automation automation automation automation automation automation"
-      "events events events events events events events events events events events events";
-  }
-
   .overviewDashboardGrid > .overviewSummary {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
     display: grid;
-  }
-
-  .overviewDashboardGrid > .modsHealthPanel {
-    align-self: stretch;
-  }
-
-  .modUpdatesCard {
-    min-height: 280px;
-    display: block;
-  }
-
-  .modUpdatesCardOpen {
-    width: 100%;
-    height: 100%;
-  }
-
-  .modUpdatesRefreshButton {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    margin: 0;
-  }
-
-  .modUpdatesWideHeader {
-    padding-right: 40px;
-  }
-
-  .modUpdatesCompact {
-    display: none;
-  }
-
-  .modUpdatesWide {
-    height: 100%;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    align-content: stretch;
-    gap: var(--space-3);
   }
 
   .workspacePage-overview .resourcePanel .resourceRows {
@@ -1657,9 +1473,6 @@
     min-height: 132px;
   }
 
-  .workspacePage-overview .activePlayerGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 
@@ -1671,17 +1484,9 @@
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 0.035);
-  align-content: center;
-  justify-items: start;
-  gap: 6px;
+  box-shadow: none;
 }
 
-.overviewSummary .summaryTile::before {
-  display: none;
-}
-
-.summaryTile > span,
 .resourceMetricLabel > span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -1690,11 +1495,6 @@
   text-transform: uppercase;
 }
 
-.overviewSummary .summaryTile > span {
-  line-height: 1;
-}
-
-.summaryTile > strong,
 .resourceMetricLabel > strong {
   color: var(--text);
   font-size: var(--type-card-title-size);
@@ -1703,17 +1503,7 @@
   line-height: 1.3;
 }
 
-.overviewSummary .summaryTile > strong {
-  max-width: 100%;
-  display: -webkit-box;
-  overflow: hidden;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.overviewSummary .summaryTile > .summaryStatusText {
+.overviewSummary .summaryStatusText {
   color: var(--text);
   font-size: clamp(16px, 1.35vw, 20px);
   font-weight: var(--weight-heading);
@@ -1722,16 +1512,16 @@
   text-transform: uppercase;
 }
 
-.overviewSummary .summaryTile.state.running > .summaryStatusText {
+.overviewSummary .summaryTile.state.running .summaryStatusText {
   color: var(--sentinel-success);
 }
 
-.overviewSummary .summaryTile.state.stopped > .summaryStatusText,
-.overviewSummary .summaryTile.state.danger > .summaryStatusText {
+.overviewSummary .summaryTile.state.stopped .summaryStatusText,
+.overviewSummary .summaryTile.state.danger .summaryStatusText {
   color: var(--sentinel-danger);
 }
 
-.overviewSummary .summaryTile.state.neutral > .summaryStatusText {
+.overviewSummary .summaryTile.state.neutral .summaryStatusText {
   color: var(--text);
 }
 
@@ -1830,4 +1620,151 @@
   background: var(--surface-muted);
   color: var(--text-soft);
   opacity: 0.62;
+}
+
+@media (min-width: 981px) {
+  .overviewDashboardGrid {
+    grid-template-areas:
+      "summary summary summary summary summary summary summary summary summary summary summary summary"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
+      "players players players players players support support support support support support support"
+      "events events events events events events events events events events events events";
+  }
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
+    display: grid;
+  }
+
+  .overviewSupportStack {
+    grid-area: support;
+    min-width: 0;
+    display: grid;
+    align-self: stretch;
+    align-content: start;
+    gap: var(--space-4);
+  }
+
+  .overviewSupportStack > .modsHealthPanel,
+  .overviewSupportStack > .schedulePanel {
+    grid-area: auto;
+  }
+
+  .overviewSummary .summaryTile {
+    min-height: 72px;
+    grid-template-columns: 6px minmax(0, 1fr);
+    gap: 10px;
+    padding: var(--space-3);
+    border-color: var(--border-panel);
+    background: var(--surface-raised);
+    box-shadow: none;
+  }
+
+  .overviewSummary .uiMetricTileMarker {
+    width: 6px;
+    height: 28px;
+    border-radius: 999px;
+    box-shadow: none;
+  }
+
+  .overviewSummary .uiMetricTileCopy > strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .overviewSummary .summaryStatusText {
+    color: var(--text);
+    font-size: var(--type-card-title-size);
+    text-transform: uppercase;
+  }
+
+  .overviewSummary .summaryTile.state.running .summaryStatusText { color: var(--sentinel-success); }
+  .overviewSummary .summaryTile.state.stopped .summaryStatusText,
+  .overviewSummary .summaryTile.state.danger .summaryStatusText { color: var(--sentinel-danger); }
+
+  .serverTimelinePanel {
+    padding: var(--space-4);
+    border-color: var(--border-panel);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: none;
+  }
+
+  .serverTimelinePanel > .uiPanelHeader {
+    min-height: 36px;
+    padding-bottom: var(--space-3);
+    border-bottom: var(--border-subtle) solid var(--border-row);
+  }
+
+  .playersPanel .overviewCardBody,
+  .activePlayerRoster {
+    height: 100%;
+  }
+
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activePlayerGrid {
+    max-height: 430px;
+    align-content: start;
+  }
+
+  .modUpdatesCard,
+  .schedulePanel {
+    align-self: start;
+  }
+
+  .modUpdatesList,
+  .scheduleUpcomingList {
+    gap: var(--space-1);
+  }
+
+  .modUpdatesListItem,
+  .scheduleUpcomingItem {
+    min-height: 52px;
+    height: 52px;
+  }
+
+  .modUpdatesRemaining {
+    justify-self: start;
+    margin-top: var(--space-1);
+  }
+
+  .eventsPanel {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .overviewPage .eventsPanel .eventRow,
+  .overviewPage .eventsPanel .eventRow.success,
+  .overviewPage .eventsPanel .eventRow.warning,
+  .overviewPage .eventsPanel .eventRow.eventKind--player_reconnected {
+    border-color: var(--border-row);
+    background: transparent;
+  }
+
+  .overviewPage .eventsPanel .eventRow.error {
+    border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
+    background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));
+  }
+}
+
+@media (min-width: 1321px) {
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2000px) {
+  .activePlayerGrid,
+  .overviewPanelSkeleton {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }

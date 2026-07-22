@@ -380,8 +380,16 @@
   .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
 }
 
-@media (min-width: 981px) and (max-width: 1320px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (min-width: 981px) {
+  .applicationSkeletonSummary { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .applicationSkeletonWideTile { display: block; }
+  .applicationOverviewPanelGrid {
+    grid-template-areas:
+      "resource resource resource resource resource resource resource resource resource resource resource resource"
+      "players players players players players mods mods mods mods mods mods mods"
+      "players players players players players automation automation automation automation automation automation automation"
+      "events events events events events events events events events events events events";
+  }
 }
 
 @media (min-width: 761px) and (max-width: 980px) {
@@ -398,12 +406,6 @@
   .applicationFilesDetailsPanel,
   .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
 }
-
-@media (min-width: 2560px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-  .applicationSkeletonWideTile { display: block; }
-}
-
 
 /* Shared application patterns migrated from the former adoption layer */
 .fileToolbar .uiButton,
