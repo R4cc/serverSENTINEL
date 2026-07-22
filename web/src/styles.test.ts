@@ -133,8 +133,11 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineSharedGuide\.tone-server\s*\{\s*--timeline-guide-color:\s*var\(--timeline-server\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*transform:\s*translateX\(-14px\);[^}]*background:\s*transparent;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\.is-multiple\s*\{[^}]*min-width:\s*max-content;[^}]*border:\s*1px solid var\(--border-subtle\);/s);
+    expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\.is-labeled\s*\{[^}]*width:\s*max-content;[^}]*padding-right:\s*6px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationClusterIcon \+ \.timelineAnnotationClusterIcon\s*\{\s*margin-left:\s*-9px;\s*\}/s);
+    expect(overviewStyles).toMatch(/\.timelineAnnotationClusterIcon \.controlGlyph-start,[\s\S]*?fill:\s*currentColor;[\s\S]*?stroke:\s*none;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationClusterCount\s*\{[^}]*font-size:\s*10px;[^}]*font-weight:\s*var\(--weight-title\);/s);
+    expect(overviewStyles).toMatch(/\.timelineAnnotationClusterLabel\s*\{[^}]*font-size:\s*10px;[^}]*font-weight:\s*var\(--weight-title\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationPopover\s*\{[^}]*position:\s*absolute;[^}]*max-height:\s*250px;[^}]*border:\s*var\(--border-strong\) solid var\(--border\);[^}]*background:\s*color-mix\(in srgb, var\(--surface-raised\) 78%, var\(--surface-muted\)\);[^}]*box-shadow:\s*var\(--shadow-elevated\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationPopoverItem\s*\{[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);/s);
     expect(overviewStyles).toMatch(/\.timelineSeriesToggle\s*\{[^}]*border:\s*1px solid[^}]*cursor:\s*pointer;/s);

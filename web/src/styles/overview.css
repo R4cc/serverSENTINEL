@@ -781,6 +781,11 @@ button.overviewCardRow:focus-visible {
   box-shadow: var(--shadow-xs);
 }
 
+.timelineAnnotationCluster.is-labeled {
+  width: max-content;
+  padding-right: 6px;
+}
+
 .timelineAnnotationIconStack {
   display: inline-flex;
   align-items: center;
@@ -817,7 +822,25 @@ button.overviewCardRow:focus-visible {
   stroke-linejoin: round;
 }
 
+.timelineAnnotationClusterIcon .controlGlyph-start,
+.timelineAnnotationClusterIcon .controlGlyph-stop {
+  fill: currentColor;
+  stroke: none;
+}
+
+.timelineAnnotationClusterIcon .controlGlyph-restart {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+}
+
 .timelineAnnotationClusterCount {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+}
+
+.timelineAnnotationClusterLabel {
   color: var(--text);
   font-size: 10px;
   font-weight: var(--weight-title);

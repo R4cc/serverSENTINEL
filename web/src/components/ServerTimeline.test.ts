@@ -206,12 +206,36 @@ describe("server timeline markers", () => {
     expect(positioned[0].leftPercent).toBeCloseTo(33.333);
     expect(positioned[1].leftPercent).toBeCloseTo(83.333);
     expect(positioned.map((cluster) => cluster.lane)).toEqual([0, 0]);
+    expect(positioned.map((cluster) => cluster.inlineLabel)).toEqual(["Server started", "Restart"]);
+  });
+
+  it("only shows an inline event label when it fits to the right without colliding", () => {
+    const marker = timelineMarkers(response())[0];
+    const separated = [
+      { ...marker, id: "first", occurredAt: 10_000 },
+      { ...marker, id: "second", occurredAt: 40_000 }
+    ];
+    const crowded = [
+      { ...marker, id: "first", occurredAt: 10_000 },
+      { ...marker, id: "second", occurredAt: 14_000 }
+    ];
+
+    expect(positionTimelineClusters(clusterTimelineMarkers(separated, 0, 60_000, 24), 0, 60_000, 1_000).map((cluster) => cluster.inlineLabel))
+      .toEqual(["Server started", "Server started"]);
+    expect(positionTimelineClusters(clusterTimelineMarkers(crowded, 0, 60_000, 24), 0, 60_000, 1_000).map((cluster) => cluster.inlineLabel))
+      .toEqual([null, "Server started"]);
   });
 
   it("keeps a compact cluster inside the right edge", () => {
     const marker = { ...timelineMarkers(response())[0], occurredAt: 59_000, occurrences: 12 };
     const positioned = positionTimelineClusters(clusterTimelineMarkers([marker], 0, 60_000, 24), 0, 60_000, 300);
     expect(positioned[0]).toMatchObject({ alignEnd: true, lane: 0 });
+  });
+
+  it("keeps a single marker icon-only when its label would cross the right edge", () => {
+    const marker = { ...timelineMarkers(response())[0], occurredAt: 59_000 };
+    const positioned = positionTimelineClusters(clusterTimelineMarkers([marker], 0, 60_000, 24), 0, 60_000, 300);
+    expect(positioned[0]).toMatchObject({ alignEnd: true, inlineLabel: null });
   });
 
   it("keeps lifecycle and failed automation labels important while routine and planned markers stay compact", () => {

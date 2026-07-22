@@ -11,6 +11,7 @@ import type {
 import { groupNearbyRepeatedEvents } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
 import { EventIcon } from "./EventIcon";
+import { RuntimeControlIcon } from "./RuntimeControls";
 import {
   buildTimelineChartOption,
   dataZoomWindow,
@@ -341,6 +342,7 @@ export type PositionedMarkerCluster = MarkerCluster & {
   leftPercent: number;
   lane: number;
   alignEnd: boolean;
+  inlineLabel: string | null;
   labelTop: number;
   labelHeight: number;
 };
@@ -396,17 +398,36 @@ export function timelineClusterIconMarkers(cluster: MarkerCluster) {
 export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000): PositionedMarkerCluster[] {
   if (to <= from) return [];
   const availableWidth = Math.max(1, railWidth);
-  return clusters.map((cluster) => {
+  const measurements = clusters.map((cluster) => {
     const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
     const center = availableWidth * leftPercent / 100;
     const occurrenceCount = cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
     const iconCount = timelineClusterIconMarkers(cluster).length;
-    const buttonWidth = occurrenceCount > 1 ? 58 + String(occurrenceCount).length * 6 + Math.max(0, iconCount - 1) * 9 : 28;
+    const compactWidth = occurrenceCount > 1 ? 58 + String(occurrenceCount).length * 6 + Math.max(0, iconCount - 1) * 9 : 28;
+    const alignEnd = center + compactWidth - 14 > availableWidth;
     return {
-      ...cluster,
+      cluster,
       leftPercent,
+      center,
+      compactWidth,
+      compactLeft: alignEnd ? center - compactWidth + 14 : center - 14,
+      alignEnd,
+      inlineLabel: occurrenceCount === 1 && cluster.markers.length === 1
+        ? timelineMarkerDisplayLabel(cluster.markers[0]).primary
+        : null
+    };
+  });
+  return measurements.map((measurement, index) => {
+    const next = measurements[index + 1];
+    const inlineWidth = measurement.inlineLabel ? 38 + measurement.inlineLabel.length * 6.2 : 0;
+    const rightLimit = next ? next.compactLeft - 10 : availableWidth;
+    const showInlineLabel = Boolean(measurement.inlineLabel && measurement.center - 14 + inlineWidth <= rightLimit);
+    return {
+      ...measurement.cluster,
+      leftPercent: measurement.leftPercent,
       lane: 0,
-      alignEnd: center + buttonWidth - 14 > availableWidth,
+      alignEnd: showInlineLabel ? false : measurement.alignEnd,
+      inlineLabel: showInlineLabel ? measurement.inlineLabel : null,
       labelTop: 17,
       labelHeight: 30
     };
@@ -472,7 +493,9 @@ export function timelineClusterOccurrenceCount(cluster: MarkerCluster) {
 }
 
 function timelineMarkerGlyph(marker: TimelineMarker) {
-  if (marker.restart) return <EventIcon kind="server_restarted" />;
+  if (marker.restart) return <RuntimeControlIcon action="restart" />;
+  if (marker.event?.eventType === "server_started") return <RuntimeControlIcon action="start" />;
+  if (marker.event?.eventType === "server_stopped") return <RuntimeControlIcon action="stop" />;
   if (marker.event) return <EventIcon kind={marker.event.eventType} />;
   return marker.tone === "planned" ? "○" : "▶";
 }
@@ -1137,7 +1160,7 @@ export function ServerTimeline({
               >
                 <button
                   type="button"
-                  className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.alignEnd ? " align-end" : ""}`}
+                  className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.inlineLabel ? " is-labeled" : ""}${cluster.alignEnd ? " align-end" : ""}`}
                   style={{ top: `${cluster.labelTop}px` }}
                   title={markerTitle(cluster, formatDate)}
                   aria-label={markerTitle(cluster, formatDate)}
@@ -1156,6 +1179,7 @@ export function ServerTimeline({
                     ))}
                   </span>
                   {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
+                  {cluster.inlineLabel && <span className="timelineAnnotationClusterLabel" aria-hidden="true">{cluster.inlineLabel}</span>}
                 </button>
               </div>
             );
