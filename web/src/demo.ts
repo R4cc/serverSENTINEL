@@ -443,6 +443,30 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     { id: "timeline-steve-rejoin", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: new Date(now - 19 * 60_000 + 7_000).toISOString(), occurredAt: now - 19 * 60_000 + 7_000, signature: "player_joined:steve", source: "logs/latest.log", subject: "Steve" },
     { id: "timeline-maya-join", eventType: "player_joined", type: "success", severity: "success", text: "Maya joined", message: "Maya joined", timestamp: new Date(now - 7 * 60_000).toISOString(), occurredAt: now - 7 * 60_000, signature: "player_joined:maya", source: "logs/latest.log", subject: "Maya" }
   ] satisfies ServerTimelineEvent[]).filter((event) => event.occurredAt >= from && event.occurredAt <= to);
+  const demoOnlineNames = running
+    ? ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"]
+    : [];
+  const playerSessions = [
+    ...demoOnlineNames.map((player, index) => ({
+      id: `demo-online:${player.toLowerCase()}`,
+      player,
+      startedAt: now - (58 - index * 3) * 60_000,
+      endedAt: null,
+      startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
+      endBoundary: "online" as const
+    })),
+    ...["Forest_Dweller", "DragonRifle_1", "TheDeadReaper", "Ethanenet", "Itsxapi", "phiki", "Alekschede", "dindingle"].map((player, index) => {
+      const startedAt = now - (54 - index * 5) * 60_000;
+      return {
+        id: `demo-offline:${player.toLowerCase()}`,
+        player,
+        startedAt,
+        endedAt: startedAt + (8 + index * 2) * 60_000,
+        startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
+        endBoundary: "leave" as const
+      };
+    })
+  ].filter((session) => session.startedAt <= to && (session.endedAt ?? now) >= from);
   const scheduleMarkers: ServerTimelineScheduleMarker[] = schedules.flatMap((schedule) => {
     const markers: ServerTimelineScheduleMarker[] = [];
     for (const run of schedule.recentRuns ?? []) {
@@ -464,6 +488,12 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     samples,
     events: eventFixtures,
     schedules: scheduleMarkers.sort((left, right) => left.occurredAt - right.occurredAt),
+    playerActivity: {
+      snapshotState: running ? "live" : "stopped",
+      sampledAt: new Date(now).toISOString(),
+      onlineNames: demoOnlineNames,
+      sessions: playerSessions
+    },
     scheduleAnnotationsAvailable: true,
     truncated: { schedules: false }
   };

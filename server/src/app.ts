@@ -94,7 +94,7 @@ import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
-import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
+import { timelinePlayerActivity, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
@@ -5543,6 +5543,8 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
   if (to - from > timelineHistoryWindowMs) badRequest("Timeline range cannot exceed 24 hours");
   if (!Number.isInteger(requestedMaxPoints) || requestedMaxPoints < 100) badRequest("Timeline maxPoints must be a whole number of at least 100");
   const maxPoints = Math.min(1_200, requestedMaxPoints);
+  const contextFrom = generatedAt.getTime() - timelineHistoryWindowMs;
+  const timelineEvents = timelineEventsRepository.list(server.id, contextFrom, to);
   const rawSamples = resourceStatsRepository.listRange(server.id, from, to, true);
   const latestRaw = resourceStatsRepository.latest(server.id);
   const samples = timelineResourcePoints(rawSamples, from, to, maxPoints, latestRaw?.cpuCapacityCores);
@@ -5566,8 +5568,16 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
     generatedAt: generatedAt.toISOString(),
     latest,
     samples,
-    events: timelineEventsRepository.list(server.id, from, to),
+    events: timelineEvents.filter((event) => event.occurredAt >= from),
     schedules: scheduleResult.markers,
+    playerActivity: timelinePlayerActivity({
+      events: timelineEvents,
+      snapshot: playerSnapshotCoordinator?.latest(server.id),
+      contextFrom,
+      from,
+      to,
+      now: generatedAt.getTime()
+    }),
     scheduleAnnotationsAvailable,
     truncated: { schedules: scheduleResult.truncated }
   };

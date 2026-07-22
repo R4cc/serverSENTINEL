@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ServerTimelineResponse } from "../types";
 import {
   clusterTimelineMarkers,
+  formatTimelineDuration,
   mergeTimelineResponses,
   positionTimelineClusters,
   ServerTimeline,
@@ -12,7 +13,9 @@ import {
   timelineMarkers,
   timelineMarkerDisplayLabel,
   timelineMarkerIsImportant,
-  timelineMarkerPreview
+  timelineMarkerPreview,
+  timelinePlayerRows,
+  timelineSessionGeometry
 } from "./ServerTimeline";
 
 describe("server timeline controls", () => {
@@ -27,6 +30,8 @@ describe("server timeline controls", () => {
 
     expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
+    expect(html).toContain("Player activity");
+    expect(html).not.toContain("serverTimelineSummary");
   });
 });
 
@@ -229,7 +234,7 @@ describe("server timeline markers", () => {
     ];
     const clusters = clusterTimelineMarkers(markers, 0, 60_000, 24);
     const before = positionTimelineClusters(clusters, 0, 60_000, 1_000);
-    const after = positionTimelineClusters(clusters, 5_000, 65_000, 1_000);
+    const after = positionTimelineClusters(clusters, 10_000, 70_000, 1_000);
     expect(before.map((cluster) => cluster.alignEnd)).not.toEqual(after.map((cluster) => cluster.alignEnd));
     expect(before.map((cluster) => cluster.lane)).toEqual(after.map((cluster) => cluster.lane));
   });
@@ -274,6 +279,25 @@ describe("server timeline markers", () => {
     expect(merged.from).toBe(15_000);
   });
 
+  it("merges open player sessions by stable identity", () => {
+    const current = response();
+    current.playerActivity = {
+      snapshotState: "live",
+      sampledAt: new Date(50_000).toISOString(),
+      onlineNames: ["Alex"],
+      sessions: [{ id: "alex:10", player: "Alex", startedAt: 10_000, endedAt: null, startBoundary: "join", endBoundary: "online" }]
+    };
+    const incoming = response();
+    incoming.playerActivity = {
+      snapshotState: "live",
+      sampledAt: new Date(65_000).toISOString(),
+      onlineNames: [],
+      sessions: [{ id: "alex:10", player: "Alex", startedAt: 10_000, endedAt: 60_000, startBoundary: "join", endBoundary: "leave" }]
+    };
+    const merged = mergeTimelineResponses(current, incoming, 15_000, 65_000);
+    expect(merged.playerActivity).toMatchObject({ onlineNames: [], sessions: [{ id: "alex:10", endedAt: 60_000, endBoundary: "leave" }] });
+  });
+
   it("deduplicates an event when its rolling log-tail line index changes", () => {
     const current = response();
     current.events = [{ ...current.events[0], id: "logs-199-old" }];
@@ -291,5 +315,38 @@ describe("server timeline markers", () => {
     incoming.schedules = [];
 
     expect(mergeTimelineResponses(current, incoming, 0, 60_000).schedules).toEqual([]);
+  });
+});
+
+describe("server timeline player sessions", () => {
+  it("groups online players first and keeps offline activity range-relevant", () => {
+    const value = response();
+    value.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["Zoe", "Alex"],
+      sessions: [
+        { id: "zoe", player: "Zoe", startedAt: 5_000, endedAt: null, startBoundary: "join", endBoundary: "online" },
+        { id: "sam", player: "Sam", startedAt: 20_000, endedAt: 30_000, startBoundary: "join", endBoundary: "leave" },
+        { id: "old", player: "OldPlayer", startedAt: -20_000, endedAt: -10_000, startBoundary: "join", endBoundary: "leave" }
+      ]
+    };
+    expect(timelinePlayerRows(value, { from: 0, to: 60_000 }, 50_000).map((row) => [row.player, row.online])).toEqual([
+      ["Alex", true],
+      ["Zoe", true],
+      ["Sam", false]
+    ]);
+  });
+
+  it("clips incomplete sessions and reports lower-bound durations", () => {
+    const geometry = timelineSessionGeometry({
+      id: "clipped",
+      player: "Alex",
+      startedAt: 0,
+      endedAt: null,
+      startBoundary: "history-boundary",
+      endBoundary: "online"
+    }, { from: 10_000, to: 40_000 }, 30_000)!;
+    expect(geometry).toMatchObject({ leftPercent: 0, widthPercent: 66.66666666666666, startClipped: true, endClipped: false, lowerBound: true });
+    expect(formatTimelineDuration(4 * 60 * 60_000 + 25 * 60_000)).toBe("4h 25m");
   });
 });

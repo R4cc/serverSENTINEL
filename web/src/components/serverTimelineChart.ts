@@ -5,6 +5,7 @@ import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline"
 export const timelineRetentionMs = 24 * 60 * 60 * 1000;
 export const liveTimelineFutureRatio = 0.1;
 export const timelineChartGrid = { left: 56, right: 24, top: 66, bottom: 38 } as const;
+export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 34 } as const;
 
 export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
   const cpu = enabled.cpuUtilizationPercent;
@@ -232,7 +233,9 @@ export function buildTimelineChartOption({
   formatTime,
   formatShortTime,
   now,
-  gridTop
+  gridTop,
+  gridOverride,
+  seriesKeys
 }: {
   samples: ServerTimelineResourcePoint[];
   query: TimelineWindow;
@@ -244,12 +247,17 @@ export function buildTimelineChartOption({
   formatShortTime: (value: string | number | Date) => string;
   now: number;
   gridTop?: number;
+  gridOverride?: { left: number; right: number; top: number; bottom: number };
+  seriesKeys?: SeriesKey[];
 }): EChartsCoreOption {
-  const grid = timelineChartGridForEnabled(enabled, gridTop);
-  const cpuEnabled = enabled.cpuUtilizationPercent;
-  const memoryEnabled = enabled.memoryUtilizationPercent;
-  const networkEnabled = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;
-  const playersEnabled = enabled.playersOnline;
+  const grid = gridOverride ?? timelineChartGridForEnabled(enabled, gridTop);
+  const visible = new Set(seriesKeys ?? Object.keys(enabled).filter((key) => enabled[key as SeriesKey]) as SeriesKey[]);
+  const cpuEnabled = enabled.cpuUtilizationPercent && visible.has("cpuUtilizationPercent");
+  const memoryEnabled = enabled.memoryUtilizationPercent && visible.has("memoryUtilizationPercent");
+  const networkEnabled = (enabled.networkRxBytesPerSecond && visible.has("networkRxBytesPerSecond"))
+    || (enabled.networkTxBytesPerSecond && visible.has("networkTxBytesPerSecond"));
+  const playersEnabled = enabled.playersOnline && visible.has("playersOnline");
+  const separateBand = Boolean(gridOverride);
   const yAxis: Array<Record<string, unknown>> = [];
   let cpuAxis = "";
   let memoryAxis = "";
@@ -264,7 +272,7 @@ export function buildTimelineChartOption({
       position: "left",
       min: 0,
       max: 100,
-      name: "CPU",
+      name: separateBand ? "" : "CPU",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.border } },
       axisTick: { show: false },
@@ -278,11 +286,11 @@ export function buildTimelineChartOption({
     yAxis.push({
       id: memoryAxis,
       type: "value",
-      position: "right",
+      position: separateBand ? "left" : "right",
       offset: rightAxisOffset,
       min: bounds.min,
       max: bounds.max,
-      name: "Memory %",
+      name: separateBand ? "" : "Memory %",
       nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },
       axisTick: { show: false },
@@ -296,11 +304,11 @@ export function buildTimelineChartOption({
     yAxis.push({
       id: playersAxis,
       type: "value",
-      position: "right",
+      position: separateBand ? "left" : "right",
       offset: rightAxisOffset,
       min: 0,
       minInterval: 1,
-      name: "Players",
+      name: separateBand ? "" : "Players",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.border } },
       axisTick: { show: false },
@@ -314,10 +322,10 @@ export function buildTimelineChartOption({
     yAxis.push({
       id: networkAxis,
       type: "value",
-      position: "right",
+      position: separateBand ? "left" : "right",
       offset: rightAxisOffset,
       min: 0,
-      name: "Network",
+      name: separateBand ? "" : "Network",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.border } },
       axisTick: { show: false },
@@ -383,7 +391,7 @@ export function buildTimelineChartOption({
       preventDefaultMouseMove: true
     }],
     series: [
-      ...metricSeries.filter((series) => enabled[series.key]).map((series) => ({
+      ...metricSeries.filter((series) => enabled[series.key] && visible.has(series.key)).map((series) => ({
         id: series.key,
         name: series.name,
         type: "line" as const,

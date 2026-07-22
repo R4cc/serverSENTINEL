@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ScheduleNavigationTarget,
   ServerTimelineEvent,
+  ServerTimelinePlayerActivity,
+  ServerTimelinePlayerSession,
   ServerTimelineResourcePoint,
   ServerTimelineResponse,
   ServerTimelineScheduleMarker
@@ -15,7 +17,7 @@ import {
   defaultTimelinePalette,
   liveTimelineWindow,
   timelineChartGrid,
-  timelineChartGridForEnabled,
+  timelineMetricBandGrid,
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
   timelineQueryWindow,
@@ -38,6 +40,28 @@ const defaultTimelineRange: TimelineRange = "1h";
 export type SeriesKey = "cpuUtilizationPercent" | "memoryUtilizationPercent" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
+
+type MetricBand = {
+  key: "cpu" | "memory" | "network" | "players";
+  label: string;
+  series: SeriesKey[];
+  prominent: boolean;
+};
+
+export type TimelinePlayerRow = {
+  player: string;
+  online: boolean;
+  sessions: ServerTimelinePlayerSession[];
+};
+
+export type TimelineSessionGeometry = {
+  leftPercent: number;
+  widthPercent: number;
+  startClipped: boolean;
+  endClipped: boolean;
+  lowerBound: boolean;
+  durationMs: number;
+};
 
 export type TimelineMarker = {
   id: string;
@@ -99,6 +123,7 @@ type AnnotationKey = "player" | "server" | "automation" | "planned";
 
 type TimelineHoverTooltip = {
   x: number;
+  y: number;
   timestamp: number;
   html: string;
   alignEnd: boolean;
@@ -128,6 +153,87 @@ const annotationOptions: Array<{ key: AnnotationKey; label: string }> = [
   { key: "automation", label: "Automation runs" },
   { key: "planned", label: "Planned schedules" }
 ];
+
+function fallbackPlayerActivity(data: ServerTimelineResponse): ServerTimelinePlayerActivity {
+  const sessions: ServerTimelinePlayerSession[] = [];
+  const open = new Map<string, { player: string; startedAt: number }>();
+  for (const event of [...data.events].sort((left, right) => left.occurredAt - right.occurredAt)) {
+    if (event.eventType !== "player_joined" && event.eventType !== "player_left") continue;
+    const player = event.subject?.trim();
+    if (!player) continue;
+    const key = player.toLocaleLowerCase();
+    if (event.eventType === "player_joined") {
+      if (!open.has(key)) open.set(key, { player, startedAt: event.occurredAt });
+      continue;
+    }
+    const active = open.get(key);
+    if (!active) continue;
+    sessions.push({
+      id: `fallback:${key}:${active.startedAt}`,
+      player: active.player,
+      startedAt: active.startedAt,
+      endedAt: event.occurredAt,
+      startBoundary: "join",
+      endBoundary: "leave"
+    });
+    open.delete(key);
+  }
+  for (const [key, active] of open) {
+    sessions.push({
+      id: `fallback:${key}:${active.startedAt}`,
+      player: active.player,
+      startedAt: active.startedAt,
+      endedAt: data.to,
+      startBoundary: "join",
+      endBoundary: "history-boundary"
+    });
+  }
+  return { snapshotState: "unavailable", onlineNames: [], sessions };
+}
+
+export function timelinePlayerRows(data: ServerTimelineResponse | null, viewport: TimelineWindow, now: number): TimelinePlayerRow[] {
+  if (!data) return [];
+  const activity = data.playerActivity ?? fallbackPlayerActivity(data);
+  const online = new Map(activity.onlineNames.map((player) => [player.toLocaleLowerCase(), player]));
+  const rows = new Map<string, TimelinePlayerRow>();
+  for (const player of activity.onlineNames) rows.set(player.toLocaleLowerCase(), { player, online: true, sessions: [] });
+  for (const session of activity.sessions) {
+    const sessionEnd = session.endedAt ?? now;
+    if (session.startedAt > viewport.to || sessionEnd < viewport.from) continue;
+    const key = session.player.toLocaleLowerCase();
+    const row = rows.get(key) ?? { player: online.get(key) ?? session.player, online: online.has(key), sessions: [] };
+    row.sessions.push(session);
+    rows.set(key, row);
+  }
+  return [...rows.values()]
+    .map((row) => ({ ...row, sessions: row.sessions.sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id)) }))
+    .sort((left, right) => Number(right.online) - Number(left.online) || left.player.localeCompare(right.player, undefined, { sensitivity: "base" }));
+}
+
+export function timelineSessionGeometry(session: ServerTimelinePlayerSession, viewport: TimelineWindow, now: number): TimelineSessionGeometry | null {
+  const sessionEnd = session.endedAt ?? now;
+  const visibleStart = Math.max(session.startedAt, viewport.from);
+  const visibleEnd = Math.min(sessionEnd, viewport.to);
+  if (visibleEnd < visibleStart || viewport.to <= viewport.from) return null;
+  const span = viewport.to - viewport.from;
+  return {
+    leftPercent: (visibleStart - viewport.from) / span * 100,
+    widthPercent: Math.max(0.16, (visibleEnd - visibleStart) / span * 100),
+    startClipped: session.startBoundary === "history-boundary" || session.startedAt < viewport.from,
+    endClipped: session.endBoundary === "history-boundary" || sessionEnd > viewport.to,
+    lowerBound: session.startBoundary === "history-boundary" || session.endBoundary === "history-boundary",
+    durationMs: Math.max(0, sessionEnd - session.startedAt)
+  };
+}
+
+export function formatTimelineDuration(milliseconds: number) {
+  const totalMinutes = Math.max(0, Math.floor(milliseconds / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (totalMinutes) return `${totalMinutes}m`;
+  return "<1m";
+}
 
 function eventTone(event: ServerTimelineEvent): TimelineMarker["tone"] {
   if (event.eventType === "player_joined") return "join";
@@ -314,7 +420,7 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
     const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
     const center = availableWidth * leftPercent / 100;
     const labelWidth = estimatedMarkerLabelWidth(cluster);
-    const alignEnd = center + labelWidth - 12 > availableWidth + 120;
+    const alignEnd = center + labelWidth - 12 > availableWidth;
     // Allocate lanes around the event anchor rather than around the label's
     // current left/right alignment. The interval then translates with a pan,
     // so crossing the edge-alignment threshold cannot reshuffle nearby labels.
@@ -347,6 +453,18 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
   const retainedSchedules = Number.isFinite(incomingGeneratedAt)
     ? current.schedules.filter((marker) => marker.kind !== "upcoming" || marker.occurredAt > incomingGeneratedAt)
     : current.schedules;
+  const playerActivity = incoming.playerActivity || current.playerActivity
+    ? {
+        ...(current.playerActivity ?? { snapshotState: "unavailable" as const, onlineNames: [], sessions: [] }),
+        ...(incoming.playerActivity ?? {}),
+        sessions: uniqueBy([
+          ...(incoming.playerActivity?.sessions ?? []),
+          ...(current.playerActivity?.sessions ?? []).filter((session) => !incoming.playerActivity?.sessions.some((candidate) => candidate.id === session.id))
+        ], (session) => session.id)
+          .filter((session) => session.startedAt <= to && (session.endedAt ?? Number.POSITIVE_INFINITY) >= from)
+          .sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id))
+      }
+    : undefined;
   return {
     ...incoming,
     from,
@@ -363,6 +481,7 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
           .filter((marker) => marker.occurredAt >= from && marker.occurredAt <= to)
           .sort((left, right) => left.occurredAt - right.occurredAt)
       : [],
+    playerActivity,
     truncated: { schedules: current.truncated.schedules || incoming.truncated.schedules }
   };
 }
@@ -426,6 +545,107 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
   return palette;
 }
 
+function PlayerStatusIcon({ online }: { online: boolean }) {
+  return (
+    <span className={`serverTimelinePlayerStatus tone-${online ? "online" : "offline"}`} aria-label={online ? "Online now" : "Offline now"}>
+      <EventIcon kind={online ? "player_joined" : "player_left"} />
+    </span>
+  );
+}
+
+function PlayerSessionSection({
+  rows,
+  viewport,
+  now,
+  formatShortTime,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onWheel
+}: {
+  rows: TimelinePlayerRow[];
+  viewport: TimelineWindow;
+  now: number;
+  formatShortTime: (value: string | number | Date) => string;
+  onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onWheel: (event: React.WheelEvent<HTMLDivElement>) => void;
+}) {
+  const onlineRows = rows.filter((row) => row.online);
+  const offlineRows = rows.filter((row) => !row.online);
+  const ticks = Array.from({ length: 7 }, (_, index) => viewport.from + (viewport.to - viewport.from) * index / 6);
+  const nowPercent = now >= viewport.from && now <= viewport.to ? (now - viewport.from) / (viewport.to - viewport.from) * 100 : null;
+  const renderGroup = (label: string, groupRows: TimelinePlayerRow[], online: boolean) => {
+    if (!groupRows.length) return null;
+    return (
+      <section className={`serverTimelinePlayerGroup tone-${online ? "online" : "offline"}`} aria-label={`${label}, ${groupRows.length} players`}>
+        <div className="serverTimelinePlayerGroupHeader">
+          <span>{label}</span><small>({groupRows.length})</small>
+        </div>
+        {groupRows.map((row) => (
+          <div className="serverTimelinePlayerRow" key={row.player.toLocaleLowerCase()}>
+            <div className="serverTimelinePlayerIdentity">
+              <PlayerStatusIcon online={row.online} />
+              <strong title={row.player}>{row.player}</strong>
+            </div>
+            <div className="serverTimelinePlayerTrack">
+              {nowPercent !== null && <span className="serverTimelineNowLine" style={{ left: `${nowPercent}%` }} aria-hidden="true" />}
+              {row.sessions.map((session) => {
+                const geometry = timelineSessionGeometry(session, viewport, now);
+                if (!geometry) return null;
+                const exactStartVisible = session.startBoundary === "join" && session.startedAt >= viewport.from;
+                const exactEndVisible = (session.endBoundary === "leave" || session.endBoundary === "server-end")
+                  && session.endedAt !== null
+                  && session.endedAt <= viewport.to;
+                const duration = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(geometry.durationMs)}`;
+                const title = `${row.player}: ${exactStartVisible ? formatShortTime(session.startedAt) : "before visible history"} – ${session.endBoundary === "online" ? "online now" : exactEndVisible && session.endedAt !== null ? formatShortTime(session.endedAt) : "outside visible history"}; ${duration}`;
+                return (
+                  <span
+                    className={`serverTimelineSession tone-${row.online ? "online" : "offline"}${session.endBoundary === "online" ? " is-open" : ""}${geometry.startClipped ? " is-start-clipped" : ""}${geometry.endClipped ? " is-end-clipped" : ""}`}
+                    key={session.id}
+                    style={{ left: `${geometry.leftPercent}%`, width: `${geometry.widthPercent}%` }}
+                    tabIndex={0}
+                    title={title}
+                    aria-label={title}
+                  >
+                    {exactStartVisible && <time className="serverTimelineSessionTime is-start" dateTime={new Date(session.startedAt).toISOString()}>{formatShortTime(session.startedAt)}</time>}
+                    <span className="serverTimelineSessionDuration">{duration}</span>
+                    {session.endBoundary === "online"
+                      ? <span className="serverTimelineSessionTime is-end">Now</span>
+                      : exactEndVisible && session.endedAt !== null && <time className="serverTimelineSessionTime is-end" dateTime={new Date(session.endedAt).toISOString()}>{formatShortTime(session.endedAt)}</time>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </section>
+    );
+  };
+
+  return (
+    <section className="serverTimelinePlayers" aria-label="Player sessions">
+      <div className="serverTimelinePlayerAxis" aria-hidden="true">
+        <span />
+        <div>{ticks.map((tick, index) => <time key={tick} style={{ left: `${index / 6 * 100}%` }}>{formatShortTime(tick)}</time>)}</div>
+      </div>
+      <div
+        className="serverTimelinePlayerScroller"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onWheel={onWheel}
+      >
+        {renderGroup("Online now", onlineRows, true)}
+        {renderGroup("Played in this time range", offlineRows, false)}
+        {!rows.length && <div className="serverTimelinePlayerEmpty">No player sessions are available for this time range.</div>}
+      </div>
+    </section>
+  );
+}
+
 export function ServerTimeline({
   loadTimeline,
   formatTime,
@@ -452,6 +672,7 @@ export function ServerTimeline({
   const [clockNow, setClockNow] = useState(Date.now());
   const [selectedCluster, setSelectedCluster] = useState<MarkerCluster | null>(null);
   const [annotationRailWidth, setAnnotationRailWidth] = useState(1_000);
+  const [visualizationWidth, setVisualizationWidth] = useState(1_400);
   const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
   const [chartInteracting, setChartInteracting] = useState(false);
   const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
@@ -468,6 +689,7 @@ export function ServerTimeline({
     planned: true
   });
   const panelRef = useRef<HTMLElement>(null);
+  const visualizationRef = useRef<HTMLDivElement>(null);
   const annotationRailRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef(viewport);
   const dataRef = useRef<ServerTimelineResponse | null>(null);
@@ -476,6 +698,7 @@ export function ServerTimeline({
   const requestIdRef = useRef(0);
   const navigationTimerRef = useRef<number | undefined>(undefined);
   const hoverFrameRef = useRef<number | undefined>(undefined);
+  const sessionDragRef = useRef<{ pointerId: number; startX: number; viewport: TimelineWindow } | null>(null);
   const palette = useTimelinePresentation(panelRef);
   const navigationPendingRef = useRef(false);
 
@@ -577,6 +800,16 @@ export function ServerTimeline({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const element = visualizationRef.current;
+    if (!element) return;
+    const updateWidth = () => setVisualizationWidth(Math.max(1, element.getBoundingClientRect().width));
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    updateWidth();
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => () => {
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
   }, []);
@@ -598,7 +831,23 @@ export function ServerTimeline({
   const annotationGridTop = chartInteracting ? stableAnnotationGridTopRef.current : nextAnnotationGridTop;
   const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
-  const chartGrid = useMemo(() => timelineChartGridForEnabled(enabled, annotationGridTop), [annotationGridTop, enabled]);
+  const labelGutter = Math.round(Math.max(180, Math.min(260, visualizationWidth * 0.17)));
+  const metricGrid = useMemo(() => ({ ...timelineMetricBandGrid, left: labelGutter }), [labelGutter]);
+  const playerRows = useMemo(() => timelinePlayerRows(data, viewport, clockNow), [clockNow, data, viewport]);
+  const metricBands = useMemo<MetricBand[]>(() => [
+    ...(enabled.cpuUtilizationPercent ? [{ key: "cpu" as const, label: "CPU", series: ["cpuUtilizationPercent" as const], prominent: true }] : []),
+    ...(enabled.memoryUtilizationPercent ? [{ key: "memory" as const, label: "Memory", series: ["memoryUtilizationPercent" as const], prominent: true }] : []),
+    ...(enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond ? [{
+      key: "network" as const,
+      label: "Network",
+      series: [
+        ...(enabled.networkRxBytesPerSecond ? ["networkRxBytesPerSecond" as const] : []),
+        ...(enabled.networkTxBytesPerSecond ? ["networkTxBytesPerSecond" as const] : [])
+      ],
+      prominent: false
+    }] : []),
+    ...(enabled.playersOnline ? [{ key: "players" as const, label: "Players", series: ["playersOnline" as const], prominent: false }] : [])
+  ], [enabled]);
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
     const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUtilizationPercent !== null)).length;
@@ -699,26 +948,27 @@ export function ServerTimeline({
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    const plotWidth = rect.width - chartGrid.left - chartGrid.right;
-    const plotBottom = rect.height - chartGrid.bottom;
-    if (plotWidth <= 0 || x < chartGrid.left || x > chartGrid.left + plotWidth || y < chartGrid.top || y > plotBottom) {
+    const plotWidth = rect.width - metricGrid.left - metricGrid.right;
+    const plotBottom = rect.height - metricGrid.bottom;
+    if (plotWidth <= 0 || x < metricGrid.left || x > metricGrid.left + plotWidth || y < metricGrid.top || y > plotBottom) {
       hideHoverTooltip();
       return;
     }
-    const timestamp = viewport.from + (x - chartGrid.left) / plotWidth * (viewport.to - viewport.from);
+    const timestamp = viewport.from + (x - metricGrid.left) / plotWidth * (viewport.to - viewport.from);
     const html = timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate);
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
     hoverFrameRef.current = window.requestAnimationFrame(() => {
       hoverFrameRef.current = undefined;
       setHoverTooltip({
         x,
+        y: rect.top - (visualizationRef.current?.getBoundingClientRect().top ?? rect.top) + metricGrid.top + 8,
         timestamp,
         html,
         alignEnd: x > rect.width * 0.68,
         pinned: false
       });
     });
-  }, [chartGrid, clusters, data?.samples, enabled, formatDate, hideHoverTooltip, hoverTooltip?.pinned, viewport]);
+  }, [clusters, data?.samples, enabled, formatDate, hideHoverTooltip, hoverTooltip?.pinned, metricGrid, viewport]);
 
   const pinHoverTooltip = useCallback(() => {
     setHoverTooltip((current) => current ? { ...current, pinned: !current.pinned } : current);
@@ -730,7 +980,76 @@ export function ServerTimeline({
     if (interacting) hideHoverTooltip();
   }, [hideHoverTooltip, nextAnnotationGridTop]);
 
-  const chartOption = useMemo(() => buildTimelineChartOption({
+  const handleSessionPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (event.clientX - rect.left < metricGrid.left) return;
+    sessionDragRef.current = { pointerId: event.pointerId, startX: event.clientX, viewport: viewportRef.current };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    stableAnnotationGridTopRef.current = nextAnnotationGridTop;
+    setChartInteracting(true);
+    hideHoverTooltip();
+  }, [hideHoverTooltip, metricGrid.left, nextAnnotationGridTop]);
+
+  const handleSessionPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = sessionDragRef.current;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const plotWidth = rect.width - metricGrid.left - metricGrid.right;
+    if (drag?.pointerId === event.pointerId && plotWidth > 0) {
+      const delta = -(event.clientX - drag.startX) / plotWidth * (drag.viewport.to - drag.viewport.from);
+      setSelection("custom");
+      setLiveMode(false);
+      setViewport({ from: drag.viewport.from + delta, to: drag.viewport.to + delta });
+      return;
+    }
+    if (hoverTooltip?.pinned || plotWidth <= 0) return;
+    const x = event.clientX - rect.left;
+    if (x < metricGrid.left || x > metricGrid.left + plotWidth) {
+      hideHoverTooltip();
+      return;
+    }
+    const timestamp = viewport.from + (x - metricGrid.left) / plotWidth * (viewport.to - viewport.from);
+    setHoverTooltip({
+      x,
+      y: rect.top - (visualizationRef.current?.getBoundingClientRect().top ?? rect.top) + 8,
+      timestamp,
+      html: timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate),
+      alignEnd: x > rect.width * 0.68,
+      pinned: false
+    });
+  }, [clusters, data?.samples, enabled, formatDate, hideHoverTooltip, hoverTooltip?.pinned, metricGrid, setLiveMode, setViewport, viewport]);
+
+  const handleSessionPointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = sessionDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    sessionDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setChartInteracting(false);
+    const next = viewportRef.current;
+    const currentQuery = dataRef.current ? { from: dataRef.current.from, to: dataRef.current.to } : timelineQueryWindow(next, false);
+    if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+  }, [loadWindow]);
+
+  const handleSessionWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const plotWidth = rect.width - metricGrid.left - metricGrid.right;
+    if (plotWidth <= 0) return;
+    const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - metricGrid.left) / plotWidth));
+    const current = viewportRef.current;
+    const currentSpan = current.to - current.from;
+    const nextSpan = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, currentSpan * Math.exp(event.deltaY * 0.0015)));
+    const anchor = current.from + currentSpan * fraction;
+    const next = { from: anchor - nextSpan * fraction, to: anchor + nextSpan * (1 - fraction) };
+    setSelection("custom");
+    setLiveMode(false);
+    setViewport(next);
+    if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = window.setTimeout(() => void loadWindow(next, false), 250);
+  }, [loadWindow, metricGrid, setLiveMode, setViewport]);
+
+  const metricOptions = useMemo(() => new Map(metricBands.map((band) => [band.key, buildTimelineChartOption({
     samples: data?.samples ?? [],
     query,
     viewport,
@@ -740,8 +1059,9 @@ export function ServerTimeline({
     formatTime,
     formatShortTime,
     now: clockNow,
-    gridTop: annotationGridTop
-  }), [annotationGridTop, clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, palette, query, viewport]);
+    gridOverride: metricGrid,
+    seriesKeys: band.series
+  })])), [clockNow, clusters, data?.samples, enabled, formatShortTime, formatTime, metricBands, metricGrid, palette, query, viewport]);
 
   return (
     <section ref={panelRef} className="panel serverTimelinePanel" aria-busy={loading}>
@@ -816,33 +1136,14 @@ export function ServerTimeline({
       {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were omitted because this window exceeds the annotation limit.</div>}
       {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
       <div
-        className="serverTimelineChart"
+        ref={visualizationRef}
+        className="serverTimelineVisualization"
         role="group"
         aria-label="Server resource and event timeline"
-        style={{ "--timeline-annotation-extra": `${annotationGridTop - timelineChartGrid.top}px` } as React.CSSProperties}
+        style={{ "--timeline-label-gutter": `${labelGutter}px` } as React.CSSProperties}
       >
-        <EChartsCanvas
-          option={chartOption}
-          onDataZoom={handleDataZoom}
-          onInteractionChange={handleChartInteractionChange}
-          onPointerMove={handleChartPointerMove}
-          onPointerLeave={hideHoverTooltip}
-          onClick={pinHoverTooltip}
-        />
-        {hoverTooltip && <span
-          className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
-          style={{ left: hoverTooltip.x, top: chartGrid.top, bottom: chartGrid.bottom }}
-          aria-hidden="true"
-        />}
-        {hoverTooltip && (
-          <div
-            className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.pinned ? " is-pinned" : ""}`}
-            style={{ left: hoverTooltip.x + (hoverTooltip.alignEnd ? -14 : 14), top: chartGrid.top + 8 }}
-            aria-live={hoverTooltip.pinned ? "polite" : undefined}
-            dangerouslySetInnerHTML={{ __html: hoverTooltip.html }}
-          />
-        )}
-        <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: chartGrid.left, right: chartGrid.right }}>
+        <div className="serverTimelineAnnotationStage" style={{ height: annotationGridTop }}>
+        <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: metricGrid.left, right: metricGrid.right }}>
           {positionedClusters.map((cluster) => {
             const stacked = cluster.markers.length > 1;
             const preview = timelineMarkerPreview(cluster);
@@ -937,6 +1238,51 @@ export function ServerTimeline({
               ))}
             </div>
           </section>
+        )}
+        </div>
+        {annotationEnabled.player && (
+          <PlayerSessionSection
+            rows={playerRows}
+            viewport={viewport}
+            now={clockNow}
+            formatShortTime={formatShortTime}
+            onPointerDown={handleSessionPointerDown}
+            onPointerMove={handleSessionPointerMove}
+            onPointerUp={handleSessionPointerUp}
+            onWheel={handleSessionWheel}
+          />
+        )}
+        {annotationEnabled.player && data?.playerActivity && data.playerActivity.snapshotState !== "live" && data.playerActivity.snapshotState !== "stopped" && (
+          <div className="serverTimelinePlayerStatusNotice">Current player status is unavailable; retained sessions are shown as offline.</div>
+        )}
+        <div className="serverTimelineMetricBands">
+          {metricBands.map((band) => (
+            <section className={`serverTimelineMetricBand${band.prominent ? " is-prominent" : " is-compact"}`} key={band.key} aria-label={`${band.label} timeline`}>
+              <strong className={`serverTimelineMetricBandLabel tone-${band.key}`}>{band.label}</strong>
+              <EChartsCanvas
+                option={metricOptions.get(band.key)!}
+                onDataZoom={handleDataZoom}
+                onInteractionChange={handleChartInteractionChange}
+                onPointerMove={handleChartPointerMove}
+                onPointerLeave={hideHoverTooltip}
+                onClick={pinHoverTooltip}
+              />
+              {hoverTooltip && <span
+                className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
+                style={{ left: hoverTooltip.x, top: metricGrid.top, bottom: metricGrid.bottom }}
+                aria-hidden="true"
+              />}
+            </section>
+          ))}
+          {!metricBands.length && <div className="serverTimelineEmpty">Enable a metric to display its chart.</div>}
+        </div>
+        {hoverTooltip && (
+          <div
+            className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.pinned ? " is-pinned" : ""}`}
+            style={{ left: hoverTooltip.x + (hoverTooltip.alignEnd ? -14 : 14), top: hoverTooltip.y }}
+            aria-live={hoverTooltip.pinned ? "polite" : undefined}
+            dangerouslySetInnerHTML={{ __html: hoverTooltip.html }}
+          />
         )}
       </div>
       {!loading && !data?.samples.length && !markers.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}

@@ -427,6 +427,283 @@ button.overviewCardRow:focus-visible {
   height: 100%;
 }
 
+.serverTimelineVisualization {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.serverTimelineAnnotationStage {
+  position: relative;
+  min-height: 66px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
+}
+
+.serverTimelineAnnotationStage .serverTimelineAnnotations { bottom: 0; }
+
+.serverTimelinePlayers,
+.serverTimelineMetricBand {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.serverTimelinePlayerAxis,
+.serverTimelinePlayerRow {
+  display: grid;
+  grid-template-columns: var(--timeline-label-gutter) minmax(0, 1fr);
+}
+
+.serverTimelinePlayerAxis {
+  position: relative;
+  z-index: 4;
+  min-height: 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+.serverTimelinePlayerAxis > span {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.serverTimelinePlayerAxis > div {
+  position: relative;
+  margin-right: 24px;
+}
+
+.serverTimelinePlayerAxis time {
+  position: absolute;
+  top: 7px;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.serverTimelinePlayerAxis time:first-child { transform: none; }
+.serverTimelinePlayerAxis time:last-child { transform: translateX(-100%); }
+
+.serverTimelinePlayerScroller {
+  max-height: 260px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+.serverTimelinePlayerGroup {
+  --player-session-color: var(--timeline-leave);
+  min-width: 0;
+}
+
+.serverTimelinePlayerGroup.tone-online { --player-session-color: var(--timeline-join); }
+
+.serverTimelinePlayerGroupHeader {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--player-session-color);
+  background: color-mix(in srgb, var(--player-session-color) 5%, var(--surface-raised));
+  color: var(--player-session-color);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.serverTimelinePlayerGroupHeader small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-meta);
+}
+
+.serverTimelinePlayerRow {
+  min-height: 40px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.serverTimelinePlayerGroup:last-child .serverTimelinePlayerRow:last-child { border-bottom: 0; }
+
+.serverTimelinePlayerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.serverTimelinePlayerIdentity strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverTimelinePlayerStatus {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+}
+
+.serverTimelinePlayerStatus.tone-online { color: var(--timeline-join); }
+.serverTimelinePlayerStatus.tone-offline { color: var(--timeline-leave); }
+
+.serverTimelinePlayerStatus svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.serverTimelinePlayerTrack {
+  position: relative;
+  min-width: 0;
+  margin-right: 24px;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(16.666% - 1px), var(--border-muted) calc(16.666% - 1px), var(--border-muted) 16.666%);
+}
+
+.serverTimelineNowLine {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed var(--accent);
+  pointer-events: none;
+}
+
+.serverTimelineSession {
+  --session-color: var(--timeline-leave);
+  position: absolute;
+  z-index: 2;
+  top: 21px;
+  height: 2px;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--session-color);
+  color: var(--session-color);
+  outline: none;
+}
+
+.serverTimelineSession.tone-online { --session-color: var(--timeline-join); }
+
+.serverTimelineSession::before,
+.serverTimelineSession::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%);
+  border: 1.5px solid var(--session-color);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.serverTimelineSession::before { left: -3px; background: var(--session-color); }
+.serverTimelineSession::after { right: -3px; }
+.serverTimelineSession.is-open::after { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 16%, transparent); }
+.serverTimelineSession.is-start-clipped::before { width: 8px; height: 2px; left: 0; border: 0; border-radius: 0; background: linear-gradient(to right, transparent, var(--session-color)); }
+.serverTimelineSession.is-end-clipped::after { width: 8px; height: 2px; right: 0; border: 0; border-radius: 0; background: linear-gradient(to left, transparent, var(--session-color)); }
+.serverTimelineSession:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-color) 22%, transparent); }
+
+.serverTimelineSessionDuration,
+.serverTimelineSessionTime {
+  position: absolute;
+  z-index: 2;
+  color: var(--text);
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.serverTimelineSessionDuration {
+  top: -5px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: var(--weight-title);
+}
+
+.serverTimelineSessionTime { top: 7px; color: var(--text-muted); }
+.serverTimelineSessionTime.is-start { left: 0; transform: translateX(-20%); }
+.serverTimelineSessionTime.is-end { right: 0; transform: translateX(20%); }
+
+.serverTimelinePlayerEmpty {
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.serverTimelinePlayerStatusNotice {
+  margin-top: calc(var(--space-3) * -1);
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-subtle));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));
+  color: var(--status-warning-foreground);
+  font-size: 10px;
+}
+
+.serverTimelineMetricBands {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.serverTimelineMetricBand {
+  position: relative;
+  height: 160px;
+}
+
+.serverTimelineMetricBand.is-prominent { height: clamp(220px, 18vw, 300px); }
+
+.serverTimelineMetricBandLabel {
+  position: absolute;
+  z-index: 2;
+  top: 13px;
+  left: 18px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  pointer-events: none;
+}
+
+.serverTimelineMetricBandLabel.tone-cpu { color: var(--timeline-cpu); }
+.serverTimelineMetricBandLabel.tone-memory { color: var(--timeline-memory); }
+.serverTimelineMetricBandLabel.tone-network { color: var(--timeline-network-in); }
+.serverTimelineMetricBandLabel.tone-players { color: var(--timeline-players); }
+
 .serverTimelineHoverTooltip {
   position: absolute;
   z-index: 4;
@@ -845,6 +1122,10 @@ button.overviewCardRow:focus-visible {
   .serverTimelineChart {
     height: 360px;
   }
+
+  .serverTimelinePlayerScroller { max-height: 220px; }
+  .serverTimelineMetricBand.is-prominent { height: 220px; }
+  .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,6 +14,7 @@ import {
   timelineNeedsRefill,
   timelineQueryWindow,
   timelineRetentionMs,
+  timelineMetricBandGrid,
   timelineTooltipHtml
 } from "./serverTimelineChart";
 
@@ -121,6 +122,43 @@ describe("server timeline ECharts option", () => {
     }) as { yAxis: unknown[]; series: Array<{ id: string }> };
     expect(option.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
     expect(option.yAxis).toHaveLength(2);
+  });
+
+  it("builds separate metric bands with an identical shared plot grid", () => {
+    const cpu = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 20_000 },
+      viewport: { from: 5_000, to: 15_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      now: 12_000,
+      gridOverride: timelineMetricBandGrid,
+      seriesKeys: ["cpuUtilizationPercent"]
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    const memory = buildTimelineChartOption({
+      samples: [sample],
+      query: { from: 0, to: 20_000 },
+      viewport: { from: 5_000, to: 15_000 },
+      enabled,
+      clusters: [],
+      palette: defaultTimelinePalette,
+      formatTime: String,
+      formatShortTime: String,
+      now: 12_000,
+      gridOverride: timelineMetricBandGrid,
+      seriesKeys: ["memoryUtilizationPercent"]
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    expect(cpu.grid).toMatchObject(timelineMetricBandGrid);
+    expect(memory.grid).toMatchObject(timelineMetricBandGrid);
+    expect(cpu.yAxis).toHaveLength(1);
+    expect(memory.yAxis).toHaveLength(1);
+    expect(cpu.yAxis[0].position).toBe("left");
+    expect(memory.yAxis[0].position).toBe("left");
+    expect(cpu.series.some((series) => series.id === "memoryUtilizationPercent")).toBe(false);
+    expect(memory.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
   });
 
   it("removes unused right axes and gives players an integer step axis only when enabled", () => {

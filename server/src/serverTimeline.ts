@@ -5,6 +5,10 @@ import type {
   ScheduledActiveRun,
   ScheduledExecution,
   ScheduledRun,
+  PlayerSnapshot,
+  ServerTimelineEvent,
+  ServerTimelinePlayerActivity,
+  ServerTimelinePlayerSession,
   ServerTimelineResourcePoint,
   ServerTimelineScheduleMarker
 } from "./types.js";
@@ -15,6 +19,114 @@ import { nextCronRun } from "./core.js";
 // chart after six missed collection intervals so normal transport jitter does not
 // turn otherwise continuous resource series into a dotted-looking line.
 const gapThresholdMs = 30_000;
+
+function playerKey(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function timelineSnapshotAt(snapshot: PlayerSnapshot | undefined) {
+  if (!snapshot) return undefined;
+  if (snapshot.state === "live" || snapshot.state === "stale" || snapshot.state === "stopped") return snapshot.sampledAt;
+  return snapshot.lastAttemptAt;
+}
+
+export function timelinePlayerActivity(input: {
+  events: ServerTimelineEvent[];
+  snapshot?: PlayerSnapshot;
+  contextFrom: number;
+  from: number;
+  to: number;
+  now?: number;
+}): ServerTimelinePlayerActivity {
+  const now = input.now ?? Date.now();
+  const currentBoundary = Math.max(input.contextFrom, Math.min(now, input.to));
+  const displayNames = new Map<string, string>();
+  const open = new Map<string, { player: string; startedAt: number; startBoundary: ServerTimelinePlayerSession["startBoundary"] }>();
+  const seenPlayers = new Set<string>();
+  const sessions: ServerTimelinePlayerSession[] = [];
+  const rememberName = (value: string) => {
+    const player = value.trim();
+    const key = playerKey(player);
+    if (player && !displayNames.has(key)) displayNames.set(key, player);
+    return { key, player: displayNames.get(key) ?? player };
+  };
+  const close = (key: string, endedAt: number, endBoundary: ServerTimelinePlayerSession["endBoundary"]) => {
+    const active = open.get(key);
+    if (!active || endedAt < active.startedAt) return;
+    sessions.push({
+      id: `${key}:${active.startedAt}:${active.startBoundary}`,
+      player: active.player,
+      startedAt: active.startedAt,
+      endedAt,
+      startBoundary: active.startBoundary,
+      endBoundary
+    });
+    open.delete(key);
+  };
+
+  const events = [...input.events]
+    .filter((event) => event.occurredAt >= input.contextFrom && event.occurredAt <= input.to)
+    .sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
+  for (const event of events) {
+    if (event.eventType === "server_stopped" || event.eventType === "server_crashed") {
+      for (const key of [...open.keys()]) close(key, event.occurredAt, "server-end");
+      continue;
+    }
+    if (event.eventType !== "player_joined" && event.eventType !== "player_left") continue;
+    const subject = event.subject?.trim();
+    if (!subject) continue;
+    const { key, player } = rememberName(subject);
+    if (event.eventType === "player_joined") {
+      if (!open.has(key)) open.set(key, { player, startedAt: event.occurredAt, startBoundary: "join" });
+      seenPlayers.add(key);
+      continue;
+    }
+    if (!open.has(key) && seenPlayers.has(key)) continue;
+    if (!open.has(key)) open.set(key, { player, startedAt: input.contextFrom, startBoundary: "history-boundary" });
+    close(key, event.occurredAt, "leave");
+    seenPlayers.add(key);
+  }
+
+  const onlineNames = input.snapshot?.state === "live"
+    ? input.snapshot.names.map((name) => rememberName(name).player)
+    : [];
+  const onlineKeys = new Set(onlineNames.map(playerKey));
+  for (const player of onlineNames) {
+    const key = playerKey(player);
+    if (!open.has(key)) {
+      const lastEnd = sessions.filter((session) => playerKey(session.player) === key).at(-1)?.endedAt;
+      open.set(key, {
+        player,
+        startedAt: Math.max(input.contextFrom, lastEnd ?? input.contextFrom),
+        startBoundary: "history-boundary"
+      });
+    }
+  }
+  for (const [key, active] of open) {
+    if (onlineKeys.has(key)) {
+      sessions.push({
+        id: `${key}:${active.startedAt}:${active.startBoundary}`,
+        player: active.player,
+        startedAt: active.startedAt,
+        endedAt: null,
+        startBoundary: active.startBoundary,
+        endBoundary: "online"
+      });
+    } else {
+      close(key, currentBoundary, "history-boundary");
+    }
+  }
+
+  const visibleSessions = sessions
+    .filter((session) => session.startedAt <= input.to && (session.endedAt ?? now) >= input.from)
+    .sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id));
+  return {
+    snapshotState: input.snapshot?.state ?? "unavailable",
+    sampledAt: timelineSnapshotAt(input.snapshot),
+    onlineNames,
+    sessions: visibleSessions
+  };
+}
 
 function finite(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResourceStatsSample } from "./resourceStatsCollector.js";
-import { timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
+import type { ServerTimelineEvent } from "./types.js";
+import { timelinePlayerActivity, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 
 function sample(sampledAt: number, rx: number, tx: number, overrides: Partial<ResourceStatsSample> = {}): ResourceStatsSample {
   return {
@@ -150,5 +151,96 @@ describe("server timeline schedule markers", () => {
     const result = timelineScheduleMarkers({ schedules: [schedule], runs: [], activeRuns: [], from, to: from + 60 * 60_000, now: from, limit: 3 });
     expect(result.markers).toHaveLength(3);
     expect(result.truncated).toBe(true);
+  });
+});
+
+function playerEvent(id: string, eventType: "player_joined" | "player_left", subject: string, occurredAt: number): ServerTimelineEvent {
+  return {
+    id,
+    eventType,
+    type: eventType === "player_joined" ? "success" : "info",
+    severity: eventType === "player_joined" ? "success" : "info",
+    text: `${subject} ${eventType === "player_joined" ? "joined" : "left"}`,
+    message: `${subject} ${eventType === "player_joined" ? "joined" : "left"}`,
+    signature: `${eventType}:${subject.toLowerCase()}`,
+    source: "logs/latest.log",
+    subject,
+    occurredAt
+  };
+}
+
+describe("server timeline player activity", () => {
+  it("pairs sessions, ignores duplicate state changes, and keeps reconnects separate", () => {
+    const result = timelinePlayerActivity({
+      contextFrom: 0,
+      from: 0,
+      to: 100,
+      now: 100,
+      events: [
+        playerEvent("join-1", "player_joined", "Alex", 10),
+        playerEvent("join-duplicate", "player_joined", "alex", 11),
+        playerEvent("leave-1", "player_left", "ALEX", 30),
+        playerEvent("leave-duplicate", "player_left", "Alex", 31),
+        playerEvent("join-2", "player_joined", "Alex", 40)
+      ],
+      snapshot: { state: "live", online: 1, maxPlayers: 20, names: ["Alex"], sampledAt: new Date(100).toISOString() }
+    });
+
+    expect(result.onlineNames).toEqual(["Alex"]);
+    expect(result.sessions).toMatchObject([
+      { player: "Alex", startedAt: 10, endedAt: 30, startBoundary: "join", endBoundary: "leave" },
+      { player: "Alex", startedAt: 40, endedAt: null, startBoundary: "join", endBoundary: "online" }
+    ]);
+  });
+
+  it("closes open sessions at lifecycle events", () => {
+    const stopped: ServerTimelineEvent = {
+      id: "stopped",
+      eventType: "server_stopped",
+      type: "info",
+      severity: "info",
+      text: "Server stopped",
+      message: "Server stopped",
+      signature: "server_stopped",
+      source: "docker",
+      occurredAt: 50
+    };
+    const result = timelinePlayerActivity({
+      contextFrom: 0,
+      from: 0,
+      to: 100,
+      now: 100,
+      events: [playerEvent("join", "player_joined", "Alex", 10), stopped],
+      snapshot: { state: "stopped", online: 0, maxPlayers: 20, names: [], sampledAt: new Date(100).toISOString() }
+    });
+    expect(result.sessions).toMatchObject([{ startedAt: 10, endedAt: 50, endBoundary: "server-end" }]);
+  });
+
+  it("uses retained-history boundaries without reporting stale players as online", () => {
+    const result = timelinePlayerActivity({
+      contextFrom: 10,
+      from: 20,
+      to: 100,
+      now: 100,
+      events: [playerEvent("leave", "player_left", "Robin", 40)],
+      snapshot: {
+        state: "stale",
+        online: 1,
+        maxPlayers: 20,
+        names: ["Robin"],
+        sampledAt: new Date(80).toISOString(),
+        lastAttemptAt: new Date(100).toISOString(),
+        code: "QUERY_TIMEOUT",
+        message: "Timed out"
+      }
+    });
+    expect(result.onlineNames).toEqual([]);
+    expect(result.sessions).toMatchObject([{
+      player: "Robin",
+      startedAt: 10,
+      endedAt: 40,
+      startBoundary: "history-boundary",
+      endBoundary: "leave"
+    }]);
   });
 });

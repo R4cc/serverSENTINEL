@@ -38,6 +38,8 @@ export type {
   ServerActivity,
   ServerEvent,
   ServerTimelineEvent,
+  ServerTimelinePlayerActivity,
+  ServerTimelinePlayerSession,
   ServerTimelineResourcePoint,
   ServerTimelineResponse,
   ServerTimelineScheduleMarker,
