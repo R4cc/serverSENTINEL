@@ -1496,6 +1496,7 @@ button.overviewCardRow:focus-visible {
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  cursor: default;
   background-color: color-mix(in srgb, var(--status-glow-color) 7%, var(--surface-raised));
   transform: perspective(640px) rotateX(var(--status-tilt-x)) rotateY(var(--status-tilt-y));
   transform-style: preserve-3d;

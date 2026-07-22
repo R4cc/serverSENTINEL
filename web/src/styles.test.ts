@@ -85,6 +85,7 @@ describe("global stylesheet entry point", () => {
   });
 
   it("uses pointer-positioned glow colors for every overview status family", () => {
+    expect(overviewStyles).toMatch(/\.overviewSummary \.statusGlowTile\s*\{[^}]*cursor:\s*default;/s);
     expect(overviewStyles).toMatch(/\.statusGlowTile\.running\s*\{\s*--status-glow-color:\s*var\(--sentinel-success\);/s);
     expect(overviewStyles).toMatch(/\.statusGlowTile\.warning\s*\{\s*--status-glow-color:\s*var\(--sentinel-warning\);/s);
     expect(overviewStyles).toMatch(/\.statusGlowTile\.stopped,\s*\.overviewSummary \.statusGlowTile\.danger\s*\{\s*--status-glow-color:\s*var\(--sentinel-danger\);/s);
