@@ -713,19 +713,27 @@ button.overviewCardRow:focus-visible {
 .serverTimelineHoverTooltip.align-end { transform: translateX(-100%); }
 .serverTimelineHoverTooltip.is-pinned .serverTimelineTooltip { border-color: var(--accent); }
 
-.serverTimelineCursor {
+.serverTimelineSharedGuide {
+  --timeline-guide-color: var(--accent);
   position: absolute;
   z-index: 3;
+  bottom: 0;
   width: 1px;
   transform: translateX(-50%);
-  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  background: color-mix(in srgb, var(--timeline-guide-color) 64%, transparent);
   pointer-events: none;
 }
 
-.serverTimelineCursor.is-pinned {
+.serverTimelineSharedGuide.is-pinned {
   width: 2px;
-  background: var(--accent);
+  background: var(--timeline-guide-color);
 }
+
+.serverTimelineSharedGuide.tone-join { --timeline-guide-color: var(--timeline-join); }
+.serverTimelineSharedGuide.tone-leave { --timeline-guide-color: var(--timeline-leave); }
+.serverTimelineSharedGuide.tone-server { --timeline-guide-color: var(--timeline-server); }
+.serverTimelineSharedGuide.tone-automation,
+.serverTimelineSharedGuide.tone-planned { --timeline-guide-color: var(--timeline-schedule); }
 
 .serverTimelineAnnotations {
   position: absolute;

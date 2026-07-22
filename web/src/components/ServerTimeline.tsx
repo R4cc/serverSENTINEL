@@ -836,6 +836,15 @@ export function ServerTimeline({
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
   const labelGutter = Math.round(Math.max(180, Math.min(260, visualizationWidth * 0.17)));
   const metricGrid = useMemo(() => ({ ...timelineMetricBandGrid, left: labelGutter }), [labelGutter]);
+  const sharedGuide = hoverTooltip
+    ? { x: hoverTooltip.x, pinned: hoverTooltip.pinned, tone: undefined }
+    : selectedCluster && selectedPosition
+      ? {
+          x: metricGrid.left + annotationRailWidth * selectedPosition.leftPercent / 100,
+          pinned: true,
+          tone: selectedCluster.tone
+        }
+      : undefined;
   const playerRows = useMemo(() => timelinePlayerRows(data, viewport, clockNow), [clockNow, data, viewport]);
   const metricBands = useMemo<MetricBand[]>(() => [
     ...(enabled.cpuUtilizationPercent ? [{ key: "cpu" as const, label: "CPU", series: ["cpuUtilizationPercent" as const], prominent: true }] : []),
@@ -1270,15 +1279,15 @@ export function ServerTimeline({
                 onPointerLeave={hideHoverTooltip}
                 onClick={pinHoverTooltip}
               />
-              {hoverTooltip && <span
-                className={`serverTimelineCursor${hoverTooltip.pinned ? " is-pinned" : ""}`}
-                style={{ left: hoverTooltip.x, top: metricGrid.top, bottom: metricGrid.bottom }}
-                aria-hidden="true"
-              />}
             </section>
           ))}
           {!metricBands.length && <div className="serverTimelineEmpty">Enable a metric to display its chart.</div>}
         </div>
+        {sharedGuide && <span
+          className={`serverTimelineSharedGuide${sharedGuide.pinned ? " is-pinned" : ""}${sharedGuide.tone ? ` tone-${sharedGuide.tone}` : ""}`}
+          style={{ left: sharedGuide.x, top: annotationGridTop }}
+          aria-hidden="true"
+        />}
         {hoverTooltip && (
           <div
             className={`serverTimelineHoverTooltip${hoverTooltip.alignEnd ? " align-end" : ""}${hoverTooltip.pinned ? " is-pinned" : ""}`}
