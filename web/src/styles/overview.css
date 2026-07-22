@@ -133,7 +133,7 @@
   text-align: right;
 }
 
-.modUpdatesCard {
+.panel.modUpdatesCard {
   position: relative;
   width: 100%;
   min-width: 0;
@@ -142,19 +142,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0;
-  border-color: color-mix(in srgb, var(--sentinel-warning) 42%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
   color: var(--text);
   padding: 0;
   text-align: left;
   white-space: normal;
   overflow: hidden;
-}
-
-.modUpdatesCard:not(.modUpdatesCardSkeleton):hover {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 64%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-warning) 13%, var(--surface-raised));
-  color: var(--text);
 }
 
 .serverTimelinePanel {
@@ -398,21 +392,21 @@
 }
 
 .modUpdatesRefreshButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
   margin-right: var(--space-4);
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
-  color: var(--text-muted);
-}
-
-.modUpdatesRefreshButton:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
+  padding: 0;
 }
 
 .modUpdatesRefreshButton > svg {
   width: 17px;
   height: 17px;
+}
+
+.modUpdatesRefreshLabel {
+  display: none;
 }
 
 .serverTimelineEChart {
@@ -844,16 +838,6 @@
   .serverTimelinePanel * { transition: none !important; animation: none !important; }
 }
 
-.overviewDashboardGrid > .modUpdatesCard--healthy {
-  border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
-}
-
-.overviewDashboardGrid > .modUpdatesCard--healthy:hover {
-  border-color: color-mix(in srgb, var(--sentinel-success) 58%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-success) 11%, var(--surface-raised));
-}
-
 .modUpdatesCompact {
   grid-column: 1 / -1;
   min-width: 0;
@@ -871,8 +855,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
   padding-bottom: var(--space-3);
   border-bottom: var(--border-subtle) solid var(--border-muted);
 }
@@ -901,13 +883,6 @@
   line-height: 1.45;
 }
 
-.modUpdatesWideHeader > svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  color: var(--text-muted);
-}
-
 .modUpdatesList {
   min-width: 0;
   min-height: 0;
@@ -920,13 +895,25 @@
 .modUpdatesListItem {
   min-width: 0;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
   align-items: center;
   gap: var(--space-3);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
+  border: 0;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-warning) 5%, var(--surface-muted));
-  padding: 7px 9px;
+  background: transparent;
+  padding: 7px 2px;
+  transition: background-color 150ms ease;
+}
+
+.modUpdatesCardOpen:hover:not(:disabled) .modUpdatesListItem {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
+}
+
+.modUpdatesListItem > .buttonIcon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
 }
 
 .modUpdatesListItem > img,
@@ -1030,8 +1017,8 @@
 }
 
 .modUpdatesCard--healthy .modUpdatesListItem--healthy {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface-muted));
+  border-color: var(--border-muted);
+  background: transparent;
 }
 
 .modUpdatesHealthyIcon {
@@ -1536,13 +1523,20 @@
 
   .modUpdatesRefreshButton {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+    min-width: 0;
     margin: 0;
+    padding-inline: var(--space-3);
+  }
+
+  .modUpdatesRefreshLabel {
+    display: inline;
   }
 
   .modUpdatesWideHeader {
-    padding-right: 40px;
+    padding-right: 104px;
   }
 
   .modUpdatesCompact {

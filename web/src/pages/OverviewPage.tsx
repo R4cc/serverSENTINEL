@@ -240,7 +240,6 @@ export function ModHealthPanel({
                 <strong>{contentSingularTitle} updates</strong>
                 <small>No updates available</small>
               </span>
-              <AppIcon name="chevronRight" />
             </span>
             <span className="modUpdatesList">
               <span className="modUpdatesListItem modUpdatesListItem--healthy">
@@ -249,6 +248,7 @@ export function ModHealthPanel({
                   <strong>Everything is up to date</strong>
                   <small><span>New {contentSingular} updates will appear here.</span></small>
                 </span>
+                <AppIcon name="chevronRight" />
               </span>
             </span>
           </span>
@@ -279,7 +279,6 @@ export function ModHealthPanel({
               <strong>{contentSingularTitle} updates</strong>
               <small>{updateCount} update{updateCount === 1 ? "" : "s"} available</small>
             </span>
-            <AppIcon name="chevronRight" />
           </span>
           <span className="modUpdatesList">
             {visibleUpdates.map((entry) => (
@@ -293,6 +292,7 @@ export function ModHealthPanel({
                     <span>{entry.targetVersion ?? "Update available"}</span>
                   </small>
                 </span>
+                <AppIcon name="chevronRight" />
               </span>
             ))}
           </span>
@@ -308,8 +308,9 @@ function ModUpdatesRefreshButton({ contentPlural, onRefresh }: { contentPlural: 
   if (!onRefresh) return null;
   const label = `Recheck ${contentPlural} for updates`;
   return (
-    <Button variant="ghost" iconOnly compact className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label}>
+    <Button variant="secondary" compact className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label}>
       <AppIcon name="refresh" />
+      <span className="modUpdatesRefreshLabel">Refresh</span>
     </Button>
   );
 }
@@ -333,7 +334,6 @@ function ModHealthPanelSkeleton({ contentPlural = "mods" }: { contentPlural?: "m
             <strong>{contentSingularTitle} updates</strong>
             <small>Checking for updates</small>
           </span>
-          <SkeletonBlock className="modUpdatesChevronSkeleton" />
         </span>
         <span className="modUpdatesList">
           {Array.from({ length: modUpdateCardSlotCount }, (_, index) => (
@@ -343,6 +343,7 @@ function ModHealthPanelSkeleton({ contentPlural = "mods" }: { contentPlural?: "m
                 <SkeletonBlock className="modUpdatesNameSkeleton" />
                 <SkeletonBlock className="modUpdatesVersionSkeleton" />
               </span>
+              <SkeletonBlock className="modUpdatesChevronSkeleton" />
             </span>
           ))}
         </span>

@@ -53,12 +53,15 @@ describe("global stylesheet entry point", () => {
   });
 
   it("expands mod update previews progressively on large overview layouts", () => {
+    expect(overviewStyles).toMatch(/\.panel\.modUpdatesCard\s*\{[^}]*border-color:\s*var\(--border-panel\);[^}]*background:\s*var\(--surface-raised\);[^}]*padding:\s*0;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesList\s*\{[^}]*grid-auto-rows:\s*52px;[^}]*align-content:\s*start;/s);
+    expect(overviewStyles).toMatch(/\.modUpdatesListItem\s*\{[^}]*grid-template-columns:\s*36px minmax\(0, 1fr\) 16px;[^}]*border-bottom:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*transparent;[^}]*padding:\s*7px 2px;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesListCopy > strong\s*\{[^}]*line-height:\s*17px;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesCardOpen\s*\{[^}]*width:\s*100%;[^}]*justify-items:\s*stretch;/s);
     expect(overviewStyles).toMatch(/\.modUpdatesCardOpen:hover:not\(:disabled\),[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*none;/s);
-    expect(overviewStyles).toMatch(/\.modUpdatesRefreshButton\s*\{[^}]*border-color:\s*var\(--border-muted\);[^}]*background:/s);
+    expect(overviewStyles).toMatch(/\.modUpdatesRefreshLabel\s*\{[^}]*display:\s*none;/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 1440px\) and \(max-width: 2559px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*136px;[\s\S]*?\.modUpdatesListItem:nth-child\(n \+ 2\),\s*\.modUpdatesRemaining\s*\{[^}]*display:\s*none;/s);
+    expect(overviewStyles).toMatch(/@media \(min-width: 1440px\) and \(max-width: 2559px\)\s*\{[\s\S]*?\.modUpdatesRefreshButton\s*\{[^}]*width:\s*auto;[^}]*padding-inline:\s*var\(--space-3\);[\s\S]*?\.modUpdatesRefreshLabel\s*\{[^}]*display:\s*inline;/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 2560px\)\s*\{[\s\S]*?\.modUpdatesCard\s*\{[^}]*min-height:\s*280px;[\s\S]*?\.modUpdatesWide\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch;/s);
   });
 

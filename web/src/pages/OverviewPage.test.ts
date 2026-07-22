@@ -279,7 +279,7 @@ describe("mod health", () => {
     expect(render(null, false)).toBe("");
   });
 
-  it("keeps a clickable green card focused only on updates when none are available", () => {
+  it("keeps a neutral clickable card focused only on updates when none are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
       canView,
@@ -333,6 +333,8 @@ describe("mod health", () => {
     expect(html).toContain('class="modUpdatesCardOpen"');
     expect(html).toContain('aria-label="Recheck mods for updates"');
     expect(html).toContain('<path d="M20 6v5h-5"></path>');
+    expect(html).toContain('<span class="modUpdatesRefreshLabel">Refresh</span>');
+    expect(html).toContain('uiButton--secondary');
     expect(html).toContain('</button><button aria-label="Recheck mods for updates"');
   });
 
