@@ -16,3 +16,21 @@
 @import "./styles/confirmation-modal.css";
 @import "./styles/responsive.css";
 @import "./styles/motion.css";
+
+.workspaceHeader h2 {
+  font-family: var(--font-page-heading);
+  font-size: clamp(32px, 4.5vw, 72px);
+  font-weight: 650;
+}
+
+@media (max-width: 1366px) {
+  .workspaceHeader h2 {
+    font-size: clamp(20px, 1.75vw, 28px);
+  }
+}
+
+@media (max-width: 720px) {
+  .workspaceHeader h2 {
+    font-size: clamp(20px, 6vw, 27px);
+  }
+}
