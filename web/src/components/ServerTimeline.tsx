@@ -1178,9 +1178,6 @@ export function ServerTimeline({
             onWheel={handleSessionWheel}
           />
         )}
-        {annotationEnabled.player && data?.playerActivity?.snapshotState === "stale" && (
-          <div className="serverTimelinePlayerStatusNotice">Player status is temporarily stale; showing the last confirmed online players.</div>
-        )}
         {annotationEnabled.player && data?.playerActivity?.snapshotState === "unavailable" && (
           <div className="serverTimelinePlayerStatusNotice">Current player status is unavailable; retained sessions are shown as offline.</div>
         )}
