@@ -136,6 +136,17 @@ async function waitForOverviewTimeline(page) {
   });
 }
 
+async function waitForConsoleTerminal(page) {
+  await page.locator(".minecraftTerminal").waitFor();
+  await page.waitForFunction(() => {
+    const terminal = document.querySelector(".minecraftTerminal");
+    const rows = terminal?.querySelector(".xterm-rows");
+    return terminal
+      && !terminal.classList.contains("initializing")
+      && rows?.textContent?.includes('Done (5.132s)! For help, type "help"');
+  });
+}
+
 try {
   if (process.env.SERVERSENTINEL_SCREENSHOT_SKIP_BUILD !== "true") {
     await runNpm(["run", "build"]);
@@ -215,6 +226,7 @@ try {
   await capture(page, "overview.png");
 
   await openPage(page, "console", "Console");
+  await waitForConsoleTerminal(page);
   await capture(page, "console.png");
 
   await openPage(page, "files", "Files");
