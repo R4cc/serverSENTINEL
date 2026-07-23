@@ -1,6 +1,163 @@
-import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from './types';
+import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
 
 const demoStartedAt = Date.now();
+const gibibyte = 1024 * 1024 * 1024;
+
+export type DemoSession = {
+  startedAt: number;
+  playerCount: number;
+  maxPlayers: number;
+  onlinePlayerNames: string[];
+  offlinePlayerNames: string[];
+  cpuBasePercent: number;
+  cpuAmplitudePercent: number;
+  cpuPhase: number;
+  memoryBaseBytes: number;
+  memoryAmplitudeBytes: number;
+  memoryPhase: number;
+  networkRxBytesPerSecond: number;
+  networkTxBytesPerSecond: number;
+  events: ServerTimelineEvent[];
+};
+
+function randomUnit(random: () => number) {
+  return Math.min(0.999999999, Math.max(0, random()));
+}
+
+function randomInteger(minimum: number, maximum: number, random: () => number) {
+  return minimum + Math.floor(randomUnit(random) * (maximum - minimum + 1));
+}
+
+function randomDecimal(minimum: number, maximum: number, random: () => number) {
+  return minimum + randomUnit(random) * (maximum - minimum);
+}
+
+function shuffled<T>(values: readonly T[], random: () => number): T[] {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInteger(0, index, random);
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+function createDemoNicknames(count: number, random: () => number) {
+  const prefixes = ["Aero", "Ash", "Blaze", "Cinder", "Frost", "Lunar", "Pixel", "Quartz", "Shadow", "Void"];
+  const suffixes = ["Badger", "Byte", "Crafter", "Drake", "Fox", "Nomad", "Raven", "Spark", "Strider", "Wolf"];
+  return shuffled(prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}${suffix}`)), random).slice(0, count);
+}
+
+function createDemoTimelineEvent(
+  eventType: ServerEvent["eventType"],
+  occurredAt: number,
+  index: number,
+  onlinePlayerNames: string[],
+  offlinePlayerNames: string[],
+  random: () => number
+): ServerTimelineEvent {
+  const timestamp = new Date(occurredAt).toISOString();
+  const base = {
+    id: `demo-event-${index}-${eventType}`,
+    eventType,
+    timestamp,
+    occurredAt,
+    source: "logs/latest.log" as const
+  };
+  if (eventType === "player_joined" || eventType === "player_left") {
+    const candidates = eventType === "player_joined" ? onlinePlayerNames : offlinePlayerNames;
+    const subject = candidates[randomInteger(0, candidates.length - 1, random)];
+    const action = eventType === "player_joined" ? "joined" : "left";
+    return {
+      ...base,
+      type: eventType === "player_joined" ? "success" : "info",
+      severity: eventType === "player_joined" ? "success" : "info",
+      text: `${subject} ${action}`,
+      message: `${subject} ${action}`,
+      signature: `${eventType}:${subject.toLowerCase()}`,
+      subject
+    };
+  }
+  if (eventType === "server_started") {
+    return { ...base, type: "success", severity: "success", text: "Server started", message: "Server started", signature: "server_started" };
+  }
+  if (eventType === "server_stopped") {
+    return { ...base, type: "info", severity: "info", text: "Server stopped", message: "Server stopped", signature: "server_stopped" };
+  }
+  if (eventType === "server_crashed") {
+    return { ...base, type: "error", severity: "error", text: "Server process crashed", message: "Server process crashed", details: "Process exited unexpectedly and was recovered by the restart policy", signature: "server_crashed" };
+  }
+  if (eventType === "exception_caught") {
+    const exception = shuffled(["ChunkLoadException", "TickTimeoutException", "WorldSaveException"], random)[0];
+    return { ...base, type: "error", severity: "error", text: `Exception caught: ${exception}`, message: `Exception caught: ${exception}`, details: `A simulated ${exception} was caught by the demo server`, signature: `exception_caught:${exception.toLowerCase()}`, subject: exception };
+  }
+  if (eventType === "mod_disabled") {
+    const mod = shuffled(["spark.jar", "lithium.jar", "voicechat.jar"], random)[0];
+    return { ...base, type: "warning", severity: "warning", text: `Mod disabled: ${mod}`, message: `Mod disabled: ${mod}`, signature: `mod_disabled:${mod}`, subject: mod };
+  }
+  const ticksBehind = randomInteger(42, 164, random);
+  return {
+    ...base,
+    type: "warning",
+    severity: "warning",
+    text: "Server is falling behind",
+    message: "Server is falling behind",
+    details: `Running ${Math.round(ticksBehind * 50).toLocaleString("en-US")}ms or ${ticksBehind} ticks behind`,
+    signature: "server_overloaded"
+  };
+}
+
+export function createDemoSession(random: () => number = Math.random, startedAt = Date.now()): DemoSession {
+  const playerCount = randomInteger(10, 40, random);
+  const nicknames = createDemoNicknames(playerCount + 8, random);
+  const onlinePlayerNames = nicknames.slice(0, playerCount);
+  const offlinePlayerNames = nicknames.slice(playerCount);
+  const systemEventTypes: ServerEvent["eventType"][] = [
+    "server_stopped",
+    "server_crashed",
+    "exception_caught",
+    "mod_disabled",
+    "server_overloaded"
+  ];
+  const eventTypes = shuffled<ServerEvent["eventType"]>([
+    "server_started",
+    "player_joined",
+    "player_left",
+    ...shuffled(systemEventTypes, random).slice(0, 4)
+  ], random);
+  const minuteOffsets = [3, 8, 14, 21, 29, 38, 49];
+  const events = eventTypes.map((eventType, index) => createDemoTimelineEvent(
+    eventType,
+    startedAt - (minuteOffsets[index] + randomDecimal(-1.25, 1.25, random)) * 60_000,
+    index,
+    onlinePlayerNames,
+    offlinePlayerNames,
+    random
+  )).sort((left, right) => left.occurredAt - right.occurredAt);
+
+  return {
+    startedAt,
+    playerCount,
+    maxPlayers: 50,
+    onlinePlayerNames,
+    offlinePlayerNames,
+    cpuBasePercent: randomDecimal(18, 42, random),
+    cpuAmplitudePercent: randomDecimal(8, 22, random),
+    cpuPhase: randomDecimal(0, Math.PI * 2, random),
+    memoryBaseBytes: randomDecimal(1.6, 2.8, random) * gibibyte,
+    memoryAmplitudeBytes: randomDecimal(0.15, 0.55, random) * gibibyte,
+    memoryPhase: randomDecimal(0, Math.PI * 2, random),
+    networkRxBytesPerSecond: randomInteger(420_000, 920_000, random),
+    networkTxBytesPerSecond: randomInteger(280_000, 740_000, random),
+    events
+  };
+}
+
+let activeDemoSession = createDemoSession(Math.random, demoStartedAt);
+
+export function resetDemoSession(startedAt = Date.now()) {
+  activeDemoSession = createDemoSession(Math.random, startedAt);
+  return activeDemoSession;
+}
 
 export const demoServerId = "demo-survival";
 
@@ -277,7 +434,7 @@ export const demoSearchResults: ModrinthHit[] = [
 export const initialDemoFiles: Record<string, string> = {
   "/server.properties": [
     "motd=serverSENTINEL Demo",
-    "max-players=20",
+    `max-players=${activeDemoSession.maxPlayers}`,
     "view-distance=10",
     "simulation-distance=8",
     "online-mode=true"
@@ -375,11 +532,20 @@ export function demoStatus(server: ManagedServer, running: boolean): ServerStatu
 }
 
 export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSample {
-  const elapsed = (sampledAt - (demoStartedAt - 60 * 60 * 1000)) / 1000;
-  const memoryLimitBytes = 4 * 1024 * 1024 * 1024;
+  const elapsed = (sampledAt - activeDemoSession.startedAt) / 1000;
+  const historyElapsed = Math.max(0, (sampledAt - (activeDemoSession.startedAt - 60 * 60 * 1000)) / 1000);
+  const memoryLimitBytes = 4 * gibibyte;
   const cpuCapacityCores = 4;
-  const cpuUtilizationPercent = running ? 8 + Math.max(0, Math.sin(elapsed / 7)) * 22 : 0;
-  const memoryUsageBytes = running ? Math.round((1.35 + Math.sin(elapsed / 12) * 0.18) * 1024 * 1024 * 1024) : 0;
+  const cpuWave = Math.sin(elapsed / 23 + activeDemoSession.cpuPhase) * 0.65
+    + Math.sin(elapsed / 7 + activeDemoSession.cpuPhase * 1.7) * 0.35;
+  const cpuUtilizationPercent = running
+    ? Math.min(85, Math.max(5, activeDemoSession.cpuBasePercent + activeDemoSession.cpuAmplitudePercent * cpuWave))
+    : 0;
+  const memoryWave = Math.sin(elapsed / 79 + activeDemoSession.memoryPhase) * 0.7
+    + Math.sin(elapsed / 19 + activeDemoSession.memoryPhase * 1.3) * 0.3;
+  const memoryUsageBytes = running
+    ? Math.round(Math.min(3.6 * gibibyte, Math.max(1.1 * gibibyte, activeDemoSession.memoryBaseBytes + activeDemoSession.memoryAmplitudeBytes * memoryWave)))
+    : 0;
   return {
     available: true,
     running,
@@ -387,9 +553,9 @@ export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSam
     cpuCapacityCores,
     memoryUsageBytes,
     memoryLimitBytes,
-    playersOnline: running ? 12 + Math.round(1 + Math.sin(elapsed / 240)) : 0,
-    networkRxBytes: running ? Math.round(84_000_000 + elapsed * 680_000 + Math.sin(elapsed / 5) * 180_000) : 0,
-    networkTxBytes: running ? Math.round(62_000_000 + elapsed * 510_000 + Math.cos(elapsed / 6) * 120_000) : 0,
+    playersOnline: running ? activeDemoSession.playerCount : 0,
+    networkRxBytes: running ? Math.round(84_000_000 + historyElapsed * activeDemoSession.networkRxBytesPerSecond + Math.sin(elapsed / 5) * 180_000) : 0,
+    networkTxBytes: running ? Math.round(62_000_000 + historyElapsed * activeDemoSession.networkTxBytesPerSecond + Math.cos(elapsed / 6) * 120_000) : 0,
     readAt: new Date(sampledAt).toISOString(),
     container: "serversentinel-demo",
     message: running ? "Simulated runtime stats." : "Demo server is stopped.",
@@ -434,22 +600,8 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     };
   });
   const now = Date.now();
-  const eventFixtures = ([
-    { id: "timeline-started", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 48 * 60_000 - 15_000).toISOString(), occurredAt: now - 48 * 60_000 - 15_000, signature: "server_started", source: "logs/latest.log" },
-    { id: "timeline-alex-join", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: new Date(now - 48 * 60_000).toISOString(), occurredAt: now - 48 * 60_000, signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" },
-    { id: "timeline-overload", eventType: "server_overloaded", type: "warning", severity: "warning", text: "Server is falling behind", message: "Server is falling behind", timestamp: new Date(now - 31 * 60_000).toISOString(), occurredAt: now - 31 * 60_000, signature: "server_overloaded", source: "logs/latest.log" },
-    { id: "timeline-exception", eventType: "exception_caught", type: "error", severity: "error", text: "Exception caught: NullPointerException", message: "Exception caught: NullPointerException", timestamp: new Date(now - 31 * 60_000 + 5_000).toISOString(), occurredAt: now - 31 * 60_000 + 5_000, signature: "exception_caught:nullpointerexception", source: "logs/latest.log", subject: "NullPointerException" },
-    { id: "timeline-restart-stop", eventType: "server_stopped", type: "info", severity: "info", text: "Server stopped", message: "Server stopped", timestamp: new Date(now - 31 * 60_000 + 10_000).toISOString(), occurredAt: now - 31 * 60_000 + 10_000, signature: "server_stopped", source: "logs/latest.log" },
-    { id: "timeline-restart-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 30 * 60_000 - 20_000).toISOString(), occurredAt: now - 30 * 60_000 - 20_000, signature: "server_started", source: "logs/latest.log" },
-    { id: "timeline-crash", eventType: "server_crashed", type: "error", severity: "error", text: "Server process crashed", message: "Server process crashed", timestamp: new Date(now - 15 * 60_000).toISOString(), occurredAt: now - 15 * 60_000, signature: "server_crashed", source: "logs/latest.log" },
-    { id: "timeline-recovery-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: new Date(now - 15 * 60_000 + 10_000).toISOString(), occurredAt: now - 15 * 60_000 + 10_000, signature: "server_started", source: "logs/latest.log" },
-    { id: "timeline-steve-leave", eventType: "player_left", type: "info", severity: "info", text: "Steve left", message: "Steve left", timestamp: new Date(now - 19 * 60_000).toISOString(), occurredAt: now - 19 * 60_000, signature: "player_left:steve", source: "logs/latest.log", subject: "Steve" },
-    { id: "timeline-steve-rejoin", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: new Date(now - 19 * 60_000 + 7_000).toISOString(), occurredAt: now - 19 * 60_000 + 7_000, signature: "player_joined:steve", source: "logs/latest.log", subject: "Steve" },
-    { id: "timeline-maya-join", eventType: "player_joined", type: "success", severity: "success", text: "Maya joined", message: "Maya joined", timestamp: new Date(now - 7 * 60_000).toISOString(), occurredAt: now - 7 * 60_000, signature: "player_joined:maya", source: "logs/latest.log", subject: "Maya" }
-  ] satisfies ServerTimelineEvent[]).filter((event) => event.occurredAt >= from && event.occurredAt <= to);
-  const demoOnlineNames = running
-    ? ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"]
-    : [];
+  const eventFixtures = activeDemoSession.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
+  const demoOnlineNames = running ? activeDemoSession.onlinePlayerNames : [];
   const playerSessions = [
     ...demoOnlineNames.map((player, index) => ({
       id: `demo-online:${player.toLowerCase()}`,
@@ -459,7 +611,7 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
       startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
       endBoundary: "online" as const
     })),
-    ...["Forest_Dweller", "DragonRifle_1", "TheDeadReaper", "Ethanenet", "Itsxapi", "phiki", "Alekschede", "dindingle"].map((player, index) => {
+    ...activeDemoSession.offlinePlayerNames.map((player, index) => {
       const startedAt = now - (54 - index * 5) * 60_000;
       return {
         id: `demo-offline:${player.toLowerCase()}`,
@@ -508,6 +660,10 @@ function demoEvent(event: ServerEvent): ServerEvent {
 }
 
 export function demoOverviewData(running: boolean): ServerOverviewData {
+  const events = activeDemoSession.events
+    .slice()
+    .sort((left, right) => right.occurredAt - left.occurredAt)
+    .map(({ occurredAt: _occurredAt, ...event }) => event);
   return {
     eventsStatus: "ok",
     activity: {
@@ -520,29 +676,21 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
       javaRuntime: "Temurin 21",
       autosaveStatus: running ? "Recently saved" : "Unavailable"
     },
-    events: [
-      demoEvent({ id: "demo-rejoin-steve", eventType: "player_joined", type: "success", severity: "success", text: "Steve joined", message: "Steve joined", timestamp: "13:46:08", signature: "player_joined:steve", source: "logs/latest.log", subject: "Steve" }),
-      demoEvent({ id: "demo-left-steve", eventType: "player_left", type: "warning", severity: "warning", text: "Steve left", message: "Steve left", timestamp: "13:46:01", signature: "player_left:steve", source: "logs/latest.log", subject: "Steve" }),
-      demoEvent({ id: "demo-exception", eventType: "exception_caught", type: "error", severity: "error", text: "Exception caught: NullPointerException", message: "Exception caught: NullPointerException", details: "Chunk task failed with java.lang.NullPointerException", timestamp: "13:44:00", signature: "exception_caught:nullpointerexception", source: "logs/latest.log", subject: "NullPointerException" }),
-      demoEvent({ id: "demo-join-alex", eventType: "player_joined", type: "success", severity: "success", text: "Alex joined", message: "Alex joined", timestamp: "13:43:00", signature: "player_joined:alex", source: "logs/latest.log", subject: "Alex" }),
-      demoEvent({ id: "demo-overloaded", eventType: "server_overloaded", type: "warning", severity: "warning", text: "Server is falling behind", message: "Server is falling behind", details: "Running 5,421ms or 108 ticks behind", timestamp: "13:41:00", signature: "server_overloaded", source: "logs/latest.log" }),
-      demoEvent({ id: "demo-left-sam", eventType: "player_left", type: "info", severity: "info", text: "Sam left", message: "Sam left", timestamp: "13:40:00", signature: "player_left:sam", source: "logs/latest.log", subject: "Sam" }),
-      demoEvent({ id: "demo-start", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: "11:32:00", signature: "server_started", source: "logs/latest.log" })
-    ]
+    events: events.map(demoEvent)
   };
 }
 
 export function demoPlayerSnapshot(running: boolean): PlayerSnapshot {
   return running ? {
     state: "live",
-    online: 14,
-    maxPlayers: 20,
-    names: ["Alex", "Steve", "Sam", "Maya", "Noah", "Lena", "Kai", "Robin", "Avery", "Milo", "Nora", "Theo", "Iris", "Owen"],
+    online: activeDemoSession.playerCount,
+    maxPlayers: activeDemoSession.maxPlayers,
+    names: activeDemoSession.onlinePlayerNames,
     sampledAt: new Date().toISOString()
   } : {
     state: "stopped",
     online: 0,
-    maxPlayers: 20,
+    maxPlayers: activeDemoSession.maxPlayers,
     names: [],
     sampledAt: new Date().toISOString()
   };
