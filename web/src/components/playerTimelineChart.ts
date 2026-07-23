@@ -39,6 +39,10 @@ export type PlayerTimelineChartItem = {
   durationLabel: string;
   startLabel: string | null;
   endLabel: string | null;
+  reconnects: Array<{
+    at: number;
+    offlineMs: number;
+  }>;
   accessibleLabel: string;
 };
 
@@ -62,6 +66,7 @@ export type PlayerTimelineLabelLayout = {
 };
 
 export const playerTimelineRowHeight = 40;
+export const playerTimelineReconnectWindowMs = 15 * 60_000;
 const playerTimelineRightInset = 24;
 
 export function timelineSessionGeometry(session: ServerTimelinePlayerSession, viewport: PlayerTimelineWindow, now: number): TimelineSessionGeometry | null {
@@ -148,40 +153,79 @@ export function playerTimelineChartItems(
   now: number,
   formatShortTime: (value: string | number | Date) => string
 ): PlayerTimelineChartItem[] {
-  return rows.flatMap((row, rowIndex) => row.sessions.flatMap((session) => {
-    const geometry = timelineSessionGeometry(session, viewport, now);
-    if (!geometry) return [];
-    const sessionEnd = session.endedAt ?? now;
-    const visibleStart = Math.max(session.startedAt, viewport.from);
-    const visibleEnd = Math.min(sessionEnd, viewport.to);
-    const exactStart = session.startBoundary === "join" && session.startedAt >= viewport.from;
-    const exactEnd = (session.endBoundary === "leave" || session.endBoundary === "server-end")
-      && session.endedAt !== null
-      && session.endedAt <= viewport.to;
-    const open = session.endBoundary === "online" && now >= viewport.from && now <= viewport.to && visibleEnd === now;
-    const durationLabel = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(geometry.durationMs)}`;
-    const startLabel = exactStart ? formatShortTime(session.startedAt) : null;
-    const endLabel = open ? "Now" : exactEnd && session.endedAt !== null ? formatShortTime(session.endedAt) : null;
-    const accessibleStart = startLabel ?? "before visible history";
-    const accessibleEnd = open ? "online now" : endLabel ?? "outside visible history";
-    return [{
-      id: session.id,
-      player: row.player,
-      online: row.online,
-      rowIndex,
-      visibleStart,
-      visibleEnd,
-      exactStart,
-      exactEnd,
-      open,
-      startClipped: geometry.startClipped,
-      endClipped: geometry.endClipped,
-      durationLabel,
-      startLabel,
-      endLabel,
-      accessibleLabel: `${row.player}: ${accessibleStart} – ${accessibleEnd}; ${durationLabel}`
-    }];
-  }));
+  return rows.flatMap((row, rowIndex) => {
+    const sessionGroups = [...row.sessions]
+      .sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id))
+      .reduce<ServerTimelinePlayerSession[][]>((groups, session) => {
+        const current = groups.at(-1);
+        const previous = current?.at(-1);
+        const gap = previous?.endedAt === null || previous?.endedAt === undefined
+          ? Number.POSITIVE_INFINITY
+          : session.startedAt - previous.endedAt;
+        const isQuickReconnect = previous?.endBoundary === "leave"
+          && session.startBoundary === "join"
+          && gap >= 0
+          && gap <= playerTimelineReconnectWindowMs;
+        if (current && isQuickReconnect) current.push(session);
+        else groups.push([session]);
+        return groups;
+      }, []);
+
+    return sessionGroups.flatMap((sessions) => {
+      const firstSession = sessions[0];
+      const lastSession = sessions.at(-1)!;
+      const displaySession: ServerTimelinePlayerSession = {
+        id: sessions.map((session) => session.id).join("+"),
+        player: firstSession.player,
+        startedAt: firstSession.startedAt,
+        endedAt: lastSession.endedAt,
+        startBoundary: firstSession.startBoundary,
+        endBoundary: lastSession.endBoundary
+      };
+      const geometry = timelineSessionGeometry(displaySession, viewport, now);
+      if (!geometry) return [];
+      const sessionEnd = displaySession.endedAt ?? now;
+      const visibleStart = Math.max(displaySession.startedAt, viewport.from);
+      const visibleEnd = Math.min(sessionEnd, viewport.to);
+      const exactStart = displaySession.startBoundary === "join" && displaySession.startedAt >= viewport.from;
+      const exactEnd = (displaySession.endBoundary === "leave" || displaySession.endBoundary === "server-end")
+        && displaySession.endedAt !== null
+        && displaySession.endedAt <= viewport.to;
+      const open = displaySession.endBoundary === "online" && now >= viewport.from && now <= viewport.to && visibleEnd === now;
+      const activeDurationMs = sessions.reduce((total, session) => total + Math.max(0, (session.endedAt ?? now) - session.startedAt), 0);
+      const durationLabel = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(activeDurationMs)}${sessions.length > 1 ? " active" : ""}`;
+      const startLabel = exactStart ? formatShortTime(displaySession.startedAt) : null;
+      const endLabel = open ? "Now" : exactEnd && displaySession.endedAt !== null ? formatShortTime(displaySession.endedAt) : null;
+      const reconnects = sessions.slice(1).flatMap((session, index) => {
+        const previousEnd = sessions[index].endedAt;
+        if (previousEnd === null || session.startedAt < viewport.from || session.startedAt > viewport.to) return [];
+        return [{ at: session.startedAt, offlineMs: Math.max(0, session.startedAt - previousEnd) }];
+      });
+      const accessibleStart = startLabel ?? "before visible history";
+      const accessibleEnd = open ? "online now" : endLabel ?? "outside visible history";
+      const reconnectSummary = reconnects.length
+        ? `; ${reconnects.length} ${reconnects.length === 1 ? "reconnect" : "reconnects"}`
+        : "";
+      return [{
+        id: displaySession.id,
+        player: row.player,
+        online: row.online,
+        rowIndex,
+        visibleStart,
+        visibleEnd,
+        exactStart,
+        exactEnd,
+        open,
+        startClipped: geometry.startClipped,
+        endClipped: geometry.endClipped,
+        durationLabel,
+        startLabel,
+        endLabel,
+        reconnects,
+        accessibleLabel: `${row.player}: ${accessibleStart} – ${accessibleEnd}; ${durationLabel}${reconnectSummary}`
+      }];
+    });
+  });
 }
 
 function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePalette): CustomSeriesRenderItem {
@@ -221,6 +265,17 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
         silent: true
       }
     ];
+
+    for (const reconnect of item.reconnects) {
+      const reconnectX = Math.max(plotLeft, Math.min(plotRight, api.coord([reconnect.at, item.rowIndex])[0]));
+      children.push({
+        type: "circle",
+        name: `Reconnected after ${formatTimelineDuration(reconnect.offlineMs)} offline`,
+        shape: { cx: reconnectX, cy: y, r: 4.2 },
+        style: { fill: color, stroke: palette.surface, lineWidth: 1.7 },
+        silent: true
+      });
+    }
 
     if (item.startClipped) {
       children.push({
