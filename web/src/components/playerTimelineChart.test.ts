@@ -4,6 +4,7 @@ import {
   buildPlayerTimelineChartOption,
   playerTimelineChartItems,
   playerTimelineLabelLayout,
+  playerTimelineReconnectWindowMs,
   type PlayerTimelineRow
 } from "./playerTimelineChart";
 
@@ -72,6 +73,53 @@ describe("player timeline chart items", () => {
   it("uses a continuation cue instead of an open endpoint when now is outside a historical viewport", () => {
     const items = playerTimelineChartItems(rows().slice(0, 1), { from: 10_000, to: 30_000 }, 60_000, formatShortTime);
     expect(items[0]).toMatchObject({ visibleEnd: 30_000, open: false, endClipped: true, endLabel: null });
+  });
+
+  it("collapses quick leave and join bursts into one range with reconnect markers", () => {
+    const minute = 60_000;
+    const items = playerTimelineChartItems([{
+      player: "Alex",
+      online: true,
+      sessions: [
+        { id: "one", player: "Alex", startedAt: 0, endedAt: 4 * minute, startBoundary: "join", endBoundary: "leave" },
+        { id: "two", player: "Alex", startedAt: 5 * minute, endedAt: 9 * minute, startBoundary: "join", endBoundary: "leave" },
+        { id: "three", player: "Alex", startedAt: 12 * minute, endedAt: null, startBoundary: "join", endBoundary: "online" }
+      ]
+    }], { from: 0, to: 30 * minute }, 20 * minute, formatShortTime);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "one+two+three",
+      visibleStart: 0,
+      visibleEnd: 20 * minute,
+      durationLabel: "16m active",
+      startLabel: "0s",
+      endLabel: "Now",
+      reconnects: [
+        { at: 5 * minute, offlineMs: minute },
+        { at: 12 * minute, offlineMs: 3 * minute }
+      ]
+    });
+    expect(items[0].accessibleLabel).toContain("2 reconnects");
+  });
+
+  it("keeps gaps over 15 minutes and server-stop boundaries separate", () => {
+    const minute = 60_000;
+    const sessions: PlayerTimelineRow["sessions"] = [
+      { id: "quick-one", player: "Alex", startedAt: 0, endedAt: minute, startBoundary: "join", endBoundary: "leave" },
+      { id: "quick-two", player: "Alex", startedAt: minute + playerTimelineReconnectWindowMs, endedAt: 20 * minute, startBoundary: "join", endBoundary: "leave" },
+      { id: "long-gap", player: "Alex", startedAt: 36 * minute, endedAt: 40 * minute, startBoundary: "join", endBoundary: "server-end" },
+      { id: "after-stop", player: "Alex", startedAt: 41 * minute, endedAt: 45 * minute, startBoundary: "join", endBoundary: "leave" }
+    ];
+    const items = playerTimelineChartItems(
+      [{ player: "Alex", online: false, sessions }],
+      { from: 0, to: 60 * minute },
+      60 * minute,
+      formatShortTime
+    );
+
+    expect(items.map((item) => item.id)).toEqual(["quick-one+quick-two", "long-gap", "after-stop"]);
+    expect(items[0].reconnects).toEqual([{ at: 16 * minute, offlineMs: playerTimelineReconnectWindowMs }]);
   });
 });
 

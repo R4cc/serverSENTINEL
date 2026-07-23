@@ -2,7 +2,7 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData } from "./demo";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData, resetDemoSession } from "./demo";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
@@ -162,6 +162,7 @@ export default function App() {
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
   const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
+  const [demoSessionVersion, setDemoSessionVersion] = useState(0);
   const [timelineLatestSample, setTimelineLatestSample] = useState<ServerTimelineResourcePoint>();
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
   const [playerSnapshots, setPlayerSnapshots] = useState<Record<string, PlayerSnapshot>>({});
@@ -299,7 +300,7 @@ export default function App() {
     } finally {
       if (activeServerIdRef.current === serverId) setOverviewLoading(false);
     }
-  }, [demoMode, demoRunning]);
+  }, [demoMode, demoRunning, demoSessionVersion]);
 
   const triggerOverviewRefresh = useCallback((serverId: string) => {
     if (overviewRefreshTimeoutRef.current !== null) {
@@ -373,7 +374,7 @@ export default function App() {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && activeServer.id === demoServerId) return demoTimelineData(demoRunning, demoSchedules, from, to);
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
-  }, [activeServer?.id, demoMode, demoRunning, demoSchedules]);
+  }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
@@ -726,7 +727,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activePage, demoMode, demoRunning]);
+  }, [activePage, demoMode, demoRunning, demoSessionVersion]);
 
   useEffect(() => {
     const compactLayout = window.matchMedia("(max-width: 1100px)");
@@ -1169,7 +1170,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning, wideTimelineLayout]);
+  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning, demoSessionVersion, wideTimelineLayout]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
@@ -1217,7 +1218,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning, refreshOverviewData]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning, demoSessionVersion, refreshOverviewData]);
 
   useEffect(() => {
     const currentIds = new Set(activeJobs.map((job) => job.id));
@@ -2108,9 +2109,18 @@ export default function App() {
     try {
       if (activeServerIsDemo) {
         const nextRunning = action !== "stop";
+        if (nextRunning) {
+          resetDemoSession();
+          setDemoSessionVersion((version) => version + 1);
+        }
         setDemoRunning(nextRunning);
         setStatus(demoStatus(activeServer, nextRunning));
         setResourceSamples([demoStats(nextRunning)]);
+        setOverviewData(demoOverviewData(nextRunning));
+        setPlayerSnapshots((current) => ({
+          ...current,
+          [demoServerId]: demoPlayerSnapshot(nextRunning)
+        }));
         setLogs((current) => [
           ...current,
           consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
@@ -2146,8 +2156,9 @@ export default function App() {
     setNotice("");
     try {
       if (activeServerIsDemo) {
+        const snapshot = demoPlayerSnapshot(true);
         const response = command === "list"
-          ? "There are 2 of a max of 20 players online: Alex, Steve"
+          ? `There are ${snapshot.online} of a max of ${snapshot.maxPlayers} players online: ${snapshot.names.join(", ")}`
           : command === "seed"
             ? "Seed: 8675309"
             : command === "help"
