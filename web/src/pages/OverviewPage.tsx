@@ -289,7 +289,7 @@ export function ModHealthPanel({
   contentPluralTitle?: "Mods" | "Plugins";
 }) {
   if (!canView) return null;
-  if (!updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} contentPluralTitle={contentPluralTitle} onOpenMods={onOpenMods} />;
+  if (!updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} />;
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
 
@@ -303,7 +303,6 @@ export function ModHealthPanel({
   const actions = (
     <div className="overviewCardHeaderActions">
       <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} disabled={loading} />
-      <Button variant="ghost" compact className="textLinkButton" onClick={onOpenMods}>Open {contentPluralTitle}</Button>
     </div>
   );
 
@@ -372,13 +371,9 @@ function ModUpdatesRefreshButton({ contentPlural, onRefresh, disabled = false }:
 }
 
 function ModHealthPanelSkeleton({
-  contentPlural = "mods",
-  contentPluralTitle = "Mods",
-  onOpenMods
+  contentPlural = "mods"
 }: {
   contentPlural?: "mods" | "plugins";
-  contentPluralTitle?: "Mods" | "Plugins";
-  onOpenMods: () => void;
 }) {
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
@@ -388,8 +383,7 @@ function ModHealthPanelSkeleton({
       title={`${contentSingularTitle} updates`}
       description="Checking for updates"
       actions={<div className="overviewCardHeaderActions">
-        <Button variant="secondary" compact iconOnly disabled aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
-        <Button variant="ghost" compact className="textLinkButton" onClick={onOpenMods}>Open {contentPluralTitle}</Button>
+        <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton" disabled aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
       </div>}
       loading
     >
@@ -408,6 +402,13 @@ function ModHealthPanelSkeleton({
       </div>
     </OverviewCard>
   );
+}
+
+export function modUpdateRefreshResultMessage(updatePlan: ModUpdatePlan, contentPlural: "mods" | "plugins") {
+  const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
+  if (updateCount === 0) return "Everything is up to date";
+  const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
+  return `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`;
 }
 
 export type UpcomingScheduleSnapshot = {

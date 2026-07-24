@@ -14,8 +14,12 @@ import { EventIcon } from "./EventIcon";
 import {
   buildPlayerTimelineChartOption,
   formatTimelineDuration,
-  playerTimelineRowHeight,
+  playerTimelineChartHeight,
+  playerTimelineLanePositionFromZoom,
+  playerTimelineLanes,
+  resolvePlayerTimelineLaneWindow,
   timelineSessionGeometry,
+  type PlayerTimelineLanePosition,
   type PlayerTimelineRow,
   type TimelineSessionGeometry
 } from "./playerTimelineChart";
@@ -30,6 +34,7 @@ import {
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
   timelineQueryWindow,
+  timelineRetentionMs,
   type TimelinePalette
 } from "./serverTimelineChart";
 import { Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
@@ -536,24 +541,21 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
   return palette;
 }
 
-function PlayerStatusIcon({ online }: { online: boolean }) {
-  return (
-    <span className={`serverTimelinePlayerStatus tone-${online ? "online" : "offline"}`} aria-label={online ? "Online now" : "Offline now"}>
-      <EventIcon kind={online ? "player_joined" : "player_left"} />
-    </span>
-  );
-}
-
 function PlayerSessionSection({
   rows,
   query,
   viewport,
   now,
   palette,
+  formatTime,
   formatShortTime,
-  onPointerDown,
+  gridLeft,
+  interacting,
+  onDataZoom,
+  onInteractionChange,
   onPointerMove,
-  onPointerUp,
+  onPointerLeave,
+  onClick,
   onWheel
 }: {
   rows: TimelinePlayerRow[];
@@ -561,67 +563,80 @@ function PlayerSessionSection({
   viewport: TimelineWindow;
   now: number;
   palette: TimelinePalette;
+  formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
-  onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => void;
+  gridLeft: number;
+  interacting: boolean;
+  onDataZoom: (event: TimelineDataZoomEvent) => void;
+  onInteractionChange: (interacting: boolean) => void;
+  onPointerMove: React.PointerEventHandler<HTMLDivElement>;
+  onPointerLeave: React.PointerEventHandler<HTMLDivElement>;
+  onClick: React.MouseEventHandler<HTMLDivElement>;
   onWheel: (event: globalThis.WheelEvent) => void;
 }) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const onlineRows = rows.filter((row) => row.online);
-  const offlineRows = rows.filter((row) => !row.online);
-  const ticks = Array.from({ length: 7 }, (_, index) => viewport.from + (viewport.to - viewport.from) * index / 6);
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scroller.addEventListener("wheel", onWheel, { passive: false });
-    return () => scroller.removeEventListener("wheel", onWheel);
-  }, [onWheel]);
-  const renderGroup = (label: string, groupRows: TimelinePlayerRow[], online: boolean) => {
-    if (!groupRows.length) return null;
-    const option = buildPlayerTimelineChartOption({ rows: groupRows, query, viewport, now, palette, formatShortTime });
-    return (
-      <section className={`serverTimelinePlayerGroup tone-${online ? "online" : "offline"}`} aria-label={`${label}, ${groupRows.length} players`}>
-        <div className="serverTimelinePlayerGroupHeader">
-          <span>{label}</span><small>({groupRows.length})</small>
-        </div>
-        <div className="serverTimelinePlayerGroupBody" style={{ height: groupRows.length * playerTimelineRowHeight }}>
-          <div className="serverTimelinePlayerIdentities">
-            {groupRows.map((row) => (
-              <div className="serverTimelinePlayerIdentity" key={row.player.toLocaleLowerCase()}>
-                <PlayerStatusIcon online={row.online} />
-                <strong title={row.player}>{row.player}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="serverTimelinePlayerChart" aria-label={`${label} session chart`}>
-            <EChartsCanvas option={option} onDataZoom={() => undefined} />
-          </div>
-        </div>
-      </section>
-    );
-  };
+  const stableRowsRef = useRef(rows);
+  if (!interacting) stableRowsRef.current = rows;
+  const displayRows = interacting ? stableRowsRef.current : rows;
+  const lanes = useMemo(() => playerTimelineLanes(displayRows), [displayRows]);
+  const [verticalPosition, setVerticalPosition] = useState<PlayerTimelineLanePosition>({ startIndex: 0 });
+  const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, verticalPosition);
+  const option = useMemo(() => buildPlayerTimelineChartOption({
+    rows: displayRows,
+    lanes,
+    query,
+    viewport,
+    verticalPosition: resolvedPosition,
+    now,
+    palette,
+    formatTime,
+    formatShortTime,
+    gridLeft
+  }), [displayRows, formatShortTime, formatTime, gridLeft, lanes, now, palette, query, resolvedPosition.endKey, resolvedPosition.startIndex, resolvedPosition.startKey, viewport]);
+  const handleDataZoom = useCallback((event: TimelineDataZoomEvent) => {
+    const nextPosition = playerTimelineLanePositionFromZoom(event, lanes);
+    if (nextPosition) setVerticalPosition(nextPosition);
+    onDataZoom(event);
+  }, [lanes, onDataZoom]);
 
   return (
-    <section className="serverTimelinePlayers" aria-label="Player sessions">
-      <div className="serverTimelinePlayerAxis" aria-hidden="true">
-        <span />
-        <div>{ticks.map((tick, index) => <time key={tick} dateTime={new Date(tick).toISOString()} style={{ left: `${index / 6 * 100}%` }}>{formatShortTime(tick)}</time>)}</div>
-      </div>
-      <div
-        ref={scrollerRef}
-        className="serverTimelinePlayerScroller"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        {renderGroup("Online now", onlineRows, true)}
-        {renderGroup("Played in this time range", offlineRows, false)}
-        {!rows.length && <div className="serverTimelinePlayerEmpty">No player sessions are available for this time range.</div>}
-      </div>
+    <section
+      className="serverTimelinePlayers"
+      aria-label="Player sessions"
+      data-viewport-from={viewport.from}
+      data-viewport-to={viewport.to}
+    >
+      {lanes.length ? (
+        <div className="serverTimelinePlayerChart" style={{ height: playerTimelineChartHeight(lanes.length) }}>
+          <EChartsCanvas
+            option={option}
+            onDataZoom={handleDataZoom}
+            onInteractionChange={onInteractionChange}
+            onPointerMove={onPointerMove}
+            onPointerLeave={onPointerLeave}
+            onClick={onClick}
+            onWheel={onWheel}
+          />
+        </div>
+      ) : <div className="serverTimelinePlayerEmpty">No player sessions are available for this time range.</div>}
     </section>
   );
+}
+
+export function zoomTimelineWindowAtPixel(
+  viewport: TimelineWindow,
+  deltaPixels: number,
+  anchorPixel: number,
+  plotWidth: number
+): TimelineWindow {
+  if (plotWidth <= 0 || !Number.isFinite(deltaPixels)) return viewport;
+  const span = Math.max(1, viewport.to - viewport.from);
+  const nextSpan = Math.min(timelineRetentionMs, Math.max(60_000, span * Math.exp(deltaPixels * 0.0015)));
+  const anchorRatio = Math.min(1, Math.max(0, anchorPixel / plotWidth));
+  const anchorTime = viewport.from + span * anchorRatio;
+  return {
+    from: anchorTime - nextSpan * anchorRatio,
+    to: anchorTime + nextSpan * (1 - anchorRatio)
+  };
 }
 
 export function ServerTimeline({
@@ -676,7 +691,6 @@ export function ServerTimeline({
   const requestIdRef = useRef(0);
   const navigationTimerRef = useRef<number | undefined>(undefined);
   const hoverFrameRef = useRef<number | undefined>(undefined);
-  const sessionDragRef = useRef<{ pointerId: number; startX: number; viewport: TimelineWindow } | null>(null);
   const palette = useTimelinePresentation(panelRef);
   const navigationPendingRef = useRef(false);
 
@@ -910,9 +924,7 @@ export function ServerTimeline({
     const currentQuery = { from: currentData.from, to: currentData.to };
     const next = dataZoomWindow(event, currentQuery);
     if (!next) return;
-    const previousSpan = viewportRef.current.to - viewportRef.current.from;
-    const nextSpan = next.to - next.from;
-    if (Math.abs(nextSpan - previousSpan) > previousSpan * 0.01) setSelection("custom");
+    setSelection("custom");
     setSelectedCluster(null);
     setLiveMode(false);
     setViewport(next);
@@ -932,10 +944,8 @@ export function ServerTimeline({
     if (hoverTooltip?.pinned) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
     const plotWidth = rect.width - metricGrid.left - metricGrid.right;
-    const plotBottom = rect.height - metricGrid.bottom;
-    if (plotWidth <= 0 || x < metricGrid.left || x > metricGrid.left + plotWidth || y < metricGrid.top || y > plotBottom) {
+    if (plotWidth <= 0 || x < metricGrid.left || x > metricGrid.left + plotWidth) {
       hideHoverTooltip();
       return;
     }
@@ -965,75 +975,33 @@ export function ServerTimeline({
     if (interacting) hideHoverTooltip();
   }, [hideHoverTooltip, nextAnnotationGridTop]);
 
-  const handleSessionPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (event.clientX - rect.left < metricGrid.left) return;
-    sessionDragRef.current = { pointerId: event.pointerId, startX: event.clientX, viewport: viewportRef.current };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    stableAnnotationGridTopRef.current = nextAnnotationGridTop;
-    setChartInteracting(true);
-    hideHoverTooltip();
-  }, [hideHoverTooltip, metricGrid.left, nextAnnotationGridTop]);
-
-  const handleSessionPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = sessionDragRef.current;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const plotWidth = rect.width - metricGrid.left - metricGrid.right;
-    if (drag?.pointerId === event.pointerId && plotWidth > 0) {
-      const delta = -(event.clientX - drag.startX) / plotWidth * (drag.viewport.to - drag.viewport.from);
-      setSelection("custom");
-      setLiveMode(false);
-      setViewport({ from: drag.viewport.from + delta, to: drag.viewport.to + delta });
-      return;
-    }
-    if (hoverTooltip?.pinned || plotWidth <= 0) return;
-    const x = event.clientX - rect.left;
-    if (x < metricGrid.left || x > metricGrid.left + plotWidth) {
-      hideHoverTooltip();
-      return;
-    }
-    const timestamp = viewport.from + (x - metricGrid.left) / plotWidth * (viewport.to - viewport.from);
-    setHoverTooltip({
-      x,
-      y: rect.top - (visualizationRef.current?.getBoundingClientRect().top ?? rect.top) + 8,
-      timestamp,
-      html: timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate),
-      alignEnd: x > rect.width * 0.68,
-      pinned: false
-    });
-  }, [clusters, data?.samples, enabled, formatDate, hideHoverTooltip, hoverTooltip?.pinned, metricGrid, setLiveMode, setViewport, viewport]);
-
-  const handleSessionPointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = sessionDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    sessionDragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setChartInteracting(false);
-    const next = viewportRef.current;
-    const currentQuery = dataRef.current ? { from: dataRef.current.from, to: dataRef.current.to } : timelineQueryWindow(next, false);
-    if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
-  }, [loadWindow]);
-
-  const handleSessionWheel = useCallback((event: globalThis.WheelEvent) => {
+  const handleTimelineWheel = useCallback((event: globalThis.WheelEvent) => {
     const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
     const plotWidth = rect.width - metricGrid.left - metricGrid.right;
     if (plotWidth <= 0) return;
-    const current = viewportRef.current;
-    let next: TimelineWindow;
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
-      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - metricGrid.left) / plotWidth));
-      const currentSpan = current.to - current.from;
-      const nextSpan = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, currentSpan * Math.exp(event.deltaY * 0.0015)));
-      const anchor = current.from + currentSpan * fraction;
-      next = { from: anchor - nextSpan * fraction, to: anchor + nextSpan * (1 - fraction) };
-    } else {
-      const horizontalPixels = timelineHorizontalWheelPixels(event, plotWidth);
-      if (!horizontalPixels) return;
-      event.preventDefault();
-      next = panTimelineWindowByPixels(current, horizontalPixels, plotWidth);
+      event.stopImmediatePropagation();
+      const current = viewportRef.current;
+      const next = zoomTimelineWindowAtPixel(current, event.deltaY, event.clientX - rect.left - metricGrid.left, plotWidth);
+      setSelection("custom");
+      setSelectedCluster(null);
+      setLiveMode(false);
+      setViewport(next);
+      if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
+      navigationTimerRef.current = window.setTimeout(() => {
+        const currentData = dataRef.current;
+        const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
+        if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+      }, 250);
+      return;
     }
+    const horizontalPixels = timelineHorizontalWheelPixels(event, plotWidth);
+    if (!horizontalPixels) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const current = viewportRef.current;
+    const next = panTimelineWindowByPixels(current, horizontalPixels, plotWidth);
     setSelection("custom");
     setLiveMode(false);
     setViewport(next);
@@ -1210,11 +1178,16 @@ export function ServerTimeline({
             viewport={viewport}
             now={clockNow}
             palette={palette}
+            formatTime={formatTime}
             formatShortTime={formatShortTime}
-            onPointerDown={handleSessionPointerDown}
-            onPointerMove={handleSessionPointerMove}
-            onPointerUp={handleSessionPointerUp}
-            onWheel={handleSessionWheel}
+            gridLeft={metricGrid.left}
+            interacting={chartInteracting}
+            onDataZoom={handleDataZoom}
+            onInteractionChange={handleChartInteractionChange}
+            onPointerMove={handleChartPointerMove}
+            onPointerLeave={hideHoverTooltip}
+            onClick={pinHoverTooltip}
+            onWheel={handleTimelineWheel}
           />
         )}
         {annotationEnabled.player && data?.playerActivity?.snapshotState === "unavailable" && (
@@ -1231,6 +1204,7 @@ export function ServerTimeline({
                 onPointerMove={handleChartPointerMove}
                 onPointerLeave={hideHoverTooltip}
                 onClick={pinHoverTooltip}
+                onWheel={handleTimelineWheel}
               />
             </section>
           ))}

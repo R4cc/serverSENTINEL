@@ -24,10 +24,16 @@
 }
 
 .overviewDashboardGrid > .overviewSummary { grid-area: summary; }
-.overviewDashboardGrid > .resourcePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline; align-self: stretch; }
 .overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
+
+.overviewDashboardGrid--chartless {
+  grid-template-areas:
+    "summary summary summary summary summary summary summary summary summary summary summary summary"
+    "players players players players mods mods mods mods automation automation automation automation"
+    "events events events events events events events events events events events events";
+}
 
 .overviewSupportStack {
   display: contents;
@@ -226,6 +232,33 @@ button.overviewCardRow:focus-visible {
   text-align: right;
   white-space: nowrap;
 }
+
+.serverTimelineLoadingSkeleton {
+  padding: var(--space-4);
+  border-color: var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.serverTimelineSkeletonContent {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.serverTimelineSkeletonHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.serverTimelineSkeletonTitle { width: min(220px, 42%); height: 22px; }
+.serverTimelineSkeletonRange { width: min(280px, 46%); height: 34px; }
+.serverTimelineSkeletonToolbar { width: 100%; height: 50px; }
+.serverTimelineSkeletonChart { width: 100%; height: 340px; }
 
 .serverTimelinePanel {
   --timeline-cpu: #4169ff;
@@ -479,146 +512,15 @@ button.overviewCardRow:focus-visible {
   background: var(--surface-raised);
 }
 
-.serverTimelinePlayerAxis,
-.serverTimelinePlayerGroupBody {
-  display: grid;
-  grid-template-columns: var(--timeline-label-gutter) minmax(0, 1fr);
-}
-
-.serverTimelinePlayerAxis {
-  position: relative;
-  z-index: 4;
-  min-height: 28px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-muted);
-}
-
-.serverTimelinePlayerAxis > span {
-  border-right: 1px solid var(--border-subtle);
-}
-
-.serverTimelinePlayerAxis > div {
-  position: relative;
-  margin-right: 24px;
-}
-
-.serverTimelinePlayerAxis time {
-  position: absolute;
-  top: 7px;
-  transform: translateX(-50%);
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.serverTimelinePlayerAxis time:first-child { transform: none; }
-.serverTimelinePlayerAxis time:last-child { transform: translateX(-100%); }
-
-.serverTimelinePlayerScroller {
-  /* Group header (28px) plus six complete 40px rows. Keeping the cap on a
-     row boundary prevents the final visible session label being clipped. */
-  max-height: 268px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  touch-action: pan-y;
-}
-
-.serverTimelinePlayerGroup {
-  --player-session-color: var(--timeline-leave);
-  min-width: 0;
-}
-
-.serverTimelinePlayerGroup.tone-online { --player-session-color: var(--timeline-join); }
-
-.serverTimelinePlayerGroupHeader {
-  position: sticky;
-  z-index: 3;
-  top: 0;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-left: 4px solid var(--player-session-color);
-  background: color-mix(in srgb, var(--player-session-color) 5%, var(--surface-raised));
-  color: var(--player-session-color);
-  font-size: 10px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
-.serverTimelinePlayerGroupHeader small {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-meta);
-}
-
-.serverTimelinePlayerGroupBody { min-height: 40px; }
-
-.serverTimelinePlayerIdentities,
-.serverTimelinePlayerChart {
-  min-width: 0;
-  height: 100%;
-}
-
-.serverTimelinePlayerIdentities {
-  border-right: 1px solid var(--border-subtle);
-}
-
 .serverTimelinePlayerChart {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 70px;
+  max-height: 270px;
   overflow: hidden;
   background: color-mix(in srgb, var(--surface-raised) 96%, var(--surface-muted));
-  pointer-events: none;
-}
-
-.serverTimelinePlayerIdentity {
-  min-width: 0;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.serverTimelinePlayerIdentity:last-child { border-bottom-color: transparent; }
-
-.serverTimelinePlayerIdentity strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.serverTimelinePlayerStatus {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
-}
-
-.serverTimelinePlayerStatus.tone-online { color: var(--timeline-join); }
-.serverTimelinePlayerStatus.tone-offline { color: var(--timeline-leave); }
-
-.serverTimelinePlayerStatus svg {
-  width: 13px;
-  height: 13px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  touch-action: pan-y;
 }
 
 .serverTimelinePlayerEmpty {
@@ -1056,8 +958,7 @@ button.overviewCardRow:focus-visible {
     height: 360px;
   }
 
-  /* Compact desktop keeps five complete rows visible beneath the header. */
-  .serverTimelinePlayerScroller { max-height: 228px; }
+  .serverTimelinePlayerChart { max-height: 228px; }
   .serverTimelineMetricBand.is-prominent { height: 220px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }
@@ -1316,11 +1217,6 @@ button.overviewCardRow:focus-visible {
 .eventMarkerSkeleton { width: 8px; height: 8px; border-radius: 999px; }
 .eventTextSkeleton { width: min(230px, 82%); height: 13px; }
 .eventTimeSkeleton { width: 64px; height: 11px; }
-.resourceSkeletonRows .resourceMetricLabel { display: grid; gap: var(--space-2); }
-.resourceSkeletonRows .resourceMetricLabel .uiSkeleton--text { width: 90px; }
-.resourceSkeletonRows .resourceMetricLabel .uiSkeleton--title { width: 170px; }
-.resourceChartSkeleton { width: 100%; height: 128px; }
-
 .overviewPage .eventsPanel .eventList {
   gap: var(--space-3);
 }
@@ -1569,14 +1465,21 @@ button.overviewCardRow:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "summary"
-      "resource"
+      "timeline"
       "players"
       "mods"
       "automation"
       "events";
   }
 
-  .overviewDashboardGrid > .resourcePanel { grid-area: resource; }
+  .overviewDashboardGrid--chartless {
+    grid-template-areas:
+      "summary"
+      "players"
+      "mods"
+      "automation"
+      "events";
+  }
 
   .overviewDashboardGrid > .overviewSummary {
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1597,18 +1500,23 @@ button.overviewCardRow:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "summary"
-      "resource"
+      "timeline"
       "players"
       "mods"
       "automation"
       "events";
   }
 
-  .overviewDashboardGrid > .resourcePanel { grid-area: resource; }
+  .overviewDashboardGrid--chartless {
+    grid-template-areas:
+      "summary"
+      "players"
+      "mods"
+      "automation"
+      "events";
+  }
 
-  .overviewDashboardGrid > .overviewSummary,
-  .activePlayerGrid,
-  .overviewPanelSkeleton {
+  .overviewDashboardGrid > .overviewSummary {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1637,9 +1545,77 @@ button.overviewCardRow:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .workspacePage-overview .resourcePanel .resourceRow {
-    grid-template-columns: minmax(180px, 0.38fr) minmax(220px, 1fr);
+}
+
+@media (max-width: 980px) {
+  .activePlayer,
+  .playerNameSkeleton {
+    min-height: 32px;
   }
+
+  .playerNameSkeleton { height: 32px; }
+
+  .activePlayer {
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 6px;
+    padding: 5px 8px;
+  }
+
+  .activePlayerDot {
+    width: 6px;
+    height: 6px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sentinel-success) 14%, transparent);
+  }
+}
+
+@media (max-width: 980px) and (orientation: landscape) {
+  .overviewDashboardGrid .activePlayerGrid,
+  .overviewDashboardGrid .overviewPanelSkeleton {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .serverTimelinePanel {
+    padding: var(--space-3);
+    border-color: var(--border-panel);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+  }
+
+  .serverTimelinePanel > .uiPanelHeader,
+  .serverTimelineSkeletonHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-2);
+  }
+
+  .serverTimelineHeaderControls,
+  .serverTimelineRangeControls,
+  .serverTimelineNavigation {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .serverTimelineToolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .serverTimelineLayerGroup {
+    flex-basis: 100%;
+  }
+
+  .serverTimelineChart,
+  .serverTimelineSkeletonChart {
+    height: 320px;
+    min-height: 320px;
+  }
+
+  .serverTimelinePlayerChart { max-height: 220px; }
+  .serverTimelineMetricBand.is-prominent { height: 220px; }
+  .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
 @media (min-width: 2560px) {
@@ -1661,31 +1637,6 @@ button.overviewCardRow:focus-visible {
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
     display: grid;
-  }
-
-  .workspacePage-overview .resourcePanel .resourceRows {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
-  }
-
-  .workspacePage-overview .resourcePanel:not([aria-busy="true"]) {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: var(--space-3);
-  }
-
-  .workspacePage-overview .resourcePanel .resourceRow {
-    min-height: 226px;
-    height: 100%;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(132px, 1fr);
-    align-content: start;
-  }
-
-  .workspacePage-overview .resourcePanel .resourceChart,
-  .workspacePage-overview .resourcePanel .resourceChartEmpty {
-    height: 100%;
-    min-height: 132px;
   }
 
 }
@@ -1783,22 +1734,6 @@ button.overviewCardRow:focus-visible {
   transform: scaleY(1.12);
 }
 
-.resourceMetricLabel > span {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.resourceMetricLabel > strong {
-  color: var(--text);
-  font-size: var(--type-card-title-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-ui);
-  line-height: 1.3;
-}
-
 .overviewSummary .summaryStatusText {
   color: var(--text);
   font-size: clamp(16px, 1.35vw, 20px);
@@ -1835,7 +1770,6 @@ button.overviewCardRow:focus-visible {
   }
 }
 
-.resourceRow,
 .eventRow {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
@@ -1868,20 +1802,6 @@ button.overviewCardRow:focus-visible {
 
 .eventHideButton.uiButton:hover:not(:disabled) {
   color: var(--text);
-}
-
-.resourceScopeControl .uiButton {
-  min-width: 40px;
-  min-height: 30px;
-  height: 30px;
-  padding-inline: var(--space-2);
-  border-radius: calc(var(--radius-sm) - 2px);
-  color: var(--text-muted);
-}
-
-.resourceScopeControl .uiButton.active {
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
 }
 
 .uiButton.runtimeControlButton,

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EChartsCoreOption } from "echarts/core";
-import { createChartInteractionTracker, createChartOptionScheduler, timelineChartSetOptionOptions } from "./EChartsCanvas";
+import { createChartInteractionTracker, createChartOptionScheduler, timelineChartInitOptions, timelineChartSetOptionOptions } from "./EChartsCanvas";
 
 describe("timeline chart option application", () => {
   it("atomically replaces chart components while preserving their stable identities", () => {
+    expect(timelineChartInitOptions).toEqual({ renderer: "svg" });
     expect(timelineChartSetOptionOptions).toEqual({
       replaceMerge: ["grid", "xAxis", "yAxis", "dataZoom", "series"],
       lazyUpdate: false,

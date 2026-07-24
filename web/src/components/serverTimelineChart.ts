@@ -6,6 +6,64 @@ export const timelineRetentionMs = 24 * 60 * 60 * 1000;
 export const liveTimelineFutureRatio = 0.1;
 export const timelineChartGrid = { left: 56, right: 24, top: 48, bottom: 38 } as const;
 export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 34 } as const;
+export const timelineTimeDataZoomId = "timeline-inside";
+
+export function buildTimelineTimeAxisOption({
+  id,
+  query,
+  viewport,
+  palette,
+  formatTime,
+  formatShortTime,
+  position = "bottom"
+}: {
+  id: string;
+  query: TimelineWindow;
+  viewport: TimelineWindow;
+  palette: TimelinePalette;
+  formatTime: (value: string | number | Date) => string;
+  formatShortTime: (value: string | number | Date) => string;
+  position?: "top" | "bottom";
+}) {
+  return {
+    id,
+    type: "time" as const,
+    min: query.from,
+    max: query.to,
+    position,
+    axisLine: { lineStyle: { color: palette.border } },
+    axisTick: { show: false },
+    axisLabel: {
+      color: palette.textMuted,
+      hideOverlap: true,
+      formatter: (value: number) => viewport.to - viewport.from >= 60 * 60 * 1000 ? formatShortTime(value) : formatTime(value)
+    },
+    splitLine: { show: false }
+  };
+}
+
+export function buildTimelineTimeDataZoomOption({
+  id = timelineTimeDataZoomId,
+  viewport,
+  filterMode = "none"
+}: {
+  id?: string;
+  viewport: TimelineWindow;
+  filterMode?: "none" | "weakFilter";
+}) {
+  return {
+    id,
+    type: "inside" as const,
+    xAxisIndex: 0,
+    startValue: viewport.from,
+    endValue: viewport.to,
+    filterMode,
+    zoomOnMouseWheel: "ctrl" as const,
+    moveOnMouseMove: true,
+    moveOnMouseWheel: false,
+    preventDefaultMouseMove: true
+  };
+}
 
 export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
   const cpu = enabled.cpuUtilizationPercent;
@@ -95,10 +153,12 @@ export function timelineNeedsRefill(viewport: TimelineWindow, query: TimelineWin
 }
 
 export function dataZoomWindow(
-  event: { start?: number; end?: number; startValue?: number; endValue?: number; batch?: Array<{ start?: number; end?: number; startValue?: number; endValue?: number }> },
+  event: { dataZoomId?: string; start?: number; end?: number; startValue?: unknown; endValue?: unknown; batch?: Array<{ dataZoomId?: string; start?: number; end?: number; startValue?: unknown; endValue?: unknown }> },
   query: TimelineWindow
 ): TimelineWindow | null {
-  const zoom = event.batch?.[0] ?? event;
+  const candidates = event.batch ?? [event];
+  const zoom = candidates.find((candidate) => candidate.dataZoomId === undefined || candidate.dataZoomId === timelineTimeDataZoomId || candidate.dataZoomId === "player-timeline-time");
+  if (!zoom) return null;
   const startValue = Number(zoom.startValue);
   const endValue = Number(zoom.endValue);
   if (Number.isFinite(startValue) && Number.isFinite(endValue) && endValue > startValue) {
@@ -352,33 +412,16 @@ export function buildTimelineChartOption({
       description: `Server resource timeline with ${samples.length} samples and ${clusters.reduce((total, cluster) => total + cluster.markers.length, 0)} annotations.`
     },
     grid: { id: "timeline-grid", ...grid, containLabel: false },
-    xAxis: {
+    xAxis: buildTimelineTimeAxisOption({
       id: "timeline-time-axis",
-      type: "time",
-      min: query.from,
-      max: query.to,
-      axisLine: { lineStyle: { color: palette.border } },
-      axisTick: { show: false },
-      axisLabel: {
-        color: palette.textMuted,
-        hideOverlap: true,
-        formatter: (value: number) => viewport.to - viewport.from >= 60 * 60 * 1000 ? formatShortTime(value) : formatTime(value)
-      },
-      splitLine: { show: false }
-    },
+      query,
+      viewport,
+      palette,
+      formatTime,
+      formatShortTime
+    }),
     yAxis,
-    dataZoom: [{
-      id: "timeline-inside",
-      type: "inside",
-      xAxisIndex: 0,
-      startValue: viewport.from,
-      endValue: viewport.to,
-      filterMode: "none",
-      zoomOnMouseWheel: "ctrl",
-      moveOnMouseMove: true,
-      moveOnMouseWheel: false,
-      preventDefaultMouseMove: true
-    }],
+    dataZoom: [buildTimelineTimeDataZoomOption({ viewport })],
     series: [
       ...metricSeries.filter((series) => enabled[series.key] && visible.has(series.key)).map((series) => ({
         id: series.key,

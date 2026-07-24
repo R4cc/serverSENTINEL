@@ -66,6 +66,7 @@ describe("server timeline chart windows", () => {
   it("converts absolute and percentage data-zoom events into viewports", () => {
     expect(dataZoomWindow({ startValue: 2_000, endValue: 4_000 }, { from: 0, to: 10_000 })).toEqual({ from: 2_000, to: 4_000 });
     expect(dataZoomWindow({ batch: [{ start: 25, end: 75 }] }, { from: 0, to: 20_000 })).toEqual({ from: 5_000, to: 15_000 });
+    expect(dataZoomWindow({ dataZoomId: "player-timeline-rows", start: 25, end: 75 }, { from: 0, to: 20_000 })).toBeNull();
   });
 
   it("requests a new buffer only near a loaded edge", () => {

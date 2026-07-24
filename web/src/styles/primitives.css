@@ -288,15 +288,15 @@
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-template-areas:
-    "resource resource resource resource resource resource resource resource players players players players"
-    "resource resource resource resource resource resource resource resource mods mods mods mods"
-    "resource resource resource resource resource resource resource resource automation automation automation automation"
+    "timeline timeline timeline timeline timeline timeline timeline timeline players players players players"
+    "timeline timeline timeline timeline timeline timeline timeline timeline mods mods mods mods"
+    "timeline timeline timeline timeline timeline timeline timeline timeline automation automation automation automation"
     "events events events events events events events events events events events events";
   gap: var(--space-4);
   min-height: 0;
 }
 .applicationOverviewPanelGrid > .applicationSkeletonPanel { min-height: 0; }
-.applicationOverviewResourcePanel { grid-area: resource; }
+.applicationOverviewTimelinePanel { grid-area: timeline; }
 .applicationOverviewPlayersPanel { grid-area: players; }
 .applicationOverviewModsPanel { grid-area: mods; }
 .applicationOverviewAutomationPanel { grid-area: automation; }
@@ -356,7 +356,10 @@
 .themeDark .terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 
 @media (max-width: 760px) {
-  .applicationSkeletonSummary { grid-template-columns: 1fr; }
+  .applicationSkeletonSummary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: span 2; }
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(4),
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
   .applicationFilesSkeleton,
   .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
   .applicationFilesDetailsPanel,
@@ -369,15 +372,8 @@
   .applicationSkeletonBreadcrumb { width: 100%; }
   .applicationOverviewPanelGrid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "resource" "players" "mods" "automation" "events";
+    grid-template-areas: "timeline" "players" "mods" "automation" "events";
   }
-}
-
-@media (min-width: 541px) and (max-width: 760px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: span 2; }
-  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(4),
-  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
 }
 
 @media (min-width: 981px) {
@@ -385,7 +381,7 @@
   .applicationSkeletonWideTile { display: block; }
   .applicationOverviewPanelGrid {
     grid-template-areas:
-      "resource resource resource resource resource resource resource resource resource resource resource resource"
+      "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
       "players players players players players mods mods mods mods mods mods mods"
       "players players players players players automation automation automation automation automation automation automation"
       "events events events events events events events events events events events events";
@@ -399,7 +395,7 @@
   .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
   .applicationOverviewPanelGrid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "resource" "players" "mods" "automation" "events";
+    grid-template-areas: "timeline" "players" "mods" "automation" "events";
   }
   .applicationFilesSkeleton,
   .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
@@ -414,6 +410,13 @@
 .modalFooter .uiButton,
 .userModalFooter .uiButton {
   white-space: nowrap;
+}
+
+@media (max-width: 980px) and (orientation: portrait) {
+  .applicationOverviewTimelinePanel { display: none; }
+  .applicationOverviewPanelGrid {
+    grid-template-areas: "players" "mods" "automation" "events";
+  }
 }
 
 .fileTableHead .uiSortHeaderButton,

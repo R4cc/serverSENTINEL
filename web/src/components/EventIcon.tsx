@@ -2,11 +2,34 @@ import type { ServerEvent } from "../types";
 
 export type EventIconKind = ServerEvent["eventType"] | "player_reconnected" | "server_restarted";
 
+export type PlayerEventIconKind = "player_joined" | "player_left";
+export type PlayerEventIconShape =
+  | { type: "circle"; cx: number; cy: number; r: number }
+  | { type: "path"; d: string };
+
+export const playerEventIconShapes: Record<PlayerEventIconKind, PlayerEventIconShape[]> = {
+  player_joined: [
+    { type: "circle", cx: 9, cy: 8, r: 3 },
+    { type: "path", d: "M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" },
+    { type: "path", d: "M15 10h6m-3-3 3 3-3 3" }
+  ],
+  player_left: [
+    { type: "circle", cx: 9, cy: 8, r: 3 },
+    { type: "path", d: "M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" },
+    { type: "path", d: "M21 10h-6m3-3-3 3 3 3" }
+  ]
+};
+
+function PlayerEventIconShapes({ kind }: { kind: PlayerEventIconKind }) {
+  return playerEventIconShapes[kind].map((shape, index) => shape.type === "circle"
+    ? <circle key={index} cx={shape.cx} cy={shape.cy} r={shape.r} />
+    : <path key={index} d={shape.d} />);
+}
+
 export function EventIcon({ kind }: { kind: EventIconKind }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      {kind === "player_joined" && <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" /><path d="M15 10h6m-3-3 3 3-3 3" /></>}
-      {kind === "player_left" && <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3.5 2.3-5 5.5-5 2 0 3.5.6 4.4 2" /><path d="M21 10h-6m3-3-3 3 3 3" /></>}
+      {(kind === "player_joined" || kind === "player_left") && <PlayerEventIconShapes kind={kind} />}
       {kind === "player_reconnected" && <><circle cx="8" cy="8" r="3" /><path d="M2.5 19c.5-3.5 2.3-5 5.5-5 1.4 0 2.5.3 3.4.8" /><path d="M14 10a5 5 0 1 1-1 7m1 3-1-3 3-1" /></>}
       {kind === "server_started" && <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m10 8 6 4-6 4Z" /></>}
       {kind === "server_stopped" && <><rect x="3" y="4" width="18" height="16" rx="3" /><rect x="9" y="9" width="6" height="6" /></>}

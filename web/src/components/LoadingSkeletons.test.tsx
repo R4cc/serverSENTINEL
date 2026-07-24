@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, CodeLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./LoadingSkeletons";
 import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
 
 describe("loading skeletons", () => {
@@ -38,6 +38,7 @@ describe("loading skeletons", () => {
     const mods = renderToStaticMarkup(<ApplicationLoadingSkeleton page="mods" />);
     const schedules = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="schedule" label="Loading schedules" />);
     const consolePage = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="console" label="Loading console" />);
+    const timeline = renderToStaticMarkup(<ServerTimelineLoadingSkeleton />);
 
     expect(files).toContain("applicationFilesSkeleton");
     expect(files.match(/applicationFilesRow"/g)).toHaveLength(8);
@@ -45,5 +46,8 @@ describe("loading skeletons", () => {
     expect(mods.match(/applicationModsMetric"/g)).toHaveLength(3);
     expect(schedules).toContain("applicationScheduleGrid");
     expect(consolePage).toContain("applicationConsoleSkeleton");
+    expect(timeline).toContain("serverTimelineLoadingSkeleton");
+    expect(timeline).toContain("serverTimelineSkeletonChart");
+    expect(timeline).not.toContain("resourcePanel");
   });
 });

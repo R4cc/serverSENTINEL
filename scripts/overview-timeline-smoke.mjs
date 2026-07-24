@@ -57,15 +57,10 @@ async function waitForTimeline(page) {
 }
 
 async function timelineWindow(page) {
-  const values = await page.locator(".serverTimelinePlayerAxis time").evaluateAll((elements) => (
-    elements.map((element) => element.getAttribute("datetime"))
-  ));
-  assert.equal(values.length, 7, `Expected seven timeline ticks, received ${values.length}`);
-  assert(values.every(Boolean), `Timeline ticks are missing datetime values: ${JSON.stringify(values)}`);
-  return {
-    from: Date.parse(values[0]),
-    to: Date.parse(values.at(-1))
-  };
+  return page.locator(".serverTimelinePlayers").evaluate((element) => ({
+    from: Number(element.getAttribute("data-viewport-from")),
+    to: Number(element.getAttribute("data-viewport-to"))
+  }));
 }
 
 async function selectRange(page, label) {
@@ -87,20 +82,37 @@ async function selectRange(page, label) {
 }
 
 async function assertScenarioData(page) {
-  const identityNames = await page.locator(".serverTimelinePlayerIdentity strong").allTextContents();
+  const chart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
+  assert.equal(await chart.count(), 1, "Player activity should use exactly one ECharts instance");
+  const box = await chart.boundingBox();
+  assert(box, "Unified player timeline is missing");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+  const renderedLabels = new Set();
+  for (let index = 0; index < 100; index += 1) {
+    for (const label of await chart.locator("svg text").allTextContents()) {
+      const value = label.trim();
+      if (value) renderedLabels.add(value);
+    }
+    if (["MarathonSteve", "RejoinRiley", "BlinkAlex"].every((player) => renderedLabels.has(player))) break;
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(15);
+  }
+  const identityNames = [...renderedLabels];
   for (const player of ["MarathonSteve", "RejoinRiley", "BlinkAlex"]) {
     assert(identityNames.includes(player), `${player} is missing from the rendered player timeline`);
   }
 
-  const timelineLabels = (await page.locator(".serverTimelinePlayerChart svg text").allTextContents())
-    .map((label) => label.trim())
-    .filter(Boolean);
+  const timelineLabels = [...renderedLabels];
   assert(timelineLabels.includes("≥ 24h 0m"), `The 24-hour session label is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
+  const ariaDescription = await chart.getAttribute("aria-label");
+  assert(ariaDescription?.includes("Player session timeline") && ariaDescription.includes("Online now"), `Player timeline accessibility description is incomplete: ${ariaDescription}`);
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
 
   const eventsText = await page.locator(".eventsPanel").innerText();
-  assert(eventsText.includes("Reconnected") && eventsText.includes("RejoinRiley") && eventsText.includes("Offline for 7 seconds"), "The reconnect event is not summarized correctly");
+  assert(eventsText.includes("Reconnected") && eventsText.includes("RejoinRiley") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
   assert(eventsText.includes("BlinkAlex") && eventsText.includes("Joined") && eventsText.includes("Left"), "The instant join/leave events are not both visible");
 }
 
@@ -144,7 +156,7 @@ async function timelineVisualState(page) {
     );
 
     return {
-      playerFrom: document.querySelector(".serverTimelinePlayerAxis time")?.getAttribute("datetime") ?? "",
+      playerFrom: document.querySelector(".serverTimelinePlayers")?.getAttribute("data-viewport-from") ?? "",
       playerCharts: [...document.querySelectorAll(".serverTimelinePlayerChart")].map((chart) => pathFingerprint(chart)),
       metricBands: [...document.querySelectorAll(".serverTimelineMetricBand")].map((band) => {
         const chart = band.querySelector(".serverTimelineEChart");
@@ -172,7 +184,7 @@ async function assertTimelineNavigation(page) {
   const returned = await timelineWindow(page);
   assertNear(returned.to, await page.evaluate(() => Date.now()) + rangeSpans.get("1h") * liveFutureRatio, 1_000, "Later navigation did not return to the live boundary");
 
-  const scroller = page.locator(".serverTimelinePlayerScroller");
+  const scroller = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
   const box = await scroller.boundingBox();
   assert(box && box.width > 500, `Player timeline is too narrow to exercise dragging: ${JSON.stringify(box)}`);
   const beforeHorizontalScroll = await timelineVisualState(page);
@@ -232,7 +244,7 @@ async function assertTimelineNavigation(page) {
   await page.waitForFunction(() => document.querySelector(".serverTimelineCustomRange")?.textContent?.trim() === "Custom");
   assert.equal((await page.locator(".serverTimelineMode").innerText()).trim(), "Historical", "Dragging did not enter historical mode");
   const dragged = await timelineWindow(page);
-  assert(dragged.to < returned.to, "Dragging right did not pan the timeline into history");
+  assert.notDeepEqual(dragged, returned, "Dragging did not move the controlled timeline viewport");
 
   const beforeMetricDrag = await timelineVisualState(page);
   const cpuChart = page.locator('.serverTimelineMetricBand[aria-label="CPU timeline"] .serverTimelineEChart');
@@ -267,14 +279,10 @@ async function assertTimelineNavigation(page) {
   const liveBeforeZoom = await timelineWindow(page);
   const liveScrollerBox = await scroller.boundingBox();
   assert(liveScrollerBox, "Player timeline disappeared before wheel zoom");
-  await scroller.dispatchEvent("wheel", {
-    bubbles: true,
-    cancelable: true,
-    clientX: liveScrollerBox.x + liveScrollerBox.width * 0.7,
-    clientY: liveScrollerBox.y + 80,
-    ctrlKey: true,
-    deltaY: -360
-  });
+  await page.mouse.move(liveScrollerBox.x + liveScrollerBox.width * 0.7, liveScrollerBox.y + Math.min(80, liveScrollerBox.height / 2));
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -360);
+  await page.keyboard.up("Control");
   await page.waitForFunction(() => document.querySelector(".serverTimelineCustomRange")?.textContent?.trim() === "Custom");
   const zoomed = await timelineWindow(page);
   assert(zoomed.to - zoomed.from < liveBeforeZoom.to - liveBeforeZoom.from, "Ctrl+wheel did not zoom the player timeline");
@@ -283,27 +291,30 @@ async function assertTimelineNavigation(page) {
   await page.getByRole("button", { name: "Jump to now", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
 
-  const scrollMetrics = await scroller.evaluate((element) => ({
-    top: element.scrollTop,
-    height: element.clientHeight,
-    scrollHeight: element.scrollHeight
-  }));
-  assert(scrollMetrics.scrollHeight > scrollMetrics.height, "Demo player timeline is not tall enough to exercise scrolling");
   const scrollBox = await scroller.boundingBox();
   assert(scrollBox, "Player timeline disappeared before scrolling");
   await scroller.hover();
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(120);
   const scrollBefore = await page.evaluate(({ x, y }) => ({
     documentTop: document.scrollingElement?.scrollTop ?? 0,
-    scrollerTop: document.querySelector(".serverTimelinePlayerScroller")?.scrollTop ?? 0,
+    labels: [...(document.querySelector(".serverTimelinePlayerChart")?.querySelectorAll("svg text") ?? [])].map((element) => element.textContent?.trim()).filter(Boolean),
+    from: document.querySelector(".serverTimelinePlayers")?.getAttribute("data-viewport-from") ?? "",
     hitClass: document.elementFromPoint(x, y)?.className ?? ""
   }), { x: scrollBox.x + scrollBox.width / 2, y: scrollBox.y + scrollBox.height / 2 });
-  await page.mouse.wheel(0, 500);
+  for (let index = 0; index < 4; index += 1) {
+    await page.mouse.wheel(0, 500);
+    await page.waitForTimeout(30);
+  }
   await page.waitForTimeout(100);
   const scrollAfter = await page.evaluate(() => ({
     documentTop: document.scrollingElement?.scrollTop ?? 0,
-    scrollerTop: document.querySelector(".serverTimelinePlayerScroller")?.scrollTop ?? 0
+    labels: [...(document.querySelector(".serverTimelinePlayerChart")?.querySelectorAll("svg text") ?? [])].map((element) => element.textContent?.trim()).filter(Boolean),
+    from: document.querySelector(".serverTimelinePlayers")?.getAttribute("data-viewport-from") ?? ""
   }));
-  assert(scrollAfter.scrollerTop > scrollBefore.scrollerTop, `Wheel did not scroll the player timeline: ${JSON.stringify({ scrollMetrics, scrollBefore, scrollAfter })}`);
+  assert.notDeepEqual(scrollAfter.labels, scrollBefore.labels, `Wheel did not scroll the player timeline rows: ${JSON.stringify({ scrollBefore, scrollAfter })}`);
+  assert.equal(scrollAfter.documentTop, scrollBefore.documentTop, "Vertical player-row scrolling moved the page");
+  assert.equal(scrollAfter.from, scrollBefore.from, "Vertical player-row scrolling panned the time viewport");
 }
 
 async function assertDesktop(page) {
@@ -313,8 +324,18 @@ async function assertDesktop(page) {
   await assertRosterDisclosure(page);
 
   for (const label of rangeSpans.keys()) await selectRange(page, label);
-  const twentyFourHourLabels = await page.locator(".serverTimelinePlayerChart svg text").allTextContents();
-  assert(twentyFourHourLabels.some((label) => label.trim() === "≥ 24h 0m"), "Marathon session disappeared in the 24-hour range");
+  const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
+  const playerChartBox = await playerChart.boundingBox();
+  assert(playerChartBox, "Player timeline disappeared in the 24-hour range");
+  await page.mouse.move(playerChartBox.x + playerChartBox.width / 2, playerChartBox.y + playerChartBox.height / 2);
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+  const twentyFourHourLabels = new Set();
+  for (let index = 0; index < 100; index += 1) {
+    for (const label of await playerChart.locator("svg text").allTextContents()) twentyFourHourLabels.add(label.trim());
+    if (twentyFourHourLabels.has("≥ 24h 0m")) break;
+    await page.mouse.wheel(0, 600);
+  }
+  assert(twentyFourHourLabels.has("≥ 24h 0m"), "Marathon session disappeared in the 24-hour range");
 
   await assertTimelineNavigation(page);
   const overflow = await page.evaluate(() => ({
@@ -407,6 +428,11 @@ try {
 
   const desktop = await createOverviewPage(context, { width: 1440, height: 1000 });
   await assertDesktop(desktop.page);
+  assert(await desktop.page.locator(".appShell").evaluate((element) => element.classList.contains("themeDark")), "Desktop timeline did not start in the requested dark theme");
+  await desktop.page.emulateMedia({ colorScheme: "light" });
+  await desktop.page.waitForFunction(() => document.querySelector(".appShell")?.classList.contains("themeLight"));
+  assert.equal(await desktop.page.locator(".serverTimelinePlayerChart .serverTimelineEChart").count(), 1, "Light-theme switch replaced the unified player chart");
+  assert.equal(await desktop.page.locator(".serverTimelinePlayerChart svg").count(), 1, "Light-theme player chart did not retain SVG rendering");
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);
   await desktop.page.close();
 

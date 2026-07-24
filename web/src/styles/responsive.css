@@ -4,7 +4,6 @@
   }
 
   .overviewSummary,
-.overviewPage > .resourcePanel,
 .overviewPage > .eventsPanel {
     grid-column: 1 / -1;
     grid-row: auto;
@@ -139,7 +138,6 @@
   }
 
   .overviewSummary,
-.overviewPage > .resourcePanel,
 .overviewPage > .eventsPanel {
     grid-column: 1 / -1;
     grid-row: auto;
@@ -200,15 +198,6 @@
   }
 
 
-  .resourceScopeControl {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .resourceScopeControl button {
-    flex: 1;
-  }
-
   .nodesToolbar .buttonRow {
     align-items: center;
     flex-direction: row;
@@ -249,29 +238,8 @@
     flex-direction: column;
   }
 
-  .resourceRow {
-    grid-template-columns: 1fr;
-  }
-
   .overviewSummary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .resourceRows {
-    gap: 8px;
-  }
-
-  .resourceRow {
-    gap: 12px;
-    padding: 12px;
-  }
-
-  .resourceChart,
-  .resourceChartEmpty {
-    width: 100%;
-    min-width: 0;
-    margin: 0;
-    padding: 6px 2px 2px 0;
   }
 
   .eventRow {
@@ -1516,6 +1484,12 @@ button:disabled,
 
 /* Fill the desktop viewport from the shell instead of approximating the
    remaining page height with per-feature 100vh offsets. */
+@media (min-width: 2560px) {
+  .workspace.workspacePage-console {
+    max-width: none;
+  }
+}
+
 @media (min-width: 721px) {
   .workspacePage-console,
   .workspacePage-files,
@@ -2326,7 +2300,6 @@ textarea:hover:not(:disabled),
 }
 
 .summaryTile,
-.resourceRow,
 .usersTable,
 .fileTable,
 .scheduleTableFrame {
@@ -2342,18 +2315,10 @@ textarea:hover:not(:disabled),
   display: none;
 }
 
-.resourceRows,
 .eventList {
   gap: var(--space-2);
 }
 
-.resourceRow {
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
-}
-
-.resourceChart,
-.resourceChartEmpty,
 .permissionWarning,
 .permissionGroup,
 .installTabs,
@@ -2363,20 +2328,6 @@ textarea:hover:not(:disabled),
 
 .permissionGroup {
   background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
-}
-
-.resourceRow.unavailable .resourceChart,
-.resourceRow.unavailable .resourceChartEmpty {
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.018) 0 1px, transparent 1px 12px),
-    var(--surface);
-}
-
-.themeDark .resourceRow.unavailable .resourceChart,
-.themeDark .resourceRow.unavailable .resourceChartEmpty {
-  background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 12px),
-    var(--surface);
 }
 
 .usersTable th,
@@ -2632,6 +2583,14 @@ textarea:hover:not(:disabled),
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
 @media (max-width: 720px) {
+  .sidebarToggleIconDesktop {
+    display: none;
+  }
+
+  .sidebarToggleIconMobile {
+    display: inline-flex;
+  }
+
   .appShell,
   .sidebarCollapsed.appShell {
     grid-template-rows: 68px minmax(0, 1fr);
@@ -2915,7 +2874,6 @@ textarea:hover:not(:disabled),
   }
 
   .overviewPage > *,
-.overviewPage > .resourcePanel,
 .overviewPage > .eventsPanel {
     grid-column: 1 / -1;
   }

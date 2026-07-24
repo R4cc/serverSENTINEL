@@ -3,9 +3,14 @@ import type {
   CustomSeriesRenderItem,
   CustomSeriesRenderItemReturn
 } from "echarts/types/src/chart/custom/CustomSeries.js";
-import type { EChartsCoreOption } from "echarts/core";
+import { format, type EChartsCoreOption } from "echarts/core";
 import type { ServerTimelinePlayerSession } from "../types";
-import type { TimelinePalette } from "./serverTimelineChart";
+import { playerEventIconShapes, type PlayerEventIconKind } from "./EventIcon";
+import {
+  buildTimelineTimeAxisOption,
+  buildTimelineTimeDataZoomOption,
+  type TimelinePalette
+} from "./serverTimelineChart";
 
 export type PlayerTimelineWindow = { from: number; to: number };
 
@@ -13,6 +18,29 @@ export type PlayerTimelineRow = {
   player: string;
   online: boolean;
   sessions: ServerTimelinePlayerSession[];
+};
+
+export type PlayerTimelineGroupLane = {
+  key: "group:online" | "group:offline";
+  kind: "group";
+  online: boolean;
+  label: "Online now" | "Played in this time range";
+  count: number;
+};
+
+export type PlayerTimelinePlayerLane = {
+  key: string;
+  kind: "player";
+  online: boolean;
+  player: string;
+  row: PlayerTimelineRow;
+};
+
+export type PlayerTimelineLane = PlayerTimelineGroupLane | PlayerTimelinePlayerLane;
+
+export type PlayerTimelineLanePosition = {
+  startKey?: string;
+  startIndex: number;
 };
 
 export type TimelineSessionGeometry = {
@@ -29,6 +57,11 @@ export type PlayerTimelineChartItem = {
   player: string;
   online: boolean;
   rowIndex: number;
+  laneKey: string;
+  startedAt: number;
+  endedAt: number;
+  startBoundary: ServerTimelinePlayerSession["startBoundary"];
+  endBoundary: ServerTimelinePlayerSession["endBoundary"];
   visibleStart: number;
   visibleEnd: number;
   exactStart: boolean;
@@ -39,6 +72,8 @@ export type PlayerTimelineChartItem = {
   durationLabel: string;
   startLabel: string | null;
   endLabel: string | null;
+  fullStartLabel: string | null;
+  fullEndLabel: string | null;
   reconnects: Array<{
     at: number;
     offlineMs: number;
@@ -66,8 +101,76 @@ export type PlayerTimelineLabelLayout = {
 };
 
 export const playerTimelineRowHeight = 40;
+export const playerTimelineAxisHeight = 30;
+export const playerTimelineVisibleLaneCount = 6;
 export const playerTimelineReconnectWindowMs = 15 * 60_000;
-const playerTimelineRightInset = 24;
+export const playerTimelineTimeDataZoomId = "player-timeline-time";
+export const playerTimelineRowsDataZoomId = "player-timeline-rows";
+export const playerTimelineRowsSliderId = "player-timeline-rows-slider";
+
+function playerTimelineKey(player: string) {
+  return player.trim().toLocaleLowerCase();
+}
+
+function playerTimelineLaneKey(row: Pick<PlayerTimelineRow, "player" | "online">) {
+  return `player:${row.online ? "online" : "offline"}:${playerTimelineKey(row.player)}`;
+}
+
+export function playerTimelineLanes(rows: PlayerTimelineRow[]): PlayerTimelineLane[] {
+  const byName = (left: PlayerTimelineRow, right: PlayerTimelineRow) => left.player.localeCompare(right.player, undefined, { sensitivity: "base" });
+  const onlineRows = rows.filter((row) => row.online).sort(byName);
+  const offlineRows = rows.filter((row) => !row.online).sort(byName);
+  return [
+    ...(onlineRows.length ? [{ key: "group:online", kind: "group", online: true, label: "Online now", count: onlineRows.length } as const] : []),
+    ...onlineRows.map((row): PlayerTimelinePlayerLane => ({ key: playerTimelineLaneKey(row), kind: "player", online: true, player: row.player, row })),
+    ...(offlineRows.length ? [{ key: "group:offline", kind: "group", online: false, label: "Played in this time range", count: offlineRows.length } as const] : []),
+    ...offlineRows.map((row): PlayerTimelinePlayerLane => ({ key: playerTimelineLaneKey(row), kind: "player", online: false, player: row.player, row }))
+  ];
+}
+
+export function resolvePlayerTimelineLaneWindow(
+  lanes: PlayerTimelineLane[],
+  position: PlayerTimelineLanePosition = { startIndex: 0 },
+  visibleCount = playerTimelineVisibleLaneCount
+) {
+  const count = Math.max(1, Math.min(visibleCount, lanes.length || 1));
+  const keyedIndex = position.startKey ? lanes.findIndex((lane) => lane.key === position.startKey) : -1;
+  const requestedIndex = keyedIndex >= 0 ? keyedIndex : position.startIndex;
+  const startIndex = Math.max(0, Math.min(Math.max(0, lanes.length - count), requestedIndex));
+  const endIndex = Math.max(startIndex, Math.min(lanes.length - 1, startIndex + count - 1));
+  return {
+    startIndex,
+    endIndex,
+    startKey: lanes[startIndex]?.key,
+    endKey: lanes[endIndex]?.key,
+    visibleCount: count
+  };
+}
+
+export function playerTimelineLanePositionFromZoom(
+  event: { dataZoomId?: string; start?: number; startValue?: unknown; batch?: Array<{ dataZoomId?: string; start?: number; startValue?: unknown }> },
+  lanes: PlayerTimelineLane[]
+): PlayerTimelineLanePosition | null {
+  const candidates = event.batch ?? [event];
+  const zoom = candidates.find((candidate) => candidate.dataZoomId === playerTimelineRowsDataZoomId || candidate.dataZoomId === playerTimelineRowsSliderId);
+  if (!zoom || !lanes.length) return null;
+  if (typeof zoom.startValue === "string") {
+    const index = lanes.findIndex((lane) => lane.key === zoom.startValue);
+    if (index >= 0) return { startKey: lanes[index].key, startIndex: index };
+  }
+  const numericStartValue = Number(zoom.startValue);
+  if (Number.isInteger(numericStartValue) && numericStartValue >= 0 && numericStartValue < lanes.length) {
+    return { startKey: lanes[numericStartValue].key, startIndex: numericStartValue };
+  }
+  const start = Number(zoom.start);
+  if (!Number.isFinite(start)) return null;
+  const index = Math.max(0, Math.min(lanes.length - 1, Math.round(start / 100 * Math.max(0, lanes.length - 1))));
+  return { startKey: lanes[index].key, startIndex: index };
+}
+
+export function playerTimelineChartHeight(laneCount: number) {
+  return playerTimelineAxisHeight + Math.max(1, Math.min(playerTimelineVisibleLaneCount, laneCount)) * playerTimelineRowHeight;
+}
 
 export function timelineSessionGeometry(session: ServerTimelinePlayerSession, viewport: PlayerTimelineWindow, now: number): TimelineSessionGeometry | null {
   const sessionEnd = session.endedAt ?? now;
@@ -94,32 +197,30 @@ export function formatTimelineDuration(milliseconds: number) {
   return "<1m";
 }
 
-function estimatedTextWidth(value: string) {
-  return value.length * 5.6 + 10;
-}
-
 export function playerTimelineLabelLayout({
   startX,
   endX,
   plotLeft,
   plotRight,
-  durationLabel,
-  startLabel,
-  endLabel
+  durationWidth,
+  startWidth,
+  endWidth,
+  hasStart,
+  hasEnd
 }: {
   startX: number;
   endX: number;
   plotLeft: number;
   plotRight: number;
-  durationLabel: string;
-  startLabel: string | null;
-  endLabel: string | null;
+  durationWidth: number;
+  startWidth: number;
+  endWidth: number;
+  hasStart: boolean;
+  hasEnd: boolean;
 }): PlayerTimelineLabelLayout {
   const segmentWidth = Math.max(0, endX - startX);
-  const durationHalfWidth = estimatedTextWidth(durationLabel) / 2;
+  const durationHalfWidth = durationWidth / 2;
   const durationX = Math.max(plotLeft + durationHalfWidth, Math.min(plotRight - durationHalfWidth, (startX + endX) / 2));
-  const startWidth = startLabel ? estimatedTextWidth(startLabel) : 0;
-  const endWidth = endLabel ? estimatedTextWidth(endLabel) : 0;
   const roomy = segmentWidth >= startWidth + endWidth + 20;
 
   if (roomy) {
@@ -129,21 +230,21 @@ export function playerTimelineLabelLayout({
       startAlign: startX - startWidth / 2 < plotLeft ? "left" : "center",
       endX,
       endAlign: endX + endWidth / 2 > plotRight ? "right" : "center",
-      showStart: Boolean(startLabel),
-      showEnd: Boolean(endLabel)
+      showStart: hasStart,
+      showEnd: hasEnd
     };
   }
 
-  const startFitsOutside = Boolean(startLabel) && startX - startWidth - 7 >= plotLeft;
-  const endFitsOutside = Boolean(endLabel) && endX + endWidth + 7 <= plotRight;
+  const startFitsOutside = hasStart && startX - startWidth - 7 >= plotLeft;
+  const endFitsOutside = hasEnd && endX + endWidth + 7 <= plotRight;
   return {
     durationX,
     startX: startFitsOutside ? startX - 7 : startX,
     startAlign: startFitsOutside ? "right" : "left",
     endX: endFitsOutside ? endX + 7 : endX,
     endAlign: endFitsOutside ? "left" : "right",
-    showStart: Boolean(startLabel) && (startFitsOutside || !endLabel),
-    showEnd: Boolean(endLabel) && (endFitsOutside || !startLabel || !startFitsOutside)
+    showStart: hasStart && (startFitsOutside || !hasEnd),
+    showEnd: hasEnd && (endFitsOutside || !hasStart || !startFitsOutside)
   };
 }
 
@@ -194,15 +295,21 @@ export function playerTimelineChartItems(
       const open = displaySession.endBoundary === "online" && now >= viewport.from && now <= viewport.to && visibleEnd === now;
       const activeDurationMs = sessions.reduce((total, session) => total + Math.max(0, (session.endedAt ?? now) - session.startedAt), 0);
       const durationLabel = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(activeDurationMs)}${sessions.length > 1 ? " active" : ""}`;
-      const startLabel = exactStart ? formatShortTime(displaySession.startedAt) : null;
-      const endLabel = open ? "Now" : exactEnd && displaySession.endedAt !== null ? formatShortTime(displaySession.endedAt) : null;
+      const fullStartLabel = displaySession.startBoundary === "join" ? formatShortTime(displaySession.startedAt) : null;
+      const fullEndLabel = displaySession.endBoundary === "online"
+        ? "Now"
+        : (displaySession.endBoundary === "leave" || displaySession.endBoundary === "server-end") && displaySession.endedAt !== null
+          ? formatShortTime(displaySession.endedAt)
+          : null;
+      const startLabel = exactStart ? fullStartLabel : null;
+      const endLabel = open || exactEnd ? fullEndLabel : null;
       const reconnects = sessions.slice(1).flatMap((session, index) => {
         const previousEnd = sessions[index].endedAt;
         if (previousEnd === null || session.startedAt < viewport.from || session.startedAt > viewport.to) return [];
         return [{ at: session.startedAt, offlineMs: Math.max(0, session.startedAt - previousEnd) }];
       });
-      const accessibleStart = startLabel ?? "before visible history";
-      const accessibleEnd = open ? "online now" : endLabel ?? "outside visible history";
+      const accessibleStart = startLabel ?? (displaySession.startBoundary === "history-boundary" || displaySession.startedAt < viewport.from ? "before visible history" : fullStartLabel ?? "unknown start");
+      const accessibleEnd = open ? "online now" : endLabel ?? (sessionEnd > viewport.to || displaySession.endBoundary === "history-boundary" ? "outside visible history" : fullEndLabel ?? "unknown end");
       const reconnectSummary = reconnects.length
         ? `; ${reconnects.length} ${reconnects.length === 1 ? "reconnect" : "reconnects"}`
         : "";
@@ -211,6 +318,11 @@ export function playerTimelineChartItems(
         player: row.player,
         online: row.online,
         rowIndex,
+        laneKey: playerTimelineLaneKey(row),
+        startedAt: displaySession.startedAt,
+        endedAt: sessionEnd,
+        startBoundary: displaySession.startBoundary,
+        endBoundary: displaySession.endBoundary,
         visibleStart,
         visibleEnd,
         exactStart,
@@ -221,6 +333,8 @@ export function playerTimelineChartItems(
         durationLabel,
         startLabel,
         endLabel,
+        fullStartLabel,
+        fullEndLabel,
         reconnects,
         accessibleLabel: `${row.player}: ${accessibleStart} – ${accessibleEnd}; ${durationLabel}${reconnectSummary}`
       }];
@@ -228,28 +342,159 @@ export function playerTimelineChartItems(
   });
 }
 
+function rowChromeRenderItem(lanes: PlayerTimelineLane[], query: PlayerTimelineWindow, palette: TimelinePalette): CustomSeriesRenderItem {
+  return (params, api): CustomSeriesRenderItemReturn => {
+    const lane = lanes[params.dataIndex];
+    if (!lane) return null;
+    const coordSys = params.coordSys as unknown as CartesianRect;
+    const y = api.coord([query.from, lane.key])[1];
+    const rawSize = api.size?.([0, 1]);
+    const measuredBand = Math.abs(Number(Array.isArray(rawSize) ? rawSize[1] : rawSize));
+    const bandHeight = Number.isFinite(measuredBand) && measuredBand > 0 ? measuredBand : playerTimelineRowHeight;
+    const top = y - bandHeight / 2;
+    const plotRight = coordSys.x + coordSys.width;
+    const color = lane.online ? palette.join : palette.leave;
+
+    if (lane.kind === "group") {
+      return {
+        type: "group",
+        name: `${lane.label}, ${lane.count} players`,
+        children: [
+          {
+            type: "rect",
+            shape: { x: 0, y: top + 0.5, width: plotRight, height: Math.max(1, bandHeight - 1) },
+            style: { fill: color, opacity: 0.055 },
+            silent: true
+          },
+          {
+            type: "rect",
+            shape: { x: 0, y: top + 0.5, width: 4, height: Math.max(1, bandHeight - 1) },
+            style: { fill: color },
+            silent: true
+          },
+          {
+            type: "text",
+            style: {
+              x: 12,
+              y,
+              text: `${lane.label.toUpperCase()} (${lane.count})`,
+              align: "left",
+              verticalAlign: "middle",
+              fill: color,
+              font: "700 10px Inter, system-ui, sans-serif"
+            },
+            silent: true
+          },
+          {
+            type: "line",
+            shape: { x1: 0, y1: top + bandHeight - 0.5, x2: plotRight, y2: top + bandHeight - 0.5 },
+            style: { stroke: palette.border, lineWidth: 1, opacity: 0.75 },
+            silent: true
+          }
+        ]
+      };
+    }
+
+    const badgeRadius = Math.max(8, Math.min(11, bandHeight * 0.275));
+    const badgeX = 22;
+    const iconSize = badgeRadius * 1.28;
+    const iconX = badgeX - iconSize / 2;
+    const iconY = y - iconSize / 2;
+    const iconKind: PlayerEventIconKind = lane.online ? "player_joined" : "player_left";
+    const iconChildren: CustomElementOption[] = playerEventIconShapes[iconKind].map((shape) => shape.type === "circle"
+      ? {
+          type: "circle",
+          shape: {
+            cx: iconX + shape.cx / 24 * iconSize,
+            cy: iconY + shape.cy / 24 * iconSize,
+            r: shape.r / 24 * iconSize
+          },
+          style: { fill: "none", stroke: color, lineWidth: 1.35 },
+          silent: true
+        }
+      : {
+          type: "path",
+          shape: { pathData: shape.d, x: iconX, y: iconY, width: iconSize, height: iconSize },
+          style: { fill: "none", stroke: color, lineWidth: 1.35, lineCap: "round", lineJoin: "round" },
+          silent: true
+        });
+
+    return {
+      type: "group",
+      name: `${lane.player}, ${lane.online ? "online now" : "offline now"}`,
+      children: [
+        {
+          type: "line",
+          shape: { x1: 0, y1: top + bandHeight - 0.5, x2: plotRight, y2: top + bandHeight - 0.5 },
+          style: { stroke: palette.border, lineWidth: 1, opacity: 0.5 },
+          silent: true
+        },
+        {
+          type: "line",
+          shape: { x1: coordSys.x, y1: top, x2: coordSys.x, y2: top + bandHeight },
+          style: { stroke: palette.border, lineWidth: 1 },
+          silent: true
+        },
+        {
+          type: "circle",
+          shape: { cx: badgeX, cy: y, r: badgeRadius },
+          style: { fill: palette.surface, stroke: color, lineWidth: 1.5 },
+          silent: true
+        },
+        ...iconChildren,
+        {
+          type: "text",
+          style: {
+            x: badgeX + badgeRadius + 8,
+            y,
+            width: Math.max(0, coordSys.x - badgeX - badgeRadius - 20),
+            overflow: "truncate",
+            ellipsis: "…",
+            text: lane.player,
+            align: "left",
+            verticalAlign: "middle",
+            fill: palette.text,
+            font: "700 11px Inter, system-ui, sans-serif"
+          },
+          silent: true
+        }
+      ]
+    };
+  };
+}
+
 function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePalette): CustomSeriesRenderItem {
   return (params, api): CustomSeriesRenderItemReturn => {
-    const itemIndex = Number(api.value(3));
-    const item = items[itemIndex];
+    const item = items[Number(api.value(3))];
     if (!item) return null;
     const coordSys = params.coordSys as unknown as CartesianRect;
-    const start = api.coord([item.visibleStart, item.rowIndex]);
-    const end = api.coord([item.visibleEnd, item.rowIndex]);
+    const rawStartX = api.coord([item.startedAt, item.laneKey])[0];
+    const rawEndX = api.coord([item.endedAt, item.laneKey])[0];
     const plotLeft = coordSys.x;
     const plotRight = coordSys.x + coordSys.width;
-    const startX = Math.max(plotLeft, Math.min(plotRight, start[0]));
-    const endX = Math.max(startX + 1.5, Math.min(plotRight, end[0]));
-    const y = start[1];
+    const startX = Math.max(plotLeft, Math.min(plotRight, rawStartX));
+    const endX = Math.max(startX + 1.5, Math.min(plotRight, rawEndX));
+    const y = api.coord([item.startedAt, item.laneKey])[1];
     const color = item.online ? palette.join : palette.leave;
+    const startClipped = item.startBoundary === "history-boundary" || rawStartX < plotLeft;
+    const endClipped = item.endBoundary === "history-boundary" || rawEndX > plotRight;
+    const exactStart = item.startBoundary === "join" && rawStartX >= plotLeft && rawStartX <= plotRight;
+    const exactEnd = (item.endBoundary === "leave" || item.endBoundary === "server-end") && rawEndX >= plotLeft && rawEndX <= plotRight;
+    const open = item.endBoundary === "online" && rawEndX >= plotLeft && rawEndX <= plotRight;
+    const startLabel = exactStart ? item.fullStartLabel : null;
+    const endLabel = open || exactEnd ? item.fullEndLabel : null;
+    const durationFont = "600 9px Inter, system-ui, sans-serif";
+    const endpointFont = "9px Inter, system-ui, sans-serif";
     const labels = playerTimelineLabelLayout({
       startX,
       endX,
       plotLeft,
       plotRight,
-      durationLabel: item.durationLabel,
-      startLabel: item.startLabel,
-      endLabel: item.endLabel
+      durationWidth: format.getTextRect(item.durationLabel, durationFont).width + 10,
+      startWidth: startLabel ? format.getTextRect(startLabel, endpointFont).width : 0,
+      endWidth: endLabel ? format.getTextRect(endLabel, endpointFont).width : 0,
+      hasStart: Boolean(startLabel),
+      hasEnd: Boolean(endLabel)
     });
     const children: CustomElementOption[] = [
       {
@@ -267,7 +512,8 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
     ];
 
     for (const reconnect of item.reconnects) {
-      const reconnectX = Math.max(plotLeft, Math.min(plotRight, api.coord([reconnect.at, item.rowIndex])[0]));
+      const reconnectX = api.coord([reconnect.at, item.laneKey])[0];
+      if (reconnectX < plotLeft || reconnectX > plotRight) continue;
       children.push({
         type: "circle",
         name: `Reconnected after ${formatTimelineDuration(reconnect.offlineMs)} offline`,
@@ -277,7 +523,7 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
       });
     }
 
-    if (item.startClipped) {
+    if (startClipped) {
       children.push({
         type: "polygon",
         shape: { points: [[plotLeft, y], [plotLeft + 8, y - 4], [plotLeft + 8, y + 4]] },
@@ -293,7 +539,7 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
       });
     }
 
-    if (item.endClipped) {
+    if (endClipped) {
       children.push({
         type: "polygon",
         shape: { points: [[plotRight, y], [plotRight - 8, y - 4], [plotRight - 8, y + 4]] },
@@ -301,7 +547,7 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
         silent: true
       });
     } else {
-      if (item.open) {
+      if (open) {
         children.push({
           type: "circle",
           shape: { cx: endX, cy: y, r: 7.5 },
@@ -326,39 +572,39 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
         align: "center",
         verticalAlign: "bottom",
         fill: palette.text,
-        font: "600 9px Inter, system-ui, sans-serif",
+        font: durationFont,
         backgroundColor: palette.surface,
         borderRadius: 5,
         padding: [2, 5]
       },
       silent: true
     });
-    if (labels.showStart && item.startLabel) {
+    if (labels.showStart && startLabel) {
       children.push({
         type: "text",
         style: {
           x: labels.startX,
           y: y + 8,
-          text: item.startLabel,
+          text: startLabel,
           align: labels.startAlign,
           verticalAlign: "top",
           fill: palette.textMuted,
-          font: "9px Inter, system-ui, sans-serif"
+          font: endpointFont
         },
         silent: true
       });
     }
-    if (labels.showEnd && item.endLabel) {
+    if (labels.showEnd && endLabel) {
       children.push({
         type: "text",
         style: {
           x: labels.endX,
           y: y + 8,
-          text: item.endLabel,
+          text: endLabel,
           align: labels.endAlign,
           verticalAlign: "top",
-          fill: item.open ? color : palette.textMuted,
-          font: `${item.open ? "600 " : ""}9px Inter, system-ui, sans-serif`
+          fill: open ? color : palette.textMuted,
+          font: `${open ? "600 " : ""}${endpointFont}`
         },
         silent: true
       });
@@ -389,83 +635,153 @@ function nowGuideRenderItem(now: number, palette: TimelinePalette): CustomSeries
 
 export function buildPlayerTimelineChartOption({
   rows,
+  lanes = playerTimelineLanes(rows),
   query,
   viewport,
+  verticalPosition = { startIndex: 0 },
   now,
   palette,
-  formatShortTime
+  formatTime,
+  formatShortTime,
+  gridLeft = 220
 }: {
   rows: PlayerTimelineRow[];
+  lanes?: PlayerTimelineLane[];
   query: PlayerTimelineWindow;
   viewport: PlayerTimelineWindow;
+  verticalPosition?: PlayerTimelineLanePosition;
   now: number;
   palette: TimelinePalette;
+  formatTime?: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
+  gridLeft?: number;
 }): EChartsCoreOption {
+  const effectiveFormatTime = formatTime ?? formatShortTime;
   const items = playerTimelineChartItems(rows, viewport, now, formatShortTime);
   const nowVisible = now >= viewport.from && now <= viewport.to;
+  const laneWindow = resolvePlayerTimelineLaneWindow(lanes, verticalPosition);
+  const visibleLaneKeys = new Set(lanes.slice(laneWindow.startIndex, laneWindow.endIndex + 1).map((lane) => lane.key));
+  const visiblePlayers = lanes
+    .slice(laneWindow.startIndex, laneWindow.endIndex + 1)
+    .filter((lane): lane is PlayerTimelinePlayerLane => lane.kind === "player");
+  const visibleDescriptions = visiblePlayers.flatMap((lane) => {
+    const sessions = items.filter((item) => item.laneKey === lane.key).map((item) => item.accessibleLabel);
+    return sessions.length ? sessions : [`${lane.player}: ${lane.online ? "online now" : "offline now"}; no visible session range`];
+  });
+  const onlineCount = lanes.find((lane): lane is PlayerTimelineGroupLane => lane.kind === "group" && lane.online)?.count ?? 0;
+  const offlineCount = lanes.find((lane): lane is PlayerTimelineGroupLane => lane.kind === "group" && !lane.online)?.count ?? 0;
+  const hasVerticalOverflow = lanes.length > laneWindow.visibleCount;
+  const dataZoom: Array<Record<string, unknown>> = [
+    buildTimelineTimeDataZoomOption({ id: playerTimelineTimeDataZoomId, viewport, filterMode: "weakFilter" })
+  ];
+  if (hasVerticalOverflow && laneWindow.startKey && laneWindow.endKey) {
+    dataZoom.push(
+      {
+        id: playerTimelineRowsDataZoomId,
+        type: "inside",
+        yAxisIndex: 0,
+        startValue: laneWindow.startKey,
+        endValue: laneWindow.endKey,
+        filterMode: "weakFilter",
+        zoomLock: true,
+        zoomOnMouseWheel: false,
+        moveOnMouseWheel: true,
+        moveOnMouseMove: false,
+        preventDefaultMouseMove: false
+      },
+      {
+        id: playerTimelineRowsSliderId,
+        type: "slider",
+        yAxisIndex: 0,
+        orient: "vertical",
+        startValue: laneWindow.startKey,
+        endValue: laneWindow.endKey,
+        filterMode: "weakFilter",
+        zoomLock: true,
+        right: 4,
+        top: playerTimelineAxisHeight + 4,
+        bottom: 4,
+        width: 8,
+        showDataShadow: false,
+        showDetail: false,
+        brushSelect: false,
+        borderColor: "transparent",
+        backgroundColor: "transparent",
+        fillerColor: palette.border,
+        handleSize: 0,
+        moveHandleSize: 0
+      }
+    );
+  }
+
   return {
     animation: false,
     aria: {
       enabled: true,
-      description: `Player session timeline with ${rows.length} players and ${items.length} visible sessions.`
+      description: `Player session timeline. Online now: ${onlineCount}. Played in this time range: ${offlineCount}. ${visibleDescriptions.join(". ")}`
     },
-    grid: { id: "player-timeline-grid", left: 0, right: playerTimelineRightInset, top: 0, bottom: 0, containLabel: false },
-    xAxis: {
+    grid: { id: "player-timeline-grid", left: gridLeft, right: 24, top: playerTimelineAxisHeight, bottom: 0, containLabel: false },
+    xAxis: buildTimelineTimeAxisOption({
       id: "player-timeline-time-axis",
-      type: "time",
-      min: query.from,
-      max: query.to,
-      show: false,
-      splitNumber: 6
-    },
+      query,
+      viewport,
+      palette,
+      formatTime: effectiveFormatTime,
+      formatShortTime,
+      position: "top"
+    }),
     yAxis: {
       id: "player-timeline-row-axis",
       type: "category",
       inverse: true,
-      data: rows.map((row) => row.player),
+      data: lanes.map((lane) => lane.key),
       show: false,
       axisTick: { show: false },
       axisLine: { show: false },
-      splitLine: { show: true, lineStyle: { color: palette.border, width: 1, opacity: 0.62 } }
+      splitLine: { show: false }
     },
-    dataZoom: [{
-      id: "player-timeline-inside",
-      type: "inside",
-      xAxisIndex: 0,
-      startValue: viewport.from,
-      endValue: viewport.to,
-      filterMode: "weakFilter",
-      zoomOnMouseWheel: false,
-      moveOnMouseMove: false,
-      moveOnMouseWheel: false,
-      preventDefaultMouseMove: false
-    }],
+    dataZoom,
     series: [
+      {
+        id: "player-row-chrome",
+        name: "Player rows",
+        type: "custom",
+        coordinateSystem: "cartesian2d",
+        renderItem: rowChromeRenderItem(lanes, query, palette),
+        dimensions: ["start", "end", "lane", "laneIndex"],
+        encode: { x: [0, 1], y: 2 },
+        data: lanes.map((lane, index) => [query.from, query.to, lane.key, index]),
+        silent: true,
+        animation: false,
+        clip: false,
+        z: 1
+      },
       {
         id: "player-sessions",
         name: "Player sessions",
         type: "custom",
         coordinateSystem: "cartesian2d",
         renderItem: sessionRenderItem(items, palette),
-        dimensions: ["start", "end", "player", "itemIndex"],
+        dimensions: ["start", "end", "lane", "itemIndex"],
         encode: { x: [0, 1], y: 2 },
-        data: items.map((item, index) => [item.visibleStart, item.visibleEnd, item.rowIndex, index]),
+        data: items.map((item, index) => ({ name: item.accessibleLabel, value: [item.startedAt, item.endedAt, item.laneKey, index] })),
         silent: true,
         animation: false,
-        clip: true
+        clip: true,
+        z: 2
       },
-      ...(nowVisible ? [{
+      ...(nowVisible && visibleLaneKeys.size ? [{
         id: "player-now-guide",
         name: "Current time",
         type: "custom" as const,
         coordinateSystem: "cartesian2d",
         renderItem: nowGuideRenderItem(now, palette),
-        encode: { x: [0, 1], y: 2 },
-        data: [[now, now, 0]],
+        encode: { x: 0 },
+        data: [[now]],
         silent: true,
         animation: false,
-        clip: true
+        clip: true,
+        z: 3
       }] : [])
     ]
   };
