@@ -126,11 +126,19 @@ describe("SQLite repositories", () => {
   it("stores panel settings without creating JSON state", async () => {
     const storage = await createStorage();
     const settings = new SettingsRepository(storage);
-    expect(settings.get()).toEqual({ modrinthApiKey: undefined });
+    expect(settings.get()).toEqual({
+      modrinthApiKey: undefined,
+      playerHeadsEnabled: false,
+      playerHeadsOnboardingCompleted: false
+    });
 
     settings.setModrinthApiKey("  modrinth-secret  ");
 
-    expect(settings.get()).toEqual({ modrinthApiKey: "modrinth-secret" });
+    expect(settings.get()).toEqual({
+      modrinthApiKey: "modrinth-secret",
+      playerHeadsEnabled: false,
+      playerHeadsOnboardingCompleted: false
+    });
   });
 
   it("stores SQL metacharacters as data without executing them", async () => {

@@ -35,6 +35,7 @@ describe("server timeline controls", () => {
     expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
     expect(html).toContain("Player activity");
+    expect(html).toContain("Server events");
     expect(html).not.toContain("serverTimelineSummary");
   });
 

@@ -12,6 +12,13 @@ export const emptyApp: AppState = {
   runtimeMode: "all-in-one",
   timeZone: "UTC",
   modrinthApiConfigured: false,
+  playerHeads: {
+    enabled: false,
+    onboardingRequired: false,
+    provider: "mc-heads.net",
+    cacheEntries: 0,
+    cacheBytes: 0
+  },
   dockerSocketMounted: false,
   totalMemory: 0
 };

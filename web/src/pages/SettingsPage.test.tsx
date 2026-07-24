@@ -27,6 +27,10 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     modrinthConfigured: false,
     canManageIntegrations: false,
     onSubmitModrinthKey: vi.fn(),
+    playerHeads: { enabled: false, onboardingRequired: false, provider: "mc-heads.net", cacheEntries: 0, cacheBytes: 0 },
+    playerHeadsBusy: false,
+    onPlayerHeadsEnabledChange: vi.fn(),
+    onClearPlayerHeadCache: vi.fn(),
     canViewUsers: false,
     userState: {
       users: [],
@@ -109,6 +113,22 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "integrations" })} />);
     expect(html).toContain("Modrinth API key");
     expect(html).toContain("Manage integrations permission is required");
+    expect(html).toContain("Player heads");
+    expect(html).toContain("MCHeads");
+    expect(html).toContain("0 cached heads · 0 B");
+    expect(html).toContain('aria-label="Show player heads on Overview"');
+  });
+
+  it("shows the global player-head choice and cached image size", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      canManageIntegrations: true,
+      playerHeads: { enabled: true, onboardingRequired: false, provider: "mc-heads.net", cacheEntries: 42, cacheBytes: 12_288 }
+    })} />);
+    expect(html).toContain("Enabled");
+    expect(html).toContain("42 cached heads · 12 KiB");
+    expect(html).toContain("Clear cache");
+    expect(html).toContain('href="https://www.mc-heads.net/"');
   });
 
   it("renders console defaults and command-history state", () => {

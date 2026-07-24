@@ -199,6 +199,19 @@ describe("Fastify application factory", () => {
           }
         });
       }
+
+      for (const request of [
+        { method: "PUT" as const, url: "/api/settings/player-heads", payload: { enabled: true } },
+        { method: "DELETE" as const, url: "/api/settings/player-heads/cache", payload: undefined }
+      ]) {
+        const response = await app.inject({
+          method: request.method,
+          url: request.url,
+          headers: { cookie: managerCookie, "x-requested-with": "XMLHttpRequest" },
+          payload: request.payload
+        });
+        expect(response.statusCode, response.body).toBe(403);
+      }
     } finally {
       await app.close();
     }
@@ -209,6 +222,73 @@ describe("Fastify application factory", () => {
       expect(row?.modrinth_api_key).toBe("destination-key");
     } finally {
       database.close();
+    }
+  });
+
+  it("persists the player-head privacy choice and exposes no onboarding prompt after restart", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-player-head-settings-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18084",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+
+    const registered = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-first",
+      headers: csrf,
+      payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+    });
+    expect(registered.statusCode, registered.body).toBe(200);
+    const cookie = registered.headers["set-cookie"]?.split(";", 1)[0];
+    expect(cookie).toBeTruthy();
+
+    const initial = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie } });
+    expect(initial.statusCode, initial.body).toBe(200);
+    expect(initial.json().playerHeads).toEqual({
+      enabled: false,
+      onboardingRequired: true,
+      provider: "mc-heads.net",
+      cacheEntries: 0,
+      cacheBytes: 0
+    });
+
+    const enabled = await app.inject({
+      method: "PUT",
+      url: "/api/settings/player-heads",
+      headers: { ...csrf, cookie },
+      payload: { enabled: true }
+    });
+    expect(enabled.statusCode, enabled.body).toBe(200);
+    expect(enabled.json().playerHeads).toMatchObject({ enabled: true, onboardingRequired: false });
+    await app.close();
+
+    app = await buildApp();
+    try {
+      const persisted = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie } });
+      expect(persisted.statusCode, persisted.body).toBe(200);
+      expect(persisted.json().playerHeads).toMatchObject({ enabled: true, onboardingRequired: false });
+
+      const cleared = await app.inject({
+        method: "DELETE",
+        url: "/api/settings/player-heads/cache",
+        headers: { ...csrf, cookie }
+      });
+      expect(cleared.statusCode, cleared.body).toBe(200);
+      expect(cleared.json().playerHeads).toMatchObject({ cacheEntries: 0, cacheBytes: 0 });
+    } finally {
+      await app.close();
     }
   });
 
@@ -316,6 +396,13 @@ describe("Fastify application factory", () => {
         payload: { modrinthApiKey: "must-not-be-exported" }
       });
       expect(configured.statusCode, configured.body).toBe(200);
+      const playerHeadsConfigured = await app.inject({
+        method: "PUT",
+        url: "/api/settings/player-heads",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { enabled: true }
+      });
+      expect(playerHeadsConfigured.statusCode, playerHeadsConfigured.body).toBe(200);
 
       const adminExport = await app.inject({
         method: "POST",
@@ -343,6 +430,8 @@ describe("Fastify application factory", () => {
       expect(adminDownload.json().manifest.content.instance).toBe(true);
       expect(adminDownload.json().instance.settings).toEqual({});
       expect(adminDownload.body).not.toContain("must-not-be-exported");
+      expect(adminDownload.body).not.toContain("playerHeadsEnabled");
+      expect(adminDownload.body).not.toContain("player_heads_enabled");
 
       const crossUserDownload = await app.inject({
         method: "GET",

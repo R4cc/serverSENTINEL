@@ -1107,69 +1107,70 @@ export function ServerTimeline({
         style={{ "--timeline-label-gutter": `${labelGutter}px` } as React.CSSProperties}
       >
         <div className="serverTimelineAnnotationStage" style={{ height: annotationGridTop }}>
-        <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: metricGrid.left, right: metricGrid.right }}>
-          {positionedClusters.map((cluster) => {
-            const occurrenceCount = timelineClusterOccurrenceCount(cluster);
-            const iconMarkers = timelineClusterIconMarkers(cluster);
-            return (
-              <div
-                key={cluster.id}
-                className={`timelineAnnotationMarker tone-${cluster.tone}`}
-                style={{ left: `${cluster.leftPercent}%` }}
-              >
-                <button
-                  type="button"
-                  className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.inlineLabel ? " is-labeled" : ""}${cluster.alignEnd ? " align-end" : ""}`}
-                  style={{ top: `${cluster.labelTop}px` }}
-                  title={markerTitle(cluster, formatDate)}
-                  aria-label={markerTitle(cluster, formatDate)}
-                  aria-expanded={selectedCluster?.id === cluster.id}
-                  aria-controls="server-timeline-annotation-popover"
-                  onClick={() => {
-                    setHoverTooltip(null);
-                    setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
-                  }}
+          <strong className="serverTimelineAnnotationStageLabel">Server events</strong>
+          <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: metricGrid.left, right: metricGrid.right }}>
+            {positionedClusters.map((cluster) => {
+              const occurrenceCount = timelineClusterOccurrenceCount(cluster);
+              const iconMarkers = timelineClusterIconMarkers(cluster);
+              return (
+                <div
+                  key={cluster.id}
+                  className={`timelineAnnotationMarker tone-${cluster.tone}`}
+                  style={{ left: `${cluster.leftPercent}%` }}
                 >
-                  <span className="timelineAnnotationIconStack" aria-hidden="true">
-                    {iconMarkers.map((marker, index) => (
-                      <span className={`timelineAnnotationClusterIcon tone-${marker.tone}`} key={`${marker.id}:${index}`}>
-                        {timelineMarkerGlyph(marker)}
-                      </span>
-                    ))}
-                  </span>
-                  {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
-                  {cluster.inlineLabel && <span className="timelineAnnotationClusterLabel" aria-hidden="true">{cluster.inlineLabel}</span>}
-                </button>
+                  <button
+                    type="button"
+                    className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.inlineLabel ? " is-labeled" : ""}${cluster.alignEnd ? " align-end" : ""}`}
+                    style={{ top: `${cluster.labelTop}px` }}
+                    title={markerTitle(cluster, formatDate)}
+                    aria-label={markerTitle(cluster, formatDate)}
+                    aria-expanded={selectedCluster?.id === cluster.id}
+                    aria-controls="server-timeline-annotation-popover"
+                    onClick={() => {
+                      setHoverTooltip(null);
+                      setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
+                    }}
+                  >
+                    <span className="timelineAnnotationIconStack" aria-hidden="true">
+                      {iconMarkers.map((marker, index) => (
+                        <span className={`timelineAnnotationClusterIcon tone-${marker.tone}`} key={`${marker.id}:${index}`}>
+                          {timelineMarkerGlyph(marker)}
+                        </span>
+                      ))}
+                    </span>
+                    {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
+                    {cluster.inlineLabel && <span className="timelineAnnotationClusterLabel" aria-hidden="true">{cluster.inlineLabel}</span>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {selectedCluster && selectedPosition && (
+            <section
+              className="serverTimelineAnnotationPopover"
+              id="server-timeline-annotation-popover"
+              aria-label="Events at selected time"
+              style={{ left: `${Math.max(22, Math.min(78, selectedPosition.leftPercent))}%` }}
+            >
+              <div className="serverTimelineAnnotationPopoverHeader">
+                <div>
+                  <strong>{timelineClusterOccurrenceCount(selectedCluster)} {timelineClusterOccurrenceCount(selectedCluster) === 1 ? "event" : "events"}</strong>
+                  <span>{formatDate(selectedCluster.occurredAt)}</span>
+                </div>
+                <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>
               </div>
-            );
-          })}
-        </div>
-        {selectedCluster && selectedPosition && (
-          <section
-            className="serverTimelineAnnotationPopover"
-            id="server-timeline-annotation-popover"
-            aria-label="Events at selected time"
-            style={{ left: `${Math.max(22, Math.min(78, selectedPosition.leftPercent))}%` }}
-          >
-            <div className="serverTimelineAnnotationPopoverHeader">
-              <div>
-                <strong>{timelineClusterOccurrenceCount(selectedCluster)} {timelineClusterOccurrenceCount(selectedCluster) === 1 ? "event" : "events"}</strong>
-                <span>{formatDate(selectedCluster.occurredAt)}</span>
+              <div className="serverTimelineAnnotationPopoverList">
+                {selectedCluster.markers.map((marker) => (
+                  <TimelineAnnotationPopoverItem
+                    key={marker.id}
+                    marker={marker}
+                    formatDate={formatDate}
+                    onOpenSchedule={activateMarker}
+                  />
+                ))}
               </div>
-              <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>
-            </div>
-            <div className="serverTimelineAnnotationPopoverList">
-              {selectedCluster.markers.map((marker) => (
-                <TimelineAnnotationPopoverItem
-                  key={marker.id}
-                  marker={marker}
-                  formatDate={formatDate}
-                  onOpenSchedule={activateMarker}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+            </section>
+          )}
         </div>
         {annotationEnabled.player && (
           <PlayerSessionSection

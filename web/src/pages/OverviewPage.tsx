@@ -193,11 +193,15 @@ export function OverviewSummary({
 export function ActivePlayersPanel({
   snapshot,
   running,
-  loading = false
+  loading = false,
+  serverId = "",
+  playerHeadsEnabled = false
 }: {
   snapshot?: PlayerSnapshot;
   running: boolean;
   loading?: boolean;
+  serverId?: string;
+  playerHeadsEnabled?: boolean;
 }) {
   const [playersExpanded, setPlayersExpanded] = useState(false);
   const available = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot : undefined;
@@ -219,15 +223,19 @@ export function ActivePlayersPanel({
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
     const rosterCanExpand = snapshot.names.length > activePlayerPreviewLimit;
+    const headVersion = Math.floor(Date.now() / (60 * 60 * 1000));
 
     content = (
       <div className="activePlayerRoster">
         <div className="activePlayerGrid" id="active-player-grid">
           {visibleNames.map((name) => (
-            <div className="activePlayer" key={name}>
-              <span className="activePlayerDot" aria-hidden="true" />
-              <strong>{name}</strong>
-            </div>
+            <ActivePlayerRow
+              key={name}
+              serverId={serverId}
+              playerName={name}
+              playerHeadsEnabled={playerHeadsEnabled}
+              version={headVersion}
+            />
           ))}
         </div>
         {(rosterCanExpand || snapshot.state === "stale") && (
@@ -268,6 +276,34 @@ export function ActivePlayersPanel({
       {loading && <LoadingLabel>Loading active players</LoadingLabel>}
       <div className="overviewCardBody">{content}</div>
     </OverviewCard>
+  );
+}
+
+function ActivePlayerRow({
+  serverId,
+  playerName,
+  playerHeadsEnabled,
+  version
+}: {
+  serverId: string;
+  playerName: string;
+  playerHeadsEnabled: boolean;
+  version: number;
+}) {
+  const source = `/api/servers/${encodeURIComponent(serverId)}/player-head/${encodeURIComponent(playerName)}?v=${version}`;
+  const [failed, setFailed] = useState(false);
+  const showHead = playerHeadsEnabled && Boolean(serverId) && !failed;
+  useEffect(() => setFailed(false), [source, playerHeadsEnabled]);
+  return (
+    <div className={`activePlayer ${showHead ? "activePlayer--withHead" : ""}`.trim()}>
+      {showHead ? (
+        <span className="activePlayerHead" aria-hidden="true">
+          <img src={source} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+          <span className="activePlayerHeadStatus" />
+        </span>
+      ) : <span className="activePlayerDot" aria-hidden="true" />}
+      <strong>{playerName}</strong>
+    </div>
   );
 }
 

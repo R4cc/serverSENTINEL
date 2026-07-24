@@ -189,6 +189,14 @@ export type NodeManualRecovery = {
   image?: string;
 };
 
+export type PlayerHeadsState = {
+  enabled: boolean;
+  onboardingRequired: boolean;
+  provider: "mc-heads.net";
+  cacheEntries: number;
+  cacheBytes: number;
+};
+
 export type AppState = {
   servers: ManagedServer[];
   nodes?: ManagedNode[];
@@ -197,6 +205,7 @@ export type AppState = {
   runtimeMode?: "all-in-one" | "panel" | "node";
   timeZone?: string;
   modrinthApiConfigured: boolean;
+  playerHeads: PlayerHeadsState;
   dockerSocketMounted: boolean;
   totalMemory: number;
   currentUser?: PublicUser;

@@ -320,6 +320,49 @@
   padding-top: 6px;
 }
 
+.settingsHubIntegrationRow .settingsHubRowCopy a {
+  color: var(--accent);
+}
+
+.playerHeadsSettingsControl {
+  align-items: flex-end;
+}
+
+.playerHeadsSettingsControl .settingsHubPreferenceExample {
+  text-align: right;
+}
+
+.playerHeadsOnboardingBackdrop {
+  z-index: 160;
+}
+
+.playerHeadsOnboardingModal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.playerHeadsOnboardingModal .modalHeader > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.playerHeadsOnboardingModal .modalHeader p,
+.playerHeadsOnboardingBody p {
+  margin: 0;
+}
+
+.playerHeadsOnboardingBody {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.playerHeadsOnboardingFreshness {
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
 .settingsHubControl .keyForm {
   width: min(100%, 620px);
 }

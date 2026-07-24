@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 19;
+export const currentSchemaVersion = 20;
 export const currentSchemaName = "current-schema-baseline";
 
 const legacySchema16Migrations = [
@@ -44,8 +44,10 @@ const applicationTableNames = [
   "resource_stats",
   "timeline_events",
   "mod_preferences",
-  "operations"
+  "operations",
+  "player_head_cache"
 ] as const;
+const schema19ApplicationTableNames = applicationTableNames.filter((name) => name !== "player_head_cache");
 
 const currentNodeColumns = ["id", "name", "type", "status", "is_internal", "created_at", "updated_at", "last_seen_at", "connected_at", "agent_version", "protocol_version", "capabilities_json", "docker_status", "data_path_status", "total_memory", "secret_hash", "join_token_hash", "join_token_expires_at", "build_id"];
 const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "start_on_node_start", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since"];
@@ -55,7 +57,6 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   storage_metadata: ["key", "value"],
   users: ["id", "username", "password_hash", "salt", "role_preset", "permissions_json", "server_access_json", "created_at", "updated_at"],
   sessions: ["id", "user_id", "created_at"],
-  app_settings: ["id", "modrinth_api_key"],
   managed_ports: ["server_id", "node_id", "id", "name", "type", "protocol", "internal_port", "external_port", "required", "removable", "advanced"],
   scheduled_runs: ["id", "server_id", "schedule_id", "schedule_name", "status", "message", "ran_at", "details_json"],
   file_edit_leases: ["lease_id", "server_id", "path", "user_id", "session_id", "display_name", "acquired_at", "refreshed_at", "expires_at", "file_revision"],
@@ -64,8 +65,10 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   mod_preferences: ["server_id", "filename", "channel", "metadata_json"],
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
+const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed"];
+const schema19AppSettingsColumns = ["id", "modrinth_api_key"];
+const playerHeadCacheColumns = ["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"];
 const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx"];
-const preTimelineTableNames = applicationTableNames.filter((name) => name !== "timeline_events");
 const preTimelineIndexNames = applicationIndexNames.filter((name) => name !== "timeline_events_occurred_at_idx");
 
 function createCurrentSchema(database: Database.Database) {
@@ -118,8 +121,20 @@ function createCurrentSchema(database: Database.Database) {
 
     CREATE TABLE app_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
-      modrinth_api_key TEXT
+      modrinth_api_key TEXT,
+      player_heads_enabled INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_enabled IN (0, 1)),
+      player_heads_onboarding_completed INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_onboarding_completed IN (0, 1))
     );
+
+    CREATE TABLE player_head_cache (
+      cache_key TEXT PRIMARY KEY COLLATE NOCASE,
+      player_name TEXT NOT NULL,
+      png_bytes BLOB NOT NULL,
+      etag TEXT,
+      fetched_at INTEGER NOT NULL,
+      refresh_after INTEGER NOT NULL,
+      last_accessed_at INTEGER NOT NULL
+    ) WITHOUT ROWID;
 
     CREATE TABLE servers (
       id TEXT PRIMARY KEY,
@@ -280,6 +295,12 @@ function isSchema18Baseline(history: AppliedMigration[]) {
     && history[0].name === currentSchemaName;
 }
 
+function isSchema19Baseline(history: AppliedMigration[]) {
+  return history.length === 1
+    && history[0].version === 19
+    && history[0].name === currentSchemaName;
+}
+
 function isLegacySchema16(history: AppliedMigration[]) {
   return history.length === legacySchema16Migrations.length
     && history.every((migration, index) => migration.version === index + 1 && migration.name === legacySchema16Migrations[index]);
@@ -308,13 +329,20 @@ function sameNameSet(actual: string[], expected: readonly string[]) {
   return sameNames([...actual].sort(), [...expected].sort());
 }
 
-function assertApplicationTables(database: Database.Database, includesTimeline = true) {
+function assertApplicationTables(database: Database.Database, includesTimeline = true, includesPlayerHeads = true) {
   const actual = applicationTables(database).map((table) => table.name).sort();
-  const expected = [...(includesTimeline ? applicationTableNames : preTimelineTableNames)].sort();
+  const baseTables = includesPlayerHeads ? applicationTableNames : schema19ApplicationTableNames;
+  const expected = [...(includesTimeline ? baseTables : baseTables.filter((name) => name !== "timeline_events"))].sort();
   if (!sameNames(actual, expected)) throw new Error("Malformed SQLite schema: application table layout does not match the supported baseline.");
   for (const [table, columns] of Object.entries(unchangedTableColumns)) {
     if (!includesTimeline && table === "timeline_events") continue;
     if (!sameNames(tableColumns(database, table), columns)) throw new Error(`Malformed SQLite schema: ${table} columns do not match the supported baseline.`);
+  }
+  if (!sameNames(tableColumns(database, "app_settings"), includesPlayerHeads ? currentAppSettingsColumns : schema19AppSettingsColumns)) {
+    throw new Error("Malformed SQLite schema: app_settings columns do not match the supported baseline.");
+  }
+  if (includesPlayerHeads && !sameNames(tableColumns(database, "player_head_cache"), playerHeadCacheColumns)) {
+    throw new Error("Malformed SQLite schema: player_head_cache columns do not match the supported baseline.");
   }
   const indexes = database.prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all().map(({ name }) => name);
   if (!sameNameSet(indexes, includesTimeline ? applicationIndexNames : preTimelineIndexNames)) throw new Error("Malformed SQLite schema: application indexes do not match the supported baseline.");
@@ -329,8 +357,17 @@ function assertCurrentSchemaLayout(database: Database.Database) {
   }
 }
 
+function assertSchema19Layout(database: Database.Database) {
+  assertApplicationTables(database, true, false);
+  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
+    || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
+    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
+    throw new Error("Malformed SQLite schema: compact schema-19 columns do not match the supported baseline.");
+  }
+}
+
 function assertSchema17Layout(database: Database.Database) {
-  assertApplicationTables(database, false);
+  assertApplicationTables(database, false, false);
   if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
     || !sameNameSet(tableColumns(database, "servers"), schema17ServerColumns)
     || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
@@ -339,7 +376,7 @@ function assertSchema17Layout(database: Database.Database) {
 }
 
 function assertLegacySchema16Layout(database: Database.Database) {
-  assertApplicationTables(database, false);
+  assertApplicationTables(database, false, false);
   if (!sameNameSet(tableColumns(database, "nodes"), [...currentNodeColumns.slice(0, 15), "compatibility", ...currentNodeColumns.slice(15)])
     || !sameNameSet(tableColumns(database, "servers"), [...schema17ServerColumns.slice(0, 17), "desired_runtime_state", ...schema17ServerColumns.slice(17)])
     || !sameNameSet(tableColumns(database, "schedules"), ["server_id", "id", "name", "cron", "commands_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message", "command_delays_json", "command_delays_seconds_json", "steps_json"])) {
@@ -348,7 +385,7 @@ function assertLegacySchema16Layout(database: Database.Database) {
 }
 
 function assertSchema18Layout(database: Database.Database) {
-  assertApplicationTables(database, false);
+  assertApplicationTables(database, false, false);
   if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
     || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
     || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
@@ -367,6 +404,28 @@ function createTimelineEventsSchema(database: Database.Database) {
     );
     CREATE INDEX timeline_events_occurred_at_idx ON timeline_events(server_id, occurred_at);
   `);
+}
+
+function createPlayerHeadsSchema(database: Database.Database, upgradedInstance: boolean) {
+  database.exec(`
+    ALTER TABLE app_settings ADD COLUMN player_heads_enabled INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_enabled IN (0, 1));
+    ALTER TABLE app_settings ADD COLUMN player_heads_onboarding_completed INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_onboarding_completed IN (0, 1));
+    CREATE TABLE player_head_cache (
+      cache_key TEXT PRIMARY KEY COLLATE NOCASE,
+      player_name TEXT NOT NULL,
+      png_bytes BLOB NOT NULL,
+      etag TEXT,
+      fetched_at INTEGER NOT NULL,
+      refresh_after INTEGER NOT NULL,
+      last_accessed_at INTEGER NOT NULL
+    ) WITHOUT ROWID;
+  `);
+  if (upgradedInstance) {
+    database.prepare(`
+      INSERT INTO app_settings (id, player_heads_enabled, player_heads_onboarding_completed) VALUES (1, 0, 1)
+      ON CONFLICT(id) DO UPDATE SET player_heads_enabled = 0, player_heads_onboarding_completed = 1
+    `).run();
+  }
 }
 
 function recordCurrentSchema(database: Database.Database) {
@@ -404,10 +463,20 @@ function initializeSchema(database: Database.Database) {
     return;
   }
 
+  if (isSchema19Baseline(history)) {
+    assertSchema19Layout(database);
+    database.transaction(() => {
+      createPlayerHeadsSchema(database, true);
+      recordCurrentSchema(database);
+    }).immediate();
+    return;
+  }
+
   if (isSchema18Baseline(history)) {
     assertSchema18Layout(database);
     database.transaction(() => {
       createTimelineEventsSchema(database);
+      createPlayerHeadsSchema(database, true);
       recordCurrentSchema(database);
     }).immediate();
     return;
@@ -418,6 +487,7 @@ function initializeSchema(database: Database.Database) {
     database.transaction(() => {
       database.exec("ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;");
       createTimelineEventsSchema(database);
+      createPlayerHeadsSchema(database, true);
       recordCurrentSchema(database);
     }).immediate();
     return;
@@ -435,6 +505,7 @@ function initializeSchema(database: Database.Database) {
         ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;
       `);
       createTimelineEventsSchema(database);
+      createPlayerHeadsSchema(database, true);
       recordCurrentSchema(database);
     }).immediate();
     return;

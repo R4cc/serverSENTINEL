@@ -187,6 +187,24 @@ describe("active player states", () => {
     expect(html).toContain(">Steve</");
   });
 
+  it("uses same-origin lazy player heads only when the global setting is enabled", () => {
+    const enabled = renderToStaticMarkup(createElement(ActivePlayersPanel, {
+      snapshot: live(),
+      running: true,
+      serverId: "server one",
+      playerHeadsEnabled: true
+    }));
+    expect(enabled).toContain('/api/servers/server%20one/player-head/Alex?v=');
+    expect(enabled).toContain('loading="lazy"');
+    expect(enabled).toContain('decoding="async"');
+    expect(enabled).toContain('class="activePlayerHeadStatus"');
+    expect(enabled).not.toContain("mc-heads.net/avatar");
+
+    const disabled = render(live());
+    expect(disabled).not.toContain("/player-head/");
+    expect(disabled).toContain('class="activePlayerDot"');
+  });
+
   it("shows a bounded roster preview with an explicit expansion control", () => {
     const names = Array.from({ length: 11 }, (_, index) => `Player${index + 1}`);
     const html = render(live({ online: names.length, names }));
