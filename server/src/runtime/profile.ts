@@ -22,9 +22,6 @@ export type RuntimeVersion = {
   buildId?: string;
 };
 
-/** @deprecated Use RuntimeVersion. */
-export type RuntimeLoaderVersion = RuntimeVersion;
-
 export type ServerJarProvider = {
   listMinecraftVersions(runtimeType: ServerRuntimeType, options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]>;
   listRuntimeVersions(runtimeType: ServerRuntimeType, minecraftVersion: string, options?: { forceRefresh?: boolean }): Promise<RuntimeVersion[]>;

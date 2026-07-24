@@ -10,10 +10,8 @@
   --panel-gap: var(--space-4);
   --toolbar-min-height: 44px;
   --control-height: 40px;
-  --modal-padding: var(--space-4);
   --modal-small-width: 480px;
   --modal-medium-width: 760px;
-  --modal-large-width: 1040px;
   --sidebar-width: 248px;
   --sidebar-rail-size: 40px;
 }
@@ -116,7 +114,6 @@
 
 .pageStack,
 .tabPage,
-.settingsList,
 .nodesPage {
   width: 100%;
   max-width: var(--page-max-width);
@@ -422,11 +419,6 @@
 
 .scheduleEditOptions {
   align-items: flex-start;
-}
-
-.settingsList {
-  max-width: var(--content-max-width);
-  gap: var(--space-3);
 }
 
 .keyFormConfigured {

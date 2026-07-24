@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "1.5.3",
+  "version": "1.5.5",
   "private": true,
   "workspaces": [
     "shared",
@@ -14,6 +14,7 @@
     "pretest": "npm --workspace shared run build",
     "test": "npm --workspace server run test && npm --workspace web run test",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
+    "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run check:versions && npm --workspace shared run build && npm --workspace server run typecheck && npm --workspace web run typecheck",
@@ -29,7 +30,7 @@
     "playwright": "1.61.1"
   },
   "overrides": {
-    "vite": "^8.1.3",
+    "vite": "^8.1.5",
     "esbuild": "^0.28.1"
   }
 }

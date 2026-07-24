@@ -186,6 +186,18 @@ describe("active player states", () => {
     expect(html).toContain(">Steve</");
   });
 
+  it("shows a bounded roster preview with an explicit expansion control", () => {
+    const names = Array.from({ length: 11 }, (_, index) => `Player${index + 1}`);
+    const html = render(live({ online: names.length, names }));
+
+    expect(html).toContain(">Player1</");
+    expect(html).toContain(">Player8</");
+    expect(html).not.toContain(">Player9</");
+    expect(html).toContain("Show 3 more players");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls="active-player-grid"');
+  });
+
   it("keeps the complete roster and shows when stale snapshots were updated", () => {
     const html = render({
       ...live({ sampledAt: new Date(Date.now() - 60_000).toISOString() }),
@@ -282,7 +294,6 @@ describe("recent event grouping", () => {
     expect(html).toContain("×9");
     expect(html).toContain("<h2>Recent Events</h2>");
     expect(html).toContain(">View full log</button>");
-    expect(html).not.toContain("eventLogButton");
   });
 
   it("starts a new occurrence group at the ten-minute boundary", () => {

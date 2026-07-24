@@ -147,11 +147,6 @@ export function runtimeVersionInfo(server: ManagedServer) {
   );
 }
 
-/** @deprecated Use runtimeVersionInfo. */
-export function fabricLoaderVersionInfo(server: ManagedServer) {
-  return runtimeVersionInfo(server);
-}
-
 export function versionValue(version: VersionResolution | undefined) {
   return version?.version || "Unknown";
 }

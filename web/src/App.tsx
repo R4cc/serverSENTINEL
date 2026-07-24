@@ -10,6 +10,7 @@ import { trimFormValue, validatePassword, validateUsername } from "./utils/valid
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
+import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
@@ -79,17 +80,6 @@ const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
 const nodeUpdateGraceMs = 5 * 60 * 1000;
-const activePageStorageKey = "serversentinel-active-page";
-const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
-function readStoredActivePage() {
-  try {
-    const stored = window.localStorage.getItem(activePageStorageKey);
-    return activePages.has(stored as ActivePage) ? stored as ActivePage : "overview";
-  } catch {
-    return "overview";
-  }
-}
-
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
   if (type === "warning") {
     return (
@@ -1087,11 +1077,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(activePageStorageKey, activePage);
-    } catch {
-      // Ignore unavailable browser storage; the page will fall back to overview on reload.
-    }
+    writeStoredActivePage(activePage);
   }, [activePage]);
 
   useEffect(() => {

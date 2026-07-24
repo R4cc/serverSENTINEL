@@ -24,11 +24,11 @@ export async function registerStaticFrontend(app: FastifyInstance) {
     prefix: "/",
     wildcard: false,
     cacheControl: false,
-    setHeaders(response, path) {
+    setHeaders(reply, path) {
       // HTML must revalidate and must not be transformed by Cloudflare, which also
       // keeps Browser Insights injection disabled. Vite fingerprints /assets files,
       // while stable public filenames retain a short, explicit cache lifetime.
-      response.setHeader("Cache-Control", frontendCacheControl(webDist, path));
+      reply.header("Cache-Control", frontendCacheControl(webDist, path));
     }
   });
   app.setNotFoundHandler((request, reply) => {

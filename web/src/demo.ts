@@ -3,6 +3,12 @@ import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnaps
 const demoStartedAt = Date.now();
 const gibibyte = 1024 * 1024 * 1024;
 
+export const demoTimelineScenarioPlayers = {
+  marathon: "MarathonSteve",
+  reconnect: "RejoinRiley",
+  blink: "BlinkAlex"
+} as const;
+
 export type DemoSession = {
   startedAt: number;
   playerCount: number;
@@ -109,8 +115,15 @@ function createDemoTimelineEvent(
 export function createDemoSession(random: () => number = Math.random, startedAt = Date.now()): DemoSession {
   const playerCount = randomInteger(10, 40, random);
   const nicknames = createDemoNicknames(playerCount + 8, random);
-  const onlinePlayerNames = nicknames.slice(0, playerCount);
-  const offlinePlayerNames = nicknames.slice(playerCount);
+  const onlinePlayerNames = [
+    demoTimelineScenarioPlayers.marathon,
+    demoTimelineScenarioPlayers.reconnect,
+    ...nicknames.slice(0, playerCount - 2)
+  ];
+  const offlinePlayerNames = [
+    demoTimelineScenarioPlayers.blink,
+    ...nicknames.slice(playerCount - 2, playerCount + 5)
+  ];
   const systemEventTypes: ServerEvent["eventType"][] = [
     "server_stopped",
     "server_crashed",
@@ -132,7 +145,61 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
     onlinePlayerNames,
     offlinePlayerNames,
     random
-  )).sort((left, right) => left.occurredAt - right.occurredAt);
+  ));
+  const scenarioEvents: ServerTimelineEvent[] = [
+    {
+      id: "demo-event-rejoin-left",
+      eventType: "player_left",
+      timestamp: new Date(startedAt - 30 * 60_000 - 7_000).toISOString(),
+      occurredAt: startedAt - 30 * 60_000 - 7_000,
+      source: "logs/latest.log",
+      type: "info",
+      severity: "info",
+      text: `${demoTimelineScenarioPlayers.reconnect} left`,
+      message: `${demoTimelineScenarioPlayers.reconnect} left`,
+      signature: `player_left:${demoTimelineScenarioPlayers.reconnect.toLowerCase()}`,
+      subject: demoTimelineScenarioPlayers.reconnect
+    },
+    {
+      id: "demo-event-rejoin-joined",
+      eventType: "player_joined",
+      timestamp: new Date(startedAt - 30 * 60_000).toISOString(),
+      occurredAt: startedAt - 30 * 60_000,
+      source: "logs/latest.log",
+      type: "success",
+      severity: "success",
+      text: `${demoTimelineScenarioPlayers.reconnect} joined`,
+      message: `${demoTimelineScenarioPlayers.reconnect} joined`,
+      signature: `player_joined:${demoTimelineScenarioPlayers.reconnect.toLowerCase()}`,
+      subject: demoTimelineScenarioPlayers.reconnect
+    },
+    {
+      id: "demo-event-blink-joined",
+      eventType: "player_joined",
+      timestamp: new Date(startedAt - 12 * 60_000).toISOString(),
+      occurredAt: startedAt - 12 * 60_000,
+      source: "logs/latest.log",
+      type: "success",
+      severity: "success",
+      text: `${demoTimelineScenarioPlayers.blink} joined`,
+      message: `${demoTimelineScenarioPlayers.blink} joined`,
+      signature: `player_joined:${demoTimelineScenarioPlayers.blink.toLowerCase()}`,
+      subject: demoTimelineScenarioPlayers.blink
+    },
+    {
+      id: "demo-event-blink-left",
+      eventType: "player_left",
+      timestamp: new Date(startedAt - 12 * 60_000 + 5_000).toISOString(),
+      occurredAt: startedAt - 12 * 60_000 + 5_000,
+      source: "logs/latest.log",
+      type: "info",
+      severity: "info",
+      text: `${demoTimelineScenarioPlayers.blink} left`,
+      message: `${demoTimelineScenarioPlayers.blink} left`,
+      signature: `player_left:${demoTimelineScenarioPlayers.blink.toLowerCase()}`,
+      subject: demoTimelineScenarioPlayers.blink
+    }
+  ];
 
   return {
     startedAt,
@@ -148,7 +215,7 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
     memoryPhase: randomDecimal(0, Math.PI * 2, random),
     networkRxBytesPerSecond: randomInteger(420_000, 920_000, random),
     networkTxBytesPerSecond: randomInteger(280_000, 740_000, random),
-    events
+    events: [...events, ...scenarioEvents].sort((left, right) => left.occurredAt - right.occurredAt)
   };
 }
 
@@ -602,17 +669,51 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
   const now = Date.now();
   const eventFixtures = activeDemoSession.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
   const demoOnlineNames = running ? activeDemoSession.onlinePlayerNames : [];
+  const regularOnlineNames = demoOnlineNames.filter((player) => (
+    player !== demoTimelineScenarioPlayers.marathon && player !== demoTimelineScenarioPlayers.reconnect
+  ));
+  const regularOfflineNames = activeDemoSession.offlinePlayerNames.filter((player) => player !== demoTimelineScenarioPlayers.blink);
   const playerSessions = [
-    ...demoOnlineNames.map((player, index) => ({
+    ...(running ? [{
+      id: "demo-online:marathon",
+      player: demoTimelineScenarioPlayers.marathon,
+      startedAt: now - 24 * 60 * 60_000,
+      endedAt: null,
+      startBoundary: "history-boundary" as const,
+      endBoundary: "online" as const
+    }, {
+      id: "demo-online:rejoin-before",
+      player: demoTimelineScenarioPlayers.reconnect,
+      startedAt: now - 55 * 60_000,
+      endedAt: now - 30 * 60_000 - 7_000,
+      startBoundary: "join" as const,
+      endBoundary: "leave" as const
+    }, {
+      id: "demo-online:rejoin-after",
+      player: demoTimelineScenarioPlayers.reconnect,
+      startedAt: now - 30 * 60_000,
+      endedAt: null,
+      startBoundary: "join" as const,
+      endBoundary: "online" as const
+    }] : []),
+    ...regularOnlineNames.map((player, index) => ({
       id: `demo-online:${player.toLowerCase()}`,
       player,
-      startedAt: now - (58 - index * 3) * 60_000,
+      startedAt: now - (50 - index * 2) * 60_000,
       endedAt: null,
-      startBoundary: index === 0 ? "history-boundary" as const : "join" as const,
+      startBoundary: "join" as const,
       endBoundary: "online" as const
     })),
-    ...activeDemoSession.offlinePlayerNames.map((player, index) => {
-      const startedAt = now - (54 - index * 5) * 60_000;
+    {
+      id: "demo-offline:blink",
+      player: demoTimelineScenarioPlayers.blink,
+      startedAt: now - 12 * 60_000,
+      endedAt: now - 12 * 60_000 + 5_000,
+      startBoundary: "join" as const,
+      endBoundary: "leave" as const
+    },
+    ...regularOfflineNames.map((player, index) => {
+      const startedAt = now - (52 - index * 5) * 60_000;
       return {
         id: `demo-offline:${player.toLowerCase()}`,
         player,
