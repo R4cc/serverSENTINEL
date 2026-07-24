@@ -6,6 +6,7 @@ import {
   clusterTimelineMarkers,
   formatTimelineDuration,
   mergeTimelineResponses,
+  panTimelineWindowByPixels,
   positionTimelineClusters,
   ServerTimeline,
   TimelineAnnotationPopoverItem,
@@ -13,6 +14,7 @@ import {
   timelineClusterIconMarkers,
   timelineClusterOccurrenceCount,
   timelineMarkers,
+  timelineHorizontalWheelPixels,
   timelineMarkerDisplayLabel,
   timelineMarkerIsImportant,
   timelinePlayerRows,
@@ -33,6 +35,13 @@ describe("server timeline controls", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
     expect(html).toContain("Player activity");
     expect(html).not.toContain("serverTimelineSummary");
+  });
+
+  it("maps horizontal trackpad and Shift-wheel input without capturing vertical roster scrolling", () => {
+    expect(timelineHorizontalWheelPixels({ deltaMode: 0, deltaX: -120, deltaY: 4, shiftKey: false }, 800)).toBe(-120);
+    expect(timelineHorizontalWheelPixels({ deltaMode: 1, deltaX: 0, deltaY: 3, shiftKey: true }, 800)).toBe(48);
+    expect(timelineHorizontalWheelPixels({ deltaMode: 0, deltaX: 2, deltaY: 80, shiftKey: false }, 800)).toBe(0);
+    expect(panTimelineWindowByPixels({ from: 1_000, to: 5_000 }, -200, 800)).toEqual({ from: 0, to: 4_000 });
   });
 });
 

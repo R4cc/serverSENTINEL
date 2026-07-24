@@ -50,6 +50,27 @@ export type SeriesKey = "cpuUtilizationPercent" | "memoryUsageBytes" | "networkR
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
 
+export function timelineHorizontalWheelPixels(event: Pick<WheelEvent, "deltaMode" | "deltaX" | "deltaY" | "shiftKey">, pageWidth: number) {
+  const horizontal = Math.abs(event.deltaX) >= Math.abs(event.deltaY) && event.deltaX !== 0
+    ? event.deltaX
+    : event.shiftKey
+      ? event.deltaY
+      : 0;
+  if (!Number.isFinite(horizontal) || horizontal === 0) return 0;
+  const unit = event.deltaMode === 1
+    ? 16
+    : event.deltaMode === 2
+      ? pageWidth
+      : 1;
+  return horizontal * unit;
+}
+
+export function panTimelineWindowByPixels(viewport: TimelineWindow, deltaPixels: number, plotWidth: number): TimelineWindow {
+  if (!Number.isFinite(deltaPixels) || !Number.isFinite(plotWidth) || plotWidth <= 0) return viewport;
+  const deltaMs = deltaPixels / plotWidth * (viewport.to - viewport.from);
+  return { from: viewport.from + deltaMs, to: viewport.to + deltaMs };
+}
+
 type MetricBand = {
   key: "cpu" | "memory" | "network" | "players";
   label: string;
@@ -995,22 +1016,33 @@ export function ServerTimeline({
   }, [loadWindow]);
 
   const handleSessionWheel = useCallback((event: globalThis.WheelEvent) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
     const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
     const plotWidth = rect.width - metricGrid.left - metricGrid.right;
     if (plotWidth <= 0) return;
-    const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - metricGrid.left) / plotWidth));
     const current = viewportRef.current;
-    const currentSpan = current.to - current.from;
-    const nextSpan = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, currentSpan * Math.exp(event.deltaY * 0.0015)));
-    const anchor = current.from + currentSpan * fraction;
-    const next = { from: anchor - nextSpan * fraction, to: anchor + nextSpan * (1 - fraction) };
+    let next: TimelineWindow;
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - metricGrid.left) / plotWidth));
+      const currentSpan = current.to - current.from;
+      const nextSpan = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, currentSpan * Math.exp(event.deltaY * 0.0015)));
+      const anchor = current.from + currentSpan * fraction;
+      next = { from: anchor - nextSpan * fraction, to: anchor + nextSpan * (1 - fraction) };
+    } else {
+      const horizontalPixels = timelineHorizontalWheelPixels(event, plotWidth);
+      if (!horizontalPixels) return;
+      event.preventDefault();
+      next = panTimelineWindowByPixels(current, horizontalPixels, plotWidth);
+    }
     setSelection("custom");
     setLiveMode(false);
     setViewport(next);
     if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
-    navigationTimerRef.current = window.setTimeout(() => void loadWindow(next, false), 250);
+    navigationTimerRef.current = window.setTimeout(() => {
+      const currentData = dataRef.current;
+      const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
+      if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+    }, 250);
   }, [loadWindow, metricGrid, setLiveMode, setViewport]);
 
   const metricOptions = useMemo(() => new Map(metricBands.map((band) => [band.key, buildTimelineChartOption({
@@ -1032,7 +1064,7 @@ export function ServerTimeline({
       <PanelHeader
         compact
         title="Server Timeline"
-        description="Correlate resource usage with player activity, server events, and schedules. Drag to pan; use Ctrl or Command with the wheel to zoom."
+        description="Correlate resource usage with player activity, server events, and schedules. Drag or scroll horizontally to pan; use Ctrl or Command with the wheel to zoom."
         actions={<div className="serverTimelineHeaderControls">
           <span className={`serverTimelineMode tone-${live ? "live" : "history"}`} aria-live="polite"><i aria-hidden="true" />{live ? "Live" : "Historical"}</span>
           <div className="serverTimelineRangeControls" role="group" aria-label="Timeline range">
