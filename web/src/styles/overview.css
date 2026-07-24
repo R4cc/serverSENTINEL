@@ -535,6 +535,18 @@ button.overviewCardRow:focus-visible {
   background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
 }
 
+.serverTimelineAnnotationStageLabel {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 18px;
+  transform: translateY(-50%);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  pointer-events: none;
+}
+
 .serverTimelineAnnotationStage .serverTimelineAnnotations { bottom: 0; }
 
 .serverTimelinePlayers,
