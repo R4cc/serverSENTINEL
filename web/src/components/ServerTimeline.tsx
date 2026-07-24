@@ -578,7 +578,7 @@ function PlayerSessionSection({
     <section className="serverTimelinePlayers" aria-label="Player sessions">
       <div className="serverTimelinePlayerAxis" aria-hidden="true">
         <span />
-        <div>{ticks.map((tick, index) => <time key={tick} style={{ left: `${index / 6 * 100}%` }}>{formatShortTime(tick)}</time>)}</div>
+        <div>{ticks.map((tick, index) => <time key={tick} dateTime={new Date(tick).toISOString()} style={{ left: `${index / 6 * 100}%` }}>{formatShortTime(tick)}</time>)}</div>
       </div>
       <div
         className="serverTimelinePlayerScroller"

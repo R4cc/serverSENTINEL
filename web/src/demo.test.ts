@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoSession, demoPlayerSnapshot, demoStats, demoStatsHistory, demoTimelineData, initialDemoSchedules } from "./demo";
+import { createDemoSession, demoPlayerSnapshot, demoStats, demoStatsHistory, demoTimelineData, demoTimelineScenarioPlayers, initialDemoSchedules } from "./demo";
 import { resourceHistorySampleLimit, resourcePollMs } from "./utils/format";
 
 function seededRandom(seed: number) {
@@ -48,7 +48,7 @@ describe("demo session generation", () => {
     expect(first.cpuBasePercent).not.toBe(second.cpuBasePercent);
     expect(first.memoryBaseBytes).not.toBe(second.memoryBaseBytes);
     expect(first.events.map((event) => event.eventType)).not.toEqual(second.events.map((event) => event.eventType));
-    expect(first.events).toHaveLength(7);
+    expect(first.events).toHaveLength(11);
     expect(first.events.some((event) => event.eventType === "player_joined")).toBe(true);
     expect(first.events.some((event) => event.eventType === "player_left")).toBe(true);
     expect(first.events.every((event) => event.occurredAt <= first.startedAt)).toBe(true);
@@ -66,5 +66,26 @@ describe("demo session generation", () => {
     expect(timeline.playerActivity?.onlineNames).toEqual(snapshot.names);
     expect(timeline.events.filter((event) => event.subject && event.eventType.startsWith("player_"))
       .every((event) => knownNames.has(event.subject!))).toBe(true);
+  });
+
+  it("includes deterministic marathon, reconnect, and instant-session scenarios", () => {
+    const now = Date.now();
+    const timeline = demoTimelineData(true, initialDemoSchedules, now - 24 * 60 * 60_000, now);
+    const generatedAt = new Date(timeline.generatedAt).getTime();
+    const sessions = timeline.playerActivity?.sessions ?? [];
+    const marathon = sessions.find((session) => session.player === demoTimelineScenarioPlayers.marathon);
+    const reconnect = sessions.filter((session) => session.player === demoTimelineScenarioPlayers.reconnect)
+      .sort((left, right) => left.startedAt - right.startedAt);
+    const blink = sessions.find((session) => session.player === demoTimelineScenarioPlayers.blink);
+
+    expect(marathon).toMatchObject({
+      startedAt: generatedAt - 24 * 60 * 60_000,
+      endedAt: null,
+      startBoundary: "history-boundary",
+      endBoundary: "online"
+    });
+    expect(reconnect).toHaveLength(2);
+    expect(reconnect[1].startedAt - reconnect[0].endedAt!).toBe(7_000);
+    expect(blink?.endedAt! - blink?.startedAt!).toBe(5_000);
   });
 });

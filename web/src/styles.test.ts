@@ -165,6 +165,14 @@ describe("global stylesheet entry point", () => {
     expect(responsiveStyles).toMatch(/\.actionMenuPopover--start\s*\{[^}]*right:\s*auto;[^}]*left:\s*0;/s);
   });
 
+  it("packs the phone overview summary into two compact rows", () => {
+    const phoneOverviewRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("@media (max-width: 720px)"));
+    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary\s*\{[^}]*grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/s);
+    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary > \.summaryTile\s*\{[^}]*grid-column:\s*span 2;[^}]*min-height:\s*54px;/s);
+    expect(phoneOverviewRules).toMatch(/\.summaryTile:nth-of-type\(4\),\s*\.overviewDashboardGrid > \.overviewSummary > \.summaryTile:nth-of-type\(5\)\s*\{[^}]*grid-column:\s*span 3;/s);
+    expect(phoneOverviewRules).toMatch(/\.summaryTile \.uiMetricTileMarker\s*\{[^}]*display:\s*none;/s);
+  });
+
   it("uses the document as the final phone scroll surface", () => {
     const nativeScrollRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("/* Native document scrolling"));
     expect(nativeScrollRules).toMatch(/html,\s*body\s*\{[^}]*height:\s*auto;[^}]*overflow-y:\s*auto;/s);

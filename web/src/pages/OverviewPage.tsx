@@ -21,6 +21,7 @@ import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
+const activePlayerPreviewLimit = 8;
 const modUpdateCardSlotCount = 3;
 const upcomingScheduleDisplayLimit = 4;
 const upcomingScheduleWindowMs = 24 * 60 * 60 * 1000;
@@ -198,6 +199,7 @@ export function ActivePlayersPanel({
   running: boolean;
   loading?: boolean;
 }) {
+  const [playersExpanded, setPlayersExpanded] = useState(false);
   const available = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot : undefined;
   const online = available?.online;
   const countLabel = available
@@ -214,20 +216,43 @@ export function ActivePlayersPanel({
   } else if (online === 0) {
     content = <EmptyState compact title="No players online" message="The server is ready for players." />;
   } else {
+    const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
+    const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
+    const rosterCanExpand = snapshot.names.length > activePlayerPreviewLimit;
+
     content = (
       <div className="activePlayerRoster">
-        <div className="activePlayerGrid">
-          {snapshot.names.map((name) => (
+        <div className="activePlayerGrid" id="active-player-grid">
+          {visibleNames.map((name) => (
             <div className="activePlayer" key={name}>
               <span className="activePlayerDot" aria-hidden="true" />
               <strong>{name}</strong>
             </div>
           ))}
         </div>
-        {snapshot.state === "stale" && (
-          <small className="activePlayerUpdatedAt">
-            Updated {formatRelativeTimestamp(snapshot.sampledAt).toLocaleLowerCase()}
-          </small>
+        {(rosterCanExpand || snapshot.state === "stale") && (
+          <div className="activePlayerRosterFooter">
+            {rosterCanExpand && (
+              <Button
+                variant="ghost"
+                compact
+                className="activePlayerRosterToggle"
+                aria-controls="active-player-grid"
+                aria-expanded={playersExpanded}
+                onClick={() => setPlayersExpanded((expanded) => !expanded)}
+              >
+                {playersExpanded
+                  ? "Show fewer players"
+                  : `Show ${hiddenPlayerCount} more ${hiddenPlayerCount === 1 ? "player" : "players"}`}
+                <AppIcon name={playersExpanded ? "chevronUp" : "chevronDown"} />
+              </Button>
+            )}
+            {snapshot.state === "stale" && (
+              <small className="activePlayerUpdatedAt">
+                Updated {formatRelativeTimestamp(snapshot.sampledAt).toLocaleLowerCase()}
+              </small>
+            )}
+          </div>
         )}
       </div>
     );
