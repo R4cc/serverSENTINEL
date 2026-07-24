@@ -17,7 +17,7 @@ COPY server server
 COPY web web
 COPY scripts scripts
 COPY docker docker
-COPY docker-compose.yml .env.example ./
+COPY docker-compose.yml .env.example README.md ./
 RUN npm run build
 RUN npm prune --omit=dev --workspace server
 
