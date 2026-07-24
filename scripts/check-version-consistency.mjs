@@ -14,9 +14,11 @@ const expectedText = [
   ["server/src/buildInfo.ts", `?? "${version}"`],
   ["web/src/app/appConfig.ts", `appVersion = "${version}"`],
   ["docker/Dockerfile", `ARG SS_VERSION=${version}`],
-  ["docker-compose.yml", `image: nl2109/serversentinel:${version}`],
-  ["docker-compose.yml", `SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:${version}`],
-  [".env.example", `SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:${version}`]
+  ["docker-compose.yml", "image: nl2109/serversentinel:latest"],
+  ["docker-compose.yml", "SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest"],
+  [".env.example", "SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest"],
+  ["README.md", "image: nl2109/serversentinel:latest"],
+  ["README.md", "SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest"]
 ];
 
 for (const [path, expected] of expectedText) {
