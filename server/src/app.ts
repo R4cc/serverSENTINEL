@@ -105,6 +105,7 @@ import { defaultServerContainerName, isInsideServersDirectory, newServerId, serv
 import { normalizeStoredUser, UsersRepository, validateUsername } from "./storage/usersRepository.js";
 import { NodesRepository, normalizeNode } from "./storage/nodesRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
+import { PlayerHeadCacheRepository } from "./storage/playerHeadCacheRepository.js";
 import { SessionsRepository } from "./storage/sessionsRepository.js";
 import { ServersRepository } from "./storage/serversRepository.js";
 import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js";
@@ -113,6 +114,7 @@ import { TimelineEventsRepository } from "./storage/timelineEventsRepository.js"
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
+import { PlayerHeadService, playerHeadProvider } from "./playerHeadService.js";
 import { OperationService, type ForegroundOperationInput } from "./operations/operationService.js";
 import { ExportArtifactMaintenance, exportArtifactExpiresAt, exportOperationResult } from "./exportArtifactMaintenance.js";
 import {
@@ -426,6 +428,8 @@ const activeNodeUpdates = new Map<string, { version?: string; buildId?: string }
 let usersRepository: UsersRepository;
 let nodesRepository: NodesRepository;
 let settingsRepository: SettingsRepository;
+let playerHeadCacheRepository: PlayerHeadCacheRepository;
+let playerHeadService: PlayerHeadService;
 let sessionsRepository: SessionsRepository;
 let serversRepository: ServersRepository;
 let fileEditLeasesRepository: FileEditLeasesRepository;
@@ -721,6 +725,21 @@ async function readUsers() {
 
 async function modrinthApiKey() {
   return settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
+}
+
+function publicPlayerHeadsState(demoMode = false) {
+  if (demoMode) {
+    return { enabled: false, onboardingRequired: false, provider: playerHeadProvider, cacheEntries: 0, cacheBytes: 0 };
+  }
+  const settings = settingsRepository.get();
+  const cache = playerHeadService.stats();
+  return {
+    enabled: settings.playerHeadsEnabled,
+    onboardingRequired: !settings.playerHeadsOnboardingCompleted,
+    provider: playerHeadProvider,
+    cacheEntries: cache.entries,
+    cacheBytes: cache.bytes
+  };
 }
 
 export function parseCookies(cookieHeader?: string) {
@@ -4470,8 +4489,10 @@ app.decorateRequest("authenticatedUser", null);
 app.decorateRequest("authenticationPromise");
 appLogger = app.log;
 const instanceStorageDatabase = openStorageDatabase();
+let instancePlayerHeadService: PlayerHeadService | undefined;
 storageDatabase = instanceStorageDatabase;
 app.addHook("onClose", async () => {
+  instancePlayerHeadService?.close();
   instanceStorageDatabase.close();
 });
 usersRepository = new UsersRepository(storageDatabase);
@@ -4487,6 +4508,13 @@ if (initialSetupToken) {
 }
 nodesRepository = new NodesRepository(storageDatabase);
 settingsRepository = new SettingsRepository(storageDatabase);
+playerHeadCacheRepository = new PlayerHeadCacheRepository(storageDatabase);
+instancePlayerHeadService = new PlayerHeadService({
+  settings: settingsRepository,
+  cache: playerHeadCacheRepository,
+  userAgent: appUserAgentFor("player-heads")
+});
+playerHeadService = instancePlayerHeadService;
 sessionsRepository = new SessionsRepository(storageDatabase);
 serversRepository = new ServersRepository(storageDatabase, normalizeManagedServer);
 fileEditLeasesRepository = new FileEditLeasesRepository(storageDatabase);
@@ -4661,6 +4689,7 @@ app.get("/api/app", async (request) => {
       runtimeMode: config.runtimeMode,
       timeZone: config.timeZone,
       modrinthApiConfigured: false,
+      playerHeads: publicPlayerHeadsState(true),
       dockerSocketMounted: false,
       totalMemory: 0
     };
@@ -4676,6 +4705,7 @@ app.get("/api/app", async (request) => {
     runtimeMode: config.runtimeMode,
     timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
+    playerHeads: publicPlayerHeadsState(),
     dockerSocketMounted: dockerAvailable(),
     totalMemory,
     currentUser: user ? publicUser(user) : undefined
@@ -5097,6 +5127,21 @@ app.put<{ Body: { modrinthApiKey?: string } }>("/api/settings/modrinth", async (
   settingsRepository.setModrinthApiKey(key);
   logInfo({ action: "configure_modrinth", status: "succeeded" }, "Modrinth API configuration updated");
   return { ok: true, modrinthApiConfigured: true };
+});
+
+app.put<{ Body: { enabled?: boolean } }>("/api/settings/player-heads", async (request) => {
+  await requireRequestPermission(request, "integrations.manage");
+  const enabled = requireStrictBoolean(request.body?.enabled, "enabled");
+  playerHeadService.setEnabled(enabled);
+  logInfo({ action: "configure_player_heads", enabled, status: "succeeded" }, "Player head integration updated");
+  return { ok: true, playerHeads: publicPlayerHeadsState() };
+});
+
+app.delete("/api/settings/player-heads/cache", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "integrations.manage");
+  playerHeadService.clearCache();
+  logInfo({ action: "clear_player_head_cache", status: "succeeded" }, "Player head cache cleared");
+  return { ok: true, playerHeads: publicPlayerHeadsState() };
 });
 
 app.get("/api/fabric/versions", async (request) => {
@@ -5593,6 +5638,29 @@ app.get("/api/player-snapshots", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const servers = await listManagedServers();
   return { snapshots: await playerSnapshotCoordinator!.snapshots(servers) };
+});
+
+app.get<{ Params: { id: string; name: string } }>("/api/servers/:id/player-head/:name", async (request, reply) => {
+  await requireRequestPermission(request, "servers.view");
+  if (!playerHeadService.enabled()) {
+    return reply.code(404).send(apiErrorResponse("PLAYER_HEADS_DISABLED", "Player heads are disabled"));
+  }
+  const server = await getServer(request.params.id);
+  const snapshot = playerSnapshotCoordinator?.latest(server.id);
+  const names = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot.names : [];
+  const requestedName = request.params.name.trim();
+  const playerName = names.find((name) => name.toLocaleLowerCase("en-US") === requestedName.toLocaleLowerCase("en-US"));
+  if (!playerName) {
+    return reply.code(404).send(apiErrorResponse("PLAYER_HEAD_NOT_AVAILABLE", "Player head is not available"));
+  }
+  const bytes = await playerHeadService.head(playerName);
+  if (!bytes) {
+    return reply.code(503).send(apiErrorResponse("PLAYER_HEAD_UNAVAILABLE", "Player head is temporarily unavailable"));
+  }
+  reply.header("Content-Type", "image/png");
+  reply.header("Cache-Control", "private, max-age=3600, must-revalidate");
+  reply.header("X-Content-Type-Options", "nosniff");
+  return reply.send(bytes);
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
@@ -8615,6 +8683,7 @@ app.addHook("onClose", async () => {
 const startupUsers = await readUsers().catch(() => []);
 const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
+const playerHeadsEnabled = settingsRepository.get().playerHeadsEnabled;
 const dockerSocketMounted = config.runtimeMode === "panel" ? false : dockerAvailable();
 app.log.info({
   appVersion,
@@ -8629,6 +8698,7 @@ app.log.info({
   nodeCount: startupNodes.length,
   dockerSocketMounted,
   modrinthApiConfigured: modrinthConfigured,
+  playerHeadsEnabled,
   authEnabled: startupUsers.length > 0,
   logLevel: config.logLevel,
   port: config.port

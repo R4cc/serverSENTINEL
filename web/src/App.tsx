@@ -25,6 +25,7 @@ import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
 import { Banner, Button, EmptyState, PanelHeader, StatusBadge, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
+import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
@@ -169,6 +170,8 @@ export default function App() {
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
+  const [playerHeadsBusy, setPlayerHeadsBusy] = useState(false);
+  const [playerHeadsOnboardingError, setPlayerHeadsOnboardingError] = useState("");
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
@@ -1080,6 +1083,11 @@ export default function App() {
   }, [activePage]);
 
   useEffect(() => {
+    if (activePage !== "settings" || demoMode || !authSession?.authenticated) return;
+    void refreshApp({ silent: true });
+  }, [activePage, demoMode, authSession?.authenticated]);
+
+  useEffect(() => {
     if (!addNodeOpen || !addNodeResult || demoMode) return;
     const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
     if (currentNode && currentNode.status === "online" && isNodeRuntimeUsable(currentNode)) return;
@@ -1801,6 +1809,52 @@ export default function App() {
       await refreshApp();
     } catch (error) {
       notify("error", (error as Error).message);
+    }
+  }
+
+  async function updatePlayerHeads(enabled: boolean, onboarding = false) {
+    if (!canManageIntegrations || playerHeadsBusy) return;
+    setPlayerHeadsBusy(true);
+    if (onboarding) setPlayerHeadsOnboardingError("");
+    try {
+      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads", {
+        method: "PUT",
+        body: JSON.stringify({ enabled })
+      });
+      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
+      setPlayerHeadsOnboardingError("");
+      notify("success", enabled ? "Player heads enabled" : "Player heads disabled");
+    } catch (error) {
+      const message = (error as Error).message;
+      if (onboarding) setPlayerHeadsOnboardingError(message);
+      else notify("error", message);
+    } finally {
+      setPlayerHeadsBusy(false);
+    }
+  }
+
+  async function clearPlayerHeadCache() {
+    if (!canManageIntegrations || playerHeadsBusy || effectiveAppState.playerHeads.cacheEntries === 0) return;
+    const confirmed = await requestConfirmation({
+      title: "Clear cached player heads?",
+      description: "This removes every player-head image cached by this instance.",
+      warning: effectiveAppState.playerHeads.enabled
+        ? "Player heads are enabled, so images will be downloaded again as players appear on Overview."
+        : "The integration remains disabled and no new images will be requested.",
+      confirmLabel: "Clear cache",
+      cancelLabel: "Keep cache",
+      variant: "critical"
+    });
+    if (!confirmed) return;
+    setPlayerHeadsBusy(true);
+    try {
+      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads/cache", { method: "DELETE" });
+      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
+      notify("success", "Player head cache cleared");
+    } catch (error) {
+      notify("error", (error as Error).message);
+    } finally {
+      setPlayerHeadsBusy(false);
     }
   }
 
@@ -2588,6 +2642,10 @@ export default function App() {
             modrinthConfigured={effectiveAppState.modrinthApiConfigured}
             canManageIntegrations={canManageIntegrations}
             onSubmitModrinthKey={updateModrinthKey}
+            playerHeads={effectiveAppState.playerHeads}
+            playerHeadsBusy={playerHeadsBusy}
+            onPlayerHeadsEnabledChange={(enabled) => void updatePlayerHeads(enabled)}
+            onClearPlayerHeadCache={() => void clearPlayerHeadCache()}
             canViewUsers={canViewUsers}
             userState={usersWorkspace}
             systemInfo={{
@@ -2823,7 +2881,13 @@ export default function App() {
                     </Suspense>
                   )}
 
-                  <ActivePlayersPanel snapshot={playerSnapshots[activeServer.id]} running={Boolean(activeStatus?.docker.running)} loading={overviewInitialLoading} />
+                  <ActivePlayersPanel
+                    snapshot={playerSnapshots[activeServer.id]}
+                    running={Boolean(activeStatus?.docker.running)}
+                    loading={overviewInitialLoading}
+                    serverId={activeServer.id}
+                    playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                  />
                   <div className="overviewSupportStack">
                     <ModHealthPanel
                       updatePlan={modsWorkspace.data.updatePlan}
@@ -2979,6 +3043,13 @@ export default function App() {
           options={confirmationOptions}
           onConfirm={() => settleConfirmation(true)}
           onCancel={() => settleConfirmation(false)}
+        />
+      ) : null}
+      {appStateLoaded && !demoMode && canManageIntegrations && appState.playerHeads.onboardingRequired ? (
+        <PlayerHeadsOnboarding
+          busy={playerHeadsBusy}
+          error={playerHeadsOnboardingError}
+          onChoose={(enabled) => void updatePlayerHeads(enabled, true)}
         />
       ) : null}
     </>

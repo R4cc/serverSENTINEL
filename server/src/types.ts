@@ -43,6 +43,8 @@ export type {
 
 export type AppSettings = {
   modrinthApiKey?: string;
+  playerHeadsEnabled: boolean;
+  playerHeadsOnboardingCompleted: boolean;
 };
 
 export type StoredUser = {

@@ -182,7 +182,9 @@ describe("global stylesheet entry point", () => {
   });
 
   it("compacts the active player roster across phone orientations", () => {
+    expect(overviewStyles).toMatch(/\.activePlayerHead\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/s);
     expect(overviewStyles).toMatch(/@media \(max-width: 980px\)[\s\S]*?\.activePlayer\s*\{[^}]*grid-template-columns:\s*8px minmax\(0, 1fr\);[^}]*padding:\s*5px 8px;/s);
+    expect(overviewStyles).toMatch(/@media \(max-width: 980px\)[\s\S]*?\.activePlayer--withHead\s*\{[^}]*grid-template-columns:\s*20px minmax\(0, 1fr\);[\s\S]*?\.activePlayerHead\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;/s);
     expect(overviewStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: landscape\)[\s\S]*?\.overviewDashboardGrid \.activePlayerGrid,[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
     expect(primitiveStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: portrait\)[\s\S]*?\.applicationOverviewTimelinePanel\s*\{\s*display:\s*none;/s);
   });

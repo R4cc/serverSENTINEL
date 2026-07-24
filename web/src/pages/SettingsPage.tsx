@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import type { DisplayTimeZonePreference, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
+import type { DisplayTimeZonePreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
@@ -55,6 +55,10 @@ export type SettingsPageProps = {
   modrinthConfigured: boolean;
   canManageIntegrations: boolean;
   onSubmitModrinthKey(event: FormEvent<HTMLFormElement>): void;
+  playerHeads: PlayerHeadsState;
+  playerHeadsBusy: boolean;
+  onPlayerHeadsEnabledChange(value: boolean): void;
+  onClearPlayerHeadCache(): void;
   canViewUsers: boolean;
   userState: SettingsUserState;
   systemInfo: SettingsSystemInfo;
@@ -74,6 +78,12 @@ const categoryDetails: Record<SettingsCategory, { label: string; description: st
 };
 
 const regionalFormatExampleInstant = new Date("2026-07-20T14:30:00.000Z");
+
+function formatCacheSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
 
 function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -100,10 +110,10 @@ function PreferenceRow({ title, description, children, className = "" }: { title
   );
 }
 
-function Toggle({ checked, onChange, label, stateLabel }: { checked: boolean; onChange(value: boolean): void; label: string; stateLabel: string }) {
+function Toggle({ checked, onChange, label, stateLabel, disabled = false, title }: { checked: boolean; onChange(value: boolean): void; label: string; stateLabel: string; disabled?: boolean; title?: string }) {
   return (
-    <label className="settingsHubToggle">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} aria-label={label} />
+    <label className="settingsHubToggle" title={title}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} aria-label={label} disabled={disabled} />
       <span className="settingsHubToggleTrack" aria-hidden="true"><span /></span>
       <span className={checked ? "enabled" : ""}>{stateLabel}</span>
     </label>
@@ -227,6 +237,34 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className="settingsHubRows">
           <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
             <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
+          </PreferenceRow>
+          <PreferenceRow
+            title="Player heads"
+            description={<>Show player skin heads on Overview. When enabled, this panel sends online-player usernames to <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a> without an API key and caches the returned images. Disabling prevents all MCHeads traffic. Skin changes appear over time: serverSENTINEL rechecks every 12 hours, while MCHeads documents a skin cache of up to 24 hours.</>}
+            className="settingsHubIntegrationRow"
+          >
+            <div className="settingsHubControlStack playerHeadsSettingsControl">
+              <Toggle
+                checked={props.playerHeads.enabled}
+                onChange={props.onPlayerHeadsEnabledChange}
+                label="Show player heads on Overview"
+                stateLabel={props.playerHeads.enabled ? "Enabled" : "Disabled"}
+                disabled={!props.canManageIntegrations || props.playerHeadsBusy}
+                title={!props.canManageIntegrations ? "Manage integrations permission is required" : undefined}
+              />
+              <span className="settingsHubPreferenceExample">
+                {props.playerHeads.cacheEntries.toLocaleString()} cached {props.playerHeads.cacheEntries === 1 ? "head" : "heads"} · {formatCacheSize(props.playerHeads.cacheBytes)}
+              </span>
+              <Button
+                variant="secondary"
+                compact
+                onClick={props.onClearPlayerHeadCache}
+                disabled={!props.canManageIntegrations || props.playerHeadsBusy || props.playerHeads.cacheEntries === 0}
+                title={!props.canManageIntegrations ? "Manage integrations permission is required" : "Clear cached player heads"}
+              >
+                {props.playerHeadsBusy ? "Working…" : "Clear cache"}
+              </Button>
+            </div>
           </PreferenceRow>
         </div>
       </>

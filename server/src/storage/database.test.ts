@@ -60,6 +60,9 @@ function seedLegacySchema16(path: string) {
   openStorageDatabase(path).close();
   const database = new Database(path);
   database.exec(`
+    DROP TABLE player_head_cache;
+    ALTER TABLE app_settings DROP COLUMN player_heads_onboarding_completed;
+    ALTER TABLE app_settings DROP COLUMN player_heads_enabled;
     DROP TABLE timeline_events;
     ALTER TABLE nodes ADD COLUMN compatibility TEXT;
     ALTER TABLE servers ADD COLUMN desired_runtime_state TEXT CHECK (desired_runtime_state IS NULL OR desired_runtime_state IN ('running', 'stopped'));
@@ -104,6 +107,9 @@ function seedSchema17Baseline(path: string) {
   openStorageDatabase(path).close();
   const database = new Database(path);
   database.exec(`
+    DROP TABLE player_head_cache;
+    ALTER TABLE app_settings DROP COLUMN player_heads_onboarding_completed;
+    ALTER TABLE app_settings DROP COLUMN player_heads_enabled;
     DROP TABLE timeline_events;
     ALTER TABLE servers DROP COLUMN start_on_node_start;
     UPDATE schema_migrations SET version = 17, name = 'current-schema-baseline';
@@ -119,8 +125,23 @@ function seedSchema18Baseline(path: string) {
   openStorageDatabase(path).close();
   const database = new Database(path);
   database.exec(`
+    DROP TABLE player_head_cache;
+    ALTER TABLE app_settings DROP COLUMN player_heads_onboarding_completed;
+    ALTER TABLE app_settings DROP COLUMN player_heads_enabled;
     DROP TABLE timeline_events;
     UPDATE schema_migrations SET version = 18, name = 'current-schema-baseline';
+  `);
+  database.close();
+}
+
+function seedSchema19Baseline(path: string) {
+  openStorageDatabase(path).close();
+  const database = new Database(path);
+  database.exec(`
+    DROP TABLE player_head_cache;
+    ALTER TABLE app_settings DROP COLUMN player_heads_onboarding_completed;
+    ALTER TABLE app_settings DROP COLUMN player_heads_enabled;
+    UPDATE schema_migrations SET version = 19, name = 'current-schema-baseline';
   `);
   database.close();
 }
@@ -142,6 +163,20 @@ describe("SQLite storage", () => {
     expect(columnNames(storage.connection, "servers")).toContain("start_on_node_start");
     expect(columnNames(storage.connection, "schedules")).toEqual(expect.arrayContaining(["steps_json"]));
     expect(columnNames(storage.connection, "schedules")).not.toEqual(expect.arrayContaining(["commands_json", "command_delays_json", "command_delays_seconds_json"]));
+    expect(columnNames(storage.connection, "app_settings")).toEqual(["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed"]);
+    expect(columnNames(storage.connection, "player_head_cache")).toEqual(["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"]);
+    expect(storage.connection.prepare("SELECT id FROM app_settings").get()).toBeUndefined();
+  });
+
+  it("migrates schema 19 with player heads disabled and onboarding completed", async () => {
+    const path = await temporaryDatabasePath();
+    seedSchema19Baseline(path);
+
+    const storage = openStorageDatabase(path);
+    openDatabases.push(storage);
+    expect(storage.connection.prepare("SELECT player_heads_enabled, player_heads_onboarding_completed FROM app_settings WHERE id = 1").get())
+      .toEqual({ player_heads_enabled: 0, player_heads_onboarding_completed: 1 });
+    expect(columnNames(storage.connection, "player_head_cache")).toEqual(["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"]);
   });
 
   it("initializes the compact schema idempotently", async () => {
