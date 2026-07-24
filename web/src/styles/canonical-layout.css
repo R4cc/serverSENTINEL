@@ -284,10 +284,6 @@
   gap: var(--space-1);
 }
 
-.resourcePanel {
-  min-width: 0;
-}
-
 .eventRow,
 .nodeServerRow,
 .fileTableRow {
@@ -606,8 +602,7 @@
     grid-template-columns: 1fr;
   }
 
-.overviewPage > *,
-.resourcePanel {
+.overviewPage > * {
     grid-column: 1 / -1;
   }
 }

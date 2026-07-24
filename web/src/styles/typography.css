@@ -276,7 +276,6 @@ textarea,
 .keyForm label,
 .fieldLabel,
 .nodeServerSectionLabel,
-.resourceMetricLabel span,
 .modInstallVersionGroupHeader > strong,
 .fileDetailsContent dt {
   color: var(--text-muted);
@@ -349,7 +348,6 @@ textarea,
 .fileDetailsTitle h2,
 .nodeCardTitle h3,
 .nodeServerName,
-.resourceMetricLabel strong,
 .eventRow strong,
 .modInstallVersionRow span:first-child {
   color: var(--text);
@@ -366,7 +364,6 @@ textarea,
 .modInstallStepIntro p,
 .fileDetailsTitle > div > span,
 .fileDetailsContent dd,
-.resourceMetricLabel small,
 .eventRow small {
   color: var(--text-muted);
   font-size: var(--type-helper-size);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 const phoneLayoutQuery = "(max-width: 720px)";
+export const overviewTimelineQuery = "(min-width: 981px), (orientation: landscape)";
 
 function viewportHeight() {
   return Math.round(window.visualViewport?.height ?? window.innerHeight);
@@ -33,16 +34,20 @@ export function useMobileViewport() {
   return phoneLayout;
 }
 
-export function useWideTimelineViewport() {
-  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 981px)").matches);
+export function shouldShowOverviewTimeline(width: number, height: number) {
+  return width >= 981 || width > height;
+}
+
+export function useOverviewTimelineVisibility() {
+  const [visible, setVisible] = useState(() => window.matchMedia(overviewTimelineQuery).matches);
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 981px)");
-    const update = () => setWide(media.matches);
+    const media = window.matchMedia(overviewTimelineQuery);
+    const update = () => setVisible(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
 
-  return wide;
+  return visible;
 }

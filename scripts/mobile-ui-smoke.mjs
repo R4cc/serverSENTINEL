@@ -239,6 +239,63 @@ async function assertPageDocumentScroll(page, title, label) {
   assert(result.horizontalOverflow <= 1, `${label}: page has horizontal overflow (${result.horizontalOverflow}px)`);
 }
 
+async function overviewDensityMetrics(page) {
+  return page.evaluate(() => {
+    const grid = document.querySelector(".overviewDashboardGrid");
+    const summary = document.querySelector(".overviewSummary");
+    const players = document.querySelector(".playersPanel");
+    const timeline = document.querySelector(".serverTimelinePanel");
+    const legacyResourcePanel = document.querySelector(".resourcePanel");
+    const playerGrid = document.querySelector(".activePlayerGrid");
+    if (!(grid instanceof HTMLElement) || !(summary instanceof HTMLElement) || !(players instanceof HTMLElement) || !(playerGrid instanceof HTMLElement)) {
+      return { missing: true };
+    }
+    const children = [...grid.children];
+    const visibleSummaryTiles = [...summary.children].filter((element) => element instanceof HTMLElement && getComputedStyle(element).display !== "none").length;
+    const summaryRect = summary.getBoundingClientRect();
+    const playersRect = players.getBoundingClientRect();
+    return {
+      missing: false,
+      visibleSummaryTiles,
+      timeline: timeline instanceof HTMLElement,
+      legacyResourcePanel: legacyResourcePanel instanceof HTMLElement,
+      timelineBeforePlayers: timeline instanceof HTMLElement ? children.indexOf(timeline) < children.indexOf(players) : false,
+      summaryBeforePlayers: children.indexOf(summary) < children.indexOf(players),
+      summaryToPlayersGap: Math.round(playersRect.top - summaryRect.bottom),
+      playerColumns: getComputedStyle(playerGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length,
+      horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth
+    };
+  });
+}
+
+async function assertOverviewDensity(page, profile, label) {
+  await openPage(page, "overview");
+  await page.locator(".activePlayerGrid").waitFor();
+
+  const portrait = await overviewDensityMetrics(page);
+  assert(!portrait.missing, `${label}: portrait Overview surfaces are missing`);
+  assert(portrait.visibleSummaryTiles === 5, `${label}: portrait Overview shows ${portrait.visibleSummaryTiles} summary fields instead of five`);
+  assert(!portrait.timeline && !portrait.legacyResourcePanel, `${label}: portrait Overview still shows a chart`);
+  assert(portrait.summaryBeforePlayers && portrait.summaryToPlayersGap >= 0 && portrait.summaryToPlayersGap <= 24, `${label}: Active Players is not directly below the portrait summary: ${JSON.stringify(portrait)}`);
+  assert(portrait.playerColumns === 2, `${label}: portrait Active Players uses ${portrait.playerColumns} columns instead of two`);
+  assert(portrait.horizontalOverflow <= 1, `${label}: portrait Overview overflows horizontally by ${portrait.horizontalOverflow}px`);
+
+  await page.setViewportSize({ width: profile.viewport.height, height: profile.viewport.width });
+  await page.locator(".serverTimelinePanel").waitFor();
+  const landscape = await overviewDensityMetrics(page);
+  assert(!landscape.missing, `${label}: landscape Overview surfaces are missing`);
+  assert(landscape.visibleSummaryTiles === 5, `${label}: landscape Overview shows ${landscape.visibleSummaryTiles} summary fields instead of five`);
+  assert(landscape.timeline && !landscape.legacyResourcePanel, `${label}: landscape Overview did not switch to the unified timeline`);
+  assert(landscape.timelineBeforePlayers, `${label}: landscape timeline is not before Active Players`);
+  assert(landscape.playerColumns === 3, `${label}: landscape Active Players uses ${landscape.playerColumns} columns instead of three`);
+  assert(landscape.horizontalOverflow <= 1, `${label}: landscape Overview overflows horizontally by ${landscape.horizontalOverflow}px`);
+
+  await page.setViewportSize({ width: profile.viewport.width, height: profile.viewport.height });
+  await page.locator(".serverTimelinePanel").waitFor({ state: "detached" });
+  const restoredPortrait = await overviewDensityMetrics(page);
+  assert(!restoredPortrait.timeline && restoredPortrait.playerColumns === 2, `${label}: Overview did not restore its chartless two-column portrait layout`);
+}
+
 async function assertFilesToolbarGeometry(page, label) {
   const result = await page.evaluate(() => {
     const navigation = document.querySelector(".fileNavButtons");
@@ -377,6 +434,7 @@ async function runProfile(engine, profile, label) {
     await signIn(page);
 
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
+    await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .overflowButton"], label);
     await assertFloatingSurfaces(page, label);

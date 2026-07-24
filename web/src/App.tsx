@@ -2,9 +2,9 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStats, demoStatsHistory, demoStatus, demoTimelineData, resetDemoSession } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ResourceSample, ResourceStatsHistory, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, resourceHistorySampleLimit, resourcePollMs, runtimeTone, versionValue } from "./utils/format";
+import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStatus, demoTimelineData, resetDemoSession } from "./demo";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
@@ -19,14 +19,14 @@ import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ResourcePanelLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
 import { Banner, Button, EmptyState, PanelHeader, StatusBadge, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
-import { useMobileViewport, useWideTimelineViewport } from "./components/useMobileViewport";
+import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
@@ -39,7 +39,6 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
-const loadResourcePanel = () => import("./components/ResourcePanel");
 const loadServerTimeline = () => import("./components/ServerTimeline");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
@@ -49,7 +48,6 @@ const loadModsPage = () => import("./pages/ModsPage");
 const loadFilesPage = () => import("./features/files/FilesPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
-const ResourcePanel = lazy(() => loadResourcePanel().then((module) => ({ default: module.ResourcePanel })));
 const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
@@ -61,7 +59,7 @@ const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module
 
 function preloadActivePage(page: ActivePage) {
   if (page === "console") return loadMinecraftTerminal();
-  if (page === "overview") return loadResourcePanel();
+  if (page === "overview") return loadServerTimeline();
   if (page === "files") return loadFilesPage();
   if (page === "mods") return loadModsPage();
   if (page === "schedule") return loadSchedulePage();
@@ -151,7 +149,6 @@ export default function App() {
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
-  const [resourceSamples, setResourceSamples] = useState<ResourceSample[]>([]);
   const [demoSessionVersion, setDemoSessionVersion] = useState(0);
   const [timelineLatestSample, setTimelineLatestSample] = useState<ServerTimelineResourcePoint>();
   const [overviewData, setOverviewData] = useState<ServerOverviewData>({ events: [], activity: {} });
@@ -179,7 +176,7 @@ export default function App() {
   const [scheduleNavigationTarget, setScheduleNavigationTarget] = useState<ScheduleNavigationTarget | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
-  const wideTimelineLayout = useWideTimelineViewport();
+  const overviewTimelineVisible = useOverviewTimelineVisibility();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const [nodeBusyId, setNodeBusyId] = useState("");
   const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
@@ -620,8 +617,9 @@ export default function App() {
 
   useEffect(() => {
     if (!authSession?.authenticated) return;
+    if (activePage === "overview" && !overviewTimelineVisible) return;
     void preloadActivePage(activePage);
-  }, [activePage, authSession?.authenticated]);
+  }, [activePage, authSession?.authenticated, overviewTimelineVisible]);
 
   useEffect(() => {
     return () => {
@@ -869,7 +867,7 @@ export default function App() {
         consoleReconnectNoticeTimeoutRef.current = null;
       }
       setOverviewData({ events: [], activity: {} });
-      setResourceSamples([]);
+      setTimelineLatestSample(undefined);
     }
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoStatus(activeServer, demoRunning));
@@ -1113,53 +1111,6 @@ export default function App() {
   }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
-    if (!activeServer || activePage !== "overview" || activeNodeRuntimeBlocked || wideTimelineLayout) {
-      setResourceSamples([]);
-      return;
-    }
-    if (demoMode && activeServer.id === demoServerId) {
-      setResourceSamples(demoStatsHistory(demoRunning, Date.now(), resourcePollMs, resourceHistorySampleLimit));
-      const interval = window.setInterval(() => setResourceSamples((samples) => [...samples, demoStats(demoRunning)].slice(-resourceHistorySampleLimit)), resourcePollMs);
-      return () => window.clearInterval(interval);
-    }
-    const serverId = activeServer.id;
-    let cancelled = false;
-    let inFlight = false;
-    setResourceSamples([]);
-    async function pollStats() {
-      if (inFlight || document.hidden) return;
-      inFlight = true;
-      try {
-        const history = await api<ResourceStatsHistory>(`/api/servers/${serverId}/stats/history`);
-        if (cancelled) return;
-        setResourceSamples(history.samples);
-      } catch (error) {
-        if (handleStaleSession(error)) return;
-        if (!cancelled) {
-          setResourceSamples([{
-            available: false,
-            running: false,
-            cpuPercent: 0,
-            memoryUsageBytes: 0,
-            memoryLimitBytes: 0,
-            readAt: new Date().toISOString(),
-            message: (error as Error).message || "Container stats are unavailable",
-            sampledAt: Date.now()
-          }]);
-        }
-      } finally {
-        inFlight = false;
-      }
-    }
-    void pollStats();
-    const interval = window.setInterval(() => void pollStats(), resourcePollMs);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, demoRunning, demoSessionVersion, wideTimelineLayout]);
-
-  useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
     const interval = window.setInterval(() => {
@@ -1360,7 +1311,7 @@ export default function App() {
     setOverviewData({ events: [], activity: {} });
     setOverviewError("");
     setOverviewLoading(false);
-    setResourceSamples([]);
+    setTimelineLatestSample(undefined);
     setConsoleError("");
     filesWorkspace.actions.setFilesError("");
     consoleLogServerIdRef.current = "";
@@ -2141,7 +2092,6 @@ export default function App() {
         }
         setDemoRunning(nextRunning);
         setStatus(demoStatus(activeServer, nextRunning));
-        setResourceSamples([demoStats(nextRunning)]);
         setOverviewData(demoOverviewData(nextRunning));
         setPlayerSnapshots((current) => ({
           ...current,
@@ -2844,20 +2794,20 @@ export default function App() {
                     busy={overviewLoading}
                   />
                 )}
-                <div className="overviewDashboardGrid">
+                <div className={`overviewDashboardGrid ${overviewTimelineVisible ? "overviewDashboardGrid--timeline" : "overviewDashboardGrid--chartless"}`}>
                   <OverviewSummary
                     server={activeServer}
                     status={activeStatus}
                     dockerSocketMounted={activeServerDockerSocketMounted}
                     activity={overviewData.activity}
                     playerSnapshot={playerSnapshots[activeServer.id]}
-                    latestResourceSample={wideTimelineLayout ? timelineLatestSample : resourceSamples.at(-1)}
+                    latestResourceSample={overviewTimelineVisible ? timelineLatestSample : undefined}
                     formatNumber={formatDisplayNumber}
                     loading={overviewInitialLoading}
                   />
 
-                  {wideTimelineLayout ? (
-                    <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
+                  {overviewTimelineVisible && (
+                    <Suspense fallback={<ServerTimelineLoadingSkeleton />}>
                       <ServerTimeline
                         key={activeServer.id}
                         loadTimeline={loadActiveTimeline}
@@ -2869,18 +2819,6 @@ export default function App() {
                           setScheduleNavigationTarget(target ?? null);
                           setActivePage("schedule");
                         }}
-                      />
-                    </Suspense>
-                  ) : (
-                    <Suspense fallback={<ResourcePanelLoadingSkeleton />}>
-                      <ResourcePanel
-                        server={activeServer}
-                        samples={resourceSamples}
-                        status={activeStatus}
-                        dockerSocketMounted={activeServerDockerSocketMounted}
-                        formatNumber={formatDisplayNumber}
-                        formatTime={formatDisplayTime}
-                        loading={overviewLoading && resourceSamples.length === 0}
                       />
                     </Suspense>
                   )}

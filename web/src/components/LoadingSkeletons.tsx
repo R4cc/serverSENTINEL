@@ -38,7 +38,7 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
           {Array.from({ length: 7 }, (_, index) => <SkeletonBlock className={`applicationSkeletonTile ${index > 4 ? "applicationSkeletonWideTile" : ""}`} key={index} />)}
         </div>
         <div className="applicationOverviewPanelGrid">
-          <SkeletonPanel className="applicationOverviewResourcePanel" rows={3} />
+          <SkeletonPanel className="applicationOverviewTimelinePanel" rows={4} />
           <SkeletonPanel className="applicationOverviewPlayersPanel" rows={2} />
           <SkeletonPanel className="applicationOverviewModsPanel" rows={2} />
           <SkeletonPanel className="applicationOverviewAutomationPanel" rows={2} />
@@ -156,17 +156,17 @@ export function FeaturePageLoadingSkeleton({ label, page = "overview" }: { label
   );
 }
 
-export function ResourcePanelLoadingSkeleton() {
+export function ServerTimelineLoadingSkeleton() {
   return (
-    <section className="panel resourcePanel" aria-busy="true">
-      <LoadingLabel>Loading resource usage</LoadingLabel>
-      <div className="resourceRows resourceSkeletonRows" aria-hidden="true">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div className="resourceRow" key={index}>
-            <div className="resourceMetricLabel"><SkeletonBlock className="uiSkeleton--text" /><SkeletonBlock className="uiSkeleton--title" /><SkeletonBlock className="uiSkeleton--text" /></div>
-            <SkeletonBlock className="resourceChartSkeleton" />
-          </div>
-        ))}
+    <section className="panel serverTimelinePanel serverTimelineLoadingSkeleton" aria-busy="true">
+      <LoadingLabel>Loading server timeline</LoadingLabel>
+      <div className="serverTimelineSkeletonContent" aria-hidden="true">
+        <div className="serverTimelineSkeletonHeader">
+          <SkeletonBlock className="serverTimelineSkeletonTitle" />
+          <SkeletonBlock className="serverTimelineSkeletonRange" />
+        </div>
+        <SkeletonBlock className="serverTimelineSkeletonToolbar" />
+        <SkeletonBlock className="serverTimelineSkeletonChart" />
       </div>
     </section>
   );

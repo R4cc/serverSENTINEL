@@ -125,19 +125,23 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow\.error\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-danger\) 3\.5%, var\(--surface-raised\)\);/s);
   });
 
-  it("reserves the unified timeline for widths that can support it", () => {
+  it("uses the unified timeline for desktop and compact landscape layouts", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationStage\s*\{[^}]*min-height:\s*48px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster:hover:not\(:disabled\)[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*translateX\(-14px\);/s);
-    expect(overviewStyles).toMatch(/@media \(min-width: 721px\) and \(max-width: 980px\)[\s\S]*?\.overviewDashboardGrid > \.resourcePanel \{ grid-area: resource; \}/s);
+    expect(overviewStyles).toMatch(/\.overviewDashboardGrid--chartless\s*\{[^}]*"summary summary[^}]*"players players/s);
+    expect(overviewStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: landscape\)[\s\S]*?\.serverTimelineToolbar\s*\{[^}]*display:\s*grid;/s);
+    expect(overviewStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: landscape\)[\s\S]*?\.serverTimelineChart,[\s\S]*?height:\s*320px;[^}]*min-height:\s*320px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*calc\(340px \+ var\(--timeline-annotation-extra, 0px\)\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*bottom:\s*38px;/s);
     expect(overviewStyles).not.toContain("timelineAnnotationConnector");
+    expect(overviewStyles).not.toContain("resourcePanel");
+    expect(overviewStyles).not.toContain("recharts-");
     expect(overviewStyles).toMatch(/\.serverTimelineSharedGuide\s*\{[^}]*bottom:\s*0;[^}]*background:\s*color-mix\(in srgb, var\(--timeline-guide-color\) 64%, transparent\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineSharedGuide\.tone-server\s*\{\s*--timeline-guide-color:\s*var\(--timeline-server\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*transform:\s*translateX\(-14px\);[^}]*background:\s*transparent;/s);
@@ -177,6 +181,12 @@ describe("global stylesheet entry point", () => {
     expect(phoneOverviewRules).toMatch(/\.summaryTile \.uiMetricTileMarker\s*\{[^}]*display:\s*none;/s);
   });
 
+  it("compacts the active player roster across phone orientations", () => {
+    expect(overviewStyles).toMatch(/@media \(max-width: 980px\)[\s\S]*?\.activePlayer\s*\{[^}]*grid-template-columns:\s*8px minmax\(0, 1fr\);[^}]*padding:\s*5px 8px;/s);
+    expect(overviewStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: landscape\)[\s\S]*?\.overviewDashboardGrid \.activePlayerGrid,[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
+    expect(primitiveStyles).toMatch(/@media \(max-width: 980px\) and \(orientation: portrait\)[\s\S]*?\.applicationOverviewTimelinePanel\s*\{\s*display:\s*none;/s);
+  });
+
   it("uses the document as the final phone scroll surface", () => {
     const nativeScrollRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("/* Native document scrolling"));
     expect(nativeScrollRules).toMatch(/html,\s*body\s*\{[^}]*height:\s*auto;[^}]*overflow-y:\s*auto;/s);
@@ -192,5 +202,11 @@ describe("global stylesheet entry point", () => {
     expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console > \.tabPage:has\(\.consolePanel\)\s*\{[^}]*width:\s*calc\(100% \+ var\(--space-4\) \+ var\(--space-4\)\);[^}]*margin-inline:\s*calc\(0px - var\(--space-4\)\);/s);
     expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console \.consolePanel\s*\{[^}]*padding:\s*0;[^}]*border-inline:\s*0;[^}]*border-radius:\s*0;/s);
     expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console \.consolePanel \.terminal\s*\{[^}]*border-inline:\s*0;[^}]*border-radius:\s*0;/s);
+  });
+
+  it("lets the Console use the available width on very large screens", () => {
+    expect(responsiveStyles).toMatch(
+      /@media \(min-width: 2560px\)\s*\{\s*\.workspace\.workspacePage-console\s*\{[^}]*max-width:\s*none;/s
+    );
   });
 });
