@@ -131,6 +131,32 @@ async function timelineHeights(page) {
   });
 }
 
+async function timelineVisualState(page) {
+  return page.evaluate(() => {
+    const fingerprint = (values) => values.reduce((hash, value) => {
+      for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16_777_619);
+      return hash;
+    }, 2_166_136_261) >>> 0;
+    const pathFingerprint = (chart, seriesOnly = false) => fingerprint(
+      [...chart.querySelectorAll("svg path")]
+        .map((path) => `${path.getAttribute("d") ?? ""}|${path.getAttribute("transform") ?? ""}`)
+        .filter((value) => !seriesOnly || value.length > 100)
+    );
+
+    return {
+      playerFrom: document.querySelector(".serverTimelinePlayerAxis time")?.getAttribute("datetime") ?? "",
+      playerCharts: [...document.querySelectorAll(".serverTimelinePlayerChart")].map((chart) => pathFingerprint(chart)),
+      metricBands: [...document.querySelectorAll(".serverTimelineMetricBand")].map((band) => {
+        const chart = band.querySelector(".serverTimelineEChart");
+        return {
+          label: band.querySelector(".serverTimelineMetricBandLabel")?.textContent?.trim() ?? "",
+          fingerprint: chart ? pathFingerprint(chart, true) : 0
+        };
+      })
+    };
+  });
+}
+
 async function assertTimelineNavigation(page) {
   await selectRange(page, "1h");
   const initial = await timelineWindow(page);
@@ -149,20 +175,92 @@ async function assertTimelineNavigation(page) {
   const scroller = page.locator(".serverTimelinePlayerScroller");
   const box = await scroller.boundingBox();
   assert(box && box.width > 500, `Player timeline is too narrow to exercise dragging: ${JSON.stringify(box)}`);
+  const beforeHorizontalScroll = await timelineVisualState(page);
+  await scroller.dispatchEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    clientX: box.x + box.width * 0.62,
+    clientY: box.y + Math.min(90, box.height / 2),
+    deltaX: -160,
+    deltaY: 0
+  });
+  await page.waitForTimeout(100);
+  const afterHorizontalScroll = await timelineVisualState(page);
+  assert.notEqual(afterHorizontalScroll.playerFrom, beforeHorizontalScroll.playerFrom, "Horizontal scrolling did not pan the player axis");
+  assert.deepEqual(
+    afterHorizontalScroll.playerCharts.map((fingerprint, index) => fingerprint !== beforeHorizontalScroll.playerCharts[index]),
+    beforeHorizontalScroll.playerCharts.map(() => true),
+    "Rendered player sessions did not all move during horizontal scrolling"
+  );
+  assert.deepEqual(
+    afterHorizontalScroll.metricBands.map((band, index) => ({
+      label: band.label,
+      moved: band.fingerprint !== beforeHorizontalScroll.metricBands[index]?.fingerprint
+    })),
+    beforeHorizontalScroll.metricBands.map((band) => ({ label: band.label, moved: true })),
+    "Rendered metric bands did not all move during horizontal scrolling"
+  );
+  await page.getByRole("button", { name: "Jump to now", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
   const beforeHeights = await timelineHeights(page);
   const startX = box.x + box.width * 0.62;
   const startY = box.y + Math.min(90, box.height / 2);
+  const beforeVisualState = await timelineVisualState(page);
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(startX + Math.min(160, box.width * 0.15), startY, { steps: 8 });
+  await page.waitForTimeout(50);
+  const duringVisualState = await timelineVisualState(page);
   const duringHeights = await timelineHeights(page);
   assertNear(duringHeights.stage, beforeHeights.stage, 1, "Annotation stage moved during timeline drag");
   assertNear(duringHeights.visualization, beforeHeights.visualization, 1, "Timeline geometry moved during drag");
+  assert.notEqual(duringVisualState.playerFrom, beforeVisualState.playerFrom, "Player axis did not move during timeline drag");
+  assert.deepEqual(
+    duringVisualState.playerCharts.map((fingerprint, index) => fingerprint !== beforeVisualState.playerCharts[index]),
+    beforeVisualState.playerCharts.map(() => true),
+    "Rendered player sessions did not all move with the player axis during timeline drag"
+  );
+  assert.deepEqual(
+    duringVisualState.metricBands.map((band, index) => ({
+      label: band.label,
+      moved: band.fingerprint !== beforeVisualState.metricBands[index]?.fingerprint
+    })),
+    beforeVisualState.metricBands.map((band) => ({ label: band.label, moved: true })),
+    "Rendered metric bands did not all move with the player axis during timeline drag"
+  );
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector(".serverTimelineCustomRange")?.textContent?.trim() === "Custom");
   assert.equal((await page.locator(".serverTimelineMode").innerText()).trim(), "Historical", "Dragging did not enter historical mode");
   const dragged = await timelineWindow(page);
   assert(dragged.to < returned.to, "Dragging right did not pan the timeline into history");
+
+  const beforeMetricDrag = await timelineVisualState(page);
+  const cpuChart = page.locator('.serverTimelineMetricBand[aria-label="CPU timeline"] .serverTimelineEChart');
+  await cpuChart.scrollIntoViewIfNeeded();
+  const cpuBox = await cpuChart.boundingBox();
+  assert(cpuBox && cpuBox.width > 500, `CPU timeline is too narrow to exercise dragging: ${JSON.stringify(cpuBox)}`);
+  const cpuStartX = cpuBox.x + cpuBox.width * 0.62;
+  const cpuStartY = cpuBox.y + cpuBox.height * 0.5;
+  await page.mouse.move(cpuStartX, cpuStartY);
+  await page.mouse.down();
+  await page.mouse.move(cpuStartX + Math.min(120, cpuBox.width * 0.12), cpuStartY, { steps: 8 });
+  await page.waitForTimeout(50);
+  const duringMetricDrag = await timelineVisualState(page);
+  assert.notEqual(duringMetricDrag.playerFrom, beforeMetricDrag.playerFrom, "Player axis did not move during CPU timeline drag");
+  assert.deepEqual(
+    duringMetricDrag.playerCharts.map((fingerprint, index) => fingerprint !== beforeMetricDrag.playerCharts[index]),
+    beforeMetricDrag.playerCharts.map(() => true),
+    "Rendered player sessions did not all move during CPU timeline drag"
+  );
+  assert.deepEqual(
+    duringMetricDrag.metricBands.map((band, index) => ({
+      label: band.label,
+      moved: band.fingerprint !== beforeMetricDrag.metricBands[index]?.fingerprint
+    })),
+    beforeMetricDrag.metricBands.map((band) => ({ label: band.label, moved: true })),
+    "Rendered metric bands did not all move during CPU timeline drag"
+  );
+  await page.mouse.up();
 
   await page.getByRole("button", { name: "Jump to now", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
