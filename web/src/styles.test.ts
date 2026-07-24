@@ -46,6 +46,10 @@ describe("global stylesheet entry point", () => {
     expect(authStyles).not.toMatch(/:root\.themeDark[\s\S]*?--surface:/);
   });
 
+  it("uses vertical disclosure arrows for the mobile top navigation", () => {
+    expect(responsiveStyles).toMatch(/@media \(max-width: 720px\)\s*\{\s*\.sidebarToggleIconDesktop\s*\{[^}]*display:\s*none;[^}]*\}\s*\.sidebarToggleIconMobile\s*\{[^}]*display:\s*inline-flex;/s);
+  });
+
   it.each([
     "server-properties.css",
     "files-console.css",

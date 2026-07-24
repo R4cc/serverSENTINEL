@@ -301,14 +301,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function refreshUpdates(forceRefresh = true, notifyOnError = forceRefresh) {
     const serverId = activeServer?.id;
-    if (!serverId || refreshUpdatesInFlightRef.current.has(serverId)) return;
+    if (!serverId || refreshUpdatesInFlightRef.current.has(serverId)) return null;
     refreshUpdatesInFlightRef.current.add(serverId);
     try {
-      await Promise.all([
+      const [, updatePlanResult] = await Promise.all([
         loadInstalledMods(serverId, { forceRefresh, notifyOnError }),
         loadUpdatePlan(serverId, { forceRefresh, notifyOnError }),
         refreshServerState()
       ]);
+      return updatePlanResult;
     } finally {
       refreshUpdatesInFlightRef.current.delete(serverId);
     }

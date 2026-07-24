@@ -27,7 +27,7 @@ import { Banner, Button, EmptyState, PanelHeader, StatusBadge, Surface } from ".
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useWideTimelineViewport } from "./components/useMobileViewport";
-import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
+import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
@@ -237,6 +237,7 @@ export default function App() {
   const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
+  const overviewModRefreshInFlightRef = useRef(false);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
@@ -1288,6 +1289,45 @@ export default function App() {
       return;
     }
     toast.info(text, options);
+  }
+
+  async function refreshOverviewModUpdates() {
+    if (overviewModRefreshInFlightRef.current) return;
+    overviewModRefreshInFlightRef.current = true;
+    const toastId = `overview-mod-update-check:${activeServer?.id ?? "current"}`;
+    toast.loading("Checking for updates", {
+      id: toastId,
+      duration: Infinity,
+      dismissible: false
+    });
+    try {
+      const updatePlan = await modsWorkspace.actions.refresh(true, false);
+      if (!updatePlan) {
+        toast.error(`Could not check ${managedContent.singular} updates`, {
+          id: toastId,
+          duration: 7000,
+          closeButton: true,
+          dismissible: true
+        });
+        return;
+      }
+      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), {
+        id: toastId,
+        duration: 5000,
+        closeButton: true,
+        dismissible: true
+      });
+    } catch (error) {
+      toast.error(`Could not check ${managedContent.singular} updates`, {
+        id: toastId,
+        description: errorMessage(error, `Could not check ${managedContent.singular} updates.`),
+        duration: 7000,
+        closeButton: true,
+        dismissible: true
+      });
+    } finally {
+      overviewModRefreshInFlightRef.current = false;
+    }
   }
 
   function resetSessionRequestGuards() {
@@ -2852,7 +2892,7 @@ export default function App() {
                       loading={modsWorkspace.state.updatePlanLoading}
                       canView={canViewMods && supportsManagedMods}
                       onOpenMods={() => setActivePage("mods")}
-                      onRefresh={() => void modsWorkspace.actions.refresh()}
+                      onRefresh={() => void refreshOverviewModUpdates()}
                       contentPlural={managedContent.plural}
                       contentPluralTitle={managedContent.pluralTitle}
                     />

@@ -12,6 +12,7 @@ import {
   groupRecentEvents,
   groupRecentEventsByTime,
   ModHealthPanel,
+  modUpdateRefreshResultMessage,
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
@@ -335,6 +336,7 @@ describe("mod health", () => {
     expect(loadingHtml).not.toContain("modUpdatesWideTitleSkeleton");
     expect(loadingHtml).not.toContain("modUpdatesCompact");
     expect(loadingHtml).not.toContain("modUpdatesWide");
+    expect(loadingHtml).not.toContain("Open Mods");
     expect((loadingHtml.match(/modUpdatesListItem/g) ?? [])).toHaveLength(1);
     expect(loadingHtml).toContain("uiSurface");
     const refreshingHtml = render(updatePlan({ safeUpdates: 1 }), true, true);
@@ -369,7 +371,7 @@ describe("mod health", () => {
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
   });
 
-  it("renders an explicit Mods action when updates are available", () => {
+  it("uses update rows instead of a redundant header link when updates are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
       canView,
@@ -377,10 +379,9 @@ describe("mod health", () => {
     }));
 
     const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
-    expect(html).toContain("<button");
     expect(html).toContain("<h2>Mod updates</h2>");
     expect(html).toContain("3 updates available");
-    expect(html).toContain(">Open Mods</button>");
+    expect(html).not.toContain(">Open Mods</button>");
     expect(html).not.toContain("modUpdatesCardOpen");
     expect(html).not.toContain("installed");
     expect(html).not.toContain("Safe");
@@ -400,7 +401,13 @@ describe("mod health", () => {
     expect(html).toContain('<path d="M20 6v5h-5"></path>');
     expect(html).not.toContain('modUpdatesRefreshLabel');
     expect(html).toContain('uiButton--secondary');
-    expect(html).toContain('>Open Mods</button>');
+    expect(html).not.toContain('>Open Mods</button>');
+  });
+
+  it("describes the completed refresh result for mods and plugins", () => {
+    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 4, upToDate: 4 }), "mods")).toBe("Everything is up to date");
+    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 1 }), "mods")).toBe("1 mod update available");
+    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 2, reviewUpdates: 1 }), "plugins")).toBe("3 plugin updates available");
   });
 
   it("includes individually navigable update rows with icons and version transitions", () => {

@@ -2632,6 +2632,14 @@ textarea:hover:not(:disabled),
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
 @media (max-width: 720px) {
+  .sidebarToggleIconDesktop {
+    display: none;
+  }
+
+  .sidebarToggleIconMobile {
+    display: inline-flex;
+  }
+
   .appShell,
   .sidebarCollapsed.appShell {
     grid-template-rows: 68px minmax(0, 1fr);
