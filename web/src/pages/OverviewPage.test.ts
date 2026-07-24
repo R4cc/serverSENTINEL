@@ -294,7 +294,6 @@ describe("recent event grouping", () => {
     expect(html).toContain("×9");
     expect(html).toContain("<h2>Recent Events</h2>");
     expect(html).toContain(">View full log</button>");
-    expect(html).not.toContain("eventLogButton");
   });
 
   it("starts a new occurrence group at the ten-minute boundary", () => {

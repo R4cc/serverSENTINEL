@@ -1,9 +1,3 @@
-.settingsList {
-  display: grid;
-  gap: var(--space-4);
-  max-width: 1180px;
-}
-
 .settingsStatus {
   justify-self: end;
   border: var(--border-strong) solid var(--border);
@@ -2439,10 +2433,6 @@
   background: transparent;
   justify-self: start;
   box-shadow: none;
-}
-
-.eventLogButton {
-  padding-inline: var(--space-2);
 }
 
 .textLinkButton.compact {

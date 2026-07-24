@@ -121,18 +121,6 @@ export function parseMinecraftQueryFragment(packet: Buffer, expectedSessionId: B
   return { index: sequence & 0x7f, final: (sequence & 0x80) !== 0, payload: packet.subarray(16) };
 }
 
-// Kept as a packet-level parser for focused tests and callers that already have
-// one complete full-stat datagram. Network queries use fragment reassembly.
-export function parseMinecraftQueryResponse(packet: Buffer, expectedSessionId?: Buffer): MinecraftQueryMetrics {
-  if (packet.length < 16 || packet[0] !== 0) {
-    throw new MinecraftQueryError("QUERY_RESPONSE_INVALID", "Invalid Minecraft Query stat response");
-  }
-  if (expectedSessionId && !packet.subarray(1, 5).equals(expectedSessionId)) {
-    throw new MinecraftQueryError("QUERY_RESPONSE_INVALID", "Minecraft Query stat response used the wrong session");
-  }
-  return parseMinecraftQueryPayload(packet.subarray(16));
-}
-
 export function parseMinecraftQueryChallenge(packet: Buffer, expectedSessionId: Buffer) {
   if (packet.length < 6 || packet[0] !== 9 || !packet.subarray(1, 5).equals(expectedSessionId)) {
     throw new MinecraftQueryError("QUERY_RESPONSE_INVALID", "Invalid Minecraft Query challenge response");

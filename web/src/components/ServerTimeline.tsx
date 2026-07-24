@@ -544,11 +544,18 @@ function PlayerSessionSection({
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onWheel: (event: React.WheelEvent<HTMLDivElement>) => void;
+  onWheel: (event: globalThis.WheelEvent) => void;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const onlineRows = rows.filter((row) => row.online);
   const offlineRows = rows.filter((row) => !row.online);
   const ticks = Array.from({ length: 7 }, (_, index) => viewport.from + (viewport.to - viewport.from) * index / 6);
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroller.removeEventListener("wheel", onWheel);
+  }, [onWheel]);
   const renderGroup = (label: string, groupRows: TimelinePlayerRow[], online: boolean) => {
     if (!groupRows.length) return null;
     const option = buildPlayerTimelineChartOption({ rows: groupRows, query, viewport, now, palette, formatShortTime });
@@ -581,12 +588,12 @@ function PlayerSessionSection({
         <div>{ticks.map((tick, index) => <time key={tick} dateTime={new Date(tick).toISOString()} style={{ left: `${index / 6 * 100}%` }}>{formatShortTime(tick)}</time>)}</div>
       </div>
       <div
+        ref={scrollerRef}
         className="serverTimelinePlayerScroller"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onWheel={onWheel}
       >
         {renderGroup("Online now", onlineRows, true)}
         {renderGroup("Played in this time range", offlineRows, false)}
@@ -987,10 +994,10 @@ export function ServerTimeline({
     if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
   }, [loadWindow]);
 
-  const handleSessionWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+  const handleSessionWheel = useCallback((event: globalThis.WheelEvent) => {
     if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
     const plotWidth = rect.width - metricGrid.left - metricGrid.right;
     if (plotWidth <= 0) return;
     const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - metricGrid.left) / plotWidth));

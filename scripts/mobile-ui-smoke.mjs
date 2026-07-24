@@ -288,16 +288,28 @@ async function assertConsoleViewportOwnership(page, label) {
   const result = await page.evaluate(() => {
     const shell = document.querySelector(".appShell");
     const workspace = document.querySelector(".workspacePage-console");
+    const terminalFrame = document.querySelector(".consolePanel > .terminal");
     const terminal = document.querySelector(".minecraftTerminal");
     const owner = document.scrollingElement;
-    if (!(shell instanceof HTMLElement) || !(workspace instanceof HTMLElement) || !(terminal instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
+    if (!(shell instanceof HTMLElement) || !(workspace instanceof HTMLElement) || !(terminalFrame instanceof HTMLElement) || !(terminal instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
+    const terminalRect = terminalFrame.getBoundingClientRect();
+    const panelRect = terminalFrame.parentElement?.getBoundingClientRect();
+    const pageRect = terminalFrame.parentElement?.parentElement?.getBoundingClientRect();
+    const workspaceRect = workspace.getBoundingClientRect();
     return {
       missing: false,
       documentHeight: owner.scrollHeight,
       documentViewportHeight: owner.clientHeight,
+      documentWidth: owner.scrollWidth,
+      documentViewportWidth: owner.clientWidth,
       documentTop: owner.scrollTop,
       shellOverflow: getComputedStyle(shell).overflow,
       workspaceOverflow: getComputedStyle(workspace).overflow,
+      workspaceRect: { left: workspaceRect.left, right: workspaceRect.right, width: workspaceRect.width },
+      pageRect: pageRect ? { left: pageRect.left, right: pageRect.right, width: pageRect.width } : null,
+      panelRect: panelRect ? { left: panelRect.left, right: panelRect.right, width: panelRect.width } : null,
+      terminalLeft: terminalRect.left,
+      terminalRight: terminalRect.right,
       terminalHeight: terminal.getBoundingClientRect().height
     };
   });
@@ -305,6 +317,8 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: console leaks into document scrolling: ${JSON.stringify(result)}`);
   assert(result.documentTop === 0, `${label}: console document is scrolled`);
   assert(result.shellOverflow === "hidden" && result.workspaceOverflow === "hidden", `${label}: console shell is not viewport-contained: ${JSON.stringify(result)}`);
+  assert(result.documentWidth <= result.documentViewportWidth + 1, `${label}: full-width console causes horizontal overflow: ${JSON.stringify(result)}`);
+  assert(result.terminalLeft <= 1 && result.terminalRight >= result.documentViewportWidth - 1, `${label}: console does not reach both viewport edges: ${JSON.stringify(result)}`);
   assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
 }
 

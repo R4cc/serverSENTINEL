@@ -48,7 +48,7 @@ import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
 import type { RuntimeUploadSource } from "./nodes/types.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
-import { parseMinecraftQueryChallenge, parseMinecraftQueryResponse } from "./minecraftQuery.js";
+import { parseMinecraftQueryChallenge } from "./minecraftQuery.js";
 import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
 import { managedContentFileSizeLimit } from "./managedContentLimits.js";
 
@@ -749,43 +749,6 @@ describe("Minecraft Query metrics parsing", () => {
 
     expect(() => parseMinecraftQueryChallenge(packet, sessionId)).toThrow("Invalid Minecraft Query challenge response");
   });
-
-  it("parses player counts and player names from a full query response", () => {
-    const sessionId = Buffer.from([1, 2, 3, 4]);
-    const payload = Buffer.concat([
-      Buffer.from("hostname\0Test Server\0numplayers\0", "utf8"),
-      Buffer.from("2\0maxplayers\0", "utf8"),
-      Buffer.from("20\0", "utf8"),
-      Buffer.from("\0\x01player_\0\0", "latin1"),
-      Buffer.from(" Alex \0Steve\0Alex\0\0", "utf8")
-    ]);
-    const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
-
-    expect(parseMinecraftQueryResponse(packet, sessionId)).toEqual({
-      responding: true,
-      playersOnline: 2,
-      maxPlayers: 20,
-      playerNames: ["Alex", "Steve"]
-    });
-  });
-
-  it("parses an empty player roster from a full query response", () => {
-    const sessionId = Buffer.from([1, 2, 3, 4]);
-    const payload = Buffer.concat([
-      Buffer.from("numplayers\0", "utf8"),
-      Buffer.from("0\0maxplayers\0", "utf8"),
-      Buffer.from("20\0", "utf8"),
-      Buffer.from("\0\x01player_\0\0\0", "latin1")
-    ]);
-    const packet = Buffer.concat([Buffer.from([0]), sessionId, Buffer.alloc(11), payload]);
-
-    expect(parseMinecraftQueryResponse(packet, sessionId)).toEqual({
-      responding: true,
-      playersOnline: 0,
-      maxPlayers: 20,
-      playerNames: []
-    });
-  });
 });
 
 describe("security validation helpers", () => {
@@ -1046,8 +1009,8 @@ describe("Minecraft Query endpoint resolution", () => {
   }) as ManagedServer;
 
   it("prefers the managed Minecraft container IP on a shared Docker network and uses internalPort", async () => {
-    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
-    const endpoint = resolveMinecraftQueryEndpoint(server(), {}, {
+    const { resolveMinecraftQueryEndpoints } = await import("./queryEndpoint.js");
+    const [endpoint] = resolveMinecraftQueryEndpoints(server(), {}, {
       NetworkSettings: { Networks: { app: { NetworkID: "net1", IPAddress: "172.20.0.5" } } }
     }, {
       NetworkSettings: { Networks: { app: { NetworkID: "net1", IPAddress: "172.20.0.2" } } }
@@ -1056,8 +1019,8 @@ describe("Minecraft Query endpoint resolution", () => {
   });
 
   it("falls back to externalPort through the Docker host when no shared network is reachable", async () => {
-    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
-    const endpoint = resolveMinecraftQueryEndpoint(server(), {}, {
+    const { resolveMinecraftQueryEndpoints } = await import("./queryEndpoint.js");
+    const [endpoint] = resolveMinecraftQueryEndpoints(server(), {}, {
       NetworkSettings: { Networks: { minecraft: { NetworkID: "net-mc", IPAddress: "172.21.0.5" } } }
     }, {
       NetworkSettings: { Networks: { panel: { NetworkID: "net-panel", IPAddress: "172.22.0.2", Gateway: "172.22.0.1" } } }
@@ -1075,11 +1038,6 @@ describe("Minecraft Query endpoint resolution", () => {
       expect.objectContaining({ host: "172.20.0.5", port: 25566, source: "container-network" }),
       expect.objectContaining({ host: "172.20.0.1", port: 32566, source: "published-host" })
     ]);
-  });
-
-  it("returns null when query is not configured", async () => {
-    const { resolveMinecraftQueryEndpoint } = await import("./queryEndpoint.js");
-    expect(resolveMinecraftQueryEndpoint(server([]), {}, null, null)).toBeNull();
   });
 });
 
@@ -1126,14 +1084,5 @@ describe("Minecraft Docker network preservation", () => {
 
     expect(minecraftContainerNetworkingConfig(customNetworkInspect, panelInspect)).toEqual(dockerNetworkingConfigFromInspect(customNetworkInspect));
     expect(minecraftContainerNetworkingConfig({ NetworkSettings: { Networks: {} } }, panelInspect)).toEqual(dockerNetworkingConfigFromInspect(panelInspect));
-  });
-});
-
-describe("Minecraft Query timeout behavior", () => {
-  it("detects disabled Minecraft Query configuration", async () => {
-    const { minecraftQueryDisabled } = await import("./queryEndpoint.js");
-    expect(minecraftQueryDisabled({ "enable-query": "false" })).toBe(true);
-    expect(minecraftQueryDisabled({ "enable-query": "true" })).toBe(false);
-    expect(minecraftQueryDisabled({})).toBe(true);
   });
 });

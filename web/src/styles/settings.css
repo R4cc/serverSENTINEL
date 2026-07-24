@@ -669,13 +669,6 @@
 
 
 /* Settings cohesion migrated from the former adoption layer */
-/* Settings screen layout --------------------------------------------------- */
-
-.settingsList {
-  max-width: var(--content-max-width);
-  gap: var(--space-3);
-}
-
 .keyForm fieldset,
 .keyFormConfigured {
   display: grid;
@@ -789,12 +782,6 @@
 /* Responsive settings cohesion migrated from the former adoption layer */
 /* Responsive settings layout pass: keep labels, helpers, and controls readable on phones. */
 @media (max-width: 860px) {
-  .settingsList {
-    width: 100%;
-    max-width: none;
-    gap: var(--space-3);
-  }
-
   .keyForm fieldset,
   .keyFormConfigured {
     grid-template-columns: minmax(0, 1fr);

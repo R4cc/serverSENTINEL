@@ -146,23 +146,6 @@ export class McJarsProvider implements ServerJarProvider {
     };
   }
 
-  /** @deprecated Compatibility wrapper for older internal callers. */
-  async listFabricLoaderVersions(minecraftVersion: string, options?: { forceRefresh?: boolean }) {
-    const versions = await this.listRuntimeVersions("fabric", minecraftVersion, options);
-    return versions.map((version) => ({ ...version, loaderVersion: version.runtimeVersion }));
-  }
-
-  /** @deprecated Compatibility wrapper for older internal callers. */
-  resolveFabricServerJar(input: { minecraftVersion: string; loaderVersion?: string; preferStable?: boolean; forceRefresh?: boolean }) {
-    return this.resolveServerJar({
-      runtimeType: "fabric",
-      minecraftVersion: input.minecraftVersion,
-      runtimeVersion: input.loaderVersion,
-      preferStable: input.preferStable,
-      forceRefresh: input.forceRefresh
-    });
-  }
-
   private adapter(runtimeType: ServerRuntimeType) {
     const adapter = runtimeAdapters[runtimeType];
     if (!adapter) throw new RuntimeResolutionError("unsupported_runtime", `MCJars provisioning for ${runtimeType} is not enabled yet`);

@@ -15,10 +15,6 @@ export type MinecraftQueryEndpoint = {
   diagnostics: string[];
 };
 
-export function minecraftQueryDisabled(props: Record<string, string> = {}) {
-  return props["enable-query"]?.trim().toLowerCase() !== "true";
-}
-
 export function queryPortBinding(server: ManagedServer) {
   return server.managedPorts?.find((port) => port.type === "query" && port.protocol === "udp");
 }
@@ -35,15 +31,6 @@ export function configuredQueryExternalPort(server: ManagedServer, props: Record
   if (stored) return stored;
   const prop = props["query.port"] ? Number(props["query.port"]) : null;
   return prop && Number.isFinite(prop) ? prop : undefined;
-}
-
-export function resolveMinecraftQueryEndpoint(
-  server: ManagedServer,
-  props: Record<string, string> = {},
-  minecraftInspect?: QueryNetworkInspect | null,
-  callerInspect?: QueryNetworkInspect | null
-): MinecraftQueryEndpoint | null {
-  return resolveMinecraftQueryEndpoints(server, props, minecraftInspect, callerInspect)[0] ?? null;
 }
 
 export function resolveMinecraftQueryEndpoints(

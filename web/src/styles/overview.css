@@ -573,6 +573,7 @@ button.overviewCardRow:focus-visible {
   position: relative;
   overflow: hidden;
   background: color-mix(in srgb, var(--surface-raised) 96%, var(--surface-muted));
+  pointer-events: none;
 }
 
 .serverTimelinePlayerIdentity {

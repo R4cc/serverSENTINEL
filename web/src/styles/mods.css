@@ -2,10 +2,6 @@
 .modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .modsWorkspaceMetric { display: flex; gap: 10px; align-items: center; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: none; }
-.modsWorkspaceMetricDot { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--sentinel-info) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 6%, transparent); }
-.modsWorkspaceMetric.orange .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-warning) 17%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
-.modsWorkspaceMetric.purple .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-accent) 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-accent) 7%, transparent); }
-.modsWorkspaceMetric.green .modsWorkspaceMetricDot { background: color-mix(in srgb, var(--sentinel-success) 16%, transparent); box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--sentinel-success) 7%, transparent); }
 .modsWorkspaceMetric > div { min-width: 0; display: grid; grid-template-rows: auto 20px; align-content: center; }
 .modsWorkspaceMetric small { color: var(--text-muted); font-size: .76rem; }
 .modsWorkspaceMetric strong { display: flex; min-height: 20px; align-items: center; margin: 0; font-size: 1.08rem; line-height: 1.1; }

@@ -507,7 +507,6 @@
 
 .pageStack,
 .tabPage,
-.settingsList,
 .nodesPage {
   min-width: 0;
 }
@@ -1669,13 +1668,17 @@ button:disabled,
     display: flex;
     height: auto;
     min-height: 0;
+    width: calc(100% + var(--space-4) + var(--space-4));
+    margin-inline: calc(0px - var(--space-4));
     overflow: hidden;
   }
 
   .workspacePage-console .consolePanel {
     min-height: 0;
-    padding: 6px;
+    padding: 0;
     gap: 0;
+    border-inline: 0;
+    border-radius: 0;
     overflow: hidden;
   }
 
@@ -1687,6 +1690,11 @@ button:disabled,
   .workspacePage-console .minecraftTerminal {
     height: auto;
     min-height: 0;
+  }
+
+  .workspacePage-console .consolePanel .terminal {
+    border-inline: 0;
+    border-radius: 0;
   }
 
   .workspacePage-files > .filesPage {

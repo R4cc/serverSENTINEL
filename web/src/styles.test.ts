@@ -59,7 +59,7 @@ describe("global stylesheet entry point", () => {
 
   it("does not animate page containers that host fixed dialogs", () => {
     expect(motionStyles).not.toContain("sentinelPageEnter");
-    expect(motionStyles).not.toMatch(/\.workspace\s*>\s*\.(?:tabPage|pageStack|createServerPanel|settingsList)[^{]*\{[^}]*animation\s*:/s);
+    expect(motionStyles).not.toMatch(/\.workspace\s*>\s*\.(?:tabPage|pageStack|createServerPanel)[^{]*\{[^}]*animation\s*:/s);
   });
 
   it("reserves the desktop scrollbar gutter before async content changes page height", () => {
@@ -181,5 +181,12 @@ describe("global stylesheet entry point", () => {
     expect(nativeScrollRules).toMatch(/\.nodesPage\s*>\s*\.nodeDrawerBackdrop\s+\.nodeDrawerBody\s*\{[^}]*overflow:\s*visible;/s);
     expect(nativeScrollRules).toMatch(/\.appShell:has\(\.workspacePage-console\)[^{]*\{[^}]*height:\s*var\(--visual-viewport-height, 100dvh\);[^}]*overflow:\s*hidden;/s);
     expect(nativeScrollRules).toMatch(/\.workspacePage-console\s*\{[^}]*height:\s*100%;[^}]*overflow:\s*hidden;/s);
+  });
+
+  it("gives the phone Console the full viewport width", () => {
+    const phoneWorkspaceRules = responsiveStyles.slice(responsiveStyles.indexOf("/* Mobile workspaces reserve"));
+    expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console > \.tabPage:has\(\.consolePanel\)\s*\{[^}]*width:\s*calc\(100% \+ var\(--space-4\) \+ var\(--space-4\)\);[^}]*margin-inline:\s*calc\(0px - var\(--space-4\)\);/s);
+    expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console \.consolePanel\s*\{[^}]*padding:\s*0;[^}]*border-inline:\s*0;[^}]*border-radius:\s*0;/s);
+    expect(phoneWorkspaceRules).toMatch(/\.workspacePage-console \.consolePanel \.terminal\s*\{[^}]*border-inline:\s*0;[^}]*border-radius:\s*0;/s);
   });
 });
