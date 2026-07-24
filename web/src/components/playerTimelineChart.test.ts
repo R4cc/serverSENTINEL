@@ -3,8 +3,14 @@ import { defaultTimelinePalette } from "./serverTimelineChart";
 import {
   buildPlayerTimelineChartOption,
   playerTimelineChartItems,
+  playerTimelineLanePositionFromZoom,
   playerTimelineLabelLayout,
+  playerTimelineLanes,
   playerTimelineReconnectWindowMs,
+  playerTimelineRowsDataZoomId,
+  playerTimelineRowsSliderId,
+  playerTimelineTimeDataZoomId,
+  resolvePlayerTimelineLaneWindow,
   type PlayerTimelineRow
 } from "./playerTimelineChart";
 
@@ -130,9 +136,11 @@ describe("player timeline label placement", () => {
       endX: 125,
       plotLeft: 0,
       plotRight: 500,
-      durationLabel: "2m",
-      startLabel: "12:01",
-      endLabel: "12:03"
+      durationWidth: 24,
+      startWidth: 28,
+      endWidth: 28,
+      hasStart: true,
+      hasEnd: true
     });
     expect(layout).toMatchObject({ startAlign: "right", endAlign: "left", showStart: true, showEnd: true });
     expect(layout.startX).toBeLessThan(100);
@@ -145,19 +153,57 @@ describe("player timeline label placement", () => {
       endX: 2,
       plotLeft: 0,
       plotRight: 200,
-      durationLabel: "≥ 4h 25m",
-      startLabel: null,
-      endLabel: null
+      durationWidth: 58,
+      startWidth: 0,
+      endWidth: 0,
+      hasStart: false,
+      hasEnd: false
     });
     expect(layout.durationX).toBeGreaterThan(20);
     expect(layout.durationX).toBeLessThan(180);
   });
 });
 
+describe("player timeline lanes", () => {
+  it("uses dedicated group lanes and stable online-first player keys", () => {
+    expect(playerTimelineLanes(rows()).map((lane) => lane.key)).toEqual([
+      "group:online",
+      "player:online:alex",
+      "group:offline",
+      "player:offline:sam"
+    ]);
+  });
+
+  it("omits empty groups and keeps a valid vertical window after rows change", () => {
+    const lanes = playerTimelineLanes(rows().slice(1));
+    expect(lanes.map((lane) => lane.key)).toEqual(["group:offline", "player:offline:sam"]);
+    expect(resolvePlayerTimelineLaneWindow(lanes, { startKey: "missing", startIndex: 9 })).toMatchObject({
+      startIndex: 0,
+      startKey: "group:offline",
+      endKey: "player:offline:sam"
+    });
+  });
+
+  it("routes only row data-zoom events into the vertical lane position", () => {
+    const lanes = playerTimelineLanes(rows());
+    expect(playerTimelineLanePositionFromZoom({ dataZoomId: playerTimelineRowsDataZoomId, startValue: "group:offline" }, lanes))
+      .toEqual({ startKey: "group:offline", startIndex: 2 });
+    expect(playerTimelineLanePositionFromZoom({ dataZoomId: playerTimelineTimeDataZoomId, startValue: viewport.from }, lanes)).toBeNull();
+  });
+});
+
 describe("player timeline ECharts option", () => {
   it("renders sessions as a synchronized custom range series", () => {
+    const chartRows = [
+      ...rows(),
+      ...Array.from({ length: 5 }, (_, index): PlayerTimelineRow => ({
+        player: `Offline ${index + 1}`,
+        online: false,
+        sessions: []
+      }))
+    ];
     const option = buildPlayerTimelineChartOption({
-      rows: rows(),
+      rows: chartRows,
       query,
       viewport,
       now: 60_000,
@@ -169,11 +215,60 @@ describe("player timeline ECharts option", () => {
     const xAxis = option.xAxis as Record<string, unknown>;
     const yAxis = option.yAxis as Record<string, unknown>;
 
-    expect(series.map((entry) => entry.type)).toEqual(["custom", "custom"]);
-    expect(series[0]).toMatchObject({ id: "player-sessions", coordinateSystem: "cartesian2d", silent: true });
-    expect(typeof series[0].renderItem).toBe("function");
-    expect(dataZoom).toMatchObject({ startValue: viewport.from, endValue: viewport.to, filterMode: "weakFilter" });
-    expect(xAxis).toMatchObject({ min: query.from, max: query.to });
-    expect(yAxis.data).toEqual(["Alex", "Sam"]);
+    expect(series.map((entry) => entry.type)).toEqual(["custom", "custom", "custom"]);
+    expect(series[0]).toMatchObject({ id: "player-row-chrome", coordinateSystem: "cartesian2d", silent: true, clip: false });
+    expect(series[1]).toMatchObject({ id: "player-sessions", coordinateSystem: "cartesian2d", silent: true, clip: true });
+    expect(typeof series[1].renderItem).toBe("function");
+    expect(dataZoom).toMatchObject({ id: playerTimelineTimeDataZoomId, startValue: viewport.from, endValue: viewport.to, filterMode: "weakFilter" });
+    expect((option.dataZoom as Array<Record<string, unknown>>).map((zoom) => zoom.id)).toEqual([
+      playerTimelineTimeDataZoomId,
+      playerTimelineRowsDataZoomId,
+      playerTimelineRowsSliderId
+    ]);
+    expect(xAxis).toMatchObject({ min: query.from, max: query.to, position: "top" });
+    expect(yAxis.data).toEqual([
+      "group:online",
+      "player:online:alex",
+      "group:offline",
+      "player:offline:offline 1",
+      "player:offline:offline 2",
+      "player:offline:offline 3",
+      "player:offline:offline 4",
+      "player:offline:offline 5",
+      "player:offline:sam"
+    ]);
+  });
+
+  it("keeps a large synthetic session set in one SVG-oriented option", () => {
+    const minute = 60_000;
+    const syntheticRows = Array.from({ length: 100 }, (_, playerIndex): PlayerTimelineRow => ({
+      player: `Load Player ${playerIndex + 1}`,
+      online: playerIndex < 10,
+      sessions: Array.from({ length: 25 }, (_, sessionIndex) => {
+        const startedAt = sessionIndex * 25 * minute;
+        return {
+          id: `load-${playerIndex}-${sessionIndex}`,
+          player: `Load Player ${playerIndex + 1}`,
+          startedAt,
+          endedAt: startedAt + 5 * minute,
+          startBoundary: "join" as const,
+          endBoundary: "leave" as const
+        };
+      })
+    }));
+    const largeViewport = { from: 0, to: 24 * 60 * minute };
+    const option = buildPlayerTimelineChartOption({
+      rows: syntheticRows,
+      query: largeViewport,
+      viewport: largeViewport,
+      now: largeViewport.to,
+      palette: defaultTimelinePalette,
+      formatShortTime
+    }) as Record<string, unknown>;
+    const sessionSeries = (option.series as Array<Record<string, unknown>>).find((series) => series.id === "player-sessions");
+
+    expect(sessionSeries?.data).toHaveLength(2_500);
+    expect((option.yAxis as Record<string, unknown>).data).toHaveLength(102);
+    expect((option.aria as Record<string, unknown>).description).toContain("Player session timeline");
   });
 });

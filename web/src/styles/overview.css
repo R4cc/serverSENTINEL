@@ -479,146 +479,15 @@ button.overviewCardRow:focus-visible {
   background: var(--surface-raised);
 }
 
-.serverTimelinePlayerAxis,
-.serverTimelinePlayerGroupBody {
-  display: grid;
-  grid-template-columns: var(--timeline-label-gutter) minmax(0, 1fr);
-}
-
-.serverTimelinePlayerAxis {
-  position: relative;
-  z-index: 4;
-  min-height: 28px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-muted);
-}
-
-.serverTimelinePlayerAxis > span {
-  border-right: 1px solid var(--border-subtle);
-}
-
-.serverTimelinePlayerAxis > div {
-  position: relative;
-  margin-right: 24px;
-}
-
-.serverTimelinePlayerAxis time {
-  position: absolute;
-  top: 7px;
-  transform: translateX(-50%);
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.serverTimelinePlayerAxis time:first-child { transform: none; }
-.serverTimelinePlayerAxis time:last-child { transform: translateX(-100%); }
-
-.serverTimelinePlayerScroller {
-  /* Group header (28px) plus six complete 40px rows. Keeping the cap on a
-     row boundary prevents the final visible session label being clipped. */
-  max-height: 268px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  touch-action: pan-y;
-}
-
-.serverTimelinePlayerGroup {
-  --player-session-color: var(--timeline-leave);
-  min-width: 0;
-}
-
-.serverTimelinePlayerGroup.tone-online { --player-session-color: var(--timeline-join); }
-
-.serverTimelinePlayerGroupHeader {
-  position: sticky;
-  z-index: 3;
-  top: 0;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-left: 4px solid var(--player-session-color);
-  background: color-mix(in srgb, var(--player-session-color) 5%, var(--surface-raised));
-  color: var(--player-session-color);
-  font-size: 10px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
-.serverTimelinePlayerGroupHeader small {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-meta);
-}
-
-.serverTimelinePlayerGroupBody { min-height: 40px; }
-
-.serverTimelinePlayerIdentities,
-.serverTimelinePlayerChart {
-  min-width: 0;
-  height: 100%;
-}
-
-.serverTimelinePlayerIdentities {
-  border-right: 1px solid var(--border-subtle);
-}
-
 .serverTimelinePlayerChart {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 70px;
+  max-height: 270px;
   overflow: hidden;
   background: color-mix(in srgb, var(--surface-raised) 96%, var(--surface-muted));
-  pointer-events: none;
-}
-
-.serverTimelinePlayerIdentity {
-  min-width: 0;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.serverTimelinePlayerIdentity:last-child { border-bottom-color: transparent; }
-
-.serverTimelinePlayerIdentity strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.serverTimelinePlayerStatus {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
-}
-
-.serverTimelinePlayerStatus.tone-online { color: var(--timeline-join); }
-.serverTimelinePlayerStatus.tone-offline { color: var(--timeline-leave); }
-
-.serverTimelinePlayerStatus svg {
-  width: 13px;
-  height: 13px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  touch-action: pan-y;
 }
 
 .serverTimelinePlayerEmpty {
@@ -1056,8 +925,7 @@ button.overviewCardRow:focus-visible {
     height: 360px;
   }
 
-  /* Compact desktop keeps five complete rows visible beneath the header. */
-  .serverTimelinePlayerScroller { max-height: 228px; }
+  .serverTimelinePlayerChart { max-height: 228px; }
   .serverTimelineMetricBand.is-prominent { height: 220px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }

@@ -7,6 +7,7 @@ import {
   formatTimelineDuration,
   mergeTimelineResponses,
   panTimelineWindowByPixels,
+  zoomTimelineWindowAtPixel,
   positionTimelineClusters,
   ServerTimeline,
   TimelineAnnotationPopoverItem,
@@ -42,6 +43,9 @@ describe("server timeline controls", () => {
     expect(timelineHorizontalWheelPixels({ deltaMode: 1, deltaX: 0, deltaY: 3, shiftKey: true }, 800)).toBe(48);
     expect(timelineHorizontalWheelPixels({ deltaMode: 0, deltaX: 2, deltaY: 80, shiftKey: false }, 800)).toBe(0);
     expect(panTimelineWindowByPixels({ from: 1_000, to: 5_000 }, -200, 800)).toEqual({ from: 0, to: 4_000 });
+    const zoomed = zoomTimelineWindowAtPixel({ from: 0, to: 4_000_000 }, -360, 600, 800);
+    expect(zoomed.to - zoomed.from).toBeLessThan(4_000_000);
+    expect(zoomed.from + (zoomed.to - zoomed.from) * 0.75).toBeCloseTo(3_000_000);
   });
 });
 

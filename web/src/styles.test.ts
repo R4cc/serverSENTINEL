@@ -127,8 +127,8 @@ describe("global stylesheet entry point", () => {
 
   it("reserves the unified timeline for widths that can support it", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayerScroller\s*\{[^}]*max-height:\s*268px;/s);
-    expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerScroller\s*\{\s*max-height:\s*228px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
+    expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationStage\s*\{[^}]*min-height:\s*48px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster:hover:not\(:disabled\)[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*translateX\(-14px\);/s);

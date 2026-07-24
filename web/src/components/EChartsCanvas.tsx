@@ -3,6 +3,7 @@ import { CustomChart, LineChart } from "echarts/charts";
 import {
   AriaComponent,
   DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GridComponent,
   MarkLineComponent
 } from "echarts/components";
@@ -14,6 +15,7 @@ use([
   CustomChart,
   AriaComponent,
   DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GridComponent,
   MarkLineComponent,
   SVGRenderer
@@ -33,10 +35,11 @@ export const timelineChartSetOptionOptions = {
 };
 
 export type TimelineDataZoomEvent = {
+  dataZoomId?: string;
   start?: number;
   end?: number;
-  startValue?: number;
-  endValue?: number;
+  startValue?: unknown;
+  endValue?: unknown;
   batch?: TimelineDataZoomEvent[];
 };
 
@@ -112,7 +115,8 @@ export function EChartsCanvas({
   onInteractionChange,
   onPointerMove,
   onPointerLeave,
-  onClick
+  onClick,
+  onWheel
 }: {
   option: EChartsCoreOption;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
@@ -120,14 +124,17 @@ export function EChartsCanvas({
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
+  onWheel?: (event: globalThis.WheelEvent) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
   const optionSchedulerRef = useRef<ReturnType<typeof createChartOptionScheduler> | null>(null);
   const onDataZoomRef = useRef(onDataZoom);
   const onInteractionChangeRef = useRef(onInteractionChange);
+  const onWheelRef = useRef(onWheel);
   onDataZoomRef.current = onDataZoom;
   onInteractionChangeRef.current = onInteractionChange;
+  onWheelRef.current = onWheel;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -137,7 +144,12 @@ export function EChartsCanvas({
     const optionScheduler = createChartOptionScheduler((next) => chart.setOption(next, timelineChartSetOptionOptions));
     optionSchedulerRef.current = optionScheduler;
     const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
+    const handleWheel = (event: globalThis.WheelEvent) => onWheelRef.current?.(event);
     chart.on("datazoom", handleDataZoom);
+    // Let the shared timeline wheel router claim horizontal pan and modified
+    // zoom gestures before ECharts' inside-zoom handlers see them. Unclaimed
+    // vertical wheel input continues to ECharts for player-row scrolling.
+    container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     const renderer = chart.getZr();
     const interactionTracker = createChartInteractionTracker(() => {
       optionScheduler.startInteraction();
@@ -160,6 +172,7 @@ export function EChartsCanvas({
       renderer.off("mouseup", interactionTracker.pointerUp);
       renderer.off("globalout", interactionTracker.pointerOut);
       chart.off("datazoom", handleDataZoom);
+      container.removeEventListener("wheel", handleWheel, { capture: true });
       interactionTracker.cancel();
       optionScheduler.cancel();
       chart.dispose();
