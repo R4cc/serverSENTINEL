@@ -244,6 +244,17 @@ describe("Fastify application factory", () => {
     let app = await buildApp();
     const csrf = { "x-requested-with": "XMLHttpRequest" };
 
+    const browserImageRequest = await app.inject({
+      method: "GET",
+      url: "/api/servers/server-1/player-head/Alex?v=123"
+    });
+    expect(browserImageRequest.statusCode, browserImageRequest.body).toBe(401);
+    expect(browserImageRequest.body).not.toContain("CSRF protection");
+
+    const ordinaryHeaderlessApiRequest = await app.inject({ method: "GET", url: "/api/app" });
+    expect(ordinaryHeaderlessApiRequest.statusCode, ordinaryHeaderlessApiRequest.body).toBe(400);
+    expect(ordinaryHeaderlessApiRequest.body).toContain("CSRF protection");
+
     const registered = await app.inject({
       method: "POST",
       url: "/api/auth/register-first",
