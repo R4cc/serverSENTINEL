@@ -155,11 +155,26 @@
 }
 
 .consoleChatAuthor {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   padding-inline: var(--space-2);
   color: hsl(var(--chat-hue) 58% var(--chat-author-lightness));
   font-size: var(--chat-meta-size);
   font-weight: var(--weight-heading);
   overflow-wrap: anywhere;
+}
+
+.consoleChatRank {
+  border-radius: var(--radius-sm);
+  background: hsl(var(--chat-hue) 46% var(--chat-avatar-lightness));
+  padding: 1px 5px;
+  color: var(--swiss-white);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .consoleChatCluster.is-outgoing .consoleChatAuthor {

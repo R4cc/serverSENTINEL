@@ -935,8 +935,9 @@ export default function App() {
         consoleLine("[12:04:12] [Server thread/INFO]: Steve joined the game"),
         consoleLine("[12:04:20] [Server thread/INFO]: <Steve> hey, anyone up for a nether trip?"),
         consoleLine("[12:04:41] [Server thread/INFO]: Alex joined the game"),
-        consoleLine("[12:04:58] [Server thread/INFO]: <Alex> give me two minutes, gearing up"),
+        consoleLine("[12:04:58] [Server thread/INFO]: [ADM] Alex : give me two minutes, gearing up"),
         consoleLine("[12:05:12] [Server thread/INFO]: <Steve> meet me at the portal"),
+        consoleLine("[12:05:18] [Server thread/INFO]: Steve fell from a high place"),
         consoleLine("[12:05:30] [Server thread/INFO]: [Server] Scheduled restart tonight at 03:00"),
         consoleLine("[12:06:02] [Server thread/INFO]: Alex has made the advancement [We Need to Go Deeper]")
       ];

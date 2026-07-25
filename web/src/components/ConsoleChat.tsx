@@ -136,7 +136,10 @@ export function ConsoleChat({
                     version={headVersion}
                   />
                   <div className="consoleChatClusterBody">
-                    <span className="consoleChatAuthor">{author}</span>
+                    <span className="consoleChatAuthor">
+                      {item.rank && <span className="consoleChatRank">{item.rank}</span>}
+                      {author}
+                    </span>
                     {item.entries.map((entry) => (
                       <p
                         className={`consoleChatBubble ${entry.kind === "emote" ? "is-emote" : ""}`.trim()}
