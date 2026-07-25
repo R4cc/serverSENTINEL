@@ -38,6 +38,7 @@ import {
   type TimelinePalette
 } from "./serverTimelineChart";
 import { Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
+import { playerHeadSource } from "../utils/playerHeads";
 
 const timelineRanges = [
   { label: "5m", milliseconds: 5 * 60 * 1000 },
@@ -550,6 +551,7 @@ function PlayerSessionSection({
   formatTime,
   formatShortTime,
   gridLeft,
+  playerHeadSourceFor,
   interacting,
   onDataZoom,
   onInteractionChange,
@@ -566,6 +568,7 @@ function PlayerSessionSection({
   formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
   gridLeft: number;
+  playerHeadSourceFor?: (player: string) => string;
   interacting: boolean;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
   onInteractionChange: (interacting: boolean) => void;
@@ -590,8 +593,9 @@ function PlayerSessionSection({
     palette,
     formatTime,
     formatShortTime,
-    gridLeft
-  }), [displayRows, formatShortTime, formatTime, gridLeft, lanes, now, palette, query, resolvedPosition.endKey, resolvedPosition.startIndex, resolvedPosition.startKey, viewport]);
+    gridLeft,
+    playerHeadSource: playerHeadSourceFor
+  }), [displayRows, formatShortTime, formatTime, gridLeft, lanes, now, palette, playerHeadSourceFor, query, resolvedPosition.endKey, resolvedPosition.startIndex, resolvedPosition.startKey, viewport]);
   const handleDataZoom = useCallback((event: TimelineDataZoomEvent) => {
     const nextPosition = playerTimelineLanePositionFromZoom(event, lanes);
     if (nextPosition) setVerticalPosition(nextPosition);
@@ -645,7 +649,9 @@ export function ServerTimeline({
   formatShortTime,
   formatDate,
   onLatestSample,
-  onOpenSchedules
+  onOpenSchedules,
+  serverId = "",
+  playerHeadsEnabled = false
 }: {
   loadTimeline: LoadTimeline;
   formatTime: (value: string | number | Date) => string;
@@ -653,6 +659,8 @@ export function ServerTimeline({
   formatDate: (value: string | number | Date) => string;
   onLatestSample?: (sample?: ServerTimelineResourcePoint) => void;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
+  serverId?: string;
+  playerHeadsEnabled?: boolean;
 }) {
   const initialSpan = timelineRanges.find((range) => range.label === defaultTimelineRange)!.milliseconds;
   const [selection, setSelection] = useState<TimelineSelection>(defaultTimelineRange);
@@ -693,6 +701,11 @@ export function ServerTimeline({
   const hoverFrameRef = useRef<number | undefined>(undefined);
   const palette = useTimelinePresentation(panelRef);
   const navigationPendingRef = useRef(false);
+  const headVersion = Math.floor(clockNow / (60 * 60 * 1000));
+  const playerHeadSourceFor = useCallback(
+    (player: string) => playerHeadSource(serverId, player, headVersion),
+    [headVersion, serverId]
+  );
 
   const setViewport = useCallback((next: TimelineWindow) => {
     viewportRef.current = next;
@@ -1182,6 +1195,7 @@ export function ServerTimeline({
             formatTime={formatTime}
             formatShortTime={formatShortTime}
             gridLeft={metricGrid.left}
+            playerHeadSourceFor={playerHeadsEnabled ? playerHeadSourceFor : undefined}
             interacting={chartInteracting}
             onDataZoom={handleDataZoom}
             onInteractionChange={handleChartInteractionChange}

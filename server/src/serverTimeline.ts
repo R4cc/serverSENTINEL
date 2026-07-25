@@ -24,6 +24,15 @@ function playerKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
+export function timelinePlayerIsKnown(events: ServerTimelineEvent[], playerName: string) {
+  const key = playerKey(playerName);
+  return Boolean(key) && events.some((event) =>
+    (event.eventType === "player_joined" || event.eventType === "player_left")
+    && typeof event.subject === "string"
+    && playerKey(event.subject) === key
+  );
+}
+
 function timelineSnapshotAt(snapshot: PlayerSnapshot | undefined) {
   if (!snapshot) return undefined;
   if (snapshot.state === "live" || snapshot.state === "stale" || snapshot.state === "stopped") return snapshot.sampledAt;

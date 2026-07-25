@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResourceStatsSample } from "./resourceStatsCollector.js";
 import type { ServerTimelineEvent } from "./types.js";
-import { timelinePlayerActivity, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
+import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 
 function sample(sampledAt: number, rx: number, tx: number, overrides: Partial<ResourceStatsSample> = {}): ResourceStatsSample {
   return {
@@ -170,6 +170,17 @@ function playerEvent(id: string, eventType: "player_joined" | "player_left", sub
 }
 
 describe("server timeline player activity", () => {
+  it("recognizes player names from retained join and leave events", () => {
+    const events = [
+      playerEvent("join", "player_joined", "Alex", 10),
+      playerEvent("leave", "player_left", "Robin", 20)
+    ];
+
+    expect(timelinePlayerIsKnown(events, " alex ")).toBe(true);
+    expect(timelinePlayerIsKnown(events, "ROBIN")).toBe(true);
+    expect(timelinePlayerIsKnown(events, "Steve")).toBe(false);
+  });
+
   it("pairs sessions, ignores duplicate state changes, and keeps reconnects separate", () => {
     const result = timelinePlayerActivity({
       contextFrom: 0,

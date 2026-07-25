@@ -2872,6 +2872,8 @@ export default function App() {
                         formatTime={formatDisplayTime}
                         formatShortTime={formatDisplayShortTime}
                         formatDate={formatDisplayDate}
+                        serverId={activeServer.id}
+                        playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
                         onLatestSample={setTimelineLatestSample}
                         onOpenSchedules={(target) => {
                           setScheduleNavigationTarget(target ?? null);

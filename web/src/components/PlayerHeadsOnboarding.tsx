@@ -27,10 +27,10 @@ export function PlayerHeadsOnboarding({
         </header>
         <div className="modalBody playerHeadsOnboardingBody">
           <p id="player-heads-onboarding-description">
-            When enabled, serverSENTINEL sends online-player usernames from this panel host to <strong>MCHeads (mc-heads.net)</strong> and caches the returned skin-head images. MCHeads does not require an API key.
+            When enabled, serverSENTINEL sends usernames shown in the active-player roster and retained player timeline from this panel host to <strong>MCHeads (mc-heads.net)</strong> and caches the returned skin-head images. MCHeads does not require an API key.
           </p>
           <p>
-            Keeping it disabled leaves the Overview roster text-only and sends no requests, health checks, or other traffic to MCHeads. You can change this global choice later under Settings → Integrations.
+            Keeping it disabled leaves Overview player names without skin heads and sends no requests, health checks, or other traffic to MCHeads. You can change this global choice later under Settings → Integrations.
           </p>
           <p className="playerHeadsOnboardingFreshness">Skin changes appear over time: serverSENTINEL rechecks every 12 hours, while MCHeads documents a skin cache of up to 24 hours.</p>
           {error && <InlineState tone="error" title="Could not save this choice" message={error} />}

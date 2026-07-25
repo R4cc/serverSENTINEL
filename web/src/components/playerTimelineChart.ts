@@ -342,7 +342,12 @@ export function playerTimelineChartItems(
   });
 }
 
-function rowChromeRenderItem(lanes: PlayerTimelineLane[], query: PlayerTimelineWindow, palette: TimelinePalette): CustomSeriesRenderItem {
+function rowChromeRenderItem(
+  lanes: PlayerTimelineLane[],
+  query: PlayerTimelineWindow,
+  palette: TimelinePalette,
+  playerHeadSource?: (player: string) => string
+): CustomSeriesRenderItem {
   return (params, api): CustomSeriesRenderItemReturn => {
     const lane = lanes[params.dataIndex];
     if (!lane) return null;
@@ -398,6 +403,7 @@ function rowChromeRenderItem(lanes: PlayerTimelineLane[], query: PlayerTimelineW
     const badgeRadius = Math.max(8, Math.min(11, bandHeight * 0.275));
     const badgeX = 22;
     const iconSize = badgeRadius * 1.28;
+    const headSize = badgeRadius * 1.4;
     const iconX = badgeX - iconSize / 2;
     const iconY = y - iconSize / 2;
     const iconKind: PlayerEventIconKind = lane.online ? "player_joined" : "player_left";
@@ -418,6 +424,7 @@ function rowChromeRenderItem(lanes: PlayerTimelineLane[], query: PlayerTimelineW
           style: { fill: "none", stroke: color, lineWidth: 1.35, lineCap: "round", lineJoin: "round" },
           silent: true
         });
+    const headSource = playerHeadSource?.(lane.player);
 
     return {
       type: "group",
@@ -442,6 +449,17 @@ function rowChromeRenderItem(lanes: PlayerTimelineLane[], query: PlayerTimelineW
           silent: true
         },
         ...iconChildren,
+        ...(headSource ? [{
+          type: "image" as const,
+          style: {
+            image: headSource,
+            x: badgeX - headSize / 2,
+            y: y - headSize / 2,
+            width: headSize,
+            height: headSize
+          },
+          silent: true
+        }] : []),
         {
           type: "text",
           style: {
@@ -643,7 +661,8 @@ export function buildPlayerTimelineChartOption({
   palette,
   formatTime,
   formatShortTime,
-  gridLeft = 220
+  gridLeft = 220,
+  playerHeadSource
 }: {
   rows: PlayerTimelineRow[];
   lanes?: PlayerTimelineLane[];
@@ -655,6 +674,7 @@ export function buildPlayerTimelineChartOption({
   formatTime?: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
   gridLeft?: number;
+  playerHeadSource?: (player: string) => string;
 }): EChartsCoreOption {
   const effectiveFormatTime = formatTime ?? formatShortTime;
   const items = playerTimelineChartItems(rows, viewport, now, formatShortTime);
@@ -747,7 +767,7 @@ export function buildPlayerTimelineChartOption({
         name: "Player rows",
         type: "custom",
         coordinateSystem: "cartesian2d",
-        renderItem: rowChromeRenderItem(lanes, query, palette),
+        renderItem: rowChromeRenderItem(lanes, query, palette, playerHeadSource),
         dimensions: ["start", "end", "lane", "laneIndex"],
         encode: { x: [0, 1], y: 2 },
         data: lanes.map((lane, index) => [query.from, query.to, lane.key, index]),

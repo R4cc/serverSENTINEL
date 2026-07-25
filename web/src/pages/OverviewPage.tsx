@@ -19,6 +19,7 @@ import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
+import { playerHeadSource } from '../utils/playerHeads';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
@@ -290,7 +291,7 @@ function ActivePlayerRow({
   playerHeadsEnabled: boolean;
   version: number;
 }) {
-  const source = `/api/servers/${encodeURIComponent(serverId)}/player-head/${encodeURIComponent(playerName)}?v=${version}`;
+  const source = playerHeadSource(serverId, playerName, version);
   const [failed, setFailed] = useState(false);
   const showHead = playerHeadsEnabled && Boolean(serverId) && !failed;
   useEffect(() => setFailed(false), [source, playerHeadsEnabled]);
