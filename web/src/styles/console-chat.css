@@ -130,7 +130,9 @@
   width: var(--chat-avatar-size);
   height: var(--chat-avatar-size);
   overflow: hidden;
-  border-radius: 50%;
+  /* Squared off like the player heads on the overview roster: a circle crops the
+     corners off a skin that is drawn as a square. */
+  border-radius: var(--radius-sm);
   background: hsl(var(--chat-hue) 46% var(--chat-avatar-lightness));
   color: var(--swiss-white);
 }
@@ -318,7 +320,7 @@
 .consoleChatSkeletonAvatar {
   width: var(--chat-avatar-size);
   height: var(--chat-avatar-size);
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
 }
 
 .consoleChatSkeletonBubble {

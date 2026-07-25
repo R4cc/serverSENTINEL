@@ -401,6 +401,8 @@ function rowChromeRenderItem(
     }
 
     const badgeRadius = Math.max(8, Math.min(11, bandHeight * 0.275));
+    // The overview roster rounds a 24px head by 4px; keep that ratio at this size.
+    const badgeCornerRadius = Math.max(3, badgeRadius / 3);
     const badgeX = 22;
     const iconSize = badgeRadius * 1.28;
     const headSize = badgeRadius * 1.4;
@@ -443,8 +445,16 @@ function rowChromeRenderItem(
           silent: true
         },
         {
-          type: "circle",
-          shape: { cx: badgeX, cy: y, r: badgeRadius },
+          // Rounded square rather than a disc, so the frame matches the shape of the
+          // player head it holds and the roster tiles on the overview.
+          type: "rect",
+          shape: {
+            x: badgeX - badgeRadius,
+            y: y - badgeRadius,
+            width: badgeRadius * 2,
+            height: badgeRadius * 2,
+            r: badgeCornerRadius
+          },
           style: { fill: palette.surface, stroke: color, lineWidth: 1.5 },
           silent: true
         },
