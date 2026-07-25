@@ -227,6 +227,32 @@ describe("server timeline player activity", () => {
     expect(result.sessions).toMatchObject([{ startedAt: 10, endedAt: 50, endBoundary: "server-end" }]);
   });
 
+  it("bounds sessions with an unknown start by the last server start", () => {
+    const started: ServerTimelineEvent = {
+      id: "started",
+      eventType: "server_started",
+      type: "success",
+      severity: "success",
+      text: "Server started",
+      message: "Server started",
+      signature: "server_started",
+      source: "docker",
+      occurredAt: 30
+    };
+    const result = timelinePlayerActivity({
+      contextFrom: 0,
+      from: 0,
+      to: 100,
+      now: 100,
+      events: [playerEvent("join", "player_joined", "Alex", 10), started, playerEvent("leave", "player_left", "Robin", 60)],
+      snapshot: { state: "live", online: 0, maxPlayers: 20, names: [], sampledAt: new Date(100).toISOString() }
+    });
+    expect(result.sessions).toMatchObject([
+      { player: "Alex", startedAt: 10, endedAt: 30, startBoundary: "join", endBoundary: "server-end" },
+      { player: "Robin", startedAt: 30, endedAt: 60, startBoundary: "history-boundary", endBoundary: "leave" }
+    ]);
+  });
+
   it("keeps last-confirmed players visible while their snapshot is temporarily stale", () => {
     const result = timelinePlayerActivity({
       contextFrom: 10,

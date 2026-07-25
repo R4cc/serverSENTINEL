@@ -73,10 +73,20 @@ export function timelinePlayerActivity(input: {
     open.delete(key);
   };
 
+  // Nobody can have been online before the server last came up, so a session with an
+  // unknown start is bounded by the newest start event rather than by the raw history
+  // window.
+  let historyBoundary = input.contextFrom;
+
   const events = [...input.events]
     .filter((event) => event.occurredAt >= input.contextFrom && event.occurredAt <= input.to)
     .sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
   for (const event of events) {
+    if (event.eventType === "server_started") {
+      for (const key of [...open.keys()]) close(key, event.occurredAt, "server-end");
+      historyBoundary = Math.max(historyBoundary, event.occurredAt);
+      continue;
+    }
     if (event.eventType === "server_stopped" || event.eventType === "server_crashed") {
       for (const key of [...open.keys()]) close(key, event.occurredAt, "server-end");
       continue;
@@ -91,7 +101,7 @@ export function timelinePlayerActivity(input: {
       continue;
     }
     if (!open.has(key) && seenPlayers.has(key)) continue;
-    if (!open.has(key)) open.set(key, { player, startedAt: input.contextFrom, startBoundary: "history-boundary" });
+    if (!open.has(key)) open.set(key, { player, startedAt: historyBoundary, startBoundary: "history-boundary" });
     close(key, event.occurredAt, "leave");
     seenPlayers.add(key);
   }
@@ -108,7 +118,7 @@ export function timelinePlayerActivity(input: {
       const lastEnd = lastSessionEndByKey.get(key);
       open.set(key, {
         player,
-        startedAt: Math.max(input.contextFrom, lastEnd ?? input.contextFrom),
+        startedAt: Math.min(currentBoundary, Math.max(historyBoundary, lastEnd ?? historyBoundary)),
         startBoundary: "history-boundary"
       });
     }

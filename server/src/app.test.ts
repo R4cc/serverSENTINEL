@@ -630,11 +630,23 @@ describe("parseLogEvent log parsing and timestamp extraction", () => {
     expect(parseLogEvent("[12:34:55] [Server thread/INFO]: Starting minecraft server version 26.2", "logs/latest.log", 2)).toBeNull();
   });
 
-  it("removes socket addresses from player disconnect events", () => {
-    const line = "[21:40:51] [Server thread/INFO]: MCArchive (/62.210.101.98:15415) lost connection: Disconnected";
+  it("reports in-world disconnects as the player leaving", () => {
+    const line = "[21:40:51] [Server thread/INFO]: MCArchive lost connection: Disconnected";
     const event = parseLogEvent(line, "logs/latest.log", 4);
     expect(event).not.toBeNull();
     expect(event!.text).toBe("MCArchive left");
+    expect(event!.signature).toBe("player_left:mcarchive");
+  });
+
+  it("ignores disconnects of clients that never entered the world", () => {
+    expect(parseLogEvent("[21:15:21] [Server thread/INFO]: ZenithofLight (/38.211.119.23:55450) lost connection: Disconnected", "logs/latest.log", 4)).toBeNull();
+    expect(parseLogEvent("[13:33:14] [Server thread/INFO]: Disconnecting apolctetejen (/84.2.95.42:52747): You are not whitelisted.", "logs/latest.log", 5)).toBeNull();
+    expect(parseLogEvent("[13:33:14] [Server thread/INFO]: Disconnecting /84.2.95.42:52747: You are not whitelisted.", "logs/latest.log", 6)).toBeNull();
+  });
+
+  it("still reports named kicks as the player leaving", () => {
+    const event = parseLogEvent("[13:33:14] [Server thread/INFO]: Disconnecting MCArchive: Kicked by an operator", "logs/latest.log", 7);
+    expect(event).not.toBeNull();
     expect(event!.signature).toBe("player_left:mcarchive");
   });
 
