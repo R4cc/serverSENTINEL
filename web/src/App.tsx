@@ -367,7 +367,17 @@ export default function App() {
     const root = document.documentElement;
     const classes = themeClassName.split(" ");
     root.classList.add(...classes);
-    return () => root.classList.remove(...classes);
+    // Mobile browsers paint their toolbars in the page theme colour, so tracking the
+    // active theme lets the surrounding chrome read as part of the panel instead of a
+    // bright band above and below it.
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    const previousThemeColor = themeColor?.getAttribute("content") ?? null;
+    const surface = getComputedStyle(root).getPropertyValue("--surface-raised").trim();
+    if (themeColor && surface) themeColor.setAttribute("content", surface);
+    return () => {
+      root.classList.remove(...classes);
+      if (themeColor && previousThemeColor !== null) themeColor.setAttribute("content", previousThemeColor);
+    };
   }, [themeClassName]);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");

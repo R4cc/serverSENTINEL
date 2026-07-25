@@ -1,0 +1,19 @@
+{
+  "name": "serverSENTINEL",
+  "short_name": "Sentinel",
+  "description": "Manage Minecraft servers, files, mods, schedules, nodes, and runtime health with serverSENTINEL.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#1b1d22",
+  "theme_color": "#1b1d22",
+  "icons": [
+    { "src": "/logo-40.png", "sizes": "40x40", "type": "image/png" },
+    { "src": "/logo-80.png", "sizes": "80x80", "type": "image/png" },
+    { "src": "/logo-120.png", "sizes": "120x120", "type": "image/png" },
+    { "src": "/logo-120.png", "sizes": "120x120", "type": "image/png", "purpose": "maskable" }
+  ]
+}
