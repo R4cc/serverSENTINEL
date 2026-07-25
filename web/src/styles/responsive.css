@@ -1656,11 +1656,26 @@ button:disabled,
     overflow: hidden;
   }
 
+  /* The panel title is redundant on phones, but the view switch has to stay reachable. */
   .workspacePage-console .consolePanel > .uiPanelHeader {
+    flex: 0 0 auto;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-strong) solid var(--border-row);
+  }
+
+  .workspacePage-console .consolePanel > .uiPanelHeader .uiPanelHeaderCopy {
     display: none;
   }
 
+  .workspacePage-console .consolePanel > .uiPanelHeader .uiPanelHeaderActions,
+  .workspacePage-console .consolePanel .consoleHeaderActions {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+
   .workspacePage-console .consolePanel .terminal,
+  .workspacePage-console .consolePanel .consoleChat,
   .workspacePage-console .minecraftTerminal {
     height: auto;
     min-height: 0;

@@ -1,0 +1,398 @@
+.consoleChat {
+  --chat-author-lightness: 34%;
+  --chat-avatar-lightness: 42%;
+  --chat-avatar-size: 34px;
+  --chat-bubble-radius: 16px;
+  /* A wide panel would strand incoming and outgoing bubbles at opposite edges,
+     so the conversation keeps a fixed reading column no matter how wide it gets. */
+  --chat-thread-width: 780px;
+  --chat-message-size: 15px;
+  --chat-meta-size: var(--type-meta-size);
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  border: var(--border-strong) solid var(--border-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+
+.themeDark .consoleChat {
+  --chat-author-lightness: 72%;
+  --chat-avatar-lightness: 52%;
+}
+
+.consoleChatScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  scrollbar-width: thin;
+}
+
+.consoleChatThread {
+  display: grid;
+  gap: var(--space-3);
+  align-content: end;
+  min-height: 100%;
+  width: 100%;
+  max-width: var(--chat-thread-width);
+  margin-inline: auto;
+}
+
+.consoleChatSeparator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.consoleChatSeparator span {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  padding: 3px var(--space-3);
+  color: var(--text-soft);
+  font-size: var(--chat-meta-size);
+  font-weight: var(--weight-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.consoleChatSystem {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-5);
+  color: var(--text-soft);
+  font-size: var(--chat-meta-size);
+  font-weight: var(--weight-meta);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.consoleChatSystemTime {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.consoleChatCluster {
+  --chat-hue: 214;
+  display: grid;
+  grid-template-columns: var(--chat-avatar-size) minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-2);
+  max-width: min(88%, 560px);
+}
+
+.consoleChatCluster.tone-1 { --chat-hue: 268; }
+.consoleChatCluster.tone-2 { --chat-hue: 328; }
+.consoleChatCluster.tone-3 { --chat-hue: 10; }
+.consoleChatCluster.tone-4 { --chat-hue: 32; }
+.consoleChatCluster.tone-5 { --chat-hue: 96; }
+.consoleChatCluster.tone-6 { --chat-hue: 158; }
+.consoleChatCluster.tone-7 { --chat-hue: 188; }
+
+.consoleChatCluster.is-outgoing {
+  grid-template-columns: minmax(0, 1fr) var(--chat-avatar-size);
+  margin-left: auto;
+}
+
+.consoleChatCluster.is-outgoing .consoleChatAvatar {
+  order: 2;
+}
+
+.consoleChatClusterBody {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+
+.consoleChatCluster.is-outgoing .consoleChatClusterBody {
+  justify-items: end;
+}
+
+.consoleChatAvatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--chat-avatar-size);
+  height: var(--chat-avatar-size);
+  overflow: hidden;
+  border-radius: 50%;
+  background: hsl(var(--chat-hue) 46% var(--chat-avatar-lightness));
+  color: var(--swiss-white);
+}
+
+.consoleChatAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.consoleChatAvatar svg {
+  width: 18px;
+  height: 18px;
+}
+
+.consoleChatAvatar--server {
+  background: var(--accent);
+}
+
+.consoleChatAvatarPlaceholder {
+  font-size: 12px;
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-label);
+  line-height: 1;
+}
+
+.consoleChatAuthor {
+  padding-inline: var(--space-2);
+  color: hsl(var(--chat-hue) 58% var(--chat-author-lightness));
+  font-size: var(--chat-meta-size);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+.consoleChatCluster.is-outgoing .consoleChatAuthor {
+  color: var(--accent);
+}
+
+.consoleChatBubble {
+  max-width: 100%;
+  border-radius: var(--chat-bubble-radius);
+  border-bottom-left-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  font-size: var(--chat-message-size);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.themeDark .consoleChatBubble {
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--text) 12%);
+  box-shadow: none;
+}
+
+.consoleChatCluster.is-outgoing .consoleChatBubble {
+  border-bottom-left-radius: var(--chat-bubble-radius);
+  border-bottom-right-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--swiss-white);
+}
+
+.consoleChatBubble.is-emote {
+  background: transparent;
+  box-shadow: none;
+  border: var(--border-strong) dashed color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.consoleChatTime {
+  padding-inline: var(--space-2);
+  color: var(--text-soft);
+  font-size: var(--type-badge-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.consoleChatEmpty {
+  margin: auto;
+  max-width: 42ch;
+  text-align: center;
+}
+
+.consoleChatJump {
+  position: absolute;
+  right: var(--space-4);
+  bottom: 76px;
+  z-index: 2;
+}
+
+.consoleChatJump .uiButton {
+  border-radius: 999px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.consoleChatComposer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: var(--border-strong) solid var(--border-row);
+  background: var(--surface-raised);
+  padding: var(--space-2) var(--space-3);
+  padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+  /* Keep the composer aligned with the thread column while its border stays full width. */
+  padding-inline: max(var(--space-3), calc((100% - var(--chat-thread-width)) / 2));
+}
+
+.consoleChatInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--control-height-default);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  padding-inline: var(--space-4);
+  font-size: var(--type-body-size);
+}
+
+.consoleChatComposer .uiButton {
+  flex: 0 0 auto;
+  width: var(--control-height-default);
+  height: var(--control-height-default);
+  border-radius: 50%;
+  padding: 0;
+}
+
+.consoleChatSendIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.consoleChatStatus {
+  flex: 0 0 auto;
+  border-top: var(--border-strong) solid var(--border-row);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-soft);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.consoleChatSkeletonRow {
+  display: grid;
+  grid-template-columns: var(--chat-avatar-size) minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-2);
+  max-width: min(88%, 560px);
+}
+
+.consoleChatSkeletonRow.is-outgoing {
+  grid-template-columns: minmax(0, 1fr) var(--chat-avatar-size);
+  margin-left: auto;
+}
+
+.consoleChatSkeletonRow.is-outgoing .consoleChatSkeletonAvatar {
+  order: 2;
+}
+
+.consoleChatSkeletonAvatar {
+  width: var(--chat-avatar-size);
+  height: var(--chat-avatar-size);
+  border-radius: 50%;
+}
+
+.consoleChatSkeletonBubble {
+  height: 38px;
+  border-radius: var(--chat-bubble-radius);
+}
+
+.consoleViewSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: var(--border-strong) solid var(--border-panel);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  padding: 2px;
+}
+
+.consoleViewSwitchOption {
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--type-button-size);
+  font-weight: var(--weight-button);
+}
+
+.consoleViewSwitchOption svg {
+  width: 15px;
+  height: 15px;
+}
+
+.consoleViewSwitchOption:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: transparent;
+  color: var(--text);
+  transform: none;
+}
+
+.consoleViewSwitchOption[aria-pressed="true"] {
+  background: var(--surface-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  color: var(--text);
+}
+
+.themeDark .consoleViewSwitchOption[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--text) 22%);
+  box-shadow: none;
+}
+
+/* Roomy displays get a slightly larger conversation rather than a wider one. */
+@media (min-width: 1500px) {
+  .consoleChat {
+    --chat-thread-width: 900px;
+    --chat-message-size: 16px;
+    --chat-meta-size: var(--type-helper-size);
+    --chat-avatar-size: 38px;
+  }
+
+  .consoleChatCluster,
+  .consoleChatSkeletonRow {
+    max-width: min(88%, 620px);
+  }
+}
+
+@media (max-width: 720px) {
+  .consoleChat {
+    --chat-avatar-size: 30px;
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .consoleChatScroll {
+    padding: var(--space-3);
+  }
+
+  .consoleChatCluster {
+    max-width: 90%;
+  }
+
+  .consoleChatJump {
+    right: var(--space-3);
+    bottom: 72px;
+  }
+
+  /* Touch targets stay on the 44px minimum the rest of the mobile UI uses. */
+  .consoleChatInput,
+  .consoleChatComposer .uiButton {
+    height: 44px;
+  }
+
+  .consoleChatComposer .uiButton {
+    width: 44px;
+  }
+
+  .consoleViewSwitch {
+    padding: 0;
+  }
+
+  .consoleViewSwitchOption {
+    min-height: 44px;
+    padding: 0 var(--space-3);
+  }
+}
