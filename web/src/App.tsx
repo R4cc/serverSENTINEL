@@ -30,7 +30,6 @@ import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
-import { SettingsPage } from "./pages/SettingsPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled, readConsoleView, writeConsoleView, type ConsoleView } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -49,6 +48,7 @@ const loadServerCreatePage = () => import("./pages/ServerCreatePage");
 const loadServerEditPage = () => import("./pages/ServerEditPage");
 const loadModsPage = () => import("./pages/ModsPage");
 const loadFilesPage = () => import("./features/files/FilesPage");
+const loadSettingsPage = () => import("./pages/SettingsPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
 const ConsoleChat = lazy(() => loadConsoleChat().then((module) => ({ default: module.ConsoleChat })));
@@ -60,6 +60,7 @@ const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ defau
 const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
 const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
+const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })));
 
 function preloadActivePage(page: ActivePage) {
   if (page === "console") return loadMinecraftTerminal();
@@ -70,6 +71,7 @@ function preloadActivePage(page: ActivePage) {
   if (page === "nodes") return loadNodesPage();
   if (page === "create") return loadServerCreatePage();
   if (page === "properties") return loadServerEditPage();
+  if (page === "settings") return loadSettingsPage();
   return Promise.resolve();
 }
 
@@ -573,17 +575,9 @@ export default function App() {
   const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedRegionalFormatLocale), [resolvedRegionalFormatLocale]);
 
-  function formatDisplayDate(value: string | number | Date) {
-    return dateTimeFormatter.format(new Date(value));
-  }
-
-  function formatDisplayTime(value: string | number | Date) {
-    return timeFormatter.format(new Date(value));
-  }
-
-  function formatDisplayShortTime(value: string | number | Date) {
-    return shortTimeFormatter.format(new Date(value));
-  }
+  const formatDisplayDate = useCallback((value: string | number | Date) => dateTimeFormatter.format(new Date(value)), [dateTimeFormatter]);
+  const formatDisplayTime = useCallback((value: string | number | Date) => timeFormatter.format(new Date(value)), [timeFormatter]);
+  const formatDisplayShortTime = useCallback((value: string | number | Date) => shortTimeFormatter.format(new Date(value)), [shortTimeFormatter]);
 
   const filesWorkspace = useFilesWorkspace({
     activeServer,
@@ -673,9 +667,7 @@ export default function App() {
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
 
-  function formatDisplayNumber(value: number) {
-    return numberFormatter.format(value);
-  }
+  const formatDisplayNumber = useCallback((value: number) => numberFormatter.format(value), [numberFormatter]);
 
   useEffect(() => {
     void refreshAuth();
@@ -2693,6 +2685,7 @@ export default function App() {
         )}
 
         {activePage === "settings" && (
+          <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading settings" page="settings" />}>
           <SettingsPage
             loading={settingsDataLoading}
             themePreference={themePreference}
@@ -2743,6 +2736,7 @@ export default function App() {
             onExitDemo={() => void logout()}
             exitDemoDisabled={isProvisioning}
           />
+          </Suspense>
         )}
 
         {activePage === "nodes" && (

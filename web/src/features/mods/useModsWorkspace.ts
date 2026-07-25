@@ -372,8 +372,13 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "mods" && activePage !== "overview")) return;
+    let inFlight = false;
     const interval = window.setInterval(() => {
-      void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false });
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false }).finally(() => {
+        inFlight = false;
+      });
     }, 60_000);
     return () => window.clearInterval(interval);
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage]);
@@ -384,10 +389,6 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (activeServer) setUpdatePlan(createDemoUpdatePlan(activeServer.id, demoInstalledMods));
     }
   }, [activeServerIsDemo, demoInstalledMods]);
-
-  useEffect(() => {
-    resetPageState();
-  }, [activePage]);
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || !addOpen || !modrinthConfigured) {

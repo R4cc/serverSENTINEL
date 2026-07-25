@@ -149,9 +149,16 @@ export class ResourceStatsCollector {
 
   private append(serverId: string, sample: ResourceStatsSample) {
     const cutoff = sample.sampledAt - this.options.historyWindowMs;
-    const existing = this.samples.get(serverId) ?? [];
-    const next = [...existing, sample].filter((item) => item.sampledAt >= cutoff);
-    this.samples.set(serverId, next);
+    let samples = this.samples.get(serverId);
+    if (!samples) {
+      samples = [];
+      this.samples.set(serverId, samples);
+    }
+    samples.push(sample);
+    // Samples arrive in time order, so expired entries can only be at the front.
+    let expired = 0;
+    while (expired < samples.length && samples[expired].sampledAt < cutoff) expired += 1;
+    if (expired > 0) samples.splice(0, expired);
     this.options.statsRepository.append(serverId, sample, cutoff);
     return sample;
   }

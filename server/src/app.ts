@@ -1550,8 +1550,7 @@ async function getServer(serverId?: string) {
   if (serverId !== undefined) {
     validateServerId(serverId);
   }
-  const servers = await listManagedServers();
-  const server = serverId ? servers.find((candidate) => candidate.id === serverId) : servers[0];
+  const server = serverId ? serversRepository.find(serverId) : (await listManagedServers())[0];
   if (!server) {
     throw new Error("No managed server instance is registered");
   }
