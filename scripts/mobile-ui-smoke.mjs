@@ -379,6 +379,60 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
 }
 
+async function assertConsoleChatView(page, label) {
+  await openPage(page, "console");
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await page.locator(".consoleChat").waitFor();
+  await page.locator(".consoleChatCluster").first().waitFor();
+
+  const result = await page.evaluate(() => {
+    const chat = document.querySelector(".consoleChat");
+    const scroller = document.querySelector(".consoleChatScroll");
+    const composer = document.querySelector(".consoleChatComposer");
+    const input = document.querySelector(".consoleChatInput");
+    const owner = document.scrollingElement;
+    if (!(chat instanceof HTMLElement) || !(scroller instanceof HTMLElement) || !(composer instanceof HTMLElement) || !(input instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+      return { missing: true };
+    }
+    const chatRect = chat.getBoundingClientRect();
+    const composerRect = composer.getBoundingClientRect();
+    const widest = Array.from(document.querySelectorAll(".consoleChatCluster"))
+      .map((cluster) => cluster.getBoundingClientRect().right)
+      .reduce((highest, right) => Math.max(highest, right), 0);
+    return {
+      missing: false,
+      documentWidth: owner.scrollWidth,
+      documentViewportWidth: owner.clientWidth,
+      documentHeight: owner.scrollHeight,
+      documentViewportHeight: owner.clientHeight,
+      chatLeft: chatRect.left,
+      chatRight: chatRect.right,
+      chatHeight: chatRect.height,
+      composerBottom: composerRect.bottom,
+      composerHeight: composerRect.height,
+      scrolledToLatest: scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight,
+      inputFontSize: Number.parseFloat(getComputedStyle(input).fontSize),
+      widestClusterRight: widest,
+      messages: document.querySelectorAll(".consoleChatBubble").length
+    };
+  });
+
+  assert(!result.missing, `${label}: chat surfaces are missing`);
+  assert(result.messages > 0, `${label}: chat rendered no messages`);
+  assert(result.documentWidth <= result.documentViewportWidth + 1, `${label}: chat causes horizontal overflow: ${JSON.stringify(result)}`);
+  assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: chat leaks into document scrolling: ${JSON.stringify(result)}`);
+  assert(result.chatLeft <= 1 && result.chatRight >= result.documentViewportWidth - 1, `${label}: chat does not reach both viewport edges: ${JSON.stringify(result)}`);
+  assert(result.widestClusterRight <= result.documentViewportWidth + 1, `${label}: a chat bubble overflows the viewport: ${JSON.stringify(result)}`);
+  assert(result.composerHeight > 0 && result.composerBottom <= result.documentViewportHeight + 1, `${label}: chat composer is off screen: ${JSON.stringify(result)}`);
+  assert(result.scrolledToLatest <= 2, `${label}: chat did not open on the latest message: ${JSON.stringify(result)}`);
+  assert(result.inputFontSize >= 16, `${label}: chat composer input is below 16px`);
+
+  await assertTargets(page, [".consoleViewSwitch button", ".consoleChatComposer .uiButton"], `${label} chat controls`);
+
+  await page.getByRole("button", { name: "Console", exact: true }).click();
+  await page.locator(".minecraftTerminal").waitFor();
+}
+
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -443,6 +497,7 @@ async function runProfile(engine, profile, label) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);
     }
     await assertConsoleViewportOwnership(page, `${label} console`);
+    await assertConsoleChatView(page, `${label} console chat`);
     await assertEditableFontSizes(page, `${label} settings`);
 
     await openPage(page, "files");
