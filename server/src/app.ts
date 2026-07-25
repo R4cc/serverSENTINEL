@@ -4605,6 +4605,9 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && request.url.startsWith("/api/modrinth/icon")) {
     return;
   }
+  if (request.method === "GET" && /^\/api\/servers\/[^/?]+\/player-head\/[^/?]+(?:\?|$)/.test(request.url)) {
+    return;
+  }
   if (request.raw.url?.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }
