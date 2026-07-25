@@ -52,6 +52,95 @@ describe("console chat parsing", () => {
     });
   });
 
+  it("reads the rank-prefixed format chat plugins print", () => {
+    expect(parseConsoleChatLine("[18:11:54] [Server thread/INFO]: [ADM] Alezhshede : gg", "a")).toMatchObject({
+      kind: "chat",
+      player: "Alezhshede",
+      rank: "ADM",
+      text: "gg",
+      time: "18:11"
+    });
+    expect(parseConsoleChatLine("[18:46:47] [Server thread/INFO]: [NEW] Forest_Dweller : ???", "a")).toMatchObject({
+      kind: "chat",
+      player: "Forest_Dweller",
+      rank: "NEW",
+      text: "???"
+    });
+    expect(parseConsoleChatLine("[18:46:29] [Server thread/INFO]: [ADM] Alezhshede : I have all the resources for the thing with the thing", "a")).toMatchObject({
+      kind: "chat",
+      text: "I have all the resources for the thing with the thing"
+    });
+  });
+
+  it("reads rank-prefixed and rank-less variants of the bracketed name format", () => {
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: [VIP+] <Steve> hello", "a")).toMatchObject({
+      kind: "chat",
+      player: "Steve",
+      rank: "VIP+",
+      text: "hello"
+    });
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: Steve : hello", "a")).toMatchObject({
+      kind: "chat",
+      player: "Steve",
+      rank: "",
+      text: "hello"
+    });
+  });
+
+  it("reads vanilla death notices without matching mob death log lines", () => {
+    expect(parseConsoleChatLine("[18:12:40] [Server thread/INFO]: Not_French1e withered away", "a")).toMatchObject({
+      kind: "system",
+      player: "Not_French1e",
+      text: "Not_French1e withered away"
+    });
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: Steve was slain by Zombie", "a")).toMatchObject({ kind: "system", text: "Steve was slain by Zombie" });
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: Steve fell from a high place", "a")).toMatchObject({ kind: "system" });
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: Steve tried to swim in lava", "a")).toMatchObject({ kind: "system" });
+    expect(parseConsoleChatLine("[18:45:12] [Server thread/INFO]: Villager Villager['Villager'/508743, l='ServerLevel[world]', x=452.70, y=92.00, z=186.24] died, message: 'Villager was slain by Forest_Dweller'", "a")).toBeNull();
+  });
+
+  it("drops the plugin and subsystem noise that surrounds real chat", () => {
+    const noise = [
+      "[18:12:52] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Player 1fbfec46-9023-413c-8ffb-c46e69208f58 timed out",
+      "[18:12:52] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Reconnecting player ItsKapi",
+      "[18:12:54] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Player ItsKapi (1fbfec46-9023-413c-8ffb-c46e69208f58) successfully connected to voice chat",
+      "[18:15:24] [User Authenticator #38/INFO]: UUID of player dindingle is c2ef02b8-8779-4e96-8e04-2e74cfe4cc24",
+      "[18:15:26] [Server thread/INFO]: dindingle[/24.214.66.26:62286] logged in with entity id 530137 at (774.06, 64.0, 933.45)",
+      "[18:15:26] [Server thread/INFO]: [voicechat] Received secret request of dindingle (20)",
+      "[18:19:33] [Server thread/WARN]: Mismatch in destroy block pos: BlockPos{x=474, y=66, z=222} BlockPos{x=472, y=67, z=225}",
+      "[18:34:20] [Server thread/WARN]: Not_French1e moved too quickly! -0.019,-10.109,0.0",
+      "[18:37:27] [Server thread/INFO]: Not_French1e lost connection: Disconnected",
+      "[18:37:27] [Server thread/INFO]: [voicechat] Disconnecting client Not_French1e",
+      "[18:46:15] [Server thread/WARN]: Couldn't smelt 1 minecraft:tropical_fish because there is no smelting recipe",
+      "[18:53:02] [aempire-integrations/INFO]: Set Forest_Dweller to playtime status member."
+    ];
+
+    expect(noise.map((entry) => parseConsoleChatLine(entry, "a"))).toEqual(noise.map(() => null));
+  });
+
+  it("keeps a real transcript in order and drops everything around it", () => {
+    const transcript = [
+      "[18:11:51] [Server thread/INFO]: Not_French1e has made the advancement [Withering Heights]",
+      "[18:11:54] [Server thread/INFO]: [ADM] Alezhshede : gg",
+      "[18:12:40] [Server thread/INFO]: Not_French1e withered away",
+      "[18:12:50] [Server thread/INFO]: [ADM] Alezhshede : you good?",
+      "[18:12:52] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Reconnecting player ItsKapi",
+      "[18:12:55] [Server thread/INFO]: [MEM] Not_French1e : yer",
+      "[18:15:26] [Server thread/INFO]: dindingle joined the game",
+      "[18:37:27] [Server thread/INFO]: Not_French1e left the game"
+    ].map((entry) => `${entry}\n`);
+
+    expect(consoleChatEntries(transcript).map((entry) => `${entry.kind}:${entry.player}:${entry.text}`)).toEqual([
+      "system:Not_French1e:Not_French1e made the advancement [Withering Heights]",
+      "chat:Alezhshede:gg",
+      "system:Not_French1e:Not_French1e withered away",
+      "chat:Alezhshede:you good?",
+      "chat:Not_French1e:yer",
+      "system:dindingle:dindingle joined the game",
+      "system:Not_French1e:Not_French1e left the game"
+    ]);
+  });
+
   it("drops server noise that is not conversation", () => {
     expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: Preparing spawn area: 42%", "a")).toBeNull();
     expect(parseConsoleChatLine("[12:00:00] [Server thread/WARN]: <Notch> suppressed", "a")).toBeNull();

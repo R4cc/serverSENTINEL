@@ -72,6 +72,21 @@ describe("ConsoleChat", () => {
     expect(html).toContain("disabled");
   });
 
+  it("renders rank-prefixed plugin chat with the rank as a badge", () => {
+    const html = render({
+      entries: [
+        line("[18:11:54] [Server thread/INFO]: [ADM] Alezhshede : gg"),
+        line("[18:12:55] [Server thread/INFO]: [MEM] Not_French1e : yer")
+      ]
+    });
+
+    expect(html).toContain("gg");
+    expect(html).toContain("yer");
+    expect(html).toContain('class="consoleChatRank">ADM<');
+    expect(html).toContain('class="consoleChatRank">MEM<');
+    expect(html).toContain("Alezhshede");
+  });
+
   it("invites the operator to broadcast or run a command", () => {
     expect(render()).toContain("Message the server, or start with / to run a command");
   });

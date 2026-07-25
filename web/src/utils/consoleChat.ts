@@ -12,12 +12,14 @@ export type ConsoleChatEntry = {
   dayMinutes: number | null;
   /** Broadcasts that originate from the server itself render on the operator side. */
   outgoing: boolean;
+  /** Rank or channel tag a chat plugin printed ahead of the name, or "" when absent. */
+  rank: string;
 };
 
 export type ConsoleChatTimelineItem =
   | { type: "separator"; id: string; label: string }
   | { type: "system"; id: string; entry: ConsoleChatEntry }
-  | { type: "cluster"; id: string; player: string; outgoing: boolean; entries: ConsoleChatEntry[] };
+  | { type: "cluster"; id: string; player: string; rank: string; outgoing: boolean; entries: ConsoleChatEntry[] };
 
 export const consoleChatHistoryLimit = 500;
 const clusterGapMinutes = 5;
@@ -26,12 +28,32 @@ const separatorGapMinutes = 10;
 const ansiPattern = /\u001b\[[0-9;]*m/g;
 const sectionFormattingPattern = /§(?:#[0-9a-fA-F]{6}|[0-9a-fk-orA-FK-OR])/g;
 const chatPattern = /^<([^>]{1,48})>\s?([\s\S]*)$/;
+// Chat plugins print a rank or channel ahead of the name, either as
+// "[ADM] Steve : hi" or "[ADM] <Steve> hi".
+const rankBracketChatPattern = /^\[([^\]]{1,24})\]\s+<([^>]{1,48})>\s?([\s\S]*)$/;
+const rankChatPattern = /^\[([^\]]{1,24})\]\s+([A-Za-z0-9_.]{1,32})\s*:\s+([\s\S]+)$/;
+// Rank-less plugins print "Steve : hi". The spaced colon is what separates this
+// from ordinary log payloads such as "Mismatch in destroy block pos: ...".
+const spacedChatPattern = /^([A-Za-z0-9_.]{1,32})\s+:\s+([\s\S]+)$/;
 const emotePattern = /^\*\s+(\S{1,32})\s+([\s\S]+)$/;
 const serverSayPattern = /^\[Server\]\s?([\s\S]*)$/;
 const joinPattern = /^(.{1,48}?) joined the game$/i;
 const leavePattern = /^(.{1,48}?) left the game$/i;
 const advancementPattern = /^(.{1,48}?) has (made the advancement|completed the challenge|reached the goal) (\[[^\]]+\])$/i;
 const commandPattern = /^(.{1,48}?) issued server command: (\/[\s\S]+)$/;
+
+// Vanilla death notices are player-facing chat, but their phrasings are too
+// varied to detect generically without swallowing ordinary log lines, so the
+// verb phrase is matched explicitly.
+const deathPattern = new RegExp(`^([A-Za-z0-9_.]{1,32}) (${[
+  "was (?:slain|shot|killed|fireballed|pummelled|squashed|impaled|skewered|stung|poked|struck)\\b.*",
+  "was (?:blown up|doomed to fall|squished too much|pricked to death|burnt to a crisp|roasted in dragon('s)? breath|obliterated by a sonically[- ]charged shriek)\\b.*",
+  "(?:drowned|starved to death|suffocated in a wall|withered away|blew up|died|froze to death)(?: .*)?",
+  "(?:hit the ground too hard|fell (?:off|from|out of|into|while)\\b.*|fell from a high place)",
+  "(?:burned to death|went up in flames|discovered the floor was lava|walked into (?:fire|danger|the danger zone)\\b.*)",
+  "(?:tried to swim in lava|experienced kinetic energy|left the confines of this world|didn't want to live in the same world as .*)",
+  "(?:was killed (?:by|while|trying)\\b.*|went off with a bang.*|was squashed by .*|was impaled on a stalagmite.*)"
+].join("|")})$`);
 
 /** Strips ANSI colouring and Minecraft section formatting so matching sees plain text. */
 export function stripConsoleFormatting(line: string) {
@@ -103,7 +125,7 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
   const message = parsed.message;
   if (!message) return null;
 
-  const base = { id, time: parsed.time, dayMinutes: parsed.dayMinutes };
+  const base = { id, time: parsed.time, dayMinutes: parsed.dayMinutes, rank: "" };
 
   const say = message.match(serverSayPattern);
   if (say && say[1].trim()) {
@@ -116,6 +138,24 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
     if (isPlayerName(player)) {
       return { ...base, kind: "chat", player, text: chat[2].trim(), outgoing: false };
     }
+  }
+
+  const rankBracketChat = message.match(rankBracketChatPattern);
+  if (rankBracketChat) {
+    const player = cleanPlayerName(rankBracketChat[2]);
+    if (isPlayerName(player)) {
+      return { ...base, kind: "chat", player, rank: rankBracketChat[1].trim(), text: rankBracketChat[3].trim(), outgoing: false };
+    }
+  }
+
+  const rankChat = message.match(rankChatPattern);
+  if (rankChat) {
+    return { ...base, kind: "chat", player: rankChat[2], rank: rankChat[1].trim(), text: rankChat[3].trim(), outgoing: false };
+  }
+
+  const spacedChat = message.match(spacedChatPattern);
+  if (spacedChat) {
+    return { ...base, kind: "chat", player: spacedChat[1], text: spacedChat[2].trim(), outgoing: false };
   }
 
   const emote = message.match(emotePattern);
@@ -147,6 +187,11 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
   if (command) {
     const player = cleanPlayerName(command[1]);
     if (isPlayerName(player)) return { ...base, kind: "system", player, text: `${player} ran ${command[2]}`, outgoing: false };
+  }
+
+  const death = message.match(deathPattern);
+  if (death) {
+    return { ...base, kind: "system", player: death[1], text: message, outgoing: false };
   }
 
   return null;
@@ -236,8 +281,10 @@ export function consoleChatTimeline(entries: ConsoleChatEntry[]): ConsoleChatTim
     const last = items.at(-1);
     if (last?.type === "cluster" && previous && continuesCluster(previous, entry)) {
       last.entries.push(entry);
+      // A promotion mid-stack should show the rank the player holds now.
+      if (entry.rank) last.rank = entry.rank;
     } else {
-      items.push({ type: "cluster", id: entry.id, player: entry.player, outgoing: entry.outgoing, entries: [entry] });
+      items.push({ type: "cluster", id: entry.id, player: entry.player, rank: entry.rank, outgoing: entry.outgoing, entries: [entry] });
     }
     previous = entry;
   }
