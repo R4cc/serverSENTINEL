@@ -12,8 +12,11 @@ const port = Number(process.env.SERVERSENTINEL_SCREENSHOT_PORT || 4173);
 const baseUrl = `http://127.0.0.1:${port}`;
 const fixedTime = new Date("2026-01-15T12:00:00.000Z");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const [sansFontData, monoFontData] = await Promise.all([
-  readFile(join(repositoryRoot, "node_modules", "@fontsource-variable", "inter", "files", "inter-latin-wght-normal.woff2"), "base64"),
+const switzerDirectory = join(repositoryRoot, "web", "src", "assets", "fonts", "switzer");
+const [sansRegularData, sansMediumData, sansSemiBoldData, monoFontData] = await Promise.all([
+  readFile(join(switzerDirectory, "switzer-400.woff2"), "base64"),
+  readFile(join(switzerDirectory, "switzer-500.woff2"), "base64"),
+  readFile(join(switzerDirectory, "switzer-600.woff2"), "base64"),
   readFile(join(repositoryRoot, "node_modules", "@fontsource-variable", "cascadia-code", "files", "cascadia-code-latin-wght-normal.woff2"), "base64")
 ]);
 
@@ -92,9 +95,23 @@ async function installScreenshotFonts(page) {
       @font-face {
         font-family: "serverSENTINEL Screenshot Sans";
         font-style: normal;
-        font-weight: 100 900;
+        font-weight: 400;
         font-display: block;
-        src: url("data:font/woff2;base64,${sansFontData}") format("woff2-variations");
+        src: url("data:font/woff2;base64,${sansRegularData}") format("woff2");
+      }
+      @font-face {
+        font-family: "serverSENTINEL Screenshot Sans";
+        font-style: normal;
+        font-weight: 500;
+        font-display: block;
+        src: url("data:font/woff2;base64,${sansMediumData}") format("woff2");
+      }
+      @font-face {
+        font-family: "serverSENTINEL Screenshot Sans";
+        font-style: normal;
+        font-weight: 600;
+        font-display: block;
+        src: url("data:font/woff2;base64,${sansSemiBoldData}") format("woff2");
       }
       @font-face {
         font-family: "serverSENTINEL Screenshot Mono";
@@ -110,13 +127,15 @@ async function installScreenshotFonts(page) {
     `
   });
   const loadedFontCounts = await page.evaluate(async () => {
-    const [sans, mono] = await Promise.all([
-      document.fonts.load('450 14px "serverSENTINEL Screenshot Sans"', "serverSENTINEL"),
+    const [regular, medium, semiBold, mono] = await Promise.all([
+      document.fonts.load('400 14px "serverSENTINEL Screenshot Sans"', "serverSENTINEL"),
+      document.fonts.load('500 14px "serverSENTINEL Screenshot Sans"', "serverSENTINEL"),
+      document.fonts.load('600 14px "serverSENTINEL Screenshot Sans"', "serverSENTINEL"),
       document.fonts.load('400 14px "serverSENTINEL Screenshot Mono"', "serverSENTINEL")
     ]);
-    return { sans: sans.length, mono: mono.length };
+    return { regular: regular.length, medium: medium.length, semiBold: semiBold.length, mono: mono.length };
   });
-  if (!loadedFontCounts.sans || !loadedFontCounts.mono) {
+  if (!loadedFontCounts.regular || !loadedFontCounts.medium || !loadedFontCounts.semiBold || !loadedFontCounts.mono) {
     throw new Error(`Could not load deterministic screenshot fonts: ${JSON.stringify(loadedFontCounts)}`);
   }
 }

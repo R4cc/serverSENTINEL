@@ -100,10 +100,12 @@ export function timelinePlayerActivity(input: {
     ? input.snapshot.names.map((name) => rememberName(name).player)
     : [];
   const onlineKeys = new Set(onlineNames.map(playerKey));
+  const lastSessionEndByKey = new Map<string, number | null>();
+  for (const session of sessions) lastSessionEndByKey.set(playerKey(session.player), session.endedAt);
   for (const player of onlineNames) {
     const key = playerKey(player);
     if (!open.has(key)) {
-      const lastEnd = sessions.filter((session) => playerKey(session.player) === key).at(-1)?.endedAt;
+      const lastEnd = lastSessionEndByKey.get(key);
       open.set(key, {
         player,
         startedAt: Math.max(input.contextFrom, lastEnd ?? input.contextFrom),

@@ -108,6 +108,7 @@ export type TimelinePalette = {
   textMuted: string;
   border: string;
   surface: string;
+  fontFamily: string;
 };
 
 export const defaultTimelinePalette: TimelinePalette = {
@@ -125,7 +126,11 @@ export const defaultTimelinePalette: TimelinePalette = {
   text: "#1f2530",
   textMuted: "#697386",
   border: "#d9dee8",
-  surface: "#ffffff"
+  surface: "#ffffff",
+  // ECharts renders into SVG/canvas and cannot resolve a CSS custom property, so
+  // the chart is handed the resolved stack read off the panel. This literal is
+  // only the pre-mount default and mirrors --font-sans.
+  fontFamily: "\"Switzer\", Inter, \"Helvetica Neue\", Helvetica, Arial, sans-serif"
 };
 
 export function liveTimelineWindow(span: number, now = Date.now()): TimelineWindow {
@@ -411,6 +416,7 @@ export function buildTimelineChartOption({
       enabled: true,
       description: `Server resource timeline with ${samples.length} samples and ${clusters.reduce((total, cluster) => total + cluster.markers.length, 0)} annotations.`
     },
+    textStyle: { fontFamily: palette.fontFamily },
     grid: { id: "timeline-grid", ...grid, containLabel: false },
     xAxis: buildTimelineTimeAxisOption({
       id: "timeline-time-axis",

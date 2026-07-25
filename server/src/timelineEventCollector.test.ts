@@ -22,7 +22,9 @@ describe("TimelineEventCollector", () => {
     const stored = new Map<string, ServerTimelineEvent>();
     const timestamp = new Date().toISOString();
     const repository = {
-      append: (_serverId: string, key: string, value: ServerTimelineEvent) => stored.set(key, value),
+      appendMany: (_serverId: string, events: Array<{ eventKey: string; event: ServerTimelineEvent }>) => {
+        for (const { eventKey, event: value } of events) stored.set(eventKey, value);
+      },
       prune: vi.fn()
     };
     const collector = new TimelineEventCollector({
@@ -40,7 +42,7 @@ describe("TimelineEventCollector", () => {
   });
 
   it("ignores events without a placeable timestamp and isolates read failures", async () => {
-    const append = vi.fn();
+    const appendMany = vi.fn();
     const onError = vi.fn();
     const collector = new TimelineEventCollector({
       intervalMs: 10_000,
@@ -48,26 +50,26 @@ describe("TimelineEventCollector", () => {
       readServers: async () => [{ id: "server-1" }, { id: "server-2" }] as ManagedServer[],
       readLogs: async (server) => server.id === "server-1" ? { text: "line", source: "docker" } : Promise.reject(new Error("offline")),
       parseLine: () => event(),
-      repository: { append, prune: vi.fn() } as never,
+      repository: { appendMany, prune: vi.fn() } as never,
       onError
     });
     await collector.collectAll();
-    expect(append).not.toHaveBeenCalled();
+    expect(appendMany).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledOnce();
   });
 
   it("rejects events whose timestamps are implausibly far in the future", async () => {
-    const append = vi.fn();
+    const appendMany = vi.fn();
     const collector = new TimelineEventCollector({
       intervalMs: 10_000,
       retentionMs: 24 * 60 * 60 * 1000,
       readServers: async () => [{ id: "server-1" }] as ManagedServer[],
       readLogs: async () => ({ text: "line", source: "docker" }),
       parseLine: () => event(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
-      repository: { append, prune: vi.fn() } as never
+      repository: { appendMany, prune: vi.fn() } as never
     });
 
     await collector.collectAll();
-    expect(append).not.toHaveBeenCalled();
+    expect(appendMany).not.toHaveBeenCalled();
   });
 });

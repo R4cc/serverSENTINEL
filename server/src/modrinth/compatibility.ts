@@ -36,9 +36,8 @@ function compatibilityLoaders(options: Pick<CompatibilityResolverOptions, "loade
   return Array.from(new Set([...(options.loaders ?? []), ...(options.loader ? [options.loader] : [])]));
 }
 
-function versionMatchesLoader(version: ModrinthVersion, options: Pick<CompatibilityResolverOptions, "loader" | "loaders">) {
-  const loaders = compatibilityLoaders(options);
-  return loaders.length > 0 && version.loaders.some((loader) => loaders.includes(loader));
+function versionMatchesLoader(version: ModrinthVersion, loaders: ReadonlySet<string>) {
+  return loaders.size > 0 && version.loaders.some((loader) => loaders.has(loader));
 }
 
 function compatibilityDescription(options: VersionCompatibilityOptions) {
@@ -260,10 +259,11 @@ export function latestCompatibleProjectVersion(
   versions: ModrinthVersion[],
   options: VersionCompatibilityOptions
 ) {
+  const loaders = new Set(compatibilityLoaders(options));
   return versions
     .filter((version) => (
       allowedForChannel(version, options.channel)
-      && versionMatchesLoader(version, options)
+      && versionMatchesLoader(version, loaders)
       && minecraftVersionsInclude(version.game_versions, options.minecraftVersion)
       && modrinthJarFile(version)
     ))
@@ -340,7 +340,8 @@ export function resolveCompatibilityFromVersions(
   options: VersionCompatibilityOptions,
   projectSides?: { server_side?: string; client_side?: string }
 ): ModrinthCompatibilityMatch {
-  const loaderVersions = versions.filter((version) => versionMatchesLoader(version, options));
+  const loaders = new Set(compatibilityLoaders(options));
+  const loaderVersions = versions.filter((version) => versionMatchesLoader(version, loaders));
   const loaderAndGameVersions = loaderVersions.filter((version) => minecraftVersionsInclude(version.game_versions, options.minecraftVersion));
   const loaderGameJarVersions = loaderAndGameVersions.filter((version) => modrinthJarFile(version));
   const matchingVersion = loaderGameJarVersions.find((version) => allowedForChannel(version, options.channel));

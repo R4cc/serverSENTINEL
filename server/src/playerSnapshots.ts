@@ -52,6 +52,15 @@ function validTimestamp(value: unknown) {
   return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
 }
 
+const allowedUnavailableCodes = new Set<PlayerSnapshotErrorCode>([
+  "NODE_UNAVAILABLE",
+  "QUERY_DISABLED",
+  "QUERY_ENDPOINT_UNAVAILABLE",
+  "QUERY_TIMEOUT",
+  "QUERY_RESPONSE_INCOMPLETE",
+  "QUERY_RESPONSE_INVALID"
+]);
+
 function normalizeObservation(value: unknown): PlayerObservation {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Node returned an invalid player observation");
@@ -66,20 +75,12 @@ function normalizeObservation(value: unknown): PlayerObservation {
     };
   }
   if (observation.state === "unavailable") {
-    const allowedCodes = new Set<PlayerSnapshotErrorCode>([
-      "NODE_UNAVAILABLE",
-      "QUERY_DISABLED",
-      "QUERY_ENDPOINT_UNAVAILABLE",
-      "QUERY_TIMEOUT",
-      "QUERY_RESPONSE_INCOMPLETE",
-      "QUERY_RESPONSE_INVALID"
-    ]);
     return {
       state: "unavailable",
       instanceId: typeof observation.instanceId === "string" ? observation.instanceId : undefined,
       maxPlayers: observation.maxPlayers === null || Number.isSafeInteger(observation.maxPlayers) ? observation.maxPlayers as number | null : null,
       attemptedAt: validTimestamp(observation.attemptedAt) ? observation.attemptedAt as string : new Date().toISOString(),
-      code: allowedCodes.has(observation.code as PlayerSnapshotErrorCode) ? observation.code as PlayerSnapshotErrorCode : "NODE_UNAVAILABLE",
+      code: allowedUnavailableCodes.has(observation.code as PlayerSnapshotErrorCode) ? observation.code as PlayerSnapshotErrorCode : "NODE_UNAVAILABLE",
       message: typeof observation.message === "string" && observation.message.trim() ? observation.message.trim() : "Player data is unavailable"
     };
   }

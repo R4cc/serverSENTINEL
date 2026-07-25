@@ -167,33 +167,58 @@ export function parseCronField(field: string, min: number, max: number) {
   return values;
 }
 
-export function validateCron(cron: string) {
+type ParsedCron = {
+  minutes: Set<number>;
+  hours: Set<number>;
+  daysOfMonth: Set<number>;
+  months: Set<number>;
+  daysOfWeek: Set<number>;
+};
+
+const parsedCronCache = new Map<string, ParsedCron | null>();
+const parsedCronCacheLimit = 500;
+
+function parseCron(cron: string) {
+  const cached = parsedCronCache.get(cron);
+  if (cached !== undefined) return cached;
   const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) {
+  let parsed: ParsedCron | null = null;
+  if (parts.length === 5) {
+    const minutes = parseCronField(parts[0], 0, 59);
+    const hours = parseCronField(parts[1], 0, 23);
+    const daysOfMonth = parseCronField(parts[2], 1, 31);
+    const months = parseCronField(parts[3], 1, 12);
+    const daysOfWeek = parseCronField(parts[4], 0, 7);
+    if (minutes && hours && daysOfMonth && months && daysOfWeek) {
+      parsed = { minutes, hours, daysOfMonth, months, daysOfWeek };
+    }
+  }
+  if (parsedCronCache.size >= parsedCronCacheLimit) parsedCronCache.clear();
+  parsedCronCache.set(cron, parsed);
+  return parsed;
+}
+
+function cronDateMatches(parsed: ParsedCron, date: Date) {
+  const normalizedDay = date.getDay();
+  return parsed.minutes.has(date.getMinutes())
+    && parsed.hours.has(date.getHours())
+    && parsed.daysOfMonth.has(date.getDate())
+    && parsed.months.has(date.getMonth() + 1)
+    && (parsed.daysOfWeek.has(normalizedDay) || (normalizedDay === 0 && parsed.daysOfWeek.has(7)));
+}
+
+export function validateCron(cron: string) {
+  if (cron.trim().split(/\s+/).length !== 5) {
     throw new Error("Cron schedule must use five fields: minute hour day month weekday");
   }
-  const valid = [
-    parseCronField(parts[0], 0, 59),
-    parseCronField(parts[1], 0, 23),
-    parseCronField(parts[2], 1, 31),
-    parseCronField(parts[3], 1, 12),
-    parseCronField(parts[4], 0, 7)
-  ].every(Boolean);
-  if (!valid) {
+  if (!parseCron(cron)) {
     throw new Error("Cron schedule contains an invalid field");
   }
 }
 
 export function cronMatches(cron: string, date: Date) {
   validateCron(cron);
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = cron.trim().split(/\s+/);
-  const normalizedDay = date.getDay();
-  const days = parseCronField(dayOfWeek, 0, 7)!;
-  return parseCronField(minute, 0, 59)!.has(date.getMinutes())
-    && parseCronField(hour, 0, 23)!.has(date.getHours())
-    && parseCronField(dayOfMonth, 1, 31)!.has(date.getDate())
-    && parseCronField(month, 1, 12)!.has(date.getMonth() + 1)
-    && (days.has(normalizedDay) || (normalizedDay === 0 && days.has(7)));
+  return cronDateMatches(parseCron(cron)!, date);
 }
 
 export function timeZoneMinuteKey(date: Date, timeZone: string) {
@@ -212,12 +237,13 @@ export function timeZoneMinuteKey(date: Date, timeZone: string) {
 
 export function nextCronRun(cron: string, from = new Date(), maxDays = 366) {
   validateCron(cron);
+  const parsed = parseCron(cron)!;
   const cursor = new Date(from);
   cursor.setSeconds(0, 0);
   cursor.setMinutes(cursor.getMinutes() + 1);
   const maxChecks = Math.max(1, maxDays * 24 * 60);
   for (let checked = 0; checked < maxChecks; checked += 1) {
-    if (cronMatches(cron, cursor)) {
+    if (cronDateMatches(parsed, cursor)) {
       return new Date(cursor);
     }
     cursor.setMinutes(cursor.getMinutes() + 1);

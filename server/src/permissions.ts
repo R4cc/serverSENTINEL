@@ -29,6 +29,7 @@ export const ALL_PERMISSIONS = [
 ] as const satisfies readonly Permission[];
 
 const allPermissionSet = new Set<string>(ALL_PERMISSIONS);
+const permissionOrder = new Map<Permission, number>(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
 
 const PERMISSION_LABELS: Record<Permission, string> = {
   "servers.view": "view servers",
@@ -151,6 +152,14 @@ export const PERMISSION_DEPENDENCIES: Record<Permission, Permission[]> = {
   "users.manage": ["users.view"]
 };
 
+const normalizedRolePresets: Record<Exclude<RolePreset, "custom">, Permission[]> = {
+  viewer: normalizePermissions(ROLE_PRESETS.viewer),
+  operator: normalizePermissions(ROLE_PRESETS.operator),
+  maintainer: normalizePermissions(ROLE_PRESETS.maintainer),
+  manager: normalizePermissions(ROLE_PRESETS.manager),
+  admin: normalizePermissions(ROLE_PRESETS.admin)
+};
+
 export function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && allPermissionSet.has(value);
 }
@@ -182,7 +191,7 @@ export function normalizePermissions(permissions: readonly unknown[]) {
 export function inferRolePreset(permissions: readonly Permission[]): RolePreset {
   const normalized = normalizePermissions(permissions);
   for (const preset of ["admin", "manager", "maintainer", "operator", "viewer"] as const) {
-    if (samePermissions(normalized, ROLE_PRESETS[preset])) {
+    if (samePermissions(normalized, normalizedRolePresets[preset])) {
       return preset;
     }
   }
@@ -220,14 +229,11 @@ export function isFullAccessUser(user: Pick<StoredUser, "permissions">) {
 }
 
 function sortPermissions(permissions: Permission[]) {
-  const order = new Map(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
-  return permissions.sort((a, b) => order.get(a)! - order.get(b)!);
+  return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
 function samePermissions(a: readonly Permission[], b: readonly Permission[]) {
-  const normalizedA = normalizePermissions(a);
-  const normalizedB = normalizePermissions(b);
-  return normalizedA.length === normalizedB.length && normalizedA.every((permission, index) => permission === normalizedB[index]);
+  return a.length === b.length && a.every((permission, index) => permission === b[index]);
 }
 
 function throwPermissionError(message: string, statusCode: number): never {

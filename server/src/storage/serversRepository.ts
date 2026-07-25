@@ -149,7 +149,35 @@ export class ServersRepository {
       schedulesByServer.set(row.server_id, schedules);
     }
 
-    return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all().map((row) => this.normalize({
+    return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
+      .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], schedulesByServer.get(row.id) ?? []));
+  }
+
+  find(id: string): ManagedServer | undefined {
+    const database = this.storage.connection;
+    const row = database.prepare<[string], ServerRow>("SELECT * FROM servers WHERE id = ?").get(id);
+    if (!row) return undefined;
+
+    const ports = database.prepare<[string], PortRow>("SELECT * FROM managed_ports WHERE server_id = ? ORDER BY rowid").all(id).map(portFromRow);
+
+    const runsBySchedule = new Map<string, ScheduledRun[]>();
+    for (const runRow of database.prepare<[string], RunRow>(`
+      SELECT id, server_id, schedule_id, schedule_name, status, message, ran_at, details_json
+      FROM scheduled_runs WHERE server_id = ? ORDER BY ran_at DESC, id DESC
+    `).all(id)) {
+      const runs = runsBySchedule.get(runRow.schedule_id) ?? [];
+      if (runs.length < 25) runs.push(runFromRow(runRow));
+      runsBySchedule.set(runRow.schedule_id, runs);
+    }
+
+    const schedules = database.prepare<[string], ScheduleRow>("SELECT * FROM schedules WHERE server_id = ? ORDER BY rowid").all(id)
+      .map((scheduleRow) => scheduleFromRow(scheduleRow, runsBySchedule.get(scheduleRow.id) ?? []));
+
+    return this.serverFromRow(row, ports, schedules);
+  }
+
+  private serverFromRow(row: ServerRow, managedPorts: ManagedServerPort[], schedules: ScheduledExecution[]): ManagedServer {
+    return this.normalize({
       id: row.id,
       nodeId: row.node_id,
       displayName: row.display_name,
@@ -161,7 +189,7 @@ export class ServersRepository {
       dockerMountSource: row.docker_mount_source ?? undefined,
       dockerWorkingDir: row.docker_working_dir ?? undefined,
       dockerPorts: row.docker_ports ?? undefined,
-      managedPorts: portsByServer.get(row.id) ?? [],
+      managedPorts,
       javaArgs: row.java_args ?? undefined,
       startOnNodeStart: row.start_on_node_start === 1,
       runtimeIntent: row.runtime_intent ?? undefined,
@@ -173,10 +201,10 @@ export class ServersRepository {
       restartRequiredSince: row.restart_required_since ?? undefined,
       restartRequiredChanges: row.restart_required_changes_json ? JSON.parse(row.restart_required_changes_json) as RestartRequiredChange[] : undefined,
       restartRequiredModBaseline: row.restart_required_mod_baseline_json ? JSON.parse(row.restart_required_mod_baseline_json) as RestartRequiredModSnapshot[] : undefined,
-      schedules: schedulesByServer.get(row.id) ?? [],
+      schedules,
       createdAt: row.created_at,
       updatedAt: row.updated_at
-    }));
+    });
   }
 
   create(value: ManagedServer) {

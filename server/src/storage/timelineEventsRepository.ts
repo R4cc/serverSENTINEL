@@ -14,14 +14,20 @@ export class TimelineEventsRepository {
     `).all(serverId, from, to).map((row) => JSON.parse(row.event_json) as ServerTimelineEvent);
   }
 
-  append(serverId: string, eventKey: string, event: ServerTimelineEvent) {
-    this.storage.connection.prepare(`
+  appendMany(serverId: string, events: ReadonlyArray<{ eventKey: string; event: ServerTimelineEvent }>) {
+    if (events.length === 0) return;
+    const statement = this.storage.connection.prepare(`
       INSERT INTO timeline_events (server_id, event_key, occurred_at, event_json)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(server_id, event_key) DO UPDATE SET
         occurred_at = excluded.occurred_at,
         event_json = excluded.event_json
-    `).run(serverId, eventKey, event.occurredAt, JSON.stringify(event));
+    `);
+    this.storage.transaction(() => {
+      for (const { eventKey, event } of events) {
+        statement.run(serverId, eventKey, event.occurredAt, JSON.stringify(event));
+      }
+    });
   }
 
   prune(cutoff: number) {

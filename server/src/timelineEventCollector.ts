@@ -68,13 +68,15 @@ export class TimelineEventCollector {
       const referenceDate = new Date();
       const referenceTime = referenceDate.getTime();
       const cutoff = referenceTime - this.options.retentionMs;
+      const events: Array<{ eventKey: string; event: ServerEvent & { occurredAt: number } }> = [];
       text.split(/\r?\n/).forEach((line, index) => {
         const event = this.options.parseLine(line, source, index, referenceDate);
         if (!event?.timestamp) return;
         const occurredAt = new Date(event.timestamp).getTime();
         if (!Number.isFinite(occurredAt) || occurredAt < cutoff || occurredAt > referenceTime + futureEventToleranceMs) return;
-        this.options.repository.append(server.id, eventKey(event), { ...event, occurredAt });
+        events.push({ eventKey: eventKey(event), event: { ...event, occurredAt } });
       });
+      if (events.length > 0) this.options.repository.appendMany(server.id, events);
     } catch (error) {
       this.options.onError?.(error, server);
     }

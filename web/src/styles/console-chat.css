@@ -248,9 +248,18 @@
   border-top: var(--border-strong) solid var(--border-row);
   background: var(--surface-raised);
   padding: var(--space-2) var(--space-3);
-  padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
   /* Keep the composer aligned with the thread column while its border stays full width. */
   padding-inline: max(var(--space-3), calc((100% - var(--chat-thread-width)) / 2));
+}
+
+/* In a browser tab the visual viewport already stops above the toolbar, so the safe-area
+   inset would be counted twice and strand the composer well above the bottom edge.
+   Installed to a home screen the app owns the whole screen and clears the home indicator
+   itself. */
+@media (display-mode: standalone) {
+  .consoleChatComposer {
+    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+  }
 }
 
 .consoleChatInput {

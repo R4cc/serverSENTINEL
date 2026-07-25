@@ -629,7 +629,7 @@ button:disabled,
 .modalBody p {
   color: var(--text-muted);
   font-size: 14px;
-  font-weight: 750;
+  font-weight: var(--weight-body);
   line-height: 1.5;
 }
 
@@ -1000,7 +1000,7 @@ button:disabled,
 .keyForm label input {
   color: var(--text);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: var(--weight-body);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -1013,7 +1013,7 @@ button:disabled,
   gap: var(--space-2);
   color: var(--text);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: var(--weight-meta);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -2782,6 +2782,17 @@ textarea:hover:not(:disabled),
     flex: 1 1 auto;
     overflow: hidden;
     overscroll-behavior-y: contain;
+  }
+
+  /* The console is the one page a phone cannot scroll, so every pixel of shell around it
+     is a pixel the conversation never gets back. The composer and the terminal prompt own
+     the bottom edge, where padding would only read as a gap above the browser toolbar. */
+  .workspacePage-console.workspaceServerPage {
+    padding-block: var(--space-2) 0;
+  }
+
+  .workspacePage-console .consolePanel > .uiPanelHeader {
+    padding-block: var(--space-1);
   }
 
   .nodesPage.nodeDetailsOpen > .nodesToolbar,

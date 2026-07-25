@@ -1,0 +1,31 @@
+/* Switzer — Indian Type Foundry, ITF Free Font License (free for commercial use).
+   The .woff2 files are vendored under src/assets/fonts/switzer so the running app
+   never depends on a third-party font CDN. Vite fingerprints and emits them next
+   to the rest of the bundle.
+
+   Only the three weights the interface actually uses are declared:
+   400 body copy, 500 labels/buttons/navigation, 600 headings. */
+
+@font-face {
+  font-family: "Switzer";
+  src: url("../assets/fonts/switzer/switzer-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Switzer";
+  src: url("../assets/fonts/switzer/switzer-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Switzer";
+  src: url("../assets/fonts/switzer/switzer-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}

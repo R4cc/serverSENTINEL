@@ -386,7 +386,7 @@ function rowChromeRenderItem(
               align: "left",
               verticalAlign: "middle",
               fill: color,
-              font: "700 10px Inter, system-ui, sans-serif"
+              font: `600 10px ${palette.fontFamily}`
             },
             silent: true
           },
@@ -472,7 +472,7 @@ function rowChromeRenderItem(
             align: "left",
             verticalAlign: "middle",
             fill: palette.text,
-            font: "700 11px Inter, system-ui, sans-serif"
+            font: `600 11px ${palette.fontFamily}`
           },
           silent: true
         }
@@ -501,8 +501,8 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
     const open = item.endBoundary === "online" && rawEndX >= plotLeft && rawEndX <= plotRight;
     const startLabel = exactStart ? item.fullStartLabel : null;
     const endLabel = open || exactEnd ? item.fullEndLabel : null;
-    const durationFont = "600 9px Inter, system-ui, sans-serif";
-    const endpointFont = "9px Inter, system-ui, sans-serif";
+    const durationFont = `600 9px ${palette.fontFamily}`;
+    const endpointFont = `9px ${palette.fontFamily}`;
     const labels = playerTimelineLabelLayout({
       startX,
       endX,
@@ -740,6 +740,7 @@ export function buildPlayerTimelineChartOption({
       enabled: true,
       description: `Player session timeline. Online now: ${onlineCount}. Played in this time range: ${offlineCount}. ${visibleDescriptions.join(". ")}`
     },
+    textStyle: { fontFamily: palette.fontFamily },
     grid: { id: "player-timeline-grid", left: gridLeft, right: 24, top: playerTimelineAxisHeight, bottom: 0, containLabel: false },
     xAxis: buildTimelineTimeAxisOption({
       id: "player-timeline-time-axis",

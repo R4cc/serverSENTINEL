@@ -517,7 +517,8 @@ function readTimelinePalette(element: HTMLElement): TimelinePalette {
     text: read("--text", defaultTimelinePalette.text),
     textMuted: read("--text-muted", defaultTimelinePalette.textMuted),
     border: read("--border-subtle", defaultTimelinePalette.border),
-    surface: read("--surface-raised", defaultTimelinePalette.surface)
+    surface: read("--surface-raised", defaultTimelinePalette.surface),
+    fontFamily: read("--font-sans", defaultTimelinePalette.fontFamily)
   };
 }
 

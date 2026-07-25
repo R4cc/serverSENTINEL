@@ -88,8 +88,6 @@ export function useServerContext(input: {
     activeNode,
     usableContextNodes,
     activeMinecraftVersion,
-    activeRuntimeVersion,
-    activeFabricLoaderVersion: activeRuntimeVersion,
     activeRuntimeDefinition,
     activeModContext,
     activeModVersionsUnknown,

@@ -82,7 +82,10 @@ textarea {
   font-weight: var(--weight-body);
 }
 
-textarea,
+/* The textarea selector has to carry the same :not() as the `font: inherit`
+   normalisation in tokens.css, otherwise that rule wins on specificity and the
+   Java launch-flag fields render in the UI font instead of monospace. */
+textarea:not(.xterm-helper-textarea),
 .terminal,
 .minecraftTerminal,
 .installSnippet,
@@ -96,7 +99,7 @@ textarea,
 .brandBlock h1,
 .authPanel h1 {
   font-size: var(--type-brand-size);
-  font-weight: 760;
+  font-weight: var(--weight-title);
   letter-spacing: 0;
   line-height: 1.15;
   text-transform: none;
@@ -125,7 +128,7 @@ textarea,
 .accountName {
   color: inherit;
   font-size: 13px;
-  font-weight: 540;
+  font-weight: var(--weight-meta);
   letter-spacing: 0;
   text-transform: none;
 }
