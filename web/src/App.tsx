@@ -3005,6 +3005,7 @@ export default function App() {
                           playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
                           canSendCommands={canSendConsoleCommands}
                           disabledReason={consoleCommandDisabledReason}
+                          knownPlayers={playerSnapshots[activeServer.id]?.names}
                           onCommand={(command) => {
                             void sendCommand(command);
                           }}
