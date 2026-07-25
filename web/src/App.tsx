@@ -369,16 +369,20 @@ export default function App() {
     const root = document.documentElement;
     const classes = themeClassName.split(" ");
     root.classList.add(...classes);
-    // Mobile browsers paint their toolbars in the page theme colour, so tracking the
-    // active theme lets the surrounding chrome read as part of the panel instead of a
-    // bright band above and below it.
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    const previousThemeColor = themeColor?.getAttribute("content") ?? null;
-    const surface = getComputedStyle(root).getPropertyValue("--surface-raised").trim();
-    if (themeColor && surface) themeColor.setAttribute("content", surface);
+    // Mobile browsers paint their toolbars in the page theme colour, so tracking the active
+    // theme keeps the chrome above and below the app from staying light while the panel is
+    // dark. The document ships one tag per system appearance and only the matching one is
+    // read, so both are written with the colour the app actually resolved to.
+    const themeColors = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
+    const previousThemeColors = themeColors.map((meta) => meta.getAttribute("content"));
+    const surface = getComputedStyle(root).getPropertyValue("--surface").trim();
+    if (surface) for (const meta of themeColors) meta.setAttribute("content", surface);
     return () => {
       root.classList.remove(...classes);
-      if (themeColor && previousThemeColor !== null) themeColor.setAttribute("content", previousThemeColor);
+      themeColors.forEach((meta, index) => {
+        const previous = previousThemeColors[index];
+        if (previous !== null) meta.setAttribute("content", previous);
+      });
     };
   }, [themeClassName]);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
