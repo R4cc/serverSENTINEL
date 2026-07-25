@@ -1,3 +1,7 @@
+/* Two presentations share this markup. Phones get the bubble thread below, which is
+   what a conversation looks like on a touch device. Anything wider switches to the
+   message rows further down: a desktop console panel is far wider than a bubble
+   column needs, and centring one in it leaves the conversation adrift in empty space. */
 .consoleChat {
   --chat-author-lightness: 34%;
   --chat-avatar-lightness: 42%;
@@ -366,18 +370,149 @@
   box-shadow: none;
 }
 
-/* Roomy displays get a slightly larger conversation rather than a wider one. */
-@media (min-width: 1500px) {
+/* Pointer-sized screens: message rows instead of bubbles.
+   Each speaker turn becomes a full-width row — avatar gutter, then a header line of
+   name, rank and time, then the messages flush beneath it. The row spans the panel so
+   the conversation is anchored to the reading edge instead of floating mid-panel, and
+   dropping the bubble chrome fits far more of the log on screen. Several rules below
+   repeat a `.themeDark` or `.is-outgoing` selector purely to outrank the bubble
+   styling above; the media query alone would not. */
+@media (min-width: 721px) {
   .consoleChat {
-    --chat-thread-width: 900px;
-    --chat-message-size: 16px;
-    --chat-meta-size: var(--type-helper-size);
-    --chat-avatar-size: 38px;
+    --chat-avatar-size: 32px;
+    /* The row is as wide as the panel, but a line of text that wide is hard to
+       track back to the left edge, so the copy itself keeps a reading measure. */
+    --chat-measure: 80ch;
+    --chat-row-inset: var(--space-3);
+  }
+
+  .consoleChatScroll {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .consoleChatThread {
+    gap: 1px;
+    max-width: none;
   }
 
   .consoleChatCluster,
-  .consoleChatSkeletonRow {
-    max-width: min(88%, 620px);
+  .consoleChatCluster.is-outgoing,
+  .consoleChatSkeletonRow,
+  .consoleChatSkeletonRow.is-outgoing {
+    grid-template-columns: var(--chat-avatar-size) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-3);
+    max-width: none;
+    margin-left: 0;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--chat-row-inset);
+  }
+
+  .consoleChatCluster.is-outgoing .consoleChatAvatar,
+  .consoleChatSkeletonRow.is-outgoing .consoleChatSkeletonAvatar {
+    order: 0;
+  }
+
+  .consoleChatCluster:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+  }
+
+  /* Server broadcasts no longer sit on their own side of the thread, so they get a
+     tinted row and an accent rule to stay distinguishable from player chat. */
+  .consoleChatCluster.is-outgoing {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  .consoleChatCluster.is-outgoing:hover {
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+
+  .consoleChatClusterBody,
+  .consoleChatCluster.is-outgoing .consoleChatClusterBody {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    justify-items: start;
+    column-gap: var(--space-2);
+    row-gap: 1px;
+  }
+
+  .consoleChatAuthor {
+    grid-row: 1;
+    grid-column: 1;
+    gap: var(--space-2);
+    padding-inline: 0;
+    font-size: var(--chat-message-size);
+  }
+
+  /* The header carries the turn's time, so the trailing stamp moves up beside the name. */
+  .consoleChatTime {
+    grid-row: 1;
+    grid-column: 2;
+    padding-inline: 0;
+  }
+
+  .consoleChatBubble,
+  .themeDark .consoleChatBubble,
+  .consoleChatCluster.is-outgoing .consoleChatBubble {
+    grid-column: 1 / -1;
+    max-width: var(--chat-measure);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    color: var(--text);
+  }
+
+  .consoleChatBubble.is-emote {
+    border: 0;
+    color: var(--text-muted);
+  }
+
+  .consoleChatSkeletonBubble {
+    height: 28px;
+    max-width: var(--chat-measure);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Joins and leaves line up with the message column rather than floating centred. */
+  .consoleChatSystem {
+    justify-content: flex-start;
+    padding-inline: calc(var(--chat-row-inset) + var(--chat-avatar-size) + var(--space-3));
+    text-align: left;
+  }
+
+  /* A centred pill reads as a stray bubble in a left-aligned log; a ruled label does not. */
+  .consoleChatSeparator {
+    gap: var(--space-3);
+    margin: var(--space-3) var(--chat-row-inset) var(--space-1);
+  }
+
+  .consoleChatSeparator::before,
+  .consoleChatSeparator::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--border-row);
+  }
+
+  .consoleChatSeparator span {
+    background: transparent;
+    padding: 0;
+  }
+
+  /* The thread now runs the full width, so the composer has nothing to centre against. */
+  .consoleChatComposer {
+    padding-inline: var(--space-4);
+  }
+}
+
+/* Roomy displays get a slightly larger conversation rather than a wider one. */
+@media (min-width: 1500px) {
+  .consoleChat {
+    --chat-message-size: 16px;
+    --chat-meta-size: var(--type-helper-size);
+    --chat-avatar-size: 36px;
   }
 }
 

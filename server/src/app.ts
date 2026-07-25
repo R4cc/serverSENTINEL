@@ -3010,6 +3010,16 @@ function cleanPlayerName(value: string) {
     .replace(/\s+\(\/?[^)]+:\d+\)$/g, "");
 }
 
+// Minecraft keeps the client socket address next to the name while a connection is
+// still being negotiated (`Steve (/1.2.3.4:5678) lost connection: ...`, `Disconnecting
+// /1.2.3.4:5678: ...`) and logs the bare name only once the player is in the world.
+// An addressed disconnect therefore belongs to a client that never joined, so it must
+// not be reported as a player leaving.
+function connectingClientName(value: string) {
+  const trimmed = value.trim();
+  return /\(\/?[^)]*:\d+\)$/.test(trimmed) || /^\/?[^\s/]*:\d+$/.test(trimmed);
+}
+
 function cleanModName(value: string) {
   return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
 }
@@ -3106,7 +3116,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
   }
 
   const playerDisconnected = message.match(/^(.+?) lost connection:/i);
-  if (playerDisconnected) {
+  if (playerDisconnected && !connectingClientName(playerDisconnected[1])) {
     const player = cleanPlayerName(playerDisconnected[1]);
     return eventFromParsedLine({
       eventType: "player_left",
@@ -3120,8 +3130,8 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
     });
   }
 
-  const disconnectingPlayer = message.match(/^Disconnecting\s+(.+?)(?:\s*\(|:|$)/i);
-  if (disconnectingPlayer) {
+  const disconnectingPlayer = message.match(/^Disconnecting\s+(.+?)\s*(?::\s|:$|$)/i);
+  if (disconnectingPlayer && !connectingClientName(disconnectingPlayer[1])) {
     const player = cleanPlayerName(disconnectingPlayer[1]);
     return eventFromParsedLine({
       eventType: "player_left",

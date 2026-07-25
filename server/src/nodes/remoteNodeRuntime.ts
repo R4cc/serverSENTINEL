@@ -62,6 +62,14 @@ function cleanPlayerName(value: string) {
     .replace(/\s+\(\/?[^)]+:\d+\)$/g, "");
 }
 
+// Minecraft keeps the client socket address next to the name while a connection is
+// still being negotiated and logs the bare name only once the player is in the world,
+// so an addressed disconnect belongs to a client that never joined.
+function connectingClientName(value: string) {
+  const trimmed = value.trim();
+  return /\(\/?[^)]*:\d+\)$/.test(trimmed) || /^\/?[^\s/]*:\d+$/.test(trimmed);
+}
+
 function cleanModName(value: string) {
   return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
 }
@@ -144,8 +152,8 @@ function parseRemoteLogEvent(line: string, source: ServerEvent["source"], index:
 
   const playerLeft = message.match(/^(.+?) left the game$/i)
     ?? message.match(/^(.+?) lost connection:/i)
-    ?? message.match(/^Disconnecting\s+(.+?)(?:\s*\(|:|$)/i);
-  if (playerLeft) {
+    ?? message.match(/^Disconnecting\s+(.+?)\s*(?::\s|:$|$)/i);
+  if (playerLeft && !connectingClientName(playerLeft[1])) {
     const player = cleanPlayerName(playerLeft[1]);
     const severity = /lost connection|^Disconnecting/i.test(message) ? "warning" : "info";
     return makeEvent("player_left", severity, `${player} left`, player);
