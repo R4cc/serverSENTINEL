@@ -8,6 +8,7 @@ import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionIn
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
+import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
@@ -2129,9 +2130,13 @@ export default function App() {
     }
   }
 
-  async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean } = {}) {
+  async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean; skipConfirmation?: boolean } = {}) {
     if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
+    const playersOnlineConfirmation = options.skipConfirmation
+      ? null
+      : runtimeActionConfirmation(action, activeServer.displayName, playerSnapshots[activeServer.id]);
+    if (playersOnlineConfirmation && !(await requestConfirmation(playersOnlineConfirmation))) return;
     setNotice("");
     setRuntimeAction(action);
     const actionLabel = action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart";
