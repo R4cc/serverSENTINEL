@@ -239,6 +239,28 @@ describe("player timeline ECharts option", () => {
     ]);
   });
 
+  it("uses configured same-origin player heads for row icons", () => {
+    const option = buildPlayerTimelineChartOption({
+      rows: rows(),
+      query,
+      viewport,
+      now: 60_000,
+      palette: defaultTimelinePalette,
+      formatShortTime,
+      playerHeadSource: (player) => `/player-head/${encodeURIComponent(player)}`
+    }) as Record<string, unknown>;
+    const rowSeries = (option.series as Array<Record<string, unknown>>)[0];
+    const renderItem = rowSeries.renderItem as (params: unknown, api: unknown) => {
+      children: Array<{ type: string; style?: { image?: string } }>;
+    };
+    const rendered = renderItem(
+      { dataIndex: 1, coordSys: { x: 220, y: 30, width: 700, height: 240 } },
+      { coord: () => [220, 70], size: () => [0, 40] }
+    );
+
+    expect(rendered.children.find((child) => child.type === "image")?.style?.image).toBe("/player-head/Alex");
+  });
+
   it("keeps a large synthetic session set in one SVG-oriented option", () => {
     const minute = 60_000;
     const syntheticRows = Array.from({ length: 100 }, (_, playerIndex): PlayerTimelineRow => ({

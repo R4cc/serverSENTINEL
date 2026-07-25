@@ -94,7 +94,7 @@ import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { assertModrinthUrl } from "./http/outboundUrls.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
-import { timelinePlayerActivity, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
+import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "./serverTimeline.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
 import { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import { asArray, asObject, optionalString, requiredString } from "./storage/valueValidation.js";
@@ -5652,7 +5652,12 @@ app.get<{ Params: { id: string; name: string } }>("/api/servers/:id/player-head/
   const snapshot = playerSnapshotCoordinator?.latest(server.id);
   const names = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot.names : [];
   const requestedName = request.params.name.trim();
-  const playerName = names.find((name) => name.toLocaleLowerCase("en-US") === requestedName.toLocaleLowerCase("en-US"));
+  const currentPlayerName = names.find((name) => name.toLocaleLowerCase("en-US") === requestedName.toLocaleLowerCase("en-US"));
+  const now = Date.now();
+  const recentEvents = currentPlayerName
+    ? []
+    : timelineEventsRepository.list(server.id, now - timelineHistoryWindowMs, now);
+  const playerName = currentPlayerName ?? (timelinePlayerIsKnown(recentEvents, requestedName) ? requestedName : undefined);
   if (!playerName) {
     return reply.code(404).send(apiErrorResponse("PLAYER_HEAD_NOT_AVAILABLE", "Player head is not available"));
   }
