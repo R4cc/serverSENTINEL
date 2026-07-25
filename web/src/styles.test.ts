@@ -162,6 +162,23 @@ describe("global stylesheet entry point", () => {
     expect(modsStyles).toMatch(/\.modsWorkspaceTable\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
 
+  it("lets phone mod rows use document scrolling and keeps them compact", () => {
+    const phoneModRules = modsStyles.slice(modsStyles.indexOf("@media (max-width: 760px)"));
+    expect(phoneModRules).toMatch(/\.modsWorkspaceInstalled\s*\{[^}]*height:\s*auto;[^}]*flex:\s*none;/s);
+    expect(phoneModRules).toMatch(/\.modsWorkspaceRow\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[^}]*"identity enabled switchVersion"[^}]*"status version version"[^}]*"update update update";[^}]*gap:\s*5px 8px;[^}]*padding:\s*8px 10px;/s);
+    expect(phoneModRules).toMatch(/\.modsWorkspaceIdentity img,[\s\S]*?width:\s*36px;[^}]*height:\s*36px;/s);
+    expect(phoneModRules).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.modsWorkspaceInstalled,\s*\.modsWorkspaceTable\s*\{[^}]*overflow:\s*visible;/s);
+    expect(phoneModRules).toMatch(/\.modsWorkspaceTable\s*\{[^}]*flex:\s*none;[^}]*scrollbar-gutter:\s*auto;/s);
+  });
+
+  it("keeps the Mods summary markers vivid in every theme", () => {
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric \.uiMetricTileMarker\s*\{[^}]*currentColor 26%[^}]*currentColor 24%/s);
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.blue \.uiMetricTileMarker\s*\{[^}]*--sentinel-info[^}]*--sentinel-info\) 72%/s);
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.orange \.uiMetricTileMarker\s*\{[^}]*--sentinel-warning[^}]*--sentinel-warning\) 76%/s);
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.green \.uiMetricTileMarker\s*\{[^}]*--sentinel-success[^}]*--sentinel-success\) 72%/s);
+    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.purple \.uiMetricTileMarker\s*\{[^}]*--accent[^}]*--accent\) 72%/s);
+  });
+
   it("keeps the Files page layout owned by the file-manager stylesheet", () => {
     expect(serverPropertiesStyles).not.toMatch(/\.filesPage\s*\{/);
     expect(canonicalLayoutStyles).not.toMatch(/\.filesPage\s*\{[^}]*grid-template-columns:/s);

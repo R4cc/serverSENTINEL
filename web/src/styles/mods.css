@@ -225,7 +225,7 @@
 @media (max-width: 760px) {
   .modsWorkspacePage { height: auto; }
   .modsWorkspaceToolbar { flex: 0 0 auto; }
-  .modsWorkspaceInstalled { height: max(420px, calc(100vh - 260px)); flex: none; }
+  .modsWorkspaceInstalled { height: auto; flex: none; }
   .modsWorkspaceSummary { grid-template-columns: 1fr; }
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
   .modsWorkspaceSearch { min-width: 0; }
@@ -234,39 +234,47 @@
     min-height: 56px;
     padding-block: 12px;
   }
-  .modsWorkspaceUpdateActions .uiButton,
-  .modsWorkspaceUpdate .uiButton { min-height: 56px; padding-block: 12px; }
+  .modsWorkspaceUpdate .uiButton { min-height: 40px; padding-block: 6px; }
   .modsWorkspaceRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "identity identity"
-      "status enabled"
-      "version enabled"
-      "update switchVersion";
+      "identity enabled switchVersion"
+      "status version version"
+      "update update update";
     align-items: center;
-    gap: 8px 12px;
+    gap: 5px 8px;
     min-height: 0;
-    padding: 12px;
+    padding: 8px 10px;
   }
   .modsWorkspaceIdentity { grid-area: identity; }
   .modsWorkspaceIdentity img,
-  .modsWorkspaceIdentity .modsWorkspaceFallback { width: 42px; height: 42px; }
-  .modsWorkspaceIdentity strong { white-space: normal; }
-  .modsWorkspaceIdentity small { display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .modsWorkspaceIdentity .modsWorkspaceFallback { width: 36px; height: 36px; }
+  .modsWorkspaceIdentity strong { white-space: nowrap; }
+  .modsWorkspaceIdentity small { display: block; white-space: nowrap; }
   .modsWorkspaceStatus { grid-area: status; min-width: 0; }
   .modsWorkspaceVersion { grid-area: version; display: block; color: var(--text-muted); font-size: var(--type-meta-size); }
   .modsWorkspaceVersion::before { content: "Installed "; color: var(--text-soft); font-weight: var(--weight-meta); }
   .modsWorkspaceUpdate { grid-area: update; min-width: 0; }
   .modsWorkspaceUpdate:empty { display: none; }
-  .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; padding-top: 4px; }
+  .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; }
   .modsUpdateVersions { flex: none; }
-  .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: flex-end; align-items: center; align-self: stretch; }
+  .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: flex-end; align-items: center; }
   .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: end; align-self: center; }
   .modsSearchActivity { text-align: left; }
   .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
   .modsResultCard > button { grid-column: 1 / -1; }
   .modsRecommendedVersion, .modsReviewLine { align-items: stretch; flex-direction: column; }
   .modsReviewLine span { text-align: left; }
+}
+
+@media (max-width: 720px) {
+  .modsWorkspaceInstalled,
+  .modsWorkspaceTable {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .modsWorkspaceTable { flex: none; scrollbar-gutter: auto; }
 }
 
 
@@ -550,6 +558,15 @@
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
 }
+
+.modsWorkspaceMetric .uiMetricTileMarker {
+  box-shadow: inset 0 0 0 7px color-mix(in srgb, currentColor 26%, transparent), 0 0 12px color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.modsWorkspaceMetric.blue .uiMetricTileMarker { color: var(--sentinel-info); background: color-mix(in srgb, var(--sentinel-info) 72%, transparent); }
+.modsWorkspaceMetric.orange .uiMetricTileMarker { color: var(--sentinel-warning); background: color-mix(in srgb, var(--sentinel-warning) 76%, transparent); }
+.modsWorkspaceMetric.green .uiMetricTileMarker { color: var(--sentinel-success); background: color-mix(in srgb, var(--sentinel-success) 72%, transparent); }
+.modsWorkspaceMetric.purple .uiMetricTileMarker { color: var(--accent); background: color-mix(in srgb, var(--accent) 72%, transparent); }
 
 @media (max-width: 760px) {
   .modsWorkspaceSummary {
