@@ -34,7 +34,7 @@ const rankBracketChatPattern = /^\[([^\]]{1,24})\]\s+<([^>]{1,48})>\s?([\s\S]*)$
 const rankChatPattern = /^\[([^\]]{1,24})\]\s+([A-Za-z0-9_.]{1,32})\s*:\s+([\s\S]+)$/;
 // Rank-less plugins print "Steve : hi". The spaced colon is what separates this
 // from ordinary log payloads such as "Mismatch in destroy block pos: ...".
-const spacedChatPattern = /^([A-Za-z0-9_.]{1,32})\s+:\s+([\s\S]+)$/;
+const spacedChatPattern = /^([A-Za-z0-9_]{3,16})\s+:\s+([\s\S]+)$/;
 const emotePattern = /^\*\s+(\S{1,32})\s+([\s\S]+)$/;
 const serverSayPattern = /^\[Server\]\s?([\s\S]*)$/;
 const joinPattern = /^(.{1,48}?) joined the game$/i;
@@ -64,8 +64,121 @@ function cleanPlayerName(value: string) {
   return value.trim().replace(/^"|"$/g, "").replace(/\s+\(\/?[^)]+:\d+\)$/, "");
 }
 
+// Java names are 3-16 characters of letters, digits, and underscores. The
+// leading punctuation tolerance covers Floodgate, which prefixes Bedrock
+// players so their names cannot collide with a Java account.
+const playerNamePattern = /^[.*+]?[A-Za-z0-9_]{2,24}$/;
+
 function isPlayerName(value: string) {
-  return /^[A-Za-z0-9_.]{1,32}$/.test(value);
+  return playerNamePattern.test(value);
+}
+
+// Lines that can only be produced by a real player being on the server. They
+// are the authority on how a name is spelled, so chat formats never have to be
+// guessed from the decoration around them.
+const identityPatterns = [
+  /^UUID of player (\S{1,24}) is [0-9a-fA-F-]{32,36}$/,
+  /^(\S{1,24})\[[^\]]*\] logged in with entity id /,
+  /^(\S{1,24}) joined the game$/,
+  /^(\S{1,24}) left the game$/,
+  /^(\S{1,24}) lost connection: /,
+  /^(\S{1,24}) has (?:made the advancement|completed the challenge|reached the goal) \[/,
+  /^(\S{1,24}) issued server command: \//
+];
+
+/** Extracts the player name a line proves exists, or "" when it proves none. */
+export function consoleChatIdentityName(message: string) {
+  for (const pattern of identityPatterns) {
+    const match = message.match(pattern);
+    if (match && isPlayerName(match[1])) return match[1];
+  }
+  return "";
+}
+
+/**
+ * The set of names known to be real players on this server, gathered from the
+ * live player list and from identity lines in the log itself. Decorated chat
+ * lines are resolved against it, which is what lets one code path cover
+ * server software and chat plugins that all format their prefixes differently.
+ */
+export class ConsoleChatRoster {
+  private canonicalByKey = new Map<string, string>();
+  private ordered: string[] | null = null;
+
+  constructor(names: Iterable<string> = []) {
+    this.add(...names);
+  }
+
+  add(...names: string[]) {
+    for (const name of names) {
+      const trimmed = name.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLocaleLowerCase("en-US");
+      if (this.canonicalByKey.get(key) === trimmed) continue;
+      this.canonicalByKey.set(key, trimmed);
+      this.ordered = null;
+    }
+  }
+
+  has(name: string) {
+    return this.canonicalByKey.has(name.trim().toLocaleLowerCase("en-US"));
+  }
+
+  canonical(name: string) {
+    return this.canonicalByKey.get(name.trim().toLocaleLowerCase("en-US")) ?? name.trim();
+  }
+
+  /** Longest first, so "Steve2" is preferred over "Steve" inside one line. */
+  candidates() {
+    if (!this.ordered) {
+      this.ordered = [...this.canonicalByKey.values()].sort((left, right) => right.length - left.length || left.localeCompare(right));
+    }
+    return this.ordered;
+  }
+
+  get size() {
+    return this.canonicalByKey.size;
+  }
+}
+
+// How far into a line a name may sit and still be read as the speaker. Beyond
+// this it is being mentioned, not speaking.
+const rosterPrefixWindow = 72;
+const nameBoundaryPattern = /[A-Za-z0-9_]/;
+// What a plugin may place between the name and the message. Anything else means
+// the name was part of a sentence rather than a chat prefix.
+const speakerSeparatorPattern = /^[\s\])}>»›]*([:»›→>|])\s*([\s\S]+)$/;
+const rankTagPattern = /\[([^\]]{1,24})\]/g;
+
+function trailingRankTag(prefix: string) {
+  const tags = [...prefix.matchAll(rankTagPattern)].map((match) => match[1].trim()).filter(Boolean);
+  return tags.at(-1) ?? "";
+}
+
+/**
+ * Finds a known player speaking in a decorated line and strips everything
+ * around the message, whatever prefix format produced it.
+ */
+export function resolveRosterChat(message: string, roster: ConsoleChatRoster) {
+  // Plugins may print a name in a different case than the account uses, so the
+  // search is case-insensitive and the roster spelling is what gets reported.
+  const haystack = message.toLocaleLowerCase("en-US");
+  for (const name of roster.candidates()) {
+    const needle = name.toLocaleLowerCase("en-US");
+    for (let index = haystack.indexOf(needle); index !== -1 && index <= rosterPrefixWindow; index = haystack.indexOf(needle, index + 1)) {
+      const before = message[index - 1];
+      const after = message[index + name.length];
+      if (before !== undefined && nameBoundaryPattern.test(before)) continue;
+      if (after !== undefined && nameBoundaryPattern.test(after)) continue;
+
+      const separated = message.slice(index + name.length).match(speakerSeparatorPattern);
+      const text = separated?.[2].trim();
+      if (!text) continue;
+
+      return { player: name, rank: trailingRankTag(message.slice(0, index)), text };
+    }
+  }
+  return null;
 }
 
 type ParsedLogLine = {
@@ -117,7 +230,7 @@ export function splitConsoleLogLine(line: string): ParsedLogLine | null {
  * Turns one console line into a chat entry. Lines that carry no player-facing
  * conversation return null so the transcript stays readable.
  */
-export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry | null {
+export function parseConsoleChatLine(line: string, id: string, roster = new ConsoleChatRoster()): ConsoleChatEntry | null {
   const parsed = splitConsoleLogLine(line);
   if (!parsed) return null;
   if (parsed.level && parsed.level !== "INFO") return null;
@@ -150,12 +263,7 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
 
   const rankChat = message.match(rankChatPattern);
   if (rankChat) {
-    return { ...base, kind: "chat", player: rankChat[2], rank: rankChat[1].trim(), text: rankChat[3].trim(), outgoing: false };
-  }
-
-  const spacedChat = message.match(spacedChatPattern);
-  if (spacedChat) {
-    return { ...base, kind: "chat", player: spacedChat[1], text: spacedChat[2].trim(), outgoing: false };
+    return { ...base, kind: "chat", player: roster.canonical(rankChat[2]), rank: rankChat[1].trim(), text: rankChat[3].trim(), outgoing: false };
   }
 
   const emote = message.match(emotePattern);
@@ -194,6 +302,19 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
     return { ...base, kind: "system", player: death[1], text: message, outgoing: false };
   }
 
+  // Last resort: a known player speaking behind an unrecognized prefix.
+  const rosterChat = resolveRosterChat(message, roster);
+  if (rosterChat) {
+    return { ...base, kind: "chat", player: rosterChat.player, rank: rosterChat.rank, text: rosterChat.text, outgoing: false };
+  }
+
+  // With no roster yet, a spaced colon is the one rank-less shape distinctive
+  // enough to read as chat without mistaking an ordinary log payload for it.
+  const spacedChat = message.match(spacedChatPattern);
+  if (spacedChat) {
+    return { ...base, kind: "chat", player: spacedChat[1], text: spacedChat[2].trim(), outgoing: false };
+  }
+
   return null;
 }
 
@@ -202,8 +323,24 @@ export function parseConsoleChatLine(line: string, id: string): ConsoleChatEntry
  * are buffered until their newline arrives, so a split write never mis-parses.
  */
 export class ConsoleChatStream {
+  readonly roster: ConsoleChatRoster;
   private pending = "";
   private sequence = 0;
+
+  constructor(knownPlayers: Iterable<string> = []) {
+    this.roster = new ConsoleChatRoster(knownPlayers);
+  }
+
+  /**
+   * Registers every name a buffer proves exists before any of it is parsed, so
+   * chat that appears above a player's join line still resolves.
+   */
+  prime(chunks: string[]) {
+    for (const line of chunks.join("").split(/\r?\n/)) {
+      const parsed = splitConsoleLogLine(line);
+      if (parsed?.message) this.roster.add(consoleChatIdentityName(parsed.message));
+    }
+  }
 
   write(chunk: string): ConsoleChatEntry[] {
     const text = this.pending + chunk;
@@ -214,11 +351,19 @@ export class ConsoleChatStream {
     }
 
     this.pending = text.slice(lastLineFeed + 1);
+    const lines = text.slice(0, lastLineFeed).split(/\r?\n/);
+    // Harvest before parsing so a name introduced in this chunk resolves the
+    // chat that follows it in the same chunk.
+    for (const line of lines) {
+      const parsed = splitConsoleLogLine(line);
+      if (parsed?.message) this.roster.add(consoleChatIdentityName(parsed.message));
+    }
+
     const entries: ConsoleChatEntry[] = [];
-    for (const line of text.slice(0, lastLineFeed).split(/\r?\n/)) {
+    for (const line of lines) {
       const id = `chat-${this.sequence}`;
       this.sequence += 1;
-      const entry = parseConsoleChatLine(line, id);
+      const entry = parseConsoleChatLine(line, id, this.roster);
       if (entry) entries.push(entry);
     }
     return entries;
@@ -235,8 +380,10 @@ export class ConsoleChatStream {
 }
 
 /** Convenience wrapper for parsing a complete console buffer in one pass. */
-export function consoleChatEntries(chunks: string[], limit = consoleChatHistoryLimit) {
-  return new ConsoleChatStream().writeAll(chunks).slice(-limit);
+export function consoleChatEntries(chunks: string[], limit = consoleChatHistoryLimit, knownPlayers: Iterable<string> = []) {
+  const stream = new ConsoleChatStream(knownPlayers);
+  stream.prime(chunks);
+  return stream.writeAll(chunks).slice(-limit);
 }
 
 function forwardGapMinutes(previous: number, next: number) {

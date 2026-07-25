@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ConsoleChatRoster,
   ConsoleChatStream,
   consoleChatCommand,
   consoleChatEntries,
+  consoleChatIdentityName,
   consoleChatInitials,
   consoleChatTimeline,
   consoleChatTone,
@@ -149,6 +151,103 @@ describe("console chat parsing", () => {
 
   it("does not treat log payloads with angle brackets as chat", () => {
     expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: <a very long sentence that is not a player name> nope", "a")).toBeNull();
+  });
+});
+
+describe("roster-driven speaker resolution", () => {
+  const roster = new ConsoleChatRoster(["Steve", "Not_French1e", "Alex"]);
+  const parse = (message: string) => parseConsoleChatLine(`[12:00:00] [Server thread/INFO]: ${message}`, "a", roster);
+
+  it("reads the EssentialsX format examples whatever decoration they carry", () => {
+    // Format strings documented for EssentialsX chat, rendered with colour
+    // codes already stripped.
+    expect(parse("<Steve> hi")).toMatchObject({ player: "Steve", rank: "", text: "hi" });
+    expect(parse("[Admin] Steve: hi")).toMatchObject({ player: "Steve", rank: "Admin", text: "hi" });
+    expect(parse("world Steve: hi")).toMatchObject({ player: "Steve", rank: "", text: "hi" });
+    expect(parse("world [Admin] Steve: hi")).toMatchObject({ player: "Steve", rank: "Admin", text: "hi" });
+    expect(parse("Steve: hi")).toMatchObject({ player: "Steve", rank: "", text: "hi" });
+  });
+
+  it("reads separators other than a colon", () => {
+    expect(parse("[VIP] Steve » hi")).toMatchObject({ player: "Steve", rank: "VIP", text: "hi" });
+    expect(parse("Steve › hi")).toMatchObject({ player: "Steve", text: "hi" });
+    expect(parse("[world_nether] Steve | hi")).toMatchObject({ player: "Steve", rank: "world_nether", text: "hi" });
+  });
+
+  it("reports the roster spelling so one player never splits into two", () => {
+    // The head endpoint and the bubble stacking both key on the name, so a
+    // plugin printing a different case must still resolve to one player.
+    expect(parse("[ADM] not_french1e: yer")).toMatchObject({ player: "Not_French1e", text: "yer" });
+    expect(parse("world NOT_FRENCH1E: yer")).toMatchObject({ player: "Not_French1e", text: "yer" });
+  });
+
+  it("does not treat a mentioned name as the speaker", () => {
+    expect(parse("Steve lost connection: Disconnected")).toBeNull();
+    expect(parse("Set Steve to playtime status member.")).toBeNull();
+    expect(parse("[voicechat] Player Steve (1fbfec46-9023-413c-8ffb-c46e69208f58) successfully connected to voice chat")).toBeNull();
+    expect(parse("Steve moved too quickly! -0.019,-10.109,0.0")).toBeNull();
+  });
+
+  it("ignores a name that appears too late in the line to be a prefix", () => {
+    expect(parse(`${"padding ".repeat(12)}Steve: hi`)).toBeNull();
+  });
+
+  it("prefers the longest matching name so similar names do not collide", () => {
+    const overlapping = new ConsoleChatRoster(["Steve", "Steve2"]);
+    expect(parseConsoleChatLine("[12:00:00] [Server thread/INFO]: [VIP] Steve2: hi", "a", overlapping)).toMatchObject({ player: "Steve2", text: "hi" });
+  });
+});
+
+describe("roster gathering", () => {
+  it("learns names from the lines that prove a player exists", () => {
+    expect(consoleChatIdentityName("UUID of player dindingle is c2ef02b8-8779-4e96-8e04-2e74cfe4cc24")).toBe("dindingle");
+    expect(consoleChatIdentityName("dindingle[/24.214.66.26:62286] logged in with entity id 530137 at (774.06, 64.0, 933.45)")).toBe("dindingle");
+    expect(consoleChatIdentityName("Not_French1e joined the game")).toBe("Not_French1e");
+    expect(consoleChatIdentityName("Not_French1e lost connection: Disconnected")).toBe("Not_French1e");
+    expect(consoleChatIdentityName("Forest_Dweller has completed the challenge [Member]")).toBe("Forest_Dweller");
+    expect(consoleChatIdentityName("Preparing spawn area: 42%")).toBe("");
+    expect(consoleChatIdentityName("Set Forest_Dweller to playtime status member.")).toBe("");
+  });
+
+  it("resolves chat once the log has introduced the player", () => {
+    const before = consoleChatEntries([line("[12:00:00] [Server thread/INFO]: world Bramblefox: hello")]);
+    const after = consoleChatEntries([
+      line("[11:59:00] [Server thread/INFO]: Bramblefox joined the game"),
+      line("[12:00:00] [Server thread/INFO]: world Bramblefox: hello")
+    ]);
+
+    expect(before).toHaveLength(0);
+    expect(after.map((entry) => `${entry.kind}:${entry.player}:${entry.text}`)).toEqual([
+      "system:Bramblefox:Bramblefox joined the game",
+      "chat:Bramblefox:hello"
+    ]);
+  });
+
+  it("resolves chat that precedes the join line in the same buffer", () => {
+    const entries = consoleChatEntries([
+      line("[12:00:00] [Server thread/INFO]: world Bramblefox: hello"),
+      line("[12:00:30] [Server thread/INFO]: Bramblefox left the game")
+    ]);
+
+    expect(entries.map((entry) => entry.kind)).toEqual(["chat", "system"]);
+  });
+
+  it("resolves chat for an online player whose join line already scrolled away", () => {
+    const entries = consoleChatEntries([line("[12:00:00] [Server thread/INFO]: [Owner] Bramblefox: hello")], 500, ["Bramblefox"]);
+
+    expect(entries).toMatchObject([{ kind: "chat", player: "Bramblefox", rank: "Owner", text: "hello" }]);
+  });
+
+  it("accepts the Floodgate prefix Bedrock players carry", () => {
+    const entries = consoleChatEntries([
+      line("[12:00:00] [Server thread/INFO]: .BedrockFriend joined the game"),
+      line("[12:00:10] [Server thread/INFO]: [MEM] .BedrockFriend: hello from bedrock")
+    ]);
+
+    expect(entries.map((entry) => `${entry.kind}:${entry.player}`)).toEqual([
+      "system:.BedrockFriend",
+      "chat:.BedrockFriend"
+    ]);
   });
 });
 
