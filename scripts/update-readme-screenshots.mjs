@@ -131,14 +131,10 @@ async function waitForOverviewTimeline(page) {
 }
 
 async function waitForConsoleTerminal(page) {
-  await page.locator(".minecraftTerminal").waitFor();
-  await page.waitForFunction(() => {
-    const terminal = document.querySelector(".minecraftTerminal");
-    const rows = terminal?.querySelector(".xterm-rows");
-    return terminal
-      && !terminal.classList.contains("initializing")
-      && rows?.textContent?.includes('Done (5.132s)! For help, type "help"');
-  });
+  // The WebGL renderer draws glyphs on canvas, so .xterm-rows has no readable
+  // text. The terminal removes `initializing` only after its queued entries have
+  // been written, making this readiness check work for both renderers.
+  await page.locator(".minecraftTerminal:not(.initializing) .xterm-screen").waitFor();
 }
 
 try {

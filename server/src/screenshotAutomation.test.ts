@@ -17,4 +17,10 @@ describe("README screenshot automation", () => {
     expect(screenshotScript).toContain('[...charts].every((chart) => chart.querySelector("svg"))');
     expect(screenshotScript).not.toContain('timeline.locator(".serverTimelineEChart svg").waitFor()');
   });
+
+  it("waits for renderer-independent terminal readiness", () => {
+    expect(screenshotScript).toContain('.minecraftTerminal:not(.initializing) .xterm-screen');
+    expect(screenshotScript).not.toContain('.querySelector(".xterm-rows")');
+    expect(screenshotScript).not.toContain("rows?.textContent");
+  });
 });
