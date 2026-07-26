@@ -1,0 +1,228 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { config } from "../config.js";
+import { appBuildId, appVersion } from "../buildInfo.js";
+import { panelNodeConnections, services } from "../appServices.js";
+import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
+import { buildNodeInstallInstructions } from "./installInstructions.js";
+import type { NodeInstallInstructions } from "./apiTypes.js";
+import { totalmem } from "node:os";
+import { badRequest } from "../http/validation.js";
+import { nodeCapabilities, nodeFeatures, nodeProtocolMode, nodeProtocolVersion } from "./protocol.js";
+import { normalizeNode } from "../storage/nodesRepository.js";
+import type { ManagedNode, ManagedServer, PublicNode } from "../types.js";
+
+export const localNodeId = "local";
+export const nodeImageRepository = "nl2109/serversentinel";
+export const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
+
+export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: string, version = appVersion) {
+  const configured = configuredImage?.trim();
+  if (configured) return configured;
+  const build = buildId?.trim();
+  if (build && /^[A-Za-z0-9_.-]+$/.test(build)) return `${nodeImageRepository}:${build}`;
+  return `${nodeImageRepository}:${version}`;
+}
+
+export function nodeUpdateAlreadyCurrent(node: Pick<ManagedNode, "agentVersion" | "buildId">, requestedImage?: string, version = appVersion, buildId = appBuildId) {
+  return !requestedImage?.trim() && node.agentVersion === version && (buildId ? node.buildId === buildId : true);
+}
+
+export const minNodeJoinTokenTtlMinutes = 5;
+export const maxNodeJoinTokenTtlMinutes = 1440;
+
+export function hashNodeSecret(secret: string) {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+export function verifyNodeSecret(secret: string | undefined, expectedHash?: string) {
+  if (!secret || !expectedHash) return false;
+  const attempted = Buffer.from(hashNodeSecret(secret), "hex");
+  const expected = Buffer.from(expectedHash, "hex");
+  return attempted.length === expected.length && timingSafeEqual(attempted, expected);
+}
+
+export function nodeNotFound(nodeId: string): never {
+  const error = new Error(`Node ${nodeId} not found`) as Error & { statusCode?: number; code?: string };
+  error.statusCode = 404;
+  error.code = "node_not_found";
+  throw error;
+}
+
+export function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
+  return {
+    id: localNodeId,
+    name: "Internal Node",
+    type: "local",
+    status: "online",
+    isInternal: true,
+    createdAt: now,
+    updatedAt: now,
+    lastSeenAt: now,
+    agentVersion: appVersion,
+    buildId: appBuildId,
+    protocolVersion: nodeProtocolVersion,
+    capabilities: [...nodeCapabilities],
+    features: [...nodeFeatures],
+    totalMemory: totalmem()
+  };
+}
+
+export function optionalNodeTotalMemory(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+export function ensureDefaultInternalNode(nodes: ManagedNode[]) {
+  const now = new Date().toISOString();
+  const localIndex = nodes.findIndex((node) => node.id === localNodeId);
+  if (localIndex === -1) {
+    nodes.unshift(defaultInternalNode(now));
+    return true;
+  }
+
+  const current = nodes[localIndex];
+  const normalized: ManagedNode = {
+    ...current,
+    name: current.name || "Internal Node",
+    type: "local",
+    status: "online",
+    isInternal: true,
+    agentVersion: appVersion,
+    buildId: appBuildId,
+    protocolVersion: nodeProtocolVersion,
+    capabilities: [...nodeCapabilities],
+    features: [...nodeFeatures],
+    updatedAt: current.status === "online" && current.type === "local" && current.isInternal ? current.updatedAt : now,
+    lastSeenAt: current.lastSeenAt ?? now,
+    totalMemory: totalmem()
+  };
+  const changed = JSON.stringify(current) !== JSON.stringify(normalized);
+  nodes[localIndex] = normalized;
+  return changed;
+}
+
+export function publicNode(node: ManagedNode): PublicNode {
+  const normalized = normalizeNode(node);
+  const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
+  return {
+    ...publicFields,
+    protocolMode: normalized.isInternal ? "current" : nodeProtocolMode(normalized.protocolVersion),
+    hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
+  };
+}
+
+export function nodeWithLiveConnectionStatus(node: ManagedNode, connected: boolean): ManagedNode {
+  if (node.isInternal || node.type === "local") return node;
+  if (connected) return node.status === "online" ? node : { ...node, status: "online" };
+  return node.status === "online" ? { ...node, status: "offline" } : node;
+}
+
+export async function publicNodes(nodes: ManagedNode[], detectedInternalTotalMemory?: number): Promise<PublicNode[]> {
+  const internalTotalMemory = detectedInternalTotalMemory ?? (nodes.some((node) => node.id === localNodeId || node.isInternal)
+    ? await detectedTotalMemory()
+    : undefined);
+  return nodes.map((node) => {
+    const publicFields = publicNode(nodeWithLiveConnectionStatus(node, panelNodeConnections.isConnected(node.id)));
+    return (node.id === localNodeId || node.isInternal) && internalTotalMemory
+      ? { ...publicFields, totalMemory: internalTotalMemory }
+      : publicFields;
+  });
+}
+
+export function nodeInstallInstructions(input: { panelUrl?: string; joinToken?: string; dataMount?: string; nodeName?: string }): NodeInstallInstructions {
+  return buildNodeInstallInstructions({ ...input, image: nodeImage, defaultPanelPort: config.port, timeZone: config.timeZone });
+}
+
+export function createJoinToken(ttlMinutesInput?: number) {
+  const now = new Date();
+  const joinToken = randomBytes(32).toString("base64url");
+  const ttlMinutes = validateJoinTokenTtlMinutes(ttlMinutesInput);
+  return {
+    joinToken,
+    expiresAt: new Date(now.getTime() + ttlMinutes * 60_000).toISOString()
+  };
+}
+
+export function validateJoinTokenTtlMinutes(ttlMinutesInput?: unknown): number {
+  if (ttlMinutesInput === undefined || ttlMinutesInput === null) return 60;
+  if (typeof ttlMinutesInput !== "number" || !Number.isInteger(ttlMinutesInput) || ttlMinutesInput < minNodeJoinTokenTtlMinutes || ttlMinutesInput > maxNodeJoinTokenTtlMinutes) {
+    badRequest(`Join token expiry must be a whole number from ${minNodeJoinTokenTtlMinutes} to ${maxNodeJoinTokenTtlMinutes} minutes`);
+  }
+  return ttlMinutesInput;
+}
+
+export async function readNodes() {
+  const nodes = services.nodesRepository.list();
+  const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+  const changed = config.runtimeMode === "all-in-one" ? ensureDefaultInternalNode(normalized) : normalized.length !== nodes.length;
+  if (changed) {
+    services.nodesRepository.update((stored) => stored.splice(0, stored.length, ...normalized));
+  }
+  return normalized;
+}
+
+export async function updateNodes(updater: (nodes: ManagedNode[]) => void) {
+  services.nodesRepository.update((stored) => {
+    const nodes = stored.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(nodes);
+    updater(nodes);
+    const normalized = nodes.map(normalizeNode).filter((node) => config.runtimeMode !== "panel" || (!node.isInternal && node.type !== "local" && node.id !== localNodeId));
+    if (config.runtimeMode === "all-in-one") ensureDefaultInternalNode(normalized);
+    stored.splice(0, stored.length, ...normalized);
+  });
+}
+
+export function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
+  return nodes.find((node) => node.id === server.nodeId);
+}
+
+export type NodeServerCleanupFailure = {
+  serverId: string;
+  serverName: string;
+  message: string;
+};
+
+export type NodeServerCleanupSummary = {
+  attempted: number;
+  deletedContainers: number;
+  failed: NodeServerCleanupFailure[];
+  skippedReason?: string;
+};
+
+export async function cleanupNodeServerContainers(input: {
+  node: ManagedNode;
+  assignedServers: ManagedServer[];
+  isConnected: (node: ManagedNode) => boolean;
+  deleteServerContainer: (node: ManagedNode, server: ManagedServer) => Promise<unknown>;
+}) {
+  const summary: NodeServerCleanupSummary = { attempted: 0, deletedContainers: 0, failed: [] };
+  if (input.assignedServers.length === 0) return summary;
+  if (!input.isConnected(input.node)) {
+    summary.skippedReason = `Node ${input.node.name} is offline or not connected. Managed server containers could not be cleaned up.`;
+    return summary;
+  }
+
+  for (const server of input.assignedServers) {
+    summary.attempted += 1;
+    try {
+      const result = await input.deleteServerContainer(input.node, server) as { deletedContainer?: boolean } | undefined;
+      if (result?.deletedContainer !== false) summary.deletedContainers += 1;
+    } catch (error) {
+      summary.failed.push({
+        serverId: server.id,
+        serverName: server.displayName,
+        message: error instanceof Error ? error.message : "Container cleanup failed"
+      });
+    }
+  }
+
+  return summary;
+}
+
+export function nodeServerCleanupError(summary: NodeServerCleanupSummary) {
+  if (summary.skippedReason) return summary.skippedReason;
+  if (summary.failed.length === 0) return "";
+  const names = summary.failed.map((failure) => failure.serverName).join(", ");
+  return `Could not clean up ${summary.failed.length} managed server container${summary.failed.length === 1 ? "" : "s"} before deleting the node: ${names}.`;
+}
+
+export const activeNodeUpdates = new Map<string, { version?: string; buildId?: string }>();

@@ -1,3 +1,6 @@
+import type { FastifyRequest } from "fastify";
+import { config } from "../config.js";
+import { forbidden } from "./validation.js";
 export type OriginRequest = {
   protocol: string;
   headers: Record<string, unknown>;
@@ -74,4 +77,9 @@ export function requestUsesPublicHttps(request: OriginRequest, trustProxy: boole
   } catch {
     return false;
   }
+}
+
+export function assertSameOriginRequest(request: FastifyRequest, trustProxy = config.trustProxy, requireOrigin = false) {
+  const failure = sameOriginFailure(request, trustProxy, requireOrigin);
+  if (failure) forbidden(`CSRF protection: ${failure}`);
 }

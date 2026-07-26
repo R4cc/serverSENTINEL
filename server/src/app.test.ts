@@ -1,49 +1,43 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
+import { compactRecentEvents, parseLogEvent } from "./servers/logEvents.js";
 import {
-  compactRecentEvents,
-  parseLogEvent,
   requireStrictBoolean,
   validateDockerContainerName,
   validateJavaArgs,
   validateModrinthProjectId,
-  nodeInstallInstructions,
+  validateRuntimeJarFilename
+} from "./http/validation.js";
+import {
   cleanupNodeServerContainers,
-  parseCookies,
-  validateRuntimeJarFilename,
-  dockerHostPortBindings,
-  findExistingServerPortConflict,
-  normalizeCreateServerPorts,
-  allocateQueryPort,
-  sessionExpired,
-  sessionMaxAgeSeconds,
-  validateJoinTokenTtlMinutes,
-  fileContentRevision,
-  assertFileRevision,
-  validateBase64Content,
-  mutableServerConfigurationBlockedReason,
-  nodeUpdateImageForBuild,
-  nodeUpdateAlreadyCurrent,
-  modrinthSearchFacets,
-  assertSameOriginRequest,
-  localFilePathInput,
-  publicServerStatus,
-  publicInstalledModsResult,
-  assertDownloadSize,
-  fileDownloadIntentMode,
-  dedupeDownloadSelections,
-  sanitizeScheduleSteps,
-  waitForCommandDelay,
-  dockerNetworkingConfigFromInspect,
-  minecraftContainerNetworkingConfig,
-  nodeWithLiveConnectionStatus,
-  isMinecraftStopCommand,
   defaultInternalNode,
-  startConsoleHeartbeat,
-  detectVersionsFromLogText,
-  uploadManagedContentBuffer
-} from "./app.js";
+  nodeInstallInstructions,
+  nodeUpdateAlreadyCurrent,
+  nodeUpdateImageForBuild,
+  nodeWithLiveConnectionStatus,
+  validateJoinTokenTtlMinutes
+} from "./nodes/nodeService.js";
+import { parseCookies, sessionExpired, sessionMaxAgeSeconds } from "./auth/sessionService.js";
+import { dockerHostPortBindings } from "./core.js";
+import { allocateQueryPort, findExistingServerPortConflict, normalizeCreateServerPorts } from "./servers/ports.js";
+import {
+  assertDownloadSize,
+  assertFileRevision,
+  dedupeDownloadSelections,
+  fileContentRevision,
+  fileDownloadIntentMode,
+  localFilePathInput
+} from "./files/fileService.js";
+import { uploadManagedContentBuffer, validateBase64Content } from "./mods/managedContent.js";
+import { isMinecraftStopCommand, mutableServerConfigurationBlockedReason } from "./servers/lifecycle.js";
+import { modrinthSearchFacets } from "./mods/modService.js";
+import { assertSameOriginRequest } from "./http/requestOrigin.js";
+import { publicInstalledModsResult, publicServerStatus } from "./servers/publicViews.js";
+import { sanitizeScheduleSteps, waitForCommandDelay } from "./schedules/steps.js";
+import { dockerNetworkingConfigFromInspect, minecraftContainerNetworkingConfig } from "./runtime/local/dockerContainers.js";
+import { startConsoleHeartbeat } from "./servers/overview.js";
+import { detectVersionsFromLogText } from "./servers/versions.js";
 import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
 import type { RuntimeUploadSource } from "./nodes/types.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
