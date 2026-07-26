@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { ContextNode, ManagedNode, NodeOperation } from "../types";
+import type { ContextNode, NodeView, NodeOperation } from "../types";
 import { NodeDetailsDrawer, nodeDetailsActionIds, nodeDetailsPrimaryAction, type NodeDetailsDrawerProps } from "./NodeDetailsDrawer";
 
-function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
+function node(overrides: Partial<NodeView> = {}): NodeView {
   return {
     id: "node-1",
     name: "mc-node-01",

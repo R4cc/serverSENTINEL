@@ -3,13 +3,14 @@ import { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, ServerRuntimeProfile } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
+import { parseLogEvent } from "../servers/logEvents.js";
 import { RemoteNodeRuntime } from "./remoteNodeRuntime.js";
 
 function testRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.4",
-    loader: "fabric",
-    loaderVersion: "0.16.10",
+    runtimeType: "fabric",
+    runtimeVersion: "0.16.10",
     javaMajorVersion: 21,
     jarProvider: "mcjars",
     jarArtifact: {
@@ -281,6 +282,54 @@ describe("RemoteNodeRuntime command timeouts", () => {
 
     expect(overview.events.map((event) => event.eventType)).toEqual(["exception_caught", "server_overloaded"]);
     expect(overview.events[0].details).toContain("tick task failed");
+  });
+
+  // The remote overview once carried its own log parser, so the events shown on the
+  // overview disagreed with the ones the timeline collector persisted for the same
+  // server. Both sides now share parseLogEvent; this pins them together.
+  it("derives remote overview events with the same parser the timeline collector uses", async () => {
+    const logLines = [
+      "[12:00:00] [Server thread/INFO]: Starting minecraft server version 1.21.4",
+      "[12:00:05] [Server thread/INFO]: Done (5.123s)! For help, type \"help\"",
+      "[12:00:10] [Server thread/INFO]: Steve joined the game",
+      "[12:00:20] [Server thread/INFO]: Steve lost connection: Disconnected",
+      "[12:00:30] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2400ms behind",
+      "[12:00:40] [Server thread/INFO]: Stopping server"
+    ];
+    const node = testNode();
+    const connections = {
+      request: async (_node: ManagedNode, command: string) => {
+        if (command === "server.inspect") return { docker: { running: true } };
+        if (command === "server.logs.recent") return { source: "logs/latest.log", text: logLines.join("\n") };
+        if (command === "files.read") return { content: "level-name=world" };
+        return {};
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    const overview = await runtime.serverOverview(testServer());
+    const collectorEvents = logLines
+      .map((line, index) => parseLogEvent(line, "logs/latest.log", index))
+      .filter((event) => event !== null);
+
+    expect(overview.events.map((event) => event.signature).sort())
+      .toEqual(collectorEvents.map((event) => event.signature).sort());
+    // "Starting minecraft server" is a starting line, not a started one; only the
+    // "Done (...)" line may raise server_started.
+    expect(overview.events.filter((event) => event.eventType === "server_started")).toHaveLength(1);
+    // Time-only log stamps are canonicalized to an instant before crossing the API
+    // boundary so clients in another zone do not reinterpret the wall clock.
+    for (const event of overview.events) {
+      expect(event.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
   });
 
   it("sends a structured retryable event when console streaming finds the node offline", async () => {

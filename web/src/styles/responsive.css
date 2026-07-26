@@ -1675,7 +1675,6 @@ button:disabled,
   }
 
   .workspacePage-console .consolePanel .terminal,
-  .workspacePage-console .consolePanel .consoleChat,
   .workspacePage-console .minecraftTerminal {
     height: auto;
     min-height: 0;

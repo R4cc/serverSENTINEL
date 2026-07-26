@@ -1,62 +1,14 @@
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { chromium, devices, webkit } from "playwright";
+import { launchBrowser, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDirectory = await mkdtemp(join(tmpdir(), "serversentinel-mobile-smoke-"));
-const port = await availablePort();
-const baseUrl = `http://127.0.0.1:${port}`;
-const installCommand = "npx playwright install chromium webkit";
-
-let server;
-let serverOutput = "";
+const harness = await startDemoHarness({
+  dataDirectoryPrefix: "serversentinel-mobile-smoke-",
+  env: { MODRINTH_API_KEY: "demo-token" }
+});
+const { baseUrl } = harness;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-async function availablePort() {
-  return new Promise((resolvePort, rejectPort) => {
-    const listener = createServer();
-    listener.once("error", rejectPort);
-    listener.listen(0, "127.0.0.1", () => {
-      const address = listener.address();
-      const selectedPort = typeof address === "object" && address ? address.port : 0;
-      listener.close((error) => error ? rejectPort(error) : resolvePort(selectedPort));
-    });
-  });
-}
-
-async function waitForServer(timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) throw new Error(`Demo server stopped before it became ready.\n${serverOutput}`);
-    try {
-      const response = await fetch(`${baseUrl}/api/auth/session`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-      if (response.ok) return;
-    } catch {
-      // The listener is not ready yet.
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
-  }
-  throw new Error(`Timed out waiting for the demo server at ${baseUrl}.\n${serverOutput}`);
-}
-
-async function signIn(page) {
-  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Username").fill("demo");
-  await page.getByLabel("Password").fill("demo");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  try {
-    await page.locator(".appShell").waitFor({ timeout: 15_000 });
-  } catch {
-    const notice = await page.locator(".notice").textContent().catch(() => "");
-    throw new Error(`Demo startup is broken: demo / demo could not sign in.${notice ? ` ${notice.trim()}` : ""}`);
-  }
 }
 
 async function openPage(page, title) {
@@ -379,60 +331,6 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
 }
 
-async function assertConsoleChatView(page, label) {
-  await openPage(page, "console");
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await page.locator(".consoleChat").waitFor();
-  await page.locator(".consoleChatCluster").first().waitFor();
-
-  const result = await page.evaluate(() => {
-    const chat = document.querySelector(".consoleChat");
-    const scroller = document.querySelector(".consoleChatScroll");
-    const composer = document.querySelector(".consoleChatComposer");
-    const input = document.querySelector(".consoleChatInput");
-    const owner = document.scrollingElement;
-    if (!(chat instanceof HTMLElement) || !(scroller instanceof HTMLElement) || !(composer instanceof HTMLElement) || !(input instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
-      return { missing: true };
-    }
-    const chatRect = chat.getBoundingClientRect();
-    const composerRect = composer.getBoundingClientRect();
-    const widest = Array.from(document.querySelectorAll(".consoleChatCluster"))
-      .map((cluster) => cluster.getBoundingClientRect().right)
-      .reduce((highest, right) => Math.max(highest, right), 0);
-    return {
-      missing: false,
-      documentWidth: owner.scrollWidth,
-      documentViewportWidth: owner.clientWidth,
-      documentHeight: owner.scrollHeight,
-      documentViewportHeight: owner.clientHeight,
-      chatLeft: chatRect.left,
-      chatRight: chatRect.right,
-      chatHeight: chatRect.height,
-      composerBottom: composerRect.bottom,
-      composerHeight: composerRect.height,
-      scrolledToLatest: scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight,
-      inputFontSize: Number.parseFloat(getComputedStyle(input).fontSize),
-      widestClusterRight: widest,
-      messages: document.querySelectorAll(".consoleChatBubble").length
-    };
-  });
-
-  assert(!result.missing, `${label}: chat surfaces are missing`);
-  assert(result.messages > 0, `${label}: chat rendered no messages`);
-  assert(result.documentWidth <= result.documentViewportWidth + 1, `${label}: chat causes horizontal overflow: ${JSON.stringify(result)}`);
-  assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: chat leaks into document scrolling: ${JSON.stringify(result)}`);
-  assert(result.chatLeft <= 1 && result.chatRight >= result.documentViewportWidth - 1, `${label}: chat does not reach both viewport edges: ${JSON.stringify(result)}`);
-  assert(result.widestClusterRight <= result.documentViewportWidth + 1, `${label}: a chat bubble overflows the viewport: ${JSON.stringify(result)}`);
-  assert(result.composerHeight > 0 && result.composerBottom <= result.documentViewportHeight + 1, `${label}: chat composer is off screen: ${JSON.stringify(result)}`);
-  assert(result.scrolledToLatest <= 2, `${label}: chat did not open on the latest message: ${JSON.stringify(result)}`);
-  assert(result.inputFontSize >= 16, `${label}: chat composer input is below 16px`);
-
-  await assertTargets(page, [".consoleViewSwitch button", ".consoleChatComposer .uiButton"], `${label} chat controls`);
-
-  await page.getByRole("button", { name: "Console", exact: true }).click();
-  await page.locator(".minecraftTerminal").waitFor();
-}
-
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -464,15 +362,7 @@ async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector
 async function runProfile(engine, profile, label) {
   let browser;
   try {
-    try {
-      browser = await engine.launch({ headless: true });
-    } catch (error) {
-      if (/executable doesn.t exist|browser.*not found|please run/i.test(String(error))) {
-        throw new Error(`Playwright browser binaries are missing. Run: ${installCommand}\n${error}`);
-      }
-      throw error;
-    }
-
+    browser = await launchBrowser(engine);
     const context = await browser.newContext({
       ...profile,
       locale: "en-US",
@@ -485,7 +375,7 @@ async function runProfile(engine, profile, label) {
       localStorage.setItem("serversentinel-theme", "light");
       localStorage.setItem("serversentinel-active-page", "overview");
     });
-    await signIn(page);
+    await signInThroughForm(page, baseUrl);
 
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
@@ -497,7 +387,6 @@ async function runProfile(engine, profile, label) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);
     }
     await assertConsoleViewportOwnership(page, `${label} console`);
-    await assertConsoleChatView(page, `${label} console chat`);
     await assertEditableFontSizes(page, `${label} settings`);
 
     await openPage(page, "files");
@@ -561,26 +450,6 @@ async function runProfile(engine, profile, label) {
 }
 
 try {
-  server = spawn(process.execPath, [join(repositoryRoot, "server", "dist", "index.js")], {
-    cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      LOG_LEVEL: "warn",
-      MODRINTH_API_KEY: "demo-token",
-      PORT: String(port),
-      SERVERSENTINEL_DATA_DIR: dataDirectory,
-      SERVERSENTINEL_ENABLE_DEMO: "true",
-      SS_MODE: "all-in-one",
-      TZ: "UTC"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => { serverOutput = `${serverOutput}${chunk}`.slice(-20_000); });
-  }
-  await waitForServer();
-
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }
@@ -590,13 +459,5 @@ try {
     viewport: { width: 320, height: 568 }
   }, "WebKit iPhone 320x568");
 } finally {
-  if (server && server.exitCode === null) {
-    server.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolveExit) => server.once("exit", resolveExit)),
-      new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
-    ]);
-    if (server.exitCode === null) server.kill("SIGKILL");
-  }
-  await rm(dataDirectory, { recursive: true, force: true });
+  await harness.stop();
 }

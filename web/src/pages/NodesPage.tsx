@@ -3,7 +3,7 @@ import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, PanelHeader, StatusBadge, Surface } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
-import type { ContextNode, CreateNodeResponse, ManagedNode, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
+import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
@@ -178,11 +178,11 @@ const addNodeSteps = ["Create node", "Run install", "Connect", "Verify", "Ready"
 
 type AddNodeFlowState = "waiting" | "success" | "expired" | "disconnected";
 
-function isAddNodeSuccess(node?: ManagedNode) {
+function isAddNodeSuccess(node?: NodeView) {
   return Boolean(node && node.status === "online" && isNodeRuntimeUsable(node));
 }
 
-function addNodeFlowState(node: ManagedNode | undefined, expiresAt: string): AddNodeFlowState {
+function addNodeFlowState(node: NodeView | undefined, expiresAt: string): AddNodeFlowState {
   if (isAddNodeSuccess(node)) return "success";
   if (node?.status === "offline" && node.connectedAt) return "disconnected";
   if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return "expired";
@@ -218,7 +218,7 @@ function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; compl
   );
 }
 
-function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowState: AddNodeFlowState; node?: ManagedNode }) {
+function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowState: AddNodeFlowState; node?: NodeView }) {
   if (flowState === "success") {
     return (
       <div className="addNodeStatusCard success">
@@ -283,7 +283,7 @@ export function AddNodeModal({
   busy: boolean;
   browserPanelUrl: string;
   created: CreateNodeResponse | null;
-  currentNode?: ManagedNode;
+  currentNode?: NodeView;
   installMethod: "compose" | "run";
   onInstallMethodChange: (method: "compose" | "run") => void;
   onClose: () => void;
@@ -467,7 +467,7 @@ export function NodesPage({
   busy: boolean;
   busyNodeId: string;
   browserPanelUrl: string;
-  selectedNode: ManagedNode | null;
+  selectedNode: NodeView | null;
   nodeOperations: Record<string, NodeOperation>;
   nodeOperationNow: number;
   nodeUpdateGraceMs: number;
@@ -482,11 +482,11 @@ export function NodesPage({
   onDoneAddNode: () => void;
   onCreateNode: (input: AddNodeInput) => void;
   onRefresh: () => void;
-  onViewDetails: (node: ManagedNode) => void;
-  onShowInstall: (node: ManagedNode) => void;
-  onRotateToken: (node: ManagedNode) => void;
-  onUpdateNode: (node: ManagedNode) => void;
-  onRestartNode: (node: ManagedNode) => void;
+  onViewDetails: (node: NodeView) => void;
+  onShowInstall: (node: NodeView) => void;
+  onRotateToken: (node: NodeView) => void;
+  onUpdateNode: (node: NodeView) => void;
+  onRestartNode: (node: NodeView) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
@@ -501,7 +501,7 @@ export function NodesPage({
   const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
   const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
-  const nodeVersionState = (node: ManagedNode) => {
+  const nodeVersionState = (node: NodeView) => {
     if (node.isInternal || !node.agentVersion) return "unknown";
     const comparison = compareVersions(node.agentVersion, panelVersion);
     if (comparison === 0) return "current";
@@ -509,17 +509,17 @@ export function NodesPage({
     if (comparison === 1) return "newer";
     return "mismatch";
   };
-  const nodeBuildUpdateAvailable = (node: ManagedNode) => (
+  const nodeBuildUpdateAvailable = (node: NodeView) => (
     !node.isInternal
     && Boolean(panelBuildId)
     && nodeVersionState(node) === "current"
     && node.buildId !== panelBuildId
   );
-  const nodeUpdateAvailable = (node: ManagedNode) => nodeVersionState(node) === "older" || nodeBuildUpdateAvailable(node);
-  const nodePanelUpdateRequired = (node: ManagedNode) => nodeVersionState(node) === "newer";
-  const nodeVersionMismatch = (node: ManagedNode) => nodeVersionState(node) === "mismatch";
-  const nodeCanPanelUpdate = (node: ManagedNode) => node.status === "online";
-  const nodeUpdateTitle = (node: ManagedNode) => {
+  const nodeUpdateAvailable = (node: NodeView) => nodeVersionState(node) === "older" || nodeBuildUpdateAvailable(node);
+  const nodePanelUpdateRequired = (node: NodeView) => nodeVersionState(node) === "newer";
+  const nodeVersionMismatch = (node: NodeView) => nodeVersionState(node) === "mismatch";
+  const nodeCanPanelUpdate = (node: NodeView) => node.status === "online";
+  const nodeUpdateTitle = (node: NodeView) => {
     if (!nodeUpdateAvailable(node)) return "Node agent is already current";
     if (!nodeCanPanelUpdate(node)) return "Bring the node online before updating";
     if (nodeBuildUpdateAvailable(node)) return `Update node image to build ${shortBuildId(panelBuildId)}`;

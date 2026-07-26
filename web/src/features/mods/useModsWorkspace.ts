@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { api, ApiError } from "../../api";
-import { demoSearchResults, demoServerId } from "../../demo";
+import { demoFixtures, demoServerId } from "../../demoRuntime";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import type { ModInstallModalState } from "../../app/uiState";
 import { errorMessage } from "../../utils/appHelpers";
@@ -145,7 +145,7 @@ function demoInstallVersions(server: ManagedServer | undefined, mod: ModrinthHit
 
 function demoSearchPage(query: string, showIncompatibleResults: boolean) {
   const value = query.toLowerCase();
-  const baseFiltered = demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
+  const baseFiltered = demoFixtures().demoSearchResults.filter((mod) => !value || mod.title.toLowerCase().includes(value) || mod.description.toLowerCase().includes(value));
   const extraMods: ModrinthHit[] = [];
   if (value.length <= 3) {
     for (let index = 1; index <= 40; index += 1) {

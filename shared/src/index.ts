@@ -27,6 +27,113 @@ export type Permission =
   | "users.view"
   | "users.manage";
 
+/**
+ * The authorization contract. Panel and web both derive their permission logic
+ * from these tables, so a permission added here reaches every consumer at once.
+ * `ALL_PERMISSIONS` also fixes the canonical sort order used when normalizing.
+ */
+export const ALL_PERMISSIONS = [
+  "servers.view",
+  "servers.control",
+  "servers.create",
+  "servers.delete",
+  "servers.editSettings",
+  "servers.export",
+  "console.view",
+  "console.command",
+  "files.view",
+  "files.edit",
+  "files.delete",
+  "files.upload",
+  "files.download",
+  "mods.view",
+  "mods.install",
+  "mods.upload",
+  "mods.enableDisable",
+  "mods.remove",
+  "mods.update",
+  "schedules.view",
+  "schedules.manage",
+  "settings.view",
+  "integrations.manage",
+  "users.view",
+  "users.manage"
+] as const satisfies readonly Permission[];
+
+const VIEWER_PERMISSIONS = [
+  "servers.view",
+  "console.view",
+  "files.view",
+  "mods.view",
+  "schedules.view",
+  "settings.view"
+] as const satisfies readonly Permission[];
+
+const OPERATOR_PERMISSIONS = [
+  ...VIEWER_PERMISSIONS,
+  "servers.control",
+  "console.command"
+] as const satisfies readonly Permission[];
+
+const MAINTAINER_PERMISSIONS = [
+  ...OPERATOR_PERMISSIONS,
+  "mods.install",
+  "mods.upload",
+  "mods.enableDisable",
+  "mods.remove",
+  "mods.update",
+  "files.edit",
+  "files.upload",
+  "files.download",
+  "schedules.manage"
+] as const satisfies readonly Permission[];
+
+const MANAGER_PERMISSIONS = [
+  ...MAINTAINER_PERMISSIONS,
+  "servers.create",
+  "servers.delete",
+  "servers.editSettings",
+  "servers.export",
+  "files.delete"
+] as const satisfies readonly Permission[];
+
+export const ROLE_PRESETS: Readonly<Record<Exclude<RolePreset, "custom">, readonly Permission[]>> = {
+  viewer: VIEWER_PERMISSIONS,
+  operator: OPERATOR_PERMISSIONS,
+  maintainer: MAINTAINER_PERMISSIONS,
+  manager: MANAGER_PERMISSIONS,
+  admin: ALL_PERMISSIONS
+};
+
+/** Permissions that are implied by, and must be granted alongside, each key. */
+export const PERMISSION_DEPENDENCIES: Readonly<Record<Permission, readonly Permission[]>> = {
+  "servers.view": [],
+  "servers.control": ["servers.view"],
+  "servers.create": ["servers.view"],
+  "servers.delete": ["servers.view"],
+  "servers.editSettings": ["servers.view"],
+  "servers.export": ["servers.view"],
+  "console.view": [],
+  "console.command": ["console.view"],
+  "files.view": [],
+  "files.edit": ["files.view"],
+  "files.delete": ["files.view"],
+  "files.upload": ["files.view"],
+  "files.download": ["files.view"],
+  "mods.view": [],
+  "mods.install": ["mods.view"],
+  "mods.upload": ["mods.view"],
+  "mods.enableDisable": ["mods.view"],
+  "mods.remove": ["mods.view"],
+  "mods.update": ["mods.view"],
+  "schedules.view": [],
+  "schedules.manage": ["schedules.view"],
+  "settings.view": [],
+  "integrations.manage": ["settings.view"],
+  "users.view": [],
+  "users.manage": ["users.view"]
+};
+
 export type OperationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export type OperationType =
@@ -249,6 +356,137 @@ export type RuntimeLifecycleStatus = {
   nextRetryAt?: string;
   crashLoopSince?: string;
   message?: string;
+};
+
+export type NodeType = "local" | "remote";
+
+export type NodeStatus = "online" | "offline" | "unknown";
+
+export type NodeProtocolMode = "current" | "fallback" | "update-only" | "incompatible";
+
+export type RestartPhase = "stopping" | "starting";
+
+export type RestartRequiredModSnapshot = {
+  identity: string;
+  displayName: string;
+  filename: string;
+  enabled: boolean;
+  sha1: string;
+};
+
+export type ManagedServerPort = {
+  id: string;
+  name: string;
+  type: "minecraft" | "query" | "custom";
+  protocol: "tcp" | "udp";
+  internalPort: number;
+  externalPort: number;
+  required: boolean;
+  removable: boolean;
+  advanced: boolean;
+};
+
+/**
+ * Node fields common to the panel's stored record and the API projection. The
+ * panel adds its credential hashes on top (see ManagedNode in the server
+ * package); PublicNode below is what clients actually receive.
+ */
+export type ManagedNodeCore = {
+  id: string;
+  name: string;
+  type: NodeType;
+  status: NodeStatus;
+  isInternal: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt?: string;
+  connectedAt?: string;
+  agentVersion?: string;
+  buildId?: string;
+  protocolVersion?: string;
+  capabilities?: string[];
+  features?: string[];
+  dockerStatus?: string;
+  dataPathStatus?: string;
+  totalMemory?: number;
+  joinTokenExpiresAt?: string;
+};
+
+/** A managed node exactly as the panel API serializes it. */
+export type PublicNode = ManagedNodeCore & {
+  hasPendingJoinToken?: boolean;
+  protocolMode?: NodeProtocolMode;
+};
+
+/**
+ * Server fields common to the panel's stored record and the API projection. The
+ * panel adds node-local filesystem details on top (see ManagedServer in the
+ * server package) which are deliberately withheld from clients.
+ */
+export type ManagedServerCore = {
+  id: string;
+  nodeId: string;
+  displayName: string;
+  storageName?: string;
+  runtimeProfile: ServerRuntimeProfile;
+  dockerContainer?: string;
+  dockerImage?: string;
+  dockerPorts?: string;
+  managedPorts?: ManagedServerPort[];
+  javaArgs?: string;
+  startOnNodeStart?: boolean;
+  runtimeIntent?: RuntimeIntent;
+  restartPhase?: RestartPhase;
+  crashAttemptTimestamps?: string[];
+  crashNextRetryAt?: string;
+  crashLoopSince?: string;
+  crashStableSince?: string;
+  restartRequiredSince?: string;
+  restartRequiredChanges?: RestartRequiredChange[];
+  restartRequiredModBaseline?: RestartRequiredModSnapshot[];
+  schedules?: ScheduledExecution[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A managed server exactly as the panel API serializes it. */
+export type PublicServer = ManagedServerCore & {
+  directoryLabel: string;
+  hasDockerContainer: boolean;
+  nodeName?: string;
+  resolvedVersions?: ResolvedServerVersions;
+};
+
+export type NodeInstallInstructions = {
+  image: string;
+  protocolVersion: string;
+  panelUrl: string;
+  joinToken?: string;
+  tokenRequired: boolean;
+  dataMount: string;
+  dockerSocketMount: string;
+  dockerCompose: {
+    image: string;
+    restart: "unless-stopped";
+    environment: {
+      SS_MODE: "node";
+      SS_PANEL_URL: string;
+      SERVERSENTINEL_DATA_DIR: string;
+      SERVERSENTINEL_DOCKER_DATA_DIR: string;
+      TZ: string;
+      SS_NODE_NAME?: string;
+      SS_JOIN_TOKEN?: string;
+    };
+    volumes: string[];
+  };
+  dockerRun: string;
+};
+
+export type CreateNodeResponse = {
+  node: PublicNode;
+  joinToken: string;
+  expiresAt: string;
+  install: NodeInstallInstructions;
 };
 
 export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";

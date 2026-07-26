@@ -5,7 +5,8 @@ const requestMock = vi.fn();
 
 vi.mock("node:http", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:http")>();
-  return { ...actual, default: { ...actual.default, request: requestMock }, request: requestMock };
+  const actualDefault = (actual as { default?: typeof actual }).default ?? actual;
+  return { ...actual, default: { ...actualDefault, request: requestMock }, request: requestMock };
 });
 
 vi.mock("node:fs", async (importOriginal) => {

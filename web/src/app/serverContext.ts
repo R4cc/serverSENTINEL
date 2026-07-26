@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { demoServer, demoServerId } from "../demo";
+import { demoFixtures, demoServerId } from "../demoRuntime";
 import type { AppState, ContextNode, ManagedServer, ScheduledExecution, ServerStatus } from "../types";
 import { minecraftVersionInfo, runtimeVersionInfo, versionValue } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
@@ -20,7 +20,7 @@ export function useServerContext(input: {
     const runtimeMode = input.appState.runtimeMode ?? "all-in-one";
     return {
       ...input.appState,
-      servers: [demoServer(input.demoSchedules), ...input.appState.servers.filter((server) => server.id !== demoServerId)],
+      servers: [demoFixtures().demoServer(input.demoSchedules), ...input.appState.servers.filter((server) => server.id !== demoServerId)],
       nodes: input.appState.nodes?.length ? input.appState.nodes : (runtimeMode === "panel" ? [] : [defaultContextNode]),
       runtimeMode,
       modrinthApiConfigured: demoFixtureModrinthConfigured(modsDemoFixture),

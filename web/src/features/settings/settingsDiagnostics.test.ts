@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ManagedNode } from "../../types";
+import type { NodeView } from "../../types";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "./settingsDiagnostics";
 
-const nodes: ManagedNode[] = [
+const nodes: NodeView[] = [
   {
     id: "secret-node-id",
     name: "private-production-node",

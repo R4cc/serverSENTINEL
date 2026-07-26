@@ -1,4 +1,4 @@
-import type { ManagedNode } from "../../types";
+import type { NodeView } from "../../types";
 import { formatBytes } from "../../utils/format";
 
 export type SettingsSystemInfo = {
@@ -11,7 +11,7 @@ export type SettingsSystemInfo = {
   panelOnlyMode: boolean;
   demoMode: boolean;
   serverCount: number;
-  nodes: ManagedNode[];
+  nodes: NodeView[];
   totalMemory: number;
   modrinthConfigured: boolean;
 };
@@ -25,7 +25,7 @@ export type SettingsSystemSummary = {
   memory: string;
 };
 
-function aggregateVersions(nodes: ManagedNode[], field: "agentVersion" | "protocolVersion") {
+function aggregateVersions(nodes: NodeView[], field: "agentVersion" | "protocolVersion") {
   const counts = new Map<string, number>();
   for (const node of nodes) {
     const value = node[field]?.trim() || "Unknown";

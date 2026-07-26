@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { initialDemoFiles, initialDemoSchedules } from "../demo";
-import { modsForDemoFixture, readModsDemoFixture } from "../features/mods/modsDemoFixtures";
+import { demoFixtures, demoFixturesLoaded } from "../demoRuntime";
+import { readModsDemoFixture } from "../features/mods/modsDemoFixtures";
 import type { DisplayTimeZonePreference, InstalledMod, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
 import { readDisplayTimeZonePreference, readRegionalFormatPreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
@@ -32,9 +32,12 @@ export function usePreferencesState() {
   const [consoleFontSize, setConsoleFontSize] = useState(() => readConsoleFontSize());
   const [consoleScrollback, setConsoleScrollback] = useState(() => readConsoleScrollback());
   const [demoRunning, setDemoRunning] = useState(true);
-  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => ({ ...initialDemoFiles }));
-  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => modsForDemoFixture(readModsDemoFixture()));
-  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => initialDemoSchedules.map((schedule) => ({ ...schedule })));
+  // Demo fixtures live in a lazily loaded chunk, so these start empty whenever the
+  // chunk is not resolved yet. Every path that turns demo mode on awaits the load
+  // and then calls resetDemoState(), which fills them in.
+  const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => demoFixturesLoaded() ? { ...demoFixtures().initialDemoFiles } : {});
+  const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => demoFixturesLoaded() ? demoFixtures().modsForDemoFixture(readModsDemoFixture()) : []);
+  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => demoFixturesLoaded() ? demoFixtures().initialDemoSchedules.map((schedule) => ({ ...schedule })) : []);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
 
   useEffect(() => {
@@ -79,11 +82,12 @@ export function usePreferencesState() {
     writePreference(consoleScrollbackStorageKey, String(consoleScrollback));
   }, [consoleScrollback]);
 
+  /** Callers must have awaited loadDemoFixtures() before reaching this. */
   function resetDemoState() {
     setDemoRunning(true);
-    setDemoFiles({ ...initialDemoFiles });
-    setDemoInstalledMods(modsForDemoFixture(readModsDemoFixture()));
-    setDemoSchedules(initialDemoSchedules.map((schedule) => ({ ...schedule })));
+    setDemoFiles({ ...demoFixtures().initialDemoFiles });
+    setDemoInstalledMods(demoFixtures().modsForDemoFixture(readModsDemoFixture()));
+    setDemoSchedules(demoFixtures().initialDemoSchedules.map((schedule) => ({ ...schedule })));
   }
 
   return {

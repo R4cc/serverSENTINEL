@@ -2,7 +2,6 @@ export const consoleHistoryStorageKey = "serversentinel-console-history-enabled"
 export const consoleFontSizeStorageKey = "serversentinel-console-font-size";
 export const consoleScrollbackStorageKey = "serversentinel-console-scrollback";
 export const commandHistoryStorageKey = "serversentinel-command-history";
-export const consoleViewStorageKey = "serversentinel-console-view";
 
 export const consoleFontSizes = [12, 13, 15, 17] as const;
 export const consoleScrollbackSizes = [1_000, 5_000, 10_000, 25_000] as const;
@@ -42,24 +41,6 @@ export function readConsoleFontSize() {
 
 export function readConsoleScrollback() {
   return consoleScrollbackFromStoredValue(readStoredValue(consoleScrollbackStorageKey));
-}
-
-export type ConsoleView = "console" | "chat";
-
-export function consoleViewFromStoredValue(value: string | null): ConsoleView {
-  return value === "chat" ? "chat" : "console";
-}
-
-export function readConsoleView() {
-  return consoleViewFromStoredValue(readStoredValue(consoleViewStorageKey));
-}
-
-export function writeConsoleView(view: ConsoleView, storage: Pick<Storage, "setItem"> = window.localStorage) {
-  try {
-    storage.setItem(consoleViewStorageKey, view);
-  } catch {
-    // Ignore unavailable browser storage; the current session keeps the choice.
-  }
 }
 
 export function terminalPreferenceOptions(fontSize: ConsoleFontSize, scrollback: ConsoleScrollback) {

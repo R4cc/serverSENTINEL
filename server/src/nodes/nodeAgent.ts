@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
 import http from "node:http";
@@ -14,12 +14,37 @@ import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedI
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
-import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
+import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
+import {
+  assertDownloadableModrinthFile,
+  assertVersionInstallable,
+  compatibilityFromSelectedVersion,
+  managedContentNaming
+} from "../modrinth/installPolicy.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { ModHashCache } from "../modHashCache.js";
 import { managedContentFileSizeLimit } from "../managedContentLimits.js";
+import { registerShutdownHandlers } from "../shutdown.js";
 import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
+import {
+  copyServerFile,
+  createServerFolder,
+  deleteServerEntry,
+  editorFileSizeLimit,
+  fileUploadSizeLimit,
+  listServerDirectory,
+  moveServerEntry,
+  previewServerFile,
+  publicZipExtractionPlan,
+  readServerTextFile,
+  renameServerEntry,
+  resolveUploadTarget,
+  safeFileManagerName,
+  toPublicServerPath,
+  writeRuntimeUpload,
+  writeServerTextFile
+} from "../runtime/local/fileService.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
@@ -31,7 +56,7 @@ import type { NodeCancelMessage, NodeHello, NodeRequestMessage, NodeResponseMess
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
 import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
-import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "../zipArchive.js";
+import { extractZipArchive, planZipExtraction, type ZipExtractionPlan } from "../zipArchive.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
 const modHashCache = new ModHashCache();
@@ -107,8 +132,6 @@ type UpdateInput = Omit<CreateInput, "nodeId" | "acceptEula">;
 const nodeIdentityMetadataKey = "node.identity";
 const nodeUpdateDir = config.paths.nodeUpdatesDir;
 const serversRoot = resolve(config.nodeDataDir, "servers");
-const editorFileSizeLimit = 2 * 1024 * 1024;
-const fileUploadSizeLimit = 256 * 1024 * 1024;
 const uploadLimit = managedContentFileSizeLimit;
 const recentLogTailBytes = 128 * 1024;
 const zipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
@@ -172,11 +195,7 @@ function panelWebSocketUrl() {
 }
 
 function safeName(value: unknown) {
-  const raw = typeof value === "string" ? value : "";
-  const name = basename(raw).trim();
-  if (!name || name !== raw || name === "." || name === "..") throw new Error("A valid file or folder name is required");
-  if (name.length > 160 || /[<>:"/\\|?*\u0000-\u001f]/.test(name)) throw new Error("File or folder name contains unsafe characters");
-  return name;
+  return safeFileManagerName(typeof value === "string" ? value : undefined);
 }
 
 function safeRelative(value: unknown) {
@@ -212,8 +231,7 @@ async function writableResolvedInside(server: ManagedServer, targetPath: string)
 }
 
 function publicPath(root: string, target: string) {
-  const rel = relative(root, target).replaceAll("\\", "/");
-  return rel ? `/${rel}` : "/";
+  return toPublicServerPath({ serverDir: root }, target);
 }
 
 function validateBase64Content(value: unknown, allowEmpty = false) {
@@ -1091,30 +1109,16 @@ async function selfStopContainer(containerId: string, currentName: string) {
 }
 
 async function fileList(server: ManagedServer, path: unknown) {
-  const root = await serverRoot(server);
-  const target = await inside(server, path);
-  const st = await stat(target);
-  if (!st.isDirectory()) throw new Error("Path is not a directory");
-  const entries = await readdir(target, { withFileTypes: true });
-  return {
-    path: publicPath(root, target),
-    entries: await Promise.all(entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name)).map(async (entry) => {
-      const entryPath = join(target, entry.name);
-      const entryStat = await lstat(entryPath);
-      return { name: entry.name, path: publicPath(root, entryPath), type: entry.isDirectory() ? "directory" : "file", size: entryStat.size, modifiedAt: entryStat.mtime.toISOString(), status: "managed" };
-    }))
-  };
+  const scope = { serverDir: await serverRoot(server) };
+  return listServerDirectory(scope, await inside(server, path), { status: () => "managed" });
 }
 
 async function fileRead(server: ManagedServer, path: unknown, preview = false) {
-  const root = await serverRoot(server);
+  const scope = { serverDir: await serverRoot(server) };
   const target = await inside(server, path);
-  const st = await stat(target);
-  if (!st.isFile()) throw new Error("Path is not a file");
-  if (st.size > editorFileSizeLimit) return preview ? { path: publicPath(root, target), preview: "too_large", message: "File too large to preview" } : (() => { throw new Error("File is larger than the editor limit"); })();
-  const content = await readFile(target);
-  if (content.includes(0)) return preview ? { path: publicPath(root, target), preview: "binary", message: "Preview unavailable" } : (() => { throw new Error("Binary files cannot be edited"); })();
-  return preview ? { path: publicPath(root, target), preview: "text", content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() } : { path: publicPath(root, target), content: content.toString("utf8"), modifiedAt: st.mtime.toISOString() };
+  return preview
+    ? previewServerFile(scope, target, { sizeLimit: editorFileSizeLimit, requireTextLike: false })
+    : readServerTextFile(scope, target);
 }
 
 async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
@@ -1226,41 +1230,7 @@ async function fileDownload(server: ManagedServer, path: unknown) {
 }
 
 function publicExtractionPlan(root: string, plan: ZipExtractionPlan): ZipExtractionPlan {
-  return {
-    ...plan,
-    archivePath: publicPath(root, plan.archivePath),
-    destinationPath: publicPath(root, plan.destinationPath),
-    outputPaths: plan.outputPaths.map((entry) => ({ ...entry, path: publicPath(root, entry.path) })),
-    conflicts: plan.conflicts.map((entry) => ({ ...entry, path: publicPath(root, entry.path) })),
-    blocked: plan.blocked.map((entry) => ({ ...entry, path: publicPath(root, entry.path) }))
-  };
-}
-
-async function archiveList(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const root = await serverRoot(server);
-  const archive = await inside(server, path);
-  const listing = await listZipArchive(archive, typeof entryPath === "string" ? entryPath : "/", zipLimits);
-  return { ...listing, archivePath: publicPath(root, archive) };
-}
-
-async function archiveRead(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const archive = await inside(server, path);
-  const selected = typeof entryPath === "string" ? entryPath : "";
-  const indexed = await readZipArchiveEntry(archive, selected, zipLimits, editorFileSizeLimit);
-  const publicEntryPath = selected.startsWith("/") ? selected : `/${selected}`;
-  const textLike = /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(indexed.entry.name) || !indexed.entry.name.includes(".");
-  if (!textLike) return { path: publicEntryPath, preview: "unsupported", message: "Preview unavailable" };
-  if (indexed.content.includes(0)) return { path: publicEntryPath, preview: "binary", message: "Preview unavailable" };
-  return { path: publicEntryPath, preview: "text", content: indexed.content.toString("utf8"), modifiedAt: indexed.entry.modifiedAt };
-}
-
-async function archiveDownload(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const archive = await inside(server, path);
-  const opened = await openZipArchiveEntryStream(archive, typeof entryPath === "string" ? entryPath : "", zipLimits);
-  if (opened.entry.size > uploadLimit) throw new Error("Archive entry is larger than the remote transfer limit");
-  const chunks: Buffer[] = [];
-  for await (const chunk of opened.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return { filename: opened.entry.name, size: opened.entry.size, contentBase64: Buffer.concat(chunks).toString("base64") };
+  return publicZipExtractionPlan({ serverDir: root }, plan);
 }
 
 async function archivePlan(server: ManagedServer, path: unknown, destinationPath: unknown) {
@@ -1321,29 +1291,20 @@ async function writeRelativeFile(server: ManagedServer, path: unknown, content: 
 }
 
 async function writeEditableFile(server: ManagedServer, path: unknown, content: unknown) {
-  if (typeof content !== "string") throw new Error("Content is required");
-  if (Buffer.byteLength(content, "utf8") > editorFileSizeLimit) throw new Error("File content is larger than the editor limit");
-  if (content.includes("\0")) throw new Error("Binary files cannot be edited");
-  const root = await serverRoot(server);
-  const target = await inside(server, path);
-  const targetStat = await stat(target);
-  if (!targetStat.isFile()) throw new Error("Path is not a file");
-  await writeFile(target, content, "utf8");
-  return { ok: true, path: publicPath(root, target) };
+  const scope = { serverDir: await serverRoot(server) };
+  return writeServerTextFile(scope, await inside(server, path), content);
 }
 
 async function uploadFile(server: ManagedServer, parentInput: unknown, filenameInput: unknown, contentBase64Input: unknown) {
-  const parent = await inside(server, parentInput);
-  const parentStat = await stat(parent);
-  if (!parentStat.isDirectory()) throw new Error("Upload path is not a directory");
-  const contentBase64 = validateBase64Content(contentBase64Input, true);
-  const content = Buffer.from(contentBase64, "base64");
-  if (content.length > fileUploadSizeLimit) throw new Error(`Upload is larger than ${Math.floor(fileUploadSizeLimit / 1024 / 1024)} MiB`);
-  const root = await serverRoot(server);
-  const target = await writableResolvedInside(server, join(parent, safeName(filenameInput)));
-  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-  await writeFile(target, content);
-  return { ok: true, path: publicPath(root, target), size: content.length };
+  const scope = { serverDir: await serverRoot(server) };
+  const target = await resolveUploadTarget(scope, await inside(server, parentInput), filenameInput);
+  const size = await writeRuntimeUpload(target, contentBase64Input, {
+    maximumBytes: fileUploadSizeLimit,
+    allowEmpty: true,
+    label: "Uploaded file content",
+    decodeBase64: (value, allowEmpty) => validateBase64Content(value, allowEmpty)
+  });
+  return { ok: true, path: publicPath(scope.serverDir, target), size };
 }
 
 async function modsList(server: ManagedServer) {
@@ -1450,15 +1411,6 @@ async function prepareBinaryDownload(message: NodeTransferStartMessage) {
     const handle = await open(target, "r");
     return { filename: basename(target), size: targetStat.size, stream: handle.createReadStream() };
   }
-  if (message.command === "files.archive.download") {
-    const archive = await inside(server, payload.path);
-    const opened = await openZipArchiveEntryStream(archive, typeof payload.entryPath === "string" ? payload.entryPath : "", zipLimits);
-    if (opened.entry.size > (message.maxBytes ?? uploadLimit)) {
-      if ("destroy" in opened.stream) (opened.stream as { destroy: () => void }).destroy();
-      throw new Error("Archive entry exceeds the configured download limit");
-    }
-    return { filename: opened.entry.name, size: opened.entry.size, stream: opened.stream };
-  }
   throw new Error(`Unsupported download transfer ${message.command}`);
 }
 
@@ -1474,17 +1426,16 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const overrideMinecraftVersion = payload.overrideMinecraftVersion === true;
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
-  const runtime = serverRuntimeDefinition(targetRuntime.runtimeType);
-  const singular = runtime.contentKind === "plugins" ? "plugin" : "mod";
-  if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${runtime.displayName} runtime profile is required before installing compatible ${runtime.contentKind}`);
+  const naming = managedContentNaming(targetRuntime.runtimeType);
+  const singular = naming.singular;
+  if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${naming.displayName} runtime profile is required before installing compatible ${naming.plural}`);
 
   if (!versionId) {
-    const compatibility = await resolveModrinthProjectCompatibility({ projectId, minecraftVersion: targetRuntime.minecraftVersion, loaders: runtime.compatibleModrinthLoaders, runtimeName: runtime.displayName, contentKind: singular, channel });
+    const compatibility = await resolveModrinthProjectCompatibility({ projectId, minecraftVersion: targetRuntime.minecraftVersion, loaders: naming.loaders, runtimeName: naming.displayName, contentKind: singular, channel });
     if (!compatibility.compatible && !forceIncompatible) throw new Error(`${compatibility.reason}. Set forceIncompatible to true to install anyway.`);
     const file = compatibility.file;
-    if (!file?.url || !file.filename) throw new Error("No installable jar found");
-    if (!file.url.startsWith("https://")) throw new Error(`Refusing to download a non-HTTPS ${singular} file`);
-    if (file.size && file.size > uploadLimit) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download is larger than ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
+    if (!file?.url || !file.filename) throw new Error("No installable .jar file was found for that version");
+    assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
     const response = await modrinthFetch(file.url, { signal });
     if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
@@ -1503,16 +1454,21 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     return undefined;
   });
   if (!selectedVersion) throw new Error("The selected Modrinth version could not be found");
-  if (!allowedForChannel(selectedVersion, channel)) throw new Error("The selected version is outside the requested release channel");
-  const file = modrinthJarFile(selectedVersion);
-  if (!file?.url || !file.filename) throw new Error("No installable jar found");
-  if (!selectedVersion.loaders.some((loader) => runtime.compatibleModrinthLoaders.includes(loader))) throw new Error(`The selected version is not compatible with ${runtime.displayName}`);
-  if (project.server_side === "unsupported") throw new Error(`Client-only ${runtime.contentKind} cannot be installed on the server`);
-  const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, targetRuntime.minecraftVersion);
-  if (!matchesMinecraft && !overrideMinecraftVersion) throw new Error(`This version is not marked for Minecraft ${targetRuntime.minecraftVersion}. Confirm the Minecraft version override before installing.`);
+  const candidate = assertVersionInstallable({
+    version: selectedVersion,
+    project,
+    naming,
+    minecraftVersion: targetRuntime.minecraftVersion,
+    channel,
+    forceIncompatible,
+    overrideMinecraftVersion,
+    // The node agent has no way to prompt, so it keeps installing content whose
+    // server-side support Modrinth reports as unknown.
+    requireKnownServerSide: false
+  });
+  const { file, matchesMinecraft } = candidate;
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
-  if (!file.url.startsWith("https://")) throw new Error(`Refusing to download a non-HTTPS ${singular} file`);
-  if (file.size && file.size > uploadLimit) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download is larger than ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
+  assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
   const response = await modrinthFetch(file.url, { signal });
   if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
@@ -1523,19 +1479,13 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     projectId,
     version: selectedVersion.version_number,
     channel: versionChannel(selectedVersion.version_type),
-    compatibility: {
-      status: matchesMinecraft ? "compatible" : "incompatible",
-      compatible: matchesMinecraft,
-      reason: matchesMinecraft ? `Compatible server-side ${runtime.displayName} ${singular}` : "Installed with Minecraft version override",
-      matchedVersionId: selectedVersion.id,
-      matchedVersionNumber: selectedVersion.version_number,
-      matchedVersionType: versionChannel(selectedVersion.version_type),
-      matchedLoaders: selectedVersion.loaders,
-      matchedGameVersions: selectedVersion.game_versions,
+    compatibility: compatibilityFromSelectedVersion({
+      version: selectedVersion,
       file,
-      serverSide: project.server_side,
-      clientSide: project.client_side
-    }
+      projectSides: { server_side: project.server_side, client_side: project.client_side },
+      compatible: matchesMinecraft,
+      reason: matchesMinecraft ? `Compatible server-side ${naming.displayName} ${singular}` : "Installed with Minecraft version override"
+    })
   };
 }
 
@@ -1592,9 +1542,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return { ok: true };
   }
   if (command === "files.list") return fileList(server, payload?.path);
-  if (command === "files.archive.list") return archiveList(server, payload?.path, payload?.entryPath);
-  if (command === "files.archive.read") return archiveRead(server, payload?.path, payload?.entryPath);
-  if (command === "files.archive.download") return archiveDownload(server, payload?.path, payload?.entryPath);
   if (command === "files.archive.plan") return archivePlan(server, payload?.path, payload?.destinationPath);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
@@ -1608,87 +1555,44 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   }
   if (command === "files.mkdir") {
     if (isMutableConfigurationPath(payload?.parent)) await requireStoppedForMutableConfiguration(server);
-    const root = await serverRoot(server);
-    const parent = await inside(server, payload?.parent);
-    const parentStat = await stat(parent);
-    if (!parentStat.isDirectory()) throw new Error("Parent path is not a directory");
-    const target = await writableResolvedInside(server, join(parent, safeName(payload?.name)));
-    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-    await mkdir(target, { recursive: false });
-    return { ok: true, path: publicPath(root, target) };
+    const scope = { serverDir: await serverRoot(server) };
+    return createServerFolder(scope, await inside(server, payload?.parent), payload?.name);
   }
   if (command === "files.rename") {
-    const root = await serverRoot(server);
+    const scope = { serverDir: await serverRoot(server) };
     const source = await inside(server, payload?.path);
     if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(posix.dirname(safeRelative(payload?.path)), safeName(payload?.name)))) {
       await requireStoppedForMutableConfiguration(server);
     }
-    if (resolve(source) === resolve(root)) throw new Error("Refusing to rename the server root directory");
-    const target = await writableResolvedInside(server, join(dirname(source), safeName(payload?.name)));
-    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-    await rename(source, target);
-    return { ok: true, path: publicPath(root, target) };
+    return renameServerEntry(scope, source, payload?.name);
   }
   if (command === "files.move") {
-    const root = await serverRoot(server);
+    const scope = { serverDir: await serverRoot(server) };
     const source = await inside(server, payload?.path);
-    if (resolve(source) === resolve(root)) throw new Error("Refusing to move the server root directory");
-    const destination = await inside(server, payload?.destinationPath);
-    const destinationStat = await stat(destination);
-    if (!destinationStat.isDirectory()) throw new Error("Move destination is not a directory");
-    const target = await writableResolvedInside(server, join(destination, basename(source)));
-    const targetRelativeToSource = relative(source, target);
-    if (!targetRelativeToSource) throw new Error("Item is already in that folder");
-    if (!isAbsolute(targetRelativeToSource) && targetRelativeToSource !== ".." && !targetRelativeToSource.startsWith(`..${sep}`)) {
-      throw new Error("A folder cannot be moved into itself");
-    }
-    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-    if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(safeRelative(payload?.destinationPath), basename(source)))) {
-      await requireStoppedForMutableConfiguration(server);
-    }
-    await rename(source, target);
-    return { ok: true, path: publicPath(root, target) };
+    return moveServerEntry(scope, source, await inside(server, payload?.destinationPath), {
+      beforeApply: async () => {
+        if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(safeRelative(payload?.destinationPath), basename(source)))) {
+          await requireStoppedForMutableConfiguration(server);
+        }
+      }
+    });
   }
   if (command === "files.copy") {
-    const root = await serverRoot(server);
+    const scope = { serverDir: await serverRoot(server) };
     const source = await inside(server, payload?.path);
     if (isMutableConfigurationPath(payload?.path) || isMutableConfigurationPath(posix.join(safeRelative(payload?.parent), safeName(payload?.name)))) {
       await requireStoppedForMutableConfiguration(server);
     }
-    const sourceStat = await stat(source);
-    if (!sourceStat.isFile()) throw new Error("Only files can be duplicated from the browser file manager");
-    const parent = await inside(server, payload?.parent);
-    const parentStat = await stat(parent);
-    if (!parentStat.isDirectory()) throw new Error("Parent path is not a directory");
-    const target = await writableResolvedInside(server, join(parent, safeName(payload?.name)));
-    if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-    await copyFile(source, target);
-    return { ok: true, path: publicPath(root, target) };
+    return copyServerFile(scope, source, await inside(server, payload?.parent), payload?.name);
   }
   if (command === "files.delete") {
     if (payload?.recursive !== undefined && payload.recursive !== "true" && payload.recursive !== "false") {
       throw new Error("recursive must be true or false");
     }
-    const root = await serverRoot(server);
+    const scope = { serverDir: await serverRoot(server) };
     const target = await inside(server, payload?.path);
     if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
-    if (resolve(target) === resolve(root)) throw new Error("Refusing to delete the server root directory");
-    const st = await stat(target);
-    if (st.isDirectory()) {
-      if (payload?.recursive === "true") {
-        await rm(target, { recursive: true, force: false });
-      } else {
-        try {
-          await rmdir(target);
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code;
-          if (code === "ENOTEMPTY" || code === "EEXIST") throw new Error("Directory is not empty. Recursive deletion requires recursive=true and explicit confirmation.");
-          throw error;
-        }
-      }
-    }
-    else await rm(target, { force: false });
-    return { ok: true };
+    return deleteServerEntry(scope, target, payload?.recursive);
   }
   if (command.startsWith("mods.") || command.startsWith("content.")) {
     const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
@@ -1768,14 +1672,33 @@ export async function startNodeAgent() {
   const startupId = randomUUID();
   let persisted = await readNodeIdentity();
   let reconnectAttempt = 0;
+  let panelSocket: WebSocket | undefined;
+  let stopping = false;
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
+  registerShutdownHandlers(async () => {
+    stopping = true;
+    // Closing the session lets the panel mark this node offline immediately
+    // instead of waiting out its heartbeat timeout, and checkpoints the WAL.
+    panelSocket?.close(1001, "Node agent shutting down");
+    // Left assigned on purpose: a late reader gets a closed-connection error
+    // rather than silently reopening the data root mid-shutdown.
+    nodeStorageDatabase?.close();
+  }, {
+    logger: {
+      info: (fields, message) => console.info(`${message} (${JSON.stringify(fields)})`),
+      error: (fields, message) => console.error(`${message} (${JSON.stringify(fields)})`)
+    }
+  });
+
   const connect = async () => {
+    if (stopping) return;
     persisted = await readNodeIdentity();
     const target = panelWebSocketUrl();
     console.info(`Connecting node agent to ${target}`);
     const socket = new WebSocket(target, { perMessageDeflate: false, maxPayload: nodeProtocolControlMessageMaxBytes });
+    panelSocket = socket;
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
@@ -1809,6 +1732,7 @@ export async function startNodeAgent() {
       stopAllStreams();
       if (heartbeatWatchdog) clearInterval(heartbeatWatchdog);
       if (stableSessionTimer) clearTimeout(stableSessionTimer);
+      if (stopping) return;
       const reconnectDelayMs = nodeReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.max(1, Math.round(reconnectDelayMs / 1000))}s.`);

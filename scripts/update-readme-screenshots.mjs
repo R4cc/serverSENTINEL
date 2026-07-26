@@ -1,15 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { chromium } from "playwright";
+import { launchBrowser, repositoryRoot, signInThroughApi, startDemoHarness, waitForAppShell } from "./lib/demo-harness.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputDirectory = join(repositoryRoot, "docs", "screenshots");
-const dataDirectory = await mkdtemp(join(tmpdir(), "serversentinel-readme-screenshots-"));
-const port = Number(process.env.SERVERSENTINEL_SCREENSHOT_PORT || 4173);
-const baseUrl = `http://127.0.0.1:${port}`;
 const fixedTime = new Date("2026-01-15T12:00:00.000Z");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const switzerDirectory = join(repositoryRoot, "web", "src", "assets", "fonts", "switzer");
@@ -20,9 +15,8 @@ const [sansRegularData, sansMediumData, sansSemiBoldData, monoFontData] = await 
   readFile(join(repositoryRoot, "node_modules", "@fontsource-variable", "cascadia-code", "files", "cascadia-code-latin-wght-normal.woff2"), "base64")
 ]);
 
-let server;
+let harness;
 let browser;
-let serverOutput = "";
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
@@ -47,25 +41,6 @@ function runNpm(args) {
     return run(process.execPath, [process.env.npm_execpath, ...args]);
   }
   return run(npmCommand, args, { shell: process.platform === "win32" });
-}
-
-async function waitForServer(timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) {
-      throw new Error(`Demo server stopped before it became ready.\n${serverOutput}`);
-    }
-    try {
-      const response = await fetch(`${baseUrl}/api/auth/session`, {
-        headers: { "X-Requested-With": "XMLHttpRequest" }
-      });
-      if (response.ok) return;
-    } catch {
-      // The listener is not ready yet.
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
-  }
-  throw new Error(`Timed out waiting for the demo server at ${baseUrl}.\n${serverOutput}`);
 }
 
 async function settlePage(page) {
@@ -173,29 +148,14 @@ try {
 
   await mkdir(outputDirectory, { recursive: true });
 
-  server = spawn(process.execPath, [join(repositoryRoot, "server", "dist", "index.js")], {
-    cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      LOG_LEVEL: "warn",
-      PORT: String(port),
-      SERVERSENTINEL_DATA_DIR: dataDirectory,
-      SERVERSENTINEL_ENABLE_DEMO: "true",
-      SS_MODE: "panel",
-      TZ: "UTC"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
+  harness = await startDemoHarness({
+    dataDirectoryPrefix: "serversentinel-readme-screenshots-",
+    port: Number(process.env.SERVERSENTINEL_SCREENSHOT_PORT || 4173),
+    mode: "panel"
   });
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => {
-      serverOutput = `${serverOutput}${chunk}`.slice(-20_000);
-    });
-  }
-  await waitForServer();
+  const { baseUrl } = harness;
 
-  browser = await chromium.launch({
-    headless: true,
+  browser = await launchBrowser(chromium, {
     executablePath: process.env.SERVERSENTINEL_SCREENSHOT_BROWSER || undefined
   });
   const context = await browser.newContext({
@@ -210,14 +170,7 @@ try {
     colorScheme: "light",
     reducedMotion: "reduce"
   });
-  const loginResponse = await context.request.post(`${baseUrl}/api/auth/login`, {
-    headers: { "X-Requested-With": "XMLHttpRequest" },
-    data: { username: "demo", password: "demo" }
-  });
-  if (!loginResponse.ok()) {
-    const detail = await loginResponse.text().catch(() => "");
-    throw new Error(`Demo startup is broken: demo / demo could not sign in.${detail ? ` ${detail.trim()}` : ""}`);
-  }
+  await signInThroughApi(context, baseUrl);
   const page = await context.newPage();
   await page.clock.setFixedTime(fixedTime);
   await page.addInitScript(() => {
@@ -233,12 +186,7 @@ try {
     content: "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }"
   });
 
-  try {
-    await page.locator(".appShell").waitFor({ timeout: 15_000 });
-  } catch {
-    const notice = await page.locator(".notice").textContent().catch(() => "");
-    throw new Error(`Demo startup is broken: demo / demo could not sign in.${notice ? ` ${notice.trim()}` : ""}`);
-  }
+  await waitForAppShell(page);
 
   await page.locator(".workspaceHeader").getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await waitForOverviewTimeline(page);
@@ -284,13 +232,5 @@ try {
   console.log(`Updated README screenshots in ${outputDirectory}`);
 } finally {
   if (browser) await browser.close();
-  if (server && server.exitCode === null) {
-    server.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolveExit) => server.once("exit", resolveExit)),
-      new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
-    ]);
-    if (server.exitCode === null) server.kill("SIGKILL");
-  }
-  await rm(dataDirectory, { recursive: true, force: true });
+  if (harness) await harness.stop();
 }

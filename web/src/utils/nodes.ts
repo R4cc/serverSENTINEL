@@ -1,4 +1,4 @@
-import type { ManagedNode, NodeOperation } from "../types";
+import type { NodeView, NodeOperation } from "../types";
 
 export type NodeOperationAdvanceResult = {
   operation?: NodeOperation;
@@ -7,7 +7,7 @@ export type NodeOperationAdvanceResult = {
 
 export function advanceNodeOperation(
   operation: NodeOperation,
-  node: ManagedNode | undefined,
+  node: NodeView | undefined,
   now: number,
   graceMs: number,
   reconnectSettleMs = 15_000
@@ -40,39 +40,39 @@ export function advanceNodeOperation(
   return { operation: { ...operation, phase, observedOffline, reconnectedAt }, outcome: "pending" };
 }
 
-export function nodeDockerLabel(node: ManagedNode) {
+export function nodeDockerLabel(node: NodeView) {
   if (node.dockerStatus === "available") return "Docker available";
   if (node.dockerStatus === "unavailable") return "Docker unavailable";
   return "Docker unknown";
 }
 
-export function nodeDataPathLabel(node: ManagedNode) {
+export function nodeDataPathLabel(node: NodeView) {
   if (node.dataPathStatus === "ready") return "Data path writable";
   if (node.dataPathStatus === "missing") return "Data path missing";
   return "Data path unknown";
 }
 
-function isNodeDockerUsable(node: ManagedNode) {
+function isNodeDockerUsable(node: NodeView) {
   return node.dockerStatus !== "unavailable";
 }
 
-export function isNodeRuntimeUsable(node: ManagedNode) {
+export function isNodeRuntimeUsable(node: NodeView) {
   return node.status === "online"
     && isNodeDockerUsable(node)
     && (node.isInternal || node.protocolMode === "current" || node.protocolMode === "fallback" || node.protocolVersion === "3.1" || node.protocolVersion === "3.0");
 }
 
-export function nodeRestartImpactMessage(node: ManagedNode) {
+export function nodeRestartImpactMessage(node: NodeView) {
   return node.isInternal
     ? "Running servers are not restarted. They stay online and reachable, but the Panel and its controls will be temporarily unavailable."
     : "Running servers on this node are not restarted. They stay online and reachable, but their status and controls in the Panel will be temporarily unavailable until the node reconnects.";
 }
 
-export function nodeJoinTokenExpired(node: ManagedNode) {
+export function nodeJoinTokenExpired(node: NodeView) {
   return Boolean(node.hasPendingJoinToken && node.joinTokenExpiresAt && new Date(node.joinTokenExpiresAt).getTime() <= Date.now());
 }
 
-export function nodeBlockReason(node: ManagedNode) {
+export function nodeBlockReason(node: NodeView) {
   if (nodeJoinTokenExpired(node)) return "Join token expired";
   if (node.hasPendingJoinToken && node.status === "unknown") return "Waiting for node to join";
   if (node.status === "offline") return "Node offline";
@@ -84,7 +84,7 @@ export function nodeBlockReason(node: ManagedNode) {
   return "";
 }
 
-export function nodeWarnings(node: ManagedNode) {
+export function nodeWarnings(node: NodeView) {
   const warnings: string[] = [];
   if (nodeJoinTokenExpired(node)) warnings.push("Join token expired. Rotate the token and rerun the install command.");
   else if (node.hasPendingJoinToken) warnings.push("Join token pending. Run the install command before it expires.");

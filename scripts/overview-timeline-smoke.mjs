@@ -1,15 +1,12 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { launchBrowser, signInThroughApi, startDemoHarness } from "./lib/demo-harness.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDirectory = await mkdtemp(join(tmpdir(), "serversentinel-overview-smoke-"));
-const port = Number(process.env.SERVERSENTINEL_OVERVIEW_SMOKE_PORT || 4187);
-const baseUrl = `http://127.0.0.1:${port}`;
+const harness = await startDemoHarness({
+  dataDirectoryPrefix: "serversentinel-overview-smoke-",
+  port: Number(process.env.SERVERSENTINEL_OVERVIEW_SMOKE_PORT || 4187)
+});
+const { baseUrl } = harness;
 const fixedNow = new Date("2026-07-24T12:00:00.000Z");
 const liveFutureRatio = 0.1;
 const rangeSpans = new Map([
@@ -21,29 +18,10 @@ const rangeSpans = new Map([
   ["24h", 24 * 60 * 60_000]
 ]);
 
-let server;
 let browser;
-let serverOutput = "";
 
 function assertNear(actual, expected, tolerance, message) {
   assert(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, received ${actual}`);
-}
-
-async function waitForServer(timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) throw new Error(`Demo server stopped before it became ready.\n${serverOutput}`);
-    try {
-      const response = await fetch(`${baseUrl}/api/auth/session`, {
-        headers: { "X-Requested-With": "XMLHttpRequest" }
-      });
-      if (response.ok) return;
-    } catch {
-      // The listener is not ready yet.
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
-  }
-  throw new Error(`Timed out waiting for the demo server at ${baseUrl}.\n${serverOutput}`);
 }
 
 async function waitForTimeline(page) {
@@ -394,37 +372,14 @@ async function createOverviewPage(context, viewport) {
 }
 
 try {
-  server = spawn(process.execPath, [join(repositoryRoot, "server", "dist", "index.js")], {
-    cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      LOG_LEVEL: "warn",
-      PORT: String(port),
-      SERVERSENTINEL_DATA_DIR: dataDirectory,
-      SERVERSENTINEL_ENABLE_DEMO: "true",
-      SS_MODE: "all-in-one",
-      TZ: "UTC"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => { serverOutput = `${serverOutput}${chunk}`.slice(-20_000); });
-  }
-  await waitForServer();
-
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser(chromium);
   const context = await browser.newContext({
     locale: "en-US",
     timezoneId: "UTC",
     colorScheme: "dark",
     reducedMotion: "reduce"
   });
-  const loginResponse = await context.request.post(`${baseUrl}/api/auth/login`, {
-    headers: { "X-Requested-With": "XMLHttpRequest" },
-    data: { username: "demo", password: "demo" }
-  });
-  if (!loginResponse.ok()) throw new Error(`Demo startup is broken: demo / demo could not sign in. ${await loginResponse.text()}`);
+  await signInThroughApi(context, baseUrl);
 
   const desktop = await createOverviewPage(context, { width: 1440, height: 1000 });
   await assertDesktop(desktop.page);
@@ -444,12 +399,5 @@ try {
   console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, roster, and mobile layout.");
 } finally {
   if (browser) await browser.close();
-  if (server && server.exitCode === null) {
-    server.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolveExit) => server.once("exit", resolveExit)),
-      new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
-    ]);
-  }
-  await rm(dataDirectory, { recursive: true, force: true });
+  await harness.stop();
 }

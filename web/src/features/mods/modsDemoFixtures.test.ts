@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { type DemoFixtures, loadDemoFixtures } from "../../demoRuntime";
 import { createDemoUpdatePlan } from "./modUpdatePlan";
-import { demoFixtureFailureMessage, demoFixtureModrinthConfigured, modsForDemoFixture, readModsDemoFixture } from "./modsDemoFixtures";
+import { demoFixtureFailureMessage, demoFixtureModrinthConfigured, readModsDemoFixture } from "./modsDemoFixtures";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 
 describe("Mods demo fixtures", () => {
+  // The mod fixtures ship in the lazily loaded demo chunk, so the test loads it
+  // the same way the app does before turning demo mode on.
+  let modsForDemoFixture: DemoFixtures["modsForDemoFixture"];
+  beforeAll(async () => {
+    ({ modsForDemoFixture } = await loadDemoFixtures());
+  });
+
   it("reads only known fixture names", () => {
     expect(readModsDemoFixture("?mods-fixture=large")).toBe("large");
     expect(readModsDemoFixture("?mods-fixture=not-real")).toBe("default");

@@ -178,12 +178,7 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className="settingsHubRows">
           <PreferenceRow title="Theme" description="Choose a panel palette. This preference stays in this browser.">
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
-              <optgroup label="Classics">
-                {themeOptions.filter((option) => option.family === "classic").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </optgroup>
-              <optgroup label="Color commentary">
-                {themeOptions.filter((option) => option.family === "color").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </optgroup>
+              {themeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </PreferenceRow>
           <PreferenceRow title="Relative timestamps" description="Show times as “2 hours ago” instead of the full date and time.">

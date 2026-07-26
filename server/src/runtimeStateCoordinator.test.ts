@@ -10,8 +10,8 @@ function server(runtimeIntent?: "running" | "stopped"): ManagedServer {
     serverDir: "/data/servers/server-1",
     runtimeProfile: {
       minecraftVersion: "1.21.4",
-      loader: "fabric",
-      loaderVersion: "0.16.10",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       jarArtifact: { filename: "fabric-server-launch.jar" },

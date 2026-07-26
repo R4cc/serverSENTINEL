@@ -291,3 +291,21 @@ export class AsyncQueue {
     return next;
   }
 }
+
+export type DockerHostPortBinding = {
+  port: string;
+  protocol: string;
+  key: string;
+};
+
+export function dockerHostPortBindings(dockerPorts?: string): DockerHostPortBinding[] {
+  const { portBindings } = parseDockerPorts(dockerPorts);
+  return Object.entries(portBindings).flatMap(([containerPort, bindings]) => {
+    const [, protocol = "tcp"] = containerPort.split("/", 2);
+    return bindings.map((binding) => ({
+      port: binding.HostPort,
+      protocol,
+      key: `${binding.HostPort}/${protocol}`
+    }));
+  });
+}

@@ -1,7 +1,7 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { api } from "../../api";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
-import { demoStatus } from "../../demo";
+import { demoFixtures } from "../../demoRuntime";
 import type { ManagedServer, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails, ServerStatus } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
 import { clientId } from "../../utils/files";
@@ -252,10 +252,10 @@ export function useSchedulesWorkspace({
         if (step.type === "action") {
           update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: "Restarting server" });
           setDemoRunning(false);
-          setStatus(demoStatus(server, false));
+          setStatus(demoFixtures().demoStatus(server, false));
           await new Promise((resolve) => window.setTimeout(resolve, 1_500));
           setDemoRunning(true);
-          setStatus(demoStatus(server, true));
+          setStatus(demoFixtures().demoStatus(server, true));
         } else {
           update({ waitingUntil: undefined, waitingDelaySeconds: undefined, message: `Sent command ${index + 1}` });
           stepDetails.logs = [

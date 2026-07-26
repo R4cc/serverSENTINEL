@@ -110,3 +110,11 @@ function redactPublicDetails(details: Record<string, unknown>): Record<string, u
     return [key, value];
   }));
 }
+
+/** Throws a 409 conflict for a long-running operation that is already active. */
+export function operationInProgress(message: string, code: string): never {
+  const error = new Error(message) as Error & { statusCode?: number; code?: string };
+  error.statusCode = 409;
+  error.code = code;
+  throw error;
+}

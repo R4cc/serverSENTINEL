@@ -1,7 +1,7 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { api, apiErrorFromResponse } from "../../api";
-import { demoListing, demoServerId } from "../../demo";
-import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser, ZipArchiveListing, ZipExtractionPlan } from "../../types";
+import { demoFixtures, demoServerId } from "../../demoRuntime";
+import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
 import { isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
 import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
@@ -54,10 +54,6 @@ type UseFilesWorkspaceOptions = {
   setActiveJobs: Dispatch<SetStateAction<GeneralJob[]>>;
 };
 
-type FileLocation =
-  | { kind: "filesystem"; path: string }
-  | { kind: "archive"; archivePath: string; path: string };
-
 export type FileActionDialog =
   | { kind: "create"; value: string; error: string }
   | { kind: "rename"; value: string; error: string; entry: FileEntry }
@@ -91,9 +87,8 @@ export function useFilesWorkspace({
   const [focusedFilePath, setFocusedFilePath] = useState("");
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const [fileActionDialog, setFileActionDialog] = useState<FileActionDialog | null>(null);
-  const [archiveContext, setArchiveContext] = useState<{ archivePath: string; path: string; encrypted: boolean } | null>(null);
-  const [fileBackStack, setFileBackStack] = useState<FileLocation[]>([]);
-  const [fileForwardStack, setFileForwardStack] = useState<FileLocation[]>([]);
+  const [fileBackStack, setFileBackStack] = useState<string[]>([]);
+  const [fileForwardStack, setFileForwardStack] = useState<string[]>([]);
   const [fileSort, setFileSort] = useState(defaultFileSort);
   const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
   const [fileOperationBusy, setFileOperationBusy] = useState("");
@@ -101,7 +96,6 @@ export function useFilesWorkspace({
   const [filesError, setFilesError] = useState("");
   const [zipDestinationListing, setZipDestinationListing] = useState<FileListing | null>(null);
   const [zipDestinationLoading, setZipDestinationLoading] = useState(false);
-  const [zipConflictPlan, setZipConflictPlan] = useState<ZipExtractionPlan | null>(null);
   const [zipOperationId, setZipOperationId] = useState("");
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
@@ -141,7 +135,6 @@ export function useFilesWorkspace({
   } = useFileEditorSession({
     activeServer,
     activeServerIsDemo,
-    archiveContext,
     listing,
     setListing,
     demoFiles,
@@ -163,16 +156,15 @@ export function useFilesWorkspace({
     refreshFiles: (serverId, path) => loadFiles(serverId, path)
   });
 
-  const permissionPath = archiveContext?.archivePath ?? listing.path;
-  const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view");
-  const canUploadToCurrentPath = !archiveContext && (activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload"));
+  const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "view");
+  const canUploadToCurrentPath = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload");
 
   const selectedEntries = useMemo(() => {
     const selected = new Set(selectedFilePaths);
     return listing.entries.filter((entry) => selected.has(entry.path));
   }, [listing.entries, selectedFilePaths]);
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
-  const selectedZipEntry = !archiveContext && selectedEntry?.type === "file" && /\.zip$/i.test(selectedEntry.name) ? selectedEntry : null;
+  const selectedZipEntry = selectedEntry?.type === "file" && /\.zip$/i.test(selectedEntry.name) ? selectedEntry : null;
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
   const selectedTouchesServerSettings = selectedEntries.some((entry) => isServerPropertiesPath(entry.path));
   const selectedEntryTouchesServerSettings = Boolean(selectedEntry && isServerPropertiesPath(selectedEntry.path));
@@ -215,18 +207,15 @@ export function useFilesWorkspace({
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
-  const archivePermission = (action: "view" | "download") => activeServerIsDemo || Boolean(archiveContext && hasFileManagerPermission(permissionUser, archiveContext.archivePath, action));
-  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (archiveContext ? archivePermission("view") : activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
-  const canOpenSelectedZip = Boolean(selectedZipEntry && !fileRuntimeLocked && !fileOperationBusy && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view")));
+  const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
   const canExtractSelectedZip = Boolean(selectedZipEntry && !activeServerIsDemo && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view"));
-  const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && (archiveContext ? archivePermission("download") : selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download"))) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(!archiveContext && selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
-  const canRenameSelectedItem = Boolean(!archiveContext && selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
-  const canDeleteSelectedItems = Boolean(!archiveContext && selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
+  const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
 
   function canDragFileEntry(entry: FileEntry) {
-    return !archiveContext
-      && !fileRuntimeLocked
+    return !fileRuntimeLocked
       && !fileOperationBusy
       && !zipOperationId
       && !(serverRequiresStoppedForMutableConfig && isServerPropertiesPath(entry.path))
@@ -258,23 +247,12 @@ export function useFilesWorkspace({
         ? "A file operation is already running."
         : "";
   const fileBreadcrumbs = useMemo(() => {
-    if (archiveContext) {
-      const archiveParts = archiveContext.archivePath.split("/").filter(Boolean);
-      const archiveName = archiveParts.pop() ?? archiveContext.archivePath;
-      const entryParts = archiveContext.path.split("/").filter(Boolean);
-      return [
-        { label: "/", path: "/", kind: "filesystem" as const },
-        ...archiveParts.map((part, index) => ({ label: part, path: `/${archiveParts.slice(0, index + 1).join("/")}`, kind: "filesystem" as const })),
-        { label: archiveName, path: "/", kind: "archive" as const },
-        ...entryParts.map((part, index) => ({ label: part, path: `/${entryParts.slice(0, index + 1).join("/")}`, kind: "archive" as const }))
-      ];
-    }
     const parts = listing.path.split("/").filter(Boolean);
     return [
-      { label: "/", path: "/", kind: "filesystem" as const },
-      ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}`, kind: "filesystem" as const }))
+      { label: "/", path: "/" },
+      ...parts.map((part, index) => ({ label: part, path: `/${parts.slice(0, index + 1).join("/")}` }))
     ];
-  }, [listing.path, archiveContext]);
+  }, [listing.path]);
 
   useEffect(() => {
     if (fileSelectAllRef.current) {
@@ -307,24 +285,21 @@ export function useFilesWorkspace({
       setNotice(message);
       return false;
     }
-    const previousLocation: FileLocation = archiveContext
-      ? { kind: "archive", archivePath: archiveContext.archivePath, path: archiveContext.path }
-      : { kind: "filesystem", path: listing.path };
+    const previousPath = listing.path;
     setFilesLoading(true);
     setFilesError("");
     setNotice("");
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
-        const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+        const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
         writeStoredFileLocation(serverId, nextListing.path);
-        setArchiveContext(null);
         setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
         setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
         if (!preserveSelection) setSelectionAnchorPath("");
         setFilePreview({ path: "", loading: false, data: null, error: "" });
-        if (historyMode === "push" && (previousLocation.kind !== "filesystem" || nextListing.path !== previousLocation.path)) {
-          setFileBackStack((current) => [...current, previousLocation].slice(-50));
+        if (historyMode === "push" && nextListing.path !== previousPath) {
+          setFileBackStack((current) => [...current, previousPath].slice(-50));
           setFileForwardStack([]);
         }
       }
@@ -336,14 +311,13 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
         writeStoredFileLocation(serverId, nextListing.path);
-        setArchiveContext(null);
         setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
         setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
         if (!preserveSelection) setSelectionAnchorPath("");
         setFilePreview({ path: "", loading: false, data: null, error: "" });
         setFilesError("");
-        if (historyMode === "push" && (previousLocation.kind !== "filesystem" || nextListing.path !== previousLocation.path)) {
-          setFileBackStack((current) => [...current, previousLocation].slice(-50));
+        if (historyMode === "push" && nextListing.path !== previousPath) {
+          setFileBackStack((current) => [...current, previousPath].slice(-50));
           setFileForwardStack([]);
         }
       }
@@ -365,101 +339,40 @@ export function useFilesWorkspace({
     await loadFiles(activeServer.id, path, "push");
   }
 
-  async function loadArchive(serverId: string, archivePath: string, entryPath = "/", historyMode: "replace" | "push" | "back" | "forward" = "push", preserveSelection = false) {
-    if (isProvisioning || activeServerIsDemo) return false;
-    if (!hasFileManagerPermission(permissionUser, archivePath, "view")) {
-      notify("warning", "View files permission is required to open this ZIP archive.");
-      return false;
-    }
-    const previousLocation: FileLocation = archiveContext
-      ? { kind: "archive", archivePath: archiveContext.archivePath, path: archiveContext.path }
-      : { kind: "filesystem", path: listing.path };
-    setFilesLoading(true);
-    setFilesError("");
-    try {
-      const next = await api<ZipArchiveListing>(`/api/servers/${serverId}/files/archive?path=${encodeURIComponent(archivePath)}&entryPath=${encodeURIComponent(entryPath)}`);
-      setListing({ path: next.path, entries: next.entries });
-      setArchiveContext({ archivePath: next.archivePath, path: next.path, encrypted: next.encrypted });
-      setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPathValue) => next.entries.some((entry) => entry.path === entryPathValue)) : []);
-      setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, next.entries.map((entry) => entry.path)) : "");
-      if (!preserveSelection) setSelectionAnchorPath("");
-      setFilePreview({ path: "", loading: false, data: null, error: "" });
-      if (historyMode === "push" && (previousLocation.kind !== "archive" || previousLocation.archivePath !== next.archivePath || previousLocation.path !== next.path)) {
-        setFileBackStack((current) => [...current, previousLocation].slice(-50));
-        setFileForwardStack([]);
-      }
-      return true;
-    } catch (error) {
-      const message = errorMessage(error, "Could not open the ZIP archive.");
-      setFilesError(message);
-      notify("error", message);
-      return false;
-    } finally {
-      setFilesLoading(false);
-    }
-  }
-
-  async function navigateArchive(path: string) {
-    if (!activeServer || !archiveContext) return;
-    await loadArchive(activeServer.id, archiveContext.archivePath, path, "push");
-  }
-
-  async function loadLocation(location: FileLocation, historyMode: "back" | "forward") {
-    if (!activeServer) return false;
-    return location.kind === "archive"
-      ? loadArchive(activeServer.id, location.archivePath, location.path, historyMode)
-      : loadFiles(activeServer.id, location.path, historyMode);
-  }
-
   async function refreshCurrentFiles() {
     if (!activeServer) return;
-    if (archiveContext) await loadArchive(activeServer.id, archiveContext.archivePath, archiveContext.path, "replace", true);
-    else await loadFiles(activeServer.id, listing.path, "replace", true);
+    await loadFiles(activeServer.id, listing.path, "replace", true);
   }
 
   async function navigateFilesUp() {
-    if (archiveContext) {
-      if (archiveContext.path === "/") await navigateFiles(parentPath(archiveContext.archivePath));
-      else await navigateArchive(parentPath(archiveContext.path));
-      return;
-    }
     if (listing.path !== "/") await navigateFiles(parentPath(listing.path));
   }
 
   async function navigateBackFiles() {
     if (!activeServer || fileBackStack.length === 0) return;
     const target = fileBackStack[fileBackStack.length - 1];
-    const current: FileLocation = archiveContext ? { kind: "archive", archivePath: archiveContext.archivePath, path: archiveContext.path } : { kind: "filesystem", path: listing.path };
-    const loaded = await loadLocation(target, "back");
+    const currentPath = listing.path;
+    const loaded = await loadFiles(activeServer.id, target, "back");
     if (loaded) {
       setFileBackStack((current) => current.slice(0, -1));
-      setFileForwardStack((entries) => [current, ...entries].slice(0, 50));
+      setFileForwardStack((entries) => [currentPath, ...entries].slice(0, 50));
     }
   }
 
   async function navigateForwardFiles() {
     if (!activeServer || fileForwardStack.length === 0) return;
     const target = fileForwardStack[0];
-    const current: FileLocation = archiveContext ? { kind: "archive", archivePath: archiveContext.archivePath, path: archiveContext.path } : { kind: "filesystem", path: listing.path };
-    const loaded = await loadLocation(target, "forward");
+    const currentPath = listing.path;
+    const loaded = await loadFiles(activeServer.id, target, "forward");
     if (loaded) {
       setFileForwardStack((current) => current.slice(1));
-      setFileBackStack((entries) => [...entries, current].slice(-50));
+      setFileBackStack((entries) => [...entries, currentPath].slice(-50));
     }
   }
 
   function activateFileEntry(entry: FileEntry) {
     if (entry.type === "directory") {
-      if (archiveContext) void navigateArchive(entry.path);
-      else void navigateFiles(entry.path);
-      return;
-    }
-    if (!archiveContext && /\.zip$/i.test(entry.name) && activeServer && !activeServerIsDemo) {
-      setSelectedFilePaths([entry.path]);
-      setFocusedFilePath(entry.path);
-      setSelectionAnchorPath(entry.path);
-      if (fileRuntimeLocked || fileOperationBusy) return;
-      void loadArchive(activeServer.id, entry.path, "/", "push");
+      void navigateFiles(entry.path);
       return;
     }
     if (!isEditableFile(entry)) {
@@ -475,8 +388,7 @@ export function useFilesWorkspace({
   async function loadFilePreview(entry: FileEntry) {
     if (!activeServer) return;
     setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
-    const previewPermissionPath = archiveContext?.archivePath ?? entry.path;
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, previewPermissionPath, "view")) {
+    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, entry.path, "view")) {
       setFilePreview((current) => current.path === entry.path
         ? { path: entry.path, loading: false, data: null, error: "View files permission is required to preview this file." }
         : current);
@@ -500,10 +412,7 @@ export function useFilesWorkspace({
       return;
     }
     try {
-      const previewUrl = archiveContext
-        ? `/api/servers/${activeServer.id}/files/archive/preview?path=${encodeURIComponent(archiveContext.archivePath)}&entryPath=${encodeURIComponent(entry.path)}`
-        : `/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`;
-      const preview = await api<FilePreview>(previewUrl);
+      const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`);
       setFilePreview((current) => current.path === entry.path
         ? { path: entry.path, loading: false, data: preview, error: "" }
         : current);
@@ -583,7 +492,7 @@ export function useFilesWorkspace({
         const nextMods = demoInstalledMods.filter((mod) => !deletedModPaths.has(`/mods/${mod.filename}`));
         setDemoFiles(nextFiles);
         setDemoInstalledMods(nextMods);
-        setListing(demoListing(listing.path, nextFiles, nextMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, nextMods));
         clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
         setSelectedFilePaths([]);
         setFileActionDialog(null);
@@ -642,7 +551,7 @@ export function useFilesWorkspace({
         const folderPath = joinPublicPath(listing.path, name.trim());
         const nextFiles = { ...demoFiles, [joinPublicPath(folderPath, ".serversentinel-folder")]: "" };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/folder`, {
           method: "POST",
@@ -686,7 +595,7 @@ export function useFilesWorkspace({
         const content = await file.text();
         const nextFiles = { ...demoFiles, [targetPath]: content };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         const form = new FormData();
         form.append("path", listing.path);
@@ -728,19 +637,6 @@ export function useFilesWorkspace({
     URL.revokeObjectURL(objectUrl);
   }
 
-  async function downloadResponse(response: Response, fallbackFilename: string) {
-    if (!response.ok) throw await apiErrorFromResponse(response);
-    const disposition = response.headers.get("content-disposition") ?? "";
-    const encodedName = disposition.match(/filename="([^"]+)"/)?.[1];
-    const filename = encodedName ? decodeURIComponent(encodedName) : fallbackFilename;
-    const objectUrl = URL.createObjectURL(await response.blob());
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
-  }
-
   async function downloadSelectedItems() {
     if (!activeServer || selectedEntries.length === 0) return;
     if (!canDownloadSelectedItems) return;
@@ -759,17 +655,6 @@ export function useFilesWorkspace({
         anchor.download = filename;
         anchor.click();
         URL.revokeObjectURL(url);
-      } else if (archiveContext) {
-        if (selectedEntries.length === 1 && selectedEntries[0].type === "file") {
-          await downloadUrl(`/api/servers/${activeServer.id}/files/archive/download?path=${encodeURIComponent(archiveContext.archivePath)}&entryPath=${encodeURIComponent(selectedEntries[0].path)}`, selectedEntries[0].name);
-        } else {
-          await downloadResponse(await fetch(`/api/servers/${activeServer.id}/files/archive/download`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-            credentials: "same-origin",
-            body: JSON.stringify({ path: archiveContext.archivePath, entryPaths: selectedEntries.map((entry) => entry.path) })
-          }), "archive-selection.zip");
-        }
       } else {
         const intent = await api<DownloadIntent>(`/api/servers/${activeServer.id}/files/download/intent`, {
           method: "POST",
@@ -796,11 +681,6 @@ export function useFilesWorkspace({
     return filename.replace(/\.zip$/i, "").trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_") || "archive";
   }
 
-  async function openSelectedZip() {
-    if (!activeServer || !selectedZipEntry || !canOpenSelectedZip) return;
-    await loadArchive(activeServer.id, selectedZipEntry.path, "/", "push");
-  }
-
   async function waitForZipOperation(operationId: string) {
     try {
       for (;;) {
@@ -819,7 +699,7 @@ export function useFilesWorkspace({
             finalNotification: { type: "success", text: "ZIP extraction completed." },
             dismissible: true
           } : job));
-          if (!archiveContext && activeServer) await loadFiles(activeServer.id, listing.path);
+          if (activeServer) await loadFiles(activeServer.id, listing.path);
           await refreshModsAfterFilesChange();
           return;
         }
@@ -861,13 +741,14 @@ export function useFilesWorkspace({
     void waitForZipOperation(operation.id);
   }
 
-  async function startZipExtraction(plan: ZipExtractionPlan, conflictPolicy: "replace" | "skip") {
-    if (!activeServer || !selectedZipEntry || zipOperationId) return;
-    setZipConflictPlan(null);
+  async function startZipExtraction(destinationPath: string) {
+    if (!activeServer || !selectedZipEntry || !canExtractSelectedZip) return;
+    const archiveEntry = selectedZipEntry;
+    setFileOperationBusy("zip-extract");
     try {
       const operation = await api<OperationRecord>(`/api/servers/${activeServer.id}/files/archive/extract`, {
         method: "POST",
-        body: JSON.stringify({ path: selectedZipEntry.path, destinationPath: plan.destinationPath, conflictPolicy })
+        body: JSON.stringify({ path: archiveEntry.path, destinationPath, conflictPolicy: "replace" })
       });
       trackedZipOperationsRef.current.add(operation.id);
       setZipOperationId(operation.id);
@@ -876,7 +757,7 @@ export function useFilesWorkspace({
         type: "file-extract",
         status: operation.status,
         title: "Extracting ZIP archive",
-        subject: selectedZipEntry.name,
+        subject: archiveEntry.name,
         progress: operation.progress,
         task: operation.task || "Starting extraction",
         dismissible: false
@@ -884,25 +765,6 @@ export function useFilesWorkspace({
       void waitForZipOperation(operation.id);
     } catch (error) {
       notify("error", errorMessage(error, "Could not start ZIP extraction."));
-    }
-  }
-
-  async function planSelectedZipExtraction(destinationPath: string) {
-    if (!activeServer || !selectedZipEntry || !canExtractSelectedZip) return;
-    setFileOperationBusy("zip-plan");
-    try {
-      const plan = await api<ZipExtractionPlan>(`/api/servers/${activeServer.id}/files/archive/extract/plan`, {
-        method: "POST",
-        body: JSON.stringify({ path: selectedZipEntry.path, destinationPath })
-      });
-      if (plan.blocked.length) {
-        notify("error", `Extraction is blocked by ${plan.blocked[0].path}.`);
-        return;
-      }
-      if (plan.conflicts.length) setZipConflictPlan(plan);
-      else await startZipExtraction(plan, "replace");
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not prepare ZIP extraction."));
     } finally {
       setFileOperationBusy("");
     }
@@ -910,12 +772,12 @@ export function useFilesWorkspace({
 
   async function extractSelectedZipHere() {
     if (!selectedZipEntry) return;
-    await planSelectedZipExtraction(parentPath(selectedZipEntry.path));
+    await startZipExtraction(parentPath(selectedZipEntry.path));
   }
 
   async function extractSelectedZipToFolder() {
     if (!selectedZipEntry) return;
-    await planSelectedZipExtraction(joinPublicPath(parentPath(selectedZipEntry.path), zipDestinationName(selectedZipEntry.name)));
+    await startZipExtraction(joinPublicPath(parentPath(selectedZipEntry.path), zipDestinationName(selectedZipEntry.name)));
   }
 
   async function loadZipDestination(path: string) {
@@ -939,7 +801,7 @@ export function useFilesWorkspace({
   async function confirmZipDestination() {
     const destination = zipDestinationListing?.path;
     setZipDestinationListing(null);
-    if (destination) await planSelectedZipExtraction(destination);
+    if (destination) await startZipExtraction(destination);
   }
 
   async function renameSelectedFile(name: string, entry = selectedEntry) {
@@ -974,7 +836,7 @@ export function useFilesWorkspace({
           }
         }
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file`, {
           method: "PATCH",
@@ -1021,7 +883,7 @@ export function useFilesWorkspace({
           setDemoInstalledMods((current) => current.filter((mod) => mod.filename !== movedDemoMod.filename));
         }
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, movedDemoMod ? demoInstalledMods.filter((mod) => mod.filename !== movedDemoMod.filename) : demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, movedDemoMod ? demoInstalledMods.filter((mod) => mod.filename !== movedDemoMod.filename) : demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file/move`, {
           method: "POST",
@@ -1062,7 +924,7 @@ export function useFilesWorkspace({
       if (activeServerIsDemo) {
         const nextFiles = { ...demoFiles, [targetPath]: demoFiles[entry.path] ?? "" };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file/duplicate`, {
           method: "POST",
@@ -1086,7 +948,6 @@ export function useFilesWorkspace({
 
   function clearWorkspace() {
     setListing({ path: "/", entries: [] });
-    setArchiveContext(null);
     setFilesError("");
     setFilesLoading(false);
     setSelectedFilePaths([]);
@@ -1100,8 +961,7 @@ export function useFilesWorkspace({
   }
 
   function initializeDemoRoot(path = "/") {
-    setArchiveContext(null);
-    const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+    const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
     setListing(nextListing);
     writeStoredFileLocation(demoServerId, nextListing.path);
   }
@@ -1110,7 +970,6 @@ export function useFilesWorkspace({
     setFilesError(message);
     setFilesLoading(false);
     setListing({ path: "/", entries: [] });
-    setArchiveContext(null);
     setSelectedFilePaths([]);
     setFocusedFilePath("");
     setSelectionAnchorPath("");
@@ -1129,9 +988,7 @@ export function useFilesWorkspace({
     setFileForwardStack([]);
     setFileReadError("");
     setFilePreview({ path: "", loading: false, data: null, error: "" });
-    setArchiveContext(null);
     setZipDestinationListing(null);
-    setZipConflictPlan(null);
     resetEditorState();
     if (activeServer) void navigateFiles("/");
   }
@@ -1139,7 +996,6 @@ export function useFilesWorkspace({
   return {
     data: {
       listing,
-      archiveContext,
       selectedEntries,
       selectedEntry,
       selectedZipEntry,
@@ -1148,8 +1004,7 @@ export function useFilesWorkspace({
       selectionSummary,
       fileBreadcrumbs,
       filePreview,
-      zipDestinationListing,
-      zipConflictPlan
+      zipDestinationListing
     },
     state: {
       filesLoading,
@@ -1176,7 +1031,6 @@ export function useFilesWorkspace({
       canEditSelectedPath,
       editDisabledReason,
       canOpenSelectedFile,
-      canOpenSelectedZip,
       canExtractSelectedZip,
       canDownloadSelectedItems,
       canDuplicateSelectedFile,
@@ -1198,8 +1052,6 @@ export function useFilesWorkspace({
       loadFiles,
       refreshCurrentFiles,
       navigateFiles,
-      navigateArchive,
-      loadArchive,
       navigateBackFiles,
       navigateForwardFiles,
       navigateFilesUp,
@@ -1216,13 +1068,11 @@ export function useFilesWorkspace({
       openCreateFolderDialog,
       uploadFile,
       downloadSelectedItems,
-      openSelectedZip,
       extractSelectedZipHere,
       extractSelectedZipToFolder,
       openZipDestinationPicker,
       loadZipDestination,
       confirmZipDestination,
-      startZipExtraction,
       resumeZipOperation,
       openDuplicateDialog,
       openRenameDialog,
@@ -1249,8 +1099,7 @@ export function useFilesWorkspace({
       setEditorText,
       setDirty,
       setDiscardEditorRequest,
-      setZipDestinationListing,
-      setZipConflictPlan
+      setZipDestinationListing
     }
   };
 }

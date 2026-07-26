@@ -166,6 +166,10 @@ export class OperationsRepository {
     return this.find(id);
   }
 
+  /**
+   * Progress reporting calls this on every step of long extractions and
+   * provisioning runs, so it deliberately does not read the row back.
+   */
   update(id: string, patch: OperationPatch) {
     this.storage.connection.prepare(`
       UPDATE operations
@@ -185,7 +189,6 @@ export class OperationsRepository {
       patch.logSummary ?? null,
       id
     );
-    return this.find(id);
   }
 
   succeed(id: string, patch: OperationPatch = {}, now = new Date().toISOString()) {

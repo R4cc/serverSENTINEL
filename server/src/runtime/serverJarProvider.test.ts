@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ServerRuntimeType } from "../types.js";
-import type { ServerJarProvider } from "./profile.js";
+import type { ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
+import type { RuntimeMinecraftVersion, RuntimeVersion, ServerJarProvider } from "./profile.js";
 import { RuntimeServerJarProvider } from "./serverJarProvider.js";
 
 function provider(runtimeType: ServerRuntimeType): ServerJarProvider {
   return {
-    listMinecraftVersions: vi.fn(async () => [{ id: runtimeType === "paper" ? "1.21.11" : "1.21.4", supported: true, javaMajorVersion: 21 }]),
-    listRuntimeVersions: vi.fn(async () => [{ id: "version", runtimeVersion: runtimeType === "paper" ? "132" : "0.16.10" }]),
-    resolveServerJar: vi.fn(async (input) => ({
+    listMinecraftVersions: vi.fn(async (): Promise<RuntimeMinecraftVersion[]> => [{ id: runtimeType === "paper" ? "1.21.11" : "1.21.4", supported: true, javaMajorVersion: 21 }]),
+    listRuntimeVersions: vi.fn(async (): Promise<RuntimeVersion[]> => [{ id: "version", runtimeVersion: runtimeType === "paper" ? "132" : "0.16.10" }]),
+    resolveServerJar: vi.fn(async (input): Promise<ServerRuntimeProfile> => ({
       minecraftVersion: input.minecraftVersion,
       runtimeType,
       runtimeVersion: input.runtimeVersion || "latest",

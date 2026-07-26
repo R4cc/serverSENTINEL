@@ -13,7 +13,15 @@ function node(): ManagedNode {
 }
 
 function server(index: number): ManagedServer {
-  return { id: `server-${index}`, nodeId: "node-1", displayName: `Server ${index}`, serverDir: `/servers/${index}`, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+  return {
+    id: `server-${index}`, nodeId: "node-1", displayName: `Server ${index}`, serverDir: `/servers/${index}`,
+    runtimeProfile: {
+      minecraftVersion: "1.21.4", runtimeType: "fabric", runtimeVersion: "0.16.10", javaMajorVersion: 21,
+      jarProvider: "mcjars", jarArtifact: { filename: "fabric-server-launch.jar" },
+      compatibilityStatus: "compatible", resolvedAt: "2026-01-01T00:00:00.000Z"
+    },
+    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z"
+  };
 }
 
 describe("RemoteObservationCoordinator", () => {

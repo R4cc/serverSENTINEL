@@ -231,7 +231,7 @@ export class PanelNodeConnections {
 
   async download(
     node: ManagedNode,
-    command: Extract<NodeTransferStartMessage["command"], "files.download" | "files.archive.download">,
+    command: Extract<NodeTransferStartMessage["command"], "files.download">,
     payload: unknown,
     maxBytes: number,
     timeoutMs = 2 * 60 * 1000

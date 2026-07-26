@@ -1,18 +1,12 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { demoListing } from "../../demo";
-import type { FileEditLease, FileListing, FilePreview, InstalledMod, ManagedServer, PublicUser } from "../../types";
+import { demoFixtures } from "../../demoRuntime";
+import type { FileEditLease, FileListing, InstalledMod, ManagedServer, PublicUser } from "../../types";
 import { isEditableFile } from "../../utils/files";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { errorMessage } from "../../utils/appHelpers";
 import { fileEditBlockedReason, fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
-
-export type FileArchiveContext = {
-  archivePath: string;
-  path: string;
-  encrypted: boolean;
-};
 
 export type DiscardEditorRequest = { action: "close" } | { action: "switch"; path: string };
 
@@ -21,7 +15,6 @@ type Notify = (type: "success" | "error" | "info" | "warning", text: string) => 
 type FileEditorSessionInputs = {
   activeServer: ManagedServer | null | undefined;
   activeServerIsDemo: boolean;
-  archiveContext: FileArchiveContext | null;
   listing: FileListing;
   setListing: Dispatch<SetStateAction<FileListing>>;
   demoFiles: Record<string, string>;
@@ -46,7 +39,6 @@ type FileEditorSessionInputs = {
 export function useFileEditorSession({
   activeServer,
   activeServerIsDemo,
-  archiveContext,
   listing,
   setListing,
   demoFiles,
@@ -84,8 +76,7 @@ export function useFileEditorSession({
   const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
   const editDisabledReason = fileEditBlockedReason(selectedPath, serverRequiresStoppedForMutableConfig, stoppedServerMutationMessage);
-  const canEditSelectedPath = !archiveContext
-    && !editDisabledReason
+  const canEditSelectedPath = !editDisabledReason
     && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
   function releaseFileLease(lease = fileEditLease) {
@@ -192,8 +183,7 @@ export function useFileEditorSession({
       notify("warning", message);
       return;
     }
-    const openPermissionPath = archiveContext?.archivePath ?? path;
-    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, openPermissionPath, "view")) {
+    if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
       const message = "View files permission is required to open this file.";
       setFileReadError(message);
       setNotice(message);
@@ -245,18 +235,6 @@ export function useFileEditorSession({
       return;
     }
     try {
-      if (archiveContext) {
-        const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/files/archive/preview?path=${encodeURIComponent(archiveContext.archivePath)}&entryPath=${encodeURIComponent(path)}`);
-        if (preview.preview !== "text") throw new Error(preview.message || "This archive entry cannot be opened as text");
-        setSelectedPath(path);
-        setEditorText(preview.content ?? "");
-        setSavedEditorText(preview.content ?? "");
-        setFileRevision("");
-        setFileEditMode(false);
-        setDirty(false);
-        setSelectedFilePaths([path]);
-        return;
-      }
       const file = await api<{ path: string; content: string; revision: string }>(
         `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
       );
@@ -279,10 +257,6 @@ export function useFileEditorSession({
   }
 
   async function enterFileEditMode() {
-    if (archiveContext) {
-      setFileLeaseMessage("ZIP archive contents are read-only. Extract the archive before editing files.");
-      return;
-    }
     if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
     if (editDisabledReason) {
       setFileLeaseMessage(editDisabledReason);
@@ -350,7 +324,7 @@ export function useFileEditorSession({
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
-      setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       setFileSaving(false);
       return;
     }

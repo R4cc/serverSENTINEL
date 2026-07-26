@@ -1,27 +1,34 @@
 import type {
+  ManagedNodeCore,
+  ManagedServerCore,
   Permission,
   ReleaseChannel,
-  ResolvedServerVersions,
-  RestartRequiredChange,
   RolePreset,
-  RuntimeIntent,
-  ScheduledExecution,
-  ServerAccess,
-  ServerRuntimeProfile
+  ServerAccess
 } from "@serversentinel/contracts";
 
 export type {
+  CreateNodeResponse,
   JavaMajorVersion,
+  ManagedServerPort,
+  NodeInstallInstructions,
+  NodeProtocolMode,
+  NodeStatus,
+  NodeType,
   OperationRecord,
   OperationStatus,
   OperationType,
   Permission,
   PlayerSnapshot,
   PlayerSnapshotErrorCode,
+  PublicNode,
+  PublicServer,
   PublicUser,
   ReleaseChannel,
   ResolvedServerVersions,
+  RestartPhase,
   RestartRequiredChange,
+  RestartRequiredModSnapshot,
   RolePreset,
   ScheduleStep,
   ScheduledActiveRun,
@@ -92,14 +99,6 @@ export type InstalledModMetadata = {
   reviewAcknowledgedAt?: string;
 };
 
-export type RestartRequiredModSnapshot = {
-  identity: string;
-  displayName: string;
-  filename: string;
-  enabled: boolean;
-  sha1: string;
-};
-
 export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
 
 export type ModCompatibility = {
@@ -163,86 +162,24 @@ export type FileEditLease = {
   fileRevision: string;
 };
 
-export type NodeType = "local" | "remote";
-
-export type NodeStatus = "online" | "offline" | "unknown";
-
-export type ManagedNode = {
-  id: string;
-  name: string;
-  type: NodeType;
-  status: NodeStatus;
-  isInternal: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastSeenAt?: string;
-  connectedAt?: string;
-  agentVersion?: string;
-  buildId?: string;
-  protocolVersion?: string;
-  capabilities?: string[];
-  features?: string[];
-  dockerStatus?: string;
-  dataPathStatus?: string;
-  totalMemory?: number;
+/**
+ * The stored node record: the shared wire contract plus the credential hashes
+ * that must never leave the panel. PublicNode is the projection clients see.
+ */
+export type ManagedNode = ManagedNodeCore & {
   secretHash?: string;
   joinTokenHash?: string;
-  joinTokenExpiresAt?: string;
 };
 
-export type PublicNode = Omit<ManagedNode, "secretHash" | "joinTokenHash"> & {
-  hasPendingJoinToken?: boolean;
-  protocolMode?: "current" | "fallback" | "update-only" | "incompatible";
-};
-
-export type ManagedServer = {
-  id: string;
-  nodeId: string;
-  displayName: string;
+/**
+ * The stored server record: the shared wire contract plus the node-local
+ * filesystem details that must never leave the panel. PublicServer is the
+ * projection clients see.
+ */
+export type ManagedServer = ManagedServerCore & {
   serverDir: string;
-  storageName?: string;
-  runtimeProfile: ServerRuntimeProfile;
-  dockerContainer?: string;
-  dockerImage?: string;
   dockerMountSource?: string;
   dockerWorkingDir?: string;
-  dockerPorts?: string;
-  managedPorts?: ManagedServerPort[];
-  javaArgs?: string;
-  startOnNodeStart?: boolean;
-  runtimeIntent?: RuntimeIntent;
-  restartPhase?: RestartPhase;
-  crashAttemptTimestamps?: string[];
-  crashNextRetryAt?: string;
-  crashLoopSince?: string;
-  crashStableSince?: string;
-  restartRequiredSince?: string;
-  restartRequiredChanges?: RestartRequiredChange[];
-  restartRequiredModBaseline?: RestartRequiredModSnapshot[];
-  schedules?: ScheduledExecution[];
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type RestartPhase = "stopping" | "starting";
-
-export type ManagedServerPort = {
-  id: string;
-  name: string;
-  type: "minecraft" | "query" | "custom";
-  protocol: "tcp" | "udp";
-  internalPort: number;
-  externalPort: number;
-  required: boolean;
-  removable: boolean;
-  advanced: boolean;
-};
-
-export type PublicServer = Omit<ManagedServer, "serverDir" | "dockerMountSource" | "dockerWorkingDir"> & {
-  directoryLabel: string;
-  hasDockerContainer: boolean;
-  nodeName?: string;
-  resolvedVersions?: ResolvedServerVersions;
 };
 
 export type DockerState = "running" | "exited" | "created" | "paused" | "restarting" | "removing" | "dead" | "unknown";
