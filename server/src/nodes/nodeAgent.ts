@@ -18,6 +18,7 @@ import { allowedForChannel, fetchProject, fetchProjectVersions, minecraftVersion
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { ModHashCache } from "../modHashCache.js";
 import { managedContentFileSizeLimit } from "../managedContentLimits.js";
+import { registerShutdownHandlers } from "../shutdown.js";
 import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -1768,14 +1769,33 @@ export async function startNodeAgent() {
   const startupId = randomUUID();
   let persisted = await readNodeIdentity();
   let reconnectAttempt = 0;
+  let panelSocket: WebSocket | undefined;
+  let stopping = false;
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
 
+  registerShutdownHandlers(async () => {
+    stopping = true;
+    // Closing the session lets the panel mark this node offline immediately
+    // instead of waiting out its heartbeat timeout, and checkpoints the WAL.
+    panelSocket?.close(1001, "Node agent shutting down");
+    // Left assigned on purpose: a late reader gets a closed-connection error
+    // rather than silently reopening the data root mid-shutdown.
+    nodeStorageDatabase?.close();
+  }, {
+    logger: {
+      info: (fields, message) => console.info(`${message} (${JSON.stringify(fields)})`),
+      error: (fields, message) => console.error(`${message} (${JSON.stringify(fields)})`)
+    }
+  });
+
   const connect = async () => {
+    if (stopping) return;
     persisted = await readNodeIdentity();
     const target = panelWebSocketUrl();
     console.info(`Connecting node agent to ${target}`);
     const socket = new WebSocket(target, { perMessageDeflate: false, maxPayload: nodeProtocolControlMessageMaxBytes });
+    panelSocket = socket;
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
@@ -1809,6 +1829,7 @@ export async function startNodeAgent() {
       stopAllStreams();
       if (heartbeatWatchdog) clearInterval(heartbeatWatchdog);
       if (stableSessionTimer) clearTimeout(stableSessionTimer);
+      if (stopping) return;
       const reconnectDelayMs = nodeReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.max(1, Math.round(reconnectDelayMs / 1000))}s.`);

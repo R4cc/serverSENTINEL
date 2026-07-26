@@ -8,6 +8,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const originalEnv = { ...process.env };
 const temporaryDirectories: string[] = [];
 
+function sessionCookieFrom(response: { headers: Record<string, unknown> }) {
+  const header = response.headers["set-cookie"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" ? value.split(";", 1)[0] : undefined;
+}
+
 afterEach(async () => {
   process.env = { ...originalEnv };
   vi.restoreAllMocks();
@@ -77,7 +83,7 @@ describe("Fastify application factory", () => {
         payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
       });
       expect(login.statusCode, login.body).toBe(200);
-      const cookie = login.headers["set-cookie"]?.split(";", 1)[0];
+      const cookie = sessionCookieFrom(login);
       expect(cookie).toBeTruthy();
 
       const started = await app.inject({
@@ -147,7 +153,7 @@ describe("Fastify application factory", () => {
         payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
       });
       expect(adminLogin.statusCode, adminLogin.body).toBe(200);
-      const adminCookie = adminLogin.headers["set-cookie"]?.split(";", 1)[0];
+      const adminCookie = sessionCookieFrom(adminLogin);
       expect(adminCookie).toBeTruthy();
 
       const configured = await app.inject({
@@ -175,7 +181,7 @@ describe("Fastify application factory", () => {
         payload: { username: "manager", password: "password123" }
       });
       expect(managerLogin.statusCode, managerLogin.body).toBe(200);
-      const managerCookie = managerLogin.headers["set-cookie"]?.split(";", 1)[0];
+      const managerCookie = sessionCookieFrom(managerLogin);
       expect(managerCookie).toBeTruthy();
       const payload = {
         artifactBase64: Buffer.from("{}", "utf8").toString("base64"),
@@ -262,7 +268,7 @@ describe("Fastify application factory", () => {
       payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
     });
     expect(registered.statusCode, registered.body).toBe(200);
-    const cookie = registered.headers["set-cookie"]?.split(";", 1)[0];
+    const cookie = sessionCookieFrom(registered);
     expect(cookie).toBeTruthy();
 
     const initial = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie } });
@@ -330,7 +336,7 @@ describe("Fastify application factory", () => {
         payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
       });
       expect(registered.statusCode, registered.body).toBe(200);
-      const adminCookie = registered.headers["set-cookie"]?.split(";", 1)[0];
+      const adminCookie = sessionCookieFrom(registered);
       expect(adminCookie).toBeTruthy();
 
       for (const rolePreset of ["viewer", "manager"] as const) {
@@ -351,7 +357,7 @@ describe("Fastify application factory", () => {
           payload: { username, password: "password123" }
         });
         expect(response.statusCode, response.body).toBe(200);
-        return response.headers["set-cookie"]?.split(";", 1)[0];
+        return sessionCookieFrom(response);
       };
       const viewerCookie = await login("viewer");
       const managerCookie = await login("manager");
@@ -450,6 +456,77 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: managerCookie }
       });
       expect(crossUserDownload.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("requires servers.view before serving the runtime and version catalogs", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-version-catalog-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18084",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const catalogUrls = [
+      "/api/runtime/types",
+      "/api/fabric/versions",
+      "/api/runtime/fabric/minecraft-versions",
+      "/api/runtime/fabric/versions?minecraftVersion=1.21.4",
+      "/api/runtime/fabric/loader-versions?minecraftVersion=1.21.4"
+    ];
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const adminCookie = sessionCookieFrom(registered);
+
+      // console.view expands to itself only, so this account is authenticated
+      // but holds none of the server permissions the catalogs gate on.
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { username: "console-only", password: "password123", permissions: ["console.view"] }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      expect(created.json().permissions).toEqual(["console.view"]);
+
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        headers: csrf,
+        payload: { username: "console-only", password: "password123" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+
+      for (const url of catalogUrls) {
+        const response = await app.inject({ method: "GET", url, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${url} -> ${response.body}`).toBe(403);
+        expect(response.json().error.code).toBe("PERMISSION_DENIED");
+      }
+
+      for (const url of catalogUrls) {
+        const response = await app.inject({ method: "GET", url, headers: { ...csrf } });
+        expect(response.statusCode, `${url} -> ${response.body}`).toBe(401);
+      }
     } finally {
       await app.close();
     }

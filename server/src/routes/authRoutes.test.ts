@@ -80,8 +80,7 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
       username: user.username,
       rolePreset: user.rolePreset,
       permissions: user.permissions,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
+      createdAt: user.createdAt
     }),
     demoEnabled,
     isDemoUser: (user: Pick<StoredUser, "username"> | null | undefined) => user?.username.toLowerCase() === "demo",

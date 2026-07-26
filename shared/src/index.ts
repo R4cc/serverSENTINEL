@@ -27,6 +27,113 @@ export type Permission =
   | "users.view"
   | "users.manage";
 
+/**
+ * The authorization contract. Panel and web both derive their permission logic
+ * from these tables, so a permission added here reaches every consumer at once.
+ * `ALL_PERMISSIONS` also fixes the canonical sort order used when normalizing.
+ */
+export const ALL_PERMISSIONS = [
+  "servers.view",
+  "servers.control",
+  "servers.create",
+  "servers.delete",
+  "servers.editSettings",
+  "servers.export",
+  "console.view",
+  "console.command",
+  "files.view",
+  "files.edit",
+  "files.delete",
+  "files.upload",
+  "files.download",
+  "mods.view",
+  "mods.install",
+  "mods.upload",
+  "mods.enableDisable",
+  "mods.remove",
+  "mods.update",
+  "schedules.view",
+  "schedules.manage",
+  "settings.view",
+  "integrations.manage",
+  "users.view",
+  "users.manage"
+] as const satisfies readonly Permission[];
+
+const VIEWER_PERMISSIONS = [
+  "servers.view",
+  "console.view",
+  "files.view",
+  "mods.view",
+  "schedules.view",
+  "settings.view"
+] as const satisfies readonly Permission[];
+
+const OPERATOR_PERMISSIONS = [
+  ...VIEWER_PERMISSIONS,
+  "servers.control",
+  "console.command"
+] as const satisfies readonly Permission[];
+
+const MAINTAINER_PERMISSIONS = [
+  ...OPERATOR_PERMISSIONS,
+  "mods.install",
+  "mods.upload",
+  "mods.enableDisable",
+  "mods.remove",
+  "mods.update",
+  "files.edit",
+  "files.upload",
+  "files.download",
+  "schedules.manage"
+] as const satisfies readonly Permission[];
+
+const MANAGER_PERMISSIONS = [
+  ...MAINTAINER_PERMISSIONS,
+  "servers.create",
+  "servers.delete",
+  "servers.editSettings",
+  "servers.export",
+  "files.delete"
+] as const satisfies readonly Permission[];
+
+export const ROLE_PRESETS: Readonly<Record<Exclude<RolePreset, "custom">, readonly Permission[]>> = {
+  viewer: VIEWER_PERMISSIONS,
+  operator: OPERATOR_PERMISSIONS,
+  maintainer: MAINTAINER_PERMISSIONS,
+  manager: MANAGER_PERMISSIONS,
+  admin: ALL_PERMISSIONS
+};
+
+/** Permissions that are implied by, and must be granted alongside, each key. */
+export const PERMISSION_DEPENDENCIES: Readonly<Record<Permission, readonly Permission[]>> = {
+  "servers.view": [],
+  "servers.control": ["servers.view"],
+  "servers.create": ["servers.view"],
+  "servers.delete": ["servers.view"],
+  "servers.editSettings": ["servers.view"],
+  "servers.export": ["servers.view"],
+  "console.view": [],
+  "console.command": ["console.view"],
+  "files.view": [],
+  "files.edit": ["files.view"],
+  "files.delete": ["files.view"],
+  "files.upload": ["files.view"],
+  "files.download": ["files.view"],
+  "mods.view": [],
+  "mods.install": ["mods.view"],
+  "mods.upload": ["mods.view"],
+  "mods.enableDisable": ["mods.view"],
+  "mods.remove": ["mods.view"],
+  "mods.update": ["mods.view"],
+  "schedules.view": [],
+  "schedules.manage": ["schedules.view"],
+  "settings.view": [],
+  "integrations.manage": ["settings.view"],
+  "users.view": [],
+  "users.manage": ["users.view"]
+};
+
 export type OperationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export type OperationType =

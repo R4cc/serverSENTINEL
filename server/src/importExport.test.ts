@@ -470,7 +470,7 @@ describe("export/import artifacts", () => {
         replaceAll() {
           throw new Error("preference write failed");
         }
-      } as ModPreferencesRepository,
+      } as unknown as ModPreferencesRepository,
     })).rejects.toThrow("preference write failed");
 
     expect(repositories.serversRepository.list()).toEqual([]);

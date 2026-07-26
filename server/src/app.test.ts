@@ -49,7 +49,7 @@ import type { RuntimeUploadSource } from "./nodes/types.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
 import { parseMinecraftQueryChallenge } from "./minecraftQuery.js";
-import type { ManagedNode, ManagedServer, ServerEvent } from "./types.js";
+import type { ManagedNode, ManagedServer, ServerEvent, ServerRuntimeProfile } from "./types.js";
 import { managedContentFileSizeLimit } from "./managedContentLimits.js";
 
 describe("live node connectivity", () => {
@@ -181,18 +181,18 @@ describe("Minecraft stop command intent", () => {
   });
 });
 
-function testRuntimeProfile() {
+function testRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.4",
-    loader: "fabric" as const,
-    loaderVersion: "0.16.10",
-    javaMajorVersion: 21 as const,
-    jarProvider: "mcjars" as const,
+    runtimeType: "fabric",
+    runtimeVersion: "0.16.10",
+    javaMajorVersion: 21,
+    jarProvider: "mcjars",
     jarArtifact: {
       filename: "fabric-server-launch.jar",
       downloadUrl: "https://example.invalid/fabric-server-launch.jar"
     },
-    compatibilityStatus: "compatible" as const,
+    compatibilityStatus: "compatible",
     resolvedAt: new Date().toISOString()
   };
 }
@@ -1010,15 +1010,18 @@ describe("server port conflict detection", () => {
 });
 
 describe("Minecraft Query endpoint resolution", () => {
-  const server = (ports = [{ id: "minecraft-query", name: "Minecraft Query", type: "query" as const, protocol: "udp" as const, internalPort: 25566, externalPort: 32566, required: true, removable: false, advanced: true }]) => ({
+  const server = (ports = [{ id: "minecraft-query", name: "Minecraft Query", type: "query" as const, protocol: "udp" as const, internalPort: 25566, externalPort: 32566, required: true, removable: false, advanced: true }]): ManagedServer => ({
     id: "s1",
     nodeId: "local",
-    name: "Test",
-    path: "/tmp/test",
+    displayName: "Test",
+    serverDir: "/tmp/test",
+    runtimeProfile: testRuntimeProfile(),
     dockerContainer: "mc",
     dockerPorts: "25565:25565/tcp,32566:25566/udp",
-    managedPorts: ports
-  }) as ManagedServer;
+    managedPorts: ports,
+    createdAt: "",
+    updatedAt: ""
+  });
 
   it("prefers the managed Minecraft container IP on a shared Docker network and uses internalPort", async () => {
     const { resolveMinecraftQueryEndpoints } = await import("./queryEndpoint.js");

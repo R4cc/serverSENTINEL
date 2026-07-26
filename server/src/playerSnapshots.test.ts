@@ -28,7 +28,7 @@ function coordinator(read: () => Promise<PlayerObservation>, now: () => number) 
     pollMs: 10_000,
     staleMs: 5 * 60 * 1000,
     readServers: async () => [server],
-    runtimeForServer: () => ({ readPlayerObservation: read } as NodeRuntime),
+    runtimeForServer: () => ({ readPlayerObservation: read } as unknown as NodeRuntime),
     now
   });
 }
