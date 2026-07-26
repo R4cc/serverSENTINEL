@@ -51,6 +51,7 @@ import { ModHashCache } from "./modHashCache.js";
 import { cachedIconFilenames, findCachedIconFile } from "./iconFileCache.js";
 import { normalizeInstalledModMetadata } from "./installedModMetadata.js";
 import { managedContentFileSizeLimit } from "./managedContentLimits.js";
+import { registerShutdownHandlers } from "./shutdown.js";
 import { LocalNodeRuntime } from "./nodes/localNodeRuntime.js";
 import type { CreateNodeResponse, NodeInstallInstructions } from "./nodes/apiTypes.js";
 import { buildNodeInstallInstructions } from "./nodes/installInstructions.js";
@@ -4670,6 +4671,14 @@ async function isDemoModeRequest(request: AuthenticatedRequest) {
   return isDemoUser(await currentUserForRequest(request, currentUserFromCookie));
 }
 
+// Upstream runtime/version catalogs back both the create and the edit-properties
+// flows, so they gate on the permission both of those imply rather than on
+// servers.create alone. Demo sessions read the catalogs without a server list.
+async function requireVersionCatalogAccess(request: AuthenticatedRequest) {
+  if (await isDemoModeRequest(request)) return;
+  await requireRequestPermission(request, "servers.view");
+}
+
 app.addHook("preHandler", async (request) => {
   if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
     return;
@@ -5070,9 +5079,27 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
     });
 
     if (!acceptedNode) {
+      logWarn({
+        nodeId: hello.nodeId ?? undefined,
+        nodeName: hello.nodeName,
+        credential: hello.nodeSecret ? "node_secret" : hello.joinToken ? "join_token" : "none",
+        action: "node_join",
+        status: "rejected"
+      }, "Node authentication failed");
       reject("Node authentication failed");
       return;
     }
+
+    logInfo({
+      nodeId: acceptedNode.id,
+      nodeName: acceptedNode.name,
+      agentVersion: acceptedNode.agentVersion,
+      buildId: acceptedNode.buildId,
+      protocolVersion: acceptedNode.protocolVersion,
+      credential: issuedSecret ? "join_token" : "node_secret",
+      action: "node_join",
+      status: "accepted"
+    }, issuedSecret ? "Node registered and connected" : "Node reconnected");
 
     const welcome: PanelWelcome = {
       type: "welcome",
@@ -5157,9 +5184,7 @@ app.delete("/api/settings/player-heads/cache", destructiveRateLimit, async (requ
 });
 
 app.get("/api/fabric/versions", async (request) => {
-  if (!isDemoModeRequest(request)) {
-    await requireRequestPermission(request, "servers.create");
-  }
+  await requireVersionCatalogAccess(request);
   const game = await serverJarProvider.listMinecraftVersions("fabric");
   const latestGame = game.find((version) => version.type === "release") ?? game[0];
   const loader = latestGame ? await serverJarProvider.listRuntimeVersions("fabric", latestGame.id).catch(() => []) : [];
@@ -5171,24 +5196,20 @@ app.get("/api/fabric/versions", async (request) => {
 });
 
 app.get("/api/runtime/types", async (request) => {
-  if (!isDemoModeRequest(request)) await requireRequestPermission(request, "servers.view");
+  await requireVersionCatalogAccess(request);
   return {
     runtimes: (["fabric", "paper"] as const).map((runtimeType) => serverRuntimeDefinition(runtimeType))
   };
 });
 
 app.get<{ Params: { runtimeType: string } }>("/api/runtime/:runtimeType/minecraft-versions", async (request) => {
-  if (!isDemoModeRequest(request)) {
-    await requireRequestPermission(request, "servers.create");
-  }
+  await requireVersionCatalogAccess(request);
   const runtimeType = parseServerRuntimeType(request.params.runtimeType);
   return { runtimeType, versions: await serverJarProvider.listMinecraftVersions(runtimeType) };
 });
 
 app.get<{ Params: { runtimeType: string }; Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/:runtimeType/versions", async (request) => {
-  if (!isDemoModeRequest(request)) {
-    await requireRequestPermission(request, "servers.create");
-  }
+  await requireVersionCatalogAccess(request);
   const minecraftVersion = request.query.minecraftVersion?.trim();
   if (!minecraftVersion) {
     throw new Error("minecraftVersion is required");
@@ -5220,7 +5241,7 @@ app.post<{ Params: { runtimeType: string }; Body: { minecraftVersion?: string; r
 
 // Legacy Fabric endpoints remain available while older web clients roll forward.
 app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
-  if (!isDemoModeRequest(request)) await requireRequestPermission(request, "servers.create");
+  await requireVersionCatalogAccess(request);
   const minecraftVersion = request.query.minecraftVersion?.trim();
   if (!minecraftVersion) throw new Error("minecraftVersion is required");
   const versions = await serverJarProvider.listRuntimeVersions("fabric", minecraftVersion, { forceRefresh: request.query.refresh === "true" });
@@ -8747,6 +8768,7 @@ export async function buildApp() {
 
 export async function startServer() {
 const app = await buildApp();
+registerShutdownHandlers(() => app.close(), { logger: app.log });
 await app.listen({ host: "0.0.0.0", port: config.port });
 app.log.info({ port: config.port }, "serverSENTINEL web panel listening");
 }
