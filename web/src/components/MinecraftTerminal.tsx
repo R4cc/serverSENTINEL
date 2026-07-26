@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { IDisposable } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -105,6 +106,23 @@ export function MinecraftTerminal({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // The fallback DOM renderer rewrites a row's markup for every cell change, so a scrolling
+    // console repaints the whole viewport line by line. The GPU renderer draws it as one frame.
+    // It has to be loaded after open(), and it is unavailable often enough — no WebGL2, a
+    // blocklisted driver, a lost context after the GPU resets — that both paths have to work.
+    let webglAddon: WebglAddon | null = null;
+    const disposeWebgl = () => {
+      webglAddon?.dispose();
+      webglAddon = null;
+    };
+    try {
+      webglAddon = new WebglAddon();
+      disposables.push(webglAddon.onContextLoss(disposeWebgl));
+      terminal.loadAddon(webglAddon);
+    } catch {
+      disposeWebgl();
+    }
+
     let previousTouchY: number | null = null;
     let touchScrollRemainder = 0;
     const handleTouchStart = (event: TouchEvent) => {
@@ -206,6 +224,9 @@ export function MinecraftTerminal({
       terminalRef.current = null;
       appliedThemeRef.current = null;
       initialRenderCompleteRef.current = false;
+      // Release the GPU context before the terminal goes away; navigating between servers
+      // remounts this component and browsers cap how many live WebGL contexts a page may hold.
+      disposeWebgl();
       terminal.dispose();
     };
   }, []);
