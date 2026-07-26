@@ -20,7 +20,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, ConsoleChatLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
@@ -30,7 +30,7 @@ import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
-import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled, readConsoleView, writeConsoleView, type ConsoleView } from "./features/settings/settingsPreferences";
+import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { managedContentTerminology } from "./features/mods/contentTerminology";
@@ -40,7 +40,6 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
-const loadConsoleChat = () => import("./components/ConsoleChat");
 const loadServerTimeline = () => import("./components/ServerTimeline");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
@@ -51,7 +50,6 @@ const loadFilesPage = () => import("./features/files/FilesPage");
 const loadSettingsPage = () => import("./pages/SettingsPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
-const ConsoleChat = lazy(() => loadConsoleChat().then((module) => ({ default: module.ConsoleChat })));
 const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
@@ -120,49 +118,6 @@ function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "e
   );
 }
 
-const consoleViewOptions: Array<{ value: ConsoleView; label: string; title: string }> = [
-  { value: "console", label: "Console", title: "Show the raw server console" },
-  { value: "chat", label: "Chat", title: "Show player chat as a conversation" }
-];
-
-export function ConsoleViewSwitch({ value, onChange }: { value: ConsoleView; onChange(view: ConsoleView): void }) {
-  return (
-    <div className="consoleViewSwitch" role="group" aria-label="Console view">
-      {consoleViewOptions.map((option) => (
-        <button
-          type="button"
-          key={option.value}
-          className="consoleViewSwitchOption"
-          aria-pressed={value === option.value}
-          title={option.title}
-          onClick={() => onChange(option.value)}
-        >
-          <ConsoleViewIcon view={option.value} />
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ConsoleViewIcon({ view }: { view: ConsoleView }) {
-  if (view === "chat") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M20 12a7 7 0 0 1-7 7H8l-4 3v-4.6A7 7 0 0 1 4 12a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7Z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="m7 10 3 2.5L7 15" />
-      <path d="M13 15h4" />
-    </svg>
-  );
-}
-
 function AppToaster({ darkMode }: { darkMode: boolean }) {
   return (
     <Toaster
@@ -212,7 +167,6 @@ export default function App() {
   const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
   const [commandSending, setCommandSending] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory(readConsoleHistoryEnabled()));
-  const [consoleView, setConsoleView] = useState<ConsoleView>(() => readConsoleView());
   const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
@@ -304,12 +258,6 @@ export default function App() {
       }
     };
   }, [activeServerId]);
-
-  function selectConsoleView(view: ConsoleView) {
-    setConsoleView(view);
-    writeConsoleView(view);
-    if (view === "chat") void loadConsoleChat();
-  }
 
   function showRuntimeFeedback(action: "start" | "stop" | "restart") {
     if (action === "stop") return;
@@ -2996,51 +2944,30 @@ export default function App() {
                   <PanelHeader
                     title="Console"
                     actions={<div className="consoleHeaderActions">
-                      <ConsoleViewSwitch value={consoleView} onChange={selectConsoleView} />
                       <Button variant="secondary" compact onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
                         Download log
                       </Button>
                     </div>}
                   />
-                  {consoleView === "chat" ? (
-                    consoleSnapshotReadyServerId !== activeServer.id ? (
-                      <ConsoleChatLoadingSkeleton />
+                  <div className="terminal">
+                    {consoleSnapshotReadyServerId !== activeServer.id ? (
+                      <TerminalLoadingSkeleton />
                     ) : (
-                      <Suspense fallback={<ConsoleChatLoadingSkeleton />}>
-                        <ConsoleChat
+                      <Suspense fallback={<TerminalLoadingSkeleton />}>
+                        <MinecraftTerminal
                           entries={logs}
-                          serverId={activeServer.id}
-                          playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
                           canSendCommands={canSendConsoleCommands}
                           disabledReason={consoleCommandDisabledReason}
-                          knownPlayers={playerSnapshots[activeServer.id]?.names}
+                          commandHistory={commandHistory}
+                          fontSize={consoleFontSize}
+                          scrollback={consoleScrollback}
                           onCommand={(command) => {
                             void sendCommand(command);
                           }}
                         />
                       </Suspense>
-                    )
-                  ) : (
-                    <div className="terminal">
-                      {consoleSnapshotReadyServerId !== activeServer.id ? (
-                        <TerminalLoadingSkeleton />
-                      ) : (
-                        <Suspense fallback={<TerminalLoadingSkeleton />}>
-                          <MinecraftTerminal
-                            entries={logs}
-                            canSendCommands={canSendConsoleCommands}
-                            disabledReason={consoleCommandDisabledReason}
-                            commandHistory={commandHistory}
-                            fontSize={consoleFontSize}
-                            scrollback={consoleScrollback}
-                            onCommand={(command) => {
-                              void sendCommand(command);
-                            }}
-                          />
-                        </Suspense>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </Surface>
               </section>
             )}

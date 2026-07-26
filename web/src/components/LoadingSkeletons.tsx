@@ -183,24 +183,6 @@ export function CodeLoadingSkeleton({ label = "Loading content" }: { label?: str
   );
 }
 
-export function ConsoleChatLoadingSkeleton() {
-  return (
-    <div className="consoleChat consoleChatLoadingSkeleton" aria-busy="true">
-      <LoadingLabel>Loading server chat</LoadingLabel>
-      <div className="consoleChatScroll" aria-hidden="true">
-        <div className="consoleChatThread">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div className={`consoleChatSkeletonRow ${index % 3 === 2 ? "is-outgoing" : ""}`.trim()} key={index}>
-              <SkeletonBlock className="consoleChatSkeletonAvatar" />
-              <SkeletonBlock className="consoleChatSkeletonBubble" style={{ width: `${46 + (index * 31) % 44}%` }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function TerminalLoadingSkeleton() {
   return (
     <div className="terminalLoadingSkeleton" aria-busy="true">
