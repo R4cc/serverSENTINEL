@@ -1,10 +1,19 @@
 ARG SS_VERSION=1.6.0
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
+
+FROM dependency-base AS production-dependencies
+
+COPY package*.json ./
+COPY shared/package.json shared/package.json
+COPY server/package.json server/package.json
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --workspace server; else npm install --omit=dev --workspace server; fi
+
+FROM dependency-base AS build
 
 COPY package*.json ./
 COPY shared/package.json shared/package.json
@@ -19,7 +28,6 @@ COPY scripts scripts
 COPY docker docker
 COPY docker-compose.yml .env.example README.md ./
 RUN npm run build
-RUN npm prune --omit=dev --workspace server
 
 FROM node:22-bookworm-slim AS runtime
 
@@ -37,7 +45,7 @@ ENV PORT=8080
 COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
-COPY --from=build /app/node_modules node_modules
+COPY --from=production-dependencies /app/node_modules node_modules
 
 COPY --from=build /app/shared/package.json shared/package.json
 COPY --from=build /app/shared/dist shared/dist
