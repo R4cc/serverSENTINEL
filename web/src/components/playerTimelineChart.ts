@@ -409,7 +409,8 @@ function rowChromeRenderItem(
     const iconX = badgeX - iconSize / 2;
     const iconY = y - iconSize / 2;
     const iconKind: PlayerEventIconKind = lane.online ? "player_joined" : "player_left";
-    const iconChildren: CustomElementOption[] = playerEventIconShapes[iconKind].map((shape) => shape.type === "circle"
+    const headSource = playerHeadSource?.(lane.player);
+    const iconChildren: CustomElementOption[] = headSource ? [] : playerEventIconShapes[iconKind].map((shape) => shape.type === "circle"
       ? {
           type: "circle",
           shape: {
@@ -426,7 +427,6 @@ function rowChromeRenderItem(
           style: { fill: "none", stroke: color, lineWidth: 1.35, lineCap: "round", lineJoin: "round" },
           silent: true
         });
-    const headSource = playerHeadSource?.(lane.player);
 
     return {
       type: "group",

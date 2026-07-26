@@ -2922,9 +2922,7 @@ export default function App() {
                     status={activeStatus}
                     dockerSocketMounted={activeServerDockerSocketMounted}
                     activity={overviewData.activity}
-                    playerSnapshot={playerSnapshots[activeServer.id]}
                     latestResourceSample={overviewTimelineVisible ? timelineLatestSample : undefined}
-                    formatNumber={formatDisplayNumber}
                     loading={overviewInitialLoading}
                   />
 
@@ -2947,13 +2945,15 @@ export default function App() {
                     </Suspense>
                   )}
 
-                  <ActivePlayersPanel
-                    snapshot={playerSnapshots[activeServer.id]}
-                    running={Boolean(activeStatus?.docker.running)}
-                    loading={overviewInitialLoading}
-                    serverId={activeServer.id}
-                    playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                  />
+                  {!overviewTimelineVisible && (
+                    <ActivePlayersPanel
+                      snapshot={playerSnapshots[activeServer.id]}
+                      running={Boolean(activeStatus?.docker.running)}
+                      loading={overviewInitialLoading}
+                      serverId={activeServer.id}
+                      playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                    />
+                  )}
                   <div className="overviewSupportStack">
                     <ModHealthPanel
                       updatePlan={modsWorkspace.data.updatePlan}

@@ -199,22 +199,22 @@ async function overviewDensityMetrics(page) {
     const timeline = document.querySelector(".serverTimelinePanel");
     const legacyResourcePanel = document.querySelector(".resourcePanel");
     const playerGrid = document.querySelector(".activePlayerGrid");
-    if (!(grid instanceof HTMLElement) || !(summary instanceof HTMLElement) || !(players instanceof HTMLElement) || !(playerGrid instanceof HTMLElement)) {
+    if (!(grid instanceof HTMLElement) || !(summary instanceof HTMLElement)) {
       return { missing: true };
     }
     const children = [...grid.children];
     const visibleSummaryTiles = [...summary.children].filter((element) => element instanceof HTMLElement && getComputedStyle(element).display !== "none").length;
     const summaryRect = summary.getBoundingClientRect();
-    const playersRect = players.getBoundingClientRect();
+    const playersRect = players instanceof HTMLElement ? players.getBoundingClientRect() : undefined;
     return {
       missing: false,
       visibleSummaryTiles,
       timeline: timeline instanceof HTMLElement,
+      players: players instanceof HTMLElement,
       legacyResourcePanel: legacyResourcePanel instanceof HTMLElement,
-      timelineBeforePlayers: timeline instanceof HTMLElement ? children.indexOf(timeline) < children.indexOf(players) : false,
-      summaryBeforePlayers: children.indexOf(summary) < children.indexOf(players),
-      summaryToPlayersGap: Math.round(playersRect.top - summaryRect.bottom),
-      playerColumns: getComputedStyle(playerGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length,
+      summaryBeforePlayers: players instanceof HTMLElement ? children.indexOf(summary) < children.indexOf(players) : false,
+      summaryToPlayersGap: playersRect ? Math.round(playersRect.top - summaryRect.bottom) : null,
+      playerColumns: playerGrid instanceof HTMLElement ? getComputedStyle(playerGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length : 0,
       horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth
     };
   });
@@ -226,8 +226,9 @@ async function assertOverviewDensity(page, profile, label) {
 
   const portrait = await overviewDensityMetrics(page);
   assert(!portrait.missing, `${label}: portrait Overview surfaces are missing`);
-  assert(portrait.visibleSummaryTiles === 5, `${label}: portrait Overview shows ${portrait.visibleSummaryTiles} summary fields instead of five`);
+  assert(portrait.visibleSummaryTiles === 4, `${label}: portrait Overview shows ${portrait.visibleSummaryTiles} summary fields instead of four`);
   assert(!portrait.timeline && !portrait.legacyResourcePanel, `${label}: portrait Overview still shows a chart`);
+  assert(portrait.players, `${label}: portrait Overview does not show Active Players`);
   assert(portrait.summaryBeforePlayers && portrait.summaryToPlayersGap >= 0 && portrait.summaryToPlayersGap <= 24, `${label}: Active Players is not directly below the portrait summary: ${JSON.stringify(portrait)}`);
   assert(portrait.playerColumns === 2, `${label}: portrait Active Players uses ${portrait.playerColumns} columns instead of two`);
   assert(portrait.horizontalOverflow <= 1, `${label}: portrait Overview overflows horizontally by ${portrait.horizontalOverflow}px`);
@@ -236,16 +237,15 @@ async function assertOverviewDensity(page, profile, label) {
   await page.locator(".serverTimelinePanel").waitFor();
   const landscape = await overviewDensityMetrics(page);
   assert(!landscape.missing, `${label}: landscape Overview surfaces are missing`);
-  assert(landscape.visibleSummaryTiles === 5, `${label}: landscape Overview shows ${landscape.visibleSummaryTiles} summary fields instead of five`);
+  assert(landscape.visibleSummaryTiles === 4, `${label}: landscape Overview shows ${landscape.visibleSummaryTiles} summary fields instead of four`);
   assert(landscape.timeline && !landscape.legacyResourcePanel, `${label}: landscape Overview did not switch to the unified timeline`);
-  assert(landscape.timelineBeforePlayers, `${label}: landscape timeline is not before Active Players`);
-  assert(landscape.playerColumns === 3, `${label}: landscape Active Players uses ${landscape.playerColumns} columns instead of three`);
+  assert(!landscape.players, `${label}: landscape Overview still shows the redundant Active Players card`);
   assert(landscape.horizontalOverflow <= 1, `${label}: landscape Overview overflows horizontally by ${landscape.horizontalOverflow}px`);
 
   await page.setViewportSize({ width: profile.viewport.width, height: profile.viewport.height });
   await page.locator(".serverTimelinePanel").waitFor({ state: "detached" });
   const restoredPortrait = await overviewDensityMetrics(page);
-  assert(!restoredPortrait.timeline && restoredPortrait.playerColumns === 2, `${label}: Overview did not restore its chartless two-column portrait layout`);
+  assert(!restoredPortrait.timeline && restoredPortrait.players && restoredPortrait.playerColumns === 2, `${label}: Overview did not restore its chartless Active Players layout`);
 }
 
 async function assertFilesToolbarGeometry(page, label) {

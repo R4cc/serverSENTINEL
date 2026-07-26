@@ -17,7 +17,7 @@
   grid-template-areas:
     "summary summary summary summary summary summary summary summary summary summary summary summary"
     "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-    "players players players players mods mods mods mods automation automation automation automation"
+    "mods mods mods mods mods mods automation automation automation automation automation automation"
     "events events events events events events events events events events events events";
   gap: var(--space-4);
   align-items: start;
@@ -115,7 +115,7 @@ button.overviewCardRow:focus-visible {
 
 .overviewDashboardGrid > .overviewSummary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   gap: var(--space-2);
 }
@@ -1553,7 +1553,6 @@ button.overviewCardRow:focus-visible {
     grid-template-areas:
       "summary"
       "timeline"
-      "players"
       "mods"
       "automation"
       "events";
@@ -1569,16 +1568,11 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
-    grid-column: span 2;
-  }
-
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(4),
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(5) {
-    grid-column: span 3;
+    grid-column: auto;
   }
 }
 
@@ -1588,7 +1582,6 @@ button.overviewCardRow:focus-visible {
     grid-template-areas:
       "summary"
       "timeline"
-      "players"
       "mods"
       "automation"
       "events";
@@ -1615,16 +1608,11 @@ button.overviewCardRow:focus-visible {
 
 @media (min-width: 541px) and (max-width: 720px) {
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
-    grid-column: span 2;
-  }
-
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(4),
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-child(5) {
-    grid-column: span 3;
+    grid-column: auto;
   }
 
   .overviewDashboardGrid .activePlayerGrid,
@@ -1734,7 +1722,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
@@ -1959,12 +1947,12 @@ button.overviewCardRow:focus-visible {
     grid-template-areas:
       "summary summary summary summary summary summary summary summary summary summary summary summary"
       "timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline timeline"
-      "players players players players players support support support support support support support"
+      "support support support support support support support support support support support support"
       "events events events events events events events events events events events events";
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
@@ -1975,6 +1963,7 @@ button.overviewCardRow:focus-visible {
     grid-area: support;
     min-width: 0;
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-self: stretch;
     align-content: start;
     gap: var(--space-4);
