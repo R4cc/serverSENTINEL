@@ -1,32 +1,7 @@
+import { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@serversentinel/contracts";
 import type { Permission, RolePreset, StoredUser } from "./types.js";
 
-export const ALL_PERMISSIONS = [
-  "servers.view",
-  "servers.control",
-  "servers.create",
-  "servers.delete",
-  "servers.editSettings",
-  "servers.export",
-  "console.view",
-  "console.command",
-  "files.view",
-  "files.edit",
-  "files.delete",
-  "files.upload",
-  "files.download",
-  "mods.view",
-  "mods.install",
-  "mods.upload",
-  "mods.enableDisable",
-  "mods.remove",
-  "mods.update",
-  "schedules.view",
-  "schedules.manage",
-  "settings.view",
-  "integrations.manage",
-  "users.view",
-  "users.manage"
-] as const satisfies readonly Permission[];
+export { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS };
 
 const allPermissionSet = new Set<string>(ALL_PERMISSIONS);
 const permissionOrder = new Map<Permission, number>(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
@@ -57,99 +32,6 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   "integrations.manage": "manage integrations",
   "users.view": "view users",
   "users.manage": "manage users"
-};
-
-export const ROLE_PRESETS: Record<Exclude<RolePreset, "custom">, Permission[]> = {
-  viewer: [
-    "servers.view",
-    "console.view",
-    "files.view",
-    "mods.view",
-    "schedules.view",
-    "settings.view"
-  ],
-  operator: [
-    "servers.view",
-    "console.view",
-    "files.view",
-    "mods.view",
-    "schedules.view",
-    "settings.view",
-    "servers.control",
-    "console.command"
-  ],
-  maintainer: [
-    "servers.view",
-    "console.view",
-    "files.view",
-    "mods.view",
-    "schedules.view",
-    "settings.view",
-    "servers.control",
-    "console.command",
-    "mods.install",
-    "mods.upload",
-    "mods.enableDisable",
-    "mods.remove",
-    "mods.update",
-    "files.edit",
-    "files.upload",
-    "files.download",
-    "schedules.manage"
-  ],
-  manager: [
-    "servers.view",
-    "console.view",
-    "files.view",
-    "mods.view",
-    "schedules.view",
-    "settings.view",
-    "servers.control",
-    "console.command",
-    "mods.install",
-    "mods.upload",
-    "mods.enableDisable",
-    "mods.remove",
-    "mods.update",
-    "files.edit",
-    "files.upload",
-    "files.download",
-    "schedules.manage",
-    "servers.create",
-    "servers.delete",
-    "servers.editSettings",
-    "servers.export",
-    "files.delete"
-  ],
-  admin: [...ALL_PERMISSIONS]
-};
-
-export const PERMISSION_DEPENDENCIES: Record<Permission, Permission[]> = {
-  "servers.view": [],
-  "servers.control": ["servers.view"],
-  "servers.create": ["servers.view"],
-  "servers.delete": ["servers.view"],
-  "servers.editSettings": ["servers.view"],
-  "servers.export": ["servers.view"],
-  "console.view": [],
-  "console.command": ["console.view"],
-  "files.view": [],
-  "files.edit": ["files.view"],
-  "files.delete": ["files.view"],
-  "files.upload": ["files.view"],
-  "files.download": ["files.view"],
-  "mods.view": [],
-  "mods.install": ["mods.view"],
-  "mods.upload": ["mods.view"],
-  "mods.enableDisable": ["mods.view"],
-  "mods.remove": ["mods.view"],
-  "mods.update": ["mods.view"],
-  "schedules.view": [],
-  "schedules.manage": ["schedules.view"],
-  "settings.view": [],
-  "integrations.manage": ["settings.view"],
-  "users.view": [],
-  "users.manage": ["users.view"]
 };
 
 const normalizedRolePresets: Record<Exclude<RolePreset, "custom">, Permission[]> = {
