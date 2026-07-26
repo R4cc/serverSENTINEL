@@ -1,62 +1,14 @@
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { chromium, devices, webkit } from "playwright";
+import { launchBrowser, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDirectory = await mkdtemp(join(tmpdir(), "serversentinel-mobile-smoke-"));
-const port = await availablePort();
-const baseUrl = `http://127.0.0.1:${port}`;
-const installCommand = "npx playwright install chromium webkit";
-
-let server;
-let serverOutput = "";
+const harness = await startDemoHarness({
+  dataDirectoryPrefix: "serversentinel-mobile-smoke-",
+  env: { MODRINTH_API_KEY: "demo-token" }
+});
+const { baseUrl } = harness;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-async function availablePort() {
-  return new Promise((resolvePort, rejectPort) => {
-    const listener = createServer();
-    listener.once("error", rejectPort);
-    listener.listen(0, "127.0.0.1", () => {
-      const address = listener.address();
-      const selectedPort = typeof address === "object" && address ? address.port : 0;
-      listener.close((error) => error ? rejectPort(error) : resolvePort(selectedPort));
-    });
-  });
-}
-
-async function waitForServer(timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) throw new Error(`Demo server stopped before it became ready.\n${serverOutput}`);
-    try {
-      const response = await fetch(`${baseUrl}/api/auth/session`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-      if (response.ok) return;
-    } catch {
-      // The listener is not ready yet.
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
-  }
-  throw new Error(`Timed out waiting for the demo server at ${baseUrl}.\n${serverOutput}`);
-}
-
-async function signIn(page) {
-  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Username").fill("demo");
-  await page.getByLabel("Password").fill("demo");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  try {
-    await page.locator(".appShell").waitFor({ timeout: 15_000 });
-  } catch {
-    const notice = await page.locator(".notice").textContent().catch(() => "");
-    throw new Error(`Demo startup is broken: demo / demo could not sign in.${notice ? ` ${notice.trim()}` : ""}`);
-  }
 }
 
 async function openPage(page, title) {
@@ -410,15 +362,7 @@ async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector
 async function runProfile(engine, profile, label) {
   let browser;
   try {
-    try {
-      browser = await engine.launch({ headless: true });
-    } catch (error) {
-      if (/executable doesn.t exist|browser.*not found|please run/i.test(String(error))) {
-        throw new Error(`Playwright browser binaries are missing. Run: ${installCommand}\n${error}`);
-      }
-      throw error;
-    }
-
+    browser = await launchBrowser(engine);
     const context = await browser.newContext({
       ...profile,
       locale: "en-US",
@@ -431,7 +375,7 @@ async function runProfile(engine, profile, label) {
       localStorage.setItem("serversentinel-theme", "light");
       localStorage.setItem("serversentinel-active-page", "overview");
     });
-    await signIn(page);
+    await signInThroughForm(page, baseUrl);
 
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
@@ -506,26 +450,6 @@ async function runProfile(engine, profile, label) {
 }
 
 try {
-  server = spawn(process.execPath, [join(repositoryRoot, "server", "dist", "index.js")], {
-    cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      LOG_LEVEL: "warn",
-      MODRINTH_API_KEY: "demo-token",
-      PORT: String(port),
-      SERVERSENTINEL_DATA_DIR: dataDirectory,
-      SERVERSENTINEL_ENABLE_DEMO: "true",
-      SS_MODE: "all-in-one",
-      TZ: "UTC"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => { serverOutput = `${serverOutput}${chunk}`.slice(-20_000); });
-  }
-  await waitForServer();
-
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }
@@ -535,13 +459,5 @@ try {
     viewport: { width: 320, height: 568 }
   }, "WebKit iPhone 320x568");
 } finally {
-  if (server && server.exitCode === null) {
-    server.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolveExit) => server.once("exit", resolveExit)),
-      new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
-    ]);
-    if (server.exitCode === null) server.kill("SIGKILL");
-  }
-  await rm(dataDirectory, { recursive: true, force: true });
+  await harness.stop();
 }
