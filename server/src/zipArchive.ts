@@ -277,7 +277,10 @@ async function hasSymlinkAncestor(destination: string, target: string) {
 }
 
 export async function planZipExtraction(archivePath: string, destinationPath: string, limits: ZipArchiveLimits): Promise<ZipExtractionPlan> {
-  const index = await indexZipArchive(archivePath, limits);
+  return planZipExtractionFromIndex(await indexZipArchive(archivePath, limits), archivePath, destinationPath);
+}
+
+async function planZipExtractionFromIndex(index: ZipIndex, archivePath: string, destinationPath: string): Promise<ZipExtractionPlan> {
   const conflicts: ZipExtractionConflict[] = [];
   const blocked: ZipExtractionConflict[] = [];
   for (const entry of index.entries) {
@@ -315,10 +318,10 @@ export async function extractZipArchive(input: {
   signal?: AbortSignal;
 }): Promise<ZipExtractionResult> {
   input.signal?.throwIfAborted();
-  const plan = await planZipExtraction(input.archivePath, input.destinationPath, input.limits);
+  const index = await indexZipArchive(input.archivePath, input.limits);
+  const plan = await planZipExtractionFromIndex(index, input.archivePath, input.destinationPath);
   if (plan.blocked.length) throw zipError(`ZIP extraction is blocked by ${plan.blocked[0].path}`, "zip_extraction_blocked");
   const conflictPaths = new Set(plan.conflicts.map((entry) => resolve(entry.path)));
-  const index = await indexZipArchive(input.archivePath, input.limits);
   await mkdir(input.destinationPath, { recursive: true });
   let createdDirectories = 0;
   let extractedFiles = 0;
