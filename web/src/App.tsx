@@ -15,7 +15,7 @@ import { readStoredActivePage, writeStoredActivePage } from "./app/navigationSto
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
-import { appendConsoleEntries, consoleReconnectDelay, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
@@ -224,6 +224,9 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const logsRef = useRef<string[]>([]);
+  const pendingLogLinesRef = useRef<string[]>([]);
+  const consoleLineAssemblerRef = useRef(new ConsoleLineAssembler());
+  const logFlushFrameRef = useRef<number | null>(null);
   const consoleScrollbackRef = useRef(consoleScrollback);
   const fileWorkspaceServerIdRef = useRef("");
   const refreshModsAfterFileMutationRef = useRef<() => Promise<unknown> | unknown>(() => undefined);
@@ -642,6 +645,9 @@ export default function App() {
       if (consoleCommandRefreshTimeoutRef.current !== null) {
         window.clearTimeout(consoleCommandRefreshTimeoutRef.current);
       }
+      if (logFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(logFlushFrameRef.current);
+      }
     };
   }, []);
 
@@ -865,6 +871,7 @@ export default function App() {
     const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
     if (serverChanged) {
+      discardQueuedConsoleLines();
       logsRef.current = [];
       setLogs([]);
       setConsoleSnapshotReadyServerId("");
@@ -1016,11 +1023,7 @@ export default function App() {
       }
       if (message.type === "log") {
         markConsoleLive();
-        setLogs((current) => {
-          const next = appendConsoleEntries(current, [message.text ?? ""], consoleScrollbackRef.current);
-          logsRef.current = next;
-          return next;
-        });
+        queueConsoleChunk(message.text ?? "");
         if (message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
@@ -1053,6 +1056,7 @@ export default function App() {
     socket.onclose = scheduleReconnect;
     return () => {
       closedByCleanup = true;
+      discardQueuedConsoleLines();
       if (consoleReconnectTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectTimeoutRef.current);
         consoleReconnectTimeoutRef.current = null;
@@ -1545,6 +1549,41 @@ export default function App() {
     } finally {
       statusRefreshInFlightRef.current.delete(serverId);
     }
+  }
+
+  /**
+   * A chatty server emits log frames far faster than the screen refreshes, and one state update
+   * per frame means one full re-render and one terminal write per line. Collecting the lines and
+   * flushing them once per animation frame keeps a burst to a single render and a single write.
+   */
+  function queueConsoleChunk(chunk: string) {
+    for (const line of consoleLineAssemblerRef.current.push(chunk)) pendingLogLinesRef.current.push(line);
+    // A background tab never runs animation frames, so cap what can pile up at the same limit
+    // the buffer would enforce on flush anyway.
+    const overflow = pendingLogLinesRef.current.length - consoleScrollbackRef.current;
+    if (overflow > 0) pendingLogLinesRef.current.splice(0, overflow);
+    if (logFlushFrameRef.current !== null) return;
+    logFlushFrameRef.current = window.requestAnimationFrame(flushQueuedConsoleLines);
+  }
+
+  function flushQueuedConsoleLines() {
+    logFlushFrameRef.current = null;
+    const pending = pendingLogLinesRef.current;
+    if (!pending.length) return;
+    pendingLogLinesRef.current = [];
+    setLogs((current) => {
+      const next = appendConsoleEntries(current, pending, consoleScrollbackRef.current);
+      logsRef.current = next;
+      return next;
+    });
+  }
+
+  function discardQueuedConsoleLines() {
+    pendingLogLinesRef.current = [];
+    consoleLineAssemblerRef.current.reset();
+    if (logFlushFrameRef.current === null) return;
+    window.cancelAnimationFrame(logFlushFrameRef.current);
+    logFlushFrameRef.current = null;
   }
 
   async function refreshConsoleLogs(serverId = activeServer?.id): Promise<boolean> {
