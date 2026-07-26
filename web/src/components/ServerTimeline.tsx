@@ -17,6 +17,7 @@ import {
   playerTimelineChartHeight,
   playerTimelineLanePositionFromZoom,
   playerTimelineLanes,
+  playerTimelineVisibleLaneCount,
   resolvePlayerTimelineLaneWindow,
   timelineSessionGeometry,
   type PlayerTimelineLanePosition,
@@ -51,7 +52,7 @@ const timelineRanges = [
 
 type TimelineRange = typeof timelineRanges[number]["label"];
 type TimelineSelection = TimelineRange | "custom";
-const defaultTimelineRange: TimelineRange = "1h";
+const defaultTimelineRange: TimelineRange = "3h";
 export type SeriesKey = "cpuUtilizationPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
 export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
@@ -611,17 +612,25 @@ function PlayerSessionSection({
       data-viewport-to={viewport.to}
     >
       {lanes.length ? (
-        <div className="serverTimelinePlayerChart" style={{ height: playerTimelineChartHeight(lanes.length) }}>
-          <EChartsCanvas
-            option={option}
-            onDataZoom={handleDataZoom}
-            onInteractionChange={onInteractionChange}
-            onPointerMove={onPointerMove}
-            onPointerLeave={onPointerLeave}
-            onClick={onClick}
-            onWheel={onWheel}
-          />
-        </div>
+        <>
+          <header className="serverTimelinePlayerHeader">
+            <strong>Player activity</strong>
+            {lanes.length > playerTimelineVisibleLaneCount && (
+              <span className="serverTimelinePlayerScrollHint"><i aria-hidden="true">↕</i> Scroll to see more</span>
+            )}
+          </header>
+          <div className="serverTimelinePlayerChart" style={{ height: playerTimelineChartHeight(lanes.length) }}>
+            <EChartsCanvas
+              option={option}
+              onDataZoom={handleDataZoom}
+              onInteractionChange={onInteractionChange}
+              onPointerMove={onPointerMove}
+              onPointerLeave={onPointerLeave}
+              onClick={onClick}
+              onWheel={onWheel}
+            />
+          </div>
+        </>
       ) : <div className="serverTimelinePlayerEmpty">No player sessions are available for this time range.</div>}
     </section>
   );

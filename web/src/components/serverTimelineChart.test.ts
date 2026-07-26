@@ -3,7 +3,9 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey } from "./ServerTimeline";
 import {
   buildTimelineChartOption,
+  cpuAxisMaximum,
   memoryAxisMaximum,
+  memoryAxisBounds,
   dataZoomWindow,
   defaultTimelinePalette,
   escapeTimelineHtml,
@@ -138,7 +140,7 @@ describe("server timeline ECharts option", () => {
       now: 12_000,
       gridOverride: timelineMetricBandGrid,
       seriesKeys: ["cpuUtilizationPercent"]
-    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string; min: number; max: number }>; series: Array<{ id: string }> };
     const memory = buildTimelineChartOption({
       samples: [sample],
       query: { from: 0, to: 20_000 },
@@ -151,13 +153,16 @@ describe("server timeline ECharts option", () => {
       now: 12_000,
       gridOverride: timelineMetricBandGrid,
       seriesKeys: ["memoryUsageBytes"]
-    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string }>; series: Array<{ id: string }> };
+    }) as { grid: { left: number; right: number }; yAxis: Array<{ position: string; min: number; max: number }>; series: Array<{ id: string }> };
     expect(cpu.grid).toMatchObject(timelineMetricBandGrid);
     expect(memory.grid).toMatchObject(timelineMetricBandGrid);
     expect(cpu.yAxis).toHaveLength(1);
     expect(memory.yAxis).toHaveLength(1);
     expect(cpu.yAxis[0].position).toBe("left");
     expect(memory.yAxis[0].position).toBe("left");
+    expect(cpu.yAxis[0].max).toBe(20);
+    expect(memory.yAxis[0].min).toBeGreaterThan(0);
+    expect(memory.yAxis[0].max).toBeLessThan(sample.memoryLimitBytes!);
     expect(cpu.series.some((series) => series.id === "memoryUsageBytes")).toBe(false);
     expect(memory.series.some((series) => series.id === "cpuUtilizationPercent")).toBe(false);
   });
@@ -204,13 +209,24 @@ describe("server timeline ECharts option", () => {
       gridOverride: timelineMetricBandGrid,
       seriesKeys: ["memoryUsageBytes"]
     }) as { yAxis: Array<{ min: number; max: number }>; series: Array<{ id: string; data: Array<[number, number]> }> };
-    expect(option.yAxis[0].min).toBe(0);
+    expect(option.yAxis[0].min).toBeGreaterThan(0);
     expect(option.yAxis[0].max).toBeGreaterThan(800);
     expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, 700], [20_000, 800]]);
   });
 
   it("adds headroom when usage exceeds the reported memory limit", () => {
     expect(memoryAxisMaximum([{ ...sample, memoryUsageBytes: 1_200, memoryLimitBytes: 1_000 }])).toBeGreaterThan(1_200);
+  });
+
+  it("scales separate CPU and memory bands from visible samples only", () => {
+    const samples = [
+      { ...sample, sampledAt: 1_000, cpuUtilizationPercent: 95, memoryUsageBytes: 100 },
+      { ...sample, sampledAt: 10_000, cpuUtilizationPercent: 24, memoryUsageBytes: 700 },
+      { ...sample, sampledAt: 20_000, cpuUtilizationPercent: 36, memoryUsageBytes: 800 }
+    ];
+    const viewport = { from: 5_000, to: 25_000 };
+    expect(cpuAxisMaximum(samples, viewport)).toBe(50);
+    expect(memoryAxisBounds(samples, viewport)).toEqual({ min: 675, max: 825 });
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {

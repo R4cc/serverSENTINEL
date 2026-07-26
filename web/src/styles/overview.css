@@ -553,9 +553,50 @@ button.overviewCardRow:focus-visible {
 .serverTimelineMetricBand {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
+}
+
+.serverTimelinePlayers {
+  border-color: color-mix(in srgb, var(--timeline-join) 24%, var(--border-muted));
+  background: color-mix(in srgb, var(--timeline-join) 3%, var(--surface-raised));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--timeline-join) 72%, transparent);
+}
+
+.serverTimelinePlayerHeader {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) 0 18px;
+  border-bottom: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 16%, var(--border-muted));
+  background: color-mix(in srgb, var(--timeline-join) 6%, var(--surface-muted));
+  color: var(--timeline-join);
+  font-size: 12px;
+}
+
+.serverTimelinePlayerScrollHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+}
+
+.serverTimelinePlayerScrollHint i {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 28%, var(--border-muted));
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--timeline-join);
+  font-style: normal;
+  font-size: 12px;
 }
 
 .serverTimelinePlayerChart {
@@ -565,7 +606,7 @@ button.overviewCardRow:focus-visible {
   min-height: 70px;
   max-height: 270px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface-raised) 96%, var(--surface-muted));
+  background: color-mix(in srgb, var(--timeline-join) 2%, var(--surface-raised));
   touch-action: pan-y;
 }
 
@@ -598,7 +639,7 @@ button.overviewCardRow:focus-visible {
   height: 160px;
 }
 
-.serverTimelineMetricBand.is-prominent { height: clamp(220px, 18vw, 300px); }
+.serverTimelineMetricBand.is-prominent { height: clamp(172px, 11vw, 190px); }
 
 .serverTimelineMetricBandLabel {
   position: absolute;
@@ -1005,7 +1046,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .serverTimelinePlayerChart { max-height: 228px; }
-  .serverTimelineMetricBand.is-prominent { height: 220px; }
+  .serverTimelineMetricBand.is-prominent { height: 176px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
@@ -1675,7 +1716,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .serverTimelinePlayerChart { max-height: 220px; }
-  .serverTimelineMetricBand.is-prominent { height: 220px; }
+  .serverTimelineMetricBand.is-prominent { height: 176px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
