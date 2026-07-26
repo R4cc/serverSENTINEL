@@ -259,6 +259,29 @@ describe("player timeline ECharts option", () => {
     );
 
     expect(rendered.children.find((child) => child.type === "image")?.style?.image).toBe("/player-head/Alex");
+    expect(rendered.children.some((child) => child.type === "circle" || child.type === "path")).toBe(false);
+  });
+
+  it("uses the player event glyph only as a fallback when no head is configured", () => {
+    const option = buildPlayerTimelineChartOption({
+      rows: rows(),
+      query,
+      viewport,
+      now: 60_000,
+      palette: defaultTimelinePalette,
+      formatShortTime
+    }) as Record<string, unknown>;
+    const rowSeries = (option.series as Array<Record<string, unknown>>)[0];
+    const renderItem = rowSeries.renderItem as (params: unknown, api: unknown) => {
+      children: Array<{ type: string }>;
+    };
+    const rendered = renderItem(
+      { dataIndex: 1, coordSys: { x: 220, y: 30, width: 700, height: 240 } },
+      { coord: () => [220, 70], size: () => [0, 40] }
+    );
+
+    expect(rendered.children.some((child) => child.type === "image")).toBe(false);
+    expect(rendered.children.filter((child) => child.type === "circle" || child.type === "path")).toHaveLength(3);
   });
 
   it("keeps a large synthetic session set in one SVG-oriented option", () => {
