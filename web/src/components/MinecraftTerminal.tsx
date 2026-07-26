@@ -32,6 +32,8 @@ type InputSnapshot = {
   cursor: number;
 };
 
+type TerminalTheme = ReturnType<typeof terminalTheme>;
+
 const prompt = "\x1b[38;2;112;208;255m>\x1b[0m ";
 
 export function MinecraftTerminal({
@@ -59,6 +61,7 @@ export function MinecraftTerminal({
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
   const promptVisibleRef = useRef(false);
+  const appliedThemeRef = useRef<TerminalTheme | null>(null);
 
   entriesRef.current = entries;
 
@@ -79,6 +82,8 @@ export function MinecraftTerminal({
     if (!container) return;
 
     const styles = window.getComputedStyle(container);
+    const initialTheme = terminalTheme(styles);
+    appliedThemeRef.current = initialTheme;
     const terminal = new Terminal({
       allowTransparency: true,
       convertEol: false,
@@ -87,7 +92,7 @@ export function MinecraftTerminal({
       fontFamily: styles.getPropertyValue("--font-mono") || "ui-monospace, SFMono-Regular, Consolas, monospace",
       lineHeight: 1.35,
       tabStopWidth: 2,
-      theme: terminalTheme(styles),
+      theme: initialTheme,
       ...terminalPreferenceOptions(fontSize, scrollback)
     });
     const fitAddon = new FitAddon();
@@ -199,16 +204,25 @@ export function MinecraftTerminal({
       disposables.forEach((disposable) => disposable.dispose());
       fitAddonRef.current = null;
       terminalRef.current = null;
+      appliedThemeRef.current = null;
       initialRenderCompleteRef.current = false;
       terminal.dispose();
     };
   }, []);
 
+  // The palette lives in CSS variables, so there is no prop to depend on and this has to
+  // re-read the computed style after every render. Assigning `options.theme` is compared by
+  // reference inside xterm, so handing it a fresh object rebuilds the colour set and forces a
+  // full repaint of every row — at streaming log rates that reads as flicker. Only assign when
+  // the resolved colours actually changed.
   useEffect(() => {
     const container = containerRef.current;
     const terminal = terminalRef.current;
     if (!container || !terminal) return;
-    terminal.options.theme = terminalTheme(window.getComputedStyle(container));
+    const nextTheme = terminalTheme(window.getComputedStyle(container));
+    if (appliedThemeRef.current && sameTerminalTheme(appliedThemeRef.current, nextTheme)) return;
+    appliedThemeRef.current = nextTheme;
+    terminal.options.theme = nextTheme;
   });
 
   useEffect(() => {
@@ -240,7 +254,8 @@ export function MinecraftTerminal({
     const terminal = terminalRef.current;
     if (!terminal || !initialRenderCompleteRef.current) return;
     if (canSendCommands) {
-      if (!promptVisibleRef.current) writePrompt();
+      const atBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
+      if (!promptVisibleRef.current) writePrompt(atBottom);
       return;
     }
     if (promptVisibleRef.current) {
@@ -497,10 +512,15 @@ export function MinecraftTerminal({
       promptVisibleRef.current = false;
     }
 
-    chunks.forEach((chunk) => writeLogChunk(chunk));
+    // The decoder carries its partial line across calls, so joining first and writing once is
+    // equivalent to writing each entry — and it keeps a snapshot of thousands of lines to a
+    // single parser pass instead of one queued write per line.
+    writeLogChunk(chunks.join(""));
     previousEntriesRef.current = nextEntries;
 
-    if (canSendCommandsRef.current) writePrompt();
+    // Reading a log line is not a reason to yank someone who scrolled up back to the newest
+    // output; only follow the tail when they were already pinned to it.
+    if (canSendCommandsRef.current) writePrompt(wasAtBottom);
     if (wasAtBottom) terminal.scrollToBottom();
   }
 
@@ -511,11 +531,11 @@ export function MinecraftTerminal({
     if (decoded) terminal.write(decoded);
   }
 
-  function writePrompt() {
+  function writePrompt(followTail = true) {
     if (promptVisibleRef.current || !terminalRef.current) return;
     terminalRef.current.write(`${prompt}${inputRef.current}`);
     positionCursorAfterRender();
-    terminalRef.current.scrollToBottom();
+    if (followTail) terminalRef.current.scrollToBottom();
     promptVisibleRef.current = true;
   }
 
@@ -563,20 +583,43 @@ function terminalTheme(styles: CSSStyleDeclaration) {
   };
 }
 
+function sameTerminalTheme(left: TerminalTheme, right: TerminalTheme) {
+  return left.background === right.background
+    && left.foreground === right.foreground
+    && left.cursor === right.cursor
+    && left.selectionBackground === right.selectionBackground;
+}
+
+/**
+ * Finds how many trailing entries of `previousEntries` line up with the leading entries of
+ * `nextEntries`. Once the scrollback limit trims the head of the buffer, every update arrives
+ * shifted rather than appended, so this runs on every streamed line and has to stay allocation
+ * free — slicing candidate windows here is what made large consoles stutter.
+ */
+function trailingOverlap(previousEntries: string[], nextEntries: string[]) {
+  const maxOverlap = Math.min(previousEntries.length, nextEntries.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    const offset = previousEntries.length - overlap;
+    let matches = true;
+    for (let index = 0; index < overlap; index += 1) {
+      if (previousEntries[offset + index] !== nextEntries[index]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return overlap;
+  }
+  return 0;
+}
+
 function diffEntries(previousEntries: string[], nextEntries: string[]) {
   const appendOnly = previousEntries.length <= nextEntries.length
     && previousEntries.every((entry, index) => entry === nextEntries[index]);
   if (appendOnly) return { reset: false, chunks: nextEntries.slice(previousEntries.length) };
   if (!nextEntries.length) return { reset: true, chunks: [] };
 
-  const maxOverlap = Math.min(previousEntries.length, nextEntries.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    const previousTail = previousEntries.slice(previousEntries.length - overlap);
-    const nextHead = nextEntries.slice(0, overlap);
-    if (previousTail.every((entry, index) => entry === nextHead[index])) {
-      return { reset: false, chunks: nextEntries.slice(overlap) };
-    }
-  }
+  const overlap = trailingOverlap(previousEntries, nextEntries);
+  if (overlap > 0) return { reset: false, chunks: nextEntries.slice(overlap) };
 
   return { reset: true, chunks: nextEntries };
 }

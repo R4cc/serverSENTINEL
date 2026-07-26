@@ -1,9 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { appendConsoleEntries, consoleReconnectDelay, consoleSnapshotLines, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
+import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, consoleSnapshotLines, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
 
 describe("console pipeline", () => {
+  it("splits stream chunks into the same line entries a snapshot produces", () => {
+    const assembler = new ConsoleLineAssembler();
+
+    expect(assembler.push("[12:00:01] one\n[12:00:02] tw")).toEqual(["[12:00:01] one\n"]);
+    expect(assembler.push("o\r\n[12:00:03] three\n")).toEqual(["[12:00:02] two\n", "[12:00:03] three\n"]);
+    expect(assembler.push("no newline yet")).toEqual([]);
+  });
+
+  it("reconciles a snapshot against lines the stream already delivered as chunks", () => {
+    // The websocket delivered two lines in a single frame; the snapshot repeats them and adds a
+    // third. Without matching units the whole buffer would be replaced and the terminal redrawn.
+    const assembler = new ConsoleLineAssembler();
+    const streamed = assembler.push("one\ntwo\n");
+    const snapshot = consoleSnapshotLines("one\ntwo\nthree\n").map((line) => `${line}\n`);
+
+    expect(reconcileConsoleSnapshot(streamed, snapshot, streamed))
+      .toEqual(["one\n", "two\n", "three\n"]);
+  });
+
   it("reconciles overlapping snapshots and preserves live lines received during loading", () => {
     expect(reconcileConsoleSnapshot(["a", "b"], ["b", "c"], ["a", "b", "d"])).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("keeps live lines that arrived after the scrollback limit trimmed the buffer head", () => {
+    // The snapshot request started at ["a", "b", "c"]; three more lines streamed in while it was
+    // in flight and a limit of three dropped the head, so the tail is no longer a suffix of a
+    // buffer that still starts with "a".
+    expect(reconcileConsoleSnapshot(["a", "b", "c"], ["b", "c", "d"], ["d", "e", "f"], 5))
+      .toEqual(["b", "c", "d", "e", "f"]);
   });
 
   it("replaces obsolete history after log rotation", () => {
