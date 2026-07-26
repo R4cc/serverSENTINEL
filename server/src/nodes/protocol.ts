@@ -37,9 +37,6 @@ export const nodeCapabilities = [
   "files.move",
   "files.copy",
   "files.mkdir",
-  "files.archive.list",
-  "files.archive.read",
-  "files.archive.download",
   "files.archive.plan",
   "files.archive.extract",
   "mods.list",
@@ -240,7 +237,7 @@ export type NodeTransferStartMessage = {
   type: "transferStart";
   id: string;
   direction: NodeTransferDirection;
-  command: "files.upload" | "files.download" | "files.archive.download" | "mods.upload" | "content.upload";
+  command: "files.upload" | "files.download" | "mods.upload" | "content.upload";
   payload: unknown;
   size?: number;
   sha256?: string;
@@ -381,7 +378,7 @@ export function normalizePanelToNodeMessage(value: unknown): PanelToNodeMessage 
   if (message.type === "streamStop") return { type: "streamStop", id };
   if (message.type === "transferStart") {
     const command = requiredString(message.command, "command") as NodeTransferStartMessage["command"];
-    if (!["files.upload", "files.download", "files.archive.download", "mods.upload", "content.upload"].includes(command)) throw new Error(`Unsupported transfer command ${command}`);
+    if (!["files.upload", "files.download", "mods.upload", "content.upload"].includes(command)) throw new Error(`Unsupported transfer command ${command}`);
     const direction = message.direction;
     if (direction !== "upload" && direction !== "download") throw new Error("transfer direction must be upload or download");
     return { type: "transferStart", id, direction, command, payload: message.payload, size: optionalNonNegativeNumber(message.size, "size"), sha256: optionalSha256(message.sha256), maxBytes: optionalPositiveNumber(message.maxBytes, "maxBytes") };

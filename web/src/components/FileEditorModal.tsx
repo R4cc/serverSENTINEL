@@ -19,7 +19,6 @@ type FileEditorModalProps = {
   editMessage: string;
   editDisabled: boolean;
   editDisabledReason?: string;
-  readOnlyOnly?: boolean;
   editorDisabled: boolean;
   saveDisabled: boolean;
   discardRequestOpen: boolean;
@@ -85,7 +84,6 @@ export function FileEditorModal({
   editMessage,
   editDisabled,
   editDisabledReason = "",
-  readOnlyOnly = false,
   editorDisabled,
   saveDisabled,
   discardRequestOpen,
@@ -193,7 +191,7 @@ export function FileEditorModal({
             </div>
             <footer className="fileEditorFooter">
               <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
-              {readOnlyOnly ? null : editing ? (
+              {editing ? (
                 <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
                   {fileSaving ? "Saving" : "Save"}
                 </Button>

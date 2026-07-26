@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { ZipFile } from "yazl";
-import { extractZipArchive, indexZipArchive, listZipArchive, planZipExtraction, readZipArchiveEntry } from "./zipArchive.js";
+import { extractZipArchive, indexZipArchive, planZipExtraction } from "./zipArchive.js";
 
 const roots: string[] = [];
 const limits = { maxEntries: 100, maxExpandedBytes: 1024 * 1024 };
@@ -30,8 +30,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe("ZIP archive browsing", () => {
-  it("builds implicit folders and reads nested text entries", async () => {
+describe("ZIP archive indexing", () => {
+  it("builds implicit folders for nested entries", async () => {
     const root = await temporaryRoot();
     const archive = join(root, "server.zip");
     await writeZip(archive, [
@@ -39,16 +39,13 @@ describe("ZIP archive browsing", () => {
       { name: "empty/", directory: true }
     ]);
 
-    const top = await listZipArchive(archive, "/", limits);
-    expect(top.readOnly).toBe(true);
-    expect(top.entries.map((entry) => [entry.path, entry.type])).toEqual([
-      ["/config", "directory"],
-      ["/empty", "directory"]
+    const index = await indexZipArchive(archive, limits);
+    expect(index.entries.map((entry) => [entry.path, entry.type])).toEqual([
+      ["config", "directory"],
+      ["config/server.yml", "file"],
+      ["empty", "directory"]
     ]);
-    const config = await listZipArchive(archive, "/config", limits);
-    expect(config.entries[0]).toMatchObject({ path: "/config/server.yml", type: "file", size: 14 });
-    const read = await readZipArchiveEntry(archive, "/config/server.yml", limits, 1024);
-    expect(read.content.toString("utf8")).toBe("enabled: true\n");
+    expect(index.entries.find((entry) => entry.path === "config/server.yml")).toMatchObject({ type: "file", size: 14 });
   });
 
   it("rejects traversal paths and expanded-size overflow", async () => {

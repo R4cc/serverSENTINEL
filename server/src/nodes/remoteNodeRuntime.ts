@@ -8,7 +8,7 @@ import type { PanelNodeConnections } from "./panelConnections.js";
 import { assertNodeSupports, nodeAdvertisesCapability, nodeAdvertisesFeature, type ServerObservationSection } from "./protocol.js";
 import type { RemoteObservationCoordinator } from "./observationCoordinator.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter, RuntimeUploadSource } from "./types.js";
-import type { ZipArchiveListing, ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
+import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
@@ -544,22 +544,6 @@ export class RemoteNodeRuntime implements NodeRuntime {
         return download.stream;
       })
     };
-  }
-
-  listArchive(server: ManagedServer, archivePath: string, entryPath: string) {
-    return this.command(server, "files.archive.list", { path: normalizeRemotePath(archivePath), entryPath }) as Promise<ZipArchiveListing>;
-  }
-
-  previewArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string) {
-    return this.command(server, "files.archive.read", { path: normalizeRemotePath(archivePath), entryPath, preview: true });
-  }
-
-  async downloadArchiveEntry(server: ManagedServer, archivePath: string, entryPath: string): Promise<FileDownloadResult> {
-    const binaryNode = await this.binaryTransferNode(server);
-    if (binaryNode) return this.connections.download(binaryNode, "files.archive.download", { server, path: normalizeRemotePath(archivePath), entryPath }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
-    const result = await this.command(server, "files.archive.download", { path: normalizeRemotePath(archivePath), entryPath }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
-    if (result.size > legacyTransferDecodedLimitBytes) throw new Error("This archive entry is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
-    return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
   }
 
   planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {

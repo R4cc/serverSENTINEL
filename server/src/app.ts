@@ -65,7 +65,7 @@ import type { NodeRuntime, RuntimeUploadSource } from "./nodes/types.js";
 import { defaultServerJarProvider } from "./runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "./runtime/artifact.js";
 import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
-import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "./zipArchive.js";
+import { extractZipArchive, planZipExtraction, type ZipExtractionPlan } from "./zipArchive.js";
 import {
   normalizeRuntimeProfile,
   runtimeProfileForServer,
@@ -5758,89 +5758,6 @@ async function requireArchiveExtractionPermissions(
   return touchesMods;
 }
 
-app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive", async (request) => {
-  const server = await getServer(request.params.id);
-  const runtime = runtimeForServer(server);
-  const archive = await resolveZipArchive(runtime, server, request.query.path);
-  await requireFilePathPermission(request, server, archive, "files.view");
-  return runtime.listArchive(server, archive, request.query.entryPath ?? "/");
-});
-
-app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive/preview", async (request) => {
-  const server = await getServer(request.params.id);
-  const runtime = runtimeForServer(server);
-  const archive = await resolveZipArchive(runtime, server, request.query.path);
-  await requireFilePathPermission(request, server, archive, "files.view");
-  return runtime.previewArchiveEntry(server, archive, request.query.entryPath ?? "");
-});
-
-app.get<{ Params: { id: string }; Querystring: { path?: string; entryPath?: string } }>("/api/servers/:id/files/archive/download", async (request, reply) => {
-  const server = await getServer(request.params.id);
-  const runtime = runtimeForServer(server);
-  const archive = await resolveZipArchive(runtime, server, request.query.path);
-  await requireFilePathPermission(request, server, archive, "files.download");
-  const download = await runtime.downloadArchiveEntry(server, archive, request.query.entryPath ?? "");
-  return reply
-    .header("Content-Type", "application/octet-stream")
-    .header("Content-Length", download.size)
-    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`)
-    .send(download.stream);
-});
-
-async function collectSelectedArchiveEntries(runtime: NodeRuntime, server: ManagedServer, archivePath: string, selectedPaths: string[]) {
-  const collected = new Map<string, FileArchiveEntry>();
-  const collectDirectory = async (entryPath: string) => {
-    const listing = await runtime.listArchive(server, archivePath, entryPath);
-    const normalizedDirectory = entryPath.replace(/^\/+|\/+$/g, "");
-    if (normalizedDirectory) collected.set(normalizedDirectory, { sourcePath: `/${normalizedDirectory}`, archivePath: normalizedDirectory, type: "directory", size: 0 });
-    for (const entry of listing.entries) {
-      const normalized = entry.path.replace(/^\/+/, "");
-      if (entry.type === "directory") await collectDirectory(entry.path);
-      else collected.set(normalized, { sourcePath: entry.path, archivePath: normalized, type: "file", size: entry.size, modifiedAt: entry.modifiedAt });
-    }
-  };
-  for (const selectedPath of selectedPaths) {
-    const normalized = selectedPath.replace(/^\/+|\/+$/g, "");
-    if (!normalized || normalized.includes("\\") || normalized.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("Archive selection path must be normalized");
-    const parent = normalized.includes("/") ? `/${normalized.split("/").slice(0, -1).join("/")}` : "/";
-    const listing = await runtime.listArchive(server, archivePath, parent);
-    const entry = listing.entries.find((candidate) => candidate.path.replace(/^\/+/, "") === normalized);
-    if (!entry) throw new Error(`Archive entry ${selectedPath} was not found`);
-    if (entry.type === "directory") await collectDirectory(entry.path);
-    else collected.set(normalized, { sourcePath: entry.path, archivePath: normalized, type: "file", size: entry.size, modifiedAt: entry.modifiedAt });
-  }
-  const entries = Array.from(collected.values());
-  assertDownloadSize(entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0));
-  return entries;
-}
-
-app.post<{ Params: { id: string }; Body: { path?: string; entryPaths?: unknown } }>("/api/servers/:id/files/archive/download", async (request, reply) => {
-  const server = await getServer(request.params.id);
-  const runtime = runtimeForServer(server);
-  const archive = await resolveZipArchive(runtime, server, request.body.path);
-  await requireFilePathPermission(request, server, archive, "files.download");
-  const entryPaths = Array.isArray(request.body.entryPaths) ? request.body.entryPaths : [];
-  if (entryPaths.length < 1 || entryPaths.length > 200 || entryPaths.some((entry) => typeof entry !== "string")) throw new Error("Choose between 1 and 200 archive entries");
-  const entries = await collectSelectedArchiveEntries(runtime, server, archive, entryPaths as string[]);
-  const filename = entryPaths.length === 1 ? safeArchiveFilename(basename(entryPaths[0] as string)) : safeArchiveFilename(`${basename(archive, extname(archive))}-selection`);
-  const stream = createZipArchiveStream(entries, async (entry) => (await runtime.downloadArchiveEntry(server, archive, entry.sourcePath)).stream);
-  return reply
-    .header("Content-Type", "application/zip")
-    .header("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`)
-    .send(stream);
-});
-
-app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string } }>("/api/servers/:id/files/archive/extract/plan", destructiveRateLimit, async (request) => {
-  const server = await getServer(request.params.id);
-  const runtime = runtimeForServer(server);
-  const archive = await resolveZipArchive(runtime, server, request.body.path);
-  await requireFilePathPermission(request, server, archive, "files.view");
-  const destination = await resolveArchiveDestination(runtime, server, request.body.destinationPath);
-  const plan = await runtime.planArchiveExtraction(server, archive, destination);
-  await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
-  return plan;
-});
-
 app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string; conflictPolicy?: string } }>("/api/servers/:id/files/archive/extract", destructiveRateLimit, async (request, reply) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
@@ -6236,27 +6153,6 @@ function publicZipExtractionPlan(server: ManagedServer, plan: ZipExtractionPlan)
     conflicts: plan.conflicts.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) })),
     blocked: plan.blocked.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) }))
   };
-}
-
-async function localListArchive(_server: ManagedServer, archivePath: string, entryPath: string) {
-  const listing = await listZipArchive(archivePath, entryPath, fileZipLimits);
-  return { ...listing, archivePath: toPublicPath(_server, archivePath) };
-}
-
-async function localPreviewArchiveEntry(_server: ManagedServer, archivePath: string, entryPath: string) {
-  const normalizedPath = entryPath.startsWith("/") ? entryPath : `/${entryPath}`;
-  const indexed = await readZipArchiveEntry(archivePath, entryPath, fileZipLimits, editorFileSizeLimit);
-  if (!isTextLikeServerFile(indexed.entry.name)) {
-    return { path: normalizedPath, preview: "unsupported", message: "Preview unavailable" };
-  }
-  if (indexed.content.includes(0)) return { path: normalizedPath, preview: "binary", message: "Preview unavailable" };
-  return { path: normalizedPath, preview: "text", content: indexed.content.toString("utf8"), modifiedAt: indexed.entry.modifiedAt };
-}
-
-async function localDownloadArchiveEntry(_server: ManagedServer, archivePath: string, entryPath: string) {
-  const opened = await openZipArchiveEntryStream(archivePath, entryPath, fileZipLimits);
-  assertDownloadSize(opened.entry.size);
-  return { filename: opened.entry.name, size: opened.entry.size, stream: opened.stream as Readable };
 }
 
 async function localPlanArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {
@@ -8545,9 +8441,6 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   previewFile: localPreviewFile,
   downloadFile: localDownloadFile,
   downloadArchive: localDownloadArchive,
-  listArchive: localListArchive,
-  previewArchiveEntry: localPreviewArchiveEntry,
-  downloadArchiveEntry: localDownloadArchiveEntry,
   planArchiveExtraction: localPlanArchiveExtraction,
   extractArchive: localExtractArchive,
   readFile: localReadEditableFile,

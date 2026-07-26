@@ -277,23 +277,6 @@ export type FileListing = {
   entries: FileEntry[];
 };
 
-export type ZipArchiveListing = FileListing & {
-  archivePath: string;
-  readOnly: true;
-  encrypted: boolean;
-};
-
-export type ZipExtractionPlan = {
-  archivePath: string;
-  destinationPath: string;
-  fileCount: number;
-  directoryCount: number;
-  totalBytes: number;
-  outputPaths: Array<{ path: string; type: "directory" | "file" }>;
-  conflicts: Array<{ path: string; kind: "file" | "type" | "symlink" }>;
-  blocked: Array<{ path: string; kind: "file" | "type" | "symlink" }>;
-};
-
 export type FilePreview = {
   path: string;
   preview: "text" | "unsupported" | "binary" | "too_large";

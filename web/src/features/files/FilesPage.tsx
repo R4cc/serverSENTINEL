@@ -43,7 +43,6 @@ export function FilesPage({
   const { data, state, refs, actions } = workspace;
   const {
     listing,
-    archiveContext,
     selectedEntries,
     selectedEntry,
     selectedZipEntry,
@@ -52,8 +51,7 @@ export function FilesPage({
     selectionSummary,
     fileBreadcrumbs,
     filePreview,
-    zipDestinationListing,
-    zipConflictPlan
+    zipDestinationListing
   } = data;
   const {
     filesLoading,
@@ -80,7 +78,6 @@ export function FilesPage({
     canEditSelectedPath,
     editDisabledReason,
     canOpenSelectedFile,
-    canOpenSelectedZip,
     canExtractSelectedZip,
     canDownloadSelectedItems,
     canDuplicateSelectedFile,
@@ -116,7 +113,7 @@ export function FilesPage({
   useEffect(() => {
     breadcrumbRef.current?.querySelector<HTMLElement>(".active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
     setFileContextMenu(null);
-  }, [listing.path, archiveContext?.archivePath]);
+  }, [listing.path]);
 
   useEffect(() => {
     const dialogOpen = Boolean(fileActionDialog);
@@ -244,28 +241,27 @@ export function FilesPage({
   const secondarySelectionActions: ActionMenuItem[] = [];
   if (selectedZipEntry) {
     secondarySelectionActions.push(
-      { id: "extract-here", label: "Extract here", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipHere, disabled: !canExtractSelectedZip, title: "Extract all contents beside the ZIP" },
-      { id: "extract-folder", label: "Extract to folder", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipToFolder, disabled: !canExtractSelectedZip, title: `Extract to ${selectedZipEntry.name.replace(/\.zip$/i, "") || "archive"}/` },
-      { id: "extract-choose", label: "Choose extract folder", icon: <AppIcon name="folderPlus" />, onSelect: actions.openZipDestinationPicker, disabled: !canExtractSelectedZip, title: "Choose a server folder" }
+      { id: "extract-here", label: "Extract here", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipHere, disabled: !canExtractSelectedZip, title: "Extract all contents beside the ZIP, replacing files with the same name" },
+      { id: "extract-folder", label: "Extract to folder", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipToFolder, disabled: !canExtractSelectedZip, title: `Extract to ${selectedZipEntry.name.replace(/\.zip$/i, "") || "archive"}/, replacing files with the same name` },
+      { id: "extract-choose", label: "Choose extract folder", icon: <AppIcon name="folderPlus" />, onSelect: actions.openZipDestinationPicker, disabled: !canExtractSelectedZip, title: "Choose a server folder, replacing files with the same name" }
     );
   }
-  if (!archiveContext && selectedEntry?.type === "file") {
+  if (selectedEntry?.type === "file") {
     secondarySelectionActions.push({ id: "duplicate", label: "Duplicate", icon: <AppIcon name="copy" />, onSelect: actions.openDuplicateDialog, disabled: !canDuplicateSelectedFile, title: fileActionBlockedReason || "Duplicate selected file" });
   }
-  if (!archiveContext && selectedEntry) {
+  if (selectedEntry) {
     secondarySelectionActions.push({ id: "rename", label: "Rename", icon: <AppIcon name="rename" />, onSelect: actions.openRenameDialog, disabled: !canRenameSelectedItem, title: fileActionBlockedReason || "Rename selected item" });
   }
-  if (!archiveContext && selectedEntries.length > 0) {
+  if (selectedEntries.length > 0) {
     secondarySelectionActions.push({ id: "delete", label: "Delete", icon: <AppIcon name="trash" />, onSelect: actions.openDeleteDialog, disabled: !canDeleteSelectedItems, critical: true, title: fileActionBlockedReason || "Delete selected items" });
   }
 
   const selectionContextActions: ActionMenuItem[] = [];
   if (selectedEntry?.type === "directory") {
-    const permissionPath = archiveContext?.archivePath ?? selectedEntry.path;
     const canOpenFolder = !isProvisioning
       && !dockerOperationalLock
       && !filesLoading
-      && (activeServerIsDemo || hasFileManagerPermission(permissionUser, permissionPath, "view"));
+      && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view"));
     selectionContextActions.push({
       id: "open-folder",
       label: "Open",
@@ -274,8 +270,6 @@ export function FilesPage({
       disabled: !canOpenFolder,
       title: fileReadActionBlockedReason || (canOpenFolder ? "Open folder" : "View files permission is required.")
     });
-  } else if (selectedZipEntry) {
-    selectionContextActions.push({ id: "open-zip", label: "Open ZIP", icon: <AppIcon name="archive" />, onSelect: actions.openSelectedZip, disabled: !canOpenSelectedZip, title: "Open this ZIP as a read-only folder" });
   } else if (selectedEntry?.type === "file" && isEditableFile(selectedEntry)) {
     selectionContextActions.push({
       id: "open-file",
@@ -308,27 +302,24 @@ export function FilesPage({
     separatorBefore: index === 0 && selectionContextActions.length > 0
   }));
 
-  const backgroundContextActions: ActionMenuItem[] = [];
-  if (!archiveContext) {
-    backgroundContextActions.push(
-      {
-        id: "upload",
-        label: "Upload file",
-        icon: <AppIcon name="fileUp" />,
-        onSelect: () => refs.fileUploadRef.current?.click(),
-        disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
-        title: fileActionBlockedReason || "Upload a file to this folder"
-      },
-      {
-        id: "new-folder",
-        label: "New folder",
-        icon: <AppIcon name="folderPlus" />,
-        onSelect: actions.openCreateFolderDialog,
-        disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
-        title: fileActionBlockedReason || "Create a folder here"
-      }
-    );
-  }
+  const backgroundContextActions: ActionMenuItem[] = [
+    {
+      id: "upload",
+      label: "Upload file",
+      icon: <AppIcon name="fileUp" />,
+      onSelect: () => refs.fileUploadRef.current?.click(),
+      disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+      title: fileActionBlockedReason || "Upload a file to this folder"
+    },
+    {
+      id: "new-folder",
+      label: "New folder",
+      icon: <AppIcon name="folderPlus" />,
+      onSelect: actions.openCreateFolderDialog,
+      disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+      title: fileActionBlockedReason || "Create a folder here"
+    }
+  ];
   backgroundContextActions.push({
     id: "refresh",
     label: filesLoading ? "Refreshing" : "Refresh",
@@ -351,41 +342,39 @@ export function FilesPage({
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
                 <AppIcon name="chevronRight" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateFilesUp} disabled={isProvisioning || (!archiveContext && listing.path === "/")} title={!archiveContext && listing.path === "/" ? "Already at server root" : "Go up one folder"} aria-label="Go up one folder">
+              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateFilesUp} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go up one folder"} aria-label="Go up one folder">
                 <AppIcon name="arrowUp" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || (!archiveContext && listing.path === "/")} title={!archiveContext && listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
+              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
                 <AppIcon name="home" />
               </Button>
             </div>
             <div className="fileBreadcrumbs uiToolbarMeta" aria-label="Current folder" ref={breadcrumbRef}>
               {fileBreadcrumbs.map((crumb) => (
                 <button
-                  key={`${crumb.kind}:${crumb.path}`}
+                  key={crumb.path}
                   type="button"
-                  onClick={() => void (crumb.kind === "archive" ? actions.navigateArchive(crumb.path) : actions.navigateFiles(crumb.path))}
-                  className={`${crumb.path === listing.path && ((archiveContext && crumb.kind === "archive") || (!archiveContext && crumb.kind === "filesystem")) ? "active" : ""} ${crumb.kind === "filesystem" && fileDropTargetPath === crumb.path ? "fileDropTarget" : ""}`.trim()}
-                  title={crumb.kind === "archive" && archiveContext ? `${archiveContext.archivePath}!${crumb.path}` : draggedFilePath && crumb.kind === "filesystem" ? `Move to ${crumb.path}` : crumb.path}
-                  onDragOver={crumb.kind === "filesystem" ? (event) => handleFileDragOver(event, crumb.path) : undefined}
-                  onDragLeave={crumb.kind === "filesystem" ? (event) => handleFileDragLeave(event, crumb.path) : undefined}
-                  onDrop={crumb.kind === "filesystem" ? (event) => handleFileDrop(event, crumb.path) : undefined}
+                  onClick={() => void actions.navigateFiles(crumb.path)}
+                  className={`${crumb.path === listing.path ? "active" : ""} ${fileDropTargetPath === crumb.path ? "fileDropTarget" : ""}`.trim()}
+                  title={draggedFilePath ? `Move to ${crumb.path}` : crumb.path}
+                  onDragOver={(event) => handleFileDragOver(event, crumb.path)}
+                  onDragLeave={(event) => handleFileDragLeave(event, crumb.path)}
+                  onDrop={(event) => handleFileDrop(event, crumb.path)}
                 >
                   {crumb.label}
                 </button>
               ))}
             </div>
             <div className="fileToolbar uiToolbarSecondary">
-              {!archiveContext && <>
-                <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
-                <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
-                  <AppIcon name="fileUp" />
-                  <span className="fileToolbarLabel">Upload</span>
-                </Button>
-                <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
-                  <AppIcon name="folderPlus" />
-                  <span className="fileToolbarLabel">New folder</span>
-                </Button>
-              </>}
+              <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
+              <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
+                <AppIcon name="fileUp" />
+                <span className="fileToolbarLabel">Upload</span>
+              </Button>
+              <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
+                <AppIcon name="folderPlus" />
+                <span className="fileToolbarLabel">New folder</span>
+              </Button>
               <Button variant="secondary" compact aria-label={filesLoading ? "Refreshing files" : "Refresh files"} onClick={() => void actions.refreshCurrentFiles()} disabled={isProvisioning || filesLoading || !canViewCurrentFiles} title={canViewCurrentFiles ? "Reload this folder" : "View files permission is required for this folder"} reserveLabel={<><AppIcon name="refresh" /><span className="fileToolbarLabel">Refreshing</span></>}>
                 <AppIcon name="refresh" />
                 <span className="fileToolbarLabel">{filesLoading ? "Refreshing" : "Refresh"}</span>
@@ -393,20 +382,10 @@ export function FilesPage({
             </div>
           </div>
 
-          {archiveContext && (
-            <div className="zipReadOnlyBanner" role="status">
-              <AppIcon name="archive" />
-              <div><strong>ZIP archive — read only</strong><span>You are viewing {archiveContext.archivePath}. Extract its contents before editing them.</span></div>
-            </div>
-          )}
-
           <section className="fileListSurface" aria-label="File list">
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
-              {selectedZipEntry && <>
-                <Button variant="secondary" compact onClick={actions.openSelectedZip} disabled={!canOpenSelectedZip} title="Open this ZIP as a read-only folder"><AppIcon name="archive" /><span className="selectionActionLabel">Open ZIP</span></Button>
-              </>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
                 <span className="selectionActionLabel">Open</span>
@@ -467,7 +446,7 @@ export function FilesPage({
             {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
             {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
             {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
-              <InlineState tone="empty" title="This folder is empty" message={archiveContext ? "There are no entries in this ZIP folder." : "There are no files or folders here yet. Upload a file or create a folder to add content."} />
+              <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
             )}
             {sortedFileEntries.map((entry) => {
               const selected = selectedFilePaths.includes(entry.path);
@@ -526,7 +505,7 @@ export function FilesPage({
           </div>
           <div className="fileTableFooter">
             <span>{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : `${sortedFileEntries.length} items`}</span>
-            <span title={archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : archiveContext ? `${archiveContext.archivePath}!${listing.path}` : listing.path}</span>
+            <span title={listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
           </div>
           </section>
         </section>
@@ -559,7 +538,7 @@ export function FilesPage({
               </div>
             </div>
             <dl>
-              <div><dt>Location</dt><dd>{archiveContext ? `${archiveContext.archivePath}!${selectedEntry.path}` : selectedEntry.path}</dd></div>
+              <div><dt>Location</dt><dd>{selectedEntry.path}</dd></div>
               <div><dt>Type</dt><dd>{fileDisplayType(selectedEntry)}</dd></div>
               <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "-"}</dd></div>
               <div><dt>Modified</dt><dd>{dateTimeFormatter.format(new Date(selectedEntry.modifiedAt))}</dd></div>
@@ -638,24 +617,6 @@ export function FilesPage({
         </div>
       )}
 
-      {zipConflictPlan && (
-        <div className="modalBackdrop" role="presentation">
-          <DialogSurface className="modalPanel zipConflictModal" labelledBy="zip-conflict-title" onClose={() => actions.setZipConflictPlan(null)}>
-            <header className="modalHeader"><h2 id="zip-conflict-title">Files already exist</h2></header>
-            <div className="modalBody">
-              <p>{zipConflictPlan.conflicts.length} file{zipConflictPlan.conflicts.length === 1 ? "" : "s"} already exist in {zipConflictPlan.destinationPath}.</p>
-              <ul>{zipConflictPlan.conflicts.slice(0, 5).map((conflict) => <li key={conflict.path}>{conflict.path}</li>)}</ul>
-              {zipConflictPlan.conflicts.length > 5 && <p>…and {zipConflictPlan.conflicts.length - 5} more.</p>}
-            </div>
-            <footer className="modalFooter zipConflictActions">
-              <Button variant="secondary" onClick={() => actions.setZipConflictPlan(null)}>Cancel</Button>
-              <Button variant="secondary" onClick={() => actions.startZipExtraction(zipConflictPlan, "skip")}>Skip all</Button>
-              <Button variant="critical" onClick={() => actions.startZipExtraction(zipConflictPlan, "replace")}>Replace all</Button>
-            </footer>
-          </DialogSurface>
-        </div>
-      )}
-
       <FileEditorModal
         selectedPath={selectedPath}
         editorText={editorText}
@@ -667,9 +628,8 @@ export function FilesPage({
         editing={fileEditMode}
         editBusy={fileLeaseBusy}
         editMessage={fileLeaseMessage}
-        editDisabled={Boolean(archiveContext) || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-        editDisabledReason={archiveContext ? "ZIP archive contents are read-only. Extract this file before editing it." : editDisabledReason}
-        readOnlyOnly={Boolean(archiveContext)}
+        editDisabled={isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+        editDisabledReason={editDisabledReason}
         editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
         saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
         discardRequestOpen={Boolean(discardEditorRequest)}

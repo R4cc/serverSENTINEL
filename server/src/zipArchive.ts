@@ -9,7 +9,7 @@ export type ZipArchiveLimits = {
   maxExpandedBytes: number;
 };
 
-export type ZipArchiveEntry = {
+type ZipArchiveEntry = {
   name: string;
   path: string;
   type: "directory" | "file";
@@ -18,14 +18,6 @@ export type ZipArchiveEntry = {
   modifiedAt: string;
   encrypted?: boolean;
   unsupported?: boolean;
-};
-
-export type ZipArchiveListing = {
-  archivePath: string;
-  path: string;
-  readOnly: true;
-  encrypted: boolean;
-  entries: ZipArchiveEntry[];
 };
 
 export type ZipExtractionConflict = {
@@ -83,19 +75,6 @@ function normalizedEntryName(rawName: string) {
     throw zipError(`Archive entry ${JSON.stringify(rawName)} is not normalized`);
   }
   return { path: parts.join("/"), directory };
-}
-
-export function normalizeZipEntryPath(input: unknown, allowRoot = true) {
-  if (typeof input !== "string") throw zipError("Archive entry path must be a string");
-  if (input.includes("\0") || input.includes("\\")) throw zipError("Archive entry path contains invalid characters");
-  const value = input.replace(/^\/+/, "").replace(/\/+$/, "");
-  if (!value) {
-    if (allowRoot) return "";
-    throw zipError("An archive entry path is required");
-  }
-  const parts = value.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) throw zipError("Archive entry path must be normalized");
-  return parts.join("/");
 }
 
 function unixMode(entry: Entry) {
@@ -195,40 +174,11 @@ export async function indexZipArchive(archivePath: string, limits: ZipArchiveLim
   return { entries, encrypted, totalBytes };
 }
 
-export async function listZipArchive(archivePath: string, entryPath: string, limits: ZipArchiveLimits): Promise<ZipArchiveListing> {
-  const index = await indexZipArchive(archivePath, limits);
-  const current = normalizeZipEntryPath(entryPath);
-  if (current && !index.entries.some((entry) => entry.path === current && entry.type === "directory")) {
-    throw zipError("Archive folder was not found", "zip_entry_not_found");
-  }
-  const prefix = current ? `${current}/` : "";
-  const entries = index.entries
-    .filter((entry) => entry.path.startsWith(prefix) && !entry.path.slice(prefix.length).includes("/") && entry.path !== current)
-    .sort((left, right) => Number(right.type === "directory") - Number(left.type === "directory") || left.name.localeCompare(right.name))
-    .map(({ rawName: _rawName, rawEntry: _rawEntry, unsafeLink: _unsafeLink, ...entry }) => ({ ...entry, path: `/${entry.path}` }));
-  return { archivePath, path: current ? `/${current}` : "/", readOnly: true, encrypted: index.encrypted, entries };
-}
-
-async function findRawEntry(archivePath: string, entryPath: string, limits: ZipArchiveLimits) {
-  const normalized = normalizeZipEntryPath(entryPath, false);
-  const index = await indexZipArchive(archivePath, limits);
-  const entry = index.entries.find((candidate) => candidate.path === normalized && candidate.type === "file");
-  if (!entry || !entry.rawName) throw zipError("Archive file was not found", "zip_entry_not_found");
-  if (entry.encrypted) throw zipError("Encrypted ZIP entries are not supported", "zip_encrypted");
-  if (entry.unsupported) throw zipError("This ZIP compression method is not supported", "zip_compression_unsupported");
-  return entry;
-}
-
-export async function openZipArchiveEntryStream(archivePath: string, entryPath: string, limits: ZipArchiveLimits) {
-  const target = await findRawEntry(archivePath, entryPath, limits);
-  return openIndexedZipEntryStream(archivePath, target);
-}
-
 async function openIndexedZipEntryStream(archivePath: string, target: IndexedEntry) {
   if (!target.rawEntry) throw zipError("Archive file was not found", "zip_entry_not_found");
   const rawEntry = target.rawEntry;
   const zip = await openZip(archivePath);
-  return new Promise<{ entry: ZipArchiveEntry; stream: NodeJS.ReadableStream }>((resolvePromise, reject) => {
+  return new Promise<NodeJS.ReadableStream>((resolvePromise, reject) => {
     const fail = (error: Error) => {
       reject(error);
       zip.close();
@@ -238,18 +188,9 @@ async function openIndexedZipEntryStream(archivePath: string, target: IndexedEnt
       if (error || !stream) return fail(error ?? zipError("Could not read archive entry"));
       stream.once("end", () => zip.close());
       stream.once("error", () => zip.close());
-      const { rawName: _rawName, rawEntry: _rawEntry, unsafeLink: _unsafeLink, ...publicEntry } = target;
-      resolvePromise({ entry: publicEntry, stream });
+      resolvePromise(stream);
     });
   });
-}
-
-export async function readZipArchiveEntry(archivePath: string, entryPath: string, limits: ZipArchiveLimits, maxBytes: number) {
-  const opened = await openZipArchiveEntryStream(archivePath, entryPath, limits);
-  if (opened.entry.size > maxBytes) throw zipError(`Archive entry is larger than ${maxBytes} bytes`, "zip_entry_size_limit");
-  const chunks: Buffer[] = [];
-  for await (const chunk of opened.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return { entry: opened.entry, content: Buffer.concat(chunks) };
 }
 
 async function existingStat(path: string) {
@@ -355,8 +296,8 @@ export async function extractZipArchive(input: {
     try {
       if (entry.encrypted) throw zipError(`Archive entry ${entry.path} is encrypted`, "zip_encrypted");
       if (entry.unsupported) throw zipError(`Archive entry ${entry.path} uses an unsupported compression method`, "zip_compression_unsupported");
-      const opened = await openIndexedZipEntryStream(input.archivePath, entry);
-      await pipeline(opened.stream, createWriteStream(temporary, { flags: "wx" }), { signal: input.signal });
+      const entryStream = await openIndexedZipEntryStream(input.archivePath, entry);
+      await pipeline(entryStream, createWriteStream(temporary, { flags: "wx" }), { signal: input.signal });
       if (conflict) await rename(target, backup);
       try {
         await rename(temporary, target);

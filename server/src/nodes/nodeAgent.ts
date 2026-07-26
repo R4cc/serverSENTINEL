@@ -32,7 +32,7 @@ import type { NodeCancelMessage, NodeHello, NodeRequestMessage, NodeResponseMess
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
 import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
-import { extractZipArchive, listZipArchive, openZipArchiveEntryStream, planZipExtraction, readZipArchiveEntry, type ZipExtractionPlan } from "../zipArchive.js";
+import { extractZipArchive, planZipExtraction, type ZipExtractionPlan } from "../zipArchive.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
 const modHashCache = new ModHashCache();
@@ -1237,33 +1237,6 @@ function publicExtractionPlan(root: string, plan: ZipExtractionPlan): ZipExtract
   };
 }
 
-async function archiveList(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const root = await serverRoot(server);
-  const archive = await inside(server, path);
-  const listing = await listZipArchive(archive, typeof entryPath === "string" ? entryPath : "/", zipLimits);
-  return { ...listing, archivePath: publicPath(root, archive) };
-}
-
-async function archiveRead(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const archive = await inside(server, path);
-  const selected = typeof entryPath === "string" ? entryPath : "";
-  const indexed = await readZipArchiveEntry(archive, selected, zipLimits, editorFileSizeLimit);
-  const publicEntryPath = selected.startsWith("/") ? selected : `/${selected}`;
-  const textLike = /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(indexed.entry.name) || !indexed.entry.name.includes(".");
-  if (!textLike) return { path: publicEntryPath, preview: "unsupported", message: "Preview unavailable" };
-  if (indexed.content.includes(0)) return { path: publicEntryPath, preview: "binary", message: "Preview unavailable" };
-  return { path: publicEntryPath, preview: "text", content: indexed.content.toString("utf8"), modifiedAt: indexed.entry.modifiedAt };
-}
-
-async function archiveDownload(server: ManagedServer, path: unknown, entryPath: unknown) {
-  const archive = await inside(server, path);
-  const opened = await openZipArchiveEntryStream(archive, typeof entryPath === "string" ? entryPath : "", zipLimits);
-  if (opened.entry.size > uploadLimit) throw new Error("Archive entry is larger than the remote transfer limit");
-  const chunks: Buffer[] = [];
-  for await (const chunk of opened.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return { filename: opened.entry.name, size: opened.entry.size, contentBase64: Buffer.concat(chunks).toString("base64") };
-}
-
 async function archivePlan(server: ManagedServer, path: unknown, destinationPath: unknown) {
   const root = await serverRoot(server);
   const archive = await inside(server, path);
@@ -1451,15 +1424,6 @@ async function prepareBinaryDownload(message: NodeTransferStartMessage) {
     const handle = await open(target, "r");
     return { filename: basename(target), size: targetStat.size, stream: handle.createReadStream() };
   }
-  if (message.command === "files.archive.download") {
-    const archive = await inside(server, payload.path);
-    const opened = await openZipArchiveEntryStream(archive, typeof payload.entryPath === "string" ? payload.entryPath : "", zipLimits);
-    if (opened.entry.size > (message.maxBytes ?? uploadLimit)) {
-      if ("destroy" in opened.stream) (opened.stream as { destroy: () => void }).destroy();
-      throw new Error("Archive entry exceeds the configured download limit");
-    }
-    return { filename: opened.entry.name, size: opened.entry.size, stream: opened.stream };
-  }
   throw new Error(`Unsupported download transfer ${message.command}`);
 }
 
@@ -1593,9 +1557,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return { ok: true };
   }
   if (command === "files.list") return fileList(server, payload?.path);
-  if (command === "files.archive.list") return archiveList(server, payload?.path, payload?.entryPath);
-  if (command === "files.archive.read") return archiveRead(server, payload?.path, payload?.entryPath);
-  if (command === "files.archive.download") return archiveDownload(server, payload?.path, payload?.entryPath);
   if (command === "files.archive.plan") return archivePlan(server, payload?.path, payload?.destinationPath);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
   if (command === "files.download") return fileDownload(server, payload?.path);
