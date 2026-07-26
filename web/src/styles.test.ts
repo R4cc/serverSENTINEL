@@ -7,6 +7,7 @@ const motionStyles = readFileSync(new URL("./styles/motion.css", import.meta.url
 const tokenStyles = readFileSync(new URL("./styles/tokens.css", import.meta.url), "utf8");
 const primitiveStyles = readFileSync(new URL("./styles/primitives.css", import.meta.url), "utf8");
 const serverPropertiesStyles = readFileSync(new URL("./styles/server-properties.css", import.meta.url), "utf8");
+const filesConsoleStyles = readFileSync(new URL("./styles/files-console.css", import.meta.url), "utf8");
 const fileManagerStyles = readFileSync(new URL("./styles/file-manager.css", import.meta.url), "utf8");
 const canonicalLayoutStyles = readFileSync(new URL("./styles/canonical-layout.css", import.meta.url), "utf8");
 const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "utf8");
@@ -118,9 +119,9 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).not.toContain("modUpdatesRefreshLabel");
   });
 
-  it("uses the desktop five-seven support split and neutral event rows", () => {
-    expect(overviewStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?"players players players players players support support support support support support support"/s);
-    expect(overviewStyles).toMatch(/\.overviewSupportStack\s*\{[^}]*grid-area:\s*support;[^}]*display:\s*grid;/s);
+  it("uses the full desktop width for support cards after the timeline replaces Active Players", () => {
+    expect(overviewStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?"support support support support support support support support support support support support"/s);
+    expect(overviewStyles).toMatch(/\.overviewSupportStack\s*\{[^}]*grid-area:\s*support;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow,\s*[\s\S]*?\.eventRow\.eventKind--player_reconnected\s*\{[^}]*border-color:\s*var\(--border-row\);[^}]*background:\s*transparent;/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow\.error\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-danger\) 3\.5%, var\(--surface-raised\)\);/s);
   });
@@ -188,16 +189,20 @@ describe("global stylesheet entry point", () => {
     expect(fileManagerStyles).toMatch(/\.filesPage\s*\{[^}]*min-height:\s*520px;/s);
   });
 
+  it("keeps the file editor wider than generic dialogs while preserving its phone inset", () => {
+    expect(filesConsoleStyles).toMatch(/\.modalPanel\.fileEditorModal\s*\{[^}]*width:\s*90vw;/s);
+    expect(responsiveStyles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.modalPanel\.fileEditorModal\s*\{[^}]*width:\s*calc\(100vw - 16px\);/s);
+  });
+
   it("keeps phone action menus inside the edge they are aligned to", () => {
     expect(responsiveStyles).toMatch(/\.actionMenuPopover--end\s*\{[^}]*right:\s*0;[^}]*left:\s*auto;/s);
     expect(responsiveStyles).toMatch(/\.actionMenuPopover--start\s*\{[^}]*right:\s*auto;[^}]*left:\s*0;/s);
   });
 
-  it("packs the phone overview summary into two compact rows", () => {
+  it("packs the four phone overview summary tiles into two equal rows", () => {
     const phoneOverviewRules = responsiveStyles.slice(responsiveStyles.lastIndexOf("@media (max-width: 720px)"));
-    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary\s*\{[^}]*grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/s);
-    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary > \.summaryTile\s*\{[^}]*grid-column:\s*span 2;[^}]*min-height:\s*54px;/s);
-    expect(phoneOverviewRules).toMatch(/\.summaryTile:nth-of-type\(4\),\s*\.overviewDashboardGrid > \.overviewSummary > \.summaryTile:nth-of-type\(5\)\s*\{[^}]*grid-column:\s*span 3;/s);
+    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
+    expect(phoneOverviewRules).toMatch(/\.overviewDashboardGrid > \.overviewSummary > \.summaryTile\s*\{[^}]*grid-column:\s*auto;[^}]*min-height:\s*54px;/s);
     expect(phoneOverviewRules).toMatch(/\.summaryTile \.uiMetricTileMarker\s*\{[^}]*display:\s*none;/s);
   });
 

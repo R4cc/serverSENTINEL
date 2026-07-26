@@ -1409,7 +1409,7 @@ button:disabled,
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   }
 
-  .fileEditorModal {
+  .modalPanel.fileEditorModal {
     height: calc(var(--visual-viewport-height, 100dvh) - 16px);
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   }
@@ -2555,7 +2555,7 @@ textarea:hover:not(:disabled),
     max-height: calc(100dvh - 16px);
   }
 
-  .fileEditorModal {
+  .modalPanel.fileEditorModal {
     width: calc(100vw - 16px);
     height: calc(100vh - 16px);
     height: calc(100dvh - 16px);
@@ -2906,21 +2906,16 @@ textarea:hover:not(:disabled),
 
 @media (max-width: 720px) {
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);
   }
 
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
-    grid-column: span 2;
+    grid-column: auto;
     min-height: 54px;
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     padding: var(--space-2) 10px;
-  }
-
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-of-type(4),
-  .overviewDashboardGrid > .overviewSummary > .summaryTile:nth-of-type(5) {
-    grid-column: span 3;
   }
 
   .overviewSummary > .summaryTile .uiMetricTileMarker {

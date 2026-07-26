@@ -515,6 +515,10 @@
   font-weight: var(--weight-strong);
 }
 
+.modalPanel.fileEditorModal {
+  width: 90vw;
+}
+
 .fileEditorBackdrop {
   z-index: 50;
 }

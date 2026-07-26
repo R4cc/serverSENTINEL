@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoStatus } from "../demo";
+import { demoOverviewData, demoServer, demoStatus } from "../demo";
 import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecution, ServerEvent, ServerStatus } from "../types";
 import {
   ActivePlayersPanel,
@@ -83,22 +83,32 @@ describe("recent event timestamps", () => {
 });
 
 describe("overview summary", () => {
-  it("keeps mod updates out of the persistent summary and reserves CPU and memory for the wide layout", () => {
+  it("omits the duplicate player count and reports CPU and memory percentages on the wide layout", () => {
     const server = demoServer();
     const html = renderToStaticMarkup(createElement(OverviewSummary, {
       server,
       status: demoStatus(server, true),
       dockerSocketMounted: true,
       activity: demoOverviewData(true).activity,
-      playerSnapshot: demoPlayerSnapshot(true)
+      latestResourceSample: {
+        available: true,
+        running: true,
+        cpuPercent: 5.2,
+        cpuUtilizationPercent: 5.2,
+        memoryUsageBytes: 18_185_000_000,
+        memoryUtilizationPercent: 73.4
+      }
     }));
 
-    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(7);
-    expect((html.match(/class="uiMetricTile /g) ?? []).length).toBe(7);
+    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(6);
+    expect((html.match(/class="uiMetricTile /g) ?? []).length).toBe(6);
     expect((html.match(/overviewWideSummaryTile/g) ?? []).length).toBe(2);
     expect(html).not.toContain(">Mod updates<");
+    expect(html).not.toContain(">Players<");
     expect(html).toContain(">CPU<");
+    expect(html).toContain("5.2%");
     expect(html).toContain(">Memory<");
+    expect(html).toContain("73.4%");
     expect(html).not.toContain(">Container<");
     expect(html).not.toContain("Server Activity &amp; Health");
   });
@@ -110,11 +120,10 @@ describe("overview summary", () => {
       status: demoStatus(server, true),
       dockerSocketMounted: true,
       activity: demoOverviewData(true).activity,
-      playerSnapshot: demoPlayerSnapshot(true),
       loading: true
     }));
 
-    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(6);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
   });
@@ -141,8 +150,7 @@ describe("overview summary", () => {
       server,
       status,
       dockerSocketMounted: setup.socketMounted ?? true,
-      activity: demoOverviewData(running).activity,
-      playerSnapshot: demoPlayerSnapshot(running)
+      activity: demoOverviewData(running).activity
     }));
 
     expect(html).toContain(`statusGlowTile ${stateClass}`);

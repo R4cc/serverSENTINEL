@@ -123,16 +123,13 @@ export function OverviewSummary({
   status,
   dockerSocketMounted,
   activity,
-  playerSnapshot,
   latestResourceSample,
-  formatNumber = (value) => String(value),
   loading = false
 }: {
   server: ManagedServer;
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
   activity: ServerActivity;
-  playerSnapshot?: PlayerSnapshot;
   latestResourceSample?: {
     available: boolean;
     running: boolean;
@@ -140,21 +137,12 @@ export function OverviewSummary({
     cpuUtilizationPercent?: number | null;
     cpuCapacityCores?: number;
     memoryUsageBytes: number | null;
+    memoryUtilizationPercent?: number | null;
   };
-  formatNumber?: (value: number) => string;
   loading?: boolean;
 }) {
   const running = Boolean(status?.docker.running);
   const state = dockerStateLabel(status, dockerSocketMounted);
-  const players = !playerSnapshot
-    ? "Collecting"
-    : playerSnapshot.state === "stopped"
-      ? "Not running"
-      : playerSnapshot.state === "unavailable"
-        ? "Unavailable"
-        : playerSnapshot.maxPlayers
-          ? `${playerSnapshot.online} / ${playerSnapshot.maxPlayers}`
-          : String(playerSnapshot.online);
   const minecraftVersion = minecraftVersionInfo(server);
   const runtimeVersion = runtimeVersionInfo(server);
   const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
@@ -165,8 +153,8 @@ export function OverviewSummary({
       ? latestResourceSample.cpuPercent / latestResourceSample.cpuCapacityCores
       : null);
   const cpu = hasResourceStats && normalizedCpu !== null ? `${normalizedCpu.toFixed(1)}%` : resourceFallback;
-  const memory = hasResourceStats
-    ? `${formatNumber(Math.round((latestResourceSample?.memoryUsageBytes ?? 0) / 1024 / 1024))} MB`
+  const memory = hasResourceStats && latestResourceSample?.memoryUtilizationPercent != null
+    ? `${latestResourceSample.memoryUtilizationPercent.toFixed(1)}%`
     : resourceFallback;
 
   return (
@@ -184,7 +172,6 @@ export function OverviewSummary({
       <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
       <MetricTile className="summaryTile" label={runtime.displayName} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)} />
       <MetricTile className="summaryTile" label="Uptime" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
-      <MetricTile className="summaryTile" label="Players" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : players} />
       <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
       <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
