@@ -92,6 +92,54 @@ export function memoryAxisMaximum(samples: ServerTimelineResourcePoint[]) {
   return Math.ceil(target / step) * step;
 }
 
+function visibleMetricValues(
+  samples: ServerTimelineResourcePoint[],
+  key: "cpuUtilizationPercent" | "memoryUsageBytes",
+  viewport: TimelineWindow
+) {
+  return samples.flatMap((sample) => {
+    const value = sample[key];
+    return sample.sampledAt >= viewport.from
+      && sample.sampledAt <= viewport.to
+      && sample.available
+      && sample.running
+      && typeof value === "number"
+      && Number.isFinite(value)
+      ? [Math.max(0, value)]
+      : [];
+  });
+}
+
+export function cpuAxisMaximum(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
+  const values = visibleMetricValues(samples, "cpuUtilizationPercent", viewport);
+  if (!values.length) return 100;
+  const observed = Math.max(...values);
+  const target = observed + Math.max(5, observed * 0.12);
+  const step = target <= 20 ? 5 : target <= 60 ? 10 : 20;
+  return Math.min(100, Math.max(10, Math.ceil(target / step) * step));
+}
+
+function niceAxisStep(target: number) {
+  if (!Number.isFinite(target) || target <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(target));
+  const fraction = target / magnitude;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
+  return niceFraction * magnitude;
+}
+
+export function memoryAxisBounds(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
+  const values = visibleMetricValues(samples, "memoryUsageBytes", viewport);
+  if (!values.length) return { min: 0, max: 1 };
+  const observedMin = Math.min(...values);
+  const observedMax = Math.max(...values);
+  const center = (observedMin + observedMax) / 2;
+  const desiredSpan = Math.max((observedMax - observedMin) * 1.2, observedMax * 0.08, 1);
+  const step = niceAxisStep(desiredSpan / 5);
+  const min = Math.max(0, Math.floor((center - desiredSpan / 2) / step) * step);
+  const max = Math.ceil((center + desiredSpan / 2) / step) * step;
+  return { min, max: Math.max(max, min + step) };
+}
+
 export type TimelinePalette = {
   cpu: string;
   memory: string;
@@ -313,6 +361,7 @@ export function buildTimelineChartOption({
     || (enabled.networkTxBytesPerSecond && visible.has("networkTxBytesPerSecond"));
   const playersEnabled = enabled.playersOnline && visible.has("playersOnline");
   const separateBand = Boolean(gridOverride);
+  const separateMemoryBounds = separateBand && memoryEnabled ? memoryAxisBounds(samples, viewport) : undefined;
   const yAxis: Array<Record<string, unknown>> = [];
   let cpuAxis = "";
   let memoryAxis = "";
@@ -326,7 +375,8 @@ export function buildTimelineChartOption({
       type: "value",
       position: "left",
       min: 0,
-      max: 100,
+      max: separateBand ? cpuAxisMaximum(samples, viewport) : 100,
+      splitNumber: 4,
       name: separateBand ? "" : "CPU",
       nameTextStyle: { color: palette.textMuted, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.border } },
@@ -342,8 +392,9 @@ export function buildTimelineChartOption({
       type: "value",
       position: separateBand ? "left" : "right",
       offset: rightAxisOffset,
-      min: 0,
-      max: memoryAxisMaximum(samples),
+      min: separateMemoryBounds?.min ?? 0,
+      max: separateMemoryBounds?.max ?? memoryAxisMaximum(samples),
+      splitNumber: 4,
       name: separateBand ? "" : "Memory",
       nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },

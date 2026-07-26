@@ -23,7 +23,7 @@ import {
 } from "./ServerTimeline";
 
 describe("server timeline controls", () => {
-  it("renders the three-hour preset and keeps reset disabled for an unmodified preset", () => {
+  it("uses the three-hour preset by default and keeps reset disabled for an unmodified preset", () => {
     const html = renderToStaticMarkup(createElement(ServerTimeline, {
       loadTimeline: vi.fn(),
       formatTime: String,
@@ -33,6 +33,7 @@ describe("server timeline controls", () => {
     }));
 
     expect(html).toMatch(/>1h<.*>3h<.*>6h</s);
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*active[^>]*>3h<\/button>/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
     expect(html).toContain("Player activity");
     expect(html).toContain("Server events");

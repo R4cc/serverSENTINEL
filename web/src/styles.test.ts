@@ -128,6 +128,9 @@ describe("global stylesheet entry point", () => {
   it("uses the unified timeline for desktop and compact landscape layouts", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayers\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--timeline-join\) 24%, var\(--border-muted\)\);[^}]*box-shadow:\s*inset 3px 0 0/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid[^}]*background:\s*color-mix\(in srgb, var\(--timeline-join\) 6%, var\(--surface-muted\)\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineMetricBand\.is-prominent\s*\{\s*height:\s*clamp\(172px, 11vw, 190px\);\s*\}/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationStage\s*\{[^}]*min-height:\s*48px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
