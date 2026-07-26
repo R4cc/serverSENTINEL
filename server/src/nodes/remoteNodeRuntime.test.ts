@@ -8,8 +8,8 @@ import { RemoteNodeRuntime } from "./remoteNodeRuntime.js";
 function testRuntimeProfile(): ServerRuntimeProfile {
   return {
     minecraftVersion: "1.21.4",
-    loader: "fabric",
-    loaderVersion: "0.16.10",
+    runtimeType: "fabric",
+    runtimeVersion: "0.16.10",
     javaMajorVersion: 21,
     jarProvider: "mcjars",
     jarArtifact: {

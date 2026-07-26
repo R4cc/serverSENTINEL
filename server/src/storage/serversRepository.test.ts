@@ -50,8 +50,8 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
     storageName: serverStorageName(id),
     runtimeProfile: {
       minecraftVersion: "1.21.1",
-      loader: "fabric",
-      loaderVersion: "0.16.0",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.0",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       jarArtifact: { filename: "fabric-server-launch.jar" },

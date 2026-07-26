@@ -12,7 +12,7 @@ function schedule(overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
     id: scheduleId,
     name: "Nightly restart",
     cron: "0 4 * * *",
-    steps: [{ type: "action", action: "restart", delaySeconds: 0 }],
+    steps: [{ type: "action", procedure: "restart", delaySeconds: 0 }],
     onlyWhenNoPlayers: false,
     enabled: true,
     createdAt: "2026-01-01T00:00:00.000Z",
