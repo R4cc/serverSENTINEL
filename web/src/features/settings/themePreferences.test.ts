@@ -8,17 +8,15 @@ describe("theme preferences", () => {
   });
 
   it("resolves fixed and system color modes", () => {
-    expect(resolveDarkTheme("xander", false)).toBe(true);
-    expect(resolveDarkTheme("nightlight", false)).toBe(true);
-    expect(resolveDarkTheme("mint", true)).toBe(false);
-    expect(resolveDarkTheme("peach", true)).toBe(false);
+    expect(resolveDarkTheme("dark", false)).toBe(true);
+    expect(resolveDarkTheme("light", true)).toBe(false);
     expect(resolveDarkTheme("system", true)).toBe(true);
     expect(resolveDarkTheme("system", false)).toBe(false);
   });
 
-  it("combines the contrast mode with the selected palette class", () => {
-    expect(resolvedThemeClassName("xander", false)).toBe("themeDark themeXanderGreen");
-    expect(resolvedThemeClassName("mint", true)).toBe("themeLight themeMint");
+  it("maps the resolved mode onto a contrast class", () => {
     expect(resolvedThemeClassName("dark", false)).toBe("themeDark");
+    expect(resolvedThemeClassName("light", true)).toBe("themeLight");
+    expect(resolvedThemeClassName("system", true)).toBe("themeDark");
   });
 });

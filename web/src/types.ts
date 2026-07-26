@@ -528,7 +528,7 @@ export type ScheduleNavigationTarget =
   | { kind: "active-run"; scheduleId: string; runId: string }
   | { kind: "completed-run"; scheduleId: string; runId: string };
 
-export type ThemePreference = "light" | "dark" | "system" | "xander" | "mint" | "nightlight" | "peach";
+export type ThemePreference = "light" | "dark" | "system";
 
 export type RegionalFormatPreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
 
