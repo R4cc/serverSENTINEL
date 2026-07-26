@@ -6,9 +6,9 @@ import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -42,6 +42,13 @@ import {
   unknownCompatibility,
   versionChannel
 } from "./modrinth/compatibility.js";
+import {
+  assertDownloadableModrinthFile,
+  assertModrinthDownloadSize,
+  assertVersionInstallable,
+  compatibilityFromSelectedVersion,
+  managedContentNaming
+} from "./modrinth/installPolicy.js";
 import { configureModrinthApiKeyProvider, modrinthFetch } from "./modrinth/modrinthClient.js";
 import { assessRequiredModDependencies } from "./modrinth/dependencyHealth.js";
 import { searchModrinth } from "./modrinth/searchCache.js";
@@ -62,6 +69,23 @@ import { NodeRuntimeRegistry } from "./nodes/registry.js";
 import { RemoteNodeRuntime } from "./nodes/remoteNodeRuntime.js";
 import { newNodeSecret } from "./nodes/nodeAgent.js";
 import type { NodeRuntime, RuntimeUploadSource } from "./nodes/types.js";
+import {
+  copyServerFile,
+  createServerFolder,
+  deleteServerEntry,
+  fileUploadSizeLimit,
+  listServerDirectory,
+  moveServerEntry,
+  previewServerFile,
+  publicZipExtractionPlan,
+  readServerTextFile,
+  renameServerEntry,
+  resolveUploadTarget,
+  safeFileManagerName,
+  toPublicServerPath,
+  writeRuntimeUpload,
+  writeServerTextFile
+} from "./runtime/local/fileService.js";
 import { defaultServerJarProvider } from "./runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "./runtime/artifact.js";
 import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "./downloadArchive.js";
@@ -443,9 +467,7 @@ let modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
 const panelNodeConnections = new PanelNodeConnections();
 const sessionCookieName = "serversentinel_session";
 let appLogger: FastifyBaseLogger | undefined;
-const editorFileSizeLimit = 2 * 1024 * 1024;
 const filePreviewSizeLimit = 96 * 1024;
-const fileUploadSizeLimit = 256 * 1024 * 1024;
 const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
 const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
@@ -1117,15 +1139,10 @@ function requireManagedModsRuntime(server: Pick<ManagedServer, "runtimeProfile">
 function managedContentRuntime(server: Pick<ManagedServer, "runtimeProfile">) {
   requireManagedModsRuntime(server);
   const target = runtimeTarget(server);
-  const definition = serverRuntimeDefinition(target.runtimeType);
-  const singular: "mod" | "plugin" = definition.contentKind === "plugins" ? "plugin" : "mod";
   return {
     target,
-    definition,
-    directory: definition.contentDirectory,
-    singular,
-    plural: definition.contentKind,
-    loaders: definition.compatibleModrinthLoaders
+    definition: serverRuntimeDefinition(target.runtimeType),
+    ...managedContentNaming(target.runtimeType)
   };
 }
 
@@ -1567,8 +1584,7 @@ function ensureManagedServerDirectory(server: ManagedServer) {
 }
 
 function toPublicPath(server: ManagedServer, absolutePath: string) {
-  const rel = relative(resolve(server.serverDir), absolutePath).replaceAll("\\", "/");
-  return rel ? `/${rel}` : "/";
+  return toPublicServerPath(server, absolutePath);
 }
 
 function isModsPath(server: ManagedServer, absolutePath: string) {
@@ -1605,17 +1621,6 @@ async function requireFilePathPermission(request: { headers: { cookie?: string }
     return requireRequestPermission(request, "mods.remove");
   }
   return requireRequestPermission(request, permission);
-}
-
-function safeFileManagerName(name?: string) {
-  const filename = basename(name ?? "").trim();
-  if (!filename || filename !== name || filename === "." || filename === "..") {
-    throw new Error("A valid file or folder name is required");
-  }
-  if (filename.length > 160 || /[<>:"/\\|?*\u0000-\u001f]/.test(filename)) {
-    throw new Error("File or folder name contains unsafe characters");
-  }
-  return filename;
 }
 
 function fileDownloadLimitError(size: number): never {
@@ -1844,18 +1849,6 @@ function localResolveExistingPath(server: ManagedServer, path: string) {
 
 function localResolveWritablePath(server: ManagedServer, path: string) {
   return ensureWritableInsideServer(server, localFilePathInput(server, path));
-}
-
-function isTextLikeServerFile(name: string) {
-  return /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(name) || !name.includes(".");
-}
-
-function fileManagerStatus(entryStat: Awaited<ReturnType<typeof lstat>>, name: string) {
-  if (entryStat.isDirectory()) return "ok";
-  if (!entryStat.isFile()) return "unknown";
-  if (entryStat.size > editorFileSizeLimit) return "too_large";
-  if (!isTextLikeServerFile(name)) return "binary";
-  return "ok";
 }
 
 function modIconKey(filename: string) {
@@ -6070,55 +6063,11 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
 
 
 async function localListFiles(server: ManagedServer, target: string) {
-  const targetStat = await stat(target);
-  if (!targetStat.isDirectory()) {
-    throw new Error("Path is not a directory");
-  }
-
-  const entries = await readdir(target, { withFileTypes: true });
-  return {
-    path: toPublicPath(server, target),
-    entries: await Promise.all(
-      entries
-        .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-        .map(async (entry) => {
-          const absolutePath = join(target, entry.name);
-          const entryStat = await lstat(absolutePath);
-          return {
-            name: entry.name,
-            path: toPublicPath(server, absolutePath),
-            type: entry.isDirectory() ? "directory" : "file",
-            size: entryStat.size,
-            modifiedAt: entryStat.mtime.toISOString(),
-            status: fileManagerStatus(entryStat, entry.name)
-          };
-        })
-    )
-  };
+  return listServerDirectory(server, target);
 }
 
 async function localPreviewFile(server: ManagedServer, target: string) {
-  const targetStat = await stat(target);
-  const publicPath = toPublicPath(server, target);
-  if (!targetStat.isFile()) {
-    return { path: publicPath, preview: "unsupported", message: "Preview unavailable" };
-  }
-  if (!isTextLikeServerFile(basename(target))) {
-    return { path: publicPath, preview: "unsupported", message: "Preview unavailable" };
-  }
-  if (targetStat.size > filePreviewSizeLimit) {
-    return { path: publicPath, preview: "too_large", message: "File too large to preview" };
-  }
-  const buffer = await readFile(target);
-  if (buffer.includes(0)) {
-    return { path: publicPath, preview: "binary", message: "Preview unavailable" };
-  }
-  return {
-    path: publicPath,
-    preview: "text",
-    content: buffer.toString("utf8"),
-    modifiedAt: targetStat.mtime.toISOString()
-  };
+  return previewServerFile(server, target, { sizeLimit: filePreviewSizeLimit, requireTextLike: true });
 }
 
 async function localDownloadFile(_server: ManagedServer, target: string) {
@@ -6144,17 +6093,6 @@ async function localDownloadArchive(_server: ManagedServer, entries: FileArchive
   };
 }
 
-function publicZipExtractionPlan(server: ManagedServer, plan: ZipExtractionPlan): ZipExtractionPlan {
-  return {
-    ...plan,
-    archivePath: toPublicPath(server, plan.archivePath),
-    destinationPath: toPublicPath(server, plan.destinationPath),
-    outputPaths: plan.outputPaths.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) })),
-    conflicts: plan.conflicts.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) })),
-    blocked: plan.blocked.map((entry) => ({ ...entry, path: toPublicPath(server, entry.path) }))
-  };
-}
-
 async function localPlanArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string) {
   return publicZipExtractionPlan(server, await planZipExtraction(archivePath, destinationPath, fileZipLimits));
 }
@@ -6165,195 +6103,65 @@ async function localExtractArchive(server: ManagedServer, archivePath: string, d
 }
 
 async function localReadEditableFile(server: ManagedServer, target: string) {
-  const targetStat = await stat(target);
-  if (!targetStat.isFile()) {
-    throw new Error("Path is not a file");
-  }
-  if (targetStat.size > editorFileSizeLimit) {
-    logWarn({ ...serverLogFields(server), path: toPublicPath(server, target), size: targetStat.size, reason: "editor_size_limit" }, "File edit rejected");
-    throw new Error("File is larger than the 2 MiB editor limit");
-  }
-  const buffer = await readFile(target);
-  if (buffer.includes(0)) {
-    logWarn({ ...serverLogFields(server), path: toPublicPath(server, target), reason: "binary_file" }, "File edit rejected");
-    throw new Error("Binary files cannot be edited in the browser editor");
-  }
-  return {
-    path: toPublicPath(server, target),
-    content: buffer.toString("utf8"),
-    modifiedAt: targetStat.mtime.toISOString()
-  };
+  return readServerTextFile(server, target, {
+    onRejected: (reason, path, size) => logWarn(
+      { ...serverLogFields(server), path, ...(reason === "editor_size_limit" ? { size } : {}), reason },
+      "File edit rejected"
+    )
+  });
 }
 
 async function localWriteEditableFile(server: ManagedServer, target: string, content: unknown) {
-  if (typeof content !== "string") {
-    throw new Error("Content is required");
-  }
-  if (Buffer.byteLength(content, "utf8") > editorFileSizeLimit) {
-    throw new Error("File content is larger than the 2 MiB editor limit");
-  }
-  if (content.includes("\0")) {
-    throw new Error("Binary files cannot be edited in the browser editor");
-  }
-  const targetStat = await stat(target);
-  if (!targetStat.isFile()) {
-    throw new Error("Path is not a file");
-  }
-  const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, content, "utf8");
-    await rename(temporary, target);
-  } catch (error) {
-    await rm(temporary, { force: true }).catch(() => undefined);
-    throw error;
-  }
-  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "write_file" }, "Server file written");
-  return { ok: true, path: toPublicPath(server, target) };
+  const result = await writeServerTextFile(server, target, content);
+  logInfo({ ...serverLogFields(server), path: result.path, action: "write_file" }, "Server file written");
+  return result;
 }
 
 async function localCreateFolder(server: ManagedServer, parent: string, name: unknown) {
-  const parentStat = await stat(parent);
-  if (!parentStat.isDirectory()) {
-    throw new Error("Parent path is not a directory");
-  }
-  const folderName = safeFileManagerName(name as string | undefined);
-  const target = await ensureWritableResolvedInsideServer(server, join(parent, folderName));
-  await mkdir(target, { recursive: false });
-  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), action: "create_folder" }, "Server folder created");
-  return { ok: true, path: toPublicPath(server, target) };
-}
-
-function isRuntimeUploadSource(value: unknown): value is RuntimeUploadSource {
-  return Boolean(value && typeof value === "object" && "stream" in value && (value as RuntimeUploadSource).stream);
-}
-
-async function writeRuntimeUpload(target: string, input: unknown, maximumBytes: number, allowEmpty: boolean, label: string, validateTemporary?: (path: string) => Promise<void>) {
-  const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
-  let size = 0;
-  try {
-    if (isRuntimeUploadSource(input)) {
-      if (input.size !== undefined && (!Number.isSafeInteger(input.size) || input.size < (allowEmpty ? 0 : 1) || input.size > maximumBytes)) {
-        throw new Error(`${label} must be between ${allowEmpty ? 0 : 1} bytes and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`);
-      }
-      const counter = new Transform({
-        transform(chunk, _encoding, callback) {
-          size += Buffer.byteLength(chunk);
-          callback(size > maximumBytes ? new Error(`${label} is larger than ${Math.floor(maximumBytes / 1024 / 1024)} MiB`) : undefined, chunk);
-        }
-      });
-      await pipeline(input.stream, counter, createWriteStream(temporary, { flags: "wx" }));
-      if (input.size !== undefined && input.size !== size) throw new Error(`${label} declared ${input.size} bytes but streamed ${size}`);
-      if (!allowEmpty && size === 0) throw new Error(`${label} cannot be empty`);
-    } else {
-      const validContentBase64 = validateBase64Content(input, allowEmpty, label);
-      const content = Buffer.from(validContentBase64, "base64");
-      size = content.byteLength;
-      if (size > maximumBytes || (!allowEmpty && size === 0)) throw new Error(`${label} must be between ${allowEmpty ? 0 : 1} bytes and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`);
-      await writeFile(temporary, content, { flag: "wx" });
-    }
-    await validateTemporary?.(temporary);
-    await rename(temporary, target);
-    return size;
-  } catch (error) {
-    await rm(temporary, { force: true }).catch(() => undefined);
-    throw error;
-  }
+  const result = await createServerFolder(server, parent, name);
+  logInfo({ ...serverLogFields(server), path: result.path, action: "create_folder" }, "Server folder created");
+  return result;
 }
 
 async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, contentBase64: unknown | RuntimeUploadSource) {
-  const parentStat = await stat(parent);
-  if (!parentStat.isDirectory()) {
-    throw new Error("Upload path is not a directory");
-  }
-  const filename = safeFileManagerName(filenameInput as string | undefined);
-  const target = await ensureWritableResolvedInsideServer(server, join(parent, filename));
-  if (existsSync(target)) {
-    throw new Error("A file or folder with that name already exists");
-  }
-  const size = await writeRuntimeUpload(target, contentBase64, fileUploadSizeLimit, true, "Uploaded file content");
-  logInfo({ ...serverLogFields(server), path: toPublicPath(server, target), size, action: "upload_file" }, "Server file uploaded");
-  return { ok: true, path: toPublicPath(server, target), size };
+  const target = await resolveUploadTarget(server, parent, filenameInput);
+  const size = await writeRuntimeUpload(target, contentBase64, {
+    maximumBytes: fileUploadSizeLimit,
+    allowEmpty: true,
+    label: "Uploaded file content",
+    decodeBase64: validateBase64Content
+  });
+  const path = toPublicPath(server, target);
+  logInfo({ ...serverLogFields(server), path, size, action: "upload_file" }, "Server file uploaded");
+  return { ok: true, path, size };
 }
 
 async function localRenameFile(server: ManagedServer, source: string, name: unknown) {
-  if (resolve(source) === resolve(server.serverDir)) {
-    throw new Error("Refusing to rename the server root directory");
-  }
-  const targetName = safeFileManagerName(name as string | undefined);
-  const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
-  if (existsSync(target)) {
-    throw new Error("A file or folder with that name already exists");
-  }
-  await rename(source, target);
-  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "rename_file" }, "Server file renamed");
-  return { ok: true, path: toPublicPath(server, target) };
+  const result = await renameServerEntry(server, source, name);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: result.path, action: "rename_file" }, "Server file renamed");
+  return result;
 }
 
 async function localMoveFile(server: ManagedServer, source: string, destinationParent: string) {
-  if (resolve(source) === resolve(server.serverDir)) throw new Error("Refusing to move the server root directory");
-  const destinationStat = await stat(destinationParent);
-  if (!destinationStat.isDirectory()) throw new Error("Move destination is not a directory");
-  const target = await ensureWritableResolvedInsideServer(server, join(destinationParent, basename(source)));
-  const targetRelativeToSource = relative(source, target);
-  if (!targetRelativeToSource) throw new Error("Item is already in that folder");
-  if (!isAbsolute(targetRelativeToSource) && targetRelativeToSource !== ".." && !targetRelativeToSource.startsWith(`..${sep}`)) {
-    throw new Error("A folder cannot be moved into itself");
-  }
-  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-  await rename(source, target);
-  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "move_file" }, "Server file moved");
-  return { ok: true, path: toPublicPath(server, target) };
+  const result = await moveServerEntry(server, source, destinationParent);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: result.path, action: "move_file" }, "Server file moved");
+  return result;
 }
 
 async function localDuplicateFile(server: ManagedServer, source: string, name: unknown) {
-  const sourceStat = await stat(source);
-  if (!sourceStat.isFile()) {
-    throw new Error("Only files can be duplicated from the browser file manager");
-  }
-  const targetName = safeFileManagerName(name as string | undefined);
-  const target = await ensureWritableResolvedInsideServer(server, join(dirname(source), targetName));
-  if (existsSync(target)) {
-    throw new Error("A file or folder with that name already exists");
-  }
-  await copyFile(source, target);
-  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: toPublicPath(server, target), action: "duplicate_file" }, "Server file duplicated");
-  return { ok: true, path: toPublicPath(server, target) };
+  const result = await copyServerFile(server, source, dirname(source), name);
+  logInfo({ ...serverLogFields(server), fromPath: toPublicPath(server, source), path: result.path, action: "duplicate_file" }, "Server file duplicated");
+  return result;
 }
 
 async function localDeleteFile(server: ManagedServer, target: string, recursive: unknown) {
-  if (recursive !== undefined && recursive !== "true" && recursive !== "false") {
-    throw new Error("recursive must be true or false");
-  }
-  if (resolve(target) === resolve(server.serverDir)) {
-    throw new Error("Refusing to delete the server root directory");
-  }
-  const publicPath = toPublicPath(server, target);
-  const targetStat = await stat(target);
-  if (targetStat.isDirectory()) {
-    if (recursive === "true") {
-      await rm(target, { recursive: true, force: false });
-    } else {
-      try {
-        await rmdir(target);
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === "ENOTEMPTY" || code === "EEXIST") {
-          throw new Error("Directory is not empty. Recursive deletion requires recursive=true and explicit confirmation.");
-        }
-        throw error;
-      }
-    }
-  } else if (targetStat.isFile()) {
-    await rm(target, { force: false });
-  } else {
-    throw new Error("Only files and directories can be deleted from the browser file manager");
-  }
+  const result = await deleteServerEntry(server, target, recursive);
   const contentDirectory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
-  if (publicPath.startsWith(`/${contentDirectory}/`) && (publicPath.endsWith(".jar") || publicPath.endsWith(".jar.disabled"))) {
-    await deleteModIcon(server, basename(publicPath));
+  if (result.path.startsWith(`/${contentDirectory}/`) && (result.path.endsWith(".jar") || result.path.endsWith(".jar.disabled"))) {
+    await deleteModIcon(server, basename(result.path));
   }
-  logInfo({ ...serverLogFields(server), path: publicPath, recursive: recursive === "true", action: "delete_file" }, "Server file deleted");
-  return { ok: true, path: publicPath };
+  logInfo({ ...serverLogFields(server), path: result.path, recursive: recursive === "true", action: "delete_file" }, "Server file deleted");
+  return result;
 }
 
 
@@ -6993,14 +6801,20 @@ async function localUploadMod(server: ManagedServer, filenameInput: unknown, con
     if (existsSync(destination)) {
       throw new Error(`A ${singular} with that filename already exists`);
     }
-    const size = await writeRuntimeUpload(destination, contentBase64Input, modFileSizeLimit, false, `Uploaded ${singular}`, async (temporary) => {
-      const headerHandle = await open(temporary, "r");
-      try {
-        const header = Buffer.alloc(4);
-        const { bytesRead } = await headerHandle.read(header, 0, 4, 0);
-        assertJarBuffer(header.subarray(0, bytesRead));
-      } finally {
-        await headerHandle.close();
+    const size = await writeRuntimeUpload(destination, contentBase64Input, {
+      maximumBytes: modFileSizeLimit,
+      allowEmpty: false,
+      label: `Uploaded ${singular}`,
+      decodeBase64: validateBase64Content,
+      validateTemporary: async (temporary) => {
+        const headerHandle = await open(temporary, "r");
+        try {
+          const header = Buffer.alloc(4);
+          const { bytesRead } = await headerHandle.read(header, 0, 4, 0);
+          assertJarBuffer(header.subarray(0, bytesRead));
+        } finally {
+          await headerHandle.close();
+        }
       }
     });
     await deleteModIcon(server, filename);
@@ -7276,7 +7090,6 @@ async function switchModrinthModVersion(server: ManagedServer, input: unknown) {
       version: selectedVersion,
       file,
       projectSides,
-      minecraftVersion: targetRuntime.minecraftVersion,
       compatible,
       reason: compatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : incompatibilityReason ?? "Switched with compatibility override"
     });
@@ -7400,29 +7213,6 @@ function parseModrinthSwitchVersionRequest(input: unknown): ModrinthSwitchVersio
   };
 }
 
-function compatibilityFromSelectedVersion(input: {
-  version: ModrinthVersion;
-  file: NonNullable<ReturnType<typeof modrinthJarFile>>;
-  projectSides: { server_side?: string; client_side?: string };
-  minecraftVersion: string;
-  compatible: boolean;
-  reason: string;
-}): ModCompatibility {
-  return {
-    status: input.compatible ? "compatible" : "incompatible",
-    compatible: input.compatible,
-    reason: input.reason,
-    matchedVersionId: input.version.id,
-    matchedVersionNumber: input.version.version_number,
-    matchedVersionType: versionChannel(input.version.version_type),
-    matchedLoaders: input.version.loaders,
-    matchedGameVersions: input.version.game_versions,
-    file: input.file,
-    serverSide: input.projectSides.server_side,
-    clientSide: input.projectSides.client_side
-  };
-}
-
 type PlannedModInstall = {
   projectId: string;
   project: ModrinthProject;
@@ -7482,7 +7272,6 @@ async function planRequiredModrinthInstalls(input: {
       version,
       file,
       projectSides,
-      minecraftVersion: input.minecraftVersion,
       compatible: true,
       reason: dependencyType === "root" ? `Compatible server-side ${input.runtimeName} ${input.contentKind}` : "Compatible required dependency"
     });
@@ -7579,47 +7368,25 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     if (!selectedVersion) {
       throw new Error(install.versionId ? "The selected Modrinth version could not be found" : "No compatible installable version was found for that project");
     }
-    if (!allowedForChannel(selectedVersion, selectedChannel)) {
-      throw new Error("The selected version is outside the requested release channel");
-    }
-    const file = modrinthJarFile(selectedVersion);
-    const hasCompatibleLoader = selectedVersion.loaders.some((loader) => contentDefinition.loaders.includes(loader));
-    const matchesMinecraft = minecraftVersionsInclude(selectedVersion.game_versions, minecraftVersion);
-    const serverSide = project.server_side;
-    const serverSupported = modrinthServerSideSupported(serverSide);
-    if (!file) {
-      throw new Error("No installable .jar file was found for that version");
-    }
-    if (!hasCompatibleLoader) {
-      throw new Error(`The selected version is not compatible with ${contentDefinition.definition.displayName}`);
-    }
-    if (serverSide === "unsupported") {
-      throw new Error(`Client-only ${contentDefinition.plural} cannot be installed on the server`);
-    }
-    if (serverSide === "unknown" && !forceIncompatible) {
-      throw new Error("Server-side support is unknown. Confirm the risk before installing.");
-    }
-    if (!serverSupported && !forceIncompatible) {
-      throw new Error("Server-side support could not be verified. Confirm the risk before installing.");
-    }
-    if (!matchesMinecraft && !install.overrideMinecraftVersion) {
-      throw new Error(`This version is not marked for Minecraft ${minecraftVersion}. Confirm the Minecraft version override before installing.`);
-    }
-    const compatible = hasCompatibleLoader && matchesMinecraft && serverSupported;
-    const incompatibilityReason = compatible
-      ? undefined
-      : !matchesMinecraft
-        ? `Installed with Minecraft version override. Server ${minecraftVersion}; mod ${selectedVersion.game_versions.join(", ") || "unknown"}.`
-        : serverSide === "unknown"
-          ? "Server-side support could not be verified"
-          : "Installed with compatibility override";
+    const candidate = assertVersionInstallable({
+      version: selectedVersion,
+      project,
+      naming: contentDefinition,
+      minecraftVersion,
+      channel: selectedChannel,
+      forceIncompatible,
+      overrideMinecraftVersion: install.overrideMinecraftVersion,
+      requireKnownServerSide: true
+    });
+    const file = candidate.file;
     const compatibility = compatibilityFromSelectedVersion({
       version: selectedVersion,
       file,
       projectSides,
-      minecraftVersion,
-      compatible,
-      reason: compatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : incompatibilityReason ?? "Installed with compatibility override"
+      compatible: candidate.compatible,
+      reason: candidate.compatible
+        ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}`
+        : candidate.incompatibilityReason ?? "Installed with compatibility override"
     });
     logInfo({ ...serverLogFields(server), projectId, versionId: compatibility.matchedVersionId, compatibility: compatibility.status, forceIncompatible, action: "modrinth_install" }, "Modrinth compatibility decision");
     if (!compatibility.compatible && !forceIncompatible) {
@@ -7663,12 +7430,7 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
     try {
       for (const planned of installPlan.installs) {
       if (planned.dependencyType === "required" && installedProjectIds.has(planned.projectId)) continue;
-      if (!planned.file.url.startsWith("https://")) {
-        throw new Error("Refusing to download a non-HTTPS mod file");
-      }
-      if (planned.file.size && planned.file.size > modFileSizeLimit) {
-        throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-      }
+      assertDownloadableModrinthFile(planned.file, { singular: contentDefinition.singular, maximumBytes: modFileSizeLimit });
       const destination = await ensureWritableInsideServer(server, join(contentDefinition.directory, safeModFilename(planned.file.filename)));
       if (existsSync(destination)) {
         if (planned.dependencyType === "required") continue;
@@ -7683,8 +7445,8 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
         throw new Error("Mod download returned no body");
       }
       const contentLength = Number(downloadResponse.headers.get("content-length") ?? "0");
-      if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
-        throw new Error(`Mod download is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
+      if (Number.isFinite(contentLength)) {
+        assertModrinthDownloadSize(contentLength, { singular: contentDefinition.singular, maximumBytes: modFileSizeLimit });
       }
       try {
         await pipeline(
@@ -7723,9 +7485,9 @@ async function localInstallMod(server: ManagedServer, input: unknown) {
           hashes: planned.file.hashes,
           installedAt: new Date().toISOString(),
           installedWithForceIncompatible: planned.dependencyType === "root" && forceIncompatible && !compatibility.compatible,
-          incompatibilityReason: planned.dependencyType === "root" ? incompatibilityReason : undefined,
-          overrideMinecraftVersion: planned.dependencyType === "root" && install.overrideMinecraftVersion && !matchesMinecraft,
-          overrideReason: planned.dependencyType === "root" && install.overrideMinecraftVersion && !matchesMinecraft ? incompatibilityReason : undefined,
+          incompatibilityReason: planned.dependencyType === "root" ? candidate.incompatibilityReason : undefined,
+          overrideMinecraftVersion: planned.dependencyType === "root" && install.overrideMinecraftVersion && !candidate.matchesMinecraft,
+          overrideReason: planned.dependencyType === "root" && install.overrideMinecraftVersion && !candidate.matchesMinecraft ? candidate.incompatibilityReason : undefined,
           clientSide: planned.project.client_side,
           serverSide: planned.project.server_side,
           iconUrl: modrinthIconProxyUrl(planned.project.icon_url),
@@ -8265,7 +8027,6 @@ async function installModWithRemoteVersionFallback(server: ManagedServer, input:
       version: selectedVersion,
       file,
       projectSides,
-      minecraftVersion: targetRuntime.minecraftVersion,
       compatible: selectedIsCompatible,
       reason: selectedIsCompatible ? `Compatible server-side ${contentDefinition.definition.displayName} ${contentDefinition.singular}` : "Installed with compatibility override"
     });
