@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ManagedNode, NodeOperation } from "../types";
+import type { NodeView, NodeOperation } from "../types";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeBlockReason, nodeRestartImpactMessage, nodeWarnings } from "./nodes";
 
 const graceMs = 5 * 60 * 1000;
 
-function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
+function node(overrides: Partial<NodeView> = {}): NodeView {
   return {
     id: "node-1",
     name: "Node 1",

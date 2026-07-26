@@ -1,4 +1,4 @@
-import type { ActivePage, AppState, ManagedNode } from "../types";
+import type { ActivePage, AppState, PlaceholderNode } from "../types";
 
 export const appVersion = "1.6.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
@@ -23,7 +23,7 @@ export const emptyApp: AppState = {
   totalMemory: 0
 };
 
-export const defaultContextNode: ManagedNode = {
+export const defaultContextNode: PlaceholderNode = {
   id: "local",
   name: "Internal Node",
   type: "local",
@@ -31,7 +31,7 @@ export const defaultContextNode: ManagedNode = {
   isInternal: true
 };
 
-export const emptyPanelContextNode: ManagedNode = {
+export const emptyPanelContextNode: PlaceholderNode = {
   id: "",
   name: "No node selected",
   type: "remote",

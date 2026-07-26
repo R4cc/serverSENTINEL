@@ -1,6 +1,6 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { api, apiErrorFromResponse } from "../../api";
-import { demoListing, demoServerId } from "../../demo";
+import { demoFixtures, demoServerId } from "../../demoRuntime";
 import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
 import { isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
@@ -291,7 +291,7 @@ export function useFilesWorkspace({
     setNotice("");
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
-        const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+        const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
         writeStoredFileLocation(serverId, nextListing.path);
         setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
@@ -492,7 +492,7 @@ export function useFilesWorkspace({
         const nextMods = demoInstalledMods.filter((mod) => !deletedModPaths.has(`/mods/${mod.filename}`));
         setDemoFiles(nextFiles);
         setDemoInstalledMods(nextMods);
-        setListing(demoListing(listing.path, nextFiles, nextMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, nextMods));
         clearDeletedFileState(deletedEntries, selectedPath, filePreview.path, resetEditorState, setFilePreview);
         setSelectedFilePaths([]);
         setFileActionDialog(null);
@@ -551,7 +551,7 @@ export function useFilesWorkspace({
         const folderPath = joinPublicPath(listing.path, name.trim());
         const nextFiles = { ...demoFiles, [joinPublicPath(folderPath, ".serversentinel-folder")]: "" };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/folder`, {
           method: "POST",
@@ -595,7 +595,7 @@ export function useFilesWorkspace({
         const content = await file.text();
         const nextFiles = { ...demoFiles, [targetPath]: content };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         const form = new FormData();
         form.append("path", listing.path);
@@ -836,7 +836,7 @@ export function useFilesWorkspace({
           }
         }
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file`, {
           method: "PATCH",
@@ -883,7 +883,7 @@ export function useFilesWorkspace({
           setDemoInstalledMods((current) => current.filter((mod) => mod.filename !== movedDemoMod.filename));
         }
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, movedDemoMod ? demoInstalledMods.filter((mod) => mod.filename !== movedDemoMod.filename) : demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, movedDemoMod ? demoInstalledMods.filter((mod) => mod.filename !== movedDemoMod.filename) : demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file/move`, {
           method: "POST",
@@ -924,7 +924,7 @@ export function useFilesWorkspace({
       if (activeServerIsDemo) {
         const nextFiles = { ...demoFiles, [targetPath]: demoFiles[entry.path] ?? "" };
         setDemoFiles(nextFiles);
-        setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+        setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       } else {
         await api(`/api/servers/${activeServer.id}/file/duplicate`, {
           method: "POST",
@@ -961,7 +961,7 @@ export function useFilesWorkspace({
   }
 
   function initializeDemoRoot(path = "/") {
-    const nextListing = demoListing(path, demoFiles, demoInstalledMods);
+    const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
     setListing(nextListing);
     writeStoredFileLocation(demoServerId, nextListing.path);
   }

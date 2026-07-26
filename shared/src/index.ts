@@ -358,6 +358,137 @@ export type RuntimeLifecycleStatus = {
   message?: string;
 };
 
+export type NodeType = "local" | "remote";
+
+export type NodeStatus = "online" | "offline" | "unknown";
+
+export type NodeProtocolMode = "current" | "fallback" | "update-only" | "incompatible";
+
+export type RestartPhase = "stopping" | "starting";
+
+export type RestartRequiredModSnapshot = {
+  identity: string;
+  displayName: string;
+  filename: string;
+  enabled: boolean;
+  sha1: string;
+};
+
+export type ManagedServerPort = {
+  id: string;
+  name: string;
+  type: "minecraft" | "query" | "custom";
+  protocol: "tcp" | "udp";
+  internalPort: number;
+  externalPort: number;
+  required: boolean;
+  removable: boolean;
+  advanced: boolean;
+};
+
+/**
+ * Node fields common to the panel's stored record and the API projection. The
+ * panel adds its credential hashes on top (see ManagedNode in the server
+ * package); PublicNode below is what clients actually receive.
+ */
+export type ManagedNodeCore = {
+  id: string;
+  name: string;
+  type: NodeType;
+  status: NodeStatus;
+  isInternal: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt?: string;
+  connectedAt?: string;
+  agentVersion?: string;
+  buildId?: string;
+  protocolVersion?: string;
+  capabilities?: string[];
+  features?: string[];
+  dockerStatus?: string;
+  dataPathStatus?: string;
+  totalMemory?: number;
+  joinTokenExpiresAt?: string;
+};
+
+/** A managed node exactly as the panel API serializes it. */
+export type PublicNode = ManagedNodeCore & {
+  hasPendingJoinToken?: boolean;
+  protocolMode?: NodeProtocolMode;
+};
+
+/**
+ * Server fields common to the panel's stored record and the API projection. The
+ * panel adds node-local filesystem details on top (see ManagedServer in the
+ * server package) which are deliberately withheld from clients.
+ */
+export type ManagedServerCore = {
+  id: string;
+  nodeId: string;
+  displayName: string;
+  storageName?: string;
+  runtimeProfile: ServerRuntimeProfile;
+  dockerContainer?: string;
+  dockerImage?: string;
+  dockerPorts?: string;
+  managedPorts?: ManagedServerPort[];
+  javaArgs?: string;
+  startOnNodeStart?: boolean;
+  runtimeIntent?: RuntimeIntent;
+  restartPhase?: RestartPhase;
+  crashAttemptTimestamps?: string[];
+  crashNextRetryAt?: string;
+  crashLoopSince?: string;
+  crashStableSince?: string;
+  restartRequiredSince?: string;
+  restartRequiredChanges?: RestartRequiredChange[];
+  restartRequiredModBaseline?: RestartRequiredModSnapshot[];
+  schedules?: ScheduledExecution[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A managed server exactly as the panel API serializes it. */
+export type PublicServer = ManagedServerCore & {
+  directoryLabel: string;
+  hasDockerContainer: boolean;
+  nodeName?: string;
+  resolvedVersions?: ResolvedServerVersions;
+};
+
+export type NodeInstallInstructions = {
+  image: string;
+  protocolVersion: string;
+  panelUrl: string;
+  joinToken?: string;
+  tokenRequired: boolean;
+  dataMount: string;
+  dockerSocketMount: string;
+  dockerCompose: {
+    image: string;
+    restart: "unless-stopped";
+    environment: {
+      SS_MODE: "node";
+      SS_PANEL_URL: string;
+      SERVERSENTINEL_DATA_DIR: string;
+      SERVERSENTINEL_DOCKER_DATA_DIR: string;
+      TZ: string;
+      SS_NODE_NAME?: string;
+      SS_JOIN_TOKEN?: string;
+    };
+    volumes: string[];
+  };
+  dockerRun: string;
+};
+
+export type CreateNodeResponse = {
+  node: PublicNode;
+  joinToken: string;
+  expiresAt: string;
+  install: NodeInstallInstructions;
+};
+
 export type VersionSource = "detected" | "profile" | "log" | "unknown" | "demo";
 
 export type VersionResolution = {

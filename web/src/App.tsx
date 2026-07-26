@@ -2,8 +2,8 @@ import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, u
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoOverviewData, demoPlayerSnapshot, demoServer, demoServerId, demoStatus, demoTimelineData, resetDemoSession } from "./demo";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -185,7 +185,7 @@ export default function App() {
   const overviewTimelineVisible = useOverviewTimelineVisibility();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const [nodeBusyId, setNodeBusyId] = useState("");
-  const [nodeDetails, setNodeDetails] = useState<ManagedNode | null>(null);
+  const [nodeDetails, setNodeDetails] = useState<NodeView | null>(null);
   const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
   const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
   const [nodeManualRecoveryById, setNodeManualRecoveryById] = useState<Record<string, NodeManualRecovery>>({});
@@ -273,7 +273,7 @@ export default function App() {
 
   const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
     if (demoMode && serverId === demoServerId) {
-      setOverviewData(demoOverviewData(demoRunning));
+      setOverviewData(demoFixtures().demoOverviewData(demoRunning));
       setOverviewError("");
       setOverviewLoading(false);
       return;
@@ -380,7 +380,7 @@ export default function App() {
   }, [activePage, activeServer, supportsManagedMods]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
-    if (demoMode && activeServer.id === demoServerId) return demoTimelineData(demoRunning, demoSchedules, from, to);
+    if (demoMode && activeServer.id === demoServerId) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to);
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
@@ -699,7 +699,7 @@ export default function App() {
     if (demoMode) {
       setPlayerSnapshots((current) => ({
         ...current,
-        [demoServerId]: demoPlayerSnapshot(demoRunning)
+        [demoServerId]: demoFixtures().demoPlayerSnapshot(demoRunning)
       }));
       return;
     }
@@ -758,8 +758,8 @@ export default function App() {
   useEffect(() => {
     if (Object.keys(nodeOperations).length === 0) return;
     const next = { ...nodeOperations };
-    const completed: Array<{ node: ManagedNode; operation: NodeOperation }> = [];
-    const mismatched: Array<{ node: ManagedNode; operation: NodeOperation }> = [];
+    const completed: Array<{ node: NodeView; operation: NodeOperation }> = [];
+    const mismatched: Array<{ node: NodeView; operation: NodeOperation }> = [];
     let changed = false;
 
     for (const [nodeId, operation] of Object.entries(nodeOperations)) {
@@ -880,7 +880,7 @@ export default function App() {
       setTimelineLatestSample(undefined);
     }
     if (demoMode && activeServer.id === demoServerId) {
-      setStatus(demoStatus(activeServer, demoRunning));
+      setStatus(demoFixtures().demoStatus(activeServer, demoRunning));
       const demoLogs = [
         consoleLine("[demo] Starting minecraft server version 1.21.4"),
         consoleLine("[demo] Loading Fabric Loader 0.16.10"),
@@ -1156,7 +1156,7 @@ export default function App() {
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "overview") return;
     if (demoMode && activeServer.id === demoServerId) {
-      setOverviewData(demoOverviewData(demoRunning));
+      setOverviewData(demoFixtures().demoOverviewData(demoRunning));
       setOverviewError("");
       setOverviewLoading(false);
       return;
@@ -1349,6 +1349,9 @@ export default function App() {
     try {
       const session = await api<AuthSession>("/api/auth/session");
       const nextDemoMode = Boolean(session.authenticated && session.demo);
+      // The fixture chunk must be resolved before demoMode goes true, so that
+      // every synchronous demoFixtures() reader below is safe.
+      if (nextDemoMode) await loadDemoFixtures();
       writeStoredDemoMode(nextDemoMode);
       setDemoMode(nextDemoMode);
       if (nextDemoMode) {
@@ -1404,6 +1407,7 @@ export default function App() {
       loginSucceeded = true;
       resetSessionRequestGuards();
       if (session.demo) {
+        await loadDemoFixtures();
         writeStoredDemoMode(true);
         resetDemoState();
         setAuthNotice("");
@@ -1517,7 +1521,7 @@ export default function App() {
     if (!serverId) return;
     if (demoMode && serverId === demoServerId) {
       if (activeServerIdRef.current === serverId) {
-        setStatus(demoStatus(demoServer(demoSchedules), demoRunning));
+        setStatus(demoFixtures().demoStatus(demoFixtures().demoServer(demoSchedules), demoRunning));
       }
       return;
     }
@@ -1906,7 +1910,7 @@ export default function App() {
     notify("success", "Node status refreshed");
   }
 
-  async function viewNodeDetails(node: ManagedNode) {
+  async function viewNodeDetails(node: NodeView) {
     setNodeDetails(node);
     if (demoMode) return;
     setNodeBusyId(node.id);
@@ -1920,7 +1924,7 @@ export default function App() {
     }
   }
 
-  async function showNodeInstall(node: ManagedNode) {
+  async function showNodeInstall(node: NodeView) {
     setNodeBusyId(node.id);
     try {
       const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
@@ -1933,7 +1937,7 @@ export default function App() {
     }
   }
 
-  async function rotateNodeToken(node: ManagedNode) {
+  async function rotateNodeToken(node: NodeView) {
     if (node.isInternal || !canManageUsers) return;
     setNodeBusyId(node.id);
     try {
@@ -1952,7 +1956,7 @@ export default function App() {
     }
   }
 
-  async function updateNodeImage(node: ManagedNode) {
+  async function updateNodeImage(node: NodeView) {
     if (node.isInternal || !canManageUsers) return;
     const buildText = panelBuildId ? ` build ${panelBuildId.slice(0, 12)}` : "";
     const sameVersion = node.agentVersion === panelVersion;
@@ -2019,7 +2023,7 @@ export default function App() {
     }
   }
 
-  async function restartNode(node: ManagedNode) {
+  async function restartNode(node: NodeView) {
     if (!canManageUsers) return;
     const confirmed = await requestConfirmation({
       title: node.isInternal ? "Restart the Panel container?" : `Restart ${node.name}?`,
@@ -2160,15 +2164,15 @@ export default function App() {
       if (activeServerIsDemo) {
         const nextRunning = action !== "stop";
         if (nextRunning) {
-          resetDemoSession();
+          demoFixtures().resetDemoSession();
           setDemoSessionVersion((version) => version + 1);
         }
         setDemoRunning(nextRunning);
-        setStatus(demoStatus(activeServer, nextRunning));
-        setOverviewData(demoOverviewData(nextRunning));
+        setStatus(demoFixtures().demoStatus(activeServer, nextRunning));
+        setOverviewData(demoFixtures().demoOverviewData(nextRunning));
         setPlayerSnapshots((current) => ({
           ...current,
-          [demoServerId]: demoPlayerSnapshot(nextRunning)
+          [demoServerId]: demoFixtures().demoPlayerSnapshot(nextRunning)
         }));
         setLogs((current) => [
           ...current,
@@ -2205,7 +2209,7 @@ export default function App() {
     setNotice("");
     try {
       if (activeServerIsDemo) {
-        const snapshot = demoPlayerSnapshot(true);
+        const snapshot = demoFixtures().demoPlayerSnapshot(true);
         const response = command === "list"
           ? `There are ${snapshot.online} of a max of ${snapshot.maxPlayers} players online: ${snapshot.names.join(", ")}`
           : command === "seed"

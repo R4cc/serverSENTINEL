@@ -2,7 +2,7 @@ import { ActionMenu, type ActionMenuItem } from "../components/ActionMenu";
 import { DialogSurface } from "../components/DialogSurface";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, StatusBadge } from "../components/UiPrimitives";
-import type { ContextNode, ManagedNode, NodeManualRecovery, NodeOperation } from "../types";
+import type { ContextNode, NodeView, NodeManualRecovery, NodeOperation } from "../types";
 import { formatBytes } from "../utils/format";
 import { nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
 
@@ -15,7 +15,7 @@ export function nodeDetailsPrimaryAction({
   updateAvailable,
   canManageNodes
 }: {
-  node: ManagedNode;
+  node: NodeView;
   operation?: NodeOperation;
   manualRecovery?: NodeManualRecovery;
   updateAvailable: boolean;
@@ -34,7 +34,7 @@ export function nodeDetailsActionIds({
   contextNode,
   canManageNodes
 }: {
-  node: ManagedNode;
+  node: NodeView;
   contextNode?: ContextNode;
   canManageNodes: boolean;
 }) {
@@ -93,7 +93,7 @@ function NodeGlyph() {
 }
 
 export type NodeDetailsDrawerProps = {
-  node: ManagedNode;
+  node: NodeView;
   contextNode?: ContextNode;
   panelVersion: string;
   panelBuildId?: string;
@@ -111,11 +111,11 @@ export type NodeDetailsDrawerProps = {
   updateTitle: string;
   formatDate: (value: string | number | Date) => string;
   onClose: () => void;
-  onShowInstall: (node: ManagedNode) => void;
-  onRotateToken: (node: ManagedNode) => void;
-  onUpdateNode: (node: ManagedNode) => void;
+  onShowInstall: (node: NodeView) => void;
+  onRotateToken: (node: NodeView) => void;
+  onUpdateNode: (node: NodeView) => void;
   onRefresh: () => void;
-  onRestartNode: (node: ManagedNode) => void;
+  onRestartNode: (node: NodeView) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCopy: (value: string) => void;
 };

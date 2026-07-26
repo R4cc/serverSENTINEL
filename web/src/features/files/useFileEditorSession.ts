@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { demoListing } from "../../demo";
+import { demoFixtures } from "../../demoRuntime";
 import type { FileEditLease, FileListing, InstalledMod, ManagedServer, PublicUser } from "../../types";
 import { isEditableFile } from "../../utils/files";
 import { hasFileManagerPermission } from "../../utils/permissions";
@@ -324,7 +324,7 @@ export function useFileEditorSession({
       setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
-      setListing(demoListing(listing.path, nextFiles, demoInstalledMods));
+      setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       setFileSaving(false);
       return;
     }

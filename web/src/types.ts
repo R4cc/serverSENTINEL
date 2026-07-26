@@ -1,25 +1,35 @@
 import type {
+  NodeInstallInstructions,
+  PublicNode,
+  PublicServer,
   PublicUser,
   PlayerSnapshot,
   ReleaseChannel,
-  ResolvedServerVersions,
-  RestartRequiredChange,
   RuntimeLifecycleStatus,
-  ScheduledExecution,
   ServerActivity,
-  ServerEvent,
-  ServerRuntimeProfile
+  ServerEvent
 } from "@serversentinel/contracts";
 
 export type {
+  CreateNodeResponse,
+  ManagedServerPort,
+  NodeInstallInstructions,
+  NodeProtocolMode,
+  NodeStatus,
+  NodeType,
   OperationRecord,
   Permission as PermissionKey,
   PlayerSnapshot,
+  PublicNode,
+  PublicServer,
   PublicUser,
   ReleaseChannel,
   ResolvedServerVersions,
+  RestartPhase,
   RestartRequiredChange,
+  RestartRequiredModSnapshot,
   RolePreset,
+  RuntimeIntent,
   RuntimeLifecycleStatus,
   ScheduleStep,
   ScheduledActiveRun,
@@ -39,38 +49,14 @@ export type {
   VersionSource
 } from "@serversentinel/contracts";
 
-export type ManagedServer = {
-  id: string;
-  displayName: string;
-  nodeId: string;
-  nodeName?: string;
-  directoryLabel: string;
-  storageName?: string;
-  dockerContainer?: string;
-  dockerImage?: string;
-  dockerPorts?: string;
-  managedPorts?: ManagedServerPort[];
-  javaArgs?: string;
-  startOnNodeStart?: boolean;
-  restartRequiredSince?: string;
-  restartRequiredChanges?: RestartRequiredChange[];
-  schedules?: ScheduledExecution[];
-  hasDockerContainer: boolean;
-  resolvedVersions?: ResolvedServerVersions;
-  runtimeProfile: ServerRuntimeProfile;
-};
-
-export type ManagedServerPort = {
-  id: string;
-  name: string;
-  type: string;
-  protocol: "tcp" | "udp";
-  internalPort: number;
-  externalPort: number;
-  required?: boolean;
-  removable?: boolean;
-  advanced?: boolean;
-};
+/**
+ * The panel serializes servers and nodes as PublicServer / PublicNode. These
+ * aliases keep the established UI vocabulary while the shape stays owned by the
+ * shared contract, so a backend field change surfaces here as a type error
+ * instead of a silently missing property.
+ */
+export type ManagedServer = PublicServer;
+export type ManagedNode = PublicNode;
 
 export type RuntimeVersion = {
   id: string;
@@ -89,62 +75,25 @@ export type RuntimeLoaderVersion = {
   buildId?: string;
 };
 
-export type ManagedNode = {
-  id: string;
-  name: string;
-  type: "local" | "remote";
-  status: "online" | "offline" | "unknown";
-  isInternal: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  lastSeenAt?: string;
-  connectedAt?: string;
-  agentVersion?: string;
-  buildId?: string;
-  protocolVersion?: string;
-  protocolMode?: "current" | "fallback" | "update-only" | "incompatible";
-  dockerStatus?: string;
-  dataPathStatus?: string;
-  totalMemory?: number;
-  joinTokenExpiresAt?: string;
-  hasPendingJoinToken?: boolean;
-  capabilities?: string[];
-  features?: string[];
-};
+/**
+ * A synthetic node the UI shows before the API has described a real one: the
+ * implicit local node in all-in-one mode, and the "no node selected" stub in
+ * panel mode. Neither has server-assigned timestamps, so those are absent
+ * rather than invented.
+ */
+export type PlaceholderNode = Omit<ManagedNode, "createdAt" | "updatedAt">;
 
-export type ContextNode = ManagedNode & {
+/**
+ * The node shape presentation code reads. Satisfied by both a real ManagedNode
+ * from the API and a PlaceholderNode, so display helpers accept either; the
+ * server-assigned timestamps are optional here because placeholders have none.
+ * Use ManagedNode, not this, when typing an API response.
+ */
+export type NodeView = PlaceholderNode & Partial<Pick<ManagedNode, "createdAt" | "updatedAt">>;
+
+/** A node paired with its servers for the workspace switcher. */
+export type ContextNode = NodeView & {
   servers: ManagedServer[];
-};
-
-export type NodeInstallInstructions = {
-  image: string;
-  panelUrl: string;
-  joinToken?: string;
-  tokenRequired: boolean;
-  dataMount: string;
-  dockerSocketMount: string;
-  dockerCompose: {
-    image: string;
-    restart: "unless-stopped";
-    environment: {
-      SS_MODE: "node";
-      SS_PANEL_URL: string;
-      SERVERSENTINEL_DATA_DIR?: string;
-      SERVERSENTINEL_DOCKER_DATA_DIR?: string;
-      TZ: string;
-      SS_NODE_NAME?: string;
-      SS_JOIN_TOKEN?: string;
-    };
-    volumes: string[];
-  };
-  dockerRun: string;
-};
-
-export type CreateNodeResponse = {
-  node: ManagedNode;
-  joinToken: string;
-  expiresAt: string;
-  install: NodeInstallInstructions;
 };
 
 export type NodeInstallResponse = {
@@ -188,7 +137,11 @@ export type PlayerHeadsState = {
 
 export type AppState = {
   servers: ManagedServer[];
-  nodes?: ManagedNode[];
+  /**
+   * NodeView rather than ManagedNode because demo mode synthesizes this list
+   * from a PlaceholderNode. Real nodes fetched from the API stay ManagedNode.
+   */
+  nodes?: NodeView[];
   appVersion?: string;
   buildId?: string;
   runtimeMode?: "all-in-one" | "panel" | "node";
