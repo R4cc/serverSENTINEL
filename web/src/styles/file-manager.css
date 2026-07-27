@@ -114,6 +114,22 @@
   margin-left: var(--space-1);
 }
 
+.filesPage .selectionActionPromoted,
+.filesPage .selectionActionMenu--expanded {
+  display: none;
+}
+
+@container (min-width: 961px) {
+  .filesPage .selectionActionPromoted,
+  .filesPage .selectionActionMenu--expanded {
+    display: inline-flex;
+  }
+
+  .filesPage .selectionActionMenu--compact {
+    display: none;
+  }
+}
+
 .filesPage .fileTable {
   position: relative;
   flex: 1 1 auto;

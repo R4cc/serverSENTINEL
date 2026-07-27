@@ -79,9 +79,9 @@ describe("demo session generation", () => {
     const blink = sessions.find((session) => session.player === demoTimelineScenarioPlayers.blink);
 
     expect(marathon).toMatchObject({
-      startedAt: generatedAt - 24 * 60 * 60_000,
+      startedAt: generatedAt - 25 * 60 * 60_000,
       endedAt: null,
-      startBoundary: "history-boundary",
+      startBoundary: "join",
       endBoundary: "online"
     });
     expect(reconnect).toHaveLength(2);

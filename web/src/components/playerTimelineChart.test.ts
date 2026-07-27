@@ -10,6 +10,7 @@ import {
   playerTimelineRowsDataZoomId,
   playerTimelineRowsSliderId,
   playerTimelineTimeDataZoomId,
+  preservePlayerTimelineLanePosition,
   resolvePlayerTimelineLaneWindow,
   type PlayerTimelineRow
 } from "./playerTimelineChart";
@@ -60,7 +61,7 @@ describe("player timeline chart items", () => {
         startClipped: true,
         endClipped: false,
         open: true,
-        durationLabel: "≥ 1m",
+        durationLabel: "Duration unavailable",
         startLabel: null,
         endLabel: "Now"
       },
@@ -127,6 +128,18 @@ describe("player timeline chart items", () => {
     expect(items.map((item) => item.id)).toEqual(["quick-one+quick-two", "long-gap", "after-stop"]);
     expect(items[0].reconnects).toEqual([{ at: 16 * minute, offlineMs: playerTimelineReconnectWindowMs }]);
   });
+
+  it("keeps exact multi-day playtime while withholding invented boundary durations", () => {
+    const day = 24 * 60 * 60_000;
+    const exact = playerTimelineChartItems([{
+      player: "Alex",
+      online: false,
+      sessions: [{ id: "exact", player: "Alex", startedAt: 0, endedAt: 2 * day + 90 * 60_000, startBoundary: "join", endBoundary: "leave" }]
+    }], { from: 0, to: 3 * day }, 3 * day, formatShortTime);
+    expect(exact[0].durationLabel).toBe("49h 30m");
+    expect(playerTimelineChartItems(rows().slice(0, 1), viewport, 60_000, formatShortTime)[0].durationLabel)
+      .toBe("Duration unavailable");
+  });
 });
 
 describe("player timeline label placement", () => {
@@ -168,19 +181,19 @@ describe("player timeline lanes", () => {
   it("uses dedicated group lanes and stable online-first player keys", () => {
     expect(playerTimelineLanes(rows()).map((lane) => lane.key)).toEqual([
       "group:online",
-      "player:online:alex",
+      "player:alex",
       "group:offline",
-      "player:offline:sam"
+      "player:sam"
     ]);
   });
 
   it("omits empty groups and keeps a valid vertical window after rows change", () => {
     const lanes = playerTimelineLanes(rows().slice(1));
-    expect(lanes.map((lane) => lane.key)).toEqual(["group:offline", "player:offline:sam"]);
+    expect(lanes.map((lane) => lane.key)).toEqual(["group:offline", "player:sam"]);
     expect(resolvePlayerTimelineLaneWindow(lanes, { startKey: "missing", startIndex: 9 })).toMatchObject({
       startIndex: 0,
       startKey: "group:offline",
-      endKey: "player:offline:sam"
+      endKey: "player:sam"
     });
   });
 
@@ -189,6 +202,20 @@ describe("player timeline lanes", () => {
     expect(playerTimelineLanePositionFromZoom({ dataZoomId: playerTimelineRowsDataZoomId, startValue: "group:offline" }, lanes))
       .toEqual({ startKey: "group:offline", startIndex: 2 });
     expect(playerTimelineLanePositionFromZoom({ dataZoomId: playerTimelineTimeDataZoomId, startValue: viewport.from }, lanes)).toBeNull();
+  });
+
+  it("anchors to the next surviving lane when the scrolled row leaves the time range", () => {
+    const previous = playerTimelineLanes([
+      ...rows(),
+      { player: "Taylor", online: false, sessions: [] },
+      { player: "Uma", online: false, sessions: [] },
+      { player: "Victor", online: false, sessions: [] },
+      { player: "Wanda", online: false, sessions: [] },
+      { player: "Zoe", online: false, sessions: [] }
+    ]);
+    const next = previous.filter((lane) => lane.key !== "player:sam");
+    expect(preservePlayerTimelineLanePosition(previous, next, { startKey: "player:sam", startIndex: 3 }))
+      .toEqual({ startKey: "player:taylor", startIndex: 3 });
   });
 });
 
@@ -228,14 +255,14 @@ describe("player timeline ECharts option", () => {
     expect(xAxis).toMatchObject({ min: query.from, max: query.to, position: "top" });
     expect(yAxis.data).toEqual([
       "group:online",
-      "player:online:alex",
+      "player:alex",
       "group:offline",
-      "player:offline:offline 1",
-      "player:offline:offline 2",
-      "player:offline:offline 3",
-      "player:offline:offline 4",
-      "player:offline:offline 5",
-      "player:offline:sam"
+      "player:offline 1",
+      "player:offline 2",
+      "player:offline 3",
+      "player:offline 4",
+      "player:offline 5",
+      "player:sam"
     ]);
   });
 

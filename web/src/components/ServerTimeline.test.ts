@@ -306,6 +306,26 @@ describe("server timeline markers", () => {
     expect(merged.playerActivity).toMatchObject({ onlineNames: [], sessions: [{ id: "alex:10", endedAt: 60_000, endBoundary: "leave" }] });
   });
 
+  it("replaces rolling history-boundary sessions instead of accumulating seven-day bars", () => {
+    const current = response();
+    current.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["Alex"],
+      sessions: [{ id: "alex:old-boundary", player: "Alex", startedAt: 1_000, endedAt: null, startBoundary: "history-boundary", endBoundary: "online" }]
+    };
+    const incoming = response();
+    incoming.from = 45_000;
+    incoming.to = 65_000;
+    incoming.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["Alex"],
+      sessions: [{ id: "alex:new-boundary", player: "Alex", startedAt: 2_000, endedAt: null, startBoundary: "history-boundary", endBoundary: "online" }]
+    };
+
+    expect(mergeTimelineResponses(current, incoming, 0, 65_000).playerActivity?.sessions)
+      .toEqual([incoming.playerActivity.sessions[0]]);
+  });
+
   it("deduplicates an event when its rolling log-tail line index changes", () => {
     const current = response();
     current.events = [{ ...current.events[0], id: "logs-199-old" }];
@@ -355,6 +375,20 @@ describe("server timeline player sessions", () => {
       ["Zoe", true],
       ["Sam", false]
     ]);
+  });
+
+  it("does not let the latest live roster reorder a historical player range", () => {
+    const value = response();
+    value.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["LatestPlayer"],
+      sessions: [
+        { id: "latest", player: "LatestPlayer", startedAt: 80_000, endedAt: null, startBoundary: "join", endBoundary: "online" },
+        { id: "historical", player: "HistoricalPlayer", startedAt: 20_000, endedAt: 30_000, startBoundary: "join", endBoundary: "leave" }
+      ]
+    };
+    expect(timelinePlayerRows(value, { from: 10_000, to: 40_000 }, 100_000).map((row) => [row.player, row.online]))
+      .toEqual([["HistoricalPlayer", false]]);
   });
 
   it("clips incomplete sessions and reports lower-bound durations", () => {

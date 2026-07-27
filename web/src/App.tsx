@@ -4,7 +4,7 @@ import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
 import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, formatTimestampForFilename, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
+import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
@@ -24,7 +24,7 @@ import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadi
 import { RuntimeControls } from "./components/RuntimeControls";
 import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
 import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
-import { Banner, Button, EmptyState, PanelHeader, StatusBadge, Surface } from "./components/UiPrimitives";
+import { Banner, Button, EmptyState, StatusBadge, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { ActionMenu } from "./components/ActionMenu";
@@ -1657,25 +1657,6 @@ export default function App() {
     if (activeServerIdRef.current === serverId) setConsoleStreamVersion((version) => version + 1);
   }
 
-  function downloadConsoleLogs() {
-    if (!activeServer || logs.length === 0) return;
-    const safeServerName = (activeServer.displayName || activeServer.id)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "server";
-    const timestamp = formatTimestampForFilename(new Date(), displayTimeZone);
-    const filename = `${safeServerName}-console-${timestamp}.log`;
-    const blob = new Blob([logs.join("")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function serverFromOperation(operation: OperationRecord) {
     const result = operation.result;
     if (result && typeof result === "object" && "server" in result) {
@@ -2893,13 +2874,6 @@ export default function App() {
                         onSelect: () => { void retryActiveConnection(); },
                         disabled: isProvisioning,
                         title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
-                      },
-                      {
-                        id: "download-log",
-                        label: "Download log",
-                        onSelect: downloadConsoleLogs,
-                        disabled: logs.length === 0,
-                        title: logs.length === 0 ? "No console log lines are available to download." : "Download console log"
                       }
                     ]}
                     trigger={
@@ -2997,14 +2971,6 @@ export default function App() {
             {activePage === "console" && (
               <section className="tabPage layoutWide">
                 <Surface className="consolePanel">
-                  <PanelHeader
-                    title="Console"
-                    actions={<div className="consoleHeaderActions">
-                      <Button variant="secondary" compact onClick={downloadConsoleLogs} disabled={logs.length === 0} title={logs.length === 0 ? "No console log lines are available to download." : "Download console log"}>
-                        Download log
-                      </Button>
-                    </div>}
-                  />
                   <div className="terminal">
                     {consoleSnapshotReadyServerId !== activeServer.id ? (
                       <TerminalLoadingSkeleton />

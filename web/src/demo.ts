@@ -681,9 +681,9 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     ...(running ? [{
       id: "demo-online:marathon",
       player: demoTimelineScenarioPlayers.marathon,
-      startedAt: now - 24 * 60 * 60_000,
+      startedAt: now - 25 * 60 * 60_000,
       endedAt: null,
-      startBoundary: "history-boundary" as const,
+      startBoundary: "join" as const,
       endBoundary: "online" as const
     }, {
       id: "demo-online:rejoin-before",

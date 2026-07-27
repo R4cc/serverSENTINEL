@@ -101,6 +101,7 @@ async function assertFloatingSurfaces(page, label) {
     return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight };
   });
   assert(menu.left >= 0 && menu.right <= menu.width && menu.top >= 0 && menu.bottom <= menu.height, `${label}: server action menu leaves the viewport: ${JSON.stringify(menu)}`);
+  assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
   await page.keyboard.press("Escape");
 }
 
@@ -319,7 +320,8 @@ async function assertConsoleViewportOwnership(page, label) {
       panelRect: panelRect ? { left: panelRect.left, right: panelRect.right, width: panelRect.width } : null,
       terminalLeft: terminalRect.left,
       terminalRight: terminalRect.right,
-      terminalHeight: terminal.getBoundingClientRect().height
+      terminalHeight: terminal.getBoundingClientRect().height,
+      panelHeaderPresent: terminalFrame.parentElement?.querySelector(":scope > .uiPanelHeader") !== null
     };
   });
   assert(!result.missing, `${label}: console viewport surfaces are missing`);
@@ -329,6 +331,7 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(result.documentWidth <= result.documentViewportWidth + 1, `${label}: full-width console causes horizontal overflow: ${JSON.stringify(result)}`);
   assert(result.terminalLeft <= 1 && result.terminalRight >= result.documentViewportWidth - 1, `${label}: console does not reach both viewport edges: ${JSON.stringify(result)}`);
   assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
+  assert(!result.panelHeaderPresent, `${label}: removed console header bar is still present`);
 }
 
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
