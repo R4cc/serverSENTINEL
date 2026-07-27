@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { defaultTimelinePalette } from "./serverTimelineChart";
 import {
   buildPlayerTimelineChartOption,
+  playerTimelineChartHeight,
   playerTimelineChartItems,
+  playerTimelineHasLaneOverflow,
   playerTimelineLanePositionFromZoom,
   playerTimelineLabelLayout,
   playerTimelineLanes,
+  playerTimelineLaneWindowSize,
   playerTimelineReconnectWindowMs,
   playerTimelineRowsDataZoomId,
   playerTimelineRowsSliderId,
@@ -197,6 +200,65 @@ describe("player timeline lanes", () => {
     });
   });
 
+  it("grows to the whole roster when expanded instead of scrolling inside the card", () => {
+    expect(playerTimelineLaneWindowSize(9)).toBe(6);
+    expect(playerTimelineLaneWindowSize(9, true)).toBe(9);
+    expect(playerTimelineLaneWindowSize(24, true)).toBe(16);
+    expect(playerTimelineHasLaneOverflow(9)).toBe(true);
+    expect(playerTimelineHasLaneOverflow(9, true)).toBe(false);
+    expect(playerTimelineHasLaneOverflow(24, true)).toBe(true);
+    expect(playerTimelineChartHeight(9, true)).toBeGreaterThan(playerTimelineChartHeight(9));
+  });
+
+  it("drops the vertical scrollbar once an expanded window shows every lane", () => {
+    const chartRows = Array.from({ length: 8 }, (_, index): PlayerTimelineRow => ({
+      player: `Player ${index + 1}`,
+      online: false,
+      sessions: []
+    }));
+    const build = (visibleLaneCount: number) => buildPlayerTimelineChartOption({
+      rows: chartRows,
+      query,
+      viewport,
+      visibleLaneCount,
+      now: 60_000,
+      palette: defaultTimelinePalette,
+      formatShortTime
+    }) as Record<string, unknown>;
+
+    expect((build(6).dataZoom as Array<Record<string, unknown>>).map((zoom) => zoom.id)).toEqual([
+      playerTimelineTimeDataZoomId,
+      playerTimelineRowsDataZoomId,
+      playerTimelineRowsSliderId
+    ]);
+    expect((build(9).dataZoom as Array<Record<string, unknown>>).map((zoom) => zoom.id)).toEqual([playerTimelineTimeDataZoomId]);
+  });
+
+  it("renders group lanes as a labelled rule rather than a filled tint band", () => {
+    const option = buildPlayerTimelineChartOption({
+      rows: rows(),
+      query,
+      viewport,
+      now: 60_000,
+      palette: defaultTimelinePalette,
+      formatShortTime
+    }) as Record<string, unknown>;
+    const renderItem = (option.series as Array<Record<string, unknown>>)[0].renderItem as (params: unknown, api: unknown) => {
+      children: Array<{ type: string; style?: { text?: string; fill?: string } }>;
+    };
+    const rendered = renderItem(
+      { dataIndex: 0, coordSys: { x: 220, y: 30, width: 700, height: 240 } },
+      { coord: () => [220, 50], size: () => [0, 40] }
+    );
+
+    expect(rendered.children.some((child) => child.type === "rect")).toBe(false);
+    expect(rendered.children.map((child) => child.type)).toEqual(["circle", "text", "line"]);
+    expect(rendered.children.find((child) => child.type === "text")?.style).toMatchObject({
+      text: "ONLINE NOW · 1",
+      fill: defaultTimelinePalette.textMuted
+    });
+  });
+
   it("routes only row data-zoom events into the vertical lane position", () => {
     const lanes = playerTimelineLanes(rows());
     expect(playerTimelineLanePositionFromZoom({ dataZoomId: playerTimelineRowsDataZoomId, startValue: "group:offline" }, lanes))
@@ -300,15 +362,20 @@ describe("player timeline ECharts option", () => {
     }) as Record<string, unknown>;
     const rowSeries = (option.series as Array<Record<string, unknown>>)[0];
     const renderItem = rowSeries.renderItem as (params: unknown, api: unknown) => {
-      children: Array<{ type: string }>;
+      children: Array<{ type: string; x?: number; scaleX?: number; children?: Array<{ type: string; shape: Record<string, unknown> }> }>;
     };
     const rendered = renderItem(
       { dataIndex: 1, coordSys: { x: 220, y: 30, width: 700, height: 240 } },
       { coord: () => [220, 70], size: () => [0, 40] }
     );
+    const glyph = rendered.children.find((child) => child.type === "group")!;
 
     expect(rendered.children.some((child) => child.type === "image")).toBe(false);
-    expect(rendered.children.filter((child) => child.type === "circle" || child.type === "path")).toHaveLength(3);
+    expect(glyph.children).toHaveLength(3);
+    // Sizing lives in the group transform; recycled path elements keep their parsed
+    // geometry, so a shape-level scale would strand them at their first position.
+    expect(glyph.scaleX).toBeGreaterThan(0);
+    expect(glyph.children?.every((child) => !("width" in child.shape) && !("x" in child.shape))).toBe(true);
   });
 
   it("keeps a large synthetic session set in one SVG-oriented option", () => {

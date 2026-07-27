@@ -16,6 +16,7 @@ const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "
 const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
+const serverTimeline = readFileSync(new URL("./components/ServerTimeline.tsx", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it("loads the design system in an intentional cascade", () => {
@@ -138,11 +139,17 @@ describe("global stylesheet entry point", () => {
   it("uses the unified timeline for desktop and compact landscape layouts", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayers\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--timeline-join\) 24%, var\(--border-muted\)\);[^}]*box-shadow:\s*inset 3px 0 0/s);
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid[^}]*background:\s*color-mix\(in srgb, var\(--timeline-join\) 6%, var\(--surface-muted\)\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\.is-expanded\s*\{\s*max-height:\s*none;\s*\}/s);
+    // The player card carries no green wash of its own; it shares metric-band chrome.
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayers,\s*\.serverTimelineMetricBand\s*\{[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*var\(--surface-raised\);/s);
+    expect(overviewStyles).not.toMatch(/\.serverTimelinePlayers\s*\{/s);
+    expect(overviewStyles).not.toContain("serverTimelinePlayerScrollHint");
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerCount\.tone-offline\s*\{\s*--player-count-color:\s*var\(--timeline-leave\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.serverTimelineMetricBand\.is-prominent\s*\{\s*height:\s*clamp\(172px, 11vw, 190px\);\s*\}/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineAnnotationStage\s*\{[^}]*min-height:\s*48px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEventRail\s*\{[^}]*min-height:\s*48px;[^}]*display:\s*flex;/s);
+    expect(overviewStyles).not.toContain("serverTimelineAnnotationStage");
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster:hover:not\(:disabled\)[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*translateX\(-14px\);/s);
     expect(overviewStyles).toMatch(/\.overviewDashboardGrid--chartless\s*\{[^}]*"summary summary[^}]*"players players/s);
@@ -151,7 +158,8 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*calc\(340px \+ var\(--timeline-annotation-extra, 0px\)\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
-    expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*bottom:\s*38px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*inset:\s*0;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEventRailLine\s*\{[^}]*bottom:\s*8px;[^}]*height:\s*1px;/s);
     expect(overviewStyles).not.toContain("timelineAnnotationConnector");
     expect(overviewStyles).not.toContain("resourcePanel");
     expect(overviewStyles).not.toContain("recharts-");
@@ -167,6 +175,13 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationPopover\s*\{[^}]*position:\s*absolute;[^}]*max-height:\s*250px;[^}]*border:\s*var\(--border-strong\) solid var\(--border\);[^}]*background:\s*color-mix\(in srgb, var\(--surface-raised\) 78%, var\(--surface-muted\)\);[^}]*box-shadow:\s*var\(--shadow-elevated\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotationPopoverItem\s*\{[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);/s);
     expect(overviewStyles).toMatch(/\.timelineSeriesToggle\s*\{[^}]*border:\s*1px solid[^}]*cursor:\s*pointer;/s);
+  });
+
+  it("hands the timeline charts color tokens rather than border-width tokens", () => {
+    const widthTokens = [...tokenStyles.matchAll(/(--[\w-]+):\s*\d+(?:\.\d+)?px;/g)].map((match) => match[1]);
+    expect(widthTokens).toContain("--border-subtle");
+    for (const token of widthTokens) expect(serverTimeline).not.toContain(`read("${token}"`);
+    expect(serverTimeline).toContain('read("--border-muted"');
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {

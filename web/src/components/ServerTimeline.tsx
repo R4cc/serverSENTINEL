@@ -15,9 +15,10 @@ import {
   buildPlayerTimelineChartOption,
   formatTimelineDuration,
   playerTimelineChartHeight,
+  playerTimelineHasLaneOverflow,
   playerTimelineLanePositionFromZoom,
   playerTimelineLanes,
-  playerTimelineVisibleLaneCount,
+  playerTimelineLaneWindowSize,
   preservePlayerTimelineLanePosition,
   resolvePlayerTimelineLaneWindow,
   timelineSessionGeometry,
@@ -538,7 +539,9 @@ function readTimelinePalette(element: HTMLElement): TimelinePalette {
     accent: read("--accent", defaultTimelinePalette.accent),
     text: read("--text", defaultTimelinePalette.text),
     textMuted: read("--text-muted", defaultTimelinePalette.textMuted),
-    border: read("--border-subtle", defaultTimelinePalette.border),
+    // --border-subtle is a width token; charts need the color, or ECharts silently
+    // falls back to its own defaults for row rules and the vertical scrollbar.
+    border: read("--border-muted", defaultTimelinePalette.border),
     surface: read("--surface-raised", defaultTimelinePalette.surface),
     fontFamily: read("--font-sans", defaultTimelinePalette.fontFamily)
   };
@@ -600,10 +603,15 @@ function PlayerSessionSection({
   if (!interacting) stableRowsRef.current = rows;
   const displayRows = interacting ? stableRowsRef.current : rows;
   const lanes = useMemo(() => playerTimelineLanes(displayRows), [displayRows]);
+  const [expanded, setExpanded] = useState(false);
+  const laneWindowSize = playerTimelineLaneWindowSize(lanes.length, expanded);
+  const collapsedOverflow = playerTimelineHasLaneOverflow(lanes.length);
   const [verticalPosition, setVerticalPosition] = useState<PlayerTimelineLanePosition>({ startIndex: 0 });
   const previousLanesRef = useRef(lanes);
-  const anchoredPosition = preservePlayerTimelineLanePosition(previousLanesRef.current, lanes, verticalPosition);
-  const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, anchoredPosition);
+  const anchoredPosition = preservePlayerTimelineLanePosition(previousLanesRef.current, lanes, verticalPosition, laneWindowSize);
+  const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, anchoredPosition, laneWindowSize);
+  const onlineCount = displayRows.filter((row) => row.online).length;
+  const offlineCount = displayRows.length - onlineCount;
   useEffect(() => {
     previousLanesRef.current = lanes;
     setVerticalPosition((current) =>
@@ -618,13 +626,14 @@ function PlayerSessionSection({
     query,
     viewport,
     verticalPosition: resolvedPosition,
+    visibleLaneCount: laneWindowSize,
     now,
     palette,
     formatTime,
     formatShortTime,
     gridLeft,
     playerHeadSource: playerHeadSourceFor
-  }), [displayRows, formatShortTime, formatTime, gridLeft, lanes, now, palette, playerHeadSourceFor, query, resolvedPosition.endKey, resolvedPosition.startIndex, resolvedPosition.startKey, viewport]);
+  }), [displayRows, formatShortTime, formatTime, gridLeft, laneWindowSize, lanes, now, palette, playerHeadSourceFor, query, resolvedPosition.endKey, resolvedPosition.startIndex, resolvedPosition.startKey, viewport]);
   const handleDataZoom = useCallback((event: TimelineDataZoomEvent) => {
     const nextPosition = playerTimelineLanePositionFromZoom(event, lanes);
     if (nextPosition) setVerticalPosition(nextPosition);
@@ -642,12 +651,30 @@ function PlayerSessionSection({
       {lanes.length ? (
         <>
           <header className="serverTimelinePlayerHeader">
-            <strong>Player activity</strong>
-            {lanes.length > playerTimelineVisibleLaneCount && (
-              <span className="serverTimelinePlayerScrollHint"><i aria-hidden="true">↕</i> Scroll to see more</span>
+            <div className="serverTimelinePlayerHeading">
+              <strong>Player activity</strong>
+              <span className="serverTimelinePlayerCounts">
+                {onlineCount > 0 && <span className="serverTimelinePlayerCount tone-online"><i aria-hidden="true" />{onlineCount} online</span>}
+                {offlineCount > 0 && <span className="serverTimelinePlayerCount tone-offline"><i aria-hidden="true" />{offlineCount} earlier</span>}
+              </span>
+            </div>
+            {collapsedOverflow && (
+              <Button
+                variant="ghost"
+                compact
+                className="serverTimelinePlayerToggle"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((current) => !current)}
+              >
+                {expanded ? "Show fewer" : `Show all ${displayRows.length}`}
+                <span className="serverTimelinePlayerToggleGlyph" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
+              </Button>
             )}
           </header>
-          <div className="serverTimelinePlayerChart" style={{ height: playerTimelineChartHeight(lanes.length) }}>
+          <div
+            className={`serverTimelinePlayerChart${expanded ? " is-expanded" : ""}`}
+            style={{ height: playerTimelineChartHeight(lanes.length, expanded) }}
+          >
             <EChartsCanvas
               option={option}
               onDataZoom={handleDataZoom}
@@ -863,6 +890,10 @@ export function ServerTimeline({
   const positionedClusters = useMemo(
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
     [annotationRailWidth, clusters, viewport.from, viewport.to]
+  );
+  const visibleEventCount = useMemo(
+    () => clusters.reduce((total, cluster) => total + timelineClusterOccurrenceCount(cluster), 0),
+    [clusters]
   );
   const nextAnnotationGridTop = useMemo(() => timelineAnnotationGridTop(positionedClusters), [positionedClusters]);
   // Panning changes annotation clusters continuously. Keep their reserved rail
@@ -1167,72 +1198,85 @@ export function ServerTimeline({
         aria-label="Server resource and event timeline"
         style={{ "--timeline-label-gutter": `${labelGutter}px` } as React.CSSProperties}
       >
-        <div className="serverTimelineAnnotationStage" style={{ height: annotationGridTop }}>
-          <strong className="serverTimelineAnnotationStageLabel">Server events</strong>
-          <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations" style={{ left: metricGrid.left, right: metricGrid.right }}>
-            {positionedClusters.map((cluster) => {
-              const occurrenceCount = timelineClusterOccurrenceCount(cluster);
-              const iconMarkers = timelineClusterIconMarkers(cluster);
-              return (
-                <div
-                  key={cluster.id}
-                  className={`timelineAnnotationMarker tone-${cluster.tone}`}
-                  style={{ left: `${cluster.leftPercent}%` }}
-                >
-                  <button
-                    type="button"
-                    className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.inlineLabel ? " is-labeled" : ""}${cluster.alignEnd ? " align-end" : ""}`}
-                    style={{ top: `${cluster.labelTop}px` }}
-                    title={markerTitle(cluster, formatDate)}
-                    aria-label={markerTitle(cluster, formatDate)}
-                    aria-expanded={selectedCluster?.id === cluster.id}
-                    aria-controls="server-timeline-annotation-popover"
-                    onClick={() => {
-                      setHoverTooltip(null);
-                      setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
-                    }}
-                  >
-                    <span className="timelineAnnotationIconStack" aria-hidden="true">
-                      {iconMarkers.map((marker, index) => (
-                        <span className={`timelineAnnotationClusterIcon tone-${marker.tone}`} key={`${marker.id}:${index}`}>
-                          {timelineMarkerGlyph(marker)}
-                        </span>
-                      ))}
-                    </span>
-                    {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
-                    {cluster.inlineLabel && <span className="timelineAnnotationClusterLabel" aria-hidden="true">{cluster.inlineLabel}</span>}
-                  </button>
-                </div>
-              );
-            })}
+        <section
+          className={`serverTimelineEventRail${visibleEventCount ? "" : " is-empty"}`}
+          aria-label="Timeline events"
+          style={{ height: annotationGridTop }}
+        >
+          <div className="serverTimelineEventRailGutter" style={{ width: metricGrid.left }}>
+            <strong>Events</strong>
+            <span>{visibleEventCount ? `${visibleEventCount} in this range` : "None in this range"}</span>
           </div>
-          {selectedCluster && selectedPosition && (
-            <section
-              className="serverTimelineAnnotationPopover"
-              id="server-timeline-annotation-popover"
-              aria-label="Events at selected time"
-              style={{ left: `${Math.max(22, Math.min(78, selectedPosition.leftPercent))}%` }}
-            >
-              <div className="serverTimelineAnnotationPopoverHeader">
-                <div>
-                  <strong>{timelineClusterOccurrenceCount(selectedCluster)} {timelineClusterOccurrenceCount(selectedCluster) === 1 ? "event" : "events"}</strong>
-                  <span>{formatDate(selectedCluster.occurredAt)}</span>
+          <div className="serverTimelineEventRailTrack" style={{ marginRight: metricGrid.right }}>
+            <span className="serverTimelineEventRailLine" aria-hidden="true" />
+            <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
+              {positionedClusters.map((cluster) => {
+                const occurrenceCount = timelineClusterOccurrenceCount(cluster);
+                const iconMarkers = timelineClusterIconMarkers(cluster);
+                return (
+                  <div
+                    key={cluster.id}
+                    className={`timelineAnnotationMarker tone-${cluster.tone}`}
+                    style={{ left: `${cluster.leftPercent}%` }}
+                  >
+                    <button
+                      type="button"
+                      className={`timelineAnnotationCluster${occurrenceCount > 1 ? " is-multiple" : ""}${cluster.inlineLabel ? " is-labeled" : ""}${cluster.alignEnd ? " align-end" : ""}`}
+                      style={{ top: `${cluster.labelTop}px` }}
+                      title={markerTitle(cluster, formatDate)}
+                      aria-label={markerTitle(cluster, formatDate)}
+                      aria-expanded={selectedCluster?.id === cluster.id}
+                      aria-controls="server-timeline-annotation-popover"
+                      onClick={() => {
+                        setHoverTooltip(null);
+                        setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);
+                      }}
+                    >
+                      <span className="timelineAnnotationIconStack" aria-hidden="true">
+                        {iconMarkers.map((marker, index) => (
+                          <span className={`timelineAnnotationClusterIcon tone-${marker.tone}`} key={`${marker.id}:${index}`}>
+                            {timelineMarkerGlyph(marker)}
+                          </span>
+                        ))}
+                      </span>
+                      {occurrenceCount > 1 && <span className="timelineAnnotationClusterCount">{occurrenceCount} events</span>}
+                      {cluster.inlineLabel && <span className="timelineAnnotationClusterLabel" aria-hidden="true">{cluster.inlineLabel}</span>}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {!visibleEventCount && !loading && (
+              <span className="serverTimelineEventRailEmpty">No server events, automation runs, or planned schedules here</span>
+            )}
+            {selectedCluster && selectedPosition && (
+              <section
+                className="serverTimelineAnnotationPopover"
+                id="server-timeline-annotation-popover"
+                aria-label="Events at selected time"
+                style={{ left: `${Math.max(22, Math.min(78, selectedPosition.leftPercent))}%` }}
+              >
+                <div className="serverTimelineAnnotationPopoverHeader">
+                  <div>
+                    <strong>{timelineClusterOccurrenceCount(selectedCluster)} {timelineClusterOccurrenceCount(selectedCluster) === 1 ? "event" : "events"}</strong>
+                    <span>{formatDate(selectedCluster.occurredAt)}</span>
+                  </div>
+                  <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>
                 </div>
-                <Button variant="ghost" compact onClick={() => setSelectedCluster(null)} aria-label="Close events popover">×</Button>
-              </div>
-              <div className="serverTimelineAnnotationPopoverList">
-                {selectedCluster.markers.map((marker) => (
-                  <TimelineAnnotationPopoverItem
-                    key={marker.id}
-                    marker={marker}
-                    formatDate={formatDate}
-                    onOpenSchedule={activateMarker}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
+                <div className="serverTimelineAnnotationPopoverList">
+                  {selectedCluster.markers.map((marker) => (
+                    <TimelineAnnotationPopoverItem
+                      key={marker.id}
+                      marker={marker}
+                      formatDate={formatDate}
+                      onOpenSchedule={activateMarker}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </section>
         {annotationEnabled.player && (
           <PlayerSessionSection
             rows={playerRows}

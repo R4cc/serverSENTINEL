@@ -40,6 +40,22 @@ describe("server timeline controls", () => {
     expect(html).not.toContain("serverTimelineSummary");
   });
 
+  it("renders server events as a gutter-labelled rail instead of a standalone card", () => {
+    const html = renderToStaticMarkup(createElement(ServerTimeline, {
+      loadTimeline: vi.fn(),
+      formatTime: String,
+      formatShortTime: String,
+      formatDate: String,
+      onOpenSchedules: vi.fn()
+    }));
+
+    expect(html).toContain("serverTimelineEventRail");
+    expect(html).toContain("serverTimelineEventRailTrack");
+    expect(html).toContain("serverTimelineEventRailLine");
+    expect(html).toContain("None in this range");
+    expect(html).not.toContain("serverTimelineAnnotationStage");
+  });
+
   it("maps horizontal trackpad and Shift-wheel input without capturing vertical roster scrolling", () => {
     expect(timelineHorizontalWheelPixels({ deltaMode: 0, deltaX: -120, deltaY: 4, shiftKey: false }, 800)).toBe(-120);
     expect(timelineHorizontalWheelPixels({ deltaMode: 1, deltaX: 0, deltaY: 3, shiftKey: true }, 800)).toBe(48);
