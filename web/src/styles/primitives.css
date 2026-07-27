@@ -562,8 +562,6 @@
 .modsReviewLine,
 .modsDependencySummary,
 .modsCompatibilityCard,
-.nodesToolbar,
-.nodeCard,
 .nodeInstallBox,
 .summaryTile {
   border-color: var(--border-panel);
@@ -581,7 +579,6 @@
 }
 
 .uiPanelHeader,
-.nodeCardHeader,
 .modsWorkspaceListHeader,
 .modsDrawerHeader,
 .modsDrawerFooter,
@@ -595,7 +592,6 @@
 
 .uiPanelHeader h2,
 .uiPanelHeaderCopy h2,
-.nodeCardHeader h3,
 .modsWorkspaceListHeader h3,
 .modsDrawerHeader h2,
 .nodeModalHeader h2,
@@ -612,7 +608,6 @@
 
 .uiPanelHeader p,
 .uiPanelHeaderCopy p,
-.nodeCardHeader p,
 .modsWorkspaceListHeader span,
 .modsDrawerHeader p,
 .nodeModalHeader p,
@@ -632,7 +627,6 @@
 .modsWorkspaceUpdateActions,
 .modsDrawerFooter,
 .scheduleRowActions,
-.nodeCardActions,
 .nodeModalFooter,
 .modalFooter,
 .userModalFooter,
@@ -642,7 +636,6 @@
 }
 
 .fileToolbar,
-.nodesToolbar,
 .modsWorkspaceToolbar {
   min-height: var(--toolbar-min-height);
   padding: var(--space-3);
@@ -662,7 +655,6 @@
 .fileToolbar .uiButton,
 .selectionActions .uiButton,
 .scheduleRowActions .uiButton,
-.nodeCardActions .uiButton,
 .fileEditorFooter .uiButton,
 .modalFooter .uiButton,
 .userModalFooter .uiButton {
@@ -673,8 +665,6 @@
 .fileTableRow,
 .modsWorkspaceRow,
 .scheduleTableRow,
-.nodeServerRow,
-.nodeServerMoreRow,
 .eventRow {
   border-color: var(--border-row);
   background: var(--surface);
@@ -685,8 +675,6 @@
 .fileTableRow:hover,
 .modsWorkspaceRow:hover,
 .scheduleTableRow:hover,
-.nodeServerRow:hover:not(:disabled),
-.nodeServerMoreRow:hover:not(:disabled),
 .eventRow:hover {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
@@ -706,8 +694,7 @@
 .settingsStatus,
 .runtimeBadge,
 .roleBadge,
-.modsStatusChip,
-.nodeServerState {
+.modsStatusChip {
   min-height: 24px;
   border-width: var(--border-subtle);
   border-radius: 999px;
@@ -727,8 +714,6 @@
   border-radius: 999px;
 }
 
-.nodeServerIcon,
-.nodePlayerIcon,
 .serverStripIcon {
   border-color: var(--border-muted);
   background: var(--surface-muted);
@@ -743,7 +728,6 @@
 .modsWorkspaceToolbar,
 .modsWorkspacePrimaryActions,
 .modsWorkspaceUpdateActions,
-.nodeCardActions,
 .modalFooter,
 .userModalFooter,
 .fileEditorFooter {

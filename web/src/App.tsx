@@ -888,20 +888,7 @@ export default function App() {
     }
     if (demoMode && activeServer.id === demoServerId) {
       setStatus(demoFixtures().demoStatus(activeServer, demoRunning));
-      const demoLogs = [
-        consoleLine("[demo] Starting minecraft server version 1.21.4"),
-        consoleLine("[demo] Loading Fabric Loader 0.16.10"),
-        consoleLine("[demo] Preparing spawn area: 100%"),
-        consoleLine("[demo] Done (5.132s)! For help, type \"help\""),
-        consoleLine("[12:04:12] [Server thread/INFO]: Steve joined the game"),
-        consoleLine("[12:04:20] [Server thread/INFO]: <Steve> hey, anyone up for a nether trip?"),
-        consoleLine("[12:04:41] [Server thread/INFO]: Alex joined the game"),
-        consoleLine("[12:04:58] [Server thread/INFO]: [ADM] Alex : give me two minutes, gearing up"),
-        consoleLine("[12:05:12] [Server thread/INFO]: <Steve> meet me at the portal"),
-        consoleLine("[12:05:18] [Server thread/INFO]: Steve fell from a high place"),
-        consoleLine("[12:05:30] [Server thread/INFO]: [Server] Scheduled restart tonight at 03:00"),
-        consoleLine("[12:06:02] [Server thread/INFO]: Alex has made the advancement [We Need to Go Deeper]")
-      ];
+      const demoLogs = demoFixtures().demoConsoleMessages().map(consoleLine);
       logsRef.current = demoLogs;
       setLogs(demoLogs);
       setConsoleSnapshotReadyServerId(activeServer.id);
@@ -2208,7 +2195,7 @@ export default function App() {
           [demoServerId]: demoFixtures().demoPlayerSnapshot(nextRunning)
         }));
         setLogs((current) => [
-          ...current,
+          ...(nextRunning ? demoFixtures().demoConsoleMessages().map(consoleLine) : current),
           consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
           consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
         ].slice(-consoleScrollbackRef.current));

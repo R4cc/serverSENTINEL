@@ -1,0 +1,430 @@
+/* Nodes page.
+
+   Loaded after the shared responsive layer so the page owns its own presentation
+   instead of out-specifying global rules. Every selector here is exclusive to the
+   Nodes list; the drawer and the install dialogs keep their settings-nodes.css
+   rules. */
+
+.nodesPage {
+  max-width: var(--balanced-content-max-width);
+  gap: var(--space-4);
+}
+
+/* Fleet bar -------------------------------------------------------------- */
+
+/* The workspace already titles the page, so this bar carries counts and actions
+   rather than a second heading. */
+.nodesOverviewBar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.nodesFleetStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+}
+
+.nodesFleetStat {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nodesFleetStat dt {
+  color: var(--text-soft);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-badge);
+  text-transform: uppercase;
+}
+
+.nodesFleetStat dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+}
+
+.nodesFleetStat dd span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-ui);
+}
+
+.nodesOverviewActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nodesRefreshButton.uiButton {
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+}
+
+/* Node tiles ------------------------------------------------------------- */
+
+/* One node per tile, tiled across the page. A lone node keeps a card's width
+   rather than stretching into a banner with its servers stranded at one end. */
+.nodesBoard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.nodesEmptyState {
+  grid-column: 1 / -1;
+}
+
+.nodeTile {
+  container-type: inline-size;
+  container-name: nodeTile;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  border: var(--border-strong) solid var(--border-panel);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--surface-raised);
+}
+
+.nodeTile.offline {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 30%, var(--border-panel));
+}
+
+.nodeTile.unknown {
+  border-color: color-mix(in srgb, var(--text-soft) 26%, var(--border-panel));
+}
+
+/* Name and status share the first line, meta and actions the second, so a long
+   node name or a busy meta line never has to fight the controls for room. */
+.nodeTileHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "mark name badges"
+    "mark meta actions";
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.nodeTileMark {
+  display: grid;
+  place-items: center;
+  grid-area: mark;
+  width: 38px;
+  height: 38px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+}
+
+.nodeTileMark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nodeTileMark.ready {
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-success) 9%, var(--surface-raised));
+  color: var(--status-success-foreground);
+}
+
+.nodeTileMark.limited {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised));
+  color: var(--status-danger-foreground);
+}
+
+.nodeTileName {
+  grid-area: name;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeTileMeta {
+  grid-area: meta;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeTileBadges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-area: badges;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nodeTileActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-area: actions;
+  gap: var(--space-2);
+}
+
+.nodeUpgradeButton.uiButton {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+/* Server grid ------------------------------------------------------------ */
+
+/* Servers tile rather than stretch into full-width rows, so a wide panel stays
+   dense instead of stranding a status pill an inch from its server name. */
+.nodeTileServers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: var(--space-2);
+}
+
+.nodeServerTile {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon name name"
+    "icon state players";
+  align-items: center;
+  gap: 3px var(--space-2);
+  min-height: 60px;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  color: var(--text);
+  text-align: left;
+}
+
+.nodeServerTile:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 58%, var(--surface-raised));
+  color: var(--text);
+  transform: none;
+}
+
+.nodeServerTileIcon {
+  display: grid;
+  place-items: center;
+  grid-area: icon;
+  width: 22px;
+  height: 22px;
+  color: var(--text-soft);
+}
+
+.nodeServerTileIcon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeServerTileName {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeServerTileState {
+  display: inline-flex;
+  align-items: center;
+  grid-area: state;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-badge);
+  white-space: nowrap;
+}
+
+.nodeServerTileState.running {
+  color: var(--status-success-foreground);
+}
+
+.nodeServerTileState.stopped {
+  color: var(--status-danger-foreground);
+}
+
+.nodeServerTilePlayers {
+  display: inline-flex;
+  align-items: center;
+  grid-area: players;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  white-space: nowrap;
+}
+
+.nodeServerTilePlayers.unknown {
+  color: var(--text-soft);
+}
+
+.nodePlayerIcon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  background: transparent;
+}
+
+.nodePlayerIcon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nodeServerTileAdd {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+  background: transparent;
+  color: var(--accent);
+}
+
+.nodeServerTileAdd .nodeServerTileIcon {
+  color: inherit;
+}
+
+.nodeServerTileHint {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  opacity: 0.78;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeServerTileAdd:disabled {
+  border-color: var(--border-muted);
+  border-style: dashed;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+}
+
+.nodeTileMore {
+  justify-self: start;
+  min-height: var(--control-height-compact);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.nodeTileMore:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--accent);
+  transform: none;
+}
+
+/* A tile can be half the page wide on a large screen and full width on a phone,
+   so its header reflows against its own width rather than the viewport's. */
+/* A narrow tile has no room to truncate the meta line down to nothing, so it
+   wraps onto a second line instead. */
+@container nodeTile (max-width: 420px) {
+  .nodeTileMeta {
+    overflow: visible;
+    white-space: normal;
+  }
+}
+
+@container nodeTile (max-width: 300px) {
+  .nodeTileHead {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "mark name"
+      "mark meta"
+      "badges badges"
+      "actions actions";
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .nodeTileBadges,
+  .nodeTileActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .nodesOverviewBar {
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .nodesFleetStats {
+    gap: var(--space-3) var(--space-5);
+  }
+
+  .nodesFleetStat dd {
+    font-size: 20px;
+  }
+
+  .nodesOverviewActions {
+    width: 100%;
+  }
+
+  .nodesOverviewActions .uiButton:not(.nodesRefreshButton) {
+    flex: 1 1 auto;
+  }
+
+  .nodeTile {
+    padding: var(--space-3);
+  }
+
+  .nodesPage.nodeDetailsOpen > .nodesOverviewBar,
+  .nodesPage.nodeDetailsOpen > .nodesBoard {
+    display: none;
+  }
+}

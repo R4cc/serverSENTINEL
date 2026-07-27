@@ -205,8 +205,7 @@ textarea:not(.xterm-helper-textarea),
 }
 
 .runtimeBadge,
-.settingsStatus,
-.nodeServerState {
+.settingsStatus {
   font-size: var(--type-badge-size);
   font-weight: var(--weight-strong);
   letter-spacing: var(--tracking-badge);
@@ -225,7 +224,6 @@ textarea:not(.xterm-helper-textarea),
 .userModalHeader h2,
 .nodeModalHeader h2,
 .fileEditorHeader h2,
-.nodesToolbar h2,
 .nodeInstallHeader h3,
 .permissionsHeader h3,
 .modInstallStepIntro h3 {
@@ -275,7 +273,6 @@ textarea:not(.xterm-helper-textarea),
 .userModalForm label,
 .keyForm label,
 .fieldLabel,
-.nodeServerSectionLabel,
 .modInstallVersionGroupHeader > strong,
 .fileDetailsContent dt {
   color: var(--text-muted);
@@ -346,8 +343,6 @@ textarea:not(.xterm-helper-textarea),
 .userNameCell strong,
 .fileNameCell > span:last-child,
 .fileDetailsTitle h2,
-.nodeCardTitle h3,
-.nodeServerName,
 .eventRow strong,
 .modInstallVersionRow span:first-child {
   color: var(--text);
@@ -358,7 +353,6 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.nodeCardHeader p,
 .nodeInstallHeader p,
 .nodeModalHeader p,
 .modInstallStepIntro p,
@@ -371,12 +365,6 @@ textarea:not(.xterm-helper-textarea),
   letter-spacing: 0;
   line-height: 1.45;
   text-transform: none;
-}
-
-.nodeServerPlayers {
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
 }
 
 .addNodeStepLabel,

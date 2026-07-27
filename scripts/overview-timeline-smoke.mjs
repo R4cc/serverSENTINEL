@@ -72,16 +72,12 @@ async function assertScenarioData(page) {
       const value = label.trim();
       if (value) renderedLabels.add(value);
     }
-    if (["MarathonSteve", "RejoinRiley", "BlinkAlex"].every((player) => renderedLabels.has(player))) break;
+    if (["25h 0m", "54m active", "<1m"].every((label) => renderedLabels.has(label))) break;
     await page.mouse.wheel(0, 600);
     await page.waitForTimeout(15);
   }
-  const identityNames = [...renderedLabels];
-  for (const player of ["MarathonSteve", "RejoinRiley", "BlinkAlex"]) {
-    assert(identityNames.includes(player), `${player} is missing from the rendered player timeline`);
-  }
-
   const timelineLabels = [...renderedLabels];
+  assert(!timelineLabels.some((label) => label.toLowerCase().includes("alex")), `A removed fixed identity is still rendered: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("25h 0m"), `The exact multi-day session label is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
@@ -90,8 +86,11 @@ async function assertScenarioData(page) {
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
 
   const eventsText = await page.locator(".eventsPanel").innerText();
-  assert(eventsText.includes("Reconnected") && eventsText.includes("RejoinRiley") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
-  assert(eventsText.includes("BlinkAlex") && eventsText.includes("Joined") && eventsText.includes("Left"), "The instant join/leave events are not both visible");
+  assert(eventsText.includes("Reconnected") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
+  const joinedSubjects = await page.locator(".eventsPanel .eventKind--player_joined .eventSubject").allTextContents();
+  const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
+  assert(joinedSubjects.some((subject) => leftSubjects.includes(subject)), "The instant join/leave events do not share a generated player identity");
+  assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
 }
 
 // The desktop Overview replaced the Active Players card with the timeline, so the

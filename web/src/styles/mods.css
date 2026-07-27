@@ -293,7 +293,6 @@
 .modsReviewLine,
 .modsDependencySummary,
 .modsCompatibilityCard,
-.nodeCard,
 .nodeInstallBox {
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
@@ -307,8 +306,7 @@
 }
 
 .modsWorkspaceMetric small,
-.modsWorkspaceTableHead,
-.nodeServerSectionLabel {
+.modsWorkspaceTableHead {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
@@ -318,9 +316,7 @@
 
 .modsWorkspaceMetric strong,
 .modsWorkspaceIdentity strong,
-.modsResultContent strong,
-.nodeCardTitle h3,
-.nodeServerName {
+.modsResultContent strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
@@ -334,7 +330,6 @@
 .modsResultContent p,
 .modsResultContent small,
 .modsDetailsDescription,
-.nodeCardHeader p,
 .nodeInstallHeader p,
 .nodeModalHeader p {
   color: var(--text-muted);
@@ -349,7 +344,6 @@
 .modsDrawerFooter .uiButton,
 .modsUpdateReviewActions .uiButton,
 .modsResultCard > .uiButton,
-.nodeCardActions .uiButton,
 .nodeModalFooter .uiButton {
   white-space: nowrap;
 }
@@ -357,7 +351,6 @@
 .modsWorkspaceListHeader,
 .modsDrawerHeader,
 .modsDrawerFooter,
-.nodeCardHeader,
 .nodeModalHeader,
 .nodeModalFooter {
   border-color: var(--border-row);
