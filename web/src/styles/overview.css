@@ -527,27 +527,69 @@ button.overviewCardRow:focus-visible {
   gap: var(--space-3);
 }
 
-.serverTimelineAnnotationStage {
+/* The event rail is chrome-free on purpose: it reads as the shared time axis that
+   the player and metric cards hang from rather than as a fourth, mostly empty card. */
+.serverTimelineEventRail {
   position: relative;
   min-height: 48px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
 }
 
-.serverTimelineAnnotationStageLabel {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 18px;
-  transform: translateY(-50%);
+.serverTimelineEventRailGutter {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 var(--space-3) 0 18px;
+}
+
+.serverTimelineEventRailGutter > strong {
   color: var(--text);
   font-size: 13px;
   font-weight: var(--weight-title);
+}
+
+.serverTimelineEventRailGutter > span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.serverTimelineEventRailTrack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.serverTimelineEventRailLine {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 60%, transparent) 8%,
+    color-mix(in srgb, var(--border) 60%, transparent) 92%,
+    transparent
+  );
   pointer-events: none;
 }
 
-.serverTimelineAnnotationStage .serverTimelineAnnotations { bottom: 0; }
+.serverTimelineEventRail.is-empty .serverTimelineEventRailLine { opacity: 0.55; }
+
+.serverTimelineEventRailEmpty {
+  position: absolute;
+  bottom: 15px;
+  left: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  pointer-events: none;
+}
 
 .serverTimelinePlayers,
 .serverTimelineMetricBand {
@@ -558,46 +600,63 @@ button.overviewCardRow:focus-visible {
   background: var(--surface-raised);
 }
 
-.serverTimelinePlayers {
-  border-color: color-mix(in srgb, var(--timeline-join) 24%, var(--border-muted));
-  background: color-mix(in srgb, var(--timeline-join) 3%, var(--surface-raised));
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--timeline-join) 72%, transparent);
-}
-
 .serverTimelinePlayerHeader {
   min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 var(--space-3) 0 18px;
-  border-bottom: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 16%, var(--border-muted));
-  background: color-mix(in srgb, var(--timeline-join) 6%, var(--surface-muted));
-  color: var(--timeline-join);
+  padding: 0 var(--space-2) 0 18px;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  background: transparent;
+  color: var(--text);
   font-size: 12px;
 }
 
-.serverTimelinePlayerScrollHint {
+.serverTimelinePlayerHeading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.serverTimelinePlayerHeading > strong {
+  font-size: 13px;
+  font-weight: var(--weight-title);
+}
+
+.serverTimelinePlayerCounts {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
+}
+
+.serverTimelinePlayerCount {
+  --player-count-color: var(--timeline-join);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: var(--weight-title);
 }
 
-.serverTimelinePlayerScrollHint i {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 28%, var(--border-muted));
+.serverTimelinePlayerCount.tone-offline { --player-count-color: var(--timeline-leave); }
+
+.serverTimelinePlayerCount i {
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--timeline-join);
-  font-style: normal;
-  font-size: 12px;
+  background: var(--player-count-color);
 }
+
+.serverTimelinePlayerToggle {
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.serverTimelinePlayerToggleGlyph { font-size: 9px; line-height: 1; }
 
 .serverTimelinePlayerChart {
   position: relative;
@@ -606,9 +665,11 @@ button.overviewCardRow:focus-visible {
   min-height: 70px;
   max-height: 270px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--timeline-join) 2%, var(--surface-raised));
+  background: var(--surface-raised);
   touch-action: pan-y;
 }
+
+.serverTimelinePlayerChart.is-expanded { max-height: none; }
 
 .serverTimelinePlayerEmpty {
   min-height: 64px;
@@ -689,10 +750,7 @@ button.overviewCardRow:focus-visible {
 .serverTimelineAnnotations {
   position: absolute;
   z-index: 2;
-  top: 0;
-  right: 24px;
-  bottom: 38px;
-  left: 56px;
+  inset: 0;
   pointer-events: none;
 }
 
@@ -2034,9 +2092,11 @@ button.overviewCardRow:focus-visible {
 
   .activePlayerGrid { align-content: start; }
 
+  /* Both sit in one row of the support stack, so they stretch to a shared height
+     instead of each shrinking to its own content. Their bodies stay top-aligned. */
   .modUpdatesCard,
   .schedulePanel {
-    align-self: start;
+    align-self: stretch;
   }
 
   .modUpdatesList,

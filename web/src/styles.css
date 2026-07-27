@@ -16,6 +16,9 @@
 @import "./styles/settings.css";
 @import "./styles/confirmation-modal.css";
 @import "./styles/responsive.css";
+/* The Nodes list owns its layout end to end, so it loads after the shared
+   responsive layer instead of competing with it. */
+@import "./styles/nodes.css";
 @import "./styles/motion.css";
 
 .workspaceHeader h2 {

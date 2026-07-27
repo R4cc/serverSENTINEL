@@ -192,19 +192,6 @@
     width: 100%;
   }
 
-
-  .nodesToolbar .buttonRow {
-    align-items: center;
-    flex-direction: row;
-    justify-content: flex-end;
-    width: auto;
-  }
-
-  .nodesToolbar .nodesRefreshButton {
-    width: 44px;
-    min-width: 44px;
-  }
-
   .filesPage .fileNavBar .fileToolbar {
     align-items: center;
     flex-direction: row;
@@ -543,14 +530,11 @@ button:disabled,
   transform: none;
 }
 
-.serverListItem,
-.nodeCard {
+.serverListItem {
   min-width: 0;
 }
 
 .serverListItem strong,
-.nodeCardTitle h3,
-.nodeServerName,
 .accountName,
 .settingsNavLabel {
   overflow: hidden;
@@ -671,9 +655,6 @@ button:disabled,
 
 .nodeModalBody.nodeDetailsBody {
   padding: var(--space-6) var(--space-7) var(--space-7);
-}
-
-@media (max-width: 920px) {
 }
 
 @media (max-width: 640px) {
@@ -890,26 +871,12 @@ button:disabled,
   min-width: 0;
 }
 
-.nodeServerRow {
-  min-width: 0;
-}
-
-.nodeServerState,
-.nodeServerPlayers {
-  flex: 0 0 auto;
-}
-
-.nodesGrid {
-  min-height: 0;
-}
-
 /* Unified interaction primitives */
 .buttonRow,
 .userActions,
 .keyFormActions,
 .fileToolbar,
 .selectionActions,
-.nodeCardActions,
 .modalFooter,
 .userModalFooter,
 .nodeModalFooter.inline,
@@ -922,19 +889,11 @@ button:disabled,
 }
 
 .fileToolbar,
-.selectionActionBar,
-.nodesToolbar {
+.selectionActionBar {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   padding: var(--space-3);
-}
-
-.nodesToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
 }
 
 .panel,
@@ -946,7 +905,6 @@ button:disabled,
   border-radius: var(--radius-sm);
 }
 
-.nodeCardHeader,
 .nodeInstallHeader,
 .modalHeader,
 .userModalHeader,
@@ -1032,8 +990,7 @@ button:disabled,
 }
 
 .settingsStatus.ready,
-.runtimeBadge.running,
-.nodeServerState.running {
+.runtimeBadge.running {
   border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
   color: var(--status-success-foreground);
@@ -1048,8 +1005,7 @@ button:disabled,
 
 .settingsStatus.limited,
 .runtimeBadge.stopped,
-.runtimeBadge.exited,
-.nodeServerState.stopped {
+.runtimeBadge.exited {
   border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
   color: var(--status-danger-foreground);
@@ -1062,15 +1018,11 @@ button:disabled,
   color: var(--status-neutral-foreground);
 }
 
-.nodeServerRow,
-.nodeServerMoreRow,
 .fileTableRow,
 .eventRow {
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
 
-.nodeServerRow:hover:not(:disabled),
-.nodeServerMoreRow:hover:not(:disabled),
 .fileTableRow:hover,
 .eventRow:hover {
   background: var(--sentinel-accent-soft);
@@ -1116,8 +1068,7 @@ button:disabled,
 }
 
 .themeDark .fileToolbar,
-.themeDark .selectionActionBar,
-.themeDark .nodesToolbar {
+.themeDark .selectionActionBar {
   background: var(--surface-raised);
 }
 
@@ -1978,7 +1929,6 @@ button:disabled,
 .authPanel,
 .activeServerStrip,
 .modalPanel,
-.nodeCard,
 .fileCodeEditor,
 .fileEditorStateFill,
 .installSnippetShell,
@@ -1991,7 +1941,6 @@ button:disabled,
 .themeDark .authPanel,
 .themeDark .activeServerStrip,
 .themeDark .modalPanel,
-.themeDark .nodeCard,
 .themeDark .fileCodeEditor,
 .themeDark .fileEditorStateFill,
 .themeDark .installSnippetShell,
@@ -2017,8 +1966,7 @@ button:disabled,
 }
 
 .fileToolbar,
-.selectionActionBar,
-.nodesToolbar {
+.selectionActionBar {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
   box-shadow: none;
@@ -2083,8 +2031,7 @@ textarea:hover:not(:disabled),
 }
 
 .settingsStatus.ready,
-.runtimeBadge.running,
-.nodeServerState.running {
+.runtimeBadge.running {
   border-color: color-mix(in srgb, var(--sentinel-success) 36%, transparent);
 }
 
@@ -2095,28 +2042,21 @@ textarea:hover:not(:disabled),
 
 .settingsStatus.limited,
 .runtimeBadge.stopped,
-.runtimeBadge.exited,
-.nodeServerState.stopped {
+.runtimeBadge.exited {
   border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
 }
 
-.nodeServerRow,
-.nodeServerMoreRow,
 .fileTableRow,
 .eventRow {
   border-color: var(--border-row);
   box-shadow: none;
 }
 
-.nodeServerRow,
-.nodeServerMoreRow,
 .fileTableRow,
 .eventRow {
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
 }
 
-.nodeServerRow:hover:not(:disabled),
-.nodeServerMoreRow:hover:not(:disabled),
 .fileTableRow:hover,
 .eventRow:hover {
   background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
@@ -2218,9 +2158,7 @@ textarea:hover:not(:disabled),
   border-color: transparent;
 }
 
-.fileNameCell:hover,
-.nodeServerRow:hover:not(:disabled),
-.nodeServerMoreRow:hover:not(:disabled) {
+.fileNameCell:hover {
   border-color: var(--border-row);
 }
 
@@ -2253,10 +2191,6 @@ textarea:hover:not(:disabled),
   .serverStripRight {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .nodesGrid {
-    max-height: calc(100vh - 220px);
   }
 }
 
@@ -2422,9 +2356,6 @@ textarea:hover:not(:disabled),
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
-}
-
-@media (max-width: 760px) {
 }
 
 /* Keep sidebar selections and account controls independent of page-theme surfaces. */
@@ -2648,11 +2579,6 @@ textarea:hover:not(:disabled),
      the bottom edge, where padding would only read as a gap above the browser toolbar. */
   .workspacePage-console.workspaceServerPage {
     padding-block: var(--space-2) 0;
-  }
-
-  .nodesPage.nodeDetailsOpen > .nodesToolbar,
-  .nodesPage.nodeDetailsOpen > .nodesGrid {
-    display: none;
   }
 
   .nodesPage > .nodeDrawerBackdrop {

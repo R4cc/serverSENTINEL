@@ -51,10 +51,15 @@ function renderForm(disabled = false, disabledReason = "") {
 }
 
 describe("ServerEditForm", () => {
-  it("renders one settings surface with a single advanced disclosure and preserved fields", () => {
+  it("renders a toolbar and distinct configuration cards with one advanced disclosure", () => {
     const html = renderForm();
 
     expect(html.match(/propertiesSettingsSurface/g)).toHaveLength(1);
+    expect(html).toContain("propertiesToolbar");
+    expect(html).toContain("propertiesSectionGeneral");
+    expect(html).toContain("propertiesSectionResources");
+    expect(html).toContain("propertiesSectionNetwork");
+    expect(html).not.toContain("propertiesActionBar");
     expect(html.match(/<details/g)).toHaveLength(1);
     expect(html).toContain(">General<");
     expect(html).toContain(">Resources<");

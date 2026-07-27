@@ -14,6 +14,10 @@ const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "
 const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
+const serverTimeline = readFileSync(new URL("./components/ServerTimeline.tsx", import.meta.url), "utf8");
+const nodesStyles = readFileSync(new URL("./styles/nodes.css", import.meta.url), "utf8");
+const modsSummary = readFileSync(new URL("./features/mods/ModsSummary.tsx", import.meta.url), "utf8");
+const nodesPage = readFileSync(new URL("./pages/NodesPage.tsx", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it("loads the design system in an intentional cascade", () => {
@@ -122,6 +126,8 @@ describe("global stylesheet entry point", () => {
   it("uses the full desktop width for support cards after the timeline replaces Active Players", () => {
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?"support support support support support support support support support support support support"/s);
     expect(overviewStyles).toMatch(/\.overviewSupportStack\s*\{[^}]*grid-area:\s*support;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
+    // Side by side in one support-stack row, so neither may shrink to its own content.
+    expect(overviewStyles).toMatch(/@media \(min-width: 981px\)[\s\S]*?\.modUpdatesCard,\s*\.schedulePanel\s*\{\s*align-self:\s*stretch;\s*\}/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow,\s*[\s\S]*?\.eventRow\.eventKind--player_reconnected\s*\{[^}]*border-color:\s*var\(--border-row\);[^}]*background:\s*transparent;/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow\.error\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-danger\) 3\.5%, var\(--surface-raised\)\);/s);
   });
@@ -129,11 +135,17 @@ describe("global stylesheet entry point", () => {
   it("uses the unified timeline for desktop and compact landscape layouts", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayers\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--timeline-join\) 24%, var\(--border-muted\)\);[^}]*box-shadow:\s*inset 3px 0 0/s);
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid[^}]*background:\s*color-mix\(in srgb, var\(--timeline-join\) 6%, var\(--surface-muted\)\);/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\.is-expanded\s*\{\s*max-height:\s*none;\s*\}/s);
+    // The player card carries no green wash of its own; it shares metric-band chrome.
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayers,\s*\.serverTimelineMetricBand\s*\{[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*var\(--surface-raised\);/s);
+    expect(overviewStyles).not.toMatch(/\.serverTimelinePlayers\s*\{/s);
+    expect(overviewStyles).not.toContain("serverTimelinePlayerScrollHint");
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerCount\.tone-offline\s*\{\s*--player-count-color:\s*var\(--timeline-leave\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.serverTimelineMetricBand\.is-prominent\s*\{\s*height:\s*clamp\(172px, 11vw, 190px\);\s*\}/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineAnnotationStage\s*\{[^}]*min-height:\s*48px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEventRail\s*\{[^}]*min-height:\s*48px;[^}]*display:\s*flex;/s);
+    expect(overviewStyles).not.toContain("serverTimelineAnnotationStage");
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster:hover:not\(:disabled\)[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*translateX\(-14px\);/s);
     expect(overviewStyles).toMatch(/\.overviewDashboardGrid--chartless\s*\{[^}]*"summary summary[^}]*"players players/s);
@@ -142,7 +154,8 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineChart\s*\{[^}]*min-height:\s*calc\(340px \+ var\(--timeline-annotation-extra, 0px\)\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
-    expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*bottom:\s*38px;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*inset:\s*0;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEventRailLine\s*\{[^}]*bottom:\s*8px;[^}]*height:\s*1px;/s);
     expect(overviewStyles).not.toContain("timelineAnnotationConnector");
     expect(overviewStyles).not.toContain("resourcePanel");
     expect(overviewStyles).not.toContain("recharts-");
@@ -160,8 +173,15 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.timelineSeriesToggle\s*\{[^}]*border:\s*1px solid[^}]*cursor:\s*pointer;/s);
   });
 
+  it("hands the timeline charts color tokens rather than border-width tokens", () => {
+    const widthTokens = [...tokenStyles.matchAll(/(--[\w-]+):\s*\d+(?:\.\d+)?px;/g)].map((match) => match[1]);
+    expect(widthTokens).toContain("--border-subtle");
+    for (const token of widthTokens) expect(serverTimeline).not.toContain(`read("${token}"`);
+    expect(serverTimeline).toContain('read("--border-muted"');
+  });
+
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary \.uiMetricTileCopy strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
     expect(modsStyles).toMatch(/\.modsMetricValueSkeleton\s*\{[^}]*height:\s*17px;[^}]*margin:\s*0;/s);
     expect(modsStyles).toMatch(/\.modsWorkspaceTable\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
@@ -175,12 +195,19 @@ describe("global stylesheet entry point", () => {
     expect(phoneModRules).toMatch(/\.modsWorkspaceTable\s*\{[^}]*flex:\s*none;[^}]*scrollbar-gutter:\s*auto;/s);
   });
 
-  it("keeps the Mods summary markers vivid in every theme", () => {
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric \.uiMetricTileMarker\s*\{[^}]*currentColor 26%[^}]*currentColor 24%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.blue \.uiMetricTileMarker\s*\{[^}]*--sentinel-info[^}]*--sentinel-info\) 72%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.orange \.uiMetricTileMarker\s*\{[^}]*--sentinel-warning[^}]*--sentinel-warning\) 76%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.green \.uiMetricTileMarker\s*\{[^}]*--sentinel-success[^}]*--sentinel-success\) 72%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.purple \.uiMetricTileMarker\s*\{[^}]*--accent[^}]*--accent\) 72%/s);
+  it("keeps the workspace summary markers vivid in every theme", () => {
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary \.uiMetricTileMarker\s*\{[^}]*currentColor 26%[^}]*currentColor 24%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--info \.uiMetricTileMarker\s*\{[^}]*--sentinel-info[^}]*--sentinel-info\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--warning \.uiMetricTileMarker\s*\{[^}]*--sentinel-warning[^}]*--sentinel-warning\) 76%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--success \.uiMetricTileMarker\s*\{[^}]*--sentinel-success[^}]*--sentinel-success\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--accent \.uiMetricTileMarker\s*\{[^}]*--accent[^}]*--accent\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--danger \.uiMetricTileMarker\s*\{[^}]*--sentinel-danger[^}]*--sentinel-danger\) 72%/s);
+  });
+
+  it("gives the Mods and Nodes summaries the same tile, not two lookalikes", () => {
+    expect(modsStyles).not.toContain(".modsWorkspaceMetric");
+    expect(nodesStyles).not.toContain(".nodesFleetMetric");
+    for (const summary of [modsSummary, nodesPage]) expect(summary).toContain('variant="summary"');
   });
 
   it("keeps the Files page layout owned by the file-manager stylesheet", () => {

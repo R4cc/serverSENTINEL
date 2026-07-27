@@ -91,7 +91,6 @@ export function MinecraftTerminal({
       cursorBlink: true,
       cursorStyle: "bar",
       fontFamily: styles.getPropertyValue("--font-mono") || "ui-monospace, SFMono-Regular, Consolas, monospace",
-      lineHeight: 1.35,
       tabStopWidth: 2,
       theme: initialTheme,
       ...terminalPreferenceOptions(fontSize, scrollback)

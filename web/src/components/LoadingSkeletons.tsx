@@ -2,6 +2,12 @@ import { LoadingLabel, SkeletonBlock } from "./UiPrimitives";
 import { BrandLogo } from "./BrandLogo";
 import type { ActivePage } from "../types";
 
+/* Skeletons must claim the same width contract as the page they stand in for,
+   otherwise the workspace snaps sideways when the lazy chunk resolves. */
+function pageWidthClass(page: ActivePage) {
+  return page === "create" ? "layoutReadable" : "layoutWide";
+}
+
 export function AuthLoadingSkeleton() {
   return (
     <main className="authShell">
@@ -23,7 +29,7 @@ export function AuthLoadingSkeleton() {
 
 export function ApplicationLoadingSkeleton({ page = "overview" }: { page?: ActivePage }) {
   return (
-    <section className={`tabPage applicationLoadingSkeleton applicationLoadingSkeleton--${page} ${page === "properties" || page === "create" ? "layoutReadable" : "layoutWide"}`} aria-busy="true">
+    <section className={`tabPage applicationLoadingSkeleton applicationLoadingSkeleton--${page} ${pageWidthClass(page)}`} aria-busy="true">
       <LoadingLabel>Loading application</LoadingLabel>
       <ApplicationSkeletonContent page={page} />
     </section>
@@ -149,7 +155,7 @@ export function ActiveServerStripLoadingSkeleton() {
 
 export function FeaturePageLoadingSkeleton({ label, page = "overview" }: { label: string; page?: ActivePage }) {
   return (
-    <section className={`tabPage featurePageLoadingSkeleton applicationLoadingSkeleton applicationLoadingSkeleton--${page} ${page === "properties" || page === "create" ? "layoutReadable" : "layoutWide"}`} aria-busy="true">
+    <section className={`tabPage featurePageLoadingSkeleton applicationLoadingSkeleton applicationLoadingSkeleton--${page} ${pageWidthClass(page)}`} aria-busy="true">
       <LoadingLabel>{label}</LoadingLabel>
       <ApplicationSkeletonContent page={page} />
     </section>

@@ -17,7 +17,7 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     onRegionalFormatChange: vi.fn(),
     onDisplayTimeZoneChange: vi.fn(),
     rememberConsoleHistory: true,
-    consoleFontSize: 13,
+    consoleFontSize: 14,
     consoleScrollback: 5_000,
     commandHistoryCount: 3,
     onRememberConsoleHistoryChange: vi.fn(),
@@ -133,7 +133,7 @@ describe("SettingsPage", () => {
   it("renders console defaults and command-history state", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "console", commandHistoryCount: 0 })} />);
     expect(html).toContain("Remember command history");
-    expect(html).toContain("13px (default)");
+    expect(html).toContain("14px (default)");
     expect(html).toContain('value="5000" selected=""');
     expect(html).toContain("lines (default)");
     expect(html).toContain("Clear history");

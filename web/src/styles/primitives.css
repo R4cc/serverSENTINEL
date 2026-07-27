@@ -96,6 +96,7 @@
 
 .uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-raised); }
 .uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
+.uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 7%, transparent); }
 .uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
 .uiMetricTile--success .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-success) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-success) 7%, transparent); }
 .uiMetricTile--warning .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-warning) 17%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
@@ -104,6 +105,24 @@
 .uiMetricTileLabel { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .uiMetricTileCopy strong { min-width: 0; color: var(--text); font-size: var(--type-card-title-size); font-weight: var(--weight-strong); line-height: 1.2; overflow-wrap: anywhere; }
 .uiMetricTileDetail { overflow: hidden; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Summary variant: the wide, low count tile that heads a workspace. Owned here
+   rather than per page so the Mods and Nodes summaries stay the same component
+   instead of two lookalikes that drift apart. The marker reads as a filled dot
+   with a glow, not the pale wash the default tile uses. */
+.uiMetricTile--summary { min-height: 76px; gap: 10px; padding: var(--space-3) var(--space-4); }
+.uiMetricTile--summary .uiMetricTileCopy strong { display: flex; align-items: center; min-height: 20px; font-size: var(--type-row-title-size); line-height: 1.3; }
+.uiMetricTile--summary .uiMetricTileMarker { box-shadow: inset 0 0 0 7px color-mix(in srgb, currentColor 26%, transparent), 0 0 12px color-mix(in srgb, currentColor 24%, transparent); }
+.uiMetricTile--summary.uiMetricTile--neutral .uiMetricTileMarker { color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 72%, transparent); }
+.uiMetricTile--summary.uiMetricTile--info .uiMetricTileMarker { color: var(--sentinel-info); background: color-mix(in srgb, var(--sentinel-info) 72%, transparent); }
+.uiMetricTile--summary.uiMetricTile--accent .uiMetricTileMarker { color: var(--accent); background: color-mix(in srgb, var(--accent) 72%, transparent); }
+.uiMetricTile--summary.uiMetricTile--success .uiMetricTileMarker { color: var(--sentinel-success); background: color-mix(in srgb, var(--sentinel-success) 72%, transparent); }
+.uiMetricTile--summary.uiMetricTile--warning .uiMetricTileMarker { color: var(--sentinel-warning); background: color-mix(in srgb, var(--sentinel-warning) 76%, transparent); }
+.uiMetricTile--summary.uiMetricTile--danger .uiMetricTileMarker { color: var(--sentinel-danger); background: color-mix(in srgb, var(--sentinel-danger) 72%, transparent); }
+
+@media (max-width: 760px) {
+  .uiMetricTile--summary { min-height: 68px; padding: var(--space-2) var(--space-3); }
+}
 
 .uiStatusBadge,
 .runtimeBadge,
@@ -562,8 +581,6 @@
 .modsReviewLine,
 .modsDependencySummary,
 .modsCompatibilityCard,
-.nodesToolbar,
-.nodeCard,
 .nodeInstallBox,
 .summaryTile {
   border-color: var(--border-panel);
@@ -581,7 +598,6 @@
 }
 
 .uiPanelHeader,
-.nodeCardHeader,
 .modsWorkspaceListHeader,
 .modsDrawerHeader,
 .modsDrawerFooter,
@@ -595,7 +611,6 @@
 
 .uiPanelHeader h2,
 .uiPanelHeaderCopy h2,
-.nodeCardHeader h3,
 .modsWorkspaceListHeader h3,
 .modsDrawerHeader h2,
 .nodeModalHeader h2,
@@ -612,7 +627,6 @@
 
 .uiPanelHeader p,
 .uiPanelHeaderCopy p,
-.nodeCardHeader p,
 .modsWorkspaceListHeader span,
 .modsDrawerHeader p,
 .nodeModalHeader p,
@@ -632,7 +646,6 @@
 .modsWorkspaceUpdateActions,
 .modsDrawerFooter,
 .scheduleRowActions,
-.nodeCardActions,
 .nodeModalFooter,
 .modalFooter,
 .userModalFooter,
@@ -642,7 +655,6 @@
 }
 
 .fileToolbar,
-.nodesToolbar,
 .modsWorkspaceToolbar {
   min-height: var(--toolbar-min-height);
   padding: var(--space-3);
@@ -662,7 +674,6 @@
 .fileToolbar .uiButton,
 .selectionActions .uiButton,
 .scheduleRowActions .uiButton,
-.nodeCardActions .uiButton,
 .fileEditorFooter .uiButton,
 .modalFooter .uiButton,
 .userModalFooter .uiButton {
@@ -673,8 +684,6 @@
 .fileTableRow,
 .modsWorkspaceRow,
 .scheduleTableRow,
-.nodeServerRow,
-.nodeServerMoreRow,
 .eventRow {
   border-color: var(--border-row);
   background: var(--surface);
@@ -685,8 +694,6 @@
 .fileTableRow:hover,
 .modsWorkspaceRow:hover,
 .scheduleTableRow:hover,
-.nodeServerRow:hover:not(:disabled),
-.nodeServerMoreRow:hover:not(:disabled),
 .eventRow:hover {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
@@ -706,8 +713,7 @@
 .settingsStatus,
 .runtimeBadge,
 .roleBadge,
-.modsStatusChip,
-.nodeServerState {
+.modsStatusChip {
   min-height: 24px;
   border-width: var(--border-subtle);
   border-radius: 999px;
@@ -727,8 +733,6 @@
   border-radius: 999px;
 }
 
-.nodeServerIcon,
-.nodePlayerIcon,
 .serverStripIcon {
   border-color: var(--border-muted);
   background: var(--surface-muted);
@@ -743,7 +747,6 @@
 .modsWorkspaceToolbar,
 .modsWorkspacePrimaryActions,
 .modsWorkspaceUpdateActions,
-.nodeCardActions,
 .modalFooter,
 .userModalFooter,
 .fileEditorFooter {

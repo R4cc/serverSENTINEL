@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoSession, demoPlayerSnapshot, demoStats, demoStatsHistory, demoTimelineData, demoTimelineScenarioPlayers, initialDemoSchedules } from "./demo";
+import { createDemoSession, demoConsoleMessages, demoPlayerSnapshot, demoStats, demoStatsHistory, demoTimelineData, initialDemoSchedules } from "./demo";
 import { resourceHistorySampleLimit, resourcePollMs } from "./utils/format";
 
 function seededRandom(seed: number) {
@@ -45,6 +45,7 @@ describe("demo session generation", () => {
     const second = createDemoSession(seededRandom(2), 1_000_000);
 
     expect(first.onlinePlayerNames).not.toEqual(second.onlinePlayerNames);
+    expect(first.timelineScenarioPlayers).not.toEqual(second.timelineScenarioPlayers);
     expect(first.cpuBasePercent).not.toBe(second.cpuBasePercent);
     expect(first.memoryBaseBytes).not.toBe(second.memoryBaseBytes);
     expect(first.events.map((event) => event.eventType)).not.toEqual(second.events.map((event) => event.eventType));
@@ -52,6 +53,7 @@ describe("demo session generation", () => {
     expect(first.events.some((event) => event.eventType === "player_joined")).toBe(true);
     expect(first.events.some((event) => event.eventType === "player_left")).toBe(true);
     expect(first.events.every((event) => event.occurredAt <= first.startedAt)).toBe(true);
+    expect([...first.onlinePlayerNames, ...first.offlinePlayerNames].every((name) => !name.toLowerCase().includes("alex"))).toBe(true);
   });
 
   it("uses the randomized nicknames in timeline player activity and events", () => {
@@ -73,10 +75,13 @@ describe("demo session generation", () => {
     const timeline = demoTimelineData(true, initialDemoSchedules, now - 24 * 60 * 60_000, now);
     const generatedAt = new Date(timeline.generatedAt).getTime();
     const sessions = timeline.playerActivity?.sessions ?? [];
-    const marathon = sessions.find((session) => session.player === demoTimelineScenarioPlayers.marathon);
-    const reconnect = sessions.filter((session) => session.player === demoTimelineScenarioPlayers.reconnect)
+    const marathon = sessions.find((session) => session.startedAt === generatedAt - 25 * 60 * 60_000 && session.endedAt === null);
+    const reconnectPlayer = sessions.find((session, index) => sessions.some((candidate, candidateIndex) => (
+      candidateIndex !== index && candidate.player === session.player
+    )))?.player;
+    const reconnect = sessions.filter((session) => session.player === reconnectPlayer)
       .sort((left, right) => left.startedAt - right.startedAt);
-    const blink = sessions.find((session) => session.player === demoTimelineScenarioPlayers.blink);
+    const blink = sessions.find((session) => session.endedAt !== null && session.endedAt - session.startedAt === 5_000);
 
     expect(marathon).toMatchObject({
       startedAt: generatedAt - 25 * 60 * 60_000,
@@ -87,5 +92,13 @@ describe("demo session generation", () => {
     expect(reconnect).toHaveLength(2);
     expect(reconnect[1].startedAt - reconnect[0].endedAt!).toBe(7_000);
     expect(blink?.endedAt! - blink?.startedAt!).toBe(5_000);
+  });
+
+  it("uses only the active randomized roster in demo console messages", () => {
+    const names = demoPlayerSnapshot(true).names;
+    const messages = demoConsoleMessages().join("\n");
+
+    expect(names.slice(0, 2).every((name) => messages.includes(name))).toBe(true);
+    expect(messages.toLowerCase()).not.toContain("alex");
   });
 });

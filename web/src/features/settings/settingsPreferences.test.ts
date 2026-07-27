@@ -12,7 +12,7 @@ import {
 describe("settings console preferences", () => {
   it("preserves the existing console defaults", () => {
     expect(consoleHistoryEnabledFromStoredValue(null)).toBe(true);
-    expect(consoleFontSizeFromStoredValue(null)).toBe(13);
+    expect(consoleFontSizeFromStoredValue(null)).toBe(14);
     expect(consoleScrollbackFromStoredValue(null)).toBe(5_000);
   });
 
@@ -20,13 +20,20 @@ describe("settings console preferences", () => {
     expect(consoleHistoryEnabledFromStoredValue("false")).toBe(false);
     expect(consoleFontSizeFromStoredValue("17")).toBe(17);
     expect(consoleScrollbackFromStoredValue("25000")).toBe(25_000);
-    expect(terminalPreferenceOptions(15, 10_000)).toEqual({ fontSize: 15, scrollback: 10_000 });
+    expect(terminalPreferenceOptions(15, 10_000)).toEqual({
+      fontSize: 15,
+      fontWeight: "400",
+      fontWeightBold: "600",
+      lineHeight: 1.45,
+      scrollback: 10_000
+    });
   });
 
   it("falls back safely when storage is invalid", () => {
     expect(consoleHistoryEnabledFromStoredValue("not-a-boolean")).toBe(true);
-    expect(consoleFontSizeFromStoredValue("14")).toBe(13);
-    expect(consoleFontSizeFromStoredValue("large")).toBe(13);
+    expect(consoleFontSizeFromStoredValue("14")).toBe(14);
+    expect(consoleFontSizeFromStoredValue("13")).toBe(14);
+    expect(consoleFontSizeFromStoredValue("large")).toBe(14);
     expect(consoleScrollbackFromStoredValue("999999")).toBe(5_000);
   });
 

@@ -212,7 +212,7 @@ export function SettingsPage(props: SettingsPageProps) {
           </PreferenceRow>
           <PreferenceRow title="Terminal font size" description="Change the console text size without changing the rest of the interface.">
             <select aria-label="Terminal font size" value={props.consoleFontSize} onChange={(event) => props.onConsoleFontSizeChange(Number(event.target.value) as ConsoleFontSize)}>
-              {consoleFontSizes.map((size) => <option key={size} value={size}>{size}px{size === 13 ? " (default)" : ""}</option>)}
+              {consoleFontSizes.map((size) => <option key={size} value={size}>{size}px{size === 14 ? " (default)" : ""}</option>)}
             </select>
           </PreferenceRow>
           <PreferenceRow title="Retained output" description="Choose how many console lines can be scrolled back through. Higher values use more browser memory.">

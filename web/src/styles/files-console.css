@@ -79,12 +79,12 @@
   padding: var(--space-2) var(--space-3);
   color: var(--text-soft);
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: var(--weight-heading);
+  font-size: 13px;
+  font-weight: var(--weight-meta);
 }
 
 .minecraftTerminalShell.disabled .minecraftTerminal {
-  opacity: 0.82;
+  opacity: 1;
 }
 
 

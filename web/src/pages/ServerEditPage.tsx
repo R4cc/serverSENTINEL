@@ -16,7 +16,7 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField } from "../components/UiPrimitives";
+import { Banner, Button, FormField, PanelHeader, Toolbar } from "../components/UiPrimitives";
 import {
   clampNumber,
   formatManagedPortBindings,
@@ -321,11 +321,34 @@ export function ServerEditForm({
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={onSubmit} className="serverPropertiesForm">
         {disabled && disabledReason && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
+        <Toolbar
+          className="propertiesToolbar"
+          primary={(
+            <div className="propertiesToolbarCopy">
+              <strong>Server configuration</strong>
+              <span>Review the settings below, then save all changes together.</span>
+            </div>
+          )}
+          secondary={(
+            <div className="propertiesActionButtons">
+              <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
+                Discard changes
+              </Button>
+              <Button type="submit" disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
+                Save changes
+              </Button>
+            </div>
+          )}
+        />
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
-            <div className="propertiesSection" aria-labelledby="properties-general-title">
-              <h2 id="properties-general-title">General</h2>
+            <section className="propertiesSection propertiesSectionGeneral">
+              <PanelHeader
+                headingLevel={3}
+                title="General"
+                description="Identity, versions, and startup behavior."
+              />
               <div className="propertiesFieldGrid three">
                 <FormField htmlFor="properties-display-name" label="Display name" required>
                   <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
@@ -366,10 +389,14 @@ export function ServerEditForm({
                   <small>Automatically start this Minecraft server whenever its assigned node starts.</small>
                 </span>
               </label>
-            </div>
+            </section>
 
-            <div className="propertiesSection" aria-labelledby="properties-resources-title">
-              <h2 id="properties-resources-title">Resources</h2>
+            <section className="propertiesSection propertiesSectionResources">
+              <PanelHeader
+                headingLevel={3}
+                title="Resources"
+                description="Memory reserved for the Minecraft runtime."
+              />
               <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
                 <div className="memoryRangeLayout">
                   <MemoryRangeControl
@@ -406,10 +433,14 @@ export function ServerEditForm({
                 {memoryWarning && <span className="fieldError">Leave some RAM for the host. Using nearly all memory may cause instability.</span>}
                 <input type="hidden" name="javaArgs" value={javaArgs} />
               </section>
-            </div>
+            </section>
 
-            <div className="propertiesSection" aria-labelledby="properties-network-title">
-              <h2 id="properties-network-title">Network</h2>
+            <section className="propertiesSection propertiesSectionNetwork">
+              <PanelHeader
+                headingLevel={3}
+                title="Network"
+                description="Ports used by players and server status queries."
+              />
               <MinecraftPortsSection
                 serverPort={serverPort}
                 queryPort={queryPort}
@@ -419,11 +450,14 @@ export function ServerEditForm({
                 queryPortValid={queryPortValid}
                 portConflict={portConflict}
               />
-            </div>
+            </section>
 
             <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
               <summary>
-                <strong>Advanced</strong>
+                <span className="propertiesDisclosureCopy">
+                  <strong>Advanced</strong>
+                  <small>Container, Java, and additional port settings.</small>
+                </span>
               </summary>
               <div className="advancedResourceBody propertiesAdvancedBody">
                 <div className="propertiesFieldGrid two">
@@ -468,16 +502,6 @@ export function ServerEditForm({
             </details>
           </section>
         </fieldset>
-        <div className="propertiesActionBar">
-          <div className="propertiesActionButtons">
-            <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
-              Discard changes
-            </Button>
-            <Button type="submit" disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
-              Save changes
-            </Button>
-          </div>
-        </div>
       </form>
 
       {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
@@ -503,8 +527,11 @@ export function DeleteServerPanel({
 
   return (
     <section className="propertiesSideCard dangerPanel">
-      <h2>Danger zone</h2>
-      <p className="muted">Deleting a server is permanent and cannot be undone.</p>
+      <PanelHeader
+        headingLevel={3}
+        title="Danger zone"
+        description="Deleting a server is permanent and cannot be undone."
+      />
       <form onSubmit={onSubmit} className="appForm">
         <fieldset disabled={disabled}>
         <label>

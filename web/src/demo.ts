@@ -5,11 +5,11 @@ import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnaps
 const demoStartedAt = Date.now();
 const gibibyte = 1024 * 1024 * 1024;
 
-export const demoTimelineScenarioPlayers = {
-  marathon: "MarathonSteve",
-  reconnect: "RejoinRiley",
-  blink: "BlinkAlex"
-} as const;
+type DemoTimelineScenarioPlayers = {
+  marathon: string;
+  reconnect: string;
+  blink: string;
+};
 
 export type DemoSession = {
   startedAt: number;
@@ -17,6 +17,7 @@ export type DemoSession = {
   maxPlayers: number;
   onlinePlayerNames: string[];
   offlinePlayerNames: string[];
+  timelineScenarioPlayers: DemoTimelineScenarioPlayers;
   cpuBasePercent: number;
   cpuAmplitudePercent: number;
   cpuPhase: number;
@@ -50,8 +51,8 @@ function shuffled<T>(values: readonly T[], random: () => number): T[] {
 }
 
 function createDemoNicknames(count: number, random: () => number) {
-  const prefixes = ["Aero", "Ash", "Blaze", "Cinder", "Frost", "Lunar", "Pixel", "Quartz", "Shadow", "Void"];
-  const suffixes = ["Badger", "Byte", "Crafter", "Drake", "Fox", "Nomad", "Raven", "Spark", "Strider", "Wolf"];
+  const prefixes = ["Copper", "Crimson", "Drift", "Ember", "Glacier", "Hollow", "Meteor", "Nimbus", "Obsidian", "Orbit", "Storm", "Turbo"];
+  const suffixes = ["Beacon", "Bolt", "Branch", "Circuit", "Comet", "Crown", "Dune", "Falcon", "Forge", "Glyph", "Harbor", "Quartz"];
   return shuffled(prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}${suffix}`)), random).slice(0, count);
 }
 
@@ -117,14 +118,19 @@ function createDemoTimelineEvent(
 export function createDemoSession(random: () => number = Math.random, startedAt = Date.now()): DemoSession {
   const playerCount = randomInteger(10, 40, random);
   const nicknames = createDemoNicknames(playerCount + 8, random);
+  const timelineScenarioPlayers = {
+    marathon: nicknames[0],
+    reconnect: nicknames[1],
+    blink: nicknames[playerCount]
+  };
   const onlinePlayerNames = [
-    demoTimelineScenarioPlayers.marathon,
-    demoTimelineScenarioPlayers.reconnect,
-    ...nicknames.slice(0, playerCount - 2)
+    timelineScenarioPlayers.marathon,
+    timelineScenarioPlayers.reconnect,
+    ...nicknames.slice(2, playerCount)
   ];
   const offlinePlayerNames = [
-    demoTimelineScenarioPlayers.blink,
-    ...nicknames.slice(playerCount - 2, playerCount + 5)
+    timelineScenarioPlayers.blink,
+    ...nicknames.slice(playerCount + 1, playerCount + 8)
   ];
   const systemEventTypes: ServerEvent["eventType"][] = [
     "server_stopped",
@@ -157,10 +163,10 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
       source: "logs/latest.log",
       type: "info",
       severity: "info",
-      text: `${demoTimelineScenarioPlayers.reconnect} left`,
-      message: `${demoTimelineScenarioPlayers.reconnect} left`,
-      signature: `player_left:${demoTimelineScenarioPlayers.reconnect.toLowerCase()}`,
-      subject: demoTimelineScenarioPlayers.reconnect
+      text: `${timelineScenarioPlayers.reconnect} left`,
+      message: `${timelineScenarioPlayers.reconnect} left`,
+      signature: `player_left:${timelineScenarioPlayers.reconnect.toLowerCase()}`,
+      subject: timelineScenarioPlayers.reconnect
     },
     {
       id: "demo-event-rejoin-joined",
@@ -170,10 +176,10 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
       source: "logs/latest.log",
       type: "success",
       severity: "success",
-      text: `${demoTimelineScenarioPlayers.reconnect} joined`,
-      message: `${demoTimelineScenarioPlayers.reconnect} joined`,
-      signature: `player_joined:${demoTimelineScenarioPlayers.reconnect.toLowerCase()}`,
-      subject: demoTimelineScenarioPlayers.reconnect
+      text: `${timelineScenarioPlayers.reconnect} joined`,
+      message: `${timelineScenarioPlayers.reconnect} joined`,
+      signature: `player_joined:${timelineScenarioPlayers.reconnect.toLowerCase()}`,
+      subject: timelineScenarioPlayers.reconnect
     },
     {
       id: "demo-event-blink-joined",
@@ -183,10 +189,10 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
       source: "logs/latest.log",
       type: "success",
       severity: "success",
-      text: `${demoTimelineScenarioPlayers.blink} joined`,
-      message: `${demoTimelineScenarioPlayers.blink} joined`,
-      signature: `player_joined:${demoTimelineScenarioPlayers.blink.toLowerCase()}`,
-      subject: demoTimelineScenarioPlayers.blink
+      text: `${timelineScenarioPlayers.blink} joined`,
+      message: `${timelineScenarioPlayers.blink} joined`,
+      signature: `player_joined:${timelineScenarioPlayers.blink.toLowerCase()}`,
+      subject: timelineScenarioPlayers.blink
     },
     {
       id: "demo-event-blink-left",
@@ -196,10 +202,10 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
       source: "logs/latest.log",
       type: "info",
       severity: "info",
-      text: `${demoTimelineScenarioPlayers.blink} left`,
-      message: `${demoTimelineScenarioPlayers.blink} left`,
-      signature: `player_left:${demoTimelineScenarioPlayers.blink.toLowerCase()}`,
-      subject: demoTimelineScenarioPlayers.blink
+      text: `${timelineScenarioPlayers.blink} left`,
+      message: `${timelineScenarioPlayers.blink} left`,
+      signature: `player_left:${timelineScenarioPlayers.blink.toLowerCase()}`,
+      subject: timelineScenarioPlayers.blink
     }
   ];
 
@@ -209,6 +215,7 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
     maxPlayers: 50,
     onlinePlayerNames,
     offlinePlayerNames,
+    timelineScenarioPlayers,
     cpuBasePercent: randomDecimal(18, 42, random),
     cpuAmplitudePercent: randomDecimal(8, 22, random),
     cpuPhase: randomDecimal(0, Math.PI * 2, random),
@@ -226,6 +233,24 @@ let activeDemoSession = createDemoSession(Math.random, demoStartedAt);
 export function resetDemoSession(startedAt = Date.now()) {
   activeDemoSession = createDemoSession(Math.random, startedAt);
   return activeDemoSession;
+}
+
+export function demoConsoleMessages() {
+  const [firstPlayer, secondPlayer] = activeDemoSession.onlinePlayerNames;
+  return [
+    "[demo] Starting minecraft server version 1.21.4",
+    "[demo] Loading Fabric Loader 0.16.10",
+    "[demo] Preparing spawn area: 100%",
+    "[demo] Done (5.132s)! For help, type \"help\"",
+    `[12:04:12] [Server thread/INFO]: ${firstPlayer} joined the game`,
+    `[12:04:20] [Server thread/INFO]: <${firstPlayer}> anyone up for a nether trip?`,
+    `[12:04:41] [Server thread/INFO]: ${secondPlayer} joined the game`,
+    `[12:04:58] [Server thread/INFO]: [ADM] ${secondPlayer} : give me two minutes, gearing up`,
+    `[12:05:12] [Server thread/INFO]: <${firstPlayer}> meet me at the portal`,
+    `[12:05:18] [Server thread/INFO]: ${firstPlayer} fell from a high place`,
+    "[12:05:30] [Server thread/INFO]: [Server] Scheduled restart tonight at 03:00",
+    `[12:06:02] [Server thread/INFO]: ${secondPlayer} has made the advancement [We Need to Go Deeper]`
+  ];
 }
 
 export { demoServerId };
@@ -673,28 +698,29 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
   const now = Date.now();
   const eventFixtures = activeDemoSession.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
   const demoOnlineNames = running ? activeDemoSession.onlinePlayerNames : [];
+  const scenarioPlayers = activeDemoSession.timelineScenarioPlayers;
   const regularOnlineNames = demoOnlineNames.filter((player) => (
-    player !== demoTimelineScenarioPlayers.marathon && player !== demoTimelineScenarioPlayers.reconnect
+    player !== scenarioPlayers.marathon && player !== scenarioPlayers.reconnect
   ));
-  const regularOfflineNames = activeDemoSession.offlinePlayerNames.filter((player) => player !== demoTimelineScenarioPlayers.blink);
+  const regularOfflineNames = activeDemoSession.offlinePlayerNames.filter((player) => player !== scenarioPlayers.blink);
   const playerSessions = [
     ...(running ? [{
       id: "demo-online:marathon",
-      player: demoTimelineScenarioPlayers.marathon,
+      player: scenarioPlayers.marathon,
       startedAt: now - 25 * 60 * 60_000,
       endedAt: null,
       startBoundary: "join" as const,
       endBoundary: "online" as const
     }, {
       id: "demo-online:rejoin-before",
-      player: demoTimelineScenarioPlayers.reconnect,
+      player: scenarioPlayers.reconnect,
       startedAt: now - 55 * 60_000,
       endedAt: now - 30 * 60_000 - 7_000,
       startBoundary: "join" as const,
       endBoundary: "leave" as const
     }, {
       id: "demo-online:rejoin-after",
-      player: demoTimelineScenarioPlayers.reconnect,
+      player: scenarioPlayers.reconnect,
       startedAt: now - 30 * 60_000,
       endedAt: null,
       startBoundary: "join" as const,
@@ -710,7 +736,7 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     })),
     {
       id: "demo-offline:blink",
-      player: demoTimelineScenarioPlayers.blink,
+      player: scenarioPlayers.blink,
       startedAt: now - 12 * 60_000,
       endedAt: now - 12 * 60_000 + 5_000,
       startBoundary: "join" as const,

@@ -72,16 +72,12 @@ async function assertScenarioData(page) {
       const value = label.trim();
       if (value) renderedLabels.add(value);
     }
-    if (["MarathonSteve", "RejoinRiley", "BlinkAlex"].every((player) => renderedLabels.has(player))) break;
+    if (["25h 0m", "54m active", "<1m"].every((label) => renderedLabels.has(label))) break;
     await page.mouse.wheel(0, 600);
     await page.waitForTimeout(15);
   }
-  const identityNames = [...renderedLabels];
-  for (const player of ["MarathonSteve", "RejoinRiley", "BlinkAlex"]) {
-    assert(identityNames.includes(player), `${player} is missing from the rendered player timeline`);
-  }
-
   const timelineLabels = [...renderedLabels];
+  assert(!timelineLabels.some((label) => label.toLowerCase().includes("alex")), `A removed fixed identity is still rendered: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("25h 0m"), `The exact multi-day session label is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
@@ -90,8 +86,32 @@ async function assertScenarioData(page) {
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
 
   const eventsText = await page.locator(".eventsPanel").innerText();
-  assert(eventsText.includes("Reconnected") && eventsText.includes("RejoinRiley") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
-  assert(eventsText.includes("BlinkAlex") && eventsText.includes("Joined") && eventsText.includes("Left"), "The instant join/leave events are not both visible");
+  assert(eventsText.includes("Reconnected") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
+  const joinedSubjects = await page.locator(".eventsPanel .eventKind--player_joined .eventSubject").allTextContents();
+  const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
+  assert(joinedSubjects.some((subject) => leftSubjects.includes(subject)), "The instant join/leave events do not share a generated player identity");
+  assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
+}
+
+// The desktop Overview replaced the Active Players card with the timeline, so the
+// roster disclosure lives on the player-activity section here and on the standalone
+// card only in the chartless mobile layout.
+async function assertPlayerSectionDisclosure(page) {
+  const section = page.locator(".serverTimelinePlayers");
+  const chart = section.locator(".serverTimelinePlayerChart");
+  const counts = await section.locator(".serverTimelinePlayerCount").allTextContents();
+  assert(counts.some((text) => /\d+ online/.test(text)), `Player activity is missing an online count: ${JSON.stringify(counts)}`);
+
+  const toggle = section.locator(".serverTimelinePlayerToggle");
+  assert.equal(await toggle.count(), 1, "The demo roster should overflow the collapsed player section");
+  const collapsedHeight = (await chart.boundingBox())?.height ?? 0;
+  await toggle.click();
+  await page.waitForFunction(() => document.querySelector(".serverTimelinePlayerChart")?.classList.contains("is-expanded"));
+  const expandedHeight = (await chart.boundingBox())?.height ?? 0;
+  assert(expandedHeight > collapsedHeight, `Expanding the player section did not grow it: ${collapsedHeight} -> ${expandedHeight}`);
+  assert.equal(await section.getByRole("button", { name: /Show fewer/ }).count(), 1, "Expanded player section cannot be collapsed again");
+  await toggle.click();
+  await page.waitForFunction(() => !document.querySelector(".serverTimelinePlayerChart")?.classList.contains("is-expanded"));
 }
 
 async function assertRosterDisclosure(page) {
@@ -112,7 +132,7 @@ async function assertRosterDisclosure(page) {
 
 async function timelineHeights(page) {
   return page.evaluate(() => {
-    const stage = document.querySelector(".serverTimelineAnnotationStage");
+    const stage = document.querySelector(".serverTimelineEventRail");
     const visualization = document.querySelector(".serverTimelineVisualization");
     return {
       stage: stage?.getBoundingClientRect().height ?? 0,
@@ -299,7 +319,7 @@ async function assertDesktop(page) {
   const panel = await waitForTimeline(page);
   assert.equal(await panel.getAttribute("aria-busy"), "false");
   await assertScenarioData(page);
-  await assertRosterDisclosure(page);
+  await assertPlayerSectionDisclosure(page);
 
   for (const label of rangeSpans.keys()) await selectRange(page, label);
   const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
@@ -324,13 +344,10 @@ async function assertDesktop(page) {
 }
 
 async function assertMobile(page) {
-  const resourcePanel = page.locator(".resourcePanel");
-  await resourcePanel.getByRole("heading", { name: "Resource Usage", exact: true }).waitFor();
-  for (const label of ["1m", "5m", "15m", "1h", "All"]) {
-    const button = resourcePanel.getByRole("button", { name: label, exact: true });
-    await button.click();
-    assert.equal(await button.getAttribute("aria-pressed"), "true", `Mobile resource range ${label} did not activate`);
-  }
+  // The phone layout is chartless, so the Active Players card and its disclosure are
+  // the roster surface here while the timeline owns the desktop layout.
+  assert.equal(await page.locator(".serverTimelinePanel").count(), 0, "The phone layout should stay chartless");
+  await assertRosterDisclosure(page);
 
   const mobileMetrics = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,

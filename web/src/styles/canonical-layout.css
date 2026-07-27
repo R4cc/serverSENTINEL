@@ -87,7 +87,6 @@
 .workspaceActions,
 .buttonRow,
 .selectionActions,
-.nodeCardActions,
 .modInstallFooter,
 .modalFooter,
 .userModalFooter,
@@ -159,7 +158,6 @@
   padding: var(--space-4);
 }
 
-.nodeCardHeader,
 .modalHeader,
 .userModalHeader,
 .nodeModalHeader,
@@ -170,7 +168,6 @@
   border-bottom: 1px solid var(--border-row);
 }
 
-.nodeCardHeader,
 .fileEditorHeader {
   display: flex;
   gap: var(--space-3);
@@ -227,8 +224,7 @@
   padding: 0 var(--space-3);
 }
 
-.overflowButton,
-.nodesRefreshButton {
+.overflowButton {
   width: var(--control-height);
   height: var(--control-height);
   min-width: var(--control-height);
@@ -285,7 +281,6 @@
 }
 
 .eventRow,
-.nodeServerRow,
 .fileTableRow {
   min-height: 0;
 }
@@ -322,8 +317,7 @@
 
 .fileNavBar,
 .fileToolbar,
-.selectionActionBar,
-.nodesToolbar {
+.selectionActionBar {
   min-height: var(--toolbar-min-height);
   padding: var(--space-3);
   gap: var(--space-3);
@@ -345,8 +339,7 @@
 }
 
 .fileToolbar,
-.selectionActionBar,
-.nodesToolbar {
+.selectionActionBar {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -438,39 +431,6 @@
   gap: var(--space-3);
 }
 
-.nodesToolbar {
-  margin: 0;
-}
-
-.nodesGrid {
-  gap: var(--space-3);
-  max-height: none;
-  overflow: visible;
-}
-
-.nodeCard {
-  padding: var(--space-3);
-  gap: var(--space-3);
-}
-
-.nodeCardHeader {
-  margin: 0;
-}
-
-.nodeCardTopLine,
-.nodeServerRow {
-  gap: var(--space-3);
-}
-
-.nodeServerList {
-  gap: var(--space-2);
-}
-
-.nodeServerRow {
-  min-height: 52px;
-  padding: var(--space-3);
-}
-
 .appForm,
 .userModalForm,
 .keyForm {
@@ -506,12 +466,6 @@
 .userModalPanel,
 .nodeModalPanel {
   width: min(var(--modal-medium-width), calc(100vw - 32px));
-}
-
-@media (max-width: 920px) {
-}
-
-@media (max-width: 640px) {
 }
 
 
@@ -614,10 +568,6 @@
     justify-content: flex-start;
   }
 
-.nodeServerRow {
-    grid-template-columns: 1fr;
-  }
-
   .usersSettings {
     padding-inline: var(--space-3);
   }
@@ -704,8 +654,7 @@
 
 .fileNavBar,
 .fileToolbar,
-.selectionActionBar,
-.nodesToolbar {
+.selectionActionBar {
     display: grid;
     grid-template-columns: 1fr;
   }

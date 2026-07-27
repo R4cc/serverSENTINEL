@@ -102,7 +102,8 @@ export type PlayerTimelineLabelLayout = {
 
 export const playerTimelineRowHeight = 40;
 export const playerTimelineAxisHeight = 30;
-export const playerTimelineVisibleLaneCount = 6;
+export const playerTimelineCollapsedLaneCount = 6;
+export const playerTimelineExpandedLaneCount = 16;
 export const playerTimelineReconnectWindowMs = 15 * 60_000;
 export const playerTimelineTimeDataZoomId = "player-timeline-time";
 export const playerTimelineRowsDataZoomId = "player-timeline-rows";
@@ -128,10 +129,21 @@ export function playerTimelineLanes(rows: PlayerTimelineRow[]): PlayerTimelineLa
   ];
 }
 
+// Collapsed keeps the section roughly as tall as a metric band; expanded grows to
+// the full roster so the common case never needs a scroll gesture inside the card.
+export function playerTimelineLaneWindowSize(laneCount: number, expanded = false) {
+  const cap = expanded ? playerTimelineExpandedLaneCount : playerTimelineCollapsedLaneCount;
+  return Math.max(1, Math.min(cap, laneCount || 1));
+}
+
+export function playerTimelineHasLaneOverflow(laneCount: number, expanded = false) {
+  return laneCount > playerTimelineLaneWindowSize(laneCount, expanded);
+}
+
 export function resolvePlayerTimelineLaneWindow(
   lanes: PlayerTimelineLane[],
   position: PlayerTimelineLanePosition = { startIndex: 0 },
-  visibleCount = playerTimelineVisibleLaneCount
+  visibleCount = playerTimelineCollapsedLaneCount
 ) {
   const count = Math.max(1, Math.min(visibleCount, lanes.length || 1));
   const keyedIndex = position.startKey ? lanes.findIndex((lane) => lane.key === position.startKey) : -1;
@@ -150,11 +162,12 @@ export function resolvePlayerTimelineLaneWindow(
 export function preservePlayerTimelineLanePosition(
   previousLanes: PlayerTimelineLane[],
   nextLanes: PlayerTimelineLane[],
-  position: PlayerTimelineLanePosition
+  position: PlayerTimelineLanePosition,
+  visibleCount = playerTimelineCollapsedLaneCount
 ): PlayerTimelineLanePosition {
   if (!nextLanes.length) return { startIndex: 0 };
   const nextIndexByKey = new Map(nextLanes.map((lane, index) => [lane.key, index]));
-  const previousWindow = resolvePlayerTimelineLaneWindow(previousLanes, position);
+  const previousWindow = resolvePlayerTimelineLaneWindow(previousLanes, position, visibleCount);
   const anchorKey = previousWindow.startKey ?? position.startKey;
   const survivingIndex = anchorKey ? nextIndexByKey.get(anchorKey) : undefined;
   if (survivingIndex !== undefined) return { startKey: anchorKey, startIndex: survivingIndex };
@@ -194,8 +207,8 @@ export function playerTimelineLanePositionFromZoom(
   return { startKey: lanes[index].key, startIndex: index };
 }
 
-export function playerTimelineChartHeight(laneCount: number) {
-  return playerTimelineAxisHeight + Math.max(1, Math.min(playerTimelineVisibleLaneCount, laneCount)) * playerTimelineRowHeight;
+export function playerTimelineChartHeight(laneCount: number, expanded = false) {
+  return playerTimelineAxisHeight + playerTimelineLaneWindowSize(laneCount, expanded) * playerTimelineRowHeight;
 }
 
 export function timelineSessionGeometry(session: ServerTimelinePlayerSession, viewport: PlayerTimelineWindow, now: number): TimelineSessionGeometry | null {
@@ -392,39 +405,39 @@ function rowChromeRenderItem(
     const color = lane.online ? palette.join : palette.leave;
 
     if (lane.kind === "group") {
+      // A section rule rather than a filled band: the tinted full-width blocks read
+      // as alerts and made the roster look busier than the metric bands beside it.
+      const groupFont = `600 9px ${palette.fontFamily}`;
+      const groupLabel = `${lane.label.toUpperCase()} · ${lane.count}`;
+      const labelX = 22;
+      const ruleStart = labelX + format.getTextRect(groupLabel, groupFont).width + 10;
       return {
         type: "group",
         name: `${lane.label}, ${lane.count} players`,
         children: [
           {
-            type: "rect",
-            shape: { x: 0, y: top + 0.5, width: plotRight, height: Math.max(1, bandHeight - 1) },
-            style: { fill: color, opacity: 0.055 },
-            silent: true
-          },
-          {
-            type: "rect",
-            shape: { x: 0, y: top + 0.5, width: 4, height: Math.max(1, bandHeight - 1) },
+            type: "circle",
+            shape: { cx: labelX - 8, cy: y, r: 3 },
             style: { fill: color },
             silent: true
           },
           {
             type: "text",
             style: {
-              x: 12,
+              x: labelX,
               y,
-              text: `${lane.label.toUpperCase()} (${lane.count})`,
+              text: groupLabel,
               align: "left",
               verticalAlign: "middle",
-              fill: color,
-              font: `600 10px ${palette.fontFamily}`
+              fill: palette.textMuted,
+              font: groupFont
             },
             silent: true
           },
           {
             type: "line",
-            shape: { x1: 0, y1: top + bandHeight - 0.5, x2: plotRight, y2: top + bandHeight - 0.5 },
-            style: { stroke: palette.border, lineWidth: 1, opacity: 0.75 },
+            shape: { x1: ruleStart, y1: y, x2: plotRight, y2: y },
+            style: { stroke: palette.border, lineWidth: 1, opacity: 0.6 },
             silent: true
           }
         ]
@@ -441,23 +454,33 @@ function rowChromeRenderItem(
     const iconY = y - iconSize / 2;
     const iconKind: PlayerEventIconKind = lane.online ? "player_joined" : "player_left";
     const headSource = playerHeadSource?.(lane.player);
-    const iconChildren: CustomElementOption[] = headSource ? [] : playerEventIconShapes[iconKind].map((shape) => shape.type === "circle"
-      ? {
-          type: "circle",
-          shape: {
-            cx: iconX + shape.cx / 24 * iconSize,
-            cy: iconY + shape.cy / 24 * iconSize,
-            r: shape.r / 24 * iconSize
-          },
-          style: { fill: "none", stroke: color, lineWidth: 1.35 },
-          silent: true
-        }
-      : {
-          type: "path",
-          shape: { pathData: shape.d, x: iconX, y: iconY, width: iconSize, height: iconSize },
-          style: { fill: "none", stroke: color, lineWidth: 1.35, lineCap: "round", lineJoin: "round" },
-          silent: true
-        });
+    // ECharts parses `pathData` once per element and keeps the parsed geometry when the
+    // string is unchanged, so sizing a glyph through the path shape leaves recycled rows
+    // drawing at the position they were first created at. Keep every glyph in the icon's
+    // own 24-unit space and move it with the group transform, which is applied on every
+    // render, so scrolling or expanding the roster cannot smear the icons.
+    const iconScale = iconSize / 24;
+    const iconChildren: CustomElementOption[] = headSource ? [] : [{
+      type: "group",
+      x: iconX,
+      y: iconY,
+      scaleX: iconScale,
+      scaleY: iconScale,
+      silent: true,
+      children: playerEventIconShapes[iconKind].map((shape) => shape.type === "circle"
+        ? {
+            type: "circle",
+            shape: { cx: shape.cx, cy: shape.cy, r: shape.r },
+            style: { fill: "none", stroke: color, lineWidth: 1.35 / iconScale },
+            silent: true
+          }
+        : {
+            type: "path",
+            shape: { pathData: shape.d },
+            style: { fill: "none", stroke: color, lineWidth: 1.35 / iconScale, lineCap: "round", lineJoin: "round" },
+            silent: true
+          })
+    }];
 
     return {
       type: "group",
@@ -466,13 +489,13 @@ function rowChromeRenderItem(
         {
           type: "line",
           shape: { x1: 0, y1: top + bandHeight - 0.5, x2: plotRight, y2: top + bandHeight - 0.5 },
-          style: { stroke: palette.border, lineWidth: 1, opacity: 0.5 },
+          style: { stroke: palette.border, lineWidth: 1, opacity: 0.35 },
           silent: true
         },
         {
           type: "line",
           shape: { x1: coordSys.x, y1: top, x2: coordSys.x, y2: top + bandHeight },
-          style: { stroke: palette.border, lineWidth: 1 },
+          style: { stroke: palette.border, lineWidth: 1, opacity: 0.7 },
           silent: true
         },
         {
@@ -698,6 +721,7 @@ export function buildPlayerTimelineChartOption({
   query,
   viewport,
   verticalPosition = { startIndex: 0 },
+  visibleLaneCount,
   now,
   palette,
   formatTime,
@@ -710,6 +734,7 @@ export function buildPlayerTimelineChartOption({
   query: PlayerTimelineWindow;
   viewport: PlayerTimelineWindow;
   verticalPosition?: PlayerTimelineLanePosition;
+  visibleLaneCount?: number;
   now: number;
   palette: TimelinePalette;
   formatTime?: (value: string | number | Date) => string;
@@ -720,7 +745,7 @@ export function buildPlayerTimelineChartOption({
   const effectiveFormatTime = formatTime ?? formatShortTime;
   const items = playerTimelineChartItems(rows, viewport, now, formatShortTime);
   const nowVisible = now >= viewport.from && now <= viewport.to;
-  const laneWindow = resolvePlayerTimelineLaneWindow(lanes, verticalPosition);
+  const laneWindow = resolvePlayerTimelineLaneWindow(lanes, verticalPosition, visibleLaneCount ?? playerTimelineCollapsedLaneCount);
   const visibleLaneKeys = new Set(lanes.slice(laneWindow.startIndex, laneWindow.endIndex + 1).map((lane) => lane.key));
   const visiblePlayers = lanes
     .slice(laneWindow.startIndex, laneWindow.endIndex + 1)
