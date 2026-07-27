@@ -559,9 +559,7 @@ function PlayerSessionSection({
   interacting,
   onDataZoom,
   onInteractionChange,
-  onPointerMove,
-  onPointerLeave,
-  onClick,
+  onPointerEnter,
   onWheel
 }: {
   rows: TimelinePlayerRow[];
@@ -576,9 +574,7 @@ function PlayerSessionSection({
   interacting: boolean;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
   onInteractionChange: (interacting: boolean) => void;
-  onPointerMove: React.PointerEventHandler<HTMLDivElement>;
-  onPointerLeave: React.PointerEventHandler<HTMLDivElement>;
-  onClick: React.MouseEventHandler<HTMLDivElement>;
+  onPointerEnter: React.PointerEventHandler<HTMLElement>;
   onWheel: (event: globalThis.WheelEvent) => void;
 }) {
   const stableRowsRef = useRef(rows);
@@ -612,6 +608,7 @@ function PlayerSessionSection({
       aria-label="Player sessions"
       data-viewport-from={viewport.from}
       data-viewport-to={viewport.to}
+      onPointerEnter={onPointerEnter}
     >
       {lanes.length ? (
         <>
@@ -626,9 +623,6 @@ function PlayerSessionSection({
               option={option}
               onDataZoom={handleDataZoom}
               onInteractionChange={onInteractionChange}
-              onPointerMove={onPointerMove}
-              onPointerLeave={onPointerLeave}
-              onClick={onClick}
               onWheel={onWheel}
             />
           </div>
@@ -970,6 +964,12 @@ export function ServerTimeline({
     setHoverTooltip((current) => current?.pinned ? current : null);
   }, []);
 
+  const clearHoverTooltip = useCallback(() => {
+    if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    hoverFrameRef.current = undefined;
+    setHoverTooltip(null);
+  }, []);
+
   const handleChartPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (hoverTooltip?.pinned) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1218,9 +1218,7 @@ export function ServerTimeline({
             interacting={chartInteracting}
             onDataZoom={handleDataZoom}
             onInteractionChange={handleChartInteractionChange}
-            onPointerMove={handleChartPointerMove}
-            onPointerLeave={hideHoverTooltip}
-            onClick={pinHoverTooltip}
+            onPointerEnter={clearHoverTooltip}
             onWheel={handleTimelineWheel}
           />
         )}
