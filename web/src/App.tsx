@@ -3045,7 +3045,7 @@ export default function App() {
             )}
 
             {activePage === "properties" && (
-              <section className="tabPage settingsPage layoutReadable">
+              <section className="tabPage settingsPage layoutWide">
                 <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" page="properties" />}>
                   <ServerEditForm
                     server={activeServer}

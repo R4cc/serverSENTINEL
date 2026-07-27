@@ -6,88 +6,93 @@
    rules. */
 
 .nodesPage {
-  max-width: var(--balanced-content-max-width);
-  gap: var(--space-4);
+  max-width: none;
+  gap: 14px;
 }
 
-/* Fleet bar -------------------------------------------------------------- */
+/* Fleet summary and toolbar --------------------------------------------- */
 
-/* The workspace already titles the page, so this bar carries counts and actions
-   rather than a second heading. */
-.nodesOverviewBar {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  padding-bottom: var(--space-3);
-  border-bottom: var(--border-subtle) solid var(--border-row);
-}
-
-.nodesFleetStats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-6);
-  margin: 0;
-}
-
-.nodesFleetStat {
+.nodesFleetSummary {
   display: grid;
-  gap: 3px;
-  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.nodesFleetStat dt {
-  color: var(--text-soft);
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-badge);
-  text-transform: uppercase;
-}
-
-.nodesFleetStat dd {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text);
-  font-size: 24px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-tight);
-  line-height: 1;
-}
-
-.nodesFleetStat dd span {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-ui);
-}
-
-.nodesOverviewActions {
+.nodesFleetMetric.uiMetricTile {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
+  min-height: 72px;
+  padding: 12px 14px;
+  border-color: var(--border);
 }
 
-.nodesRefreshButton.uiButton {
-  width: var(--control-icon-button-size);
-  min-width: var(--control-icon-button-size);
+.nodesFleetMetric .uiMetricTileMarker {
+  box-shadow: inset 0 0 0 8px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.nodesFleetMetric--nodes.uiMetricTile--success .uiMetricTileMarker {
+  color: var(--sentinel-success);
+  background: color-mix(in srgb, var(--sentinel-success) 72%, transparent);
+}
+
+.nodesFleetMetric--nodes.uiMetricTile--danger .uiMetricTileMarker {
+  color: var(--sentinel-danger);
+  background: color-mix(in srgb, var(--sentinel-danger) 72%, transparent);
+}
+
+.nodesFleetMetric--servers .uiMetricTileMarker {
+  color: var(--sentinel-info);
+  background: color-mix(in srgb, var(--sentinel-info) 72%, transparent);
+}
+
+.nodesFleetMetric--players .uiMetricTileMarker {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.nodesFleetMetric .uiMetricTileCopy {
+  grid-template-rows: auto 20px auto;
+}
+
+.nodesFleetMetric .uiMetricTileCopy strong {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  font-size: 1.08rem;
+  line-height: 1.1;
+}
+
+.nodesToolbar {
+  min-height: 57px;
+}
+
+.nodesToolbar .uiToolbarMeta {
+  text-align: right;
 }
 
 /* Node tiles ------------------------------------------------------------- */
 
-/* One node per tile, tiled across the page. A lone node keeps a card's width
-   rather than stretching into a banner with its servers stranded at one end. */
 .nodesBoard {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
-  align-items: start;
-  gap: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.nodesBoardHeader {
+  min-height: 62px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-subtle) solid var(--border-row);
 }
 
 .nodesEmptyState {
-  grid-column: 1 / -1;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
 }
 
 .nodeTile {
@@ -97,18 +102,15 @@
   align-content: start;
   gap: var(--space-3);
   min-width: 0;
-  border: var(--border-strong) solid var(--border-panel);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  border-radius: 0;
   padding: var(--space-4);
-  background: var(--surface-raised);
+  background: transparent;
 }
 
-.nodeTile.offline {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 30%, var(--border-panel));
-}
-
-.nodeTile.unknown {
-  border-color: color-mix(in srgb, var(--text-soft) 26%, var(--border-panel));
+.nodeTile:last-child {
+  border-bottom: 0;
 }
 
 /* Name and status share the first line, meta and actions the second, so a long
@@ -225,7 +227,7 @@
   border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  background: var(--surface-raised);
+  background: var(--surface);
   color: var(--text);
   text-align: left;
 }
@@ -398,33 +400,45 @@
 }
 
 @media (max-width: 720px) {
-  .nodesOverviewBar {
-    align-items: stretch;
-    gap: var(--space-3);
+  .nodesFleetSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .nodesFleetStats {
-    gap: var(--space-3) var(--space-5);
+  .nodesFleetSummary > :nth-child(3) {
+    grid-column: 1 / -1;
   }
 
-  .nodesFleetStat dd {
-    font-size: 20px;
+  .nodesToolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .nodesOverviewActions {
-    width: 100%;
-  }
-
-  .nodesOverviewActions .uiButton:not(.nodesRefreshButton) {
-    flex: 1 1 auto;
+  .nodesToolbar .uiToolbarMeta {
+    display: none;
   }
 
   .nodeTile {
     padding: var(--space-3);
   }
 
-  .nodesPage.nodeDetailsOpen > .nodesOverviewBar,
+  .nodesPage.nodeDetailsOpen > .nodesFleetSummary,
+  .nodesPage.nodeDetailsOpen > .nodesToolbar,
   .nodesPage.nodeDetailsOpen > .nodesBoard {
     display: none;
+  }
+}
+
+@media (max-width: 460px) {
+  .nodesFleetSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .nodesFleetSummary > :nth-child(3) {
+    grid-column: auto;
+  }
+
+  .nodesToolbar .uiToolbarPrimary,
+  .nodesToolbar .uiToolbarSecondary,
+  .nodesToolbar .uiButton {
+    width: 100%;
   }
 }

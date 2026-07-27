@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button, EmptyState, StatusBadge } from "../components/UiPrimitives";
+import { Button, EmptyState, MetricTile, PanelHeader, StatusBadge, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -569,33 +569,56 @@ export function NodesPage({
   );
 
   return (
-    <section className={`pageStack nodesPage layoutBalanced ${selectedDetailsNode ? "nodeDetailsOpen" : ""}`.trim()}>
+    <section className={`pageStack nodesPage layoutWide ${selectedDetailsNode ? "nodeDetailsOpen" : ""}`.trim()}>
       {sortedNodes.length > 0 && (
-        <div className="nodesOverviewBar">
-          <dl className="nodesFleetStats">
-            <div className="nodesFleetStat">
-              <dt>Nodes</dt>
-              <dd>{fleet.nodes}<span>{fleet.nodesOnline} online</span></dd>
-            </div>
-            <div className="nodesFleetStat">
-              <dt>Servers</dt>
-              <dd>{fleet.servers}<span>{fleet.serversRunning} running</span></dd>
-            </div>
-            <div className="nodesFleetStat">
-              <dt>Players</dt>
-              <dd>{fleet.players}<span>online now</span></dd>
-            </div>
-          </dl>
-          <div className="nodesOverviewActions">
-            {addNodeButton}
-            <Button variant="secondary" iconOnly className="iconButton nodesRefreshButton" onClick={onRefresh} disabled={busy} aria-label="Refresh node status" title="Refresh node status">
+        <section className="nodesFleetSummary" aria-label="Node fleet summary">
+          <MetricTile
+            className="nodesFleetMetric nodesFleetMetric--nodes"
+            tone={fleet.nodesOnline === fleet.nodes ? "success" : "danger"}
+            label="Nodes"
+            value={fleet.nodes}
+            detail={`${fleet.nodesOnline} online`}
+          />
+          <MetricTile
+            className="nodesFleetMetric nodesFleetMetric--servers"
+            tone="neutral"
+            label="Servers"
+            value={fleet.servers}
+            detail={`${fleet.serversRunning} running`}
+          />
+          <MetricTile
+            className="nodesFleetMetric nodesFleetMetric--players"
+            tone="accent"
+            label="Players"
+            value={fleet.players}
+            detail="Online now"
+          />
+        </section>
+      )}
+
+      {sortedNodes.length > 0 && (
+        <Toolbar
+          className="nodesToolbar"
+          primary={addNodeButton}
+          meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
+          secondary={(
+            <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
               <AppIcon name="refresh" />
+              {busy ? "Refreshing…" : "Refresh"}
             </Button>
-          </div>
-        </div>
+          )}
+        />
       )}
 
       <section className="nodesBoard">
+        {sortedNodes.length > 0 && (
+          <PanelHeader
+            className="nodesBoardHeader"
+            headingLevel={3}
+            title="Connected nodes"
+            description="Hosts available to run and manage Minecraft servers."
+          />
+        )}
         {sortedNodes.length === 0 && (
           <EmptyState
             className="nodesEmptyState"
