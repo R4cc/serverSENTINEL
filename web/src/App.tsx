@@ -15,7 +15,7 @@ import { readStoredActivePage, writeStoredActivePage } from "./app/navigationSto
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
-import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { AuthPanel } from "./components/AuthPanel";
 import { BrandLogo } from "./components/BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
@@ -927,8 +927,6 @@ export default function App() {
       setConsoleLoading(false);
       return;
     }
-    void refreshConsoleLogs(activeServer.id);
-
     if (consoleReconnectTimeoutRef.current !== null) {
       window.clearTimeout(consoleReconnectTimeoutRef.current);
       consoleReconnectTimeoutRef.current = null;
@@ -945,8 +943,20 @@ export default function App() {
     let pollingAvailable = false;
     let pollingInFlight = false;
     let pollingInterval: number | null = null;
+    let snapshotReady = false;
+    let replayGuard: ConsoleReplayGuard | null = null;
+    let initialStreamLines: string[] = [];
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}`);
+
+    void refreshConsoleLogs(serverId).finally(() => {
+      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
+      replayGuard = new ConsoleReplayGuard(logsRef.current);
+      snapshotReady = true;
+      const liveLines = replayGuard.push(initialStreamLines);
+      initialStreamLines = [];
+      queueConsoleLines(liveLines);
+    });
 
     function stopPolling() {
       pollingAvailable = false;
@@ -1023,7 +1033,14 @@ export default function App() {
       }
       if (message.type === "log") {
         markConsoleLive();
-        queueConsoleChunk(message.text ?? "");
+        const lines = consoleLineAssemblerRef.current.push(message.text ?? "");
+        if (snapshotReady) {
+          queueConsoleLines(replayGuard?.push(lines) ?? lines);
+        } else {
+          initialStreamLines.push(...lines);
+          const overflow = initialStreamLines.length - consoleScrollbackRef.current;
+          if (overflow > 0) initialStreamLines.splice(0, overflow);
+        }
         if (message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
@@ -1556,8 +1573,8 @@ export default function App() {
    * per frame means one full re-render and one terminal write per line. Collecting the lines and
    * flushing them once per animation frame keeps a burst to a single render and a single write.
    */
-  function queueConsoleChunk(chunk: string) {
-    for (const line of consoleLineAssemblerRef.current.push(chunk)) pendingLogLinesRef.current.push(line);
+  function queueConsoleLines(lines: string[]) {
+    pendingLogLinesRef.current.push(...lines);
     // A background tab never runs animation frames, so cap what can pile up at the same limit
     // the buffer would enforce on flush anyway.
     const overflow = pendingLogLinesRef.current.length - consoleScrollbackRef.current;
@@ -1571,11 +1588,9 @@ export default function App() {
     const pending = pendingLogLinesRef.current;
     if (!pending.length) return;
     pendingLogLinesRef.current = [];
-    setLogs((current) => {
-      const next = appendConsoleEntries(current, pending, consoleScrollbackRef.current);
-      logsRef.current = next;
-      return next;
-    });
+    const next = appendConsoleEntries(logsRef.current, pending, consoleScrollbackRef.current);
+    logsRef.current = next;
+    setLogs(next);
   }
 
   function discardQueuedConsoleLines() {
@@ -1606,11 +1621,9 @@ export default function App() {
       if (activeServerIdRef.current !== serverId) return false;
       const lines = consoleSnapshotLines(result.text, limit);
       const nextLogs = lines.map((line) => consoleLine(line));
-      setLogs((current) => {
-        const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, current, limit);
-        logsRef.current = reconciled;
-        return reconciled;
-      });
+      const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, logsRef.current, limit);
+      logsRef.current = reconciled;
+      setLogs(reconciled);
       return true;
     } catch (error) {
       if (handleStaleSession(error)) return false;

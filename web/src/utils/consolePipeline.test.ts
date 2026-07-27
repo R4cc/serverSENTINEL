@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, consoleSnapshotLines, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
+import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot } from "./consolePipeline";
 
 describe("console pipeline", () => {
   it("splits stream chunks into the same line entries a snapshot produces", () => {
@@ -40,6 +40,35 @@ describe("console pipeline", () => {
   it("deduplicates appended entries and enforces the history limit", () => {
     expect(appendConsoleEntries(["a", "b"], ["b", "c"], 3)).toEqual(["a", "b", "c"]);
     expect(appendConsoleEntries(["a", "b", "c"], ["d"], 3)).toEqual(["b", "c", "d"]);
+  });
+
+  it("filters a historical websocket replay split before the live tail", () => {
+    const guard = new ConsoleReplayGuard([
+      "[08:15] starting",
+      "[08:15] Alex joined",
+      "[08:45] saved",
+      "[09:42] list"
+    ]);
+
+    expect(guard.push(["[08:15] starting", "[08:15] Alex joined"])).toEqual([]);
+    expect(guard.push(["[08:45] saved"])).toEqual([]);
+    expect(guard.push(["[09:42] list", "[09:43] Steve joined"])).toEqual(["[09:43] Steve joined"]);
+    expect(guard.push(["[09:43] Steve joined"])).toEqual(["[09:43] Steve joined"]);
+  });
+
+  it("filters a replay that begins at a trailing subset of the snapshot", () => {
+    const guard = new ConsoleReplayGuard(["old", "tail-a", "tail-b"]);
+
+    expect(guard.push(["tail-a"])).toEqual([]);
+    expect(guard.push(["tail-b", "live"])).toEqual(["live"]);
+  });
+
+  it("keeps replay candidates across frames when the first line appears more than once", () => {
+    const guard = new ConsoleReplayGuard(["repeat", "startup", "repeat", "later"]);
+
+    expect(guard.push(["repeat"])).toEqual([]);
+    expect(guard.push(["startup"])).toEqual([]);
+    expect(guard.push(["repeat", "later", "live"])).toEqual(["live"]);
   });
 
   it("keeps the configured number of snapshot lines instead of truncating to 200", () => {
