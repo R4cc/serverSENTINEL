@@ -132,6 +132,8 @@ describe("global stylesheet entry point", () => {
   it("uses the full desktop width for support cards after the timeline replaces Active Players", () => {
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\)\s*\{[\s\S]*?"support support support support support support support support support support support support"/s);
     expect(overviewStyles).toMatch(/\.overviewSupportStack\s*\{[^}]*grid-area:\s*support;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
+    // Side by side in one support-stack row, so neither may shrink to its own content.
+    expect(overviewStyles).toMatch(/@media \(min-width: 981px\)[\s\S]*?\.modUpdatesCard,\s*\.schedulePanel\s*\{\s*align-self:\s*stretch;\s*\}/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow,\s*[\s\S]*?\.eventRow\.eventKind--player_reconnected\s*\{[^}]*border-color:\s*var\(--border-row\);[^}]*background:\s*transparent;/s);
     expect(overviewStyles).toMatch(/\.overviewPage \.eventsPanel \.eventRow\.error\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--sentinel-danger\) 3\.5%, var\(--surface-raised\)\);/s);
   });

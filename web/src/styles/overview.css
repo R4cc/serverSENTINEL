@@ -2092,9 +2092,11 @@ button.overviewCardRow:focus-visible {
 
   .activePlayerGrid { align-content: start; }
 
+  /* Both sit in one row of the support stack, so they stretch to a shared height
+     instead of each shrinking to its own content. Their bodies stay top-aligned. */
   .modUpdatesCard,
   .schedulePanel {
-    align-self: start;
+    align-self: stretch;
   }
 
   .modUpdatesList,
