@@ -907,7 +907,6 @@ button:disabled,
 .buttonRow,
 .userActions,
 .keyFormActions,
-.consoleHeaderActions,
 .fileToolbar,
 .selectionActions,
 .nodeCardActions,
@@ -1539,24 +1538,6 @@ button:disabled,
     border-inline: 0;
     border-radius: 0;
     overflow: hidden;
-  }
-
-  /* The panel title is redundant on phones, but the view switch has to stay reachable. */
-  .workspacePage-console .consolePanel > .uiPanelHeader {
-    flex: 0 0 auto;
-    padding: var(--space-2) var(--space-3);
-    border-bottom: var(--border-strong) solid var(--border-row);
-  }
-
-  .workspacePage-console .consolePanel > .uiPanelHeader .uiPanelHeaderCopy {
-    display: none;
-  }
-
-  .workspacePage-console .consolePanel > .uiPanelHeader .uiPanelHeaderActions,
-  .workspacePage-console .consolePanel .consoleHeaderActions {
-    width: 100%;
-    flex-wrap: nowrap;
-    justify-content: space-between;
   }
 
   .workspacePage-console .consolePanel .terminal,
@@ -2667,10 +2648,6 @@ textarea:hover:not(:disabled),
      the bottom edge, where padding would only read as a gap above the browser toolbar. */
   .workspacePage-console.workspaceServerPage {
     padding-block: var(--space-2) 0;
-  }
-
-  .workspacePage-console .consolePanel > .uiPanelHeader {
-    padding-block: var(--space-1);
   }
 
   .nodesPage.nodeDetailsOpen > .nodesToolbar,

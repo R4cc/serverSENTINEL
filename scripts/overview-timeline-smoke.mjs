@@ -82,7 +82,7 @@ async function assertScenarioData(page) {
   }
 
   const timelineLabels = [...renderedLabels];
-  assert(timelineLabels.includes("≥ 24h 0m"), `The 24-hour session label is missing: ${JSON.stringify(timelineLabels)}`);
+  assert(timelineLabels.includes("25h 0m"), `The exact multi-day session label is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
   const ariaDescription = await chart.getAttribute("aria-label");
@@ -310,10 +310,10 @@ async function assertDesktop(page) {
   const retainedRangeLabels = new Set();
   for (let index = 0; index < 100; index += 1) {
     for (const label of await playerChart.locator("svg text").allTextContents()) retainedRangeLabels.add(label.trim());
-    if (retainedRangeLabels.has("≥ 24h 0m")) break;
+    if (retainedRangeLabels.has("25h 0m")) break;
     await page.mouse.wheel(0, 600);
   }
-  assert(retainedRangeLabels.has("≥ 24h 0m"), "Marathon session disappeared in the seven-day range");
+  assert(retainedRangeLabels.has("25h 0m"), "Marathon session disappeared in the seven-day range");
 
   await assertTimelineNavigation(page);
   const overflow = await page.evaluate(() => ({

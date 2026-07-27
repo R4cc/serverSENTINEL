@@ -189,6 +189,11 @@ describe("global stylesheet entry point", () => {
     expect(fileManagerStyles).toMatch(/\.filesPage\s*\{[^}]*min-height:\s*520px;/s);
   });
 
+  it("promotes rename and delete out of the file action menu when the selection bar is wide enough", () => {
+    expect(fileManagerStyles).toMatch(/\.filesPage \.selectionActionPromoted,\s*\.filesPage \.selectionActionMenu--expanded\s*\{[^}]*display:\s*none;/s);
+    expect(fileManagerStyles).toMatch(/@container \(min-width: 961px\)\s*\{[\s\S]*?\.filesPage \.selectionActionPromoted,[\s\S]*?display:\s*inline-flex;[\s\S]*?\.filesPage \.selectionActionMenu--compact\s*\{[^}]*display:\s*none;/s);
+  });
+
   it("keeps the file editor wider than generic dialogs while preserving its phone inset", () => {
     expect(filesConsoleStyles).toMatch(/\.modalPanel\.fileEditorModal\s*\{[^}]*width:\s*90vw;/s);
     expect(responsiveStyles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.modalPanel\.fileEditorModal\s*\{[^}]*width:\s*calc\(100vw - 16px\);/s);

@@ -113,7 +113,7 @@ function playerTimelineKey(player: string) {
 }
 
 function playerTimelineLaneKey(row: Pick<PlayerTimelineRow, "player" | "online">) {
-  return `player:${row.online ? "online" : "offline"}:${playerTimelineKey(row.player)}`;
+  return `player:${playerTimelineKey(row.player)}`;
 }
 
 export function playerTimelineLanes(rows: PlayerTimelineRow[]): PlayerTimelineLane[] {
@@ -145,6 +145,32 @@ export function resolvePlayerTimelineLaneWindow(
     endKey: lanes[endIndex]?.key,
     visibleCount: count
   };
+}
+
+export function preservePlayerTimelineLanePosition(
+  previousLanes: PlayerTimelineLane[],
+  nextLanes: PlayerTimelineLane[],
+  position: PlayerTimelineLanePosition
+): PlayerTimelineLanePosition {
+  if (!nextLanes.length) return { startIndex: 0 };
+  const nextIndexByKey = new Map(nextLanes.map((lane, index) => [lane.key, index]));
+  const previousWindow = resolvePlayerTimelineLaneWindow(previousLanes, position);
+  const anchorKey = previousWindow.startKey ?? position.startKey;
+  const survivingIndex = anchorKey ? nextIndexByKey.get(anchorKey) : undefined;
+  if (survivingIndex !== undefined) return { startKey: anchorKey, startIndex: survivingIndex };
+
+  const anchorIndex = anchorKey
+    ? previousLanes.findIndex((lane) => lane.key === anchorKey)
+    : Math.max(0, Math.min(previousLanes.length - 1, position.startIndex));
+  for (let index = Math.max(0, anchorIndex + 1); index < previousLanes.length; index += 1) {
+    const nextIndex = nextIndexByKey.get(previousLanes[index].key);
+    if (nextIndex !== undefined) return { startKey: previousLanes[index].key, startIndex: nextIndex };
+  }
+  for (let index = Math.min(previousLanes.length - 1, anchorIndex - 1); index >= 0; index -= 1) {
+    const nextIndex = nextIndexByKey.get(previousLanes[index].key);
+    if (nextIndex !== undefined) return { startKey: previousLanes[index].key, startIndex: nextIndex };
+  }
+  return { startKey: nextLanes[0].key, startIndex: 0 };
 }
 
 export function playerTimelineLanePositionFromZoom(
@@ -293,8 +319,13 @@ export function playerTimelineChartItems(
         && displaySession.endedAt !== null
         && displaySession.endedAt <= viewport.to;
       const open = displaySession.endBoundary === "online" && now >= viewport.from && now <= viewport.to && visibleEnd === now;
+      const durationKnown = sessions.every((session) =>
+        session.startBoundary === "join" && session.endBoundary !== "history-boundary"
+      );
       const activeDurationMs = sessions.reduce((total, session) => total + Math.max(0, (session.endedAt ?? now) - session.startedAt), 0);
-      const durationLabel = `${geometry.lowerBound ? "≥ " : ""}${formatTimelineDuration(activeDurationMs)}${sessions.length > 1 ? " active" : ""}`;
+      const durationLabel = durationKnown
+        ? `${formatTimelineDuration(activeDurationMs)}${sessions.length > 1 ? " active" : ""}`
+        : "Duration unavailable";
       const fullStartLabel = displaySession.startBoundary === "join" ? formatShortTime(displaySession.startedAt) : null;
       const fullEndLabel = displaySession.endBoundary === "online"
         ? "Now"

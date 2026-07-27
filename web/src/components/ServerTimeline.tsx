@@ -18,6 +18,7 @@ import {
   playerTimelineLanePositionFromZoom,
   playerTimelineLanes,
   playerTimelineVisibleLaneCount,
+  preservePlayerTimelineLanePosition,
   resolvePlayerTimelineLaneWindow,
   timelineSessionGeometry,
   type PlayerTimelineLanePosition,
@@ -222,13 +223,16 @@ export function timelinePlayerRows(data: ServerTimelineResponse | null, viewport
   if (!data) return [];
   const activity = data.playerActivity ?? fallbackPlayerActivity(data);
   const online = new Map(activity.onlineNames.map((player) => [player.toLocaleLowerCase(), player]));
+  const includesNow = now >= viewport.from && now <= viewport.to;
   const rows = new Map<string, TimelinePlayerRow>();
-  for (const player of activity.onlineNames) rows.set(player.toLocaleLowerCase(), { player, online: true, sessions: [] });
+  if (includesNow) {
+    for (const player of activity.onlineNames) rows.set(player.toLocaleLowerCase(), { player, online: true, sessions: [] });
+  }
   for (const session of activity.sessions) {
     const sessionEnd = session.endedAt ?? now;
     if (session.startedAt > viewport.to || sessionEnd < viewport.from) continue;
     const key = session.player.toLocaleLowerCase();
-    const row = rows.get(key) ?? { player: online.get(key) ?? session.player, online: online.has(key), sessions: [] };
+    const row = rows.get(key) ?? { player: online.get(key) ?? session.player, online: includesNow && online.has(key), sessions: [] };
     row.sessions.push(session);
     rows.set(key, row);
   }
@@ -453,13 +457,28 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
   const retainedSchedules = Number.isFinite(incomingGeneratedAt)
     ? current.schedules.filter((marker) => marker.kind !== "upcoming" || marker.occurredAt > incomingGeneratedAt)
     : current.schedules;
+  const incomingOnlinePlayers = new Set(
+    incoming.playerActivity?.onlineNames.map((player) => player.trim().toLocaleLowerCase()) ?? []
+  );
+  const incomingActivityPlayers = new Set([
+    ...incomingOnlinePlayers,
+    ...(incoming.playerActivity?.sessions.map((session) => session.player.trim().toLocaleLowerCase()) ?? [])
+  ]);
   const playerActivity = incoming.playerActivity || current.playerActivity
     ? {
         ...(current.playerActivity ?? { snapshotState: "unavailable" as const, onlineNames: [], sessions: [] }),
         ...(incoming.playerActivity ?? {}),
         sessions: uniqueBy([
           ...(incoming.playerActivity?.sessions ?? []),
-          ...(current.playerActivity?.sessions ?? []).filter((session) => !incoming.playerActivity?.sessions.some((candidate) => candidate.id === session.id))
+          ...(current.playerActivity?.sessions ?? []).filter((session) => {
+            if (!incoming.playerActivity) return true;
+            const key = session.player.trim().toLocaleLowerCase();
+            if (session.endedAt === null && !incomingOnlinePlayers.has(key)) return false;
+            const overlapsIncoming = session.startedAt <= incoming.to
+              && (session.endedAt ?? Number.POSITIVE_INFINITY) >= incoming.from;
+            if (incomingActivityPlayers.has(key) && overlapsIncoming) return false;
+            return !incoming.playerActivity.sessions.some((candidate) => candidate.id === session.id);
+          })
         ], (session) => session.id)
           .filter((session) => session.startedAt <= to && (session.endedAt ?? Number.POSITIVE_INFINITY) >= from)
           .sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id))
@@ -582,7 +601,17 @@ function PlayerSessionSection({
   const displayRows = interacting ? stableRowsRef.current : rows;
   const lanes = useMemo(() => playerTimelineLanes(displayRows), [displayRows]);
   const [verticalPosition, setVerticalPosition] = useState<PlayerTimelineLanePosition>({ startIndex: 0 });
-  const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, verticalPosition);
+  const previousLanesRef = useRef(lanes);
+  const anchoredPosition = preservePlayerTimelineLanePosition(previousLanesRef.current, lanes, verticalPosition);
+  const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, anchoredPosition);
+  useEffect(() => {
+    previousLanesRef.current = lanes;
+    setVerticalPosition((current) =>
+      current.startKey === anchoredPosition.startKey && current.startIndex === anchoredPosition.startIndex
+        ? current
+        : anchoredPosition
+    );
+  }, [anchoredPosition.startIndex, anchoredPosition.startKey, lanes]);
   const option = useMemo(() => buildPlayerTimelineChartOption({
     rows: displayRows,
     lanes,

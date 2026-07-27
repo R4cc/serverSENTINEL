@@ -1548,13 +1548,6 @@ button .buttonIcon {
 
 
 
-.consoleHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
 .dangerPanel {
   border-color: var(--sentinel-danger);
   background:
