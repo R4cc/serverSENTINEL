@@ -17,6 +17,9 @@ const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
 const serverTimeline = readFileSync(new URL("./components/ServerTimeline.tsx", import.meta.url), "utf8");
+const nodesStyles = readFileSync(new URL("./styles/nodes.css", import.meta.url), "utf8");
+const modsSummary = readFileSync(new URL("./features/mods/ModsSummary.tsx", import.meta.url), "utf8");
+const nodesPage = readFileSync(new URL("./pages/NodesPage.tsx", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
   it("loads the design system in an intentional cascade", () => {
@@ -187,7 +190,7 @@ describe("global stylesheet entry point", () => {
   });
 
   it("keeps mod loading values and scrollbars from resizing the workspace", () => {
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary \.uiMetricTileCopy strong\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*20px;/s);
     expect(modsStyles).toMatch(/\.modsMetricValueSkeleton\s*\{[^}]*height:\s*17px;[^}]*margin:\s*0;/s);
     expect(modsStyles).toMatch(/\.modsWorkspaceTable\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
   });
@@ -201,12 +204,19 @@ describe("global stylesheet entry point", () => {
     expect(phoneModRules).toMatch(/\.modsWorkspaceTable\s*\{[^}]*flex:\s*none;[^}]*scrollbar-gutter:\s*auto;/s);
   });
 
-  it("keeps the Mods summary markers vivid in every theme", () => {
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric \.uiMetricTileMarker\s*\{[^}]*currentColor 26%[^}]*currentColor 24%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.blue \.uiMetricTileMarker\s*\{[^}]*--sentinel-info[^}]*--sentinel-info\) 72%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.orange \.uiMetricTileMarker\s*\{[^}]*--sentinel-warning[^}]*--sentinel-warning\) 76%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.green \.uiMetricTileMarker\s*\{[^}]*--sentinel-success[^}]*--sentinel-success\) 72%/s);
-    expect(modsStyles).toMatch(/\.modsWorkspaceMetric\.purple \.uiMetricTileMarker\s*\{[^}]*--accent[^}]*--accent\) 72%/s);
+  it("keeps the workspace summary markers vivid in every theme", () => {
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary \.uiMetricTileMarker\s*\{[^}]*currentColor 26%[^}]*currentColor 24%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--info \.uiMetricTileMarker\s*\{[^}]*--sentinel-info[^}]*--sentinel-info\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--warning \.uiMetricTileMarker\s*\{[^}]*--sentinel-warning[^}]*--sentinel-warning\) 76%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--success \.uiMetricTileMarker\s*\{[^}]*--sentinel-success[^}]*--sentinel-success\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--accent \.uiMetricTileMarker\s*\{[^}]*--accent[^}]*--accent\) 72%/s);
+    expect(primitiveStyles).toMatch(/\.uiMetricTile--summary\.uiMetricTile--danger \.uiMetricTileMarker\s*\{[^}]*--sentinel-danger[^}]*--sentinel-danger\) 72%/s);
+  });
+
+  it("gives the Mods and Nodes summaries the same tile, not two lookalikes", () => {
+    expect(modsStyles).not.toContain(".modsWorkspaceMetric");
+    expect(nodesStyles).not.toContain(".nodesFleetMetric");
+    for (const summary of [modsSummary, nodesPage]) expect(summary).toContain('variant="summary"');
   });
 
   it("keeps the Files page layout owned by the file-manager stylesheet", () => {

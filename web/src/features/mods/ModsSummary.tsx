@@ -43,8 +43,8 @@ export function ModsSummary({ mods, updatePlan, loading = false, terminology = f
       {items.map((item) => (
         <MetricTile
           key={item.label}
-          className={`modsWorkspaceMetric ${item.tone}`}
-          tone={item.tone === "orange" ? "warning" : item.tone === "green" ? "success" : item.tone === "purple" ? "accent" : "neutral"}
+          variant="summary"
+          tone={item.tone === "orange" ? "warning" : item.tone === "green" ? "success" : item.tone === "purple" ? "accent" : "info"}
           label={item.label}
           value={initialLoading ? <SkeletonBlock className="modsMetricValueSkeleton" /> : item.value}
         />

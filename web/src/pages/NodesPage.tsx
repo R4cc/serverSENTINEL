@@ -576,21 +576,21 @@ export function NodesPage({
         <>
           <section className="nodesFleetSummary" aria-label="Node fleet summary">
             <MetricTile
-              className="nodesFleetMetric nodesFleetMetric--nodes"
+              variant="summary"
               tone={fleet.nodesOnline === fleet.nodes ? "success" : "danger"}
               label="Nodes"
               value={fleet.nodes}
               detail={`${fleet.nodesOnline} online`}
             />
             <MetricTile
-              className="nodesFleetMetric nodesFleetMetric--servers"
-              tone="neutral"
+              variant="summary"
+              tone="info"
               label="Servers"
               value={fleet.servers}
               detail={`${fleet.serversRunning} running`}
             />
             <MetricTile
-              className="nodesFleetMetric nodesFleetMetric--players"
+              variant="summary"
               tone="accent"
               label="Players"
               value={fleet.players}

@@ -12,49 +12,12 @@
 
 /* Fleet summary and toolbar --------------------------------------------- */
 
+/* The tiles themselves are the shared uiMetricTile--summary variant, same as the
+   Mods workspace summary; this page only owns how they are arranged. */
 .nodesFleetSummary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-}
-
-.nodesFleetMetric.uiMetricTile {
-  gap: 10px;
-  padding: var(--space-3) 14px;
-  border-color: var(--border);
-}
-
-.nodesFleetMetric .uiMetricTileMarker {
-  box-shadow: inset 0 0 0 8px color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.nodesFleetMetric--nodes.uiMetricTile--success .uiMetricTileMarker {
-  color: var(--sentinel-success);
-  background: color-mix(in srgb, var(--sentinel-success) 72%, transparent);
-}
-
-.nodesFleetMetric--nodes.uiMetricTile--danger .uiMetricTileMarker {
-  color: var(--sentinel-danger);
-  background: color-mix(in srgb, var(--sentinel-danger) 72%, transparent);
-}
-
-.nodesFleetMetric--servers .uiMetricTileMarker {
-  color: var(--sentinel-info);
-  background: color-mix(in srgb, var(--sentinel-info) 72%, transparent);
-}
-
-.nodesFleetMetric--players .uiMetricTileMarker {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 72%, transparent);
-}
-
-/* Pin the value row so the three tiles line up label-to-label. */
-.nodesFleetMetric .uiMetricTileCopy strong {
-  display: flex;
-  align-items: center;
-  min-height: 20px;
-  font-size: 1.08rem;
-  line-height: 1.1;
 }
 
 .nodesToolbar {

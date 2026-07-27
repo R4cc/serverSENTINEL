@@ -6,7 +6,8 @@ type SurfaceElement = "section" | "article" | "aside" | "div";
 type SurfaceDensity = "default" | "compact" | "flush";
 type SurfaceTone = "default" | "subtle";
 type BannerTone = "info" | "success" | "warning" | "error";
-type MetricTone = "neutral" | "accent" | "success" | "warning" | "danger";
+type MetricTone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
+type MetricVariant = "default" | "summary";
 
 function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -216,6 +217,7 @@ export function MetricTile({
   value,
   detail,
   tone = "neutral",
+  variant = "default",
   className,
   ...props
 }: HTMLAttributes<HTMLElement> & {
@@ -223,9 +225,10 @@ export function MetricTile({
   value: ReactNode;
   detail?: ReactNode;
   tone?: MetricTone;
+  variant?: MetricVariant;
 }) {
   return (
-    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, className)}>
+    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, className)}>
       <span className="uiMetricTileMarker" aria-hidden="true" />
       <div className="uiMetricTileCopy">
         <span className="uiMetricTileLabel">{label}</span>
