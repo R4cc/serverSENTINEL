@@ -36,10 +36,11 @@
   background: var(--surface-raised);
 }
 
+/* General and Advanced span the full width; Resources and Network auto-place
+   side by side on the row between them and stretch to a shared height. */
 .propertiesSettingsSurface {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  align-items: start;
   gap: var(--space-3);
   min-width: 0;
 }
@@ -48,7 +49,6 @@
   display: grid;
   gap: var(--space-4);
   min-width: 0;
-  height: 100%;
   border: 1px solid var(--border-row);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
@@ -57,14 +57,6 @@
 
 .propertiesSectionGeneral {
   grid-column: 1 / -1;
-}
-
-.propertiesSectionResources {
-  grid-column: 1;
-}
-
-.propertiesSectionNetwork {
-  grid-column: 2;
 }
 
 .propertiesFieldGrid {
@@ -328,16 +320,10 @@
   max-width: 720px;
 }
 
+/* Single column; the `1 / -1` spans above already collapse to it. */
 @media (max-width: 1100px) {
   .propertiesSettingsSurface {
     grid-template-columns: 1fr;
-  }
-
-  .propertiesSectionGeneral,
-  .propertiesSectionResources,
-  .propertiesSectionNetwork,
-  .propertiesDisclosure.resourceDisclosure {
-    grid-column: 1;
   }
 }
 

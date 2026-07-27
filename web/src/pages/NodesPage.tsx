@@ -558,6 +558,8 @@ export function NodesPage({
     };
   }, [playerSnapshots, serverStateLabel, sortedNodes]);
 
+  const hasNodes = sortedNodes.length > 0;
+
   const addNodeButton = (
     <Button
       onClick={onOpenAddNode}
@@ -570,48 +572,48 @@ export function NodesPage({
 
   return (
     <section className={`pageStack nodesPage layoutWide ${selectedDetailsNode ? "nodeDetailsOpen" : ""}`.trim()}>
-      {sortedNodes.length > 0 && (
-        <section className="nodesFleetSummary" aria-label="Node fleet summary">
-          <MetricTile
-            className="nodesFleetMetric nodesFleetMetric--nodes"
-            tone={fleet.nodesOnline === fleet.nodes ? "success" : "danger"}
-            label="Nodes"
-            value={fleet.nodes}
-            detail={`${fleet.nodesOnline} online`}
-          />
-          <MetricTile
-            className="nodesFleetMetric nodesFleetMetric--servers"
-            tone="neutral"
-            label="Servers"
-            value={fleet.servers}
-            detail={`${fleet.serversRunning} running`}
-          />
-          <MetricTile
-            className="nodesFleetMetric nodesFleetMetric--players"
-            tone="accent"
-            label="Players"
-            value={fleet.players}
-            detail="Online now"
-          />
-        </section>
-      )}
+      {hasNodes && (
+        <>
+          <section className="nodesFleetSummary" aria-label="Node fleet summary">
+            <MetricTile
+              className="nodesFleetMetric nodesFleetMetric--nodes"
+              tone={fleet.nodesOnline === fleet.nodes ? "success" : "danger"}
+              label="Nodes"
+              value={fleet.nodes}
+              detail={`${fleet.nodesOnline} online`}
+            />
+            <MetricTile
+              className="nodesFleetMetric nodesFleetMetric--servers"
+              tone="neutral"
+              label="Servers"
+              value={fleet.servers}
+              detail={`${fleet.serversRunning} running`}
+            />
+            <MetricTile
+              className="nodesFleetMetric nodesFleetMetric--players"
+              tone="accent"
+              label="Players"
+              value={fleet.players}
+              detail="Online now"
+            />
+          </section>
 
-      {sortedNodes.length > 0 && (
-        <Toolbar
-          className="nodesToolbar"
-          primary={addNodeButton}
-          meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
-          secondary={(
-            <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
-              <AppIcon name="refresh" />
-              {busy ? "Refreshing…" : "Refresh"}
-            </Button>
-          )}
-        />
+          <Toolbar
+            className="nodesToolbar"
+            primary={addNodeButton}
+            meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
+            secondary={(
+              <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
+                <AppIcon name="refresh" />
+                {busy ? "Refreshing…" : "Refresh"}
+              </Button>
+            )}
+          />
+        </>
       )}
 
       <section className="nodesBoard">
-        {sortedNodes.length > 0 && (
+        {hasNodes && (
           <PanelHeader
             className="nodesBoardHeader"
             headingLevel={3}
@@ -619,7 +621,7 @@ export function NodesPage({
             description="Hosts available to run and manage Minecraft servers."
           />
         )}
-        {sortedNodes.length === 0 && (
+        {!hasNodes && (
           <EmptyState
             className="nodesEmptyState"
             title="No nodes yet"
@@ -645,7 +647,7 @@ export function NodesPage({
             node.isInternal ? "" : node.agentVersion ? `agent ${node.agentVersion}` : ""
           ].filter(Boolean);
           return (
-            <article key={node.id} className={`nodeTile ${node.status}`}>
+            <article key={node.id} className="nodeTile">
               <header className="nodeTileHead">
                 <span className={`nodeTileMark ${statusTone(node.status)}`} aria-hidden="true"><AppIcon name="server" /></span>
                 <h3 className="nodeTileName" title={node.name}>{node.name}</h3>

@@ -5,8 +5,8 @@
    Nodes list; the drawer and the install dialogs keep their settings-nodes.css
    rules. */
 
+/* Width comes from the layoutWide contract in canonical-layout.css. */
 .nodesPage {
-  max-width: none;
   gap: 14px;
 }
 
@@ -19,11 +19,8 @@
 }
 
 .nodesFleetMetric.uiMetricTile {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  min-height: 72px;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border-color: var(--border);
 }
 
@@ -51,10 +48,7 @@
   background: color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
-.nodesFleetMetric .uiMetricTileCopy {
-  grid-template-rows: auto 20px auto;
-}
-
+/* Pin the value row so the three tiles line up label-to-label. */
 .nodesFleetMetric .uiMetricTileCopy strong {
   display: flex;
   align-items: center;
@@ -90,7 +84,6 @@
 }
 
 .nodesEmptyState {
-  width: 100%;
   border: 0;
   border-radius: 0;
 }
@@ -427,18 +420,10 @@
   }
 }
 
+/* One column: the third tile's `1 / -1` span already collapses to it, and the
+   primitive layer already stretches toolbar buttons below 720px. */
 @media (max-width: 460px) {
   .nodesFleetSummary {
     grid-template-columns: 1fr;
-  }
-
-  .nodesFleetSummary > :nth-child(3) {
-    grid-column: auto;
-  }
-
-  .nodesToolbar .uiToolbarPrimary,
-  .nodesToolbar .uiToolbarSecondary,
-  .nodesToolbar .uiButton {
-    width: 100%;
   }
 }
