@@ -38,12 +38,6 @@
 .modsWorkspaceIdentity > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-left: auto; color: var(--text-muted); }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceIdentity small { overflow: hidden; color: var(--text-muted); font-size: .76rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.modsStatusChip.ready { border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent); color: var(--status-success-foreground); background: color-mix(in srgb, var(--sentinel-success) 11%, transparent); }
-.modsStatusChip.update { border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent); color: var(--status-warning-foreground); background: color-mix(in srgb, var(--sentinel-warning) 11%, transparent); }
-.modsStatusChip.review { border-color: color-mix(in srgb, var(--sentinel-accent) 34%, transparent); color: var(--sentinel-accent-strong); background: var(--sentinel-accent-soft); }
-.modsStatusChip.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent); color: var(--status-danger-foreground); background: color-mix(in srgb, var(--sentinel-danger) 10%, transparent); }
-.modsStatusChip.unknown { border-color: var(--border); background: var(--surface); }
-
 .modsWorkspaceStatus {
   display: flex;
   align-items: center;
@@ -59,7 +53,7 @@
 .modsUpdateCell.review .modsUpdateVersions strong { color: var(--sentinel-accent-strong); }
 .modsWorkspaceUpdate button { padding: 5px 10px; border: 1px solid color-mix(in srgb, currentColor 34%, var(--border)); background: color-mix(in srgb, currentColor 7%, transparent); box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: color-mix(in srgb, currentColor 11%, transparent); }
-.modsWorkspaceUpdate .modsUpdateAction { width: 100%; min-width: 0; justify-content: space-between; overflow: hidden; }
+.modsWorkspaceUpdate .modsUpdateAction { justify-content: space-between; overflow: hidden; }
 .modsUpdateTransition { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .modsUpdateTransition .modsUpdateArrow { color: var(--accent); }
 .modsUpdateTransition strong { overflow: hidden; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }

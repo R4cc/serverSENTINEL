@@ -200,10 +200,6 @@ export type ResourceSample = ResourceStats & {
   sampledAt: number;
 };
 
-export type ResourceStatsHistory = {
-  samples: ResourceSample[];
-};
-
 export type ServerOverviewData = {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";

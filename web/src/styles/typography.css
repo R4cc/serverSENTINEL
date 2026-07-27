@@ -116,9 +116,6 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.sideNav {
-}
-
 .sideNav button {
   min-height: 44px;
 }
