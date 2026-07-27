@@ -27,6 +27,7 @@ import {
 import { RuntimeControlIcon } from "./RuntimeControls";
 import {
   buildTimelineChartOption,
+  clampTimelineWindow,
   dataZoomWindow,
   defaultTimelinePalette,
   liveTimelineWindow,
@@ -47,7 +48,8 @@ const timelineRanges = [
   { label: "1h", milliseconds: 60 * 60 * 1000 },
   { label: "3h", milliseconds: 3 * 60 * 60 * 1000 },
   { label: "6h", milliseconds: 6 * 60 * 60 * 1000 },
-  { label: "24h", milliseconds: 24 * 60 * 60 * 1000 }
+  { label: "24h", milliseconds: 24 * 60 * 60 * 1000 },
+  { label: "7d", milliseconds: 7 * 24 * 60 * 60 * 1000 }
 ] as const;
 
 type TimelineRange = typeof timelineRanges[number]["label"];
@@ -72,10 +74,10 @@ export function timelineHorizontalWheelPixels(event: Pick<WheelEvent, "deltaMode
   return horizontal * unit;
 }
 
-export function panTimelineWindowByPixels(viewport: TimelineWindow, deltaPixels: number, plotWidth: number): TimelineWindow {
+export function panTimelineWindowByPixels(viewport: TimelineWindow, deltaPixels: number, plotWidth: number, now = Date.now()): TimelineWindow {
   if (!Number.isFinite(deltaPixels) || !Number.isFinite(plotWidth) || plotWidth <= 0) return viewport;
   const deltaMs = deltaPixels / plotWidth * (viewport.to - viewport.from);
-  return { from: viewport.from + deltaMs, to: viewport.to + deltaMs };
+  return clampTimelineWindow({ from: viewport.from + deltaMs, to: viewport.to + deltaMs }, now);
 }
 
 type MetricBand = {
@@ -557,9 +559,7 @@ function PlayerSessionSection({
   interacting,
   onDataZoom,
   onInteractionChange,
-  onPointerMove,
-  onPointerLeave,
-  onClick,
+  onPointerEnter,
   onWheel
 }: {
   rows: TimelinePlayerRow[];
@@ -574,9 +574,7 @@ function PlayerSessionSection({
   interacting: boolean;
   onDataZoom: (event: TimelineDataZoomEvent) => void;
   onInteractionChange: (interacting: boolean) => void;
-  onPointerMove: React.PointerEventHandler<HTMLDivElement>;
-  onPointerLeave: React.PointerEventHandler<HTMLDivElement>;
-  onClick: React.MouseEventHandler<HTMLDivElement>;
+  onPointerEnter: React.PointerEventHandler<HTMLElement>;
   onWheel: (event: globalThis.WheelEvent) => void;
 }) {
   const stableRowsRef = useRef(rows);
@@ -610,6 +608,7 @@ function PlayerSessionSection({
       aria-label="Player sessions"
       data-viewport-from={viewport.from}
       data-viewport-to={viewport.to}
+      onPointerEnter={onPointerEnter}
     >
       {lanes.length ? (
         <>
@@ -624,9 +623,6 @@ function PlayerSessionSection({
               option={option}
               onDataZoom={handleDataZoom}
               onInteractionChange={onInteractionChange}
-              onPointerMove={onPointerMove}
-              onPointerLeave={onPointerLeave}
-              onClick={onClick}
               onWheel={onWheel}
             />
           </div>
@@ -640,17 +636,18 @@ export function zoomTimelineWindowAtPixel(
   viewport: TimelineWindow,
   deltaPixels: number,
   anchorPixel: number,
-  plotWidth: number
+  plotWidth: number,
+  now = Date.now()
 ): TimelineWindow {
   if (plotWidth <= 0 || !Number.isFinite(deltaPixels)) return viewport;
   const span = Math.max(1, viewport.to - viewport.from);
   const nextSpan = Math.min(timelineRetentionMs, Math.max(60_000, span * Math.exp(deltaPixels * 0.0015)));
   const anchorRatio = Math.min(1, Math.max(0, anchorPixel / plotWidth));
   const anchorTime = viewport.from + span * anchorRatio;
-  return {
+  return clampTimelineWindow({
     from: anchorTime - nextSpan * anchorRatio,
     to: anchorTime + nextSpan * (1 - anchorRatio)
-  };
+  }, now);
 }
 
 export function ServerTimeline({
@@ -718,8 +715,9 @@ export function ServerTimeline({
   );
 
   const setViewport = useCallback((next: TimelineWindow) => {
-    viewportRef.current = next;
-    setViewportState(next);
+    const bounded = clampTimelineWindow(next);
+    viewportRef.current = bounded;
+    setViewportState(bounded);
   }, []);
 
   const setLiveMode = useCallback((next: boolean) => {
@@ -733,9 +731,10 @@ export function ServerTimeline({
     commitViewport?: boolean;
     onCommit?: () => void;
   } = {}) => {
-    const query = timelineQueryWindow(nextViewport, nextLive);
-    const current = dataRef.current;
     const now = Date.now();
+    const boundedViewport = clampTimelineWindow(nextViewport, now);
+    const query = timelineQueryWindow(boundedViewport, nextLive, now);
+    const current = dataRef.current;
     const generatedAt = current ? new Date(current.generatedAt).getTime() : NaN;
     const incremental = Boolean(
       options.incremental
@@ -756,7 +755,7 @@ export function ServerTimeline({
         : { ...response, from: query.from, to: query.to };
       if (!incremental) lastFullLoadRef.current = now;
       dataRef.current = next;
-      if (options.commitViewport) setViewport(nextViewport);
+      if (options.commitViewport) setViewport(boundedViewport);
       setData(next);
       options.onCommit?.();
       onLatestSample?.(next.latest);
@@ -945,15 +944,17 @@ export function ServerTimeline({
     const currentData = dataRef.current;
     if (!currentData) return;
     const currentQuery = { from: currentData.from, to: currentData.to };
-    const next = dataZoomWindow(event, currentQuery);
-    if (!next) return;
+    const zoomed = dataZoomWindow(event, currentQuery);
+    if (!zoomed) return;
+    const now = Date.now();
+    const next = clampTimelineWindow(zoomed, now);
     setSelection("custom");
     setSelectedCluster(null);
     setLiveMode(false);
     setViewport(next);
     if (navigationTimerRef.current !== undefined) window.clearTimeout(navigationTimerRef.current);
     navigationTimerRef.current = window.setTimeout(() => {
-      if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+      if (timelineNeedsRefill(next, currentQuery, now)) void loadWindow(next, false);
     }, 250);
   }, [loadWindow, setLiveMode, setViewport]);
 
@@ -961,6 +962,12 @@ export function ServerTimeline({
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
     hoverFrameRef.current = undefined;
     setHoverTooltip((current) => current?.pinned ? current : null);
+  }, []);
+
+  const clearHoverTooltip = useCallback(() => {
+    if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    hoverFrameRef.current = undefined;
+    setHoverTooltip(null);
   }, []);
 
   const handleChartPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -1006,7 +1013,8 @@ export function ServerTimeline({
       event.preventDefault();
       event.stopImmediatePropagation();
       const current = viewportRef.current;
-      const next = zoomTimelineWindowAtPixel(current, event.deltaY, event.clientX - rect.left - metricGrid.left, plotWidth);
+      const now = Date.now();
+      const next = zoomTimelineWindowAtPixel(current, event.deltaY, event.clientX - rect.left - metricGrid.left, plotWidth, now);
       setSelection("custom");
       setSelectedCluster(null);
       setLiveMode(false);
@@ -1015,7 +1023,7 @@ export function ServerTimeline({
       navigationTimerRef.current = window.setTimeout(() => {
         const currentData = dataRef.current;
         const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
-        if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+        if (timelineNeedsRefill(next, currentQuery, now)) void loadWindow(next, false);
       }, 250);
       return;
     }
@@ -1024,7 +1032,8 @@ export function ServerTimeline({
     event.preventDefault();
     event.stopImmediatePropagation();
     const current = viewportRef.current;
-    const next = panTimelineWindowByPixels(current, horizontalPixels, plotWidth);
+    const now = Date.now();
+    const next = panTimelineWindowByPixels(current, horizontalPixels, plotWidth, now);
     setSelection("custom");
     setLiveMode(false);
     setViewport(next);
@@ -1032,7 +1041,7 @@ export function ServerTimeline({
     navigationTimerRef.current = window.setTimeout(() => {
       const currentData = dataRef.current;
       const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
-      if (timelineNeedsRefill(next, currentQuery)) void loadWindow(next, false);
+      if (timelineNeedsRefill(next, currentQuery, now)) void loadWindow(next, false);
     }, 250);
   }, [loadWindow, metricGrid, setLiveMode, setViewport]);
 
@@ -1209,9 +1218,7 @@ export function ServerTimeline({
             interacting={chartInteracting}
             onDataZoom={handleDataZoom}
             onInteractionChange={handleChartInteractionChange}
-            onPointerMove={handleChartPointerMove}
-            onPointerLeave={hideHoverTooltip}
-            onClick={pinHoverTooltip}
+            onPointerEnter={clearHoverTooltip}
             onWheel={handleTimelineWheel}
           />
         )}

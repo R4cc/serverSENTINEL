@@ -338,15 +338,6 @@ button .buttonIcon {
 }
 
 .runtimeBadge {
-  border: var(--border-strong) solid var(--border);
-  border-radius: 999px;
-  padding: 2px 8px;
-  color: var(--text);
-  background: var(--surface);
-  font-size: 9px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  white-space: nowrap;
   line-height: 1.2;
 }
 

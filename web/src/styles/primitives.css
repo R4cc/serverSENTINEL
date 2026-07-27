@@ -15,7 +15,7 @@
 }
 
 .uiButton--primary { border-color: var(--text); background: var(--text); color: var(--surface); }
-.uiButton--primary:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); color: var(--swiss-white); transform: none; }
+.uiButton--primary:hover:not(:disabled) { transform: none; }
 .uiButton--secondary { border-color: var(--border-muted); background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted)); color: var(--text); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,

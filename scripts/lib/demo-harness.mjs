@@ -10,7 +10,7 @@ export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "
 const playwrightInstallCommand = "npx playwright install chromium webkit";
 
 /** Reserves a free loopback port by letting the kernel pick one and releasing it again. */
-export async function availablePort() {
+async function availablePort() {
   return new Promise((resolvePort, rejectPort) => {
     const listener = createServer();
     listener.once("error", rejectPort);

@@ -36,11 +36,6 @@
     padding-bottom: var(--space-4) !important;
   }
 
-  .brandBlock .iconButton,
-  .sidebarCollapsed .brandBlock .iconButton {
-    position: static !important;
-  }
-
   .brandLockup,
   .sidebarCollapsed .brandLockup {
     left: 0 !important;
@@ -1033,7 +1028,6 @@ button:disabled,
   color: var(--text-muted);
   font-size: 10px;
   font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
   line-height: 1;
   white-space: nowrap;
 }
@@ -1085,12 +1079,6 @@ button:disabled,
 
 .modalPanel {
   padding: 0;
-}
-
-.modalBody,
-.userModalBody,
-.nodeModalBody,
-.fileEditorBody {
 }
 
 .modalFooter,
@@ -1175,32 +1163,6 @@ button:disabled,
 }
 
 /* Sidebar-specific states need to remain legible against its navy surface. */
-.sidebar .sideNav button.active,
-.sidebar .serverListItem.active {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 58%, var(--accent));
-  border-radius: 10px;
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 7%) 0 25%, transparent 25% 50%, rgb(255 255 255 / 4%) 50% 75%, transparent 75%) 0 0 / 8px 8px,
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, white), var(--accent));
-  color: var(--swiss-white);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 18%),
-    0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
-}
-
-.sidebar .sideNav button.active:hover,
-.sidebar .serverListItem.active:hover {
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 8%) 0 25%, transparent 25% 50%, rgb(255 255 255 / 4%) 50% 75%, transparent 75%) 0 0 / 8px 8px,
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, white), color-mix(in srgb, var(--accent) 88%, black));
-  color: var(--swiss-white);
-}
-
-.sidebar .accountIcon {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
 
 /* Phone layouts use a single visual viewport and a single active scroll owner. */
 @media (max-width: 720px) {
@@ -1226,28 +1188,13 @@ button:disabled,
 
   .sidebar,
   .sidebarCollapsed .sidebar {
-    position: relative;
-    inset: auto;
     z-index: 40;
-    grid-row: 1;
-    height: 68px;
     min-height: 0;
-    padding: 12px !important;
-    overflow: hidden;
     border-right: 0;
     border-bottom: var(--border-heavy) solid var(--border);
   }
 
-  .sidebar .brandBlock,
-  .sidebarCollapsed .brandBlock {
-    min-height: 44px;
-    height: 44px !important;
-    padding: 0 !important;
-    border-bottom: 0;
-  }
-
   .workspace {
-    grid-row: 2;
     width: 100%;
     height: 100%;
     min-height: 0;
@@ -1265,41 +1212,12 @@ button:disabled,
   }
 
   .mobileNavigationOpen .sidebar {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: var(--visual-viewport-height, 100dvh);
-    padding-top: max(12px, env(safe-area-inset-top)) !important;
-    padding-right: max(12px, env(safe-area-inset-right)) !important;
-    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
-    padding-left: max(12px, env(safe-area-inset-left)) !important;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    background: var(--surface);
-    border: 0;
   }
 
   .mobileNavigationOpen .sidebar .brandBlock {
-    position: sticky;
-    top: 0;
     z-index: 1;
-    flex: 0 0 44px;
     background: var(--surface);
-  }
-
-  .mobileNavigationOpen .sideNav,
-  .mobileNavigationOpen .sideNavBottom {
-    flex: 0 0 auto;
-    overflow: visible;
-  }
-
-  .mobileNavigationOpen .sideNavBottom {
-    margin-top: auto;
   }
 
   .mobileNavigationOpen .workspace {
@@ -1357,45 +1275,12 @@ button:disabled,
     height: 44px;
   }
 
-  .workspaceServerPage > .activeServerStrip .serverStripRight {
-    grid-template-columns: minmax(0, 1fr) 44px;
-  }
-
-  .workspaceServerPage > .activeServerStrip .runtimeControlButton,
-  .workspaceServerPage > .activeServerStrip .overflowButton {
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .workspaceServerPage > .activeServerStrip .overflowButton {
-    width: 44px;
-  }
-
-  .workspacePage-files .fileNavButtons .uiButton,
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
-  .workspacePage-files .fileBreadcrumbs button {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
-
   .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
     flex-basis: 44px;
   }
 
-  .workspacePage-files .fileBreadcrumbs {
-    min-height: 44px;
-  }
-
   .workspacePage-files .fileBreadcrumbs button {
-    width: auto;
     max-width: min(160px, 54vw);
-  }
-
-  .workspacePage-files .fileTableHead,
-  .workspacePage-files .fileTableRow {
-    min-height: 44px;
   }
 
   .modalBackdrop,
@@ -1719,12 +1604,7 @@ button:disabled,
     gap: 6px;
   }
 
-  .workspacePage-files .fileNavButtons {
-    grid-area: navigation;
-  }
-
   .workspacePage-files .fileBreadcrumbs {
-    grid-area: breadcrumbs;
     min-height: 32px;
   }
 
@@ -1752,7 +1632,6 @@ button:disabled,
   }
 
   .workspacePage-files .fileBreadcrumbs button {
-    width: auto;
     max-width: 160px;
     padding-inline: 8px;
   }

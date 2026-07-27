@@ -62,16 +62,6 @@
   min-height: 0;
 }
 
-.nodeCard.online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-success) 6%, var(--surface-raised));
-}
-
-.nodeCard.offline {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-danger) 6%, var(--surface-raised));
-}
-
 .nodeCard.unknown {
   border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-panel));
   background: color-mix(in srgb, var(--text-soft) 5%, var(--surface-raised));
@@ -193,7 +183,6 @@
 .nodeServerRow:hover:not(:disabled),
 .nodeServerMoreRow:hover:not(:disabled) {
   border-color: var(--accent);
-  background: var(--sentinel-accent-soft);
   color: var(--text);
   transform: none;
 }

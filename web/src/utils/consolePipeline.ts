@@ -41,6 +41,45 @@ function overlapLength(left: string[], right: string[]) {
   return 0;
 }
 
+/**
+ * A newly opened console websocket replays its existing Docker/file tail before it starts
+ * forwarding live output. That replay can be split across several frames, so each early frame
+ * may match the middle of the HTTP snapshot rather than its suffix. Track every possible replay
+ * position until it catches up instead of appending those historical frames after newer output.
+ */
+export class ConsoleReplayGuard {
+  private cursors: number[] | undefined;
+  private replayComplete: boolean;
+
+  constructor(private readonly history: string[]) {
+    this.replayComplete = history.length === 0;
+  }
+
+  push(incoming: string[]) {
+    if (!incoming.length || this.replayComplete) return incoming;
+
+    for (let incomingOffset = 0; incomingOffset < incoming.length; incomingOffset += 1) {
+      if (this.cursors === undefined) {
+        this.cursors = [];
+        for (let historyOffset = 0; historyOffset < this.history.length; historyOffset += 1) {
+          if (this.history[historyOffset] === incoming[incomingOffset]) {
+            this.cursors.push(historyOffset + 1);
+          }
+        }
+      } else {
+        this.cursors = this.cursors
+          .filter((cursor) => cursor < this.history.length && this.history[cursor] === incoming[incomingOffset])
+          .map((cursor) => cursor + 1);
+      }
+      if (!this.cursors.length) {
+        this.replayComplete = true;
+        return incoming.slice(incomingOffset);
+      }
+    }
+    return [];
+  }
+}
+
 export function consoleSnapshotLines(text: string, limit = 5_000) {
   if (!text) return [];
   const lines = text.split(/\r?\n/);

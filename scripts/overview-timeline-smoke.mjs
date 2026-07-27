@@ -8,14 +8,14 @@ const harness = await startDemoHarness({
 });
 const { baseUrl } = harness;
 const fixedNow = new Date("2026-07-24T12:00:00.000Z");
-const liveFutureRatio = 0.1;
 const rangeSpans = new Map([
   ["5m", 5 * 60_000],
   ["15m", 15 * 60_000],
   ["1h", 60 * 60_000],
   ["3h", 3 * 60 * 60_000],
   ["6h", 6 * 60 * 60_000],
-  ["24h", 24 * 60 * 60_000]
+  ["24h", 24 * 60 * 60_000],
+  ["7d", 7 * 24 * 60 * 60_000]
 ]);
 
 let browser;
@@ -55,7 +55,7 @@ async function selectRange(page, label) {
   const window = await timelineWindow(page);
   const expectedSpan = rangeSpans.get(label);
   assertNear(window.to - window.from, expectedSpan, 2, `${label} range span is incorrect`);
-  assertNear(window.to, await page.evaluate(() => Date.now()) + expectedSpan * liveFutureRatio, 1_000, `${label} live range has incorrect future padding`);
+  assertNear(window.to, await page.evaluate(() => Date.now()), 1_000, `${label} live range does not end at the current time`);
   return window;
 }
 
@@ -160,7 +160,7 @@ async function assertTimelineNavigation(page) {
   await page.getByRole("button", { name: "Later timeline window", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
   const returned = await timelineWindow(page);
-  assertNear(returned.to, await page.evaluate(() => Date.now()) + rangeSpans.get("1h") * liveFutureRatio, 1_000, "Later navigation did not return to the live boundary");
+  assertNear(returned.to, await page.evaluate(() => Date.now()), 1_000, "Later navigation did not return to the live boundary");
 
   const scroller = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
   const box = await scroller.boundingBox();
@@ -304,16 +304,16 @@ async function assertDesktop(page) {
   for (const label of rangeSpans.keys()) await selectRange(page, label);
   const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
   const playerChartBox = await playerChart.boundingBox();
-  assert(playerChartBox, "Player timeline disappeared in the 24-hour range");
+  assert(playerChartBox, "Player timeline disappeared in the seven-day range");
   await page.mouse.move(playerChartBox.x + playerChartBox.width / 2, playerChartBox.y + playerChartBox.height / 2);
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
-  const twentyFourHourLabels = new Set();
+  const retainedRangeLabels = new Set();
   for (let index = 0; index < 100; index += 1) {
-    for (const label of await playerChart.locator("svg text").allTextContents()) twentyFourHourLabels.add(label.trim());
-    if (twentyFourHourLabels.has("≥ 24h 0m")) break;
+    for (const label of await playerChart.locator("svg text").allTextContents()) retainedRangeLabels.add(label.trim());
+    if (retainedRangeLabels.has("≥ 24h 0m")) break;
     await page.mouse.wheel(0, 600);
   }
-  assert(twentyFourHourLabels.has("≥ 24h 0m"), "Marathon session disappeared in the 24-hour range");
+  assert(retainedRangeLabels.has("≥ 24h 0m"), "Marathon session disappeared in the seven-day range");
 
   await assertTimelineNavigation(page);
   const overflow = await page.evaluate(() => ({

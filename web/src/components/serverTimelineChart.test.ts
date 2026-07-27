@@ -3,6 +3,7 @@ import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey } from "./ServerTimeline";
 import {
   buildTimelineChartOption,
+  clampTimelineWindow,
   cpuAxisMaximum,
   memoryAxisMaximum,
   memoryAxisBounds,
@@ -10,7 +11,6 @@ import {
   defaultTimelinePalette,
   escapeTimelineHtml,
   liveTimelineWindow,
-  liveTimelineFutureRatio,
   nearestTimelineSample,
   timelineHoverTooltipHtml,
   timelineNeedsRefill,
@@ -52,17 +52,18 @@ const clusters: MarkerCluster[] = [{
 }];
 
 describe("server timeline chart windows", () => {
-  it("reserves future headroom for planned schedules and buffers one span behind a live viewport", () => {
+  it("ends live windows at the current time and buffers one span behind them", () => {
     const viewport = liveTimelineWindow(1_000, 10_000);
-    expect(liveTimelineFutureRatio).toBe(0.1);
-    expect(viewport).toEqual({ from: 9_100, to: 10_100 });
-    expect(timelineQueryWindow(viewport, true)).toEqual({ from: 8_100, to: 10_100 });
+    expect(viewport).toEqual({ from: 9_000, to: 10_000 });
+    expect(timelineQueryWindow(viewport, true, 10_000)).toEqual({ from: 8_000, to: 10_000 });
   });
 
-  it("buffers historical viewports on both sides and caps full-day queries", () => {
-    expect(timelineQueryWindow({ from: 10_000, to: 20_000 }, false)).toEqual({ from: 5_000, to: 25_000 });
-    const fullDay = { from: 0, to: timelineRetentionMs };
-    expect(timelineQueryWindow(fullDay, true)).toEqual(fullDay);
+  it("buffers historical viewports, caps seven-day queries, and clamps navigation at now", () => {
+    expect(timelineRetentionMs).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(timelineQueryWindow({ from: 10_000, to: 20_000 }, false, 30_000)).toEqual({ from: 5_000, to: 25_000 });
+    const fullRetention = { from: 0, to: timelineRetentionMs };
+    expect(timelineQueryWindow(fullRetention, true, timelineRetentionMs)).toEqual(fullRetention);
+    expect(clampTimelineWindow({ from: 9_500, to: 10_500 }, 10_000)).toEqual({ from: 9_000, to: 10_000 });
   });
 
   it("converts absolute and percentage data-zoom events into viewports", () => {
@@ -72,8 +73,8 @@ describe("server timeline chart windows", () => {
   });
 
   it("requests a new buffer only near a loaded edge", () => {
-    expect(timelineNeedsRefill({ from: 2_000, to: 8_000 }, { from: 0, to: 10_000 })).toBe(false);
-    expect(timelineNeedsRefill({ from: 500, to: 6_500 }, { from: 0, to: 10_000 })).toBe(true);
+    expect(timelineNeedsRefill({ from: 2_000, to: 8_000 }, { from: 0, to: 10_000 }, 20_000)).toBe(false);
+    expect(timelineNeedsRefill({ from: 500, to: 6_500 }, { from: 0, to: 10_000 }, 20_000)).toBe(true);
   });
 });
 
