@@ -6,6 +6,7 @@
   --font-sans: "Switzer", Inter, "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-page-heading: var(--font-sans);
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --font-console: "JetBrains Mono", var(--font-mono);
   --swiss-white: #ffffff;
   --swiss-black: #000000;
   --swiss-muted: #f2f2f2;
