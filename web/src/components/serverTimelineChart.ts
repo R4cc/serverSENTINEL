@@ -2,8 +2,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import type { ServerTimelineResourcePoint } from "../types";
 import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
 
-export const timelineRetentionMs = 24 * 60 * 60 * 1000;
-export const liveTimelineFutureRatio = 0.1;
+export const timelineRetentionMs = 7 * 24 * 60 * 60 * 1000;
 export const timelineChartGrid = { left: 56, right: 24, top: 48, bottom: 38 } as const;
 export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 34 } as const;
 export const timelineTimeDataZoomId = "timeline-inside";
@@ -182,24 +181,29 @@ export const defaultTimelinePalette: TimelinePalette = {
 };
 
 export function liveTimelineWindow(span: number, now = Date.now()): TimelineWindow {
-  const futureSpan = span * liveTimelineFutureRatio;
-  return { from: now - span + futureSpan, to: now + futureSpan };
+  return { from: now - span, to: now };
 }
 
-export function timelineQueryWindow(viewport: TimelineWindow, live: boolean): TimelineWindow {
-  const span = Math.max(1, viewport.to - viewport.from);
-  if (span >= timelineRetentionMs) return { ...viewport };
+export function clampTimelineWindow(viewport: TimelineWindow, now = Date.now()): TimelineWindow {
+  const span = Math.min(timelineRetentionMs, Math.max(1, viewport.to - viewport.from));
+  const earliest = now - timelineRetentionMs;
+  const to = Math.min(now, Math.max(earliest + span, viewport.to));
+  return { from: to - span, to };
+}
+
+export function timelineQueryWindow(viewport: TimelineWindow, live: boolean, now = Date.now()): TimelineWindow {
+  const boundedViewport = clampTimelineWindow(viewport, now);
+  const span = Math.max(1, boundedViewport.to - boundedViewport.from);
+  if (span >= timelineRetentionMs) return boundedViewport;
   const desired = live
-    ? { from: viewport.from - span, to: viewport.to }
-    : { from: viewport.from - span * 0.5, to: viewport.to + span * 0.5 };
-  if (desired.to - desired.from <= timelineRetentionMs) return desired;
-  const center = (viewport.from + viewport.to) / 2;
-  return { from: center - timelineRetentionMs / 2, to: center + timelineRetentionMs / 2 };
+    ? { from: boundedViewport.from - span, to: boundedViewport.to }
+    : { from: boundedViewport.from - span * 0.5, to: boundedViewport.to + span * 0.5 };
+  return clampTimelineWindow(desired, now);
 }
 
-export function timelineNeedsRefill(viewport: TimelineWindow, query: TimelineWindow) {
+export function timelineNeedsRefill(viewport: TimelineWindow, query: TimelineWindow, now = Date.now()) {
   const span = Math.max(1, viewport.to - viewport.from);
-  const next = timelineQueryWindow(viewport, false);
+  const next = timelineQueryWindow(viewport, false, now);
   const queryAlreadyMatches = Math.abs(next.from - query.from) < 1_000 && Math.abs(next.to - query.to) < 1_000;
   if (queryAlreadyMatches) return false;
   return viewport.from - query.from <= span * 0.25 || query.to - viewport.to <= span * 0.25;

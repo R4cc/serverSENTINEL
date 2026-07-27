@@ -288,7 +288,7 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
   const from = request.query.from === undefined ? to - 60 * 60 * 1000 : Number(request.query.from);
   const requestedMaxPoints = request.query.maxPoints === undefined ? 900 : Number(request.query.maxPoints);
   if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) badRequest("Timeline from and to must define a valid time range");
-  if (to - from > timelineHistoryWindowMs) badRequest("Timeline range cannot exceed 24 hours");
+  if (to - from > timelineHistoryWindowMs) badRequest("Timeline range cannot exceed 7 days");
   if (!Number.isInteger(requestedMaxPoints) || requestedMaxPoints < 100) badRequest("Timeline maxPoints must be a whole number of at least 100");
   const maxPoints = Math.min(1_200, requestedMaxPoints);
   const contextFrom = generatedAt.getTime() - timelineHistoryWindowMs;

@@ -183,5 +183,5 @@ export function streamDockerLogs(server: ManagedServer, client: Client) {
   return request;
 }
 
-export const resourceStatsHistoryWindow = 24 * 60 * 60 * 1000;
-export const timelineHistoryWindow = 24 * 60 * 60 * 1000;
+export const resourceStatsHistoryWindow = 7 * 24 * 60 * 60 * 1000;
+export const timelineHistoryWindow = 7 * 24 * 60 * 60 * 1000;
