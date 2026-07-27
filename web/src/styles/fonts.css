@@ -29,14 +29,3 @@
   font-style: normal;
   font-display: swap;
 }
-
-/* JetBrains Mono 2.304 — JetBrains, SIL Open Font License 1.1.
-   The unmodified regular webfont is bundled for the Console only; its complete
-   copyright notice and license live beside the font asset. */
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("../assets/fonts/jetbrains-mono/jetbrains-mono-400.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}

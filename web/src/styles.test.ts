@@ -3,8 +3,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const stylesheet = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-const fontStyles = readFileSync(new URL("./styles/fonts.css", import.meta.url), "utf8");
-const minecraftTerminal = readFileSync(new URL("./components/MinecraftTerminal.tsx", import.meta.url), "utf8");
 const motionStyles = readFileSync(new URL("./styles/motion.css", import.meta.url), "utf8");
 const tokenStyles = readFileSync(new URL("./styles/tokens.css", import.meta.url), "utf8");
 const primitiveStyles = readFileSync(new URL("./styles/primitives.css", import.meta.url), "utf8");
@@ -75,13 +73,6 @@ describe("global stylesheet entry point", () => {
 
   it("reserves the desktop scrollbar gutter before async content changes page height", () => {
     expect(tokenStyles).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
-  });
-
-  it("bundles JetBrains Mono specifically for the Console", () => {
-    expect(fontStyles).toMatch(/font-family:\s*"JetBrains Mono";[\s\S]*?jetbrains-mono-400\.woff2/);
-    expect(tokenStyles).toMatch(/--font-console:\s*"JetBrains Mono",\s*var\(--font-mono\);/);
-    expect(filesConsoleStyles).toMatch(/\.terminal\s*\{[^}]*font-family:\s*var\(--font-console\);/s);
-    expect(minecraftTerminal).toContain('getPropertyValue("--font-console")');
   });
 
   it("keeps the overview loading skeleton on the final seven-metric desktop geometry", () => {
