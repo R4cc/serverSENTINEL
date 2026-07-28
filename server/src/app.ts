@@ -15,7 +15,7 @@ import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExi
 import { cancelActiveScheduleRun } from "./schedules/activeRuns.js";
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
-import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logInfo, logWarn, routeLogFields } from "./logging.js";
+import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext } from "./logging.js";
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
@@ -98,6 +98,12 @@ const app = Fastify({
   logController: new LogController({ disableRequestLogging: true }),
   bodyLimit: 180 * 1024 * 1024
 });
+app.addHook("onRequest", (request, _reply, done) => {
+  runWithRequestLogContext({
+    requestId: request.id,
+    clientIp: request.ip
+  }, done);
+});
 app.setErrorHandler((error, request, reply) => {
   const expectedUserError = isExpectedUserError(error);
   const statusCode = errorStatusCode(error, reply, expectedUserError);
@@ -108,13 +114,25 @@ app.setErrorHandler((error, request, reply) => {
     ...errorLogFields(error, statusCode)
   };
   if (statusCode >= 500) {
-    app.log.error(fields, "API request failed");
+    logError(fields, "API request failed");
   } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
-    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
+    logWarn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
   } else {
-    app.log.warn(fields, "API request rejected");
+    logWarn(fields, "API request rejected");
   }
   reply.code(statusCode).send(publicApiError(error, statusCode));
+});
+app.addHook("onResponse", async (request, reply) => {
+  if (!request.raw.url?.startsWith("/api/") || request.headers.upgrade?.toLowerCase() === "websocket") {
+    return;
+  }
+  logInfo({
+    ...routeLogFields(request, reply.statusCode),
+    action: "api_request",
+    category: "http",
+    requestKind: ["GET", "HEAD", "OPTIONS"].includes(request.method) ? "read" : "mutation",
+    durationMs: Math.round(reply.elapsedTime * 100) / 100
+  }, "API request completed");
 });
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;

@@ -726,6 +726,8 @@ export function RecentEventsPanel({
   eventsStatus = "ok",
   formatDate,
   relativeTimestamps = true,
+  serverId = "",
+  playerHeadsEnabled = false,
   onOpenConsole,
   requestConfirmation,
   loading = false
@@ -734,6 +736,8 @@ export function RecentEventsPanel({
   eventsStatus?: "ok" | "unavailable";
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
+  serverId?: string;
+  playerHeadsEnabled?: boolean;
   onOpenConsole: () => void;
   requestConfirmation: RequestConfirmation;
   loading?: boolean;
@@ -807,14 +811,24 @@ export function RecentEventsPanel({
                 const timestamp = eventDate(group.timestamp, now);
                 const presentation = recentEventPresentation(group);
                 const relatedLabel = relatedEventLabel(group);
+                const playerName = group.kind === "player_joined"
+                  || group.kind === "player_left"
+                  || group.kind === "player_reconnected"
+                  ? presentation.subject
+                  : undefined;
                 return (
                   <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
-                    <span className="eventIcon" aria-hidden="true">
-                      <EventIcon kind={group.kind} />
+                    <RecentEventMarker
+                      kind={group.kind}
+                      playerName={playerName}
+                      serverId={serverId}
+                      playerHeadsEnabled={playerHeadsEnabled}
+                      version={Math.floor(now.getTime() / (60 * 60 * 1000))}
+                    >
                       {group.events.length > 1 && group.kind !== "player_reconnected" && group.kind !== "server_restarted" && (
                         <span className="eventOccurrenceBadge">×{group.events.length}</span>
                       )}
-                    </span>
+                    </RecentEventMarker>
                     <div className="eventCopy">
                       <strong>{presentation.title}</strong>
                       {presentation.subject && <span className="eventSubject">{presentation.subject}</span>}
@@ -856,5 +870,48 @@ export function RecentEventsPanel({
         )}
       </div>
     </OverviewCard>
+  );
+}
+
+function RecentEventMarker({
+  kind,
+  playerName,
+  serverId,
+  playerHeadsEnabled,
+  version,
+  children
+}: {
+  kind: RecentEventKind;
+  playerName?: string;
+  serverId: string;
+  playerHeadsEnabled: boolean;
+  version: number;
+  children?: ReactNode;
+}) {
+  const source = playerName ? playerHeadSource(serverId, playerName, version) : "";
+  const [failed, setFailed] = useState(false);
+  const showHead = playerHeadsEnabled && Boolean(serverId) && Boolean(playerName) && !failed;
+
+  useEffect(() => setFailed(false), [source, playerHeadsEnabled]);
+
+  return (
+    <span className={`eventIcon${showHead ? " eventIcon--withPlayerHead" : ""}`} aria-hidden="true">
+      {showHead ? (
+        <>
+          <img
+            className="eventPlayerHead"
+            src={source}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+          />
+          <span className="eventPlayerIconBadge">
+            <EventIcon kind={kind} />
+          </span>
+        </>
+      ) : <EventIcon kind={kind} />}
+      {children}
+    </span>
   );
 }

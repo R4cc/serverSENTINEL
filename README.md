@@ -126,6 +126,8 @@ Open `http://localhost:8080`. On first launch, get the one-time setup token from
 docker compose logs serversentinel
 ```
 
+At the default `LOG_LEVEL=info`, the container emits structured JSON for completed API requests and audited authentication or administration actions. Request entries include the request ID, client IP, authenticated actor, normalized route, status, and duration. Passwords, session cookies, authorization headers, raw request bodies, and URL query values are not logged.
+
 The defaults work as-is. To customize the port, time zone, image, or optional API settings, copy [`.env.example`](.env.example) to `.env` before starting the container.
 
 ### All-in-one Docker Compose

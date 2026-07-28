@@ -1,4 +1,5 @@
 import type { StoredUser } from "../types.js";
+import { setRequestLogActor } from "../logging.js";
 
 export type AuthenticatedRequest = {
   headers: { cookie?: string };
@@ -13,6 +14,7 @@ export function currentUserForRequest(
   if (!request.authenticationPromise) {
     request.authenticationPromise = resolveUser(request.headers.cookie).then((user) => {
       request.authenticatedUser = user;
+      setRequestLogActor(user);
       return user;
     });
   }

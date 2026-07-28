@@ -2949,7 +2949,17 @@ export default function App() {
                       }}
                     />
                   </div>
-                  <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
+                  <RecentEventsPanel
+                    events={overviewData.events}
+                    eventsStatus={overviewData.eventsStatus}
+                    formatDate={formatDisplayDate}
+                    relativeTimestamps={relativeTimestamps}
+                    serverId={activeServer.id}
+                    playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                    onOpenConsole={() => setActivePage("console")}
+                    requestConfirmation={requestConfirmation}
+                    loading={overviewLoading && overviewData.events.length === 0}
+                  />
                 </div>
 
               </section>

@@ -994,6 +994,23 @@ button.overviewCardRow:focus-visible {
   font-weight: var(--weight-title);
 }
 
+.serverTimelineAnnotationPopoverGlyph svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.serverTimelineAnnotationPopoverGlyph .controlGlyph-start,
+.serverTimelineAnnotationPopoverGlyph .controlGlyph-stop {
+  fill: currentColor;
+  stroke: none;
+}
+
 .serverTimelineAnnotationPopoverItemBody {
   min-width: 0;
   flex: 1 1 auto;
@@ -1465,6 +1482,68 @@ button.overviewCardRow:focus-visible {
 .overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventIcon {
   background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface-raised));
   color: var(--sentinel-warning);
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_left {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_left::before {
+  background: var(--sentinel-danger);
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventIcon {
+  background: color-mix(in srgb, var(--sentinel-danger) 14%, var(--surface-raised));
+  color: var(--sentinel-danger);
+}
+
+.overviewPage .eventsPanel .eventIcon.eventIcon--withPlayerHead {
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--accent);
+  box-shadow: 0 0 0 var(--border-subtle) var(--border-muted);
+}
+
+.overviewPage .eventsPanel .eventPlayerHead {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  image-rendering: pixelated;
+}
+
+.overviewPage .eventsPanel .eventPlayerIconBadge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--swiss-white);
+  box-shadow: var(--shadow-xs);
+}
+
+.overviewPage .eventsPanel .eventPlayerIconBadge svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_joined .eventPlayerIconBadge {
+  background: var(--sentinel-success);
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventPlayerIconBadge {
+  background: var(--sentinel-danger);
+}
+
+.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventPlayerIconBadge {
+  background: var(--sentinel-warning);
 }
 
 .overviewPage .eventsPanel .eventCopy {
@@ -2110,6 +2189,11 @@ button.overviewCardRow:focus-visible {
   .overviewPage .eventsPanel .eventRow.eventKind--player_reconnected {
     border-color: var(--border-row);
     background: transparent;
+  }
+
+  .overviewPage .eventsPanel .eventRow.eventKind--player_left {
+    border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
+    background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));
   }
 
   .overviewPage .eventsPanel .eventRow.error {

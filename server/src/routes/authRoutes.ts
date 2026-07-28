@@ -4,6 +4,7 @@ import { ROLE_PRESETS, normalizePermissions } from "../permissions.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
+import { setRequestLogActor } from "../logging.js";
 
 type UserPermissionData = {
   permissions: Permission[];
@@ -51,11 +52,16 @@ function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
   context.sessions.deleteExpired(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
 }
 
+function samePermissions(left: readonly Permission[], right: readonly Permission[]) {
+  return left.length === right.length && left.every((permission, index) => permission === right[index]);
+}
+
 export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesContext) {
   app.get("/api/auth/session", async (request) => {
     pruneExpiredSessions(context);
     const users = context.users.list();
     const user = await context.currentUserFromCookie(request.headers.cookie);
+    setRequestLogActor(user);
     return {
       authenticated: Boolean(user),
       setupRequired: users.length === 0,
@@ -93,9 +99,17 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const sessionId = randomBytes(32).toString("base64url");
     context.users.createFirst(user, { id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
+    setRequestLogActor(user);
     const isSecure = requestUsesPublicHttps(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
-    context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "register_first" }, "Initial admin user created");
+    context.logInfo({
+      userId: user.id,
+      username: user.username,
+      rolePreset: user.rolePreset,
+      permissions: user.permissions,
+      category: "audit",
+      action: "register_first"
+    }, "Initial admin user created");
     return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo: false, user: context.publicUser(user) };
   });
 
@@ -106,7 +120,13 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const users = context.users.list();
     const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
     if (!user || !context.verifyPassword(password, user)) {
-      context.logWarn({ username, action: "login", status: "failed" }, "Login failed");
+      context.logWarn({
+        attemptedUsername: username.slice(0, 64),
+        usernameTruncated: username.length > 64 || undefined,
+        category: "audit",
+        action: "login",
+        status: "failed"
+      }, "Login failed");
       const error = new Error("Invalid username or password") as Error & { statusCode?: number };
       error.statusCode = 401;
       throw error;
@@ -115,20 +135,29 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const now = new Date().toISOString();
     context.sessions.create({ id: sessionId, userId: user.id, createdAt: now });
     pruneExpiredSessions(context);
+    setRequestLogActor(user);
     const isSecure = requestUsesPublicHttps(request, context.trustProxy);
     reply.header("Set-Cookie", context.sessionCookie(sessionId, context.sessionMaxAgeSeconds, isSecure));
-    context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, action: "login", status: "succeeded" }, "Login succeeded");
+    context.logInfo({ userId: user.id, username: user.username, rolePreset: user.rolePreset, category: "audit", action: "login", status: "succeeded" }, "Login succeeded");
     const demo = context.demoEnabled && context.isDemoUser(user);
     return { authenticated: true, setupRequired: false, demoEnabled: context.demoEnabled, demo, user: context.publicUser(user) };
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
+    const user = await context.currentUserFromCookie(request.headers.cookie);
+    setRequestLogActor(user);
     const sessionId = context.parseCookies(request.headers.cookie).get(context.sessionCookieName);
     if (sessionId) {
       context.sessions.delete(sessionId);
     }
     reply.header("Set-Cookie", context.sessionCookie("", 0, requestUsesPublicHttps(request, context.trustProxy)));
-    context.logInfo({ action: "logout" }, "User logged out");
+    context.logInfo({
+      userId: user?.id,
+      username: user?.username,
+      rolePreset: user?.rolePreset,
+      category: "audit",
+      action: "logout"
+    }, "User logged out");
     return { ok: true };
   });
 
@@ -154,7 +183,14 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       ...context.hashPassword(password)
     };
     context.users.create(createdUser);
-    context.logInfo({ userId: createdUser.id, username: createdUser.username, rolePreset: createdUser.rolePreset, action: "create_user" }, "User created");
+    context.logInfo({
+      userId: createdUser.id,
+      username: createdUser.username,
+      rolePreset: createdUser.rolePreset,
+      permissions: createdUser.permissions,
+      category: "audit",
+      action: "create_user"
+    }, "User created");
     return context.publicUser(createdUser);
   });
 
@@ -167,6 +203,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       throw error;
     }
     const body = request.body ?? {};
+    const passwordChanged = typeof body.password === "string" && Boolean(body.password.trim());
     const updatedUser = context.users.updateById(request.params.id, (current) => {
       const username = body.username === undefined ? current.username : context.validateUsername(body.username);
       const rolePreset = context.normalizeRolePreset(body.rolePreset);
@@ -174,7 +211,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         rolePreset,
         permissions: body.permissions
       }, current);
-      const password = typeof body.password === "string" && body.password.trim() ? context.validatePassword(body.password) : undefined;
+      const password = passwordChanged ? context.validatePassword(body.password) : undefined;
       return {
         ...current,
         username,
@@ -184,10 +221,26 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         ...(password ? context.hashPassword(password) : {})
       };
     });
-    if (typeof body.password === "string" && body.password.trim()) {
-      context.sessions.deleteForUser(updatedUser.id);
-    }
-    context.logInfo({ userId: updatedUser.id, username: updatedUser.username, rolePreset: updatedUser.rolePreset, action: "update_user" }, "User updated");
+    const sessionsRevoked = passwordChanged ? context.sessions.deleteForUser(updatedUser.id) : 0;
+    const changedFields = [
+      target && target.username !== updatedUser.username ? "username" : undefined,
+      target && target.rolePreset !== updatedUser.rolePreset ? "rolePreset" : undefined,
+      target && !samePermissions(target.permissions, updatedUser.permissions) ? "permissions" : undefined,
+      passwordChanged ? "password" : undefined
+    ].filter((field): field is string => Boolean(field));
+    context.logInfo({
+      userId: updatedUser.id,
+      username: updatedUser.username,
+      previousUsername: target?.username,
+      rolePreset: updatedUser.rolePreset,
+      previousRolePreset: target?.rolePreset,
+      permissions: updatedUser.permissions,
+      previousPermissions: target?.permissions,
+      changedFields,
+      sessionsRevoked,
+      category: "audit",
+      action: "update_user"
+    }, "User updated");
     return context.publicUser(updatedUser);
   });
 
@@ -200,7 +253,14 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       throw error;
     }
     const deletedUser = context.users.delete(request.params.id);
-    context.logInfo({ userId: deletedUser.id, username: deletedUser.username, action: "delete_user" }, "User deleted");
+    context.logInfo({
+      userId: deletedUser.id,
+      username: deletedUser.username,
+      rolePreset: deletedUser.rolePreset,
+      permissions: deletedUser.permissions,
+      category: "audit",
+      action: "delete_user"
+    }, "User deleted");
     return { ok: true };
   });
 }
