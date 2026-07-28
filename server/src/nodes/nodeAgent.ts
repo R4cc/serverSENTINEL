@@ -46,7 +46,7 @@ import {
   writeRuntimeUpload,
   writeServerTextFile
 } from "../runtime/local/fileService.js";
-import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
 import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
@@ -253,7 +253,7 @@ function containerName(server: ManagedServer) {
 function runtimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; includeRestartPolicy: boolean }) {
   const targetRuntime = runtimeTarget(server);
   return {
-    image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
+    image: validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion)),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || serverRuntimeDefinition(targetRuntime.runtimeType).serverJarFilename),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
@@ -291,13 +291,6 @@ async function dockerServerRoot(server: ManagedServer) {
     return root;
   }
   return join(config.nodeDockerDataDir, rel);
-}
-
-function dockerImage(version?: string) {
-  const [major, minor, patch] = (version ?? "").split(".").map(Number);
-  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
-  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) return "eclipse-temurin:21-jre";
-  return "eclipse-temurin:17-jre";
 }
 
 function isValidServerPort(port: string) {
@@ -367,7 +360,7 @@ async function pullImage(image: string) {
 
 async function createContainer(server: ManagedServer, networkingConfig?: NodeNetworkingConfig) {
   const targetRuntime = runtimeTarget(server);
-  const image = validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion));
+  const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion));
   await pullImage(image);
   const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
@@ -516,7 +509,7 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`, queryPort);
   parseDockerPorts(dockerPorts);
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
-  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const server: ManagedServer = {
     id,
@@ -602,7 +595,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultServerContainerName(server.id));
-  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(runtimeProfile.minecraftVersion));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });
   const dockerPorts = requestedDockerPorts ? ensureQueryDockerPort(requestedDockerPorts, queryPort) : requestedDockerPorts;

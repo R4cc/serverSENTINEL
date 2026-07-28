@@ -9,6 +9,7 @@ import {
   type RuntimeVersion,
   type ServerJarProvider
 } from "./profile.js";
+import { RuntimeProviderCache, runtimeProviderString, withRuntimeProviderDetails } from "./providerUtils.js";
 
 type PaperProjectResponse = {
   project?: { id?: string; name?: string };
@@ -31,25 +32,13 @@ type PaperBuild = {
   downloads?: Record<string, PaperDownload>;
 };
 
-type CacheEntry<T> = {
-  expiresAt: number;
-  value: T;
-};
-
 const paperBaseUrl = "https://fill.papermc.io";
-const successTtlMs = 15 * 60_000;
-const failureTtlMs = 30_000;
 const userAgent = appUserAgentFor("PaperMC runtime provider");
 const runtime = serverRuntimeDefinition("paper");
 
-function withDetails(error: RuntimeResolutionError, details: string) {
-  (error as RuntimeResolutionError & { details?: string }).details = details;
-  return error;
-}
-
 export class PaperDownloadsProvider implements ServerJarProvider {
   readonly id = "papermc" as const;
-  private readonly cache = new Map<string, CacheEntry<unknown>>();
+  private readonly cache = new RuntimeProviderCache();
 
   constructor(
     private readonly baseUrl = paperBaseUrl,
@@ -58,7 +47,7 @@ export class PaperDownloadsProvider implements ServerJarProvider {
 
   async listMinecraftVersions(runtimeType: ServerRuntimeType, options?: { forceRefresh?: boolean }): Promise<RuntimeMinecraftVersion[]> {
     this.requirePaper(runtimeType);
-    const body = await this.cached("paper-project", () => this.request<PaperProjectResponse>("/v3/projects/paper"), options?.forceRefresh);
+    const body = await this.cache.read("paper-project", () => this.request<PaperProjectResponse>("/v3/projects/paper"), options?.forceRefresh);
     if (!body.versions || typeof body.versions !== "object") {
       throw new RuntimeResolutionError("provider_unavailable", "PaperMC did not return a usable Minecraft version list");
     }
@@ -122,8 +111,8 @@ export class PaperDownloadsProvider implements ServerJarProvider {
       );
     }
     const download = selected.downloads?.["server:default"];
-    const downloadUrl = assertPaperMcArtifactUrl(stringValue(download?.url, "PaperMC server download URL"));
-    const sha256 = stringValue(download?.checksums?.sha256, "PaperMC server SHA-256").toLowerCase();
+    const downloadUrl = assertPaperMcArtifactUrl(runtimeProviderString(download?.url, "PaperMC server download URL"));
+    const sha256 = runtimeProviderString(download?.checksums?.sha256, "PaperMC server SHA-256").toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(sha256)) {
       throw new RuntimeResolutionError("no_runtime_artifact", "PaperMC returned an invalid server SHA-256 checksum");
     }
@@ -158,7 +147,7 @@ export class PaperDownloadsProvider implements ServerJarProvider {
     const normalized = minecraftVersion.trim();
     if (!normalized) throw new RuntimeResolutionError("unsupported_minecraft_version", "Minecraft version is required");
     minecraftJavaMajorVersion(normalized);
-    const body = await this.cached(
+    const body = await this.cache.read(
       `paper-builds:${normalized}`,
       () => this.request<PaperBuild[] | { ok?: boolean; message?: string }>(`/v3/projects/paper/versions/${encodeURIComponent(normalized)}/builds`),
       forceRefresh
@@ -191,23 +180,6 @@ export class PaperDownloadsProvider implements ServerJarProvider {
     };
   }
 
-  private async cached<T>(key: string, load: () => Promise<T>, forceRefresh = false): Promise<T> {
-    const now = Date.now();
-    const cached = this.cache.get(key) as CacheEntry<T> | undefined;
-    if (!forceRefresh && cached && cached.expiresAt > now) return cached.value;
-    try {
-      const value = await load();
-      this.cache.set(key, { value, expiresAt: now + successTtlMs });
-      return value;
-    } catch (error) {
-      if (cached) {
-        cached.expiresAt = now + failureTtlMs;
-        return cached.value;
-      }
-      throw error;
-    }
-  }
-
   private async request<T>(path: string): Promise<T> {
     const url = new URL(path, this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`);
     let response: Response;
@@ -218,14 +190,14 @@ export class PaperDownloadsProvider implements ServerJarProvider {
         redirect: "error"
       });
     } catch (error) {
-      throw withDetails(
+      throw withRuntimeProviderDetails(
         new RuntimeResolutionError("provider_unavailable", "serverSENTINEL could not reach PaperMC to fetch Paper server files. Check internet access from the panel or node host, then try again."),
         `PaperMC API request failed\nurl=${url.toString()}\nerror=${error instanceof Error ? error.message : String(error)}`
       );
     }
     if (!response.ok) {
       const body = (await response.text().catch(() => "")).slice(0, 4096);
-      throw withDetails(
+      throw withRuntimeProviderDetails(
         new RuntimeResolutionError("provider_unavailable", `PaperMC is currently unavailable (${response.status}). Try again in a moment.`),
         `PaperMC API request failed\nurl=${url.toString()}\nstatus=${response.status} ${response.statusText}\nbody=${body || "(empty)"}`
       );
@@ -244,11 +216,4 @@ export function paperBuildNumber(value: string | undefined, minecraftVersion: st
 
 function paperMinecraftVersionType(version: string): "release" | "snapshot" {
   return /^\d+(?:\.\d+){1,2}$/.test(version) ? "release" : "snapshot";
-}
-
-function stringValue(value: unknown, field: string) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new RuntimeResolutionError("no_runtime_artifact", `${field} is missing`);
-  }
-  return value.trim();
 }

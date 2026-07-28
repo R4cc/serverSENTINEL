@@ -108,7 +108,7 @@ export function requirePermission(permission: Permission) {
 }
 
 export function isFullAccessUser(user: Pick<StoredUser, "permissions">) {
-  return hasPermission(user, "users.manage") && ALL_PERMISSIONS.every((permission) => hasPermission(user, permission));
+  return ALL_PERMISSIONS.every((permission) => hasPermission(user, permission));
 }
 
 function sortPermissions(permissions: Permission[]) {

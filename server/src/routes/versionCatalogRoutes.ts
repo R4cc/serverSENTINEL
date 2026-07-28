@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { requireVersionCatalogAccess } from "../auth/sessionService.js";
+import { requireRequestPermission, requireVersionCatalogAccess } from "../auth/sessionService.js";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { requireRequestPermission } from "../auth/sessionService.js";
-import { serverJarProvider } from "../servers/provisioning.js";
-import { parseServerRuntimeType } from "../servers/provisioning.js";
+import { parseServerRuntimeType, serverJarProvider } from "../servers/provisioning.js";
 
 export function registerVersionCatalogRoutes(app: FastifyInstance) {
 app.get("/api/fabric/versions", async (request) => {

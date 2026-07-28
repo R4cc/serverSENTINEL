@@ -70,6 +70,15 @@ export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVe
   throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for managed runtimes");
 }
 
+export function defaultDockerImageForMinecraftVersion(version?: string) {
+  const [major, minor, patch] = (version ?? "").split(".").map(Number);
+  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
+  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) {
+    return "eclipse-temurin:21-jre";
+  }
+  return "eclipse-temurin:17-jre";
+}
+
 export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {
   return server.runtimeProfile;
 }

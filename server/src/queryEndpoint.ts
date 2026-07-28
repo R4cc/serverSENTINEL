@@ -15,22 +15,14 @@ export type MinecraftQueryEndpoint = {
   diagnostics: string[];
 };
 
-export function queryPortBinding(server: ManagedServer) {
-  return server.managedPorts?.find((port) => port.type === "query" && port.protocol === "udp");
-}
-
-export function configuredQueryInternalPort(server: ManagedServer, props: Record<string, string> = {}) {
-  const stored = queryPortBinding(server)?.internalPort;
-  if (stored) return stored;
+function configuredQueryPorts(server: ManagedServer, props: Record<string, string>) {
+  const stored = server.managedPorts?.find((port) => port.type === "query" && port.protocol === "udp");
   const prop = props["query.port"] ? Number(props["query.port"]) : null;
-  return prop && Number.isFinite(prop) ? prop : undefined;
-}
-
-export function configuredQueryExternalPort(server: ManagedServer, props: Record<string, string> = {}) {
-  const stored = queryPortBinding(server)?.externalPort;
-  if (stored) return stored;
-  const prop = props["query.port"] ? Number(props["query.port"]) : null;
-  return prop && Number.isFinite(prop) ? prop : undefined;
+  const fallback = prop && Number.isFinite(prop) ? prop : undefined;
+  return {
+    internalPort: stored?.internalPort || fallback,
+    externalPort: stored?.externalPort || fallback
+  };
 }
 
 export function resolveMinecraftQueryEndpoints(
@@ -45,8 +37,7 @@ export function resolveMinecraftQueryEndpoints(
     if (!host || !port || endpoints.some((candidate) => candidate.host === host && candidate.port === port)) return;
     endpoints.push({ host, port, source, diagnostics: [...diagnostics, detail] });
   };
-  const internalPort = configuredQueryInternalPort(server, props);
-  const externalPort = configuredQueryExternalPort(server, props);
+  const { internalPort, externalPort } = configuredQueryPorts(server, props);
   if (!internalPort && !externalPort) {
     return [];
   }
