@@ -51,6 +51,12 @@ describe("global stylesheet entry point", () => {
     expect(authStyles).not.toMatch(/:root\.themeDark[\s\S]*?--surface:/);
   });
 
+  it("keeps Mods toolbar action buttons aligned and separated on desktop", () => {
+    expect(modsStyles).toMatch(
+      /\.modsWorkspacePrimaryActions,\s*\.modsWorkspaceUpdateActions\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*align-items:\s*center;[^}]*gap:\s*8px;/s
+    );
+  });
+
   it("uses vertical disclosure arrows for the mobile top navigation", () => {
     expect(responsiveStyles).toMatch(/@media \(max-width: 720px\)\s*\{\s*\.sidebarToggleIconDesktop\s*\{[^}]*display:\s*none;[^}]*\}\s*\.sidebarToggleIconMobile\s*\{[^}]*display:\s*inline-flex;/s);
   });

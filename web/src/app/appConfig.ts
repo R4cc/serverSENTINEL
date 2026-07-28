@@ -77,3 +77,23 @@ export function writeStoredDemoMode(value: boolean, storage: Storage = window.lo
     // Ignore unavailable browser storage; in-memory state still reflects the toggle.
   }
 }
+
+/**
+ * The workspace header title for a page. Mods/plugins follow the active
+ * server's runtime terminology, so the title is derived rather than fixed.
+ */
+export function pageTitle(page: ActivePage, contentPluralTitle: string, applicationReady: boolean) {
+  const titles: Record<ActivePage, string> = {
+    servers: "Servers",
+    create: "Create new managed server",
+    overview: "Overview",
+    console: "Console",
+    files: "Files",
+    mods: contentPluralTitle,
+    schedule: "Schedules",
+    properties: "Properties",
+    settings: "Settings",
+    nodes: "Nodes"
+  };
+  return titles[page] ?? (!applicationReady ? "Loading" : "Welcome");
+}

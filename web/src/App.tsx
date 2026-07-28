@@ -1,32 +1,39 @@
-import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { Toaster, toast } from "sonner";
+import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
+import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
-import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
+import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
+import { useDisplayFormatters } from "./app/useDisplayFormatters";
+import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
+import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
+import { AppToaster } from "./components/AppToaster";
+import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
+import { WorkspaceNotices } from "./components/WorkspaceNotices";
 import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel } from "./components/AuthPanel";
-import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
-import { Banner, Button, EmptyState, Surface } from "./components/UiPrimitives";
+import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/LoadingSkeletons";
+import { Button, EmptyState } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
+import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
+import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
+import { ServersListPage } from "./pages/ServersListPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -34,21 +41,19 @@ import { managedContentTerminology } from "./features/mods/contentTerminology";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
+import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
+import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
 
-const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
-const loadServerCreatePage = () => import("./pages/ServerCreatePage");
 const loadServerEditPage = () => import("./pages/ServerEditPage");
 const loadModsPage = () => import("./pages/ModsPage");
 const loadFilesPage = () => import("./features/files/FilesPage");
 const loadSettingsPage = () => import("./pages/SettingsPage");
 
-const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
-const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
 const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
 const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
@@ -75,67 +80,6 @@ function consoleLine(text: string) {
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
-const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-const nodeUpdateGraceMs = 5 * 60 * 1000;
-function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
-  if (type === "warning") {
-    return (
-      <svg aria-hidden="true" className="toastSeverityIcon" viewBox="0 0 24 24" fill="none">
-        <path d="M12 3.25 22 20.5H2L12 3.25Z" fill="currentColor" />
-        <path d="M12 8.5v5.25" stroke="var(--surface-raised)" strokeWidth="2.2" strokeLinecap="round" />
-        <path d="M12 17.25h.01" stroke="var(--surface-raised)" strokeWidth="2.8" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  const isError = type === "error";
-  const isInfo = type === "info";
-
-  return (
-    <svg aria-hidden="true" className="toastSeverityIcon" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="currentColor" />
-      {type === "success" ? (
-        <path d="m7.75 12.2 2.65 2.65 5.85-6" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-      ) : null}
-      {isInfo ? (
-        <>
-          <path d="M12 10.5v6" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-          <path d="M12 7.2h.01" stroke="var(--surface-raised)" strokeWidth="2.8" strokeLinecap="round" />
-        </>
-      ) : null}
-      {isError ? (
-        <>
-          <path d="m8.75 8.75 6.5 6.5" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-          <path d="m15.25 8.75-6.5 6.5" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-        </>
-      ) : null}
-    </svg>
-  );
-}
-
-function AppToaster({ darkMode }: { darkMode: boolean }) {
-  return (
-    <Toaster
-      closeButton
-      expand
-      gap={8}
-      icons={{
-        success: <ToastSeverityIcon type="success" />,
-        info: <ToastSeverityIcon type="info" />,
-        warning: <ToastSeverityIcon type="warning" />,
-        error: <ToastSeverityIcon type="error" />
-      }}
-      position="top-center"
-      theme={darkMode ? "dark" : "light"}
-      toastOptions={{
-        className: "sonnerToast",
-        descriptionClassName: "sonnerToastDescription"
-      }}
-      visibleToasts={5}
-    />
-  );
-}
-
 export default function App() {
   const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -167,8 +111,6 @@ export default function App() {
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
-  const [playerHeadsBusy, setPlayerHeadsBusy] = useState(false);
-  const [playerHeadsOnboardingError, setPlayerHeadsOnboardingError] = useState("");
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
@@ -178,15 +120,6 @@ export default function App() {
   const phoneLayout = useMobileViewport();
   const overviewTimelineVisible = useOverviewTimelineVisibility();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
-  const [nodeBusyId, setNodeBusyId] = useState("");
-  const [nodeDetails, setNodeDetails] = useState<NodeView | null>(null);
-  const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
-  const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
-  const [nodeManualRecoveryById, setNodeManualRecoveryById] = useState<Record<string, NodeManualRecovery>>({});
-  const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
-  const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
-  const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("run");
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const {
     themePreference,
@@ -393,58 +326,33 @@ export default function App() {
       : serverCommandTone === "stopped" || serverCommandTone === "exited"
         ? "Offline"
         : "Unavailable";
-  const activeNodeBlockDetail = activeNodeBlockReason && activeNodeBlockMessage.startsWith(`${activeNodeBlockReason}. `)
-    ? activeNodeBlockMessage.slice(activeNodeBlockReason.length + 2)
-    : activeNodeBlockMessage;
-  const serverStripAlert = activeNodeRuntimeBlocked && activeNode.status !== "offline"
-    ? {
-        title: activeNodeBlockReason || "Node unavailable",
-        message: activeNodeBlockDetail
-      }
-    : null;
-  const serverStripHealth = serverStripAlert
-    ? null
-    : statusError
-      ? { tone: "warning", message: "Status temporarily unavailable — retrying automatically." }
-      : activePage === "console" && consoleConnectionState === "reconnecting"
-        ? { tone: "warning", message: "Reconnecting console…" }
-        : activePage === "console" && consoleConnectionState === "polling"
-          ? { tone: "warning", message: "Live stream unavailable — polling console logs." }
-        : activePage === "console" && consoleConnectionState === "error"
-          ? { tone: "error", message: consoleError || "Console stream is unavailable." }
-          : activePage === "console" && (consoleConnectionState === "connecting" || consoleLoading)
-            ? { tone: "loading", message: "Connecting to live console…" }
-            : !activeStatus
-              ? { tone: "loading", message: "Loading server status…" }
-              : null;
-  const runtimeControlsDisabledReason = authOperationalLock
-    ? "Sign in before using runtime controls."
-    : !canBasic
-      ? "Servers control permission is required."
-    : activeNodeRuntimeBlocked || nodeOfflineDetected
-        ? activeNodeBlockMessage
-          || `${activeNode.name} is offline. Runtime controls will return when it reconnects.`
-        : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
-          ? "Docker socket is not mounted. Runtime controls are unavailable for the internal node."
-          : lifecycleTransitionRunning
-            ? activeStatus?.lifecycle.message || "A server restart is already in progress."
-          : isProvisioning
-            ? "Server setup is still running."
-            : "";
+  const { alert: serverStripAlert, health: serverStripHealth } = resolveServerStripStatus({
+    activeNodeRuntimeBlocked,
+    activeNodeStatus: activeNode.status,
+    activeNodeBlockReason,
+    activeNodeBlockMessage,
+    statusError,
+    activePage,
+    consoleConnectionState,
+    consoleError,
+    consoleLoading,
+    activeStatus
+  });
+  const { runtimeControlsDisabledReason, serverRequiresStoppedForMutableConfig } = resolveRuntimeGuards({
+    authOperationalLock,
+    canBasic,
+    activeNodeRuntimeBlocked,
+    nodeOfflineDetected,
+    activeNodeBlockMessage,
+    activeNodeName: activeNode.name,
+    activeServerUsesInternalNode,
+    dockerSocketMounted: effectiveAppState.dockerSocketMounted,
+    lifecycleTransitionRunning,
+    isProvisioning,
+    activeStatus,
+    runtimeAction
+  });
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
-  const activeDockerState = activeStatus?.docker.state;
-  const activeDockerUnknownStopped = activeDockerState === "unknown"
-    && (
-      activeStatus?.docker.configured === false
-      || (activeStatus?.docker.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(activeStatus.docker.message || ""))
-    );
-  const serverRequiresStoppedForMutableConfig = Boolean(
-    activeStatus && (
-      activeStatus.docker.running
-      || runtimeAction !== null
-      || (activeDockerState && !["created", "dead", "exited"].includes(activeDockerState) && !activeDockerUnknownStopped)
-    )
-  );
 
   useEffect(() => {
     if (!nodeOfflineDetected) {
@@ -459,20 +367,31 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [activeServer?.id, nodeOfflineDetected]);
 
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canEditServerSettings;
-  const deleteServerLocked = isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running);
-  const serverSettingsLockedReason = isProvisioning
-    ? "Server setup is still running."
-    : dockerOperationalLock
-      ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
-      : serverRequiresStoppedForMutableConfig
-        ? stoppedServerMutationMessage
-        : !canEditServerSettings
-          ? "Edit server settings permission is required."
-          : serverSettingsSaving
-            ? "Server settings are saving."
-            : "";
+  const { serverSettingsLocked, deleteServerLocked, serverSettingsLockedReason } = resolveServerSettingsGuards({
+    isProvisioning,
+    dockerOperationalLock,
+    serverRequiresStoppedForMutableConfig,
+    canEditServerSettings,
+    canDeleteServers,
+    serverSettingsSaving,
+    runtimeControlsDisabledReason,
+    activeStatus
+  });
   const settingsDataLoading = !appStateLoaded && !appLoadError;
+  const {
+    playerHeadsBusy,
+    playerHeadsOnboardingError,
+    updateModrinthKey,
+    updatePlayerHeads,
+    clearPlayerHeadCache
+  } = useIntegrationSettings({
+    canManageIntegrations,
+    playerHeads: effectiveAppState.playerHeads,
+    setAppState,
+    notify,
+    refreshApp: () => refreshApp(),
+    requestConfirmation
+  });
   const usersWorkspace = useUsersWorkspace({
     activePage,
     authSession,
@@ -486,47 +405,46 @@ export default function App() {
     refreshAuth,
     logout
   });
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const modToggleLocked = modsLocked;
-  const addModFromModrinthDisabled = isProvisioning || dockerOperationalLock || !activeStatus || isAnyModJobRunning || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
-  const uploadModDisabled = modsLocked;
-  const addModFromModrinthDisabledReason = isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !activeStatus
-          ? "Server status is still loading."
-          : isAnyModJobRunning
-            ? `A ${managedContent.singular} operation is already running.`
-            : !canInstallMods
-              ? "Server management permission is required."
-              : !effectiveAppState.modrinthApiConfigured
-                ? `Add a Modrinth API key in Settings before searching for ${managedContent.plural}.`
-                : `Search Modrinth for compatible ${managedContent.runtimeName} ${managedContent.plural}.`;
-  const uploadModDisabledReason = isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !canManageMods
-          ? "Server management permission is required."
-          : !activeStatus
-            ? "Server status is still loading."
-            : isAnyModJobRunning
-              ? `A ${managedContent.singular} operation is already running.`
-              : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
-  const resolvedRegionalFormatLocale = resolveRegionalFormatLocale(regionalFormatPreference);
+  const nodesWorkspace = useNodesWorkspace({
+    contextNodes,
+    panelVersion,
+    panelBuildId,
+    demoMode,
+    canManageNodes: canManageUsers,
+    currentPanelUrl,
+    notify,
+    requestConfirmation,
+    refreshApp
+  });
+  const {
+    modsLocked,
+    modReviewAcknowledgementLocked,
+    modToggleLocked,
+    addModFromModrinthDisabled,
+    uploadModDisabled,
+    addModFromModrinthDisabledReason,
+    uploadModDisabledReason
+  } = resolveModGuards({
+    isProvisioning,
+    dockerOperationalLock,
+    canManageMods,
+    canInstallMods,
+    activeStatus,
+    isAnyModJobRunning,
+    modrinthApiConfigured: effectiveAppState.modrinthApiConfigured,
+    runtimeControlsDisabledReason,
+    managedContent
+  });
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
-  const browserTimeZone = useMemo(() => detectedBrowserTimeZone(), []);
-  const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedRegionalFormatLocale), [resolvedRegionalFormatLocale]);
-
-  const formatDisplayDate = useCallback((value: string | number | Date) => dateTimeFormatter.format(new Date(value)), [dateTimeFormatter]);
-  const formatDisplayTime = useCallback((value: string | number | Date) => timeFormatter.format(new Date(value)), [timeFormatter]);
-  const formatDisplayShortTime = useCallback((value: string | number | Date) => shortTimeFormatter.format(new Date(value)), [shortTimeFormatter]);
+  const {
+    browserTimeZone,
+    displayTimeZone,
+    dateTimeFormatter,
+    formatDisplayDate,
+    formatDisplayTime,
+    formatDisplayShortTime,
+    formatDisplayNumber
+  } = useDisplayFormatters({ regionalFormatPreference, displayTimeZonePreference, panelTimeZone });
 
   const filesWorkspace = useFilesWorkspace({
     activeServer,
@@ -616,8 +534,6 @@ export default function App() {
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
 
-  const formatDisplayNumber = useCallback((value: number) => numberFormatter.format(value), [numberFormatter]);
-
   useEffect(() => {
     void refreshAuth();
   }, []);
@@ -667,8 +583,7 @@ export default function App() {
     if (effectiveAppState.servers.length > 0 || usableContextNodes.length > 0) return;
     panelFirstRunPromptedRef.current = true;
     setActivePage("nodes");
-    setAddNodeResult(null);
-    setNodeInstallMethod("run");
+    nodesWorkspace.resetAddNode();
   }, [appStateLoaded, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
 
   function openCreateServerForNode(nodeId = "") {
@@ -746,89 +661,6 @@ export default function App() {
     window.addEventListener("keydown", closeMobileNavigation);
     return () => window.removeEventListener("keydown", closeMobileNavigation);
   }, [phoneLayout, sidebarCollapsed]);
-
-  const hasWaitingNodeOperation = Object.values(nodeOperations).some((operation) => operation.phase === "waiting");
-
-  useEffect(() => {
-    if (!hasWaitingNodeOperation) return;
-    const interval = window.setInterval(() => setNodeOperationNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [hasWaitingNodeOperation]);
-
-  useEffect(() => {
-    if (Object.keys(nodeOperations).length === 0) return;
-    const next = { ...nodeOperations };
-    const completed: Array<{ node: NodeView; operation: NodeOperation }> = [];
-    const mismatched: Array<{ node: NodeView; operation: NodeOperation }> = [];
-    let changed = false;
-
-    for (const [nodeId, operation] of Object.entries(nodeOperations)) {
-      const node = contextNodes.find((candidate) => candidate.id === nodeId);
-      const result = advanceNodeOperation(operation, node, nodeOperationNow, nodeUpdateGraceMs);
-      if (result.outcome === "completed" || result.outcome === "mismatch") {
-        delete next[nodeId];
-        changed = true;
-        if (node) (result.outcome === "completed" ? completed : mismatched).push({ node, operation });
-        continue;
-      }
-      if (result.operation !== operation && result.operation) {
-        next[nodeId] = result.operation;
-        changed = true;
-      }
-    }
-
-    if (changed) setNodeOperations(next);
-    for (const { node, operation } of completed) {
-      setNodeManualRecoveryById((current) => {
-        if (!current[node.id]) return current;
-        const updated = { ...current };
-        delete updated[node.id];
-        return updated;
-      });
-      notify("success", operation.kind === "update"
-        ? `${node.name} updated${operation.targetVersion ? ` to ${operation.targetVersion}` : ""}.`
-        : `${node.name} restarted and reconnected.`);
-    }
-    for (const { node, operation } of mismatched) {
-      const expected = [operation.targetVersion, operation.targetBuildId?.slice(0, 12)].filter(Boolean).join(" build ");
-      setNodeManualRecoveryById((current) => ({
-        ...current,
-        [node.id]: { message: `${node.name} reconnected but still reports its previous release${expected ? `. Expected ${expected}` : ""}. Refresh or retry the update.` }
-      }));
-      notify("warning", `${node.name} reconnected without the expected update.`);
-    }
-  }, [contextNodes, nodeOperationNow, nodeOperations]);
-
-  useEffect(() => {
-    if (!hasWaitingNodeOperation || demoMode) return;
-    let inFlight = false;
-    const interval = window.setInterval(() => {
-      if (inFlight || document.hidden) return;
-      inFlight = true;
-      void refreshApp({ silent: true }).finally(() => {
-        inFlight = false;
-      });
-    }, 5_000);
-    return () => window.clearInterval(interval);
-  }, [hasWaitingNodeOperation, demoMode]);
-
-  useEffect(() => {
-    setNodeManualRecoveryById((current) => {
-      const next = { ...current };
-      let changed = false;
-      for (const nodeId of Object.keys(current)) {
-        const node = contextNodes.find((candidate) => candidate.id === nodeId);
-        const targetCurrent = node?.status === "online"
-          && node.agentVersion === panelVersion
-          && (!panelBuildId || node.buildId === panelBuildId);
-        if (targetCurrent) {
-          delete next[nodeId];
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [contextNodes, panelBuildId, panelVersion]);
 
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
@@ -1096,17 +928,6 @@ export default function App() {
     if (activePage !== "settings" || demoMode || !authSession?.authenticated) return;
     void refreshApp({ silent: true });
   }, [activePage, demoMode, authSession?.authenticated]);
-
-  useEffect(() => {
-    if (!addNodeOpen || !addNodeResult || demoMode) return;
-    const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
-    if (currentNode && currentNode.status === "online" && isNodeRuntimeUsable(currentNode)) return;
-    const interval = window.setInterval(() => {
-      if (document.hidden) return;
-      void refreshApp();
-    }, 2500);
-    return () => window.clearInterval(interval);
-  }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
 
   useEffect(() => {
     if (!activeServer || activeServerUsesInternalNode || demoMode) return;
@@ -1631,26 +1452,6 @@ export default function App() {
     if (activeServerIdRef.current === serverId) setConsoleStreamVersion((version) => version + 1);
   }
 
-  function serverFromOperation(operation: OperationRecord) {
-    const result = operation.result;
-    if (result && typeof result === "object" && "server" in result) {
-      return (result as { server?: ManagedServer }).server;
-    }
-    return undefined;
-  }
-
-  function operationToProvisionActiveJob(operation: OperationRecord): Partial<GeneralJob> {
-    return {
-      id: operation.id,
-      status: operation.status,
-      progress: operation.progress,
-      task: operation.task || "Server setup is running.",
-      error: operation.errorMessage,
-      errorDetails: operation.logSummary,
-      dismissible: operation.status !== "queued" && operation.status !== "running"
-    };
-  }
-
   async function waitForProvisionOperation(operationId: string) {
     for (;;) {
       const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
@@ -1813,72 +1614,6 @@ export default function App() {
     }
   }
 
-  async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canManageIntegrations) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const key = trimFormValue(form, "modrinthApiKey");
-    if (setValidationNotice(formElement, key ? [] : [{ field: "modrinthApiKey", message: "Modrinth API key is required." }], (message) => notify("error", message))) return;
-    try {
-      await api("/api/settings/modrinth", {
-        method: "PUT",
-        body: JSON.stringify({ modrinthApiKey: key })
-      });
-      formElement.reset();
-      notify("success", "Modrinth API key saved");
-      await refreshApp();
-    } catch (error) {
-      notify("error", (error as Error).message);
-    }
-  }
-
-  async function updatePlayerHeads(enabled: boolean, onboarding = false) {
-    if (!canManageIntegrations || playerHeadsBusy) return;
-    setPlayerHeadsBusy(true);
-    if (onboarding) setPlayerHeadsOnboardingError("");
-    try {
-      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads", {
-        method: "PUT",
-        body: JSON.stringify({ enabled })
-      });
-      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
-      setPlayerHeadsOnboardingError("");
-      notify("success", enabled ? "Player heads enabled" : "Player heads disabled");
-    } catch (error) {
-      const message = (error as Error).message;
-      if (onboarding) setPlayerHeadsOnboardingError(message);
-      else notify("error", message);
-    } finally {
-      setPlayerHeadsBusy(false);
-    }
-  }
-
-  async function clearPlayerHeadCache() {
-    if (!canManageIntegrations || playerHeadsBusy || effectiveAppState.playerHeads.cacheEntries === 0) return;
-    const confirmed = await requestConfirmation({
-      title: "Clear cached player heads?",
-      description: "This removes every player-head image cached by this instance.",
-      warning: effectiveAppState.playerHeads.enabled
-        ? "Player heads are enabled, so images will be downloaded again as players appear on Overview."
-        : "The integration remains disabled and no new images will be requested.",
-      confirmLabel: "Clear cache",
-      cancelLabel: "Keep cache",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setPlayerHeadsBusy(true);
-    try {
-      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads/cache", { method: "DELETE" });
-      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
-      notify("success", "Player head cache cleared");
-    } catch (error) {
-      notify("error", (error as Error).message);
-    } finally {
-      setPlayerHeadsBusy(false);
-    }
-  }
-
   function currentPanelUrl() {
     return window.location.origin;
   }
@@ -1905,249 +1640,6 @@ export default function App() {
     setCommandHistory([]);
     clearStoredCommandHistory();
     notify("success", "Console command history cleared");
-  }
-
-  async function refreshNodes() {
-    await refreshApp();
-    notify("success", "Node status refreshed");
-  }
-
-  async function viewNodeDetails(node: NodeView) {
-    setNodeDetails(node);
-    if (demoMode) return;
-    setNodeBusyId(node.id);
-    try {
-      const details = await api<ManagedNode>(`/api/nodes/${node.id}`);
-      setNodeDetails(details);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not load node details."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function showNodeInstall(node: NodeView) {
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
-      setNodeInstallMethod("run");
-      setNodeInstallResult(result);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not load install instructions."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function rotateNodeToken(node: NodeView) {
-    if (node.isInternal || !canManageUsers) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<CreateNodeResponse>(`/api/nodes/${node.id}/rotate-token`, {
-        method: "POST",
-        body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: defaultNodeDataPath })
-      });
-      setNodeInstallMethod("run");
-      setNodeInstallResult(result);
-      notify("success", `Rotated join token for ${node.name}`);
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not rotate the join token."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function updateNodeImage(node: NodeView) {
-    if (node.isInternal || !canManageUsers) return;
-    const buildText = panelBuildId ? ` build ${panelBuildId.slice(0, 12)}` : "";
-    const sameVersion = node.agentVersion === panelVersion;
-    const actionLabel = sameVersion ? "Update" : "Upgrade";
-    const versionText = sameVersion
-      ? ` to ${panelVersion}${buildText}`
-      : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
-    const confirmed = await requestConfirmation({
-      title: `${actionLabel} ${node.name}?`,
-      description: `${actionLabel} this node${versionText}.`,
-      details: nodeRestartImpactMessage(node),
-      warning: "The node may disconnect briefly while its container is recreated.",
-      confirmLabel: `${actionLabel} node`,
-      variant: "primary"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
-        method: "POST",
-        body: JSON.stringify({})
-      });
-      if (result.mode === "offline") {
-        setNodeManualRecoveryById((current) => ({
-          ...current,
-          [node.id]: { message: result.message, command: result.command, image: result.image }
-        }));
-        setNodeDetails((current) => current?.id === node.id ? current : node);
-        notify("info", result.message);
-        return;
-      }
-      if (result.mode === "current") {
-        notify("success", result.message || `${node.name} is already current.`);
-        await refreshApp({ silent: true });
-        return;
-      }
-      notify("info", result.message || `Node ${node.name} update started.`);
-      if (result.ok && result.mode === "self") {
-        const startedAt = Date.now();
-        setNodeManualRecoveryById((current) => {
-          if (!current[node.id]) return current;
-          const next = { ...current };
-          delete next[node.id];
-          return next;
-        });
-        setNodeOperations((current) => ({
-          ...current,
-          [node.id]: {
-            kind: "update",
-            phase: "waiting",
-            startedAt,
-            startedConnectedAt: node.connectedAt,
-            targetVersion: panelVersion,
-            targetBuildId: panelBuildId
-          }
-        }));
-        setNodeOperationNow(startedAt);
-      }
-      window.setTimeout(() => void refreshApp(), 5000);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not start the node update."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function restartNode(node: NodeView) {
-    if (!canManageUsers) return;
-    const confirmed = await requestConfirmation({
-      title: node.isInternal ? "Restart the Panel container?" : `Restart ${node.name}?`,
-      description: node.isInternal
-        ? `Restart the Panel container (${node.name}).`
-        : `Restart the node container for ${node.name}.`,
-      details: nodeRestartImpactMessage(node),
-      warning: node.isInternal
-        ? "Your current session will disconnect temporarily while the Panel restarts."
-        : "The node will disconnect briefly while its container restarts.",
-      confirmLabel: node.isInternal ? "Restart Panel" : "Restart node",
-      variant: "primary"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
-        method: "POST"
-      });
-      notify("info", result.message || `Node ${node.name} restart started.`);
-      if (result.ok) {
-        const startedAt = Date.now();
-        setNodeOperations((current) => ({
-          ...current,
-          [node.id]: {
-            kind: "restart",
-            phase: "waiting",
-            startedAt,
-            startedConnectedAt: node.connectedAt
-          }
-        }));
-        setNodeOperationNow(startedAt);
-      }
-      window.setTimeout(() => void refreshApp(), 5000);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not restart the node container."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function removeNode(node: ContextNode, force = false) {
-    if (node.isInternal || !canManageUsers) return;
-    const assignedMessage = node.servers.length
-      ? force
-        ? `This will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
-        : `This will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
-      : undefined;
-    const confirmed = await requestConfirmation({
-      title: `${force ? "Force remove" : "Remove"} ${node.name}?`,
-      description: force ? "Force-remove this node from the Panel." : "Remove this node from the Panel.",
-      details: assignedMessage,
-      warning: "This action cannot be undone.",
-      confirmLabel: force ? "Force remove node" : "Remove node",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<{
-        ok: boolean;
-        deletedServers?: number;
-        selfRemoval?: { ok: boolean; message: string };
-        serverCleanup?: {
-          attempted: number;
-          deletedContainers: number;
-          failed: Array<{ serverId: string; serverName: string; message: string }>;
-          skippedReason?: string;
-        };
-      }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
-      const removedServers = result.deletedServers ?? 0;
-      const selfStopSuffix = result.selfRemoval?.ok ? " The node container will stop itself." : result.selfRemoval?.message ? ` ${result.selfRemoval.message}` : "";
-      const cleanupFailures = result.serverCleanup?.failed.length ?? 0;
-      const cleanupWarning = result.serverCleanup?.skippedReason
-        ? ` ${result.serverCleanup.skippedReason}`
-        : cleanupFailures
-          ? ` ${cleanupFailures} server container cleanup ${cleanupFailures === 1 ? "failure was" : "failures were"} reported.`
-          : "";
-      notify(cleanupWarning ? "warning" : "success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${cleanupWarning}${selfStopSuffix}`);
-      if (nodeDetails?.id === node.id) setNodeDetails(null);
-      if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
-      setNodeOperations((current) => {
-        if (!current[node.id]) return current;
-        const next = { ...current };
-        delete next[node.id];
-        return next;
-      });
-      setNodeManualRecoveryById((current) => {
-        if (!current[node.id]) return current;
-        const next = { ...current };
-        delete next[node.id];
-        return next;
-      });
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not remove the node."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function createNode(input: { name: string; panelUrl: string; dataMount: string }) {
-    if (!canManageUsers) return;
-    setNodeBusyId("create");
-    try {
-      const result = await api<CreateNodeResponse>("/api/nodes", {
-        method: "POST",
-        body: JSON.stringify({
-          name: input.name,
-          panelUrl: input.panelUrl,
-          dataMount: input.dataMount
-        })
-      });
-      setNodeInstallMethod("run");
-      setAddNodeResult(result);
-      notify("success", `Created pending node ${result.node.name}`);
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not create the node."));
-    } finally {
-      setNodeBusyId("");
-    }
   }
 
   async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean; skipConfirmation?: boolean } = {}) {
@@ -2325,7 +1817,7 @@ export default function App() {
     ? "Exit demo mode before adding real nodes."
     : isProvisioning
       ? provisioningNavigationReason
-      : nodeBusyId
+      : nodesWorkspace.busyNodeId
         ? "A node action is already in progress."
         : !canManageUsers
           ? "Manage users permission is required."
@@ -2333,45 +1825,26 @@ export default function App() {
 
   function openAddNodeFromEmptyState() {
     setActivePage("nodes");
-    setAddNodeResult(null);
-    setNodeInstallMethod("run");
-    if (canManageUsers) setAddNodeOpen(true);
+    if (canManageUsers) nodesWorkspace.onOpenAddNode();
   }
 
   function renderNoManagedServersEmptyState(title: string) {
-    const needsNodeFirst = panelOnlyMode && usableContextNodes.length === 0;
     return (
-      <EmptyState
+      <NoManagedServersEmptyState
         title={title}
         message={noManagedServersMessage}
-        action={needsNodeFirst ? (
-          <Button
-            onClick={openAddNodeFromEmptyState}
-            disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
-            title={addNodeDisabledReason}
-          >
-            Add node
-          </Button>
-        ) : (
-          <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
-        )}
+        needsNodeFirst={panelOnlyMode && usableContextNodes.length === 0}
+        onAddNode={openAddNodeFromEmptyState}
+        addNodeDisabled={demoMode || isProvisioning || nodesWorkspace.busy || !canManageUsers}
+        addNodeDisabledReason={addNodeDisabledReason}
+        onCreateServer={() => openCreateServerForNode()}
+        createServerDisabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}
+        createServerDisabledReason={createServerDisabledReason}
       />
     );
   }
 
-  const pageTitles: Record<ActivePage, string> = {
-    servers: "Servers",
-    create: "Create new managed server",
-    overview: "Overview",
-    console: "Console",
-    files: "Files",
-    mods: managedContent.pluralTitle,
-    schedule: "Schedules",
-    properties: "Properties",
-    settings: "Settings",
-    nodes: "Nodes"
-  };
-  const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
+  const currentPageTitle = pageTitle(activePage, managedContent.pluralTitle, applicationReady);
   const overviewInitialLoading = shouldShowInitialOverviewLoading(
     overviewLoading,
     overviewData.events.length,
@@ -2419,123 +1892,50 @@ export default function App() {
           </div>
         </header>
 
-        {appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
-          <Banner
-            tone="error"
-            title="Docker integration is not connected."
-            message="Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready."
-          />
-        )}
-
-        {provisioningError && activePage === "overview" && (
-          <section className="systemBanner error" role="alert">
-            <strong>Server setup failed.</strong>
-            <span>{provisioningError} Review the form values, then try creating the server again.</span>
-            {provisioningErrorDetails && (
-              <details className="failureDetails">
-                <summary>Show full API failure log</summary>
-                <pre>{provisioningErrorDetails}</pre>
-              </details>
-            )}
-          </section>
-        )}
-
-        {notice && activePage !== "files" && <Banner tone="info" title={notice} />}
-
-        {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
-          <Fragment key="application-loading">
-            {isServerWorkspacePage(activePage) && <ActiveServerStripLoadingSkeleton />}
-            <ApplicationLoadingSkeleton page={activePage} />
-          </Fragment>
-        )}
-
-        {appLoadError && (
-          <InlineState
-            tone="error"
-            title="Could not load application state"
-            message={`${appLoadError} Check that the serverSENTINEL backend is reachable, then try again.`}
-            actionLabel="Retry"
-            onAction={() => void refreshApp()}
-            busy={appRefreshing}
-          />
-        )}
+        <WorkspaceNotices
+          activePage={activePage}
+          dockerDisconnected={appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && Boolean(activeServer) && Boolean(serverStripAlert))}
+          provisioningError={provisioningError}
+          provisioningErrorDetails={provisioningErrorDetails}
+          notice={notice}
+          showApplicationLoading={!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError}
+          appLoadError={appLoadError}
+          appRefreshing={appRefreshing}
+          onRetryAppLoad={() => void refreshApp()}
+        />
 
         {activePage === "servers" && applicationReady && (
-          <section className="pageStack layoutBalanced">
-            {effectiveAppState.servers.length > 0 ? (
-              <section className="serverList">
-                {effectiveAppState.servers.map((server) => {
-                  const lockedByDemo = demoMode && server.id !== demoServerId;
-                  const minecraftVersion = versionValue(minecraftVersionInfo(server));
-                  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
-                  return (
-                    <button
-                      key={server.id}
-                      className={`serverListItem ${server.id === activeServer?.id ? "active" : ""}`}
-                      disabled={isProvisioning || lockedByDemo}
-                      onClick={() => {
-                        if (lockedByDemo) {
-                          notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
-                          return;
-                        }
-                        setActiveServerId(server.id);
-                        setActivePage("overview");
-                      }}
-                    >
-                      <span className="serverListTitleRow">
-                        <strong>{server.displayName}</strong>
-                      </span>
-                      <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - {runtime.displayName}</span>
-                      {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
-                    </button>
-                  );
-                })}
-              </section>
-            ) : (
-              renderNoManagedServersEmptyState("No managed servers yet")
-            )}
-          </section>
+          <ServersListPage
+            servers={effectiveAppState.servers}
+            activeServerId={activeServer?.id}
+            demoMode={demoMode}
+            isProvisioning={isProvisioning}
+            onSelectServer={(serverId) => {
+              setActiveServerId(serverId);
+              setActivePage("overview");
+            }}
+            onLockedServer={() => notify("info", "Demo mode is enabled. Exit demo mode to access this server.")}
+            emptyState={renderNoManagedServersEmptyState("No managed servers yet")}
+          />
         )}
 
         {activePage === "create" && (
-          <section className="createServerPanel">
-            {currentProvisionOperation && (currentProvisionOperation.status === "queued" || currentProvisionOperation.status === "running") && (
-              <InlineState
-                tone="loading"
-                title="Creating server"
-                message={`${currentProvisionOperation.task || "Server setup is running."} Progress: ${Math.round(currentProvisionOperation.progress)}%.`}
-              />
-            )}
-            {provisioningError && (
-              <section className="inlineState inlineState-error" role="alert">
-                <div className="inlineStateText">
-                  <strong>Server setup failed</strong>
-                  <span>{provisioningError} Review the details below, adjust the form if needed, then try again.</span>
-                  {provisioningErrorDetails && (
-                    <details className="failureDetails">
-                      <summary>Show full API failure log</summary>
-                      <pre>{provisioningErrorDetails}</pre>
-                    </details>
-                  )}
-                </div>
-                <Button variant="secondary" compact onClick={() => {
-                  setProvisioningError("");
-                  setProvisioningErrorDetails("");
-                }}>Clear error</Button>
-              </section>
-            )}
-            <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server form" page="create" />}>
-              <ManagedServerForm
-                nodes={contextNodes}
-                preferredNodeId={preferredCreateNodeId}
-                totalMemory={effectiveAppState.totalMemory}
-                provisioning={isProvisioning || !canCreateServers}
-                disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
-                onRefreshNodes={refreshNodes}
-                onSubmit={createServer}
-              />
-            </Suspense>
-          </section>
+          <ServerCreateTab
+            provisionOperation={currentProvisionOperation}
+            provisioningError={provisioningError}
+            provisioningErrorDetails={provisioningErrorDetails}
+            onClearProvisioningError={() => {
+              setProvisioningError("");
+              setProvisioningErrorDetails("");
+            }}
+            nodes={contextNodes}
+            preferredNodeId={preferredCreateNodeId}
+            totalMemory={effectiveAppState.totalMemory}
+            provisioning={isProvisioning || !canCreateServers}
+            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+            onRefreshNodes={nodesWorkspace.refreshNodes}
+            onSubmit={createServer}
+          />
         )}
 
         {activePage === "settings" && (
@@ -2596,52 +1996,18 @@ export default function App() {
         {activePage === "nodes" && (
           <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" page="nodes" />}>
             <NodesPage
-            nodes={contextNodes}
-            panelVersion={panelVersion}
-            panelBuildId={panelBuildId}
-            canManageNodes={canManageUsers}
-            busy={Boolean(nodeBusyId)}
-            busyNodeId={nodeBusyId}
-            browserPanelUrl={currentPanelUrl()}
-            selectedNode={nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null}
-            nodeOperations={nodeOperations}
-            nodeOperationNow={nodeOperationNow}
-            nodeUpdateGraceMs={nodeUpdateGraceMs}
-            nodeManualRecoveryById={nodeManualRecoveryById}
-            installResult={nodeInstallResult}
-            addNodeOpen={addNodeOpen}
-            addNodeResult={addNodeResult}
-            installMethod={nodeInstallMethod}
-            onInstallMethodChange={setNodeInstallMethod}
-            onOpenAddNode={() => {
-              setAddNodeResult(null);
-              setNodeInstallMethod("run");
-              setAddNodeOpen(true);
-            }}
-            onCloseAddNode={() => {
-              setAddNodeOpen(false);
-              setAddNodeResult(null);
-            }}
-            onDoneAddNode={() => {
-              setAddNodeOpen(false);
-              setAddNodeResult(null);
-              void refreshApp();
-            }}
-            onCreateNode={createNode}
-            onRefresh={() => void refreshNodes()}
-            onViewDetails={viewNodeDetails}
-            onShowInstall={showNodeInstall}
-            onRotateToken={rotateNodeToken}
-            onUpdateNode={updateNodeImage}
-            onRestartNode={restartNode}
-            onRemoveNode={removeNode}
-            onCloseDetails={() => setNodeDetails(null)}
-            onSelectServer={openServerFromNode}
-            onAddServer={openCreateServerForNode}
-            onClearInstall={() => setNodeInstallResult(null)}
-            onCopy={(text) => void copyText(text)}
-            serverStateLabel={nodeServerStateLabel}
-            playerSnapshots={playerSnapshots}
+              {...nodesWorkspace}
+              nodes={contextNodes}
+              panelVersion={panelVersion}
+              panelBuildId={panelBuildId}
+              canManageNodes={canManageUsers}
+              browserPanelUrl={currentPanelUrl()}
+              nodeUpdateGraceMs={nodeUpdateGraceMs}
+              onSelectServer={openServerFromNode}
+              onAddServer={openCreateServerForNode}
+              onCopy={(text) => void copyText(text)}
+              serverStateLabel={nodeServerStateLabel}
+              playerSnapshots={playerSnapshots}
               formatDate={formatDisplayDate}
             />
           </Suspense>
@@ -2724,29 +2090,18 @@ export default function App() {
             )}
 
             {activePage === "console" && (
-              <section className="tabPage layoutWide">
-                <Surface className="consolePanel">
-                  <div className="terminal">
-                    {consoleSnapshotReadyServerId !== activeServer.id ? (
-                      <TerminalLoadingSkeleton />
-                    ) : (
-                      <Suspense fallback={<TerminalLoadingSkeleton />}>
-                        <MinecraftTerminal
-                          entries={logs}
-                          canSendCommands={canSendConsoleCommands}
-                          disabledReason={consoleCommandDisabledReason}
-                          commandHistory={commandHistory}
-                          fontSize={consoleFontSize}
-                          scrollback={consoleScrollback}
-                          onCommand={(command) => {
-                            void sendCommand(command);
-                          }}
-                        />
-                      </Suspense>
-                    )}
-                  </div>
-                </Surface>
-              </section>
+              <ServerConsoleTab
+                snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
+                entries={logs}
+                canSendCommands={canSendConsoleCommands}
+                disabledReason={consoleCommandDisabledReason}
+                commandHistory={commandHistory}
+                fontSize={consoleFontSize}
+                scrollback={consoleScrollback}
+                onCommand={(command) => {
+                  void sendCommand(command);
+                }}
+              />
             )}
 
             {activePage === "files" && (
