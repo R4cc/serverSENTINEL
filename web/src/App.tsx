@@ -11,6 +11,7 @@ import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, emptyApp, isServerWorkspacePage, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
+import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -77,7 +78,6 @@ function consoleLine(text: string) {
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
-const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
 export default function App() {
   const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -326,58 +326,33 @@ export default function App() {
       : serverCommandTone === "stopped" || serverCommandTone === "exited"
         ? "Offline"
         : "Unavailable";
-  const activeNodeBlockDetail = activeNodeBlockReason && activeNodeBlockMessage.startsWith(`${activeNodeBlockReason}. `)
-    ? activeNodeBlockMessage.slice(activeNodeBlockReason.length + 2)
-    : activeNodeBlockMessage;
-  const serverStripAlert = activeNodeRuntimeBlocked && activeNode.status !== "offline"
-    ? {
-        title: activeNodeBlockReason || "Node unavailable",
-        message: activeNodeBlockDetail
-      }
-    : null;
-  const serverStripHealth = serverStripAlert
-    ? null
-    : statusError
-      ? { tone: "warning", message: "Status temporarily unavailable — retrying automatically." }
-      : activePage === "console" && consoleConnectionState === "reconnecting"
-        ? { tone: "warning", message: "Reconnecting console…" }
-        : activePage === "console" && consoleConnectionState === "polling"
-          ? { tone: "warning", message: "Live stream unavailable — polling console logs." }
-        : activePage === "console" && consoleConnectionState === "error"
-          ? { tone: "error", message: consoleError || "Console stream is unavailable." }
-          : activePage === "console" && (consoleConnectionState === "connecting" || consoleLoading)
-            ? { tone: "loading", message: "Connecting to live console…" }
-            : !activeStatus
-              ? { tone: "loading", message: "Loading server status…" }
-              : null;
-  const runtimeControlsDisabledReason = authOperationalLock
-    ? "Sign in before using runtime controls."
-    : !canBasic
-      ? "Servers control permission is required."
-    : activeNodeRuntimeBlocked || nodeOfflineDetected
-        ? activeNodeBlockMessage
-          || `${activeNode.name} is offline. Runtime controls will return when it reconnects.`
-        : activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted
-          ? "Docker socket is not mounted. Runtime controls are unavailable for the internal node."
-          : lifecycleTransitionRunning
-            ? activeStatus?.lifecycle.message || "A server restart is already in progress."
-          : isProvisioning
-            ? "Server setup is still running."
-            : "";
+  const { alert: serverStripAlert, health: serverStripHealth } = resolveServerStripStatus({
+    activeNodeRuntimeBlocked,
+    activeNodeStatus: activeNode.status,
+    activeNodeBlockReason,
+    activeNodeBlockMessage,
+    statusError,
+    activePage,
+    consoleConnectionState,
+    consoleError,
+    consoleLoading,
+    activeStatus
+  });
+  const { runtimeControlsDisabledReason, serverRequiresStoppedForMutableConfig } = resolveRuntimeGuards({
+    authOperationalLock,
+    canBasic,
+    activeNodeRuntimeBlocked,
+    nodeOfflineDetected,
+    activeNodeBlockMessage,
+    activeNodeName: activeNode.name,
+    activeServerUsesInternalNode,
+    dockerSocketMounted: effectiveAppState.dockerSocketMounted,
+    lifecycleTransitionRunning,
+    isProvisioning,
+    activeStatus,
+    runtimeAction
+  });
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
-  const activeDockerState = activeStatus?.docker.state;
-  const activeDockerUnknownStopped = activeDockerState === "unknown"
-    && (
-      activeStatus?.docker.configured === false
-      || (activeStatus?.docker.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(activeStatus.docker.message || ""))
-    );
-  const serverRequiresStoppedForMutableConfig = Boolean(
-    activeStatus && (
-      activeStatus.docker.running
-      || runtimeAction !== null
-      || (activeDockerState && !["created", "dead", "exited"].includes(activeDockerState) && !activeDockerUnknownStopped)
-    )
-  );
 
   useEffect(() => {
     if (!nodeOfflineDetected) {
@@ -392,19 +367,16 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [activeServer?.id, nodeOfflineDetected]);
 
-  const serverSettingsLocked = isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canEditServerSettings;
-  const deleteServerLocked = isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running);
-  const serverSettingsLockedReason = isProvisioning
-    ? "Server setup is still running."
-    : dockerOperationalLock
-      ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
-      : serverRequiresStoppedForMutableConfig
-        ? stoppedServerMutationMessage
-        : !canEditServerSettings
-          ? "Edit server settings permission is required."
-          : serverSettingsSaving
-            ? "Server settings are saving."
-            : "";
+  const { serverSettingsLocked, deleteServerLocked, serverSettingsLockedReason } = resolveServerSettingsGuards({
+    isProvisioning,
+    dockerOperationalLock,
+    serverRequiresStoppedForMutableConfig,
+    canEditServerSettings,
+    canDeleteServers,
+    serverSettingsSaving,
+    runtimeControlsDisabledReason,
+    activeStatus
+  });
   const settingsDataLoading = !appStateLoaded && !appLoadError;
   const usersWorkspace = useUsersWorkspace({
     activePage,
@@ -430,35 +402,25 @@ export default function App() {
     requestConfirmation,
     refreshApp
   });
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
-  const modToggleLocked = modsLocked;
-  const addModFromModrinthDisabled = isProvisioning || dockerOperationalLock || !activeStatus || isAnyModJobRunning || !canInstallMods || !effectiveAppState.modrinthApiConfigured;
-  const uploadModDisabled = modsLocked;
-  const addModFromModrinthDisabledReason = isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !activeStatus
-          ? "Server status is still loading."
-          : isAnyModJobRunning
-            ? `A ${managedContent.singular} operation is already running.`
-            : !canInstallMods
-              ? "Server management permission is required."
-              : !effectiveAppState.modrinthApiConfigured
-                ? `Add a Modrinth API key in Settings before searching for ${managedContent.plural}.`
-                : `Search Modrinth for compatible ${managedContent.runtimeName} ${managedContent.plural}.`;
-  const uploadModDisabledReason = isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : !canManageMods
-          ? "Server management permission is required."
-          : !activeStatus
-            ? "Server status is still loading."
-            : isAnyModJobRunning
-              ? `A ${managedContent.singular} operation is already running.`
-              : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
+  const {
+    modsLocked,
+    modReviewAcknowledgementLocked,
+    modToggleLocked,
+    addModFromModrinthDisabled,
+    uploadModDisabled,
+    addModFromModrinthDisabledReason,
+    uploadModDisabledReason
+  } = resolveModGuards({
+    isProvisioning,
+    dockerOperationalLock,
+    canManageMods,
+    canInstallMods,
+    activeStatus,
+    isAnyModJobRunning,
+    modrinthApiConfigured: effectiveAppState.modrinthApiConfigured,
+    runtimeControlsDisabledReason,
+    managedContent
+  });
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
   const {
     browserTimeZone,
