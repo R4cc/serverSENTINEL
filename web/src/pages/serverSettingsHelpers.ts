@@ -5,6 +5,7 @@ import {
   isValidServerPort,
   maxServerPort,
   minServerPort,
+  parseJavaMemoryArgs,
   totalMemoryGb
 } from "../utils/format";
 
@@ -151,6 +152,12 @@ export function preferredMinecraftVersion(options: CreateWizardMinecraftVersion[
 export function clampNumber(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+export function syncJavaMemoryArgs(value: string, bounds: MemoryBounds, minimumHeapGb: number, maximumHeapGb: number, setMinimumHeapGb: (value: number) => void, setMaximumHeapGb: (value: number) => void) {
+  const memory = parseJavaMemoryArgs(value);
+  if (memory.xmsGb !== null) setMinimumHeapGb(clampNumber(memory.xmsGb, bounds.min, Math.min(bounds.max, maximumHeapGb)));
+  if (memory.xmxGb !== null) setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(bounds.min, minimumHeapGb), bounds.max));
 }
 
 export function memoryBoundsForNode(totalMemory: number): MemoryBounds {

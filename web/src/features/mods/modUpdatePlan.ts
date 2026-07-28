@@ -1,3 +1,4 @@
+import { modUpdatePlanCounts } from "@serversentinel/contracts";
 import type { InstalledMod, ModUpdatePlan, ModUpdatePlanEntry } from "../../types";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 
@@ -76,14 +77,7 @@ export function createDemoUpdatePlan(serverId: string, mods: InstalledMod[], gen
   return {
     serverId,
     generatedAt,
-    counts: {
-      totalInstalled: updates.length,
-      safeUpdates: updates.filter((entry) => entry.status === "safe_update").length,
-      reviewUpdates: updates.filter((entry) => entry.status === "needs_review").length,
-      blockedUpdates: updates.filter((entry) => entry.status === "blocked").length,
-      upToDate: updates.filter((entry) => entry.status === "up_to_date").length,
-      unknown: updates.filter((entry) => entry.status === "unknown").length
-    },
+    counts: modUpdatePlanCounts(updates),
     updates
   };
 }

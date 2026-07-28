@@ -10,8 +10,7 @@ import {
   isValidServerPort,
   javaMajorVersionForMinecraft,
   maxServerPort,
-  minServerPort,
-  parseJavaMemoryArgs
+  minServerPort
 } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { AppIcon } from "../components/FileTypeIcon";
@@ -29,6 +28,7 @@ import {
   nodeStatusTextLabel,
   preferredMinecraftVersion,
   runtimeMinecraftOptions,
+  syncJavaMemoryArgs,
   usedPortKeysForNode,
   wizardDockerPorts,
   wizardJavaArgs,
@@ -296,13 +296,7 @@ export function ManagedServerForm({
 
   function updateJavaArgs(value: string) {
     setJavaArgs(value);
-    const memory = parseJavaMemoryArgs(value);
-    if (memory.xmsGb !== null) {
-      setMinimumHeapGb(clampNumber(memory.xmsGb, memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb)));
-    }
-    if (memory.xmxGb !== null) {
-      setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max));
-    }
+    syncJavaMemoryArgs(value, memoryBounds, minimumHeapGb, maximumHeapGb, setMinimumHeapGb, setMaximumHeapGb);
   }
 
   function updateDockerImage(value: string) {

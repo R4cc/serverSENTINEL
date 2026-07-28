@@ -34,7 +34,7 @@ import { nodeAdvertisesCapability } from "../nodes/protocol.js";
 import { RemoteNodeRuntime } from "../nodes/remoteNodeRuntime.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";
-import type { InstalledModMetadata, ManagedServer, ModCompatibility, ModPreference, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
+import type { InstalledModMetadata, ManagedServer, ModCompatibility, ModPreference, ModrinthInstallVersionStatus, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 export function modrinthSearchFacets(loaders: string | readonly string[], minecraftVersion: string, compatibilityFilter: "compatible" | "incompatible" | "all", projectType: "mod" | "plugin" = "mod") {
   const compatibleLoaders = typeof loaders === "string" ? [loaders] : Array.from(loaders);
   const facets: string[][] = [[`project_type:${projectType}`]];
@@ -1421,15 +1421,6 @@ export async function localInstallMod(server: ManagedServer, input: unknown) {
     throw error;
   }
 }
-
-export type ModrinthInstallVersionStatus =
-  | "recommended"
-  | "compatible"
-  | "version_mismatch"
-  | "wrong_loader"
-  | "no_installable_jar"
-  | "client_only"
-  | "server_support_unknown";
 
 export function classifyModrinthInstallVersion(input: {
   version: ModrinthVersion;

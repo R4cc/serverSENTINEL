@@ -22,9 +22,10 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import { extractZipArchive, planZipExtraction } from "../zipArchive.js";
 import { validateBase64Content } from "../mods/managedContent.js";
 import { deleteModIcon } from "../mods/icons.js";
-import { downloadServerJar, runtimeSelection, serverJarProvider } from "./provisioning.js";
+import { downloadServerJar, serverJarProvider } from "./provisioning.js";
 import { stoppedServerMutationMessage } from "./lifecycle.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
 import { defaultServerContainerName } from "../storage/serverIdentity.js";
 import { writeVersionMetadataFile } from "./versions.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";
@@ -59,21 +60,8 @@ export async function localUpdateServer(serverId: string, input: unknown) {
     }
     const currentRuntime = runtimeProfileForServer(current);
     const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
-    const runtimeType = selectedRuntime?.runtimeType || currentRuntime.runtimeType;
-    const runtimeDefinition = serverRuntimeDefinition(runtimeType);
-    const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
-    if (!minecraftVersion) {
-      throw new Error("Minecraft version is required");
-    }
-    const runtimeFamilyChanged = runtimeType !== currentRuntime.runtimeType || minecraftVersion !== currentRuntime.minecraftVersion;
-    const requestedRuntimeVersion = selectedRuntime?.runtimeVersion || (runtimeFamilyChanged ? "latest" : currentRuntime.runtimeVersion || "latest");
-    const serverJar = selectedRuntime?.serverJar
-      || (runtimeType !== currentRuntime.runtimeType ? runtimeDefinition.serverJarFilename : currentRuntime.jarArtifact.filename);
-    const shouldResolveRuntime = Boolean(selectedRuntime && (
-      selectedRuntime.runtimeType !== currentRuntime.runtimeType
-      || (selectedRuntime.minecraftVersion !== undefined && selectedRuntime.minecraftVersion !== currentRuntime.minecraftVersion)
-      || (selectedRuntime.runtimeVersion !== undefined && selectedRuntime.runtimeVersion !== currentRuntime.runtimeVersion)
-    ));
+    const { runtimeType, runtimeDefinition, minecraftVersion, requestedRuntimeVersion, serverJar, shouldResolveRuntime } =
+      runtimeUpdatePlan(currentRuntime, selectedRuntime);
     if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) {
       throw new Error(`${runtimeDefinition.displayName} version changes are not available until its runtime provider is enabled`);
     }

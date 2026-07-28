@@ -1,4 +1,10 @@
-export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" | "blocked" | "unknown";
+import {
+  modUpdatePlanCounts,
+  type ModUpdatePlan,
+  type ModUpdatePlanEntry,
+  type ModUpdatePlanStatus,
+  type SafeBatchUpdateResult
+} from "@serversentinel/contracts";
 
 export type ModUpdatePlanSource = {
   filename?: unknown;
@@ -11,43 +17,7 @@ export type ModUpdatePlanSource = {
   versionInfo?: unknown;
 };
 
-export type ModUpdatePlanEntry = {
-  filename: string;
-  displayName: string;
-  iconUrl?: string;
-  projectId?: string;
-  currentVersion?: string;
-  currentFilename: string;
-  targetVersion?: string;
-  targetFilename?: string;
-  channel: "release" | "beta" | "alpha";
-  status: ModUpdatePlanStatus;
-  reason: string;
-  compatibility?: {
-    status?: string;
-    compatible: boolean;
-    reason?: string;
-    serverSide?: string;
-    clientSide?: string;
-  };
-  safeBatchEligible: boolean;
-  acknowledgementRequired: boolean;
-  enabled: boolean;
-};
-
-export type ModUpdatePlan = {
-  serverId: string;
-  generatedAt: string;
-  counts: {
-    totalInstalled: number;
-    safeUpdates: number;
-    reviewUpdates: number;
-    blockedUpdates: number;
-    upToDate: number;
-    unknown: number;
-  };
-  updates: ModUpdatePlanEntry[];
-};
+export type { ModUpdatePlan, ModUpdatePlanEntry, ModUpdatePlanStatus, SafeBatchUpdateResult };
 
 type ObjectValue = Record<string, unknown>;
 
@@ -148,24 +118,10 @@ export function createModUpdatePlan(serverId: string, mods: ModUpdatePlanSource[
   return {
     serverId,
     generatedAt,
-    counts: {
-      totalInstalled: updates.length,
-      safeUpdates: updates.filter((entry) => entry.status === "safe_update").length,
-      reviewUpdates: updates.filter((entry) => entry.status === "needs_review").length,
-      blockedUpdates: updates.filter((entry) => entry.status === "blocked").length,
-      upToDate: updates.filter((entry) => entry.status === "up_to_date").length,
-      unknown: updates.filter((entry) => entry.status === "unknown").length
-    },
+    counts: modUpdatePlanCounts(updates),
     updates
   };
 }
-
-export type SafeBatchUpdateResult = {
-  updated: Array<{ filename: string; result: unknown }>;
-  skipped: Array<{ filename: string; reason: string }>;
-  failed: Array<{ filename: string; reason: string }>;
-  counts: { requested: number; updated: number; skipped: number; failed: number };
-};
 
 export async function executeSafeUpdatePlan(
   plan: ModUpdatePlan,

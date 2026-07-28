@@ -47,9 +47,10 @@ import {
   writeServerTextFile
 } from "../runtime/local/fileService.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
-import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
@@ -566,19 +567,8 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
 
   const currentRuntime = runtimeProfileForServer(server);
   const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
-  const runtimeType = selectedRuntime?.runtimeType || currentRuntime.runtimeType;
-  const runtimeDefinition = serverRuntimeDefinition(runtimeType);
-  const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
-  if (!minecraftVersion) throw new Error("Minecraft version is required");
-  const runtimeFamilyChanged = runtimeType !== currentRuntime.runtimeType || minecraftVersion !== currentRuntime.minecraftVersion;
-  const requestedRuntimeVersion = selectedRuntime?.runtimeVersion || (runtimeFamilyChanged ? "latest" : currentRuntime.runtimeVersion || "latest");
-  const serverJar = selectedRuntime?.serverJar
-    || (runtimeType !== currentRuntime.runtimeType ? runtimeDefinition.serverJarFilename : currentRuntime.jarArtifact.filename);
-  const shouldResolveRuntime = Boolean(selectedRuntime && (
-    selectedRuntime.runtimeType !== currentRuntime.runtimeType
-    || (selectedRuntime.minecraftVersion !== undefined && selectedRuntime.minecraftVersion !== currentRuntime.minecraftVersion)
-    || (selectedRuntime.runtimeVersion !== undefined && selectedRuntime.runtimeVersion !== currentRuntime.runtimeVersion)
-  ));
+  const { runtimeType, runtimeDefinition, minecraftVersion, requestedRuntimeVersion, serverJar, shouldResolveRuntime } =
+    runtimeUpdatePlan(currentRuntime, selectedRuntime);
   if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) throw new Error(`${runtimeDefinition.displayName} version changes are not available on this node yet`);
   const resolvedRuntime = shouldResolveRuntime
     ? await defaultServerJarProvider.resolveServerJar({ runtimeType, minecraftVersion, runtimeVersion: requestedRuntimeVersion, preferStable: true })
@@ -1615,28 +1605,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return { ok: true, filename };
   }
   throw new Error(`Unsupported node command ${command}`);
-}
-
-function runtimeSelection(input: unknown) {
-  const runtime = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
-  const optional = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
-  const canonicalRuntimeType = optional(runtime.runtimeType);
-  const legacyLoader = optional(runtime.loader);
-  if (canonicalRuntimeType && legacyLoader && canonicalRuntimeType !== legacyLoader) throw new Error("runtime.loader must match runtime.runtimeType");
-  const runtimeTypeValue = canonicalRuntimeType || legacyLoader || "fabric";
-  if (runtimeTypeValue !== "fabric" && runtimeTypeValue !== "paper") throw new Error("runtime.runtimeType must be fabric or paper");
-  const runtimeType: ServerRuntimeType = runtimeTypeValue;
-  const canonicalRuntimeVersion = optional(runtime.runtimeVersion);
-  const legacyLoaderVersion = optional(runtime.loaderVersion);
-  if (canonicalRuntimeVersion && legacyLoaderVersion && canonicalRuntimeVersion !== legacyLoaderVersion) throw new Error("runtime.loaderVersion must match runtime.runtimeVersion");
-  const runtimeVersion = canonicalRuntimeVersion || legacyLoaderVersion;
-  return {
-    runtimeType,
-    runtimeVersion,
-    minecraftVersion: optional(runtime.minecraftVersion),
-    loaderVersion: runtimeVersion,
-    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
-  };
 }
 
 export const __nodeAgentTestHooks = {

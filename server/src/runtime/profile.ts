@@ -1,9 +1,12 @@
 import type {
   JavaMajorVersion,
   ManagedServer,
+  RuntimeVersion,
   ServerRuntimeProfile,
   ServerRuntimeType
 } from "../types.js";
+
+export type { RuntimeVersion } from "../types.js";
 
 export type RuntimeMinecraftVersion = {
   id: string;
@@ -12,14 +15,6 @@ export type RuntimeMinecraftVersion = {
   javaMajorVersion: JavaMajorVersion;
   recommended?: boolean;
   releasedAt?: string;
-};
-
-export type RuntimeVersion = {
-  id: string;
-  runtimeVersion: string;
-  stable?: boolean;
-  recommended?: boolean;
-  buildId?: string;
 };
 
 export type ServerJarProvider = {

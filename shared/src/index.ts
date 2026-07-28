@@ -187,6 +187,114 @@ export type PublicUser = {
 
 export type ReleaseChannel = "release" | "beta" | "alpha";
 
+export type RuntimeVersion = {
+  id: string;
+  runtimeVersion: string;
+  stable?: boolean;
+  recommended?: boolean;
+  buildId?: string;
+};
+
+export type FileEditLease = {
+  leaseId: string;
+  serverId: string;
+  path: string;
+  userId: string;
+  displayName: string;
+  acquiredAt: string;
+  refreshedAt: string;
+  expiresAt: string;
+  fileRevision: string;
+};
+
+export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
+
+export type ModCompatibility = {
+  status: ModCompatibilityStatus;
+  compatible: boolean;
+  reason: string;
+  matchedVersionId?: string;
+  matchedVersionNumber?: string;
+  matchedVersionType?: ReleaseChannel;
+  matchedLoaders?: string[];
+  matchedGameVersions?: string[];
+  file?: {
+    filename: string;
+    url?: string;
+    size?: number;
+    hashes?: Record<string, string>;
+  };
+  serverSide?: string;
+  clientSide?: string;
+};
+
+export type ModrinthInstallVersionStatus =
+  | "recommended"
+  | "compatible"
+  | "version_mismatch"
+  | "wrong_loader"
+  | "no_installable_jar"
+  | "client_only"
+  | "server_support_unknown";
+
+export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" | "blocked" | "unknown";
+
+export type ModUpdatePlanEntry = {
+  filename: string;
+  displayName: string;
+  iconUrl?: string;
+  projectId?: string;
+  currentVersion?: string;
+  currentFilename: string;
+  targetVersion?: string;
+  targetFilename?: string;
+  channel: ReleaseChannel;
+  status: ModUpdatePlanStatus;
+  reason: string;
+  compatibility?: {
+    status?: string;
+    compatible: boolean;
+    reason?: string;
+    serverSide?: string;
+    clientSide?: string;
+  };
+  safeBatchEligible: boolean;
+  acknowledgementRequired: boolean;
+  enabled: boolean;
+};
+
+export type ModUpdatePlan = {
+  serverId: string;
+  generatedAt: string;
+  counts: {
+    totalInstalled: number;
+    safeUpdates: number;
+    reviewUpdates: number;
+    blockedUpdates: number;
+    upToDate: number;
+    unknown: number;
+  };
+  updates: ModUpdatePlanEntry[];
+};
+
+export type SafeBatchUpdateResult = {
+  updated: Array<{ filename: string; result: unknown }>;
+  skipped: Array<{ filename: string; reason: string }>;
+  failed: Array<{ filename: string; reason: string }>;
+  counts: { requested: number; updated: number; skipped: number; failed: number };
+};
+
+export function modUpdatePlanCounts(updates: readonly Pick<ModUpdatePlanEntry, "status">[]): ModUpdatePlan["counts"] {
+  return {
+    totalInstalled: updates.length,
+    safeUpdates: updates.filter((entry) => entry.status === "safe_update").length,
+    reviewUpdates: updates.filter((entry) => entry.status === "needs_review").length,
+    blockedUpdates: updates.filter((entry) => entry.status === "blocked").length,
+    upToDate: updates.filter((entry) => entry.status === "up_to_date").length,
+    unknown: updates.filter((entry) => entry.status === "unknown").length
+  };
+}
+
 export type RestartRequiredModAction = "added" | "removed" | "enabled" | "disabled" | "updated";
 
 export type RestartRequiredChange = {

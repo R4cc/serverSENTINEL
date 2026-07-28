@@ -555,14 +555,7 @@ export function eventDate(value: string | undefined, now = new Date()) {
 export function formatRelativeEventTime(value: string | undefined, now = new Date()) {
   const date = eventDate(value, now);
   if (!date) return value ? "Unknown" : "No timestamp";
-  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
-  if (elapsedSeconds < 60) return "Just now";
-  const minutes = Math.floor(elapsedSeconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return formatRelativeTimestamp(date, now);
 }
 
 type RecentEventKind = EventIconKind;

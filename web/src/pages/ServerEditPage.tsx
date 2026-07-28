@@ -25,6 +25,7 @@ import {
   portBindingId,
   queryPortForServer,
   serverPortForServer,
+  syncJavaMemoryArgs,
   wizardJavaArgs,
   type PortBindingRow
 } from "./serverSettingsHelpers";
@@ -308,13 +309,7 @@ export function ServerEditForm({
 
   function updateJavaArgs(value: string) {
     setJavaArgs(value);
-    const memory = parseJavaMemoryArgs(value);
-    if (memory.xmsGb !== null) {
-      setMinimumHeapGb(clampNumber(memory.xmsGb, memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb)));
-    }
-    if (memory.xmxGb !== null) {
-      setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max));
-    }
+    syncJavaMemoryArgs(value, memoryBounds, minimumHeapGb, maximumHeapGb, setMinimumHeapGb, setMaximumHeapGb);
   }
 
   return (
