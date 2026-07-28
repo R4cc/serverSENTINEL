@@ -22,7 +22,7 @@ import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.
 import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modIconUrl, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
-import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, validateBase64Content, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
+import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
 import { managedContentRuntime } from "../servers/versions.js";
 
 import { blockingRuntimeOperations } from "../servers/lifecycle.js";
@@ -34,7 +34,7 @@ import { nodeAdvertisesCapability } from "../nodes/protocol.js";
 import { RemoteNodeRuntime } from "../nodes/remoteNodeRuntime.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";
-import type { InstalledModMetadata, ManagedServer, ModCompatibility, ModPreference, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
+import type { InstalledModMetadata, ManagedServer, ModCompatibility, ModPreference, ModrinthInstallVersionStatus, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 export function modrinthSearchFacets(loaders: string | readonly string[], minecraftVersion: string, compatibilityFilter: "compatible" | "incompatible" | "all", projectType: "mod" | "plugin" = "mod") {
   const compatibleLoaders = typeof loaders === "string" ? [loaders] : Array.from(loaders);
   const facets: string[][] = [[`project_type:${projectType}`]];
@@ -676,7 +676,7 @@ export async function localRemoveMod(server: ManagedServer, filenameInput: unkno
   return { ok: true, filename };
 }
 
-export async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown | RuntimeUploadSource) {
+export async function localUploadMod(server: ManagedServer, filenameInput: unknown, content: RuntimeUploadSource) {
   const { directory, singular } = managedContentRuntime(server);
   const startedAt = Date.now();
   let filename: string | undefined;
@@ -689,11 +689,10 @@ export async function localUploadMod(server: ManagedServer, filenameInput: unkno
     if (existsSync(destination)) {
       throw new Error(`A ${singular} with that filename already exists`);
     }
-    const size = await writeRuntimeUpload(destination, contentBase64Input, {
+    const size = await writeRuntimeUpload(destination, content, {
       maximumBytes: modFileSizeLimit,
       allowEmpty: false,
       label: `Uploaded ${singular}`,
-      decodeBase64: validateBase64Content,
       validateTemporary: async (temporary) => {
         const headerHandle = await open(temporary, "r");
         try {
@@ -1421,15 +1420,6 @@ export async function localInstallMod(server: ManagedServer, input: unknown) {
     throw error;
   }
 }
-
-export type ModrinthInstallVersionStatus =
-  | "recommended"
-  | "compatible"
-  | "version_mismatch"
-  | "wrong_loader"
-  | "no_installable_jar"
-  | "client_only"
-  | "server_support_unknown";
 
 export function classifyModrinthInstallVersion(input: {
   version: ModrinthVersion;

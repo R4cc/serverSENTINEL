@@ -422,7 +422,7 @@
   .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
 }
 
-/* Shared application patterns migrated from the former adoption layer */
+/* Shared application patterns */
 .fileToolbar .uiButton,
 .selectionActions .uiButton,
 .fileEditorFooter .uiButton,
@@ -523,8 +523,8 @@
 }
 
 
-/* Authoritative shared cohesion migrated from the former adoption layer */
-/* Focused UI cohesion pass ------------------------------------------------ */
+/* Shared layout cohesion */
+/* Shared interaction states ----------------------------------------------- */
 
 .uiButton:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),

@@ -1,6 +1,7 @@
 import { fetch } from "undici";
 import { appUserAgentFor } from "../buildInfo.js";
 import { assertModrinthUrl } from "../http/outboundUrls.js";
+import { httpError } from "../http/errors.js";
 
 let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
 const defaultModrinthTimeoutMs = 15_000;
@@ -12,12 +13,6 @@ let activeRequests = 0;
 let rateLimitedUntil = 0;
 const requestWaiters: Array<() => void> = [];
 const inFlightGetRequests = new Map<string, Promise<Awaited<ReturnType<typeof fetch>>>>();
-
-type PublicHttpError = Error & {
-  statusCode?: number;
-  code?: string;
-  details?: unknown;
-};
 
 export function configureModrinthApiKeyProvider(provider: () => Promise<string>) {
   apiKeyProvider = provider;
@@ -44,11 +39,7 @@ function modrinthAuthorizationHeader(apiKey: string) {
 }
 
 function modrinthPublicError(message: string, statusCode = 424, code = "MODRINTH_REQUEST_FAILED", details?: unknown) {
-  const error = new Error(message) as PublicHttpError;
-  error.statusCode = statusCode;
-  error.code = code;
-  if (details !== undefined) error.details = details;
-  return error;
+  return httpError(statusCode, message, { code, details });
 }
 
 async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number, signal?: AbortSignal) {

@@ -1,3 +1,4 @@
+import { throwHttp } from "../http/errors.js";
 import type { ManagedServer } from "../types.js";
 import type { NodeRuntime } from "./types.js";
 
@@ -14,10 +15,7 @@ export class NodeRuntimeRegistry {
     if (this.remoteRuntimeFactory) {
       return this.remoteRuntimeFactory(nodeId);
     }
-    const error = new Error(`Remote node runtime is unavailable for node ${nodeId}`) as Error & { statusCode?: number; code?: string };
-    error.statusCode = 400;
-    error.code = "node_runtime_unavailable";
-    throw error;
+    throwHttp(400, `Remote node runtime is unavailable for node ${nodeId}`, { code: "node_runtime_unavailable" });
   }
 
   forServer(server: ManagedServer): NodeRuntime {

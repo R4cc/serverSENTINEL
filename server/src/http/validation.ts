@@ -1,16 +1,8 @@
 import type { ReleaseChannel } from "../types.js";
+import { badRequest, forbidden } from "./errors.js";
 
-export function badRequest(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 400;
-  throw error;
-}
-
-export function forbidden(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 403;
-  throw error;
-}
+/** Re-exported so existing `http/validation.js` importers keep working; defined in `http/errors.ts`. */
+export { badRequest, forbidden };
 
 export function requireStrictBoolean(value: unknown, fieldName: string) {
   if (typeof value !== "boolean") {

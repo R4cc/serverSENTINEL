@@ -15,7 +15,7 @@ import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExi
 import { cancelActiveScheduleRun } from "./schedules/activeRuns.js";
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
-import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logInfo, logWarn, routeLogFields } from "./logging.js";
+import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext } from "./logging.js";
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
@@ -62,7 +62,7 @@ import { OperationsRepository } from "./storage/operationsRepository.js";
 import { PlayerHeadService } from "./playerHeadService.js";
 import { OperationService } from "./operations/operationService.js";
 import { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
-import { errorStatusCode, publicApiError } from "./http/errors.js";
+import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
 import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
 import { ensureWritableResolvedInsideServer } from "./core.js";
 import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, stopServerWithIntent, withLifecycleLock } from "./servers/lifecycle.js";
@@ -78,6 +78,7 @@ const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
 const exportMaintenanceIntervalMs = 15 * 60 * 1000;
+const readOnlyHttpMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 let activeAppReservation: symbol | undefined;
 
@@ -98,6 +99,12 @@ const app = Fastify({
   logController: new LogController({ disableRequestLogging: true }),
   bodyLimit: 180 * 1024 * 1024
 });
+app.addHook("onRequest", (request, _reply, done) => {
+  runWithRequestLogContext({
+    requestId: request.id,
+    clientIp: request.ip
+  }, done);
+});
 app.setErrorHandler((error, request, reply) => {
   const expectedUserError = isExpectedUserError(error);
   const statusCode = errorStatusCode(error, reply, expectedUserError);
@@ -108,13 +115,25 @@ app.setErrorHandler((error, request, reply) => {
     ...errorLogFields(error, statusCode)
   };
   if (statusCode >= 500) {
-    app.log.error(fields, "API request failed");
+    logError(fields, "API request failed");
   } else if (/escapes|outside|unsafe path/i.test(errorMessage)) {
-    app.log.warn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
+    logWarn({ ...fields, action: "blocked_unsafe_path" }, "Blocked unsafe file path");
   } else {
-    app.log.warn(fields, "API request rejected");
+    logWarn(fields, "API request rejected");
   }
   reply.code(statusCode).send(publicApiError(error, statusCode));
+});
+app.addHook("onResponse", (request, reply, done) => {
+  if (request.raw.url?.startsWith("/api/") && request.headers.upgrade?.toLowerCase() !== "websocket") {
+    logInfo({
+      ...routeLogFields(request, reply.statusCode),
+      action: "api_request",
+      category: "http",
+      requestKind: readOnlyHttpMethods.has(request.method) ? "read" : "mutation",
+      durationMs: Math.round(reply.elapsedTime * 100) / 100
+    }, "API request completed");
+  }
+  done();
 });
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;
@@ -301,12 +320,10 @@ app.addHook("preHandler", async (request) => {
   }
   const demoMode = await isDemoModeRequest(request);
   if (demoMode) {
-    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/"))) {
+    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/runtime/"))) {
       return;
     }
-    const error = new Error("Demo mode is active. Disable demo mode before managing real servers.") as Error & { statusCode?: number };
-    error.statusCode = 403;
-    throw error;
+    throwHttp(403, "Demo mode is active. Disable demo mode before managing real servers.", { code: "DEMO_MODE_ACTIVE" });
   }
   await requireRequestPermission(request);
 });

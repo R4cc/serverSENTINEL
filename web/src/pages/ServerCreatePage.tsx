@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
 import { api } from "../api";
-import type { ContextNode, FabricVersions, RuntimeVersion } from "../types";
+import type { ContextNode, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
   defaultQueryPort,
@@ -10,8 +10,7 @@ import {
   isValidServerPort,
   javaMajorVersionForMinecraft,
   maxServerPort,
-  minServerPort,
-  parseJavaMemoryArgs
+  minServerPort
 } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { AppIcon } from "../components/FileTypeIcon";
@@ -19,7 +18,8 @@ import { Button } from "../components/UiPrimitives";
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from "../utils/validation";
 import {
   clampNumber,
-  fallbackFabricLoaderVersions,
+  fallbackFabricRuntimeVersions,
+  fallbackMinecraftVersions,
   findAvailablePort,
   formatNodeUptime,
   makeCreatePortBinding,
@@ -29,6 +29,7 @@ import {
   nodeStatusTextLabel,
   preferredMinecraftVersion,
   runtimeMinecraftOptions,
+  syncJavaMemoryArgs,
   usedPortKeysForNode,
   wizardDockerPorts,
   wizardJavaArgs,
@@ -42,7 +43,6 @@ export const createServerReviewSummary = "serverSENTINEL will download the requi
 export function ManagedServerForm({
   nodes = [],
   preferredNodeId = "",
-  versions,
   totalMemory = 0,
   provisioning = false,
   disabledReason = "",
@@ -51,7 +51,6 @@ export function ManagedServerForm({
 }: {
   nodes?: ContextNode[];
   preferredNodeId?: string;
-  versions: FabricVersions;
   totalMemory?: number;
   provisioning?: boolean;
   disabledReason?: string;
@@ -73,7 +72,7 @@ export function ManagedServerForm({
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("");
   const [showSnapshots, setShowSnapshots] = useState(false);
-  const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState(versions.game);
+  const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState(fallbackMinecraftVersions);
   const [loadedMinecraftRuntimeType, setLoadedMinecraftRuntimeType] = useState<ServerRuntimeType>("fabric");
   const [compatibleRuntimeVersions, setCompatibleRuntimeVersions] = useState<RuntimeVersion[]>([]);
   const [loadedRuntimeVersionsKey, setLoadedRuntimeVersionsKey] = useState("");
@@ -109,25 +108,18 @@ export function ManagedServerForm({
   const minecraftOptions = useMemo(() => (
     runtimeType === "paper" && runtimeMinecraftVersions.length === 0
       ? []
-      : runtimeMinecraftOptions({ ...versions, game: runtimeMinecraftVersions }, showSnapshots)
-  ), [runtimeMinecraftVersions, runtimeType, showSnapshots, versions]);
+      : runtimeMinecraftOptions(runtimeMinecraftVersions, showSnapshots)
+  ), [runtimeMinecraftVersions, runtimeType, showSnapshots]);
   const runtimeVersionsKey = `${runtimeType}:${minecraftVersion}`;
   const runtimeVersionsLoading = Boolean(minecraftVersion) && loadedRuntimeVersionsKey !== runtimeVersionsKey;
   const runtimeOptions = useMemo(() => {
     const source = compatibleRuntimeVersions.length > 0
       ? compatibleRuntimeVersions
-      : runtimeType === "fabric" && versions.loader.length > 0
-        ? versions.loader.map((version, index) => ({
-            id: version.version,
-            runtimeVersion: version.version,
-            stable: version.stable,
-            recommended: index === 0
-          }))
-        : runtimeType === "fabric"
-          ? fallbackFabricLoaderVersions.map((version) => ({ ...version, runtimeVersion: version.loaderVersion }))
-          : [];
+      : runtimeType === "fabric"
+        ? fallbackFabricRuntimeVersions
+        : [];
     return showSnapshots ? source : source.filter((version) => version.stable !== false);
-  }, [compatibleRuntimeVersions, runtimeType, showSnapshots, versions.loader]);
+  }, [compatibleRuntimeVersions, runtimeType, showSnapshots]);
   const recommendedRuntime = runtimeOptions.find((version) => version.recommended) || runtimeOptions.find((version) => version.stable !== false) || runtimeOptions[0];
   const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
   const runtimeCompatible = runtimeDefinition.managedProvisioning
@@ -201,14 +193,14 @@ export function ManagedServerForm({
       })
       .catch(() => {
         if (!cancelled) {
-          setRuntimeMinecraftVersions(runtimeType === "fabric" ? versions.game : []);
+          setRuntimeMinecraftVersions(runtimeType === "fabric" ? fallbackMinecraftVersions : []);
           setLoadedMinecraftRuntimeType(runtimeType);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [runtimeType, versions.game]);
+  }, [runtimeType]);
 
   useEffect(() => {
     if (minecraftOptions.some((version) => version.version === minecraftVersion)) return;
@@ -296,13 +288,7 @@ export function ManagedServerForm({
 
   function updateJavaArgs(value: string) {
     setJavaArgs(value);
-    const memory = parseJavaMemoryArgs(value);
-    if (memory.xmsGb !== null) {
-      setMinimumHeapGb(clampNumber(memory.xmsGb, memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb)));
-    }
-    if (memory.xmxGb !== null) {
-      setMaximumHeapGb(clampNumber(memory.xmxGb, Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max));
-    }
+    syncJavaMemoryArgs(value, memoryBounds, minimumHeapGb, maximumHeapGb, setMinimumHeapGb, setMaximumHeapGb);
   }
 
   function updateDockerImage(value: string) {
@@ -608,7 +594,6 @@ export function ManagedServerForm({
       <input type="hidden" name="runtimeType" value={runtimeType} />
       <input type="hidden" name="minecraftVersion" value={minecraftVersion} />
       <input type="hidden" name="runtimeVersion" value={runtimeVersion} />
-      {runtimeType === "fabric" && <input type="hidden" name="loaderVersion" value={runtimeVersion} />}
       <input type="hidden" name="serverJar" value={serverJar} />
       <input type="hidden" name="javaArgs" value={javaArgs} />
       <input type="hidden" name="serverPort" value={serverPort} />

@@ -7,6 +7,8 @@ import type { ManagedNode, ManagedServer, PublicServer } from "../types.js";
 export async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer> {
   const availableNodes = nodes ?? await readNodes();
   const node = findServerNode(server, availableNodes);
+  const target = runtimeTarget(server);
+  const resolvedAt = new Date().toISOString();
   return {
     id: server.id,
     nodeId: server.nodeId,
@@ -27,11 +29,8 @@ export async function publicServer(server: ManagedServer, nodes?: ManagedNode[])
     nodeName: node?.name,
     runtimeProfile: runtimeProfileForServer(server),
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
-      minecraftVersion: versionResolution(runtimeTarget(server).minecraftVersion, runtimeTarget(server).minecraftVersion ? "profile" : "unknown", new Date().toISOString()),
-      runtimeVersion: versionResolution(runtimeTarget(server).runtimeVersion, runtimeTarget(server).runtimeVersion ? "profile" : "unknown", new Date().toISOString()),
-      ...(runtimeTarget(server).runtimeType === "fabric" ? {
-        fabricLoaderVersion: versionResolution(runtimeTarget(server).runtimeVersion, runtimeTarget(server).runtimeVersion ? "profile" : "unknown", new Date().toISOString())
-      } : {})
+      minecraftVersion: versionResolution(target.minecraftVersion, target.minecraftVersion ? "profile" : "unknown", resolvedAt),
+      runtimeVersion: versionResolution(target.runtimeVersion, target.runtimeVersion ? "profile" : "unknown", resolvedAt)
     }
   };
 }

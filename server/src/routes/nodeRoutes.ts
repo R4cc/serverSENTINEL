@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { randomUUID } from "node:crypto";
 import { panelNodeConnections, services } from "../appServices.js";
@@ -22,44 +22,13 @@ import type { NodeHello, PanelWelcome } from "../nodes/protocol.js";
 import { newNodeSecret } from "../nodes/nodeAgent.js";
 import type { ManagedNode } from "../types.js";
 
-export function registerNodeRoutes(app: FastifyInstance) {
-app.get("/api/nodes", async (request) => {
-  await requireRequestPermission(request, "servers.view");
-  return { nodes: await publicNodes(await readNodes()) };
-});
+type CreateNodeRoute = {
+  Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string };
+};
 
-app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
+async function createNode(request: FastifyRequest<CreateNodeRoute>): Promise<CreateNodeResponse> {
   await requireRequestPermission(request, "users.manage");
-  const now = new Date();
-  const token = createJoinToken(request.body.tokenTtlMinutes);
-  const nodeId = randomUUID();
-  const nodeName = validateNodeName(request.body.name);
-  const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
-  const dataMount = optionalNodeDataMount(request.body.dataMount);
-  const node: ManagedNode = {
-    id: nodeId,
-    name: nodeName,
-    type: "remote",
-    status: "unknown",
-    isInternal: false,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    capabilities: [],
-    joinTokenHash: hashNodeSecret(token.joinToken),
-    joinTokenExpiresAt: token.expiresAt
-  };
-  services.nodesRepository.create(node);
-  return {
-    node: publicNode(node),
-    joinToken: token.joinToken,
-    expiresAt: token.expiresAt,
-    install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName })
-  };
-});
-
-app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes/pending", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
-  await requireRequestPermission(request, "users.manage");
-  const now = new Date();
+  const now = new Date().toISOString();
   const token = createJoinToken(request.body.tokenTtlMinutes);
   const nodeName = validateNodeName(request.body.name);
   const panelUrl = optionalNodePanelUrl(request.body.panelUrl);
@@ -70,8 +39,8 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     type: "remote",
     status: "unknown",
     isInternal: false,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
+    createdAt: now,
+    updatedAt: now,
     capabilities: [],
     joinTokenHash: hashNodeSecret(token.joinToken),
     joinTokenExpiresAt: token.expiresAt
@@ -83,7 +52,28 @@ app.post<{ Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; 
     expiresAt: token.expiresAt,
     install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName })
   };
+}
+
+async function markNodeOfflineIfConnectionUnchanged(node: ManagedNode) {
+  const connectedAt = node.connectedAt;
+  const now = new Date().toISOString();
+  await updateNodes((nodes) => {
+    const current = nodes.find((candidate) => candidate.id === node.id);
+    if (!current || current.connectedAt !== connectedAt) return;
+    current.status = "offline";
+    current.updatedAt = now;
+  });
+}
+
+export function registerNodeRoutes(app: FastifyInstance) {
+app.get("/api/nodes", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  return { nodes: await publicNodes(await readNodes()) };
 });
+
+app.post<CreateNodeRoute>("/api/nodes", destructiveRateLimit, createNode);
+
+app.post<CreateNodeRoute>("/api/nodes/pending", destructiveRateLimit, createNode);
 
 app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string } }>("/api/nodes/:nodeId/rotate-token", destructiveRateLimit, async (request): Promise<CreateNodeResponse> => {
   await requireRequestPermission(request, "users.manage");
@@ -170,14 +160,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   }
   const updateResult = result as { ok?: boolean; mode?: string };
   if (updateResult.ok && updateResult.mode === "self") {
-    const connectedAt = node.connectedAt;
-    const now = new Date().toISOString();
-    await updateNodes((nodes) => {
-      const current = nodes.find((candidate) => candidate.id === node.id);
-      if (!current || current.connectedAt !== connectedAt) return;
-      current.status = "offline";
-      current.updatedAt = now;
-    });
+    await markNodeOfflineIfConnectionUnchanged(node);
     setTimeout(() => activeNodeUpdates.delete(node.id), 5 * 60 * 1000).unref();
   } else {
     activeNodeUpdates.delete(node.id);
@@ -218,14 +201,7 @@ app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructi
   const result = await panelNodeConnections.request(node, "node.restart", {}, 30_000);
   const restartResult = result as { ok?: boolean };
   if (restartResult.ok) {
-    const connectedAt = node.connectedAt;
-    const now = new Date().toISOString();
-    await updateNodes((nodes) => {
-      const current = nodes.find((candidate) => candidate.id === node.id);
-      if (!current || current.connectedAt !== connectedAt) return;
-      current.status = "offline";
-      current.updatedAt = now;
-    });
+    await markNodeOfflineIfConnectionUnchanged(node);
   }
   return result;
 });

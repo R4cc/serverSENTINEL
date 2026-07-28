@@ -1,6 +1,6 @@
-# serverSENTINEL 1.5.5 Release Smoke Test
+# serverSENTINEL Release Smoke Test
 
-This path verifies the 1.5.5 release like an administrator using a fresh instance. Run it on a disposable Linux host or VM with Docker and Docker Compose access. Do not run it against production data.
+This path verifies the checked-out release candidate like an administrator using a fresh instance. Run it on a disposable Linux host or VM with Docker and Docker Compose access. Do not run it against production data.
 
 ## Prerequisites
 
@@ -13,7 +13,10 @@ This path verifies the 1.5.5 release like an administrator using a fresh instanc
 Set these variables in the checkout:
 
 ```bash
-export SS_IMAGE=nl2109/serversentinel:1.5.5
+export SS_VERSION="$(grep -m1 '"version"' package.json | cut -d'"' -f4)"
+test -n "$SS_VERSION"
+export SS_BUILD_ID="$(git rev-parse HEAD)"
+export SS_IMAGE="nl2109/serversentinel:smoke-${SS_VERSION}"
 export SS_NAME=serversentinel-smoke
 export SS_URL=http://127.0.0.1:8080
 export SS_SMOKE_ROOT="$(mktemp -d -t serversentinel-smoke-XXXXXX)"
@@ -28,7 +31,11 @@ mkdir -p "$SS_DATA"
 Build the image from the candidate:
 
 ```bash
-docker build -t "$SS_IMAGE" -f docker/Dockerfile .
+docker build \
+  --build-arg SS_VERSION="$SS_VERSION" \
+  --build-arg SS_BUILD_ID="$SS_BUILD_ID" \
+  -t "$SS_IMAGE" \
+  -f docker/Dockerfile .
 ```
 
 Start a fresh all-in-one panel with an empty data root:
@@ -67,7 +74,7 @@ In the browser:
 Expected:
 
 - The first user lands in the full admin panel.
-- The footer or app metadata reports version `1.5.5`.
+- The footer or app metadata reports the version in `$SS_VERSION`.
 - A second browser/incognito window no longer shows first-admin setup.
 
 Optional SQLite check:
@@ -143,7 +150,7 @@ With the server stopped:
 1. Open Files.
 2. List the root directory.
 3. Preview `server.properties`.
-4. Click Edit, change `motd` to `serverSENTINEL 1.0 smoke`, save, and close the editor.
+4. Click Edit, change `motd` to `serverSENTINEL release smoke`, save, and close the editor.
 5. Reopen the file and confirm the saved value is present.
 
 Expected:
@@ -227,7 +234,7 @@ If the UI is not present, verify the same flow through `POST /api/exports`, `GET
 
 ## Node Mode Manual Path
 
-Full node-mode automation is intentionally manual for 1.0 because it requires a second trusted Docker context. Verify it on a second Docker host or VM:
+Full node-mode verification is intentionally manual because it requires a second trusted Docker context. Verify it on a second Docker host or VM:
 
 1. Start a panel-only container with a fresh data root and no Docker socket mount:
 
@@ -266,4 +273,4 @@ rm -rf "$SS_SMOKE_ROOT"
 
 ## Release Signoff
 
-Record the release candidate, commit SHA, host OS, Docker version, browser, and any deviations. A 1.0 candidate should not ship if any expected result above fails without a documented product decision.
+Record the release candidate version, commit SHA, host OS, Docker version, browser, and any deviations. The candidate should not ship if any expected result above fails without a documented product decision.

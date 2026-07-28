@@ -3,6 +3,7 @@ import { lstat, mkdir, rename, rm, utimes } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import yauzl, { type Entry, type ZipFile } from "yauzl";
+import { httpError } from "./http/errors.js";
 
 export type ZipArchiveLimits = {
   maxEntries: number;
@@ -58,10 +59,7 @@ type ZipIndex = {
 };
 
 function zipError(message: string, code = "invalid_zip_archive") {
-  const error = new Error(message) as Error & { code?: string; statusCode?: number };
-  error.code = code;
-  error.statusCode = 400;
-  return error;
+  return httpError(400, message, { code });
 }
 
 function normalizedEntryName(rawName: string) {

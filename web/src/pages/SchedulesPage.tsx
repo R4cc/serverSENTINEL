@@ -618,151 +618,147 @@ export function SchedulePage({
       </div>
 
       {formMode && (
-        <div className="modalBackdrop scheduleModalBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !saveRunning) setFormMode(null);
-        }}>
-          <DialogSurface className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => { if (!saveRunning) setFormMode(null); }}>
-            <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
-              <div className="userModalHeader">
-                <h2 id="schedule-modal-title">{modalTitle}</h2>
-                <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
-                  <AppIcon name="x" />
-                </Button>
-              </div>
-              <div className="userModalBody scheduleEditBody" ref={scheduleEditBodyRef}>
-                <fieldset disabled={disabled} className="scheduleEditFieldset">
-                {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
+        <DialogSurface backdrop="scheduleModalBackdrop" dismissible={!saveRunning} className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => setFormMode(null)}>
+          <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
+            <div className="userModalHeader">
+              <h2 id="schedule-modal-title">{modalTitle}</h2>
+              <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
+                <AppIcon name="x" />
+              </Button>
+            </div>
+            <div className="userModalBody scheduleEditBody" ref={scheduleEditBodyRef}>
+              <fieldset disabled={disabled} className="scheduleEditFieldset">
+              {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
 
-                <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
-                  <div className="scheduleEditorSectionHeader">
-                    <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
-                    <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
-                  </div>
-                  <div className="userModalFields scheduleEditFields">
-                    <label>
-                      Name
-                      <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
-                    </label>
-                    <label className="scheduleCronField">
-                      Cron schedule
-                      <input
-                        name="cron"
-                        value={cronValue}
-                        onChange={(event) => setCronValue(event.target.value)}
-                        placeholder="0 4 * * *"
-                        required
-                        aria-invalid={Boolean(cronError)}
-                        aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
-                        title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
-                      />
-                      {cronError
-                        ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                        : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
-                    </label>
-                  </div>
-                </section>
+              <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
+                <div className="scheduleEditorSectionHeader">
+                  <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
+                  <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
+                </div>
+                <div className="userModalFields scheduleEditFields">
+                  <label>
+                    Name
+                    <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
+                  </label>
+                  <label className="scheduleCronField">
+                    Cron schedule
+                    <input
+                      name="cron"
+                      value={cronValue}
+                      onChange={(event) => setCronValue(event.target.value)}
+                      placeholder="0 4 * * *"
+                      required
+                      aria-invalid={Boolean(cronError)}
+                      aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
+                      title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
+                    />
+                    {cronError
+                      ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
+                      : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
+                  </label>
+                </div>
+              </section>
 
-                <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
-                  <div className="scheduleEditorSectionHeader">
-                    <div><h3 id="schedule-steps-heading">Steps</h3><p>Commands and lifecycle actions run from top to bottom. Drag the handles to reorder them.</p></div>
-                  </div>
-                  <div className="commandStack scheduleCommandStack">
-                    <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
-                    <div className="scheduleCommandList">
-                      {stepDrafts.map((draft, index) => (
-                        <div key={draft.id} className={`scheduleStepCard ${draggingStepId === draft.id ? "isDragging" : ""}`.trim()} data-schedule-step-id={draft.id}>
-                          <div className="scheduleStepHeader">
-                            <div className="scheduleStepIdentity">
-                              <Button
-                                variant="ghost"
-                                iconOnly
-                                compact
-                                className="scheduleStepDragHandle"
-                                onPointerDown={(event) => startStepDrag(event, draft.id)}
-                                onPointerMove={dragStep}
-                                onPointerUp={finishStepDrag}
-                                onPointerCancel={finishStepDrag}
-                                onKeyDown={(event) => handleStepReorderKey(event, draft.id)}
-                                aria-label={`Reorder step ${index + 1}. Drag or use the arrow keys.`}
-                                title="Drag to reorder. You can also use the arrow, Home, and End keys."
-                              >
-                                <AppIcon name="drag" />
-                              </Button>
-                              <strong>Step {index + 1}</strong>
-                            </div>
-                            {stepDrafts.length > 1 && (
-                              <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
-                                <AppIcon name="x" />
-                              </Button>
-                            )}
+              <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
+                <div className="scheduleEditorSectionHeader">
+                  <div><h3 id="schedule-steps-heading">Steps</h3><p>Commands and lifecycle actions run from top to bottom. Drag the handles to reorder them.</p></div>
+                </div>
+                <div className="commandStack scheduleCommandStack">
+                  <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
+                  <div className="scheduleCommandList">
+                    {stepDrafts.map((draft, index) => (
+                      <div key={draft.id} className={`scheduleStepCard ${draggingStepId === draft.id ? "isDragging" : ""}`.trim()} data-schedule-step-id={draft.id}>
+                        <div className="scheduleStepHeader">
+                          <div className="scheduleStepIdentity">
+                            <Button
+                              variant="ghost"
+                              iconOnly
+                              compact
+                              className="scheduleStepDragHandle"
+                              onPointerDown={(event) => startStepDrag(event, draft.id)}
+                              onPointerMove={dragStep}
+                              onPointerUp={finishStepDrag}
+                              onPointerCancel={finishStepDrag}
+                              onKeyDown={(event) => handleStepReorderKey(event, draft.id)}
+                              aria-label={`Reorder step ${index + 1}. Drag or use the arrow keys.`}
+                              title="Drag to reorder. You can also use the arrow, Home, and End keys."
+                            >
+                              <AppIcon name="drag" />
+                            </Button>
+                            <strong>Step {index + 1}</strong>
                           </div>
-                          <div className="scheduleStepFields">
-                            <label className="scheduleStepType">
-                              <span>Type</span>
-                              <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
-                                <option value="command">Command</option>
-                                <option value="action">Action</option>
+                          {stepDrafts.length > 1 && (
+                            <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
+                              <AppIcon name="x" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="scheduleStepFields">
+                          <label className="scheduleStepType">
+                            <span>Type</span>
+                            <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
+                              <option value="command">Command</option>
+                              <option value="action">Action</option>
+                            </select>
+                          </label>
+                          {draft.type === "command" ? (
+                            <label className="scheduleStepValue">
+                              <span>Command</span>
+                              <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
+                            </label>
+                          ) : (
+                            <label className="scheduleStepValue">
+                              <span>Procedure</span>
+                              <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
+                                <option value="restart">Restart</option>
                               </select>
                             </label>
-                            {draft.type === "command" ? (
-                              <label className="scheduleStepValue">
-                                <span>Command</span>
-                                <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
-                              </label>
-                            ) : (
-                              <label className="scheduleStepValue">
-                                <span>Procedure</span>
-                                <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
-                                  <option value="restart">Restart</option>
-                                </select>
-                              </label>
-                            )}
-                            <label className="scheduleCommandDelay">
-                              <span>Delay before step</span>
-                              <span className="scheduleDelayControls">
-                                <input type="number" min="0" max="604800" step="1" value={draft.delayValue} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayValue: Number(event.target.value) } : step))} required aria-label={`Delay before step ${index + 1}`} />
-                                <select value={draft.delayUnit} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayUnit: event.target.value as StepDraft["delayUnit"] } : step))} aria-label={`Delay unit before step ${index + 1}`}>
-                                  <option value="seconds">Seconds</option>
-                                  <option value="minutes">Minutes</option>
-                                  <option value="hours">Hours</option>
-                                </select>
-                              </span>
-                            </label>
-                          </div>
+                          )}
+                          <label className="scheduleCommandDelay">
+                            <span>Delay before step</span>
+                            <span className="scheduleDelayControls">
+                              <input type="number" min="0" max="604800" step="1" value={draft.delayValue} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayValue: Number(event.target.value) } : step))} required aria-label={`Delay before step ${index + 1}`} />
+                              <select value={draft.delayUnit} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, delayUnit: event.target.value as StepDraft["delayUnit"] } : step))} aria-label={`Delay unit before step ${index + 1}`}>
+                                <option value="seconds">Seconds</option>
+                                <option value="minutes">Minutes</option>
+                                <option value="hours">Hours</option>
+                              </select>
+                            </span>
+                          </label>
                         </div>
-                      ))}
-                    </div>
-                    <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
-                      <AppIcon name="plus" />
-                      <span>Additional step</span>
-                    </Button>
+                      </div>
+                    ))}
                   </div>
-                </section>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
+                    <AppIcon name="plus" />
+                    <span>Additional step</span>
+                  </Button>
+                </div>
+              </section>
 
-                <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
-                  <div className="scheduleEditorSectionHeader">
-                    <div><h3 id="schedule-options-heading">Options</h3><p>Control when this automation is allowed to start.</p></div>
-                  </div>
-                  <div className="scheduleEditOptions">
-                    <label className="scheduleOptionToggle">
-                      <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
-                      <span className="scheduleOptionCopy"><strong>Only run when no players are online</strong><small>Skip this schedule while players are connected.</small></span>
-                    </label>
-                    <label className="scheduleOptionToggle">
-                      <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
-                      <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
-                    </label>
-                  </div>
-                </section>
-                </fieldset>
-              </div>
-              <div className="userModalFooter">
-                <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
-                <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
-              </div>
-            </form>
-          </DialogSurface>
-        </div>
+              <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
+                <div className="scheduleEditorSectionHeader">
+                  <div><h3 id="schedule-options-heading">Options</h3><p>Control when this automation is allowed to start.</p></div>
+                </div>
+                <div className="scheduleEditOptions">
+                  <label className="scheduleOptionToggle">
+                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
+                    <span className="scheduleOptionCopy"><strong>Only run when no players are online</strong><small>Skip this schedule while players are connected.</small></span>
+                  </label>
+                  <label className="scheduleOptionToggle">
+                    <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
+                    <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
+                  </label>
+                </div>
+              </section>
+              </fieldset>
+            </div>
+            <div className="userModalFooter">
+              <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
+              <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
+            </div>
+          </form>
+        </DialogSurface>
       )}
 
       {selectedRun && (
@@ -783,48 +779,44 @@ export function ScheduleRunDetailsDialog({
 }) {
   const steps = run.details?.steps;
   return (
-    <div className="modalBackdrop scheduleModalBackdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <DialogSurface className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
-        <div className="userModalHeader scheduleRunModalHeader">
-          <div>
-            <h2 id="schedule-run-modal-title">{run.scheduleName}</h2>
-            <p id="schedule-run-modal-description">Run details for {formatDate(run.ranAt)}</p>
-          </div>
-          <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run details" title="Close run details">
-            <AppIcon name="x" />
-          </Button>
+    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
+      <div className="userModalHeader scheduleRunModalHeader">
+        <div>
+          <h2 id="schedule-run-modal-title">{run.scheduleName}</h2>
+          <p id="schedule-run-modal-description">Run details for {formatDate(run.ranAt)}</p>
         </div>
-        <div className="scheduleRunModalBody">
-          <div className="scheduleRunSummary">
-            <div><span>Status</span><strong className={statusTone(run.status)}>{statusLabel(run.status)}</strong></div>
-            <div><span>Started</span><strong>{formatDate(run.ranAt)}</strong></div>
-            <div><span>Steps completed</span><strong>{run.details ? `${run.details.completedStepCount} of ${run.details.stepCount}` : "Not recorded"}</strong></div>
-          </div>
-          {run.message && <p className="scheduleRunMessage">{run.message}</p>}
+        <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run details" title="Close run details">
+          <AppIcon name="x" />
+        </Button>
+      </div>
+      <div className="scheduleRunModalBody">
+        <div className="scheduleRunSummary">
+          <div><span>Status</span><strong className={statusTone(run.status)}>{statusLabel(run.status)}</strong></div>
+          <div><span>Started</span><strong>{formatDate(run.ranAt)}</strong></div>
+          <div><span>Steps completed</span><strong>{run.details ? `${run.details.completedStepCount} of ${run.details.stepCount}` : "Not recorded"}</strong></div>
+        </div>
+        {run.message && <p className="scheduleRunMessage">{run.message}</p>}
 
-          <section className="scheduleRunSteps" aria-labelledby="schedule-run-steps-heading">
-            <div className="scheduleRunSectionHeader">
-              <h3 id="schedule-run-steps-heading">Executed steps</h3>
-              {steps && <span>{steps.length} recorded</span>}
+        <section className="scheduleRunSteps" aria-labelledby="schedule-run-steps-heading">
+          <div className="scheduleRunSectionHeader">
+            <h3 id="schedule-run-steps-heading">Executed steps</h3>
+            {steps && <span>{steps.length} recorded</span>}
+          </div>
+          {steps === undefined ? (
+            <EmptyState compact className="scheduleRunStepsEmpty" title="Step details unavailable" message="This run was recorded before detailed command history was enabled." />
+          ) : steps.length === 0 ? (
+            <EmptyState compact className="scheduleRunStepsEmpty" title="No steps executed" message={run.status === "skipped" ? run.message : "The run ended before its first step started."} />
+          ) : (
+            <div className="scheduleRunStepList">
+              {steps.map((step) => <ScheduleRunStep key={`${step.stepIndex}:${step.startedAt}`} step={step} />)}
             </div>
-            {steps === undefined ? (
-              <EmptyState compact className="scheduleRunStepsEmpty" title="Step details unavailable" message="This run was recorded before detailed command history was enabled." />
-            ) : steps.length === 0 ? (
-              <EmptyState compact className="scheduleRunStepsEmpty" title="No steps executed" message={run.status === "skipped" ? run.message : "The run ended before its first step started."} />
-            ) : (
-              <div className="scheduleRunStepList">
-                {steps.map((step) => <ScheduleRunStep key={`${step.stepIndex}:${step.startedAt}`} step={step} />)}
-              </div>
-            )}
-          </section>
-        </div>
-        <div className="userModalFooter scheduleRunModalFooter">
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </div>
-      </DialogSurface>
-    </div>
+          )}
+        </section>
+      </div>
+      <div className="userModalFooter scheduleRunModalFooter">
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+      </div>
+    </DialogSurface>
   );
 }
 

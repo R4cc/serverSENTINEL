@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { registerAuthRoutes } from "./authRoutes.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 
@@ -23,6 +23,8 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
     sessions: [] as Session[],
     deletedForUsers: [] as string[]
   };
+  const logInfo = vi.fn();
+  const logWarn = vi.fn();
   return {
     calls,
     authRateLimit: {},
@@ -84,8 +86,8 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
     }),
     demoEnabled,
     isDemoUser: (user: Pick<StoredUser, "username"> | null | undefined) => user?.username.toLowerCase() === "demo",
-    logInfo() {},
-    logWarn() {}
+    logInfo,
+    logWarn
   };
 }
 
@@ -137,6 +139,15 @@ describe("auth demo login", () => {
 
     expect(updated.statusCode).toBe(200);
     expect(context.calls.deletedForUsers).toEqual([userId]);
+    const updateLog = context.logInfo.mock.calls.find(([fields]) => fields.action === "update_user");
+    expect(updateLog?.[0]).toMatchObject({
+      userId,
+      changedFields: ["permissions", "password"],
+      sessionsRevoked: 1,
+      previousRolePreset: "admin",
+      rolePreset: "admin"
+    });
+    expect(JSON.stringify(updateLog?.[0])).not.toContain("new-password-123");
   });
 
   it("rejects demo credentials when demo mode is disabled", async () => {

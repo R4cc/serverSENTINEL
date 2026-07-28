@@ -76,16 +76,6 @@ describe("api error contract", () => {
     }
   });
 
-  it("reads legacy and Fastify flat errors so older backends remain descriptive", async () => {
-    mockWindow();
-    mockFetch(Response.json({ message: "Old message", error: "Old error", code: "OLD_CODE" }, { status: 400 }));
-
-    await expect(api("/api/test")).rejects.toMatchObject({
-      status: 400,
-      code: "OLD_CODE",
-      message: "Old message"
-    });
-  });
 });
 
 describe("runtime-controlled demo mode", () => {

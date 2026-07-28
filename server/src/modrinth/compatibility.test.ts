@@ -29,7 +29,9 @@ function resolve(
   return resolveCompatibilityFromVersions(
     versions,
     {
-      loader: "fabric",
+      loaders: ["fabric"],
+      runtimeName: "Fabric",
+      contentKind: "mod",
       minecraftVersion,
       channel
     },
@@ -94,7 +96,7 @@ describe("Modrinth compatibility resolver", () => {
     const result = resolve([version({ id: "neoforge-only", loaders: ["neoforge"], game_versions: ["1.21.4"] })]);
 
     expect(result.compatible).toBe(false);
-    expect(result.reason).toBe("No Fabric version available");
+    expect(result.reason).toBe("No Fabric-compatible version available");
   });
 
   it("rejects Fabric versions for the wrong Minecraft version", () => {
@@ -125,7 +127,9 @@ describe("Modrinth compatibility resolver", () => {
       version({ id: "older", version_number: "1.2.0", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-11T19:29:30Z" }),
       version({ id: "newer", version_number: "1.2.1", loaders: ["fabric"], game_versions: ["26.1.2"], date_published: "2026-06-15T14:30:22Z" })
     ], {
-      loader: "fabric",
+      loaders: ["fabric"],
+      runtimeName: "Fabric",
+      contentKind: "mod",
       minecraftVersion: "26.1.2",
       channel: "release"
     });

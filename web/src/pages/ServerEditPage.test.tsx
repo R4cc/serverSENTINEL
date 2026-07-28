@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { FabricVersions, ManagedServer } from "../types";
+import type { ManagedServer } from "../types";
 import { ServerEditForm } from "./ServerEditPage";
 
 const server: ManagedServer = {
@@ -18,8 +18,6 @@ const server: ManagedServer = {
     minecraftVersion: "1.21.4",
     runtimeType: "fabric",
     runtimeVersion: "0.16.10",
-    loader: "fabric",
-    loaderVersion: "0.16.10",
     javaMajorVersion: 21,
     jarProvider: "mcjars",
     jarArtifact: { filename: "fabric-server-launch.jar" },
@@ -30,17 +28,10 @@ const server: ManagedServer = {
   updatedAt: "2026-01-01T00:00:00.000Z"
 };
 
-const versions: FabricVersions = {
-  game: [{ version: "1.21.4", stable: true, type: "release" }],
-  loader: [{ version: "0.16.10", stable: true }],
-  installer: []
-};
-
 function renderForm(disabled = false, disabledReason = "") {
   return renderToStaticMarkup(
     <ServerEditForm
       server={server}
-      versions={versions}
       totalMemory={16 * 1024 * 1024 * 1024}
       onSubmit={vi.fn()}
       disabled={disabled}
@@ -112,14 +103,12 @@ describe("ServerEditForm", () => {
         ...server.runtimeProfile,
         runtimeType: "paper",
         runtimeVersion: "1.21.4-232",
-        loader: undefined,
-        loaderVersion: undefined,
         jarProvider: "papermc",
         jarArtifact: { filename: "paper.jar" }
       }
     };
     const html = renderToStaticMarkup(
-      <ServerEditForm server={paperServer} versions={versions} totalMemory={16 * 1024 * 1024 * 1024} onSubmit={vi.fn()} />
+      <ServerEditForm server={paperServer} totalMemory={16 * 1024 * 1024 * 1024} onSubmit={vi.fn()} />
     );
 
     expect(html).toContain("Paper build");

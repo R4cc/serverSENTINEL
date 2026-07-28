@@ -4,9 +4,6 @@ type ApiPayload = {
     message?: unknown;
     details?: unknown;
   } | string;
-  code?: unknown;
-  message?: unknown;
-  statusCode?: unknown;
 };
 
 export class ApiError extends Error {
@@ -30,11 +27,10 @@ function payloadError(payload: ApiPayload) {
 export async function apiErrorFromResponse(response: Response, fallback?: string) {
   const payload = await response.json().catch(() => ({})) as ApiPayload;
   const error = payloadError(payload);
-  const flatMessage = typeof payload.message === "string" && (!payload.statusCode || payload.statusCode === response.status) ? payload.message : undefined;
   const message = typeof error?.message === "string"
     ? error.message
-    : flatMessage ?? fallback ?? (response.status === 401 ? "Authentication required. Sign in again to continue." : `Request failed with ${response.status}`);
-  const code = typeof error?.code === "string" ? error.code : typeof payload.code === "string" ? payload.code : "REQUEST_FAILED";
+    : fallback ?? (response.status === 401 ? "Authentication required. Sign in again to continue." : `Request failed with ${response.status}`);
+  const code = typeof error?.code === "string" ? error.code : "REQUEST_FAILED";
   const details = error?.details ?? {};
   return new ApiError(message, response.status, code, details);
 }

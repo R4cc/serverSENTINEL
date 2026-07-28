@@ -7,7 +7,8 @@ import { buildNodeInstallInstructions } from "./installInstructions.js";
 import type { NodeInstallInstructions } from "./apiTypes.js";
 import { totalmem } from "node:os";
 import { badRequest } from "../http/validation.js";
-import { nodeCapabilities, nodeFeatures, nodeProtocolMode, nodeProtocolVersion } from "./protocol.js";
+import { throwHttp } from "../http/errors.js";
+import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { normalizeNode } from "../storage/nodesRepository.js";
 import type { ManagedNode, ManagedServer, PublicNode } from "../types.js";
 
@@ -42,10 +43,7 @@ export function verifyNodeSecret(secret: string | undefined, expectedHash?: stri
 }
 
 export function nodeNotFound(nodeId: string): never {
-  const error = new Error(`Node ${nodeId} not found`) as Error & { statusCode?: number; code?: string };
-  error.statusCode = 404;
-  error.code = "node_not_found";
-  throw error;
+  throwHttp(404, `Node ${nodeId} not found`, { code: "node_not_found" });
 }
 
 export function defaultInternalNode(now = new Date().toISOString()): ManagedNode {
@@ -105,7 +103,6 @@ export function publicNode(node: ManagedNode): PublicNode {
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
     ...publicFields,
-    protocolMode: normalized.isInternal ? "current" : nodeProtocolMode(normalized.protocolVersion),
     hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
   };
 }

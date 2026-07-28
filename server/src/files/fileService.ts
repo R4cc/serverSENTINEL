@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { config } from "../config.js";
+import { throwHttp, unauthorized } from "../http/errors.js";
 import { parseCookies, requireRequestPermission, sessionCookieName } from "../auth/sessionService.js";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { ensureWritableInsideServer, normalizePublicFilePath, validateExistingInsideServer } from "../core.js";
@@ -49,9 +50,7 @@ export const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCoun
 export function fileLeaseOwner(request: { headers: { cookie?: string } }, user: StoredUser) {
   const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
   if (!sessionId) {
-    const error = new Error("Authentication required") as Error & { statusCode?: number };
-    error.statusCode = 401;
-    throw error;
+    unauthorized("Authentication required");
   }
   return { userId: user.id, sessionId, displayName: user.username };
 }
@@ -61,13 +60,7 @@ export function fileContentRevision(content: string) {
 }
 
 export function fileRevisionConflict(): never {
-  const error = new Error("The file changed after editing began. Reload it before making more changes.") as Error & {
-    statusCode?: number;
-    code?: string;
-  };
-  error.statusCode = 409;
-  error.code = "file_revision_conflict";
-  throw error;
+  throwHttp(409, "The file changed after editing began. Reload it before making more changes.", { code: "file_revision_conflict" });
 }
 
 export function assertFileRevision(requested: string | undefined, acquired: string, current: string) {
@@ -135,11 +128,10 @@ export async function requireFilePathPermission(request: { headers: { cookie?: s
 }
 
 export function fileDownloadLimitError(size: number): never {
-  const error = new Error(`Download is larger than ${Math.floor(fileDownloadMaxBytes / 1024 / 1024)} MiB`) as Error & { statusCode?: number; code?: string; details?: unknown };
-  error.statusCode = 413;
-  error.code = "download_size_limit";
-  error.details = { size, limit: fileDownloadMaxBytes };
-  throw error;
+  throwHttp(413, `Download is larger than ${Math.floor(fileDownloadMaxBytes / 1024 / 1024)} MiB`, {
+    code: "download_size_limit",
+    details: { size, limit: fileDownloadMaxBytes }
+  });
 }
 
 export function archiveSegment(name: string) {

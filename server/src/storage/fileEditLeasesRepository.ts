@@ -58,7 +58,7 @@ export class FileEditLeasesRepository {
 
   acquire(input: { serverId: string; path: string; fileRevision: string; owner: LeaseOwner }, now = Date.now()) {
     return this.storage.transaction((database) => {
-      this.removeExpired(now);
+      this.pruneExpired(now);
       const path = normalizePublicFilePath(input.path);
       const existing = this.findByPath(input.serverId, path);
       if (existing) {
@@ -85,7 +85,7 @@ export class FileEditLeasesRepository {
 
   heartbeat(leaseId: string, owner: LeaseOwner, now = Date.now()) {
     return this.storage.transaction((database) => {
-      this.removeExpired(now);
+      this.pruneExpired(now);
       const lease = this.findById(leaseId);
       this.assertOwner(lease, owner);
       database.prepare("UPDATE file_edit_leases SET refreshed_at = ?, expires_at = ? WHERE lease_id = ?")
@@ -96,7 +96,7 @@ export class FileEditLeasesRepository {
 
   requireOwned(leaseId: string, serverId: string, path: string, owner: LeaseOwner, now = Date.now()) {
     return this.storage.transaction(() => {
-      this.removeExpired(now);
+      this.pruneExpired(now);
       const normalizedPath = normalizePublicFilePath(path);
       const lease = this.findById(leaseId);
       this.assertOwner(lease, owner);
@@ -118,7 +118,7 @@ export class FileEditLeasesRepository {
 
   forceRelease(leaseId: string, serverId: string, now = Date.now()) {
     return this.storage.transaction((database) => {
-      this.removeExpired(now);
+      this.pruneExpired(now);
       return database.prepare("DELETE FROM file_edit_leases WHERE lease_id = ? AND server_id = ?").run(leaseId, serverId).changes > 0;
     });
   }
@@ -137,10 +137,6 @@ export class FileEditLeasesRepository {
       "SELECT * FROM file_edit_leases WHERE server_id = ? AND path = ?"
     ).get(serverId, path);
     return row ? leaseFromRow(row) : undefined;
-  }
-
-  private removeExpired(now: number) {
-    this.storage.connection.prepare("DELETE FROM file_edit_leases WHERE expires_at <= ?").run(now);
   }
 
   private assertOwner(lease: FileEditLease | undefined, owner: LeaseOwner): asserts lease is FileEditLease {

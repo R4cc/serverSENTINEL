@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { readFile, rm, stat } from "node:fs/promises";
-import { Transform } from "node:stream";
 import { managedContentFileSizeLimit } from "../managedContentLimits.js";
 import { operationInProgress } from "../http/errors.js";
 import { badRequest } from "../http/validation.js";
@@ -18,13 +17,6 @@ export async function withModMutationLock<T>(serverId: string, operation: () => 
   } finally {
     activeModMutations.delete(serverId);
   }
-}
-
-export function validateBase64Content(value: unknown, allowEmpty = false, label = "Uploaded mod content") {
-  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    badRequest(`${label} must be valid base64`);
-  }
-  return value;
 }
 
 export function uploadManagedContentBuffer(

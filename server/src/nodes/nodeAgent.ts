@@ -8,6 +8,7 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
+import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
@@ -39,16 +40,15 @@ import {
   publicZipExtractionPlan,
   readServerTextFile,
   renameServerEntry,
-  resolveUploadTarget,
   safeFileManagerName,
   toPublicServerPath,
-  writeRuntimeUpload,
   writeServerTextFile
 } from "../runtime/local/fileService.js";
-import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
-import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
@@ -113,9 +113,7 @@ type CreateInput = {
   runtime?: {
     runtimeType?: string;
     runtimeVersion?: string;
-    loader?: string;
     minecraftVersion?: string;
-    loaderVersion?: string;
     serverJar?: string;
   };
   dockerContainer?: string;
@@ -143,8 +141,6 @@ export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   const ceiling = Math.min(reconnectMaxDelayMs, reconnectBaseDelayMs * (2 ** Math.min(Math.max(0, attempt), 5)));
   return Math.round(reconnectBaseDelayMs + (ceiling - reconnectBaseDelayMs) * Math.min(1, Math.max(0, random())));
 }
-const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
 
 function detailedError(error: Error, details: string) {
@@ -234,13 +230,6 @@ function publicPath(root: string, target: string) {
   return toPublicServerPath({ serverDir: root }, target);
 }
 
-function validateBase64Content(value: unknown, allowEmpty = false) {
-  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    throw new Error("Uploaded content must be valid base64");
-  }
-  return value;
-}
-
 function assertJarBuffer(buffer: Buffer, contentName = "managed-content file") {
   if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b || ![0x03, 0x05, 0x07].includes(buffer[2])) {
     throw new Error(`Uploaded ${contentName} must be a valid .jar file`);
@@ -254,7 +243,7 @@ function containerName(server: ManagedServer) {
 function runtimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; includeRestartPolicy: boolean }) {
   const targetRuntime = runtimeTarget(server);
   return {
-    image: validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion)),
+    image: validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion)),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: validateRuntimeJarFilename(targetRuntime.serverJar || serverRuntimeDefinition(targetRuntime.runtimeType).serverJarFilename),
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
@@ -292,13 +281,6 @@ async function dockerServerRoot(server: ManagedServer) {
     return root;
   }
   return join(config.nodeDockerDataDir, rel);
-}
-
-function dockerImage(version?: string) {
-  const [major, minor, patch] = (version ?? "").split(".").map(Number);
-  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
-  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) return "eclipse-temurin:21-jre";
-  return "eclipse-temurin:17-jre";
 }
 
 function isValidServerPort(port: string) {
@@ -354,7 +336,6 @@ async function writeVersionMetadata(server: ManagedServer) {
     minecraftVersion: targetRuntime.minecraftVersion,
     runtimeType: targetRuntime.runtimeType,
     runtimeVersion: targetRuntime.runtimeVersion,
-    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: targetRuntime.runtimeVersion } : {}),
     createdAt,
     updatedAt: now
   }, null, 2)}\n`, "utf8");
@@ -368,7 +349,7 @@ async function pullImage(image: string) {
 
 async function createContainer(server: ManagedServer, networkingConfig?: NodeNetworkingConfig) {
   const targetRuntime = runtimeTarget(server);
-  const image = validateDockerImageName(server.dockerImage || dockerImage(targetRuntime.minecraftVersion));
+  const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion));
   await pullImage(image);
   const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
@@ -517,7 +498,7 @@ function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeP
   const dockerPorts = ensureQueryDockerPort(input.dockerPorts?.trim() || `${serverPort}:${serverPort}/tcp`, queryPort);
   parseDockerPorts(dockerPorts);
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
-  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || dockerImage(runtimeProfile.minecraftVersion));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
   const server: ManagedServer = {
     id,
@@ -574,19 +555,8 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
 
   const currentRuntime = runtimeProfileForServer(server);
   const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
-  const runtimeType = selectedRuntime?.runtimeType || currentRuntime.runtimeType;
-  const runtimeDefinition = serverRuntimeDefinition(runtimeType);
-  const minecraftVersion = selectedRuntime?.minecraftVersion || currentRuntime.minecraftVersion;
-  if (!minecraftVersion) throw new Error("Minecraft version is required");
-  const runtimeFamilyChanged = runtimeType !== currentRuntime.runtimeType || minecraftVersion !== currentRuntime.minecraftVersion;
-  const requestedRuntimeVersion = selectedRuntime?.runtimeVersion || (runtimeFamilyChanged ? "latest" : currentRuntime.runtimeVersion || "latest");
-  const serverJar = selectedRuntime?.serverJar
-    || (runtimeType !== currentRuntime.runtimeType ? runtimeDefinition.serverJarFilename : currentRuntime.jarArtifact.filename);
-  const shouldResolveRuntime = Boolean(selectedRuntime && (
-    selectedRuntime.runtimeType !== currentRuntime.runtimeType
-    || (selectedRuntime.minecraftVersion !== undefined && selectedRuntime.minecraftVersion !== currentRuntime.minecraftVersion)
-    || (selectedRuntime.runtimeVersion !== undefined && selectedRuntime.runtimeVersion !== currentRuntime.runtimeVersion)
-  ));
+  const { runtimeType, runtimeDefinition, minecraftVersion, requestedRuntimeVersion, serverJar, shouldResolveRuntime } =
+    runtimeUpdatePlan(currentRuntime, selectedRuntime);
   if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) throw new Error(`${runtimeDefinition.displayName} version changes are not available on this node yet`);
   const resolvedRuntime = shouldResolveRuntime
     ? await defaultServerJarProvider.resolveServerJar({ runtimeType, minecraftVersion, runtimeVersion: requestedRuntimeVersion, preferStable: true })
@@ -603,7 +573,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
   }
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultServerContainerName(server.id));
-  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || dockerImage(runtimeProfile.minecraftVersion));
+  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
   const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });
   const dockerPorts = requestedDockerPorts ? ensureQueryDockerPort(requestedDockerPorts, queryPort) : requestedDockerPorts;
@@ -748,14 +718,8 @@ async function playerObservation(server: ManagedServer, details?: NodeContainerI
 }
 
 async function requireStoppedForMutableConfiguration(server: ManagedServer) {
-  const status = await runtimeStatus(server) as { docker?: { configured?: boolean; available?: boolean; running?: boolean; state?: string; message?: string } };
-  if (status.docker?.running) throw new Error(stoppedServerMutationMessage);
-  const state = status.docker?.state || "";
-  if (state === "unknown") {
-    if (status.docker?.configured === false) return;
-    throw new Error(stoppedServerMutationMessage);
-  }
-  if (state && !stoppedLikeDockerStates.has(state)) throw new Error(stoppedServerMutationMessage);
+  const reason = mutableServerConfigurationBlockedReason(await runtimeStatus(server));
+  if (reason) throw new Error(reason);
 }
 
 function isMutableConfigurationPath(path: unknown) {
@@ -1222,13 +1186,6 @@ async function observeServers(payload: unknown): Promise<ServerObservationRespon
   return { observedAt: new Date().toISOString(), items: results };
 }
 
-async function fileDownload(server: ManagedServer, path: unknown) {
-  const target = await inside(server, path);
-  const st = await stat(target);
-  if (!st.isFile() || st.size > uploadLimit) throw new Error("Only files up to the transfer limit can be downloaded");
-  return { filename: basename(target), size: st.size, contentBase64: (await readFile(target)).toString("base64") };
-}
-
 function publicExtractionPlan(root: string, plan: ZipExtractionPlan): ZipExtractionPlan {
   return publicZipExtractionPlan({ serverDir: root }, plan);
 }
@@ -1295,18 +1252,6 @@ async function writeEditableFile(server: ManagedServer, path: unknown, content: 
   return writeServerTextFile(scope, await inside(server, path), content);
 }
 
-async function uploadFile(server: ManagedServer, parentInput: unknown, filenameInput: unknown, contentBase64Input: unknown) {
-  const scope = { serverDir: await serverRoot(server) };
-  const target = await resolveUploadTarget(scope, await inside(server, parentInput), filenameInput);
-  const size = await writeRuntimeUpload(target, contentBase64Input, {
-    maximumBytes: fileUploadSizeLimit,
-    allowEmpty: true,
-    label: "Uploaded file content",
-    decodeBase64: (value, allowEmpty) => validateBase64Content(value, allowEmpty)
-  });
-  return { ok: true, path: publicPath(scope.serverDir, target), size };
-}
-
 async function modsList(server: ManagedServer) {
   const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
   await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
@@ -1337,12 +1282,11 @@ async function modsList(server: ManagedServer) {
   return { mods };
 }
 
-async function modUpload(server: ManagedServer, filename: unknown, contentBase64: unknown) {
+async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
   const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
   const singular = runtime.contentKind === "plugins" ? "Plugin" : "Mod";
   const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
   if (!name.endsWith(".jar")) throw new Error(`${singular} uploads must be .jar files`);
-  const content = Buffer.from(validateBase64Content(contentBase64), "base64");
   if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular.toLowerCase()} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
   assertJarBuffer(content, singular.toLowerCase());
   await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
@@ -1439,7 +1383,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const response = await modrinthFetch(file.url, { signal });
     if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
-    const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
+    const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
 
@@ -1472,7 +1416,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const response = await modrinthFetch(file.url, { signal });
   if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
-  const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
+  const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
   return {
     ...written,
     filename: file.filename,
@@ -1544,14 +1488,9 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   if (command === "files.list") return fileList(server, payload?.path);
   if (command === "files.archive.plan") return archivePlan(server, payload?.path, payload?.destinationPath);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
-  if (command === "files.download") return fileDownload(server, payload?.path);
   if (command === "files.write") {
     if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
     return writeEditableFile(server, payload?.path, payload?.content);
-  }
-  if (command === "files.upload") {
-    if (isMutableConfigurationPath(posix.join(safeRelative(payload?.parent), safeName(payload?.filename)))) await requireStoppedForMutableConfiguration(server);
-    return uploadFile(server, payload?.parent, payload?.filename, payload?.contentBase64);
   }
   if (command === "files.mkdir") {
     if (isMutableConfigurationPath(payload?.parent)) await requireStoppedForMutableConfiguration(server);
@@ -1603,9 +1542,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     }
   }
   if (command === "mods.list" || command === "content.list") return modsList(server);
-  if (command === "mods.upload" || command === "content.upload") {
-    return modUpload(server, payload?.filename, payload?.contentBase64);
-  }
   if (command === "mods.install" || command === "content.install") {
     return modInstall(server, payload, signal);
   }
@@ -1631,28 +1567,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   throw new Error(`Unsupported node command ${command}`);
 }
 
-function runtimeSelection(input: unknown) {
-  const runtime = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
-  const optional = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
-  const canonicalRuntimeType = optional(runtime.runtimeType);
-  const legacyLoader = optional(runtime.loader);
-  if (canonicalRuntimeType && legacyLoader && canonicalRuntimeType !== legacyLoader) throw new Error("runtime.loader must match runtime.runtimeType");
-  const runtimeTypeValue = canonicalRuntimeType || legacyLoader || "fabric";
-  if (runtimeTypeValue !== "fabric" && runtimeTypeValue !== "paper") throw new Error("runtime.runtimeType must be fabric or paper");
-  const runtimeType: ServerRuntimeType = runtimeTypeValue;
-  const canonicalRuntimeVersion = optional(runtime.runtimeVersion);
-  const legacyLoaderVersion = optional(runtime.loaderVersion);
-  if (canonicalRuntimeVersion && legacyLoaderVersion && canonicalRuntimeVersion !== legacyLoaderVersion) throw new Error("runtime.loaderVersion must match runtime.runtimeVersion");
-  const runtimeVersion = canonicalRuntimeVersion || legacyLoaderVersion;
-  return {
-    runtimeType,
-    runtimeVersion,
-    minecraftVersion: optional(runtime.minecraftVersion),
-    loaderVersion: runtimeVersion,
-    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
-  };
-}
-
 export const __nodeAgentTestHooks = {
   cleanupPreviousNodeContainers,
   createNetworkingConfig,
@@ -1663,6 +1577,7 @@ export const __nodeAgentTestHooks = {
   minecraftContainerCommand,
   runtimeConfigHash,
   nodeReconnectDelayMs,
+  prepareBinaryUpload,
   selfUpdateContainer
 };
 

@@ -1,9 +1,12 @@
 import type {
   JavaMajorVersion,
   ManagedServer,
+  RuntimeVersion,
   ServerRuntimeProfile,
   ServerRuntimeType
 } from "../types.js";
+
+export type { RuntimeVersion } from "../types.js";
 
 export type RuntimeMinecraftVersion = {
   id: string;
@@ -12,14 +15,6 @@ export type RuntimeMinecraftVersion = {
   javaMajorVersion: JavaMajorVersion;
   recommended?: boolean;
   releasedAt?: string;
-};
-
-export type RuntimeVersion = {
-  id: string;
-  runtimeVersion: string;
-  stable?: boolean;
-  recommended?: boolean;
-  buildId?: string;
 };
 
 export type ServerJarProvider = {
@@ -70,6 +65,15 @@ export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVe
   throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for managed runtimes");
 }
 
+export function defaultDockerImageForMinecraftVersion(version?: string) {
+  const [major, minor, patch] = (version ?? "").split(".").map(Number);
+  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
+  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) {
+    return "eclipse-temurin:21-jre";
+  }
+  return "eclipse-temurin:17-jre";
+}
+
 export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {
   return server.runtimeProfile;
 }
@@ -90,12 +94,6 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
     throw new RuntimeResolutionError("unsupported_runtime", "server.runtimeProfile.runtimeType must be fabric or paper");
   }
   const runtimeVersion = stringField(profile.runtimeVersion ?? profile.loaderVersion, "server.runtimeProfile.runtimeVersion");
-  if (profile.runtimeType !== undefined && profile.loader !== undefined && profile.runtimeType !== profile.loader) {
-    throw new Error("server.runtimeProfile legacy loader does not match runtimeType");
-  }
-  if (profile.runtimeVersion !== undefined && profile.loaderVersion !== undefined && profile.runtimeVersion !== profile.loaderVersion) {
-    throw new Error("server.runtimeProfile legacy loaderVersion does not match runtimeVersion");
-  }
   const jarProvider = profile.jarProvider;
   if (jarProvider !== "mcjars" && jarProvider !== "papermc") {
     throw new Error("server.runtimeProfile.jarProvider must be mcjars or papermc");
@@ -116,7 +114,6 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
     minecraftVersion: stringField(profile.minecraftVersion, "server.runtimeProfile.minecraftVersion"),
     runtimeType,
     runtimeVersion,
-    ...(runtimeType === "fabric" ? { loader: "fabric" as const, loaderVersion: runtimeVersion } : {}),
     javaMajorVersion,
     jarProvider,
     jarArtifact: {
@@ -134,17 +131,11 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
 
 export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile">) {
   const profile = runtimeProfileForServer(server);
-  const runtimeType = profile.runtimeType ?? profile.loader ?? "fabric";
-  const runtimeVersion = profile.runtimeVersion ?? profile.loaderVersion ?? "";
   return {
     profile,
     minecraftVersion: profile.minecraftVersion,
-    runtimeType,
-    runtimeVersion,
-    // Compatibility aliases keep existing Fabric-only call sites and older node payloads working
-    // while the rest of the application moves to runtime-neutral terminology.
-    loader: runtimeType,
-    loaderVersion: runtimeVersion,
+    runtimeType: profile.runtimeType,
+    runtimeVersion: profile.runtimeVersion,
     serverJar: profile.jarArtifact.filename
   };
 }

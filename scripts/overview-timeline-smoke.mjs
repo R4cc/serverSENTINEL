@@ -114,6 +114,33 @@ async function assertPlayerSectionDisclosure(page) {
   await page.waitForFunction(() => !document.querySelector(".serverTimelinePlayerChart")?.classList.contains("is-expanded"));
 }
 
+async function assertSchedulePopoverIconContrast(page) {
+  await selectRange(page, "6h");
+  const trigger = page.locator(".timelineAnnotationCluster").filter({
+    has: page.locator(".timelineAnnotationClusterIcon.tone-automation, .timelineAnnotationClusterIcon.tone-planned")
+  }).first();
+  assert(await trigger.count(), "The timeline is missing its schedule marker");
+  await trigger.click();
+
+  const glyph = page.locator(".serverTimelineAnnotationPopoverItem:is(.tone-automation, .tone-planned) .serverTimelineAnnotationPopoverGlyph").first();
+  await glyph.waitFor();
+  const appearance = await glyph.locator("svg").evaluate((icon) => {
+    const iconStyles = getComputedStyle(icon);
+    const glyphStyles = getComputedStyle(icon.parentElement);
+    return {
+      color: glyphStyles.color,
+      fill: iconStyles.fill,
+      stroke: iconStyles.stroke
+    };
+  });
+  assert.equal(appearance.fill, "none", `Schedule popover icon received a solid fill: ${JSON.stringify(appearance)}`);
+  assert.equal(appearance.stroke, appearance.color, `Schedule popover icon did not inherit the visible schedule color: ${JSON.stringify(appearance)}`);
+  assert.notEqual(appearance.stroke, "rgb(0, 0, 0)", `Schedule popover icon rendered black: ${JSON.stringify(appearance)}`);
+
+  await page.getByRole("button", { name: "Close events popover" }).click();
+  await page.locator(".serverTimelineAnnotationPopover").waitFor({ state: "detached" });
+}
+
 async function assertRosterDisclosure(page) {
   const panel = page.locator(".playersPanel");
   const badgeText = (await panel.locator(".uiStatusBadge").innerText()).trim();
@@ -320,6 +347,7 @@ async function assertDesktop(page) {
   assert.equal(await panel.getAttribute("aria-busy"), "false");
   await assertScenarioData(page);
   await assertPlayerSectionDisclosure(page);
+  await assertSchedulePopoverIconContrast(page);
 
   for (const label of rangeSpans.keys()) await selectRange(page, label);
   const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
@@ -405,6 +433,7 @@ try {
   await desktop.page.waitForFunction(() => document.querySelector(".appShell")?.classList.contains("themeLight"));
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart .serverTimelineEChart").count(), 1, "Light-theme switch replaced the unified player chart");
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart svg").count(), 1, "Light-theme player chart did not retain SVG rendering");
+  await assertSchedulePopoverIconContrast(desktop.page);
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);
   await desktop.page.close();
 
@@ -413,7 +442,7 @@ try {
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
-  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, roster, and mobile layout.");
+  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, and mobile layout.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

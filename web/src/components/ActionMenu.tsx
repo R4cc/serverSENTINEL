@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./UiPrimitives";
+import { focusNextMenuItem } from "./menuFocus";
 
 export type ActionMenuItem = {
   id: string;
@@ -54,19 +55,7 @@ export function ActionMenu({
         triggerRef.current?.focus({ preventScroll: true });
         return;
       }
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
-      event.preventDefault();
-      const enabled = itemRefs.current.filter((item): item is HTMLButtonElement => Boolean(item && !item.disabled));
-      if (!enabled.length) return;
-      const currentIndex = enabled.indexOf(document.activeElement as HTMLButtonElement);
-      const nextIndex = event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? enabled.length - 1
-          : event.key === "ArrowDown"
-            ? (currentIndex + 1 + enabled.length) % enabled.length
-            : (currentIndex - 1 + enabled.length) % enabled.length;
-      enabled[nextIndex].focus();
+      focusNextMenuItem(event, itemRefs.current);
     };
 
     document.addEventListener("mousedown", handlePointerDown);

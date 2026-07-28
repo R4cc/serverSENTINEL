@@ -224,7 +224,7 @@ export class ServersRepository {
     this.storage.transaction((database) => {
       const server = this.normalize(value);
       if (!database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) throw new Error("Server not found");
-      this.upsertServer(database, server, { preserveRestartRequired: true });
+      this.upsertServer(database, server, true);
       this.syncPorts(database, server);
     });
   }
@@ -370,56 +370,35 @@ export class ServersRepository {
     if (update && result.changes === 0) throw new Error("Schedule not found");
   }
 
-  private upsertServer(database: Database.Database, server: ManagedServer, options: { preserveRestartRequired?: boolean } = {}) {
-    const statement = options.preserveRestartRequired
-      ? database.prepare(`
-        INSERT INTO servers (
-          id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
-          docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
-          crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
-          restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          node_id=excluded.node_id, display_name=excluded.display_name,
-          server_dir=excluded.server_dir, storage_name=excluded.storage_name,
-          runtime_profile_json=excluded.runtime_profile_json,
-          docker_container=excluded.docker_container, docker_image=excluded.docker_image,
-          docker_mount_source=excluded.docker_mount_source,
-           docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, start_on_node_start=excluded.start_on_node_start,
-          runtime_intent=servers.runtime_intent, restart_phase=servers.restart_phase,
-          crash_attempts_json=servers.crash_attempts_json, crash_next_retry_at=servers.crash_next_retry_at,
-          crash_loop_since=servers.crash_loop_since, crash_stable_since=servers.crash_stable_since,
-          restart_required_since=servers.restart_required_since,
-          restart_required_changes_json=servers.restart_required_changes_json,
-          restart_required_mod_baseline_json=servers.restart_required_mod_baseline_json,
-          created_at=excluded.created_at, updated_at=excluded.updated_at
-      `)
-      : database.prepare(`
-        INSERT INTO servers (
-          id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
-          docker_container, docker_image, docker_mount_source, docker_working_dir,
-          docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
-          crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
-          restart_required_mod_baseline_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          node_id=excluded.node_id, display_name=excluded.display_name,
-          server_dir=excluded.server_dir, storage_name=excluded.storage_name,
-          runtime_profile_json=excluded.runtime_profile_json,
-          docker_container=excluded.docker_container, docker_image=excluded.docker_image,
-          docker_mount_source=excluded.docker_mount_source,
-          docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
-          java_args=excluded.java_args, start_on_node_start=excluded.start_on_node_start,
-          runtime_intent=excluded.runtime_intent, restart_phase=excluded.restart_phase,
-          crash_attempts_json=excluded.crash_attempts_json, crash_next_retry_at=excluded.crash_next_retry_at,
-          crash_loop_since=excluded.crash_loop_since, crash_stable_since=excluded.crash_stable_since,
-          restart_required_since=excluded.restart_required_since,
-          restart_required_changes_json=excluded.restart_required_changes_json,
-          restart_required_mod_baseline_json=excluded.restart_required_mod_baseline_json,
-          created_at=excluded.created_at, updated_at=excluded.updated_at
-      `);
+  private upsertServer(database: Database.Database, server: ManagedServer, preserveRuntimeState = false) {
+    const statement = database.prepare(`
+      INSERT INTO servers (
+        id, node_id, display_name, server_dir, storage_name, runtime_profile_json,
+        docker_container, docker_image, docker_mount_source, docker_working_dir,
+        docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
+        crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
+        restart_required_mod_baseline_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        node_id=excluded.node_id, display_name=excluded.display_name,
+        server_dir=excluded.server_dir, storage_name=excluded.storage_name,
+        runtime_profile_json=excluded.runtime_profile_json,
+        docker_container=excluded.docker_container, docker_image=excluded.docker_image,
+        docker_mount_source=excluded.docker_mount_source,
+        docker_working_dir=excluded.docker_working_dir, docker_ports=excluded.docker_ports,
+        java_args=excluded.java_args, start_on_node_start=excluded.start_on_node_start,
+        runtime_intent=CASE WHEN ? THEN servers.runtime_intent ELSE excluded.runtime_intent END,
+        restart_phase=CASE WHEN ? THEN servers.restart_phase ELSE excluded.restart_phase END,
+        crash_attempts_json=CASE WHEN ? THEN servers.crash_attempts_json ELSE excluded.crash_attempts_json END,
+        crash_next_retry_at=CASE WHEN ? THEN servers.crash_next_retry_at ELSE excluded.crash_next_retry_at END,
+        crash_loop_since=CASE WHEN ? THEN servers.crash_loop_since ELSE excluded.crash_loop_since END,
+        crash_stable_since=CASE WHEN ? THEN servers.crash_stable_since ELSE excluded.crash_stable_since END,
+        restart_required_since=CASE WHEN ? THEN servers.restart_required_since ELSE excluded.restart_required_since END,
+        restart_required_changes_json=CASE WHEN ? THEN servers.restart_required_changes_json ELSE excluded.restart_required_changes_json END,
+        restart_required_mod_baseline_json=CASE WHEN ? THEN servers.restart_required_mod_baseline_json ELSE excluded.restart_required_mod_baseline_json END,
+        created_at=excluded.created_at, updated_at=excluded.updated_at
+    `);
+    const preserve = preserveRuntimeState ? 1 : 0;
     statement.run(
       server.id, server.nodeId, server.displayName, server.serverDir, server.storageName ?? null,
       JSON.stringify(server.runtimeProfile), server.dockerContainer ?? null,
@@ -431,7 +410,10 @@ export class ServersRepository {
       server.restartRequiredSince ?? null,
       server.restartRequiredChanges ? JSON.stringify(server.restartRequiredChanges) : null,
       server.restartRequiredModBaseline ? JSON.stringify(server.restartRequiredModBaseline) : null,
-      server.createdAt, server.updatedAt
+      server.createdAt, server.updatedAt,
+      preserve, preserve, preserve,
+      preserve, preserve, preserve,
+      preserve, preserve, preserve
     );
   }
 

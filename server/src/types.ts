@@ -1,4 +1,5 @@
 import type {
+  FileEditLease as PublicFileEditLease,
   ManagedNodeCore,
   ManagedServerCore,
   Permission,
@@ -11,8 +12,13 @@ export type {
   CreateNodeResponse,
   JavaMajorVersion,
   ManagedServerPort,
+  ModCompatibility,
+  ModCompatibilityStatus,
+  ModrinthInstallVersionStatus,
+  ModUpdatePlan,
+  ModUpdatePlanEntry,
+  ModUpdatePlanStatus,
   NodeInstallInstructions,
-  NodeProtocolMode,
   NodeStatus,
   NodeType,
   OperationRecord,
@@ -30,6 +36,8 @@ export type {
   RestartRequiredChange,
   RestartRequiredModSnapshot,
   RolePreset,
+  RuntimeVersion,
+  SafeBatchUpdateResult,
   ScheduleStep,
   ScheduledActiveRun,
   ScheduledExecution,
@@ -99,27 +107,6 @@ export type InstalledModMetadata = {
   reviewAcknowledgedAt?: string;
 };
 
-export type ModCompatibilityStatus = "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
-
-export type ModCompatibility = {
-  status: ModCompatibilityStatus;
-  compatible: boolean;
-  reason: string;
-  matchedVersionId?: string;
-  matchedVersionNumber?: string;
-  matchedVersionType?: ReleaseChannel;
-  matchedLoaders?: string[];
-  matchedGameVersions?: string[];
-  file?: {
-    filename: string;
-    url: string;
-    size?: number;
-    hashes?: Record<string, string>;
-  };
-  serverSide?: string;
-  clientSide?: string;
-};
-
 export type ModrinthVersion = {
   id: string;
   project_id?: string;
@@ -149,17 +136,8 @@ export type ModrinthProject = {
   server_side?: string;
 };
 
-export type FileEditLease = {
-  leaseId: string;
-  serverId: string;
-  path: string;
-  userId: string;
+export type FileEditLease = PublicFileEditLease & {
   sessionId: string;
-  displayName: string;
-  acquiredAt: string;
-  refreshedAt: string;
-  expiresAt: string;
-  fileRevision: string;
 };
 
 /**

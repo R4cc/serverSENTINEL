@@ -1,8 +1,7 @@
+import { httpError } from "../http/errors.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
 export const nodeProtocolVersion = "3.1";
-export const nodeFallbackProtocolVersion = "3.0";
-export const nodeUpgradeProtocolVersion = "2.0";
 export const nodeProtocolControlMessageMaxBytes = 8 * 1024 * 1024;
 export const nodeProtocolMaxActiveRequests = 64;
 export const nodeProtocolMaxActiveStreams = 32;
@@ -57,7 +56,6 @@ export const nodeFeatures = ["request-cancel", "binary-transfer"] as const;
 
 export type NodeCapability = typeof nodeCapabilities[number];
 export type NodeFeature = typeof nodeFeatures[number];
-export type NodeProtocolMode = "current" | "fallback" | "update-only" | "incompatible";
 
 export type NodeHello = {
   type: "hello";
@@ -253,30 +251,9 @@ export type NodeToPanelMessage = NodeResponseMessage | NodeStreamDataMessage | N
 
 const nodeCapabilitySet = new Set<string>(nodeCapabilities);
 const nodeFeatureSet = new Set<string>(nodeFeatures);
-const fallbackNodeCapabilitySet = new Set<string>([
-  ...nodeCapabilities.filter((capability) => capability !== "server.observe"),
-  "node.health",
-  "docker.info"
-]);
-const upgradeNodeCapabilitySet = new Set<string>([
-  ...[...fallbackNodeCapabilitySet].filter((capability) => capability !== "server.players.read"),
-  "server.queryMetrics"
-]);
-
-export function nodeProtocolMode(version?: string): NodeProtocolMode {
-  if (version === nodeProtocolVersion) return "current";
-  if (version === nodeFallbackProtocolVersion) return "fallback";
-  if (version === nodeUpgradeProtocolVersion) return "update-only";
-  return "incompatible";
-}
 
 export function protocolCompatible(version?: string) {
-  const mode = nodeProtocolMode(version);
-  return mode === "current" || mode === "fallback";
-}
-
-export function protocolCanSelfUpdate(version?: string) {
-  return nodeProtocolMode(version) !== "incompatible";
+  return version === nodeProtocolVersion;
 }
 
 export function isNodeCapability(value: unknown): value is NodeCapability {
@@ -291,9 +268,8 @@ export function requireNodeCapability(value: string): NodeCapability {
 }
 
 export function assertNodeSupports(node: ManagedNode, command: NodeCapability) {
-  if (command === "node.update" && protocolCanSelfUpdate(node.protocolVersion) && node.capabilities?.includes(command)) return;
   if (!protocolCompatible(node.protocolVersion)) {
-    throw structuredNodeProtocolError("node_incompatible", `Node ${node.name} uses unsupported protocol ${node.protocolVersion ?? "unknown"}; protocol ${nodeProtocolVersion} or ${nodeFallbackProtocolVersion} is required`);
+    throw structuredNodeProtocolError("node_incompatible", `Node ${node.name} uses unsupported protocol ${node.protocolVersion ?? "unknown"}; protocol ${nodeProtocolVersion} is required`);
   }
   if (!node.capabilities?.includes(command)) {
     throw structuredNodeProtocolError("missing_capability", `Node ${node.name} does not advertise ${command}`);
@@ -301,7 +277,6 @@ export function assertNodeSupports(node: ManagedNode, command: NodeCapability) {
 }
 
 export function nodeAdvertisesCapability(node: ManagedNode, command: NodeCapability) {
-  if (command === "node.update" && protocolCanSelfUpdate(node.protocolVersion)) return node.capabilities?.includes(command) === true;
   return protocolCompatible(node.protocolVersion) && node.capabilities?.includes(command) === true;
 }
 
@@ -313,19 +288,16 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const hello = objectValue(value, "Node hello");
   if (hello.type !== "hello") throw new Error("Node hello type must be hello");
   const protocolVersion = requiredString(hello.protocolVersion, "protocolVersion");
-  const mode = nodeProtocolMode(protocolVersion);
-  if (mode === "incompatible") throw new Error(`Unsupported node protocol ${protocolVersion}; protocol ${nodeProtocolVersion} or ${nodeFallbackProtocolVersion} is required`);
+  if (protocolVersion !== nodeProtocolVersion) throw new Error(`Unsupported node protocol ${protocolVersion}; protocol ${nodeProtocolVersion} is required`);
   const nodeId = hello.nodeId === null ? null : optionalString(hello.nodeId, "nodeId") ?? null;
   const capabilities = requiredStringArray(hello.capabilities, "capabilities");
-  const allowedCapabilities = mode === "current" ? nodeCapabilitySet : mode === "fallback" ? fallbackNodeCapabilitySet : upgradeNodeCapabilitySet;
-  const unsupportedCapabilities = capabilities.filter((capability) => !allowedCapabilities.has(capability));
+  const unsupportedCapabilities = capabilities.filter((capability) => !nodeCapabilitySet.has(capability));
   if (unsupportedCapabilities.length) throw new Error(`Node advertised unsupported capabilities: ${unsupportedCapabilities.join(", ")}`);
-  if (mode === "update-only" && !capabilities.includes("node.update")) {
-    throw new Error(`Node protocol ${nodeUpgradeProtocolVersion} is accepted only for self-update and must advertise node.update`);
-  }
-  const rawFeatures = hello.features === undefined && mode !== "current" ? [] : requiredStringArray(hello.features, "features");
+  const rawFeatures = requiredStringArray(hello.features, "features");
   const unsupportedFeatures = rawFeatures.filter((feature) => !nodeFeatureSet.has(feature));
   if (unsupportedFeatures.length) throw new Error(`Node advertised unsupported features: ${unsupportedFeatures.join(", ")}`);
+  const missingFeatures = nodeFeatures.filter((feature) => !rawFeatures.includes(feature));
+  if (missingFeatures.length) throw new Error(`Node is missing required protocol features: ${missingFeatures.join(", ")}`);
   const normalized: NodeHello = {
     type: "hello",
     nodeId,
@@ -419,11 +391,7 @@ export function normalizeNodeToPanelMessage(value: unknown): NodeToPanelMessage 
 }
 
 export function structuredNodeProtocolError(code: string, message: string, details?: string) {
-  const error = new Error(message) as Error & { code?: string; statusCode?: number; details?: string };
-  error.code = code;
-  error.statusCode = 400;
-  if (details) error.details = details;
-  return error;
+  return httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string };
 }
 
 function optionalWireError(value: unknown): NodeWireError | undefined {

@@ -29,7 +29,7 @@ import {
   fileDownloadIntentMode,
   localFilePathInput
 } from "./files/fileService.js";
-import { uploadManagedContentBuffer, validateBase64Content } from "./mods/managedContent.js";
+import { uploadManagedContentBuffer } from "./mods/managedContent.js";
 import { isMinecraftStopCommand, mutableServerConfigurationBlockedReason } from "./servers/lifecycle.js";
 import { modrinthSearchFacets } from "./mods/modService.js";
 import { assertSameOriginRequest } from "./http/requestOrigin.js";
@@ -108,8 +108,7 @@ describe("runtime version detection", () => {
   it("keeps Fabric detection compatible and selects Paper log patterns by runtime", () => {
     expect(detectVersionsFromLogText("Loading Fabric Loader 0.16.10", "fabric")).toMatchObject({
       runtimeType: "fabric",
-      runtimeVersion: "0.16.10",
-      fabricLoaderVersion: "0.16.10"
+      runtimeVersion: "0.16.10"
     });
     expect(detectVersionsFromLogText("This server is running Paper version 1.21.4-232", "paper")).toEqual({
       minecraftVersion: undefined,
@@ -366,15 +365,6 @@ describe("file revisions", () => {
     expect(() => assertFileRevision(acquired, acquired, fileContentRevision("changed")))
       .toThrow("The file changed after editing began");
     expect(() => assertFileRevision(acquired, acquired, acquired)).not.toThrow();
-  });
-});
-
-describe("base64 upload validation", () => {
-  it("rejects malformed upload payloads before permissive Buffer decoding can alter them", () => {
-    expect(() => validateBase64Content("not base64!!!", true)).toThrow("valid base64");
-    expect(() => validateBase64Content("abcd=", true)).toThrow("valid base64");
-    expect(validateBase64Content("", true)).toBe("");
-    expect(validateBase64Content(Buffer.from("hello").toString("base64"), true)).toBe("aGVsbG8=");
   });
 });
 

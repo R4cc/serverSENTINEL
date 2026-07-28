@@ -1,4 +1,5 @@
 import { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@serversentinel/contracts";
+import { throwHttp } from "./http/errors.js";
 import type { Permission, RolePreset, StoredUser } from "./types.js";
 
 export { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS };
@@ -107,19 +108,18 @@ export function requirePermission(permission: Permission) {
 }
 
 export function isFullAccessUser(user: Pick<StoredUser, "permissions">) {
-  return hasPermission(user, "users.manage") && ALL_PERMISSIONS.every((permission) => hasPermission(user, permission));
+  return ALL_PERMISSIONS.every((permission) => hasPermission(user, permission));
 }
 
 function sortPermissions(permissions: Permission[]) {
   return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
-function samePermissions(a: readonly Permission[], b: readonly Permission[]) {
+/** Both sides must come from normalizePermissions, which sorts into a stable order. */
+export function samePermissions(a: readonly Permission[], b: readonly Permission[]) {
   return a.length === b.length && a.every((permission, index) => permission === b[index]);
 }
 
 function throwPermissionError(message: string, statusCode: number): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = statusCode;
-  throw error;
+  throwHttp(statusCode, message);
 }

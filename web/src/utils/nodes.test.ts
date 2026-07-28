@@ -118,17 +118,11 @@ describe("nodeRestartImpactMessage", () => {
   });
 });
 
-describe("node protocol modes", () => {
-  it("keeps protocol 3.0 fallback nodes usable while recommending an update", () => {
-    const fallback = node({ protocolVersion: "3.0", protocolMode: "fallback", dockerStatus: "available" });
-    expect(isNodeRuntimeUsable(fallback)).toBe(true);
-    expect(nodeBlockReason(fallback)).toBe("");
-    expect(nodeWarnings(fallback)).toContain("This node is using protocol 3.0 fallback. Update it to enable optimized monitoring and transfers.");
-  });
-
-  it("blocks update-only protocol 2.0 nodes from server management", () => {
-    const updateOnly = node({ protocolVersion: "2.0", protocolMode: "update-only", dockerStatus: "available" });
-    expect(isNodeRuntimeUsable(updateOnly)).toBe(false);
-    expect(nodeBlockReason(updateOnly)).toBe("Node update required");
+describe("node protocol requirement", () => {
+  it("blocks non-3.1 nodes from server management", () => {
+    const outdated = node({ protocolVersion: "3.0", dockerStatus: "available" });
+    expect(isNodeRuntimeUsable(outdated)).toBe(false);
+    expect(nodeBlockReason(outdated)).toBe("Node update required");
+    expect(nodeWarnings(outdated)).toContain("Update this node before managing its servers.");
   });
 });

@@ -1,4 +1,4 @@
-ARG SS_VERSION=1.6.2
+ARG SS_VERSION=1.6.3
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app

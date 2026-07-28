@@ -323,6 +323,57 @@ describe("recent event grouping", () => {
     expect(html).toContain(">View full log</button>");
   });
 
+  it("uses cached player heads with overlaid join and leave icons when enabled", () => {
+    const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
+      events: [
+        serverEvent("player_joined", "2026-07-11T12:03:00.000Z", {
+          text: "Alex joined",
+          subject: "Alex",
+          signature: "player_joined:alex",
+          severity: "success"
+        }),
+        serverEvent("player_left", "2026-07-11T11:30:00.000Z", {
+          text: "Steve left",
+          subject: "Steve",
+          signature: "player_left:steve"
+        })
+      ],
+      formatDate: String,
+      serverId: "server one",
+      playerHeadsEnabled: true,
+      onOpenConsole: () => undefined,
+      requestConfirmation: async () => false
+    }));
+
+    expect(html).toContain('/api/servers/server%20one/player-head/Alex?v=');
+    expect(html).toContain('/api/servers/server%20one/player-head/Steve?v=');
+    expect(html).toContain('eventRow info eventKind--player_left');
+    expect((html.match(/eventIcon eventIcon--withPlayerHead/g) ?? [])).toHaveLength(2);
+    expect((html.match(/class="eventPlayerIconBadge"/g) ?? [])).toHaveLength(2);
+    expect((html.match(/class="eventPlayerHead"/g) ?? [])).toHaveLength(2);
+  });
+
+  it("keeps the existing event icons when player heads are disabled", () => {
+    const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
+      events: [serverEvent("player_joined", "2026-07-11T12:03:00.000Z", {
+        text: "Alex joined",
+        subject: "Alex",
+        signature: "player_joined:alex",
+        severity: "success"
+      })],
+      formatDate: String,
+      serverId: "server one",
+      playerHeadsEnabled: false,
+      onOpenConsole: () => undefined,
+      requestConfirmation: async () => false
+    }));
+
+    expect(html).not.toContain("/player-head/");
+    expect(html).not.toContain("eventIcon--withPlayerHead");
+    expect(html).not.toContain("eventPlayerIconBadge");
+    expect(html).toContain('class="eventIcon"');
+  });
+
   it("starts a new occurrence group at the ten-minute boundary", () => {
     const groups = groupRecentEvents([
       serverEvent("player_left", "2026-07-11T12:00:00.000Z", { signature: "player_left:alex", subject: "Alex" }),

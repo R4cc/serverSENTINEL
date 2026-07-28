@@ -236,13 +236,12 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (!isPlainObject(value)) throw new Error("Import artifact must be an object");
   rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "instance", "servers"], "artifact");
   if (value.artifactType !== exportArtifactType) throw new Error("Unsupported import artifact type");
-  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; serverSENTINEL 1.3 requires export schema ${exportArtifactSchemaVersion}`);
+  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; this serverSENTINEL release requires export schema ${exportArtifactSchemaVersion}`);
   if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
   if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
   rejectUnsupportedKeys(value.instance, ["settings", "nodes"], "instance");
   if (!isPlainObject(value.instance.settings)) throw new Error("Import instance.settings section is required");
-  rejectUnsupportedKeys(value.instance.settings, [...excludedInstanceSecretSettings], "instance.settings");
-  optionalStringValue(value.instance.settings.modrinthApiKey, "instance.settings.modrinthApiKey");
+  rejectUnsupportedKeys(value.instance.settings, [], "instance.settings");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
   for (const [serverIndex, entry] of value.servers.entries()) {
     if (!isPlainObject(entry)) throw new Error(`Import servers[${serverIndex}] must be an object`);
@@ -277,15 +276,7 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
       }
     }
   }
-  return {
-    ...(value as unknown as ExportArtifact),
-    instance: {
-      ...(value.instance as unknown as ExportArtifact["instance"]),
-      // Legacy schema-3 artifacts may contain this credential. It is accepted only
-      // so their server data remains migratable, then removed before validation/apply.
-      settings: {}
-    }
-  };
+  return value as unknown as ExportArtifact;
 }
 
 function assertImportServer(server: Record<string, unknown>, label: string) {
@@ -342,6 +333,7 @@ function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
     "minecraftVersion",
     "runtimeType",
     "runtimeVersion",
+    // 1.6.2 exports include these redundant aliases alongside the canonical fields.
     "loader",
     "loaderVersion",
     "javaMajorVersion",
@@ -351,13 +343,13 @@ function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
     "resolvedAt"
   ], label);
   stringValue(profile.minecraftVersion, `${label}.minecraftVersion`);
-  const runtimeType = stringValue(profile.runtimeType ?? profile.loader, `${label}.runtimeType`);
-  const runtimeVersion = stringValue(profile.runtimeVersion ?? profile.loaderVersion, `${label}.runtimeVersion`);
+  const runtimeType = stringValue(profile.runtimeType, `${label}.runtimeType`);
+  const runtimeVersion = stringValue(profile.runtimeVersion, `${label}.runtimeVersion`);
   if (runtimeType !== "fabric" && runtimeType !== "paper") throw new Error(`${label}.runtimeType must be fabric or paper`);
-  if (profile.runtimeType !== undefined && profile.loader !== undefined && profile.runtimeType !== profile.loader) {
+  if (profile.loader !== undefined && profile.loader !== runtimeType) {
     throw new Error(`${label}.loader must match runtimeType`);
   }
-  if (profile.runtimeVersion !== undefined && profile.loaderVersion !== undefined && profile.runtimeVersion !== profile.loaderVersion) {
+  if (profile.loaderVersion !== undefined && profile.loaderVersion !== runtimeVersion) {
     throw new Error(`${label}.loaderVersion must match runtimeVersion`);
   }
   void runtimeVersion;

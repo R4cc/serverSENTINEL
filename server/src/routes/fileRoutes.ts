@@ -4,6 +4,7 @@ import { stat } from "node:fs/promises";
 import { runtimeForServer, services } from "../appServices.js";
 
 import { destructiveRateLimit } from "../http/rateLimits.js";
+import { throwHttp } from "../http/errors.js";
 
 import { multipartUpload } from "../http/multipart.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
@@ -232,10 +233,7 @@ app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lea
   const user = await requireRequestPermission(request);
   const lease = services.fileEditLeasesRepository.heartbeat(request.params.leaseId, fileLeaseOwner(request, user));
   if (lease.serverId !== request.params.id) {
-    const error = new Error("The edit lease does not belong to this server") as Error & { statusCode?: number; code?: string };
-    error.statusCode = 409;
-    error.code = "file_edit_lease_lost";
-    throw error;
+    throwHttp(409, "The edit lease does not belong to this server", { code: "file_edit_lease_lost" });
   }
   return { lease: publicFileEditLease(lease) };
 });
@@ -257,10 +255,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   if (!request.body.leaseId) {
-    const error = new Error("A valid file edit lease is required") as Error & { statusCode?: number; code?: string };
-    error.statusCode = 409;
-    error.code = "file_edit_lease_lost";
-    throw error;
+    throwHttp(409, "A valid file edit lease is required", { code: "file_edit_lease_lost" });
   }
   const path = await fileEditLockPath(runtime, server, target);
   const owner = fileLeaseOwner(request, user);
@@ -281,19 +276,20 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   return runtime.createFolder(server, parent, request.body.name);
 });
 
-app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; contentBase64?: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
+app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
-  const uploadRequest = request.isMultipart() ? await multipartUpload(request, fileUploadSizeLimit) : undefined;
-  const parent = await runtime.resolveExistingPath(server, uploadRequest?.path ?? request.body?.path ?? ".");
+  if (!request.isMultipart()) throw new Error("File uploads require multipart form data");
+  const uploadRequest = await multipartUpload(request, fileUploadSizeLimit);
+  const parent = await runtime.resolveExistingPath(server, uploadRequest.path ?? ".");
   if (server.nodeId === localNodeId) {
     const parentStat = await stat(parent);
     if (!parentStat.isDirectory()) {
       throw new Error("Upload path is not a directory");
     }
   }
-  const filename = safeFileManagerName(uploadRequest?.filename ?? request.body?.filename);
+  const filename = safeFileManagerName(uploadRequest.filename);
   const target = join(parent, filename);
   const uploadPermission: Permission = runtime.isServerSettingsFile(server, target)
     ? "servers.editSettings"
@@ -303,7 +299,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; filename?: string; con
   await requireFilePathPermission(request, server, parent, uploadPermission);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
-  const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest?.content ?? request.body?.contentBase64);
+  const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest.content);
   return touchesMods ? withTrackedModMutation(server, upload) : upload();
 });
 

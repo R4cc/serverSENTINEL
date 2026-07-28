@@ -1,4 +1,10 @@
-export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" | "blocked" | "unknown";
+import {
+  modUpdatePlanCounts,
+  type ModUpdatePlan,
+  type ModUpdatePlanEntry,
+  type ModUpdatePlanStatus,
+  type SafeBatchUpdateResult
+} from "@serversentinel/contracts";
 
 export type ModUpdatePlanSource = {
   filename?: unknown;
@@ -11,43 +17,7 @@ export type ModUpdatePlanSource = {
   versionInfo?: unknown;
 };
 
-export type ModUpdatePlanEntry = {
-  filename: string;
-  displayName: string;
-  iconUrl?: string;
-  projectId?: string;
-  currentVersion?: string;
-  currentFilename: string;
-  targetVersion?: string;
-  targetFilename?: string;
-  channel: "release" | "beta" | "alpha";
-  status: ModUpdatePlanStatus;
-  reason: string;
-  compatibility?: {
-    status?: string;
-    compatible: boolean;
-    reason?: string;
-    serverSide?: string;
-    clientSide?: string;
-  };
-  safeBatchEligible: boolean;
-  acknowledgementRequired: boolean;
-  enabled: boolean;
-};
-
-export type ModUpdatePlan = {
-  serverId: string;
-  generatedAt: string;
-  counts: {
-    totalInstalled: number;
-    safeUpdates: number;
-    reviewUpdates: number;
-    blockedUpdates: number;
-    upToDate: number;
-    unknown: number;
-  };
-  updates: ModUpdatePlanEntry[];
-};
+export type { ModUpdatePlan, ModUpdatePlanEntry, ModUpdatePlanStatus, SafeBatchUpdateResult };
 
 type ObjectValue = Record<string, unknown>;
 
@@ -112,29 +82,35 @@ export function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpda
     } : undefined,
     enabled: source.enabled !== false
   };
+  const classified = (
+    status: ModUpdatePlanStatus,
+    reason: string,
+    safeBatchEligible = false,
+    acknowledgementRequired = false
+  ): ModUpdatePlanEntry => ({ ...base, status, reason, safeBatchEligible, acknowledgementRequired });
 
   if (!metadata || !projectId) {
-    return { ...base, status: "unknown", reason: "This mod has no verified Modrinth metadata, so updates cannot be planned safely.", safeBatchEligible: false, acknowledgementRequired: false };
+    return classified("unknown", "This mod has no verified Modrinth metadata, so updates cannot be planned safely.");
   }
   if (risky) {
     const reason = forced
       ? stringValue(metadata.overrideReason) ?? stringValue(metadata.incompatibilityReason) ?? "Compatibility safeguards were overridden for the installed mod."
       : compatibilityReason ?? "The installed mod is not recommended for this server target.";
-    return { ...base, status: "blocked", reason, safeBatchEligible: false, acknowledgementRequired: false };
+    return classified("blocked", reason);
   }
   if (!versionInfo) {
-    return { ...base, status: "unknown", reason: "Update metadata could not be resolved from Modrinth.", safeBatchEligible: false, acknowledgementRequired: false };
+    return classified("unknown", "Update metadata could not be resolved from Modrinth.");
   }
   if (versionInfo.upToDate === true) {
-    return { ...base, status: "up_to_date", reason: "The installed version is the latest compatible version for this server.", safeBatchEligible: false, acknowledgementRequired: false };
+    return classified("up_to_date", "The installed version is the latest compatible version for this server.");
   }
   if (!targetVersion) {
-    return { ...base, status: "blocked", reason: "No compatible installable target version was found for this server.", safeBatchEligible: false, acknowledgementRequired: false };
+    return classified("blocked", "No compatible installable target version was found for this server.");
   }
   if (uncertain) {
-    return { ...base, status: "needs_review", reason: compatibilityReason ?? "Server-side compatibility cannot be fully verified.", safeBatchEligible: false, acknowledgementRequired: true };
+    return classified("needs_review", compatibilityReason ?? "Server-side compatibility cannot be fully verified.", false, true);
   }
-  return { ...base, status: "safe_update", reason: "The target version matches this server’s Fabric and Minecraft runtime.", safeBatchEligible: true, acknowledgementRequired: false };
+  return classified("safe_update", "The target version matches this server’s Fabric and Minecraft runtime.", true);
 }
 
 export function createModUpdatePlan(serverId: string, mods: ModUpdatePlanSource[], generatedAt = new Date().toISOString()): ModUpdatePlan {
@@ -142,24 +118,10 @@ export function createModUpdatePlan(serverId: string, mods: ModUpdatePlanSource[
   return {
     serverId,
     generatedAt,
-    counts: {
-      totalInstalled: updates.length,
-      safeUpdates: updates.filter((entry) => entry.status === "safe_update").length,
-      reviewUpdates: updates.filter((entry) => entry.status === "needs_review").length,
-      blockedUpdates: updates.filter((entry) => entry.status === "blocked").length,
-      upToDate: updates.filter((entry) => entry.status === "up_to_date").length,
-      unknown: updates.filter((entry) => entry.status === "unknown").length
-    },
+    counts: modUpdatePlanCounts(updates),
     updates
   };
 }
-
-export type SafeBatchUpdateResult = {
-  updated: Array<{ filename: string; result: unknown }>;
-  skipped: Array<{ filename: string; reason: string }>;
-  failed: Array<{ filename: string; reason: string }>;
-  counts: { requested: number; updated: number; skipped: number; failed: number };
-};
 
 export async function executeSafeUpdatePlan(
   plan: ModUpdatePlan,

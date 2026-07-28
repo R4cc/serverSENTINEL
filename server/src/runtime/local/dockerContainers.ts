@@ -8,7 +8,8 @@ import { consoleLogLineLimit, readConsoleLogTail } from "../../consoleLogs.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../../http/validation.js";
 import { defaultServerContainerName } from "../../storage/serverIdentity.js";
 import { summarizeRuntimeExit } from "../../runtimeErrors.js";
-import { runtimeProfileForServer, runtimeTarget } from "../profile.js";
+import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
+export { defaultDockerImageForMinecraftVersion } from "../profile.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
@@ -651,15 +652,4 @@ export function configuredServerPort(server: ManagedServer, props: Record<string
 
 export function validDockerTimestamp(value?: string) {
   return value && !value.startsWith("0001-") ? value : undefined;
-}
-
-export function defaultDockerImageForMinecraftVersion(version?: string) {
-  const [major, minor, patch] = (version ?? "").split(".").map((part) => Number(part));
-  if (Number.isFinite(major) && major >= 26) {
-    return "eclipse-temurin:25-jre";
-  }
-  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) {
-    return "eclipse-temurin:21-jre";
-  }
-  return "eclipse-temurin:17-jre";
 }

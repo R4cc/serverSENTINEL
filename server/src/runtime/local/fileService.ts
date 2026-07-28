@@ -23,8 +23,6 @@ export type UploadSource = {
   size?: number;
 };
 
-export type Base64Decoder = (value: unknown, allowEmpty: boolean, label: string) => string;
-
 export function toPublicServerPath(scope: ServerPathScope, absolutePath: string) {
   const rel = relative(resolve(scope.serverDir), absolutePath).replaceAll("\\", "/");
   return rel ? `/${rel}` : "/";
@@ -293,7 +291,7 @@ export async function resolveUploadTarget(scope: ServerPathScope, parent: string
   return target;
 }
 
-export function isUploadSource(value: unknown): value is UploadSource {
+function isUploadSource(value: unknown): value is UploadSource {
   return Boolean(value && typeof value === "object" && "stream" in value && (value as UploadSource).stream);
 }
 
@@ -303,12 +301,11 @@ export function isUploadSource(value: unknown): value is UploadSource {
  */
 export async function writeRuntimeUpload(
   target: string,
-  input: unknown,
+  input: UploadSource,
   options: {
     maximumBytes: number;
     allowEmpty: boolean;
     label: string;
-    decodeBase64: Base64Decoder;
     validateTemporary?: (path: string) => Promise<void>;
   }
 ) {
@@ -316,25 +313,19 @@ export async function writeRuntimeUpload(
   const sizeRange = `${label} must be between ${allowEmpty ? 0 : 1} bytes and ${Math.floor(maximumBytes / 1024 / 1024)} MiB`;
   return replaceFileAtomically(target, async (temporary) => {
     let size = 0;
-    if (isUploadSource(input)) {
-      if (input.size !== undefined && (!Number.isSafeInteger(input.size) || input.size < (allowEmpty ? 0 : 1) || input.size > maximumBytes)) {
-        throw new Error(sizeRange);
-      }
-      const counter = new Transform({
-        transform(chunk, _encoding, callback) {
-          size += Buffer.byteLength(chunk);
-          callback(size > maximumBytes ? new Error(`${label} is larger than ${Math.floor(maximumBytes / 1024 / 1024)} MiB`) : undefined, chunk);
-        }
-      });
-      await pipeline(input.stream, counter, createWriteStream(temporary, { flags: "wx" }));
-      if (input.size !== undefined && input.size !== size) throw new Error(`${label} declared ${input.size} bytes but streamed ${size}`);
-      if (!allowEmpty && size === 0) throw new Error(`${label} cannot be empty`);
-    } else {
-      const content = Buffer.from(options.decodeBase64(input, allowEmpty, label), "base64");
-      size = content.byteLength;
-      if (size > maximumBytes || (!allowEmpty && size === 0)) throw new Error(sizeRange);
-      await writeFile(temporary, content, { flag: "wx" });
+    if (!isUploadSource(input)) throw new Error(`${label} must be a streamed upload`);
+    if (input.size !== undefined && (!Number.isSafeInteger(input.size) || input.size < (allowEmpty ? 0 : 1) || input.size > maximumBytes)) {
+      throw new Error(sizeRange);
     }
+    const counter = new Transform({
+      transform(chunk, _encoding, callback) {
+        size += Buffer.byteLength(chunk);
+        callback(size > maximumBytes ? new Error(`${label} is larger than ${Math.floor(maximumBytes / 1024 / 1024)} MiB`) : undefined, chunk);
+      }
+    });
+    await pipeline(input.stream, counter, createWriteStream(temporary, { flags: "wx" }));
+    if (input.size !== undefined && input.size !== size) throw new Error(`${label} declared ${input.size} bytes but streamed ${size}`);
+    if (!allowEmpty && size === 0) throw new Error(`${label} cannot be empty`);
     await options.validateTemporary?.(temporary);
     return size;
   });

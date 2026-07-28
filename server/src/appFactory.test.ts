@@ -481,10 +481,8 @@ describe("Fastify application factory", () => {
     const csrf = { "x-requested-with": "XMLHttpRequest" };
     const catalogUrls = [
       "/api/runtime/types",
-      "/api/fabric/versions",
       "/api/runtime/fabric/minecraft-versions",
-      "/api/runtime/fabric/versions?minecraftVersion=1.21.4",
-      "/api/runtime/fabric/loader-versions?minecraftVersion=1.21.4"
+      "/api/runtime/fabric/versions?minecraftVersion=1.21.4"
     ];
 
     try {

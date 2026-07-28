@@ -2,8 +2,7 @@ import { join } from "node:path";
 import { services } from "../appServices.js";
 import { appVersion } from "../buildInfo.js";
 import { config } from "../config.js";
-import { logError, logWarn } from "../logging.js";
-import { errorLogFields } from "../logging.js";
+import { errorLogFields, logError, logWarn } from "../logging.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
 import { readNodes } from "../nodes/nodeService.js";
@@ -23,7 +22,7 @@ export function targetNodeIdFromBody(value: unknown) {
   return targetNodeId;
 }
 
-export async function startExportOperation(input: { serverIds?: string[]; includeInstance: boolean }, createdBy: string) {
+export function startExportOperation(input: { serverIds?: string[]; includeInstance: boolean }, createdBy: string) {
   return services.operationService.enqueue<{
     artifact: Awaited<ReturnType<typeof createExportArtifact>>;
     written: Awaited<ReturnType<typeof writeExportArtifact>>;
@@ -73,7 +72,7 @@ export async function startExportOperation(input: { serverIds?: string[]; includ
   });
 }
 
-export async function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings: boolean }, createdBy: string) {
+export function startImportOperation(input: { artifactBase64: string; targetNodeId: string; importInstanceSettings: boolean }, createdBy: string) {
   return services.operationService.enqueue({
     type: "import.run",
     nodeId: input.targetNodeId,

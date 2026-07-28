@@ -3,7 +3,7 @@ import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -16,20 +16,17 @@ import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { ActiveServerStrip } from "./components/ActiveServerStrip";
+import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel } from "./components/AuthPanel";
-import { BrandLogo } from "./components/BrandLogo";
-import { SidebarIcon, SidebarToggleIcon } from "./components/FileTypeIcon";
 import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
-import { RuntimeControls } from "./components/RuntimeControls";
-import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
-import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
-import { Banner, Button, EmptyState, StatusBadge, Surface } from "./components/UiPrimitives";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
+import { Banner, Button, EmptyState, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
-import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
-import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
+import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
+import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -40,7 +37,6 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
-const loadServerTimeline = () => import("./components/ServerTimeline");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
 const loadServerCreatePage = () => import("./pages/ServerCreatePage");
@@ -50,7 +46,6 @@ const loadFilesPage = () => import("./features/files/FilesPage");
 const loadSettingsPage = () => import("./pages/SettingsPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
-const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
 const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
@@ -167,7 +162,6 @@ export default function App() {
   const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
   const [commandSending, setCommandSending] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory(readConsoleHistoryEnabled()));
-  const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
@@ -839,13 +833,6 @@ export default function App() {
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
     refreshApp();
-    api<FabricVersions>("/api/fabric/versions").then(setFabricVersions).catch(() => {
-      setFabricVersions({
-        game: [{ version: "1.21.4", stable: true }, { version: "1.21.1", stable: true }, { version: "1.20.1", stable: true }],
-        loader: [],
-        installer: []
-      });
-    });
   }, [authSession?.authenticated, authSession?.user?.rolePreset, demoMode]);
 
   useEffect(() => {
@@ -1723,10 +1710,6 @@ export default function App() {
             runtimeType: requestedRuntimeType,
             runtimeVersion: form.get("runtimeVersion"),
             minecraftVersion: form.get("minecraftVersion"),
-            ...(requestedRuntimeType === "fabric" ? {
-              loader: "fabric",
-              loaderVersion: form.get("runtimeVersion")
-            } : {}),
             serverJar: form.get("serverJar")
           },
           dockerContainer: form.get("dockerContainer"),
@@ -1807,7 +1790,6 @@ export default function App() {
           runtime: {
             runtimeType: editRuntimeType,
             runtimeVersion: editRuntimeVersion,
-            ...(editRuntimeType === "fabric" ? { loader: "fabric", loaderVersion: editRuntimeVersion } : {}),
             minecraftVersion: form.get("minecraftVersion"),
             serverJar: form.get("serverJar")
           },
@@ -2405,129 +2387,26 @@ export default function App() {
     <>
       <AppToaster darkMode={darkMode} />
       <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${themeClassName}`.replace(/\s+/g, " ").trim()}>
-        <aside className="sidebar" id="application-sidebar">
-        <div className="brandBlock">
-          <div className="brandLockup">
-            <BrandLogo />
-            <div>
-              <h1 className="sidebarBrandWordmark" aria-label="serverSENTINEL">
-                <span aria-hidden="true">server</span>
-                <span aria-hidden="true">SENTINEL</span>
-              </h1>
-            </div>
-          </div>
-          <Button ref={sidebarToggleRef} variant="secondary" iconOnly className="iconButton" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
-            <SidebarToggleIcon collapsed={sidebarCollapsed} />
-          </Button>
-        </div>
-        <nav className="sideNav" id="primary-navigation" aria-label="Infrastructure navigation">
-          <button className={activePage === "nodes" ? "active" : ""} onClick={() => openSidebarPage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
-            <SidebarIcon name="nodes" />
-            <span className="navLabel">Nodes</span>
-          </button>
-          <div className="sidebarDivider" />
-          <div className="serverNavigationGroup">
-            <div className="serverSwitcher">
-              <ActionMenu
-                label={activeServer ? `Switch server. Current server: ${activeServer.displayName}` : "Select server"}
-                className="serverSwitcherAction"
-                triggerClassName="serverSwitcherTrigger"
-                menuClassName="serverSwitcherMenu"
-                align="start"
-                disabled={isProvisioning || effectiveAppState.servers.length === 0}
-                items={effectiveAppState.servers.map((server) => {
-                  const selected = server.id === activeServer?.id;
-                  const lockedByDemo = demoMode && server.id !== demoServerId;
-                  const minecraftVersion = versionValue(minecraftVersionInfo(server));
-                  return {
-                    id: server.id,
-                    active: selected,
-                    disabled: lockedByDemo,
-                    title: lockedByDemo ? "Exit demo mode to access this server." : `Switch to ${server.displayName}`,
-                    onSelect: () => openServerFromNode(server.id),
-                    label: (
-                      <span className="serverSwitcherOption">
-                        <span className={`serverSwitcherOptionDot ${selected ? serverCommandTone : "unknown"}`} aria-hidden="true" />
-                        <span className="serverSwitcherOptionCopy">
-                          <strong>{server.displayName}</strong>
-                          <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
-                        </span>
-                        {selected && <span className="serverSwitcherCurrent">Current</span>}
-                      </span>
-                    )
-                  };
-                })}
-                trigger={(
-                  <>
-                    <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} aria-hidden="true" />
-                    <span className="serverSwitcherCopy">
-                      <small>Managed server</small>
-                      <strong>{activeServer?.displayName ?? "Select a server"}</strong>
-                      <span>{activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
-                    </span>
-                    <svg className="serverSwitcherChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden="true">
-                      <path d="m7 9 5 5 5-5" />
-                    </svg>
-                  </>
-                )}
-              />
-            </div>
-            <div className="serverSubNav">
-              <button className={activePage === "overview" ? "active" : ""} onClick={() => openSidebarPage("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
-                <SidebarIcon name="overview" />
-                <span className="navLabel">Overview</span>
-              </button>
-              <button className={activePage === "console" ? "active" : ""} onClick={() => openSidebarPage("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
-                <SidebarIcon name="console" />
-                <span className="navLabel">Console</span>
-              </button>
-              <button className={activePage === "files" ? "active" : ""} onClick={() => openSidebarPage("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
-                <SidebarIcon name="files" />
-                <span className="navLabel">Files</span>
-              </button>
-              {supportsManagedMods && (
-                <button className={activePage === "mods" ? "active" : ""} onClick={() => openSidebarPage("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : `Open ${managedContent.plural}`}>
-                  <SidebarIcon name="mods" />
-                  <span className="navLabel">{managedContent.pluralTitle}</span>
-                </button>
-              )}
-              <button className={activePage === "schedule" ? "active" : ""} onClick={() => openSidebarPage("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
-                <SidebarIcon name="schedule" />
-                <span className="navLabel">Schedules</span>
-              </button>
-              <button className={activePage === "properties" ? "active" : ""} onClick={() => openSidebarPage("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
-                <SidebarIcon name="properties" />
-                <span className="navLabel">Properties</span>
-              </button>
-            </div>
-          </div>
-        </nav>
-        <nav className="sideNav sideNavBottom" id="account-navigation" aria-label="Account and settings navigation">
-          <button className={activePage === "settings" ? "active" : ""} onClick={() => openSidebarPage("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
-            <SidebarIcon name="settings" />
-            <span className="navLabel settingsNavLabel">
-              <span>Settings</span>
-              <span className="settingsVersionText">v{panelVersion}</span>
-            </span>
-          </button>
-          <div className="accountChip">
-            <span className="accountIcon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 21a8 8 0 0 1 16 0" />
-              </svg>
-            </span>
-            <span className="accountName">{demoMode ? "Demo" : authSession.user?.username}</span>
-            <Button variant="ghost" iconOnly className="accountLogoutButton" onClick={logout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10 5H5v14h5" />
-                <path d="M14 8l4 4-4 4" />
-                <path d="M8 12h10" />
-              </svg>
-            </Button>
-          </div>
-        </nav>
-      </aside>
+        <AppSidebar
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+          sidebarToggleRef={sidebarToggleRef}
+          activePage={activePage}
+          onNavigate={openSidebarPage}
+          servers={effectiveAppState.servers}
+          activeServer={activeServer}
+          onSelectServer={openServerFromNode}
+          serverCommandTone={serverCommandTone}
+          isProvisioning={isProvisioning}
+          provisioningNavigationReason={provisioningNavigationReason}
+          serverPageDisabledReason={serverPageDisabledReason}
+          supportsManagedMods={supportsManagedMods}
+          managedContent={managedContent}
+          demoMode={demoMode}
+          panelVersion={panelVersion}
+          accountName={authSession.user?.username}
+          onLogout={logout}
+        />
 
       <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
@@ -2649,7 +2528,6 @@ export default function App() {
               <ManagedServerForm
                 nodes={contextNodes}
                 preferredNodeId={preferredCreateNodeId}
-                versions={fabricVersions}
                 totalMemory={effectiveAppState.totalMemory}
                 provisioning={isProvisioning || !canCreateServers}
                 disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
@@ -2783,176 +2661,66 @@ export default function App() {
 
         {isServerWorkspacePage(activePage) && activeServer && (
           <Fragment key={`server-workspace-${activeServer.id}`}>
-            <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
-              <div className="serverStripPrimary">
-                <div className="serverStripLeft">
-                  <div className="serverStripIcon">
-                    <svg className="server-icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                  </div>
-                  <div className="serverStripInfo">
-                    <div className="serverStripTitleRow">
-                      <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
-                      <strong>{activeServer.displayName}</strong>
-                      <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
-                        {lastKnownRuntimeLabel}
-                      </StatusBadge>
-                      {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} runtimeType={activeServer.runtimeProfile.runtimeType} />}
-                    </div>
-                    <div className="serverStripMetaRow">
-                      {serverStripHealth ? (
-                        <small className={`serverStripHealth ${serverStripHealth.tone}`} role={serverStripHealth.tone === "error" ? "alert" : "status"} title={consoleError || statusError || serverStripHealth.message}>
-                          {serverStripHealth.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
-                          {serverStripHealth.message}
-                        </small>
-                      ) : (
-                        <>
-                          <small className="serverStripMeta">
-                            {activeNode.name}
-                          </small>
-                          <span aria-hidden="true" className="serverStripSeparator">·</span>
-                          <small className="serverStripMeta">
-                            {activeRuntimeDefinition?.displayName ?? "Runtime"} {activeServer.runtimeProfile.runtimeVersion || "unknown"}
-                          </small>
-                          <span aria-hidden="true" className="serverStripSeparator">·</span>
-                          <small className="serverStripMeta">
-                            MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
-                          </small>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="serverStripRight">
-                  {confirmedNodeOffline && <ServerRuntimeAlert title="Node offline" compact />}
-                  <RuntimeControls
-                    status={activeStatus}
-                    controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
-                    isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
-                    disabledReason={runtimeControlsDisabledReason}
-                    busyAction={runtimeAction}
-                    onAction={runContainerAction}
-                    className="runtimeControlsCompact"
-                  />
-                  <Button
-                    variant="secondary"
-                    className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
-                    onClick={() => setActivePage("console")}
-                    title="Open console"
-                  >
-                    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="4 17 10 11 4 5" />
-                      <line x1="12" y1="19" x2="20" y2="19" />
-                    </svg>
-                    <span>Console</span>
-                  </Button>
-                  <ActionMenu
-                    label="More server actions"
-                    className="overflowMenuContainer"
-                    triggerClassName="iconButton overflowButton"
-                    menuClassName="overflowDropdown"
-                    items={[
-                      {
-                        id: "refresh",
-                        label: serverStripHealth || serverStripAlert ? "Retry connection" : "Refresh status",
-                        onSelect: () => { void retryActiveConnection(); },
-                        disabled: isProvisioning,
-                        title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
-                      }
-                    ]}
-                    trigger={
-                      <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                        <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-                        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                        <circle cx="12" cy="19" r="1.5" fill="currentColor" />
-                      </svg>
-                    }
-                  />
-                </div>
-              </div>
-              {serverStripAlert && <ServerRuntimeAlert title={serverStripAlert.title} message={serverStripAlert.message} />}
-            </div>
+            <ActiveServerStrip
+              server={activeServer}
+              runtimeAction={runtimeAction}
+              runtimeFeedbackAction={runtimeFeedbackAction}
+              serverCommandTone={serverCommandTone}
+              lastKnownRuntimeLabel={lastKnownRuntimeLabel}
+              health={serverStripHealth}
+              healthDetail={consoleError || statusError || ""}
+              alert={serverStripAlert}
+              nodeName={activeNode.name}
+              runtimeDisplayName={activeRuntimeDefinition?.displayName ?? "Runtime"}
+              runtimeVersion={activeServer.runtimeProfile.runtimeVersion}
+              minecraftVersion={activeMinecraftVersion}
+              nodeOffline={confirmedNodeOffline}
+              status={activeStatus}
+              controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
+              controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock}
+              controlsDisabledReason={runtimeControlsDisabledReason}
+              onRuntimeAction={runContainerAction}
+              consoleActive={activePage === "console"}
+              onOpenConsole={() => setActivePage("console")}
+              onRetryConnection={() => { void retryActiveConnection(); }}
+              refreshDisabled={isProvisioning}
+              refreshDisabledReason={provisioningNavigationReason}
+            />
 
             {activePage === "overview" && (
-              <section className="tabPage overviewPage layoutDashboard">
-                {overviewError && (
-                  <InlineState
-                    tone="warning"
-                    title="Overview is not up to date"
-                    message={`${overviewError} Previously loaded activity is still shown when available.`}
-                    actionLabel="Retry"
-                    onAction={() => {
-                      void refreshOverviewData(activeServer.id, { showLoading: true });
-                    }}
-                    busy={overviewLoading}
-                  />
-                )}
-                <div className={`overviewDashboardGrid ${overviewTimelineVisible ? "overviewDashboardGrid--timeline" : "overviewDashboardGrid--chartless"}`}>
-                  <OverviewSummary
-                    server={activeServer}
-                    status={activeStatus}
-                    dockerSocketMounted={activeServerDockerSocketMounted}
-                    activity={overviewData.activity}
-                    latestResourceSample={overviewTimelineVisible ? timelineLatestSample : undefined}
-                    loading={overviewInitialLoading}
-                  />
-
-                  {overviewTimelineVisible && (
-                    <Suspense fallback={<ServerTimelineLoadingSkeleton />}>
-                      <ServerTimeline
-                        key={activeServer.id}
-                        loadTimeline={loadActiveTimeline}
-                        formatTime={formatDisplayTime}
-                        formatShortTime={formatDisplayShortTime}
-                        formatDate={formatDisplayDate}
-                        serverId={activeServer.id}
-                        playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                        onLatestSample={setTimelineLatestSample}
-                        onOpenSchedules={(target) => {
-                          setScheduleNavigationTarget(target ?? null);
-                          setActivePage("schedule");
-                        }}
-                      />
-                    </Suspense>
-                  )}
-
-                  {!overviewTimelineVisible && (
-                    <ActivePlayersPanel
-                      snapshot={playerSnapshots[activeServer.id]}
-                      running={Boolean(activeStatus?.docker.running)}
-                      loading={overviewInitialLoading}
-                      serverId={activeServer.id}
-                      playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                    />
-                  )}
-                  <div className="overviewSupportStack">
-                    <ModHealthPanel
-                      updatePlan={modsWorkspace.data.updatePlan}
-                      loading={modsWorkspace.state.updatePlanLoading}
-                      canView={canViewMods && supportsManagedMods}
-                      onOpenMods={() => setActivePage("mods")}
-                      onRefresh={() => void refreshOverviewModUpdates()}
-                      contentPlural={managedContent.plural}
-                      contentPluralTitle={managedContent.pluralTitle}
-                    />
-                    <SchedulePanel
-                      schedules={activeServer.schedules ?? []}
-                      canView={canViewSchedules}
-                      formatDate={formatDisplayDate}
-                      relativeTimestamps={relativeTimestamps}
-                      onOpenSchedules={(target) => {
-                        setScheduleNavigationTarget(target ?? null);
-                        setActivePage("schedule");
-                      }}
-                    />
-                  </div>
-                  <RecentEventsPanel events={overviewData.events} eventsStatus={overviewData.eventsStatus} formatDate={formatDisplayDate} relativeTimestamps={relativeTimestamps} onOpenConsole={() => setActivePage("console")} requestConfirmation={requestConfirmation} loading={overviewLoading && overviewData.events.length === 0} />
-                </div>
-
-              </section>
+              <ServerOverviewTab
+                server={activeServer}
+                status={activeStatus}
+                dockerSocketMounted={activeServerDockerSocketMounted}
+                overviewData={overviewData}
+                overviewError={overviewError}
+                overviewLoading={overviewLoading}
+                overviewInitialLoading={overviewInitialLoading}
+                onRetryOverview={() => { void refreshOverviewData(activeServer.id, { showLoading: true }); }}
+                timelineVisible={overviewTimelineVisible}
+                timelineLatestSample={timelineLatestSample}
+                onTimelineLatestSample={setTimelineLatestSample}
+                loadTimeline={loadActiveTimeline}
+                playerSnapshot={playerSnapshots[activeServer.id]}
+                playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                modUpdatePlan={modsWorkspace.data.updatePlan}
+                modUpdatePlanLoading={modsWorkspace.state.updatePlanLoading}
+                canViewMods={canViewMods && supportsManagedMods}
+                onOpenMods={() => setActivePage("mods")}
+                onRefreshModUpdates={() => void refreshOverviewModUpdates()}
+                managedContent={managedContent}
+                canViewSchedules={canViewSchedules}
+                onOpenSchedules={(target) => {
+                  setScheduleNavigationTarget(target ?? null);
+                  setActivePage("schedule");
+                }}
+                onOpenConsole={() => setActivePage("console")}
+                requestConfirmation={requestConfirmation}
+                relativeTimestamps={relativeTimestamps}
+                formatDate={formatDisplayDate}
+                formatTime={formatDisplayTime}
+                formatShortTime={formatDisplayShortTime}
+              />
             )}
 
             {activePage === "console" && (
@@ -3049,7 +2817,6 @@ export default function App() {
                 <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" page="properties" />}>
                   <ServerEditForm
                     server={activeServer}
-                    versions={fabricVersions}
                     totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}

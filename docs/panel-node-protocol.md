@@ -1,15 +1,8 @@
 # Panel-node protocol
 
-## Compatibility modes
+## Compatibility
 
-The public node response computes one of four modes from the negotiated protocol version:
-
-- `current`: protocol 3.1, including optimized monitoring and negotiated transport features.
-- `fallback`: protocol 3.0, fully operational through the established individual commands and JSON/base64 transfers.
-- `update-only`: protocol 2.0, authenticated only for `node.update` so a panel-first rollout can recover an older node.
-- `incompatible`: all other protocol versions.
-
-Protocol 3.1 nodes advertise transport features independently from command capabilities. The panel welcome echoes the negotiated protocol and the intersection of supported features. The current features are `request-cancel` and `binary-transfer`. A node does not execute requests until it has decoded and accepted a valid welcome.
+The panel and node must both use protocol 3.1. Other protocol versions are rejected during the handshake instead of entering a reduced compatibility mode. Protocol 3.1 nodes must advertise both current transport features, `request-cancel` and `binary-transfer`; the panel echoes the accepted protocol and features in its welcome. A node does not execute requests until it has decoded and accepted that welcome.
 
 ## Connection and control bounds
 
@@ -29,4 +22,4 @@ File logs use a cursor containing source, file identity, and byte offset. Append
 
 Transfers use `transferStart`, `transferReady`, `transferFinish`, `transferResult`, and `transferCancel`. A binary chunk contains byte `0x01`, the transfer UUID as 16 raw bytes, and at most 256 KiB of payload. Send callbacks serialize chunks and bound sender buffering. The finish control carries the observed length and SHA-256 digest.
 
-Uploads write to a temporary sibling, validate the declared length, configured limit, file type, and digest, then atomically rename the file. Disconnects, cancellation, validation failures, and shutdown remove partial files. Downloads, panel-generated archive bundles, and manual mod/plugin uploads use the streamed path when `binary-transfer` is negotiated. Web upload routes accept both the existing JSON body and multipart form data; clients must not set the multipart `Content-Type` boundary themselves.
+Uploads write to a temporary sibling, validate the declared length, configured limit, file type, and digest, then atomically rename the file. Disconnects, cancellation, validation failures, and shutdown remove partial files. Downloads, panel-generated archive bundles, and manual mod/plugin uploads always use the streamed binary-transfer path. Web upload routes accept multipart form data only; clients must not set the multipart `Content-Type` boundary themselves.

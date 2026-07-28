@@ -1,7 +1,3 @@
-.workspace {
-  padding: var(--space-5);
-}
-
 .brandBlock,
 .workspaceHeader,
 .activeServerStrip {
@@ -1638,7 +1634,7 @@ button .buttonIcon {
 }
 
 
-/* Server context header cohesion migrated from the former adoption layer */
+/* Server context header layout */
 /* Compact contextual server command header */
 .activeServerStrip {
   display: grid;

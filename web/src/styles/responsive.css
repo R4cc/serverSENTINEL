@@ -288,7 +288,7 @@
   text-transform: none;
 }
 
-/* Redesigned Installed Mods Styles */
+/* Installed Mods responsive styles */
 
 
 
@@ -2613,8 +2613,8 @@ textarea:hover:not(:disabled),
 }
 
 
-/* Responsive shell cohesion migrated from the former adoption layer */
-/* Focused responsive shell pass ------------------------------------------- */
+/* Responsive shell cohesion */
+/* Responsive shell adjustments -------------------------------------------- */
 
 @media (min-width: 1101px) and (max-width: 1280px) {
   :root {

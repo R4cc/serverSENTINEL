@@ -111,10 +111,47 @@ function redactPublicDetails(details: Record<string, unknown>): Record<string, u
   }));
 }
 
+/**
+ * Builds an error carrying the HTTP status and the public error code.
+ *
+ * Prefer this over hand-rolling `new Error(...)` with a `statusCode` cast: when a throw site omits
+ * `code`, `stableErrorCode` has to fall back to matching the error message, so rewording a message
+ * silently changes the public API contract.
+ */
+export function httpError(statusCode: number, message: string, options: { code?: string; details?: unknown } = {}): HttpError {
+  const error = new Error(message) as HttpError;
+  error.statusCode = statusCode;
+  if (options.code !== undefined) error.code = options.code;
+  if (options.details !== undefined) error.details = options.details;
+  return error;
+}
+
+/** `httpError` for the common case where the result is thrown immediately. */
+export function throwHttp(statusCode: number, message: string, options: { code?: string; details?: unknown } = {}): never {
+  throw httpError(statusCode, message, options);
+}
+
+export function badRequest(message: string, options: { code?: string; details?: unknown } = {}): never {
+  throwHttp(400, message, options);
+}
+
+export function forbidden(message: string, options: { code?: string; details?: unknown } = {}): never {
+  throwHttp(403, message, options);
+}
+
+export function notFound(message: string, options: { code?: string; details?: unknown } = {}): never {
+  throwHttp(404, message, { code: "NOT_FOUND", ...options });
+}
+
+export function unauthorized(message: string, options: { code?: string; details?: unknown } = {}): never {
+  throwHttp(401, message, { code: "AUTHENTICATION_REQUIRED", ...options });
+}
+
+export function conflict(message: string, options: { code?: string; details?: unknown } = {}): never {
+  throwHttp(409, message, { code: "CONFLICT", ...options });
+}
+
 /** Throws a 409 conflict for a long-running operation that is already active. */
 export function operationInProgress(message: string, code: string): never {
-  const error = new Error(message) as Error & { statusCode?: number; code?: string };
-  error.statusCode = 409;
-  error.code = code;
-  throw error;
+  throwHttp(409, message, { code });
 }

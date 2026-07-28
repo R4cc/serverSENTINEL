@@ -20,8 +20,6 @@ import {
   writeServerTextFile
 } from "./fileService.js";
 
-const passthroughBase64 = (value: unknown) => value as string;
-
 describe("fileService", () => {
   let serverDir: string;
   let scope: { serverDir: string };
@@ -232,8 +230,7 @@ describe("fileService", () => {
       const size = await writeRuntimeUpload(target, { stream: Readable.from([Buffer.from("hello")]), size: 5 }, {
         maximumBytes: 1024,
         allowEmpty: false,
-        label: "Uploaded file content",
-        decodeBase64: passthroughBase64
+        label: "Uploaded file content"
       });
       expect(size).toBe(5);
       expect(await readFile(target, "utf8")).toBe("hello");
@@ -244,8 +241,7 @@ describe("fileService", () => {
       await expect(writeRuntimeUpload(target, { stream: Readable.from([Buffer.alloc(64)]) }, {
         maximumBytes: 8,
         allowEmpty: false,
-        label: "Uploaded file content",
-        decodeBase64: passthroughBase64
+        label: "Uploaded file content"
       })).rejects.toThrow("is larger than");
       expect(existsSync(target)).toBe(false);
       expect((await listServerDirectory(scope, serverDir)).entries).toEqual([]);
@@ -256,31 +252,17 @@ describe("fileService", () => {
       await expect(writeRuntimeUpload(target, { stream: Readable.from([Buffer.from("abc")]), size: 10 }, {
         maximumBytes: 1024,
         allowEmpty: false,
-        label: "Uploaded file content",
-        decodeBase64: passthroughBase64
+        label: "Uploaded file content"
       })).rejects.toThrow("declared 10 bytes but streamed 3");
       expect(existsSync(target)).toBe(false);
     });
 
-    it("decodes base64 payloads through the caller's validator", async () => {
-      const target = join(serverDir, "decoded.txt");
-      const size = await writeRuntimeUpload(target, Buffer.from("hello").toString("base64"), {
-        maximumBytes: 1024,
-        allowEmpty: false,
-        label: "Uploaded file content",
-        decodeBase64: passthroughBase64
-      });
-      expect(size).toBe(5);
-      expect(await readFile(target, "utf8")).toBe("hello");
-    });
-
     it("discards the upload when validateTemporary rejects it", async () => {
       const target = join(serverDir, "notajar.jar");
-      await expect(writeRuntimeUpload(target, Buffer.from("nope").toString("base64"), {
+      await expect(writeRuntimeUpload(target, { stream: Readable.from([Buffer.from("nope")]), size: 4 }, {
         maximumBytes: 1024,
         allowEmpty: false,
         label: "Uploaded mod",
-        decodeBase64: passthroughBase64,
         validateTemporary: async () => { throw new Error("Uploaded mod must be a valid .jar file"); }
       })).rejects.toThrow("must be a valid .jar file");
       expect(existsSync(target)).toBe(false);

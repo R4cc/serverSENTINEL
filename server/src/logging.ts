@@ -1,22 +1,56 @@
 import type { FastifyRequest } from "fastify";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { services } from "./appServices.js";
 
 export type LogFields = Record<string, unknown>;
 
+type RequestLogContext = {
+  requestId: string;
+  clientIp: string;
+  actorUserId?: string;
+  actorUsername?: string;
+  actorRolePreset?: string;
+};
+
+type LogActor = {
+  id: string;
+  username: string;
+  rolePreset?: string;
+};
+
+const requestLogContext = new AsyncLocalStorage<RequestLogContext>();
+
+function contextualFields(fields: LogFields): LogFields {
+  const context = requestLogContext.getStore();
+  return context ? { ...context, ...fields } : fields;
+}
+
+export function runWithRequestLogContext<T>(context: Pick<RequestLogContext, "requestId" | "clientIp">, callback: () => T): T {
+  return requestLogContext.run(context, callback);
+}
+
+export function setRequestLogActor(actor: LogActor | null | undefined) {
+  const context = requestLogContext.getStore();
+  if (!context || !actor) return;
+  context.actorUserId = actor.id;
+  context.actorUsername = actor.username;
+  context.actorRolePreset = actor.rolePreset;
+}
+
 export function logDebug(fields: LogFields, message: string) {
-  services.appLogger?.debug(fields, message);
+  services.appLogger?.debug(contextualFields(fields), message);
 }
 
 export function logInfo(fields: LogFields, message: string) {
-  services.appLogger?.info(fields, message);
+  services.appLogger?.info(contextualFields(fields), message);
 }
 
 export function logWarn(fields: LogFields, message: string) {
-  services.appLogger?.warn(fields, message);
+  services.appLogger?.warn(contextualFields(fields), message);
 }
 
 export function logError(fields: LogFields, message: string) {
-  services.appLogger?.error(fields, message);
+  services.appLogger?.error(contextualFields(fields), message);
 }
 
 export function errorLogFields(error: unknown, fallbackStatusCode?: number): LogFields {
@@ -82,7 +116,7 @@ export function logOperationFailure(fields: LogFields, message: string, error: u
 export function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields {
   return {
     method: request.method,
-    route: request.routeOptions.url ?? request.raw.url?.split("?")[0] ?? request.url.split("?")[0],
+    route: request.routeOptions.url ?? request.url.split("?")[0],
     statusCode
   };
 }

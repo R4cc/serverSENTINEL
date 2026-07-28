@@ -94,12 +94,13 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   }, () => runtimeForServer(server).removeMod(server, request.query.filename)));
 });
 
-app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
+app.post<{ Params: { id: string } }>("/api/servers/:id/mods/upload", modChangeRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
   const contentName = managedContentRuntime(server).singular;
-  const uploadRequest = request.isMultipart() ? await multipartUpload(request, modFileSizeLimit) : undefined;
+  if (!request.isMultipart()) throw new Error("Mod and plugin uploads require multipart form data");
+  const uploadRequest = await multipartUpload(request, modFileSizeLimit);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.upload",
     serverId: server.id,
@@ -107,7 +108,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string; contentBase64?: st
     createdBy: user.id,
     task: `Uploading ${contentName}`,
     successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} uploaded`
-  }, () => runtimeForServer(server).uploadMod(server, uploadRequest?.filename ?? request.body?.filename, uploadRequest?.content ?? request.body?.contentBase64)));
+  }, () => runtimeForServer(server).uploadMod(server, uploadRequest.filename, uploadRequest.content)));
 });
 
 app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; channel?: ReleaseChannel; forceIncompatible?: boolean; overrideMinecraftVersion?: boolean } }>("/api/modrinth/install", modChangeRateLimit, async (request) => {

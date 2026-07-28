@@ -23,17 +23,16 @@ export type ModrinthCompatibilityMatch = ModCompatibility & {
 export type CompatibilityResolverOptions = {
   projectId: string;
   minecraftVersion: string;
-  loader?: string;
-  loaders?: readonly string[];
-  runtimeName?: string;
-  contentKind?: "mod" | "plugin";
+  loaders: readonly string[];
+  runtimeName: string;
+  contentKind: "mod" | "plugin";
   channel: ReleaseChannel;
 };
 
 export type VersionCompatibilityOptions = Omit<CompatibilityResolverOptions, "projectId">;
 
-function compatibilityLoaders(options: Pick<CompatibilityResolverOptions, "loader" | "loaders">) {
-  return Array.from(new Set([...(options.loaders ?? []), ...(options.loader ? [options.loader] : [])]));
+function compatibilityLoaders(options: Pick<CompatibilityResolverOptions, "loaders">) {
+  return Array.from(new Set(options.loaders));
 }
 
 function versionMatchesLoader(version: ModrinthVersion, loaders: ReadonlySet<string>) {
@@ -41,9 +40,7 @@ function versionMatchesLoader(version: ModrinthVersion, loaders: ReadonlySet<str
 }
 
 function compatibilityDescription(options: VersionCompatibilityOptions) {
-  const runtimeName = options.runtimeName ?? (options.loader === "fabric" ? "Fabric" : "server");
-  const contentKind = options.contentKind ?? (options.loader === "fabric" ? "mod" : "project");
-  return { runtimeName, contentKind };
+  return { runtimeName: options.runtimeName, contentKind: options.contentKind };
 }
 
 type TimedCacheEntry<T> = {
@@ -367,8 +364,7 @@ export function resolveCompatibilityFromVersions(
 
   if (loaderVersions.length === 0) {
     const { runtimeName } = compatibilityDescription(options);
-    const legacyFabricStatus = options.loader === "fabric" && !options.loaders;
-    return incompatible(legacyFabricStatus ? "no_fabric" : "no_compatible_loader", legacyFabricStatus ? "No Fabric version available" : `No ${runtimeName}-compatible version available`, fallbackVersion, projectSides);
+    return incompatible("no_compatible_loader", `No ${runtimeName}-compatible version available`, fallbackVersion, projectSides);
   }
   if (loaderAndGameVersions.length === 0) {
     return incompatible("no_minecraft_version", `Not available for Minecraft ${options.minecraftVersion}`, fallbackVersion, projectSides);
@@ -379,8 +375,8 @@ export function resolveCompatibilityFromVersions(
   return incompatible("incompatible", "No version matched the selected release channel", fallbackVersion, projectSides);
 }
 
-export async function fetchProjectVersions(projectId: string, filters?: { loader?: string; loaders?: readonly string[]; minecraftVersion?: string }, options: { forceRefresh?: boolean } = {}) {
-  const loaders = compatibilityLoaders(filters ?? {});
+export async function fetchProjectVersions(projectId: string, filters?: { loaders: readonly string[]; minecraftVersion?: string }, options: { forceRefresh?: boolean } = {}) {
+  const loaders = filters ? compatibilityLoaders(filters) : [];
   const cacheKey = `${projectId}|${loaders.slice().sort().join(",")}|${filters?.minecraftVersion ?? ""}`;
   const cached = projectVersionsCache.get(cacheKey);
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
@@ -423,7 +419,6 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
     };
 
     const filteredVersions = await fetchProjectVersions(options.projectId, {
-      loader: options.loader,
       loaders: options.loaders,
       minecraftVersion: options.minecraftVersion
     });

@@ -1,4 +1,6 @@
 import type {
+  ModCompatibility,
+  ModrinthInstallVersionStatus,
   NodeInstallInstructions,
   PublicNode,
   PublicServer,
@@ -12,9 +14,14 @@ import type {
 
 export type {
   CreateNodeResponse,
+  FileEditLease,
   ManagedServerPort,
+  ModCompatibility,
+  ModrinthInstallVersionStatus,
+  ModUpdatePlan,
+  ModUpdatePlanEntry,
+  ModUpdatePlanStatus,
   NodeInstallInstructions,
-  NodeProtocolMode,
   NodeStatus,
   NodeType,
   OperationRecord,
@@ -31,6 +38,8 @@ export type {
   RolePreset,
   RuntimeIntent,
   RuntimeLifecycleStatus,
+  RuntimeVersion,
+  SafeBatchUpdateResult,
   ScheduleStep,
   ScheduledActiveRun,
   ScheduledExecution,
@@ -57,23 +66,6 @@ export type {
  */
 export type ManagedServer = PublicServer;
 export type ManagedNode = PublicNode;
-
-export type RuntimeVersion = {
-  id: string;
-  runtimeVersion: string;
-  stable?: boolean;
-  recommended?: boolean;
-  buildId?: string;
-};
-
-/** @deprecated Legacy Fabric endpoint response. */
-export type RuntimeLoaderVersion = {
-  id: string;
-  loaderVersion: string;
-  stable?: boolean;
-  recommended?: boolean;
-  buildId?: string;
-};
 
 /**
  * A synthetic node the UI shows before the API has described a real one: the
@@ -234,35 +226,6 @@ export type FilePreview = {
   modifiedAt?: string;
 };
 
-export type FileEditLease = {
-  leaseId: string;
-  serverId: string;
-  path: string;
-  userId: string;
-  displayName: string;
-  acquiredAt: string;
-  refreshedAt: string;
-  expiresAt: string;
-  fileRevision: string;
-};
-
-export type ModCompatibility = {
-  status: "compatible" | "no_fabric" | "no_compatible_loader" | "no_minecraft_version" | "incompatible" | "unknown";
-  compatible: boolean;
-  reason: string;
-  matchedVersionId?: string;
-  matchedVersionNumber?: string;
-  matchedVersionType?: ReleaseChannel;
-  matchedLoaders?: string[];
-  matchedGameVersions?: string[];
-  file?: {
-    filename: string;
-    size?: number;
-  };
-  serverSide?: string;
-  clientSide?: string;
-};
-
 export type ModrinthHit = {
   project_id: string;
   title: string;
@@ -275,15 +238,6 @@ export type ModrinthHit = {
   client_side?: string;
   server_side?: string;
 };
-
-export type ModrinthInstallVersionStatus =
-  | "recommended"
-  | "compatible"
-  | "version_mismatch"
-  | "wrong_loader"
-  | "no_installable_jar"
-  | "client_only"
-  | "server_support_unknown";
 
 export type ModrinthInstallVersion = {
   id: string;
@@ -381,59 +335,6 @@ export type InstalledMod = {
     latestChannel?: ReleaseChannel;
     upToDate?: boolean;
   } | null;
-};
-
-export type FabricVersions = {
-  game: Array<{ version: string; stable: boolean; recommended?: boolean; type?: "release" | "snapshot" | "unknown" }>;
-  loader: Array<{ version: string; stable: boolean }>;
-  installer: Array<{ version: string; stable: boolean }>;
-};
-
-export type ModUpdatePlanStatus = "up_to_date" | "safe_update" | "needs_review" | "blocked" | "unknown";
-
-export type ModUpdatePlanEntry = {
-  filename: string;
-  displayName: string;
-  iconUrl?: string;
-  projectId?: string;
-  currentVersion?: string;
-  currentFilename: string;
-  targetVersion?: string;
-  targetFilename?: string;
-  channel: ReleaseChannel;
-  status: ModUpdatePlanStatus;
-  reason: string;
-  compatibility?: {
-    status?: string;
-    compatible: boolean;
-    reason?: string;
-    serverSide?: string;
-    clientSide?: string;
-  };
-  safeBatchEligible: boolean;
-  acknowledgementRequired: boolean;
-  enabled: boolean;
-};
-
-export type ModUpdatePlan = {
-  serverId: string;
-  generatedAt: string;
-  counts: {
-    totalInstalled: number;
-    safeUpdates: number;
-    reviewUpdates: number;
-    blockedUpdates: number;
-    upToDate: number;
-    unknown: number;
-  };
-  updates: ModUpdatePlanEntry[];
-};
-
-export type SafeBatchUpdateResult = {
-  updated: Array<{ filename: string; result: unknown }>;
-  skipped: Array<{ filename: string; reason: string }>;
-  failed: Array<{ filename: string; reason: string }>;
-  counts: { requested: number; updated: number; skipped: number; failed: number };
 };
 
 export type GeneralJob = {

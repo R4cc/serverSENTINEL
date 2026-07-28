@@ -20,8 +20,6 @@ function testRuntimeProfile(): ServerRuntimeProfile {
     minecraftVersion: "1.21.4",
     runtimeType: "fabric",
     runtimeVersion: "0.16.10",
-    loader: "fabric",
-    loaderVersion: "0.16.10",
     javaMajorVersion: 21,
     jarProvider: "mcjars",
     jarArtifact: {
@@ -74,6 +72,17 @@ function testServer(storageName = "survival"): ManagedServer {
     javaArgs: "-Xms2G -Xmx4G",
     createdAt: "",
     updatedAt: ""
+  };
+}
+
+function uploadStart(command: "files.upload" | "mods.upload" | "content.upload", server: ManagedServer, payload: Record<string, unknown>, size: number) {
+  return {
+    type: "transferStart" as const,
+    id: "00000000-0000-4000-8000-000000000002",
+    direction: "upload" as const,
+    command,
+    payload: { server, ...payload },
+    size
   };
 }
 
@@ -581,12 +590,12 @@ describe("remote node file operation safety", () => {
     await mkdir(outsideDir);
     await symlink(outsideDir, join(serverDir, "mods"), process.platform === "win32" ? "junction" : "dir");
 
-    await expect(hooks.handleCommand("files.upload", {
+    await expect(hooks.prepareBinaryUpload(uploadStart(
+      "files.upload",
       server,
-      parent: "mods",
-      filename: "escape.txt",
-      contentBase64: Buffer.from("outside").toString("base64")
-    })).rejects.toThrow("symlink");
+      { parent: "mods", filename: "escape.txt" },
+      Buffer.byteLength("outside")
+    ))).rejects.toThrow("symlink");
 
     expect(existsSync(join(outsideDir, "escape.txt"))).toBe(false);
   });
@@ -633,19 +642,19 @@ describe("remote node file operation safety", () => {
     })).rejects.toThrow("Path does not exist");
   });
 
-  it("allows empty generic file uploads like the local runtime", async () => {
+  it("allows empty streamed generic file uploads like the local runtime", async () => {
     const server = testServer();
     const serverDir = join(tempRoot, "servers", server.storageName!);
     await mkdir(serverDir, { recursive: true });
 
-    await hooks.handleCommand("files.upload", {
+    const prepared = await hooks.prepareBinaryUpload(uploadStart(
+      "files.upload",
       server,
-      parent: ".",
-      filename: "empty.txt",
-      contentBase64: ""
-    });
+      { parent: ".", filename: "empty.txt" },
+      0
+    ));
 
-    expect(await readFile(join(serverDir, "empty.txt"))).toEqual(Buffer.alloc(0));
+    expect(prepared.targetPath).toBe(join(serverDir, "empty.txt"));
   });
 });
 
@@ -656,29 +665,25 @@ describe("remote node mod upload safety", () => {
       ...server.runtimeProfile,
       runtimeType: "paper",
       runtimeVersion: "1.21.4-232",
-      loader: undefined,
-      loaderVersion: undefined,
       jarArtifact: { filename: "paper.jar" }
     };
 
     await expect(hooks.handleCommand("mods.list", { server })).rejects.toThrow("Paper servers use plugins");
   });
 
-  it("lists and mutates Paper plugins through managed content commands without touching mods", async () => {
+  it("lists and mutates Paper plugins without touching mods", async () => {
     const server = testServer();
     server.runtimeProfile = {
       ...server.runtimeProfile,
       runtimeType: "paper",
       runtimeVersion: "232",
-      loader: undefined,
-      loaderVersion: undefined,
       jarArtifact: { filename: "paper.jar" }
     };
     const pluginsDir = join(tempRoot, "servers", server.storageName!, "plugins");
     await mkdir(pluginsDir, { recursive: true });
     const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
-    await hooks.handleCommand("content.upload", { server, filename: "essentialsx.jar", contentBase64: jar.toString("base64") });
+    await writeFile(join(pluginsDir, "essentialsx.jar"), jar);
     const listed = await hooks.handleCommand("content.list", { server }) as { mods: Array<{ filename: string }> };
     await hooks.handleCommand("content.enableDisable", { server, filename: "essentialsx.jar", enabled: false });
 
@@ -687,17 +692,20 @@ describe("remote node mod upload safety", () => {
     await expect(stat(join(tempRoot, "servers", server.storageName!, "mods"))).rejects.toThrow();
   });
 
-  it("allows mod uploads when runtime status is unavailable", async () => {
+  it("prepares streamed mod uploads when runtime status is unavailable", async () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });
     const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
-    await hooks.handleCommand("mods.upload", {
+    const prepared = await hooks.prepareBinaryUpload(uploadStart(
+      "mods.upload",
       server,
-      filename: "fabric-api.jar",
-      contentBase64: jar.toString("base64")
-    });
-    expect(await readFile(join(tempRoot, "servers", server.storageName!, "mods", "fabric-api.jar"))).toEqual(jar);
+      { filename: "fabric-api.jar" },
+      jar.byteLength
+    ));
+
+    expect(prepared.targetPath).toBe(join(tempRoot, "servers", server.storageName!, "mods", "fabric-api.jar"));
+    expect(prepared.managedContentName).toBe("mod");
   });
 
   it("rejects path-like mod upload names", async () => {
@@ -705,27 +713,29 @@ describe("remote node mod upload safety", () => {
     await mkdir(join(tempRoot, "servers", server.storageName!, "mods"), { recursive: true });
     const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
-    await expect(hooks.handleCommand("mods.upload", {
+    await expect(hooks.prepareBinaryUpload(uploadStart(
+      "mods.upload",
       server,
-      filename: "../fabric-api.jar",
-      contentBase64: jar.toString("base64")
-    })).rejects.toThrow("valid mod filename");
+      { filename: "../fabric-api.jar" },
+      jar.byteLength
+    ))).rejects.toThrow("valid mod filename");
   });
 
-  it("writes uploaded mods only to a real managed mods directory", async () => {
+  it("prepares streamed uploads only in a real managed mods directory", async () => {
     const server = testServer();
     const serverDir = join(tempRoot, "servers", server.storageName!);
     const modsDir = join(serverDir, "mods");
     await mkdir(modsDir, { recursive: true });
     const jar = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
-    await hooks.handleCommand("mods.upload", {
+    const prepared = await hooks.prepareBinaryUpload(uploadStart(
+      "mods.upload",
       server,
-      filename: "fabric-api.jar",
-      contentBase64: jar.toString("base64")
-    });
+      { filename: "fabric-api.jar" },
+      jar.byteLength
+    ));
 
-    expect(await readFile(join(modsDir, "fabric-api.jar"))).toEqual(jar);
+    expect(prepared.targetPath).toBe(join(modsDir, "fabric-api.jar"));
   });
 
   it("lists stable file hashes without requiring Modrinth metadata on the node", async () => {

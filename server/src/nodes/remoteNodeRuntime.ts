@@ -1,5 +1,4 @@
 import { basename, dirname } from "node:path";
-import { Readable } from "node:stream";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
@@ -32,7 +31,6 @@ const transferCommandTimeoutMs = 2 * 60 * 1000;
 const modsListCommandTimeoutMs = 30_000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
 const archiveCommandTimeoutMs = 30 * 60 * 1000;
-const legacyTransferDecodedLimitBytes = 72 * 1024 * 1024;
 
 function normalizeRemotePath(path: string) {
   const value = path || ".";
@@ -111,32 +109,9 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   private async binaryTransferNode(server: ManagedServer) {
     const node = this.connections.connectedNode(server.nodeId);
-    return node && nodeAdvertisesFeature(node, "binary-transfer") ? node : undefined;
-  }
-
-  private legacyUploadBuffer(contentBase64: unknown) {
-    if (typeof contentBase64 !== "string" || contentBase64.length % 4 !== 0 || !/^[a-zA-Z0-9+/]*={0,2}$/.test(contentBase64)) throw new Error("Uploaded content must be valid base64");
-    const estimatedBytes = Math.floor(contentBase64.length * 3 / 4);
-    if (estimatedBytes > legacyTransferDecodedLimitBytes) {
-      throw new Error("This upload is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
-    }
-    return Buffer.from(contentBase64, "base64");
-  }
-
-  private isUploadSource(value: unknown): value is RuntimeUploadSource {
-    return Boolean(value && typeof value === "object" && "stream" in value && (value as RuntimeUploadSource).stream);
-  }
-
-  private async bufferUploadSource(source: RuntimeUploadSource, limit: number) {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const raw of source.stream) {
-      const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-      size += chunk.byteLength;
-      if (size > limit) throw new Error("This upload is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
-      chunks.push(chunk);
-    }
-    return Buffer.concat(chunks, size);
+    if (!node) throw new Error(`Node ${server.nodeId} is not connected`);
+    if (!nodeAdvertisesFeature(node, "binary-transfer")) throw new Error(`Node ${node.name} does not advertise binary-transfer`);
+    return node;
   }
 
   private async mutation<T>(server: ManagedServer, sections: ServerObservationSection[], operation: Promise<T>) {
@@ -381,10 +356,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
     const binaryNode = await this.binaryTransferNode(server);
-    if (binaryNode) return this.connections.download(binaryNode, "files.download", { server, path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
-    const result = await this.command(server, "files.download", { path: normalizeRemotePath(target) }, transferCommandTimeoutMs) as { filename: string; size: number; contentBase64: string };
-    if (result.size > legacyTransferDecodedLimitBytes) throw new Error("This download is too large for a protocol 3.0 node. Update the node to protocol 3.1 to use streamed transfers.");
-    return { filename: result.filename, size: result.size, stream: Readable.from(Buffer.from(result.contentBase64, "base64")) };
+    return this.connections.download(binaryNode, "files.download", { server, path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
   }
 
   async downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult> {
@@ -433,20 +405,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.mutation(server, ["overviewFiles"], this.command(server, "files.mkdir", { parent: normalizeRemotePath(parent), name }));
   }
 
-  async uploadFile(server: ManagedServer, parent: string, filename: unknown, contentBase64: unknown | RuntimeUploadSource) {
+  async uploadFile(server: ManagedServer, parent: string, filename: unknown, content: RuntimeUploadSource) {
     const binaryNode = await this.binaryTransferNode(server);
-    if (binaryNode) {
-      const decoded = this.isUploadSource(contentBase64) ? undefined : this.legacyUploadBuffer(contentBase64);
-      const content = this.isUploadSource(contentBase64) ? contentBase64 : { stream: Readable.from(decoded!), size: decoded!.byteLength };
-      if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
-      const result = await this.connections.upload(binaryNode, "files.upload", { server, parent: normalizeRemotePath(parent), filename }, content.stream, content.size, transferCommandTimeoutMs);
-      this.invalidateObservations(server, ["overviewFiles", "logs"]);
-      return result;
-    }
-    const legacyBase64 = this.isUploadSource(contentBase64)
-      ? (await this.bufferUploadSource(contentBase64, legacyTransferDecodedLimitBytes)).toString("base64")
-      : (this.legacyUploadBuffer(contentBase64), contentBase64);
-    const result = await this.command(server, "files.upload", { parent: normalizeRemotePath(parent), filename, contentBase64: legacyBase64 }, transferCommandTimeoutMs);
+    if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
+    const result = await this.connections.upload(binaryNode, "files.upload", { server, parent: normalizeRemotePath(parent), filename }, content.stream, content.size, transferCommandTimeoutMs);
     this.invalidateObservations(server, ["overviewFiles", "logs"]);
     return result;
   }
@@ -486,19 +448,11 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.mutation(server, ["logs"], this.command(server, `${prefix}.remove`, { filename }));
   }
 
-  async uploadMod(server: ManagedServer, filename: unknown, contentBase64: unknown | RuntimeUploadSource) {
+  async uploadMod(server: ManagedServer, filename: unknown, content: RuntimeUploadSource) {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
     const binaryNode = await this.binaryTransferNode(server);
-    if (binaryNode) {
-      const decoded = this.isUploadSource(contentBase64) ? undefined : this.legacyUploadBuffer(contentBase64);
-      const content = this.isUploadSource(contentBase64) ? contentBase64 : { stream: Readable.from(decoded!), size: decoded!.byteLength };
-      if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
-      return this.mutation(server, ["logs"], this.connections.upload(binaryNode, `${prefix}.upload`, { server, filename }, content.stream, content.size, transferCommandTimeoutMs));
-    }
-    const legacyBase64 = this.isUploadSource(contentBase64)
-      ? (await this.bufferUploadSource(contentBase64, legacyTransferDecodedLimitBytes)).toString("base64")
-      : (this.legacyUploadBuffer(contentBase64), contentBase64);
-    return this.mutation(server, ["logs"], this.command(server, `${prefix}.upload`, { filename, contentBase64: legacyBase64 }, transferCommandTimeoutMs));
+    if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
+    return this.mutation(server, ["logs"], this.connections.upload(binaryNode, `${prefix}.upload`, { server, filename }, content.stream, content.size, transferCommandTimeoutMs));
   }
 
   installMod(server: ManagedServer, input: unknown) {

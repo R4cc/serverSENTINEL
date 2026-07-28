@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+- Set the direct upgrade floor to panel/node 1.6.2, SQLite schema 20, export schema 3, and panel-node protocol 3.1.
+- Removed protocol 2.0/3.0 handshake modes, JSON/base64 upload fallbacks, pre-schema-20 migrations, deprecated Fabric catalog routes, runtime-profile response aliases, and old flat API-error handling.
+- Require binary transfer features for remote nodes and multipart form data for browser file and managed-content uploads.
+
+## 1.6.3 - 2026-07-28
+
+- Added structured API request and audit logging with authenticated actor context, normalized routes, durations, and redaction of sensitive request data.
+- Improved Overview event grouping, scheduled-event presentation, and player-head rendering across monitoring surfaces.
+- Refined timeline session state and event-rail behavior for clearer live and retained player activity.
+
+## 1.6.2 - 2026-07-28
+
+- Extended Server Timeline retention to seven days and stabilized player-session merging, hover state, and long-running session display.
+- Improved Console rendering with ordered history replay, optional WebGL acceleration, and more readable shared monospace defaults.
+- Refined Overview, Nodes, schedules, and responsive layouts while removing dead code and redundant styles.
+
+## 1.6.1 - 2026-07-26
+
+- Centralized permission definitions and shared server/node wire contracts, enforced version-catalog permissions, and drained active work during shutdown.
+- Decomposed backend application setup into domain services and route modules, and shared browser-test and log-event helpers.
+- Removed obsolete console chat, extra themes, in-browser ZIP navigation, and the stale pnpm lockfile.
+
+## 1.6.0 - 2026-07-25
+
+- Added horizontal Server Timeline navigation, player heads with privacy controls and caching, and player-aware stop and restart confirmations.
+- Improved server-management workflows, Overview feedback, mobile Mods behavior, and console/player presentation.
+- Self-hosted the Switzer interface font and streamlined frequently used server and web paths.
+
+## 1.5.5 - 2026-07-24
+
+- Added ECharts-backed player-session timelines, quick-reconnect collapsing, and improved marker navigation and hover behavior.
+- Randomized complete demo sessions while keeping Overview, events, resources, console, and timeline fixtures internally consistent.
+- Simplified application workflows and refreshed the release smoke and screenshot automation paths.
+
+## 1.5.3 - 2026-07-22
+
+- Secured import and export authorization, added automatic export-artifact expiry, and hardened generated-file handling.
+- Stabilized API error responses, terminal initialization, snapshot loading, and runtime workflows.
+- Improved Server Timeline guides, labels, lifecycle markers, and monitoring presentation.
+
 ## 1.5.2 - 2026-07-20
 
 - Migrated the build and type-check pipeline to the TypeScript 7 native compiler while retaining the TypeScript 6 compatibility API used by the SQL safety test.
@@ -10,6 +52,11 @@
 - Consolidated remote monitoring into batched `server.observe` requests with shared panel caching, one reused container inspection per server, partial section errors, and cursor-based log deltas. Protocol 3.0 nodes retain the existing individual commands.
 - Added SHA-256-verified streamed file, archive-entry, mod, and plugin transfers plus multipart HTTP uploads. Legacy JSON uploads remain compatible, while protocol 3.0 transfers above 72 MiB return an update-required error.
 - Classified nodes as current, fallback, update-only, or incompatible so protocol 3.0 remains usable with an update recommendation and protocol 2.0 remains available only as a self-update bridge.
+
+### Upgrade Notes
+
+- Upgrade the panel before its node agents. Protocol 3.0 nodes remain operational during the rolling upgrade, while protocol 2.0 nodes connect only long enough to self-update.
+- See the [panel-node protocol](docs/panel-node-protocol.md) for negotiated features, transport limits, and compatibility behavior.
 
 ## 1.4.0 - 2026-07-17
 
@@ -24,6 +71,13 @@
 - Bumped import/export artifacts to schema 3 and removed schema-1/2 import compatibility.
 - Slimmed the node handshake while retaining protocol 2.0 validation, capability checks, and panel-first upgrade tolerance for extra 1.2.1 hello fields.
 - Removed verified unused TypeScript declarations and retired pre-redesign CSS selectors.
+
+### Upgrade Notes
+
+- Back up the complete `SERVERSENTINEL_DATA_DIR` and managed server storage before upgrading. Include `serversentinel.sqlite`, adjacent SQLite `-wal` and `-shm` files, `servers/`, and any export artifacts you rely on.
+- Version 1.3.0 accepts a fresh database or one fully migrated through schema 16. For an older database, run 1.2.1 against the data root first, let its migrations finish, stop it cleanly, and take another complete backup before starting 1.3.0 or later.
+- Rollback after schema compaction requires restoring the complete pre-upgrade backup.
+- Current releases accept export schema 3. Convert a schema-1 or schema-2 artifact by importing it into 1.2.1 and creating a new export before upgrading.
 
 ## 1.2.1 - 2026-07-14
 

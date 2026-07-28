@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedServer } from "../types.js";
-import { minecraftJavaMajorVersion, normalizeRuntimeProfile, runtimeProfileForServer, runtimeTarget } from "./profile.js";
+import { defaultDockerImageForMinecraftVersion, minecraftJavaMajorVersion, normalizeRuntimeProfile, runtimeProfileForServer, runtimeTarget } from "./profile.js";
 
 describe("runtime profile helpers", () => {
   it("derives Java requirements from supported Minecraft versions", () => {
@@ -12,13 +12,17 @@ describe("runtime profile helpers", () => {
     expect(() => minecraftJavaMajorVersion("1.17.1")).toThrow("1.18 and newer");
   });
 
+  it("uses one Java image rule for local and remote managed runtimes", () => {
+    expect(defaultDockerImageForMinecraftVersion("1.20.4")).toBe("eclipse-temurin:17-jre");
+    expect(defaultDockerImageForMinecraftVersion("1.20.5")).toBe("eclipse-temurin:21-jre");
+    expect(defaultDockerImageForMinecraftVersion("26.1.2")).toBe("eclipse-temurin:25-jre");
+  });
+
   it("returns the current runtime profile for managed servers", () => {
     const runtimeProfile = {
       minecraftVersion: "1.20.1",
       runtimeType: "fabric" as const,
       runtimeVersion: "0.15.11",
-      loader: "fabric" as const,
-      loaderVersion: "0.15.11",
       javaMajorVersion: 17 as const,
       jarProvider: "mcjars" as const,
       jarArtifact: {
@@ -44,8 +48,8 @@ describe("runtime profile helpers", () => {
   it("rejects unsafe runtime artifact filenames during normalization", () => {
     expect(() => normalizeRuntimeProfile({
       minecraftVersion: "1.21.4",
-      loader: "fabric",
-      loaderVersion: "0.16.10",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       jarArtifact: {
@@ -57,8 +61,8 @@ describe("runtime profile helpers", () => {
     })).toThrow("local .jar filename");
   });
 
-  it("upgrades legacy Fabric profiles to the canonical runtime fields", () => {
-    expect(normalizeRuntimeProfile({
+  it("normalizes persisted pre-1.6.2 Fabric profiles to canonical fields", () => {
+    const profile = normalizeRuntimeProfile({
       minecraftVersion: "1.21.4",
       loader: "fabric",
       loaderVersion: "0.16.10",
@@ -67,12 +71,13 @@ describe("runtime profile helpers", () => {
       jarArtifact: { filename: "fabric-server-launch.jar" },
       compatibilityStatus: "compatible",
       resolvedAt: "2026-07-18T00:00:00.000Z"
-    })).toMatchObject({
-      runtimeType: "fabric",
-      runtimeVersion: "0.16.10",
-      loader: "fabric",
-      loaderVersion: "0.16.10"
     });
+    expect(profile).toMatchObject({
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10"
+    });
+    expect(profile).not.toHaveProperty("loader");
+    expect(profile).not.toHaveProperty("loaderVersion");
   });
 
   it("accepts canonical Paper profiles without Fabric compatibility aliases", () => {
@@ -103,7 +108,7 @@ describe("runtime profile helpers", () => {
     });
   });
 
-  it("rejects conflicting runtime aliases and runtime providers", () => {
+  it("rejects conflicting runtime providers", () => {
     const paperProfile = {
       minecraftVersion: "1.21.4",
       runtimeType: "paper",
@@ -115,8 +120,6 @@ describe("runtime profile helpers", () => {
       resolvedAt: "2026-07-18T00:00:00.000Z"
     };
 
-    expect(() => normalizeRuntimeProfile({ ...paperProfile, loader: "fabric" })).toThrow("loader does not match runtimeType");
-    expect(() => normalizeRuntimeProfile({ ...paperProfile, loaderVersion: "0.16.10" })).toThrow("loaderVersion does not match runtimeVersion");
     expect(() => normalizeRuntimeProfile({ ...paperProfile, jarProvider: "mcjars" })).toThrow("must be papermc for paper");
   });
 });

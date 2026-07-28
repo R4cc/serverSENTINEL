@@ -5,16 +5,17 @@ import { config } from "../config.js";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
 import { appUserAgentFor } from "../buildInfo.js";
 import { detailedError, detailedErrorMessage, durationSince, errorLogFields, logError, logInfo, logWarn } from "../logging.js";
-import { validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateRuntimeJarFilename } from "../http/validation.js";
+import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../http/validation.js";
 import { dockerAvailable } from "../docker/dockerClient.js";
 import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, type ServerJarProvider } from "../runtime/profile.js";
+import { runtimeSelection } from "../runtime/selection.js";
 import { defaultDockerImageForMinecraftVersion, ensureDockerContainer, removeManagedDockerContainer, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
 
 import { ensureInsideServer } from "../core.js";
 import { newServerId, serverDirectory, serverStorageName, defaultServerContainerName } from "../storage/serverIdentity.js";
-import { asObject, optionalString, requiredString } from "../storage/valueValidation.js";
+import { requiredString } from "../storage/valueValidation.js";
 import { activeProvisionPortReservations, assertNodePortsAvailable, normalizeCreateServerPorts, type CreateServerInput } from "./ports.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import { listManagedServers } from "./store.js";
@@ -22,35 +23,6 @@ import { writeVersionMetadataFile } from "./versions.js";
 import type { ManagedServer, ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
 
 export const serverJarProvider: ServerJarProvider = defaultServerJarProvider;
-
-export function runtimeSelection(input: unknown) {
-  const runtime = asObject(input, "runtime");
-  const canonicalRuntimeType = optionalString(runtime.runtimeType, "runtime.runtimeType");
-  const legacyLoader = optionalString(runtime.loader, "runtime.loader");
-  if (canonicalRuntimeType && legacyLoader && canonicalRuntimeType !== legacyLoader) {
-    throw new Error("runtime.loader must match runtime.runtimeType");
-  }
-  const runtimeTypeValue = canonicalRuntimeType || legacyLoader || "fabric";
-  if (runtimeTypeValue !== "fabric" && runtimeTypeValue !== "paper") {
-    throw new Error("runtime.runtimeType must be fabric or paper");
-  }
-  const runtimeType: ServerRuntimeType = runtimeTypeValue;
-  const canonicalRuntimeVersion = optionalString(runtime.runtimeVersion, "runtime.runtimeVersion");
-  const legacyLoaderVersion = optionalString(runtime.loaderVersion, "runtime.loaderVersion");
-  if (canonicalRuntimeVersion && legacyLoaderVersion && canonicalRuntimeVersion !== legacyLoaderVersion) {
-    throw new Error("runtime.loaderVersion must match runtime.runtimeVersion");
-  }
-  const runtimeVersion = canonicalRuntimeVersion || legacyLoaderVersion;
-  return {
-    runtimeType,
-    runtimeVersion,
-    // Compatibility aliases for the existing provisioning payload during the migration window.
-    loader: runtimeType,
-    minecraftVersion: optionalString(runtime.minecraftVersion, "runtime.minecraftVersion"),
-    loaderVersion: runtimeVersion,
-    serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
-  };
-}
 
 export function parseServerRuntimeType(value: unknown, field = "runtimeType"): ServerRuntimeType {
   const runtimeType = requiredString(value, field);

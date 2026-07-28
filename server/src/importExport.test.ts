@@ -62,8 +62,6 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
       minecraftVersion: "1.21.1",
       runtimeType: "fabric",
       runtimeVersion: "0.16.0",
-      loader: "fabric",
-      loaderVersion: "0.16.0",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       jarArtifact: { filename: "fabric-server-launch.jar" },
@@ -289,17 +287,13 @@ describe("export/import artifacts", () => {
     expect(() => assertExportArtifact(world)).toThrow(/excluded|supported configuration file/);
   });
 
-  it("strips legacy integration credentials while preserving importable server data", () => {
-    const legacyArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
-    legacyArtifact.instance.settings.modrinthApiKey = "must-not-import";
-
-    const parsed = assertExportArtifact(legacyArtifact);
-
-    expect(parsed.instance.settings).toEqual({});
-    expect(parsed.servers).toHaveLength(1);
+  it("rejects integration credentials in import artifacts", () => {
+    const unsafeArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
+    unsafeArtifact.instance.settings.modrinthApiKey = "must-not-import";
+    expect(() => assertExportArtifact(unsafeArtifact)).toThrow(/unsupported instance\.settings content/i);
   });
 
-  it("accepts canonical Paper profiles and legacy Fabric profiles during the migration window", () => {
+  it("accepts canonical profiles and redundant aliases written by 1.6.2 exports", () => {
     const paper = structuredClone(artifact());
     paper.servers[0].server.runtimeProfile = {
       minecraftVersion: "1.21.4",
@@ -317,11 +311,19 @@ describe("export/import artifacts", () => {
     mismatchedProvider.servers[0].server.runtimeProfile.jarProvider = "mcjars";
     expect(() => assertExportArtifact(mismatchedProvider)).toThrow("must be papermc for paper");
 
-    const legacy = structuredClone(artifact());
-    const legacyProfile = legacy.servers[0].server.runtimeProfile as unknown as Record<string, unknown>;
-    delete legacyProfile.runtimeType;
-    delete legacyProfile.runtimeVersion;
-    expect(() => assertExportArtifact(legacy)).not.toThrow();
+    const previous = structuredClone(artifact());
+    const previousProfile = previous.servers[0].server.runtimeProfile as unknown as Record<string, unknown>;
+    previousProfile.loader = "fabric";
+    previousProfile.loaderVersion = previousProfile.runtimeVersion;
+    expect(() => assertExportArtifact(previous)).not.toThrow();
+
+    previousProfile.loaderVersion = "different";
+    expect(() => assertExportArtifact(previous)).toThrow(/loaderVersion must match runtimeVersion/);
+    previousProfile.loaderVersion = previousProfile.runtimeVersion;
+
+    delete previousProfile.runtimeType;
+    delete previousProfile.runtimeVersion;
+    expect(() => assertExportArtifact(previous)).toThrow(/runtimeType/);
   });
 
   it("rejects malformed server and mod preference payloads before planning", () => {
@@ -433,9 +435,7 @@ describe("export/import artifacts", () => {
     const root = await tempRoot("serversentinel-import-secret-exclusion-");
     const repositories = await createRepositories(root);
     repositories.settingsRepository.setModrinthApiKey("destination-key");
-    const legacyArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
-    legacyArtifact.instance.settings.modrinthApiKey = "artifact-key";
-    const sanitizedArtifact = assertExportArtifact(legacyArtifact);
+    const sanitizedArtifact = assertExportArtifact(artifact());
 
     const result = await applyImportArtifact(sanitizedArtifact, {
       targetNodeId: nodeId,

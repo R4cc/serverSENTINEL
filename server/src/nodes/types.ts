@@ -49,7 +49,7 @@ export type NodeRuntime = {
   readFile(server: ManagedServer, target: string): Promise<unknown>;
   writeFile(server: ManagedServer, target: string, content: unknown): Promise<unknown>;
   createFolder(server: ManagedServer, parent: string, name: unknown): Promise<unknown>;
-  uploadFile(server: ManagedServer, parent: string, filename: unknown, content: unknown | RuntimeUploadSource): Promise<unknown>;
+  uploadFile(server: ManagedServer, parent: string, filename: unknown, content: RuntimeUploadSource): Promise<unknown>;
   renameFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
   moveFile(server: ManagedServer, source: string, destinationParent: string): Promise<unknown>;
   duplicateFile(server: ManagedServer, source: string, name: unknown): Promise<unknown>;
@@ -58,6 +58,6 @@ export type NodeRuntime = {
   modIcon(server: ManagedServer, filename: unknown): Promise<ModIconResult | null>;
   toggleMod(server: ManagedServer, filename: unknown, enabled: unknown): Promise<unknown>;
   removeMod(server: ManagedServer, filename: unknown): Promise<unknown>;
-  uploadMod(server: ManagedServer, filename: unknown, content: unknown | RuntimeUploadSource): Promise<unknown>;
+  uploadMod(server: ManagedServer, filename: unknown, content: RuntimeUploadSource): Promise<unknown>;
   installMod(server: ManagedServer, input: unknown): Promise<unknown>;
 };
