@@ -2,14 +2,13 @@ const serverSideEffectsQueue = new AsyncQueue();
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { maxServerPort, minServerPort } from "../config.js";
 import { services } from "../appServices.js";
 import { AsyncQueue, validateExistingInsideServer } from "../core.js";
 import { durationSince, logInfo, logOperationFailure, logWarn } from "../logging.js";
-import { optionalStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../http/validation.js";
+import { optionalStrictBoolean } from "../http/validation.js";
 import { ensureManagedServerDirectory, readServers } from "./store.js";
-import { allocateQueryPort, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, findExistingServerPortConflict, findProvisionPortConflict, isValidServerPort, normalizeManagedPorts, portConflictMessage, queryPortEntry, type CreateServerInput } from "./ports.js";
-import { defaultDockerImageForMinecraftVersion, dockerCommandInputCapability, dockerControlConfigured, dockerRecentLogs, dockerStatus, ensureDockerContainer, inspectDockerContainer, minecraftContainerNetworkingConfig, readLatestServerLog, removeManagedDockerContainer, sendDockerStdinCommand, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { allocateQueryPort, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, findExistingServerPortConflict, findProvisionPortConflict, normalizeManagedPorts, portConflictMessage, queryPortEntry, type CreateServerInput } from "./ports.js";
+import { dockerCommandInputCapability, dockerControlConfigured, dockerRecentLogs, dockerStatus, ensureDockerContainer, inspectDockerContainer, minecraftContainerNetworkingConfig, readLatestServerLog, removeManagedDockerContainer, sendDockerStdinCommand, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
 import { dockerAvailable } from "../docker/dockerClient.js";
 import { publicServerStatus } from "./publicViews.js";
 import { streamDockerLogs, streamLatestServerLog, type Client } from "./overview.js";
@@ -23,12 +22,11 @@ import { extractZipArchive, planZipExtraction } from "../zipArchive.js";
 import { deleteModIcon } from "../mods/icons.js";
 import { downloadServerJar, serverJarProvider } from "./provisioning.js";
 import { stoppedServerMutationMessage } from "./lifecycle.js";
-import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
-import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
-import { defaultServerContainerName } from "../storage/serverIdentity.js";
+import { runtimeTarget } from "../runtime/profile.js";
 import { writeVersionMetadataFile } from "./versions.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";
-import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import { planServerUpdate } from "./serverUpdatePlan.js";
+import type { ManagedServer } from "../types.js";
 export async function localUpdateServer(serverId: string, input: unknown) {
   const body = input as {
     displayName?: string;
@@ -57,38 +55,11 @@ export async function localUpdateServer(serverId: string, input: unknown) {
     if (status.running) {
       throw new Error(stoppedServerMutationMessage);
     }
-    const currentRuntime = runtimeProfileForServer(current);
-    const selectedRuntime = body.runtime === undefined ? undefined : runtimeSelection(body.runtime);
-    const { runtimeType, runtimeDefinition, minecraftVersion, requestedRuntimeVersion, serverJar, shouldResolveRuntime } =
-      runtimeUpdatePlan(currentRuntime, selectedRuntime);
-    if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) {
-      throw new Error(`${runtimeDefinition.displayName} version changes are not available until its runtime provider is enabled`);
-    }
-    const resolvedRuntime = shouldResolveRuntime
-      ? await serverJarProvider.resolveServerJar({
-          runtimeType,
-          minecraftVersion,
-          runtimeVersion: requestedRuntimeVersion,
-          preferStable: true
-        })
-      : currentRuntime;
-    if (!resolvedRuntime) {
-      throw new Error("A runtime profile is required before changing server settings");
-    }
-    const runtimeProfile: ServerRuntimeProfile = {
-      ...resolvedRuntime,
-      jarArtifact: {
-        ...resolvedRuntime.jarArtifact,
-        filename: serverJar
-      }
-    };
-    const serverPort = body.serverPort?.trim();
-    if (serverPort && !isValidServerPort(serverPort)) {
-      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-    }
-    const dockerContainer = validateDockerContainerName(body.dockerContainer?.trim() || current.dockerContainer || defaultServerContainerName(current.id));
-    const dockerImage = validateDockerImageName(body.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
-    const requestedDockerPorts = body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
+    const plan = await planServerUpdate(current, body, {
+      resolveServerJar: (request) => serverJarProvider.resolveServerJar(request),
+      provisioningUnavailableMessage: (displayName) => `${displayName} version changes are not available until its runtime provider is enabled`
+    });
+    const { runtimeProfile, dockerContainer, dockerImage, javaArgs, serverPort, requestedDockerPorts, startOnNodeStart } = plan;
     const currentQueryPort = current.managedPorts?.find((port) => port.type === "query")?.externalPort;
     const queryPortInput = body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
     const queryPort = queryPortInput
@@ -107,22 +78,11 @@ export async function localUpdateServer(serverId: string, input: unknown) {
         throw new Error(portConflictMessage(provisionConflict.port, provisionConflict.ownerName));
       }
     }
-    const javaArgs = validateJavaArgs(body.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
-    const startOnNodeStart = optionalStrictBoolean(body.startOnNodeStart, "startOnNodeStart", current.startOnNodeStart ?? false);
-
-    const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
-      || currentRuntime.runtimeType !== runtimeProfile.runtimeType
-      || currentRuntime.runtimeVersion !== runtimeProfile.runtimeVersion
-      || currentRuntime.jarArtifact.filename !== serverJar
-      || current.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
-    const containerConfigChanged = current.dockerContainer !== dockerContainer
-      || current.dockerImage !== dockerImage
-      || current.dockerPorts !== dockerPorts
-      || current.javaArgs !== javaArgs
-      || currentRuntime.jarArtifact.filename !== serverJar;
+    const jarChanged = plan.jarChanged;
+    const containerConfigChanged = plan.containerConfigChanged(dockerPorts);
     const updated: ManagedServer = {
       ...current,
-      displayName: body.displayName?.trim() || current.displayName,
+      displayName: plan.displayName,
       runtimeProfile,
       dockerContainer,
       dockerImage,

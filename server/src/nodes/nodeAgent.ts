@@ -10,6 +10,7 @@ import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
+import { planServerUpdate } from "../servers/serverUpdatePlan.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
@@ -47,7 +48,7 @@ import {
   writeServerTextFile
 } from "../runtime/local/fileService.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
-import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
+import { runtimeSelection } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
 import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
@@ -555,49 +556,20 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
   await requireStoppedForMutableConfiguration(server);
   const running = (status as { docker?: { running?: boolean } }).docker?.running === true;
 
-  const currentRuntime = runtimeProfileForServer(server);
-  const selectedRuntime = input.runtime === undefined ? undefined : runtimeSelection(input.runtime);
-  const { runtimeType, runtimeDefinition, minecraftVersion, requestedRuntimeVersion, serverJar, shouldResolveRuntime } =
-    runtimeUpdatePlan(currentRuntime, selectedRuntime);
-  if (shouldResolveRuntime && !runtimeDefinition.managedProvisioning) throw new Error(`${runtimeDefinition.displayName} version changes are not available on this node yet`);
-  const resolvedRuntime = shouldResolveRuntime
-    ? await defaultServerJarProvider.resolveServerJar({ runtimeType, minecraftVersion, runtimeVersion: requestedRuntimeVersion, preferStable: true })
-    : currentRuntime;
-  const runtimeProfile: ServerRuntimeProfile = {
-    ...resolvedRuntime,
-    jarArtifact: {
-      ...resolvedRuntime.jarArtifact,
-      filename: serverJar
-    }
-  };
-  const serverPort = input.serverPort?.trim();
-  if (serverPort && !isValidServerPort(serverPort)) {
-    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-  }
-  const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || server.dockerContainer || defaultServerContainerName(server.id));
-  const dockerImageName = validateDockerImageName(input.dockerImage?.trim() || server.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion));
-  const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+  const plan = await planServerUpdate(server, input, {
+    resolveServerJar: (request) => defaultServerJarProvider.resolveServerJar(request),
+    provisioningUnavailableMessage: (displayName) => `${displayName} version changes are not available on this node yet`
+  });
+  const { runtimeProfile, dockerContainer, dockerImage: dockerImageName, javaArgs, serverPort, requestedDockerPorts, startOnNodeStart } = plan;
   const queryPort = queryPortFromInput({ queryPort: input.queryPort, dockerPorts: requestedDockerPorts });
   const dockerPorts = requestedDockerPorts ? ensureQueryDockerPort(requestedDockerPorts, queryPort) : requestedDockerPorts;
   if (dockerPorts) parseDockerPorts(dockerPorts);
-  const javaArgs = validateJavaArgs(input.javaArgs?.trim() || server.javaArgs || "-Xms2G -Xmx4G");
-  const startOnNodeStart = input.startOnNodeStart === undefined
-    ? server.startOnNodeStart ?? false
-    : requireStrictBoolean(input.startOnNodeStart, "startOnNodeStart");
 
-  const jarChanged = currentRuntime.minecraftVersion !== minecraftVersion
-    || currentRuntime.runtimeType !== runtimeProfile.runtimeType
-    || currentRuntime.runtimeVersion !== runtimeProfile.runtimeVersion
-    || currentRuntime.jarArtifact.filename !== serverJar
-    || server.runtimeProfile.jarArtifact.downloadUrl !== runtimeProfile.jarArtifact.downloadUrl;
-  const containerConfigChanged = server.dockerContainer !== dockerContainer
-    || server.dockerImage !== dockerImageName
-    || server.dockerPorts !== dockerPorts
-    || server.javaArgs !== javaArgs
-    || currentRuntime.jarArtifact.filename !== serverJar;
+  const jarChanged = plan.jarChanged;
+  const containerConfigChanged = plan.containerConfigChanged(dockerPorts);
   const updated: ManagedServer = {
     ...server,
-    displayName: input.displayName?.trim() || server.displayName,
+    displayName: plan.displayName,
     runtimeProfile,
     dockerContainer,
     dockerImage: dockerImageName,
