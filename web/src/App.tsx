@@ -3,13 +3,13 @@ import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
-import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "./utils/nodes";
+import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, defaultNodeDataPath, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
 import { useServerContext } from "./app/serverContext";
@@ -34,6 +34,7 @@ import { managedContentTerminology } from "./features/mods/contentTerminology";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
+import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
@@ -76,7 +77,6 @@ const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-const nodeUpdateGraceMs = 5 * 60 * 1000;
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
   if (type === "warning") {
     return (
@@ -178,15 +178,6 @@ export default function App() {
   const phoneLayout = useMobileViewport();
   const overviewTimelineVisible = useOverviewTimelineVisibility();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
-  const [nodeBusyId, setNodeBusyId] = useState("");
-  const [nodeDetails, setNodeDetails] = useState<NodeView | null>(null);
-  const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
-  const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
-  const [nodeManualRecoveryById, setNodeManualRecoveryById] = useState<Record<string, NodeManualRecovery>>({});
-  const [nodeInstallResult, setNodeInstallResult] = useState<NodeInstallResponse | CreateNodeResponse | null>(null);
-  const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
-  const [nodeInstallMethod, setNodeInstallMethod] = useState<"compose" | "run">("run");
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
   const {
     themePreference,
@@ -486,6 +477,17 @@ export default function App() {
     refreshAuth,
     logout
   });
+  const nodesWorkspace = useNodesWorkspace({
+    contextNodes,
+    panelVersion,
+    panelBuildId,
+    demoMode,
+    canManageNodes: canManageUsers,
+    currentPanelUrl,
+    notify,
+    requestConfirmation,
+    refreshApp
+  });
   const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modReviewAcknowledgementLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
   const modToggleLocked = modsLocked;
@@ -667,8 +669,7 @@ export default function App() {
     if (effectiveAppState.servers.length > 0 || usableContextNodes.length > 0) return;
     panelFirstRunPromptedRef.current = true;
     setActivePage("nodes");
-    setAddNodeResult(null);
-    setNodeInstallMethod("run");
+    nodesWorkspace.resetAddNode();
   }, [appStateLoaded, demoMode, effectiveAppState.servers.length, panelOnlyMode, usableContextNodes.length]);
 
   function openCreateServerForNode(nodeId = "") {
@@ -746,89 +747,6 @@ export default function App() {
     window.addEventListener("keydown", closeMobileNavigation);
     return () => window.removeEventListener("keydown", closeMobileNavigation);
   }, [phoneLayout, sidebarCollapsed]);
-
-  const hasWaitingNodeOperation = Object.values(nodeOperations).some((operation) => operation.phase === "waiting");
-
-  useEffect(() => {
-    if (!hasWaitingNodeOperation) return;
-    const interval = window.setInterval(() => setNodeOperationNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [hasWaitingNodeOperation]);
-
-  useEffect(() => {
-    if (Object.keys(nodeOperations).length === 0) return;
-    const next = { ...nodeOperations };
-    const completed: Array<{ node: NodeView; operation: NodeOperation }> = [];
-    const mismatched: Array<{ node: NodeView; operation: NodeOperation }> = [];
-    let changed = false;
-
-    for (const [nodeId, operation] of Object.entries(nodeOperations)) {
-      const node = contextNodes.find((candidate) => candidate.id === nodeId);
-      const result = advanceNodeOperation(operation, node, nodeOperationNow, nodeUpdateGraceMs);
-      if (result.outcome === "completed" || result.outcome === "mismatch") {
-        delete next[nodeId];
-        changed = true;
-        if (node) (result.outcome === "completed" ? completed : mismatched).push({ node, operation });
-        continue;
-      }
-      if (result.operation !== operation && result.operation) {
-        next[nodeId] = result.operation;
-        changed = true;
-      }
-    }
-
-    if (changed) setNodeOperations(next);
-    for (const { node, operation } of completed) {
-      setNodeManualRecoveryById((current) => {
-        if (!current[node.id]) return current;
-        const updated = { ...current };
-        delete updated[node.id];
-        return updated;
-      });
-      notify("success", operation.kind === "update"
-        ? `${node.name} updated${operation.targetVersion ? ` to ${operation.targetVersion}` : ""}.`
-        : `${node.name} restarted and reconnected.`);
-    }
-    for (const { node, operation } of mismatched) {
-      const expected = [operation.targetVersion, operation.targetBuildId?.slice(0, 12)].filter(Boolean).join(" build ");
-      setNodeManualRecoveryById((current) => ({
-        ...current,
-        [node.id]: { message: `${node.name} reconnected but still reports its previous release${expected ? `. Expected ${expected}` : ""}. Refresh or retry the update.` }
-      }));
-      notify("warning", `${node.name} reconnected without the expected update.`);
-    }
-  }, [contextNodes, nodeOperationNow, nodeOperations]);
-
-  useEffect(() => {
-    if (!hasWaitingNodeOperation || demoMode) return;
-    let inFlight = false;
-    const interval = window.setInterval(() => {
-      if (inFlight || document.hidden) return;
-      inFlight = true;
-      void refreshApp({ silent: true }).finally(() => {
-        inFlight = false;
-      });
-    }, 5_000);
-    return () => window.clearInterval(interval);
-  }, [hasWaitingNodeOperation, demoMode]);
-
-  useEffect(() => {
-    setNodeManualRecoveryById((current) => {
-      const next = { ...current };
-      let changed = false;
-      for (const nodeId of Object.keys(current)) {
-        const node = contextNodes.find((candidate) => candidate.id === nodeId);
-        const targetCurrent = node?.status === "online"
-          && node.agentVersion === panelVersion
-          && (!panelBuildId || node.buildId === panelBuildId);
-        if (targetCurrent) {
-          delete next[nodeId];
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [contextNodes, panelBuildId, panelVersion]);
 
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
@@ -1096,17 +1014,6 @@ export default function App() {
     if (activePage !== "settings" || demoMode || !authSession?.authenticated) return;
     void refreshApp({ silent: true });
   }, [activePage, demoMode, authSession?.authenticated]);
-
-  useEffect(() => {
-    if (!addNodeOpen || !addNodeResult || demoMode) return;
-    const currentNode = contextNodes.find((node) => node.id === addNodeResult.node.id);
-    if (currentNode && currentNode.status === "online" && isNodeRuntimeUsable(currentNode)) return;
-    const interval = window.setInterval(() => {
-      if (document.hidden) return;
-      void refreshApp();
-    }, 2500);
-    return () => window.clearInterval(interval);
-  }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
 
   useEffect(() => {
     if (!activeServer || activeServerUsesInternalNode || demoMode) return;
@@ -1907,249 +1814,6 @@ export default function App() {
     notify("success", "Console command history cleared");
   }
 
-  async function refreshNodes() {
-    await refreshApp();
-    notify("success", "Node status refreshed");
-  }
-
-  async function viewNodeDetails(node: NodeView) {
-    setNodeDetails(node);
-    if (demoMode) return;
-    setNodeBusyId(node.id);
-    try {
-      const details = await api<ManagedNode>(`/api/nodes/${node.id}`);
-      setNodeDetails(details);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not load node details."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function showNodeInstall(node: NodeView) {
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
-      setNodeInstallMethod("run");
-      setNodeInstallResult(result);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not load install instructions."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function rotateNodeToken(node: NodeView) {
-    if (node.isInternal || !canManageUsers) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<CreateNodeResponse>(`/api/nodes/${node.id}/rotate-token`, {
-        method: "POST",
-        body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: defaultNodeDataPath })
-      });
-      setNodeInstallMethod("run");
-      setNodeInstallResult(result);
-      notify("success", `Rotated join token for ${node.name}`);
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not rotate the join token."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function updateNodeImage(node: NodeView) {
-    if (node.isInternal || !canManageUsers) return;
-    const buildText = panelBuildId ? ` build ${panelBuildId.slice(0, 12)}` : "";
-    const sameVersion = node.agentVersion === panelVersion;
-    const actionLabel = sameVersion ? "Update" : "Upgrade";
-    const versionText = sameVersion
-      ? ` to ${panelVersion}${buildText}`
-      : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
-    const confirmed = await requestConfirmation({
-      title: `${actionLabel} ${node.name}?`,
-      description: `${actionLabel} this node${versionText}.`,
-      details: nodeRestartImpactMessage(node),
-      warning: "The node may disconnect briefly while its container is recreated.",
-      confirmLabel: `${actionLabel} node`,
-      variant: "primary"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
-        method: "POST",
-        body: JSON.stringify({})
-      });
-      if (result.mode === "offline") {
-        setNodeManualRecoveryById((current) => ({
-          ...current,
-          [node.id]: { message: result.message, command: result.command, image: result.image }
-        }));
-        setNodeDetails((current) => current?.id === node.id ? current : node);
-        notify("info", result.message);
-        return;
-      }
-      if (result.mode === "current") {
-        notify("success", result.message || `${node.name} is already current.`);
-        await refreshApp({ silent: true });
-        return;
-      }
-      notify("info", result.message || `Node ${node.name} update started.`);
-      if (result.ok && result.mode === "self") {
-        const startedAt = Date.now();
-        setNodeManualRecoveryById((current) => {
-          if (!current[node.id]) return current;
-          const next = { ...current };
-          delete next[node.id];
-          return next;
-        });
-        setNodeOperations((current) => ({
-          ...current,
-          [node.id]: {
-            kind: "update",
-            phase: "waiting",
-            startedAt,
-            startedConnectedAt: node.connectedAt,
-            targetVersion: panelVersion,
-            targetBuildId: panelBuildId
-          }
-        }));
-        setNodeOperationNow(startedAt);
-      }
-      window.setTimeout(() => void refreshApp(), 5000);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not start the node update."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function restartNode(node: NodeView) {
-    if (!canManageUsers) return;
-    const confirmed = await requestConfirmation({
-      title: node.isInternal ? "Restart the Panel container?" : `Restart ${node.name}?`,
-      description: node.isInternal
-        ? `Restart the Panel container (${node.name}).`
-        : `Restart the node container for ${node.name}.`,
-      details: nodeRestartImpactMessage(node),
-      warning: node.isInternal
-        ? "Your current session will disconnect temporarily while the Panel restarts."
-        : "The node will disconnect briefly while its container restarts.",
-      confirmLabel: node.isInternal ? "Restart Panel" : "Restart node",
-      variant: "primary"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
-        method: "POST"
-      });
-      notify("info", result.message || `Node ${node.name} restart started.`);
-      if (result.ok) {
-        const startedAt = Date.now();
-        setNodeOperations((current) => ({
-          ...current,
-          [node.id]: {
-            kind: "restart",
-            phase: "waiting",
-            startedAt,
-            startedConnectedAt: node.connectedAt
-          }
-        }));
-        setNodeOperationNow(startedAt);
-      }
-      window.setTimeout(() => void refreshApp(), 5000);
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not restart the node container."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function removeNode(node: ContextNode, force = false) {
-    if (node.isInternal || !canManageUsers) return;
-    const assignedMessage = node.servers.length
-      ? force
-        ? `This will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
-        : `This will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
-      : undefined;
-    const confirmed = await requestConfirmation({
-      title: `${force ? "Force remove" : "Remove"} ${node.name}?`,
-      description: force ? "Force-remove this node from the Panel." : "Remove this node from the Panel.",
-      details: assignedMessage,
-      warning: "This action cannot be undone.",
-      confirmLabel: force ? "Force remove node" : "Remove node",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setNodeBusyId(node.id);
-    try {
-      const result = await api<{
-        ok: boolean;
-        deletedServers?: number;
-        selfRemoval?: { ok: boolean; message: string };
-        serverCleanup?: {
-          attempted: number;
-          deletedContainers: number;
-          failed: Array<{ serverId: string; serverName: string; message: string }>;
-          skippedReason?: string;
-        };
-      }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
-      const removedServers = result.deletedServers ?? 0;
-      const selfStopSuffix = result.selfRemoval?.ok ? " The node container will stop itself." : result.selfRemoval?.message ? ` ${result.selfRemoval.message}` : "";
-      const cleanupFailures = result.serverCleanup?.failed.length ?? 0;
-      const cleanupWarning = result.serverCleanup?.skippedReason
-        ? ` ${result.serverCleanup.skippedReason}`
-        : cleanupFailures
-          ? ` ${cleanupFailures} server container cleanup ${cleanupFailures === 1 ? "failure was" : "failures were"} reported.`
-          : "";
-      notify(cleanupWarning ? "warning" : "success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${cleanupWarning}${selfStopSuffix}`);
-      if (nodeDetails?.id === node.id) setNodeDetails(null);
-      if (nodeInstallResult?.node.id === node.id) setNodeInstallResult(null);
-      setNodeOperations((current) => {
-        if (!current[node.id]) return current;
-        const next = { ...current };
-        delete next[node.id];
-        return next;
-      });
-      setNodeManualRecoveryById((current) => {
-        if (!current[node.id]) return current;
-        const next = { ...current };
-        delete next[node.id];
-        return next;
-      });
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not remove the node."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
-  async function createNode(input: { name: string; panelUrl: string; dataMount: string }) {
-    if (!canManageUsers) return;
-    setNodeBusyId("create");
-    try {
-      const result = await api<CreateNodeResponse>("/api/nodes", {
-        method: "POST",
-        body: JSON.stringify({
-          name: input.name,
-          panelUrl: input.panelUrl,
-          dataMount: input.dataMount
-        })
-      });
-      setNodeInstallMethod("run");
-      setAddNodeResult(result);
-      notify("success", `Created pending node ${result.node.name}`);
-      await refreshApp();
-    } catch (error) {
-      notify("error", errorMessage(error, "Could not create the node."));
-    } finally {
-      setNodeBusyId("");
-    }
-  }
-
   async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean; skipConfirmation?: boolean } = {}) {
     if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
@@ -2325,7 +1989,7 @@ export default function App() {
     ? "Exit demo mode before adding real nodes."
     : isProvisioning
       ? provisioningNavigationReason
-      : nodeBusyId
+      : nodesWorkspace.busyNodeId
         ? "A node action is already in progress."
         : !canManageUsers
           ? "Manage users permission is required."
@@ -2333,9 +1997,7 @@ export default function App() {
 
   function openAddNodeFromEmptyState() {
     setActivePage("nodes");
-    setAddNodeResult(null);
-    setNodeInstallMethod("run");
-    if (canManageUsers) setAddNodeOpen(true);
+    if (canManageUsers) nodesWorkspace.onOpenAddNode();
   }
 
   function renderNoManagedServersEmptyState(title: string) {
@@ -2347,7 +2009,7 @@ export default function App() {
         action={needsNodeFirst ? (
           <Button
             onClick={openAddNodeFromEmptyState}
-            disabled={demoMode || isProvisioning || Boolean(nodeBusyId) || !canManageUsers}
+            disabled={demoMode || isProvisioning || nodesWorkspace.busy || !canManageUsers}
             title={addNodeDisabledReason}
           >
             Add node
@@ -2531,7 +2193,7 @@ export default function App() {
                 totalMemory={effectiveAppState.totalMemory}
                 provisioning={isProvisioning || !canCreateServers}
                 disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
-                onRefreshNodes={refreshNodes}
+                onRefreshNodes={nodesWorkspace.refreshNodes}
                 onSubmit={createServer}
               />
             </Suspense>
@@ -2596,52 +2258,18 @@ export default function App() {
         {activePage === "nodes" && (
           <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" page="nodes" />}>
             <NodesPage
-            nodes={contextNodes}
-            panelVersion={panelVersion}
-            panelBuildId={panelBuildId}
-            canManageNodes={canManageUsers}
-            busy={Boolean(nodeBusyId)}
-            busyNodeId={nodeBusyId}
-            browserPanelUrl={currentPanelUrl()}
-            selectedNode={nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null}
-            nodeOperations={nodeOperations}
-            nodeOperationNow={nodeOperationNow}
-            nodeUpdateGraceMs={nodeUpdateGraceMs}
-            nodeManualRecoveryById={nodeManualRecoveryById}
-            installResult={nodeInstallResult}
-            addNodeOpen={addNodeOpen}
-            addNodeResult={addNodeResult}
-            installMethod={nodeInstallMethod}
-            onInstallMethodChange={setNodeInstallMethod}
-            onOpenAddNode={() => {
-              setAddNodeResult(null);
-              setNodeInstallMethod("run");
-              setAddNodeOpen(true);
-            }}
-            onCloseAddNode={() => {
-              setAddNodeOpen(false);
-              setAddNodeResult(null);
-            }}
-            onDoneAddNode={() => {
-              setAddNodeOpen(false);
-              setAddNodeResult(null);
-              void refreshApp();
-            }}
-            onCreateNode={createNode}
-            onRefresh={() => void refreshNodes()}
-            onViewDetails={viewNodeDetails}
-            onShowInstall={showNodeInstall}
-            onRotateToken={rotateNodeToken}
-            onUpdateNode={updateNodeImage}
-            onRestartNode={restartNode}
-            onRemoveNode={removeNode}
-            onCloseDetails={() => setNodeDetails(null)}
-            onSelectServer={openServerFromNode}
-            onAddServer={openCreateServerForNode}
-            onClearInstall={() => setNodeInstallResult(null)}
-            onCopy={(text) => void copyText(text)}
-            serverStateLabel={nodeServerStateLabel}
-            playerSnapshots={playerSnapshots}
+              {...nodesWorkspace}
+              nodes={contextNodes}
+              panelVersion={panelVersion}
+              panelBuildId={panelBuildId}
+              canManageNodes={canManageUsers}
+              browserPanelUrl={currentPanelUrl()}
+              nodeUpdateGraceMs={nodeUpdateGraceMs}
+              onSelectServer={openServerFromNode}
+              onAddServer={openCreateServerForNode}
+              onCopy={(text) => void copyText(text)}
+              serverStateLabel={nodeServerStateLabel}
+              playerSnapshots={playerSnapshots}
               formatDate={formatDisplayDate}
             />
           </Suspense>
