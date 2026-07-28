@@ -8,6 +8,8 @@ import { consoleLogLineLimit, readConsoleLogTail } from "../../consoleLogs.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../../http/validation.js";
 import { defaultServerContainerName } from "../../storage/serverIdentity.js";
 import { summarizeRuntimeExit } from "../../runtimeErrors.js";
+import { containerConfigHash, isManagedContainer, managedContainerLabels } from "../containerLabels.js";
+import { computeContainerResourceSample } from "../containerStats.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
 export { defaultDockerImageForMinecraftVersion } from "../profile.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
@@ -128,7 +130,7 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   if (!existing) {
     return false;
   }
-  if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
+  if (!isManagedContainer(existing.Config?.Labels)) {
     throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
   }
   await removeDockerContainer(server);
@@ -194,7 +196,7 @@ export function dockerRuntimeConfigHash(server: ManagedServer, options: { includ
 }
 
 export async function reconcileDockerRestartPolicy(server: ManagedServer, details: DockerContainerInspect) {
-  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") return;
+  if (!isManagedContainer(details.Config?.Labels)) return;
   const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
   if (!restartPolicy || restartPolicy === "no") return;
   await dockerJsonRequest(
@@ -260,12 +262,12 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
   const existing = await inspectDockerContainer(server);
   let networkingConfig = preferredNetworkingConfig;
   if (existing) {
-    if (existing.Config?.Labels?.["serversentinel.managed"] !== "true") {
+    if (!isManagedContainer(existing.Config?.Labels)) {
       logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
       throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
     }
     await reconcileDockerRestartPolicy(server, existing);
-    const existingConfigHash = existing.Config?.Labels?.["serversentinel.config-hash"];
+    const existingConfigHash = containerConfigHash(existing.Config?.Labels);
     const compatibleConfigHash = existingConfigHash === expectedConfigHash || legacyConfigHashes.has(existingConfigHash || "");
     if (dockerContainerMountValid(server, existing) && compatibleConfigHash && existing.Config?.OpenStdin && existing.Config?.AttachStdin) {
       return;
@@ -318,11 +320,7 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
           ]
         },
         NetworkingConfig: networkingConfig ?? await currentContainerNetworkingConfig(),
-        Labels: {
-          "serversentinel.server-id": server.id,
-          "serversentinel.managed": "true",
-          "serversentinel.config-hash": expectedConfigHash
-        }
+        Labels: managedContainerLabels(server.id, expectedConfigHash)
       },
       [201]
     );
@@ -368,7 +366,7 @@ export async function dockerStatus(server: ManagedServer) {
         : "Configured container does not exist"
     };
   }
-  const managed = details.Config?.Labels?.["serversentinel.managed"] === "true";
+  const managed = isManagedContainer(details.Config?.Labels);
   if (managed) await reconcileDockerRestartPolicy(server, details);
   const mountValid = dockerContainerMountValid(server, details);
   return {
@@ -399,7 +397,7 @@ export async function dockerAction(server: ManagedServer, action: "start" | "sto
       await ensureDockerContainer(server);
     } else {
       const existing = await inspectDockerContainer(server);
-      if (existing?.Config?.Labels?.["serversentinel.managed"] !== "true") {
+      if (!isManagedContainer(existing?.Config?.Labels)) {
         throw new Error(`Container ${dockerContainerName(server)} is not managed by serverSENTINEL; refusing to control it`);
       }
     }
@@ -459,7 +457,7 @@ export async function dockerCommandInputCapability(server: ManagedServer, curren
     };
   }
 
-  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") {
+  if (!isManagedContainer(details.Config?.Labels)) {
     return {
       available: false,
       message: "Console command input is best-effort only for non-managed containers and is disabled"
@@ -566,30 +564,10 @@ export async function dockerResourceStats(server: ManagedServer) {
       message: (error as Error).message || "Docker stats are unavailable"
     };
   }
-  const cpuDelta = (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
-  const systemDelta = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
-  const onlineCpus = stats.cpu_stats?.online_cpus || 1;
-  const rawCpuPercent = systemDelta > 0 && cpuDelta > 0 ? (cpuDelta / systemDelta) * onlineCpus * 100 : 0;
-  const memoryUsage = stats.memory_stats?.usage ?? 0;
-  const reclaimableCache = stats.memory_stats?.stats?.cache ?? stats.memory_stats?.stats?.inactive_file ?? 0;
-  const networkTotals = Object.values(stats.networks ?? {}).reduce(
-    (totals, network) => ({
-      rx: totals.rx + (network.rx_bytes ?? 0),
-      tx: totals.tx + (network.tx_bytes ?? 0)
-    }),
-    { rx: 0, tx: 0 }
-  );
-
   return {
     available: true,
     running: true,
-    cpuPercent: Number.isFinite(rawCpuPercent) ? Math.max(0, rawCpuPercent) : 0,
-    cpuCapacityCores: onlineCpus,
-    memoryUsageBytes: Math.max(0, memoryUsage - reclaimableCache),
-    memoryLimitBytes: stats.memory_stats?.limit ?? 0,
-    networkRxBytes: networkTotals.rx,
-    networkTxBytes: networkTotals.tx,
-    readAt: stats.read ?? new Date().toISOString(),
+    ...computeContainerResourceSample(stats),
     container: dockerContainerName(server)
   };
 }

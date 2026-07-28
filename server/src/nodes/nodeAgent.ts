@@ -8,6 +8,8 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
+import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
+import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
@@ -258,7 +260,7 @@ function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: f
 }
 
 async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
-  if (details.Config?.Labels?.["serversentinel.managed"] !== "true") return;
+  if (!isManagedContainer(details.Config?.Labels)) return;
   const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
   if (!restartPolicy || restartPolicy === "no") return;
   await dockerJsonRequest(
@@ -367,7 +369,7 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
     NetworkingConfig: networkingConfig ?? createNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
-    Labels: { "serversentinel.managed": "true", "serversentinel.serverId": server.id, "serversentinel.config-hash": runtimeConfigHash(server) }
+    Labels: managedContainerLabels(server.id, runtimeConfigHash(server))
   }, [201, 409]);
 }
 
@@ -394,7 +396,7 @@ async function removeManagedContainer(server: ManagedServer) {
     throw error;
   }
   if (!details) return false;
-  if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
   }
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(containerName(server))}?force=1`, [204, 404]);
@@ -407,11 +409,11 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
     await createContainer(server, preferredNetworkingConfig);
     return;
   }
-  if (details.Config?.Labels?.["serversentinel.managed"] !== "true" || details.Config?.Labels?.["serversentinel.serverId"] !== server.id) {
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
   await reconcileRestartPolicy(server, details);
-  const configHash = details.Config?.Labels?.["serversentinel.config-hash"];
+  const configHash = containerConfigHash(details.Config?.Labels);
   const compatibleConfigHash = configHash === runtimeConfigHash(server)
     || configHash === runtimeConfigHash(server, { includeTerminal: false, includeRestartPolicy: false })
     || configHash === runtimeConfigHash(server, { includeTerminal: true, includeRestartPolicy: false });
@@ -640,7 +642,7 @@ async function inspect(server: ManagedServer) {
 async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeContainerInspect | null) {
   const details = prefetchedDetails === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
-  const managed = details?.Config?.Labels?.["serversentinel.managed"] === "true";
+  const managed = isManagedContainer(details?.Config?.Labels);
   if (details && managed) await reconcileRestartPolicy(server, details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   const configured = Boolean(server.dockerContainer);
@@ -688,20 +690,13 @@ async function resourceStats(server: ManagedServer, details?: NodeContainerInspe
   const running = inspected?.State?.Running === true;
   if (!running) return { available: true, running: false, cpuPercent: 0, memoryUsageBytes: 0, memoryLimitBytes: 0, networkRxBytes: 0, networkTxBytes: 0, sampledAt: new Date().toISOString() };
   const name = encodeURIComponent(containerName(server));
-  const stats = await dockerRequest<any>("GET", `/containers/${name}/stats?stream=false`);
-  const cpuDelta = (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) - (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
-  const systemDelta = (stats.cpu_stats?.system_cpu_usage ?? 0) - (stats.precpu_stats?.system_cpu_usage ?? 0);
-  const cpuCapacityCores = stats.cpu_stats?.online_cpus ?? 1;
-  const networks = Object.values(stats.networks ?? {}) as Array<{ rx_bytes?: number; tx_bytes?: number }>;
+  const stats = await dockerRequest<DockerStatsSample>("GET", `/containers/${name}/stats?stream=false`);
+  // `readAt` is dropped deliberately: the node protocol reports its own `sampledAt` wall-clock stamp.
+  const { readAt: _readAt, ...sample } = computeContainerResourceSample(stats);
   return {
     available: true,
     running: true,
-    cpuPercent: systemDelta > 0 ? (cpuDelta / systemDelta) * cpuCapacityCores * 100 : 0,
-    cpuCapacityCores,
-    memoryUsageBytes: stats.memory_stats?.usage ?? 0,
-    memoryLimitBytes: stats.memory_stats?.limit ?? 0,
-    networkRxBytes: networks.reduce((sum, network) => sum + (network.rx_bytes ?? 0), 0),
-    networkTxBytes: networks.reduce((sum, network) => sum + (network.tx_bytes ?? 0), 0),
+    ...sample,
     sampledAt: new Date().toISOString()
   };
 }
