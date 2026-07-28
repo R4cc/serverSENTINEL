@@ -8,7 +8,7 @@ import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
@@ -16,6 +16,7 @@ import { readStoredActivePage, writeStoredActivePage } from "./app/navigationSto
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
+import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
@@ -42,6 +43,7 @@ import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
+import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
 
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
@@ -109,8 +111,6 @@ export default function App() {
   const [provisioningError, setProvisioningError] = useState("");
   const [provisioningErrorDetails, setProvisioningErrorDetails] = useState("");
   const [serverSettingsSaving, setServerSettingsSaving] = useState(false);
-  const [playerHeadsBusy, setPlayerHeadsBusy] = useState(false);
-  const [playerHeadsOnboardingError, setPlayerHeadsOnboardingError] = useState("");
   const [consoleStreamVersion, setConsoleStreamVersion] = useState(0);
   const [runtimeAction, setRuntimeAction] = useState<"start" | "stop" | "restart" | null>(null);
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
@@ -378,6 +378,20 @@ export default function App() {
     activeStatus
   });
   const settingsDataLoading = !appStateLoaded && !appLoadError;
+  const {
+    playerHeadsBusy,
+    playerHeadsOnboardingError,
+    updateModrinthKey,
+    updatePlayerHeads,
+    clearPlayerHeadCache
+  } = useIntegrationSettings({
+    canManageIntegrations,
+    playerHeads: effectiveAppState.playerHeads,
+    setAppState,
+    notify,
+    refreshApp: () => refreshApp(),
+    requestConfirmation
+  });
   const usersWorkspace = useUsersWorkspace({
     activePage,
     authSession,
@@ -1438,26 +1452,6 @@ export default function App() {
     if (activeServerIdRef.current === serverId) setConsoleStreamVersion((version) => version + 1);
   }
 
-  function serverFromOperation(operation: OperationRecord) {
-    const result = operation.result;
-    if (result && typeof result === "object" && "server" in result) {
-      return (result as { server?: ManagedServer }).server;
-    }
-    return undefined;
-  }
-
-  function operationToProvisionActiveJob(operation: OperationRecord): Partial<GeneralJob> {
-    return {
-      id: operation.id,
-      status: operation.status,
-      progress: operation.progress,
-      task: operation.task || "Server setup is running.",
-      error: operation.errorMessage,
-      errorDetails: operation.logSummary,
-      dismissible: operation.status !== "queued" && operation.status !== "running"
-    };
-  }
-
   async function waitForProvisionOperation(operationId: string) {
     for (;;) {
       const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
@@ -1617,72 +1611,6 @@ export default function App() {
       notify("error", (error as Error).message);
     } finally {
       setServerSettingsSaving(false);
-    }
-  }
-
-  async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canManageIntegrations) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const key = trimFormValue(form, "modrinthApiKey");
-    if (setValidationNotice(formElement, key ? [] : [{ field: "modrinthApiKey", message: "Modrinth API key is required." }], (message) => notify("error", message))) return;
-    try {
-      await api("/api/settings/modrinth", {
-        method: "PUT",
-        body: JSON.stringify({ modrinthApiKey: key })
-      });
-      formElement.reset();
-      notify("success", "Modrinth API key saved");
-      await refreshApp();
-    } catch (error) {
-      notify("error", (error as Error).message);
-    }
-  }
-
-  async function updatePlayerHeads(enabled: boolean, onboarding = false) {
-    if (!canManageIntegrations || playerHeadsBusy) return;
-    setPlayerHeadsBusy(true);
-    if (onboarding) setPlayerHeadsOnboardingError("");
-    try {
-      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads", {
-        method: "PUT",
-        body: JSON.stringify({ enabled })
-      });
-      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
-      setPlayerHeadsOnboardingError("");
-      notify("success", enabled ? "Player heads enabled" : "Player heads disabled");
-    } catch (error) {
-      const message = (error as Error).message;
-      if (onboarding) setPlayerHeadsOnboardingError(message);
-      else notify("error", message);
-    } finally {
-      setPlayerHeadsBusy(false);
-    }
-  }
-
-  async function clearPlayerHeadCache() {
-    if (!canManageIntegrations || playerHeadsBusy || effectiveAppState.playerHeads.cacheEntries === 0) return;
-    const confirmed = await requestConfirmation({
-      title: "Clear cached player heads?",
-      description: "This removes every player-head image cached by this instance.",
-      warning: effectiveAppState.playerHeads.enabled
-        ? "Player heads are enabled, so images will be downloaded again as players appear on Overview."
-        : "The integration remains disabled and no new images will be requested.",
-      confirmLabel: "Clear cache",
-      cancelLabel: "Keep cache",
-      variant: "critical"
-    });
-    if (!confirmed) return;
-    setPlayerHeadsBusy(true);
-    try {
-      const result = await api<{ playerHeads: AppState["playerHeads"] }>("/api/settings/player-heads/cache", { method: "DELETE" });
-      setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
-      notify("success", "Player head cache cleared");
-    } catch (error) {
-      notify("error", (error as Error).message);
-    } finally {
-      setPlayerHeadsBusy(false);
     }
   }
 
@@ -1916,19 +1844,7 @@ export default function App() {
     );
   }
 
-  const pageTitles: Record<ActivePage, string> = {
-    servers: "Servers",
-    create: "Create new managed server",
-    overview: "Overview",
-    console: "Console",
-    files: "Files",
-    mods: managedContent.pluralTitle,
-    schedule: "Schedules",
-    properties: "Properties",
-    settings: "Settings",
-    nodes: "Nodes"
-  };
-  const currentPageTitle = pageTitles[activePage] ?? (!applicationReady ? "Loading" : "Welcome");
+  const currentPageTitle = pageTitle(activePage, managedContent.pluralTitle, applicationReady);
   const overviewInitialLoading = shouldShowInitialOverviewLoading(
     overviewLoading,
     overviewData.events.length,
