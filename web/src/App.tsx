@@ -1,22 +1,24 @@
-import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
 import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
+import { minecraftVersionInfo, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
+import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
+import { AppToaster } from "./components/AppToaster";
 import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel } from "./components/AuthPanel";
 import { InlineState } from "./components/InlineState";
@@ -77,65 +79,6 @@ const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
 const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
-  if (type === "warning") {
-    return (
-      <svg aria-hidden="true" className="toastSeverityIcon" viewBox="0 0 24 24" fill="none">
-        <path d="M12 3.25 22 20.5H2L12 3.25Z" fill="currentColor" />
-        <path d="M12 8.5v5.25" stroke="var(--surface-raised)" strokeWidth="2.2" strokeLinecap="round" />
-        <path d="M12 17.25h.01" stroke="var(--surface-raised)" strokeWidth="2.8" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  const isError = type === "error";
-  const isInfo = type === "info";
-
-  return (
-    <svg aria-hidden="true" className="toastSeverityIcon" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="currentColor" />
-      {type === "success" ? (
-        <path d="m7.75 12.2 2.65 2.65 5.85-6" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-      ) : null}
-      {isInfo ? (
-        <>
-          <path d="M12 10.5v6" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-          <path d="M12 7.2h.01" stroke="var(--surface-raised)" strokeWidth="2.8" strokeLinecap="round" />
-        </>
-      ) : null}
-      {isError ? (
-        <>
-          <path d="m8.75 8.75 6.5 6.5" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-          <path d="m15.25 8.75-6.5 6.5" stroke="var(--surface-raised)" strokeWidth="2.3" strokeLinecap="round" />
-        </>
-      ) : null}
-    </svg>
-  );
-}
-
-function AppToaster({ darkMode }: { darkMode: boolean }) {
-  return (
-    <Toaster
-      closeButton
-      expand
-      gap={8}
-      icons={{
-        success: <ToastSeverityIcon type="success" />,
-        info: <ToastSeverityIcon type="info" />,
-        warning: <ToastSeverityIcon type="warning" />,
-        error: <ToastSeverityIcon type="error" />
-      }}
-      position="top-center"
-      theme={darkMode ? "dark" : "light"}
-      toastOptions={{
-        className: "sonnerToast",
-        descriptionClassName: "sonnerToastDescription"
-      }}
-      visibleToasts={5}
-    />
-  );
-}
-
 export default function App() {
   const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -517,18 +460,16 @@ export default function App() {
             : isAnyModJobRunning
               ? `A ${managedContent.singular} operation is already running.`
               : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`;
-  const resolvedRegionalFormatLocale = resolveRegionalFormatLocale(regionalFormatPreference);
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
-  const browserTimeZone = useMemo(() => detectedBrowserTimeZone(), []);
-  const displayTimeZone = resolveDisplayTimeZone(displayTimeZonePreference, panelTimeZone, browserTimeZone);
-  const dateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { dateStyle: "medium", timeStyle: "short", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const shortTimeFormatter = useMemo(() => new Intl.DateTimeFormat(resolvedRegionalFormatLocale, { hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }), [resolvedRegionalFormatLocale, displayTimeZone]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(resolvedRegionalFormatLocale), [resolvedRegionalFormatLocale]);
-
-  const formatDisplayDate = useCallback((value: string | number | Date) => dateTimeFormatter.format(new Date(value)), [dateTimeFormatter]);
-  const formatDisplayTime = useCallback((value: string | number | Date) => timeFormatter.format(new Date(value)), [timeFormatter]);
-  const formatDisplayShortTime = useCallback((value: string | number | Date) => shortTimeFormatter.format(new Date(value)), [shortTimeFormatter]);
+  const {
+    browserTimeZone,
+    displayTimeZone,
+    dateTimeFormatter,
+    formatDisplayDate,
+    formatDisplayTime,
+    formatDisplayShortTime,
+    formatDisplayNumber
+  } = useDisplayFormatters({ regionalFormatPreference, displayTimeZonePreference, panelTimeZone });
 
   const filesWorkspace = useFilesWorkspace({
     activeServer,
@@ -617,8 +558,6 @@ export default function App() {
     && !dockerOperationalLock
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
-
-  const formatDisplayNumber = useCallback((value: number) => numberFormatter.format(value), [numberFormatter]);
 
   useEffect(() => {
     void refreshAuth();
