@@ -1,15 +1,14 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
 import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
-import { minecraftVersionInfo, runtimeTone, versionValue } from "./utils/format";
+import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
@@ -19,16 +18,20 @@ import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
+import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
+import { WorkspaceNotices } from "./components/WorkspaceNotices";
 import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel } from "./components/AuthPanel";
-import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
-import { Banner, Button, EmptyState, Surface } from "./components/UiPrimitives";
+import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/LoadingSkeletons";
+import { Button, EmptyState } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
+import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
+import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
+import { ServersListPage } from "./pages/ServersListPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -39,19 +42,15 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
-const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
-const loadServerCreatePage = () => import("./pages/ServerCreatePage");
 const loadServerEditPage = () => import("./pages/ServerEditPage");
 const loadModsPage = () => import("./pages/ModsPage");
 const loadFilesPage = () => import("./features/files/FilesPage");
 const loadSettingsPage = () => import("./pages/SettingsPage");
 
-const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
-const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
 const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
 const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
@@ -1940,22 +1939,17 @@ export default function App() {
   }
 
   function renderNoManagedServersEmptyState(title: string) {
-    const needsNodeFirst = panelOnlyMode && usableContextNodes.length === 0;
     return (
-      <EmptyState
+      <NoManagedServersEmptyState
         title={title}
         message={noManagedServersMessage}
-        action={needsNodeFirst ? (
-          <Button
-            onClick={openAddNodeFromEmptyState}
-            disabled={demoMode || isProvisioning || nodesWorkspace.busy || !canManageUsers}
-            title={addNodeDisabledReason}
-          >
-            Add node
-          </Button>
-        ) : (
-          <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>Create managed server</Button>
-        )}
+        needsNodeFirst={panelOnlyMode && usableContextNodes.length === 0}
+        onAddNode={openAddNodeFromEmptyState}
+        addNodeDisabled={demoMode || isProvisioning || nodesWorkspace.busy || !canManageUsers}
+        addNodeDisabledReason={addNodeDisabledReason}
+        onCreateServer={() => openCreateServerForNode()}
+        createServerDisabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers}
+        createServerDisabledReason={createServerDisabledReason}
       />
     );
   }
@@ -2020,123 +2014,50 @@ export default function App() {
           </div>
         </header>
 
-        {appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && activeServer && serverStripAlert) && (
-          <Banner
-            tone="error"
-            title="Docker integration is not connected."
-            message="Local server controls are paused. Connect Docker in Settings, or add a remote node that is online and ready."
-          />
-        )}
-
-        {provisioningError && activePage === "overview" && (
-          <section className="systemBanner error" role="alert">
-            <strong>Server setup failed.</strong>
-            <span>{provisioningError} Review the form values, then try creating the server again.</span>
-            {provisioningErrorDetails && (
-              <details className="failureDetails">
-                <summary>Show full API failure log</summary>
-                <pre>{provisioningErrorDetails}</pre>
-              </details>
-            )}
-          </section>
-        )}
-
-        {notice && activePage !== "files" && <Banner tone="info" title={notice} />}
-
-        {!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError && shouldShowApplicationLoadingSkeleton(activePage) && (
-          <Fragment key="application-loading">
-            {isServerWorkspacePage(activePage) && <ActiveServerStripLoadingSkeleton />}
-            <ApplicationLoadingSkeleton page={activePage} />
-          </Fragment>
-        )}
-
-        {appLoadError && (
-          <InlineState
-            tone="error"
-            title="Could not load application state"
-            message={`${appLoadError} Check that the serverSENTINEL backend is reachable, then try again.`}
-            actionLabel="Retry"
-            onAction={() => void refreshApp()}
-            busy={appRefreshing}
-          />
-        )}
+        <WorkspaceNotices
+          activePage={activePage}
+          dockerDisconnected={appStateLoaded && activePage !== "settings" && !panelOnlyMode && !effectiveAppState.dockerSocketMounted && (activeNode.isInternal || usableContextNodes.length === 0) && !(isServerWorkspacePage(activePage) && Boolean(activeServer) && Boolean(serverStripAlert))}
+          provisioningError={provisioningError}
+          provisioningErrorDetails={provisioningErrorDetails}
+          notice={notice}
+          showApplicationLoading={!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError}
+          appLoadError={appLoadError}
+          appRefreshing={appRefreshing}
+          onRetryAppLoad={() => void refreshApp()}
+        />
 
         {activePage === "servers" && applicationReady && (
-          <section className="pageStack layoutBalanced">
-            {effectiveAppState.servers.length > 0 ? (
-              <section className="serverList">
-                {effectiveAppState.servers.map((server) => {
-                  const lockedByDemo = demoMode && server.id !== demoServerId;
-                  const minecraftVersion = versionValue(minecraftVersionInfo(server));
-                  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
-                  return (
-                    <button
-                      key={server.id}
-                      className={`serverListItem ${server.id === activeServer?.id ? "active" : ""}`}
-                      disabled={isProvisioning || lockedByDemo}
-                      onClick={() => {
-                        if (lockedByDemo) {
-                          notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
-                          return;
-                        }
-                        setActiveServerId(server.id);
-                        setActivePage("overview");
-                      }}
-                    >
-                      <span className="serverListTitleRow">
-                        <strong>{server.displayName}</strong>
-                      </span>
-                      <span>{minecraftVersion === "Unknown" ? "Version unknown" : minecraftVersion} - {runtime.displayName}</span>
-                      {lockedByDemo && <small>Demo mode is enabled. Disable it in settings to access this server.</small>}
-                    </button>
-                  );
-                })}
-              </section>
-            ) : (
-              renderNoManagedServersEmptyState("No managed servers yet")
-            )}
-          </section>
+          <ServersListPage
+            servers={effectiveAppState.servers}
+            activeServerId={activeServer?.id}
+            demoMode={demoMode}
+            isProvisioning={isProvisioning}
+            onSelectServer={(serverId) => {
+              setActiveServerId(serverId);
+              setActivePage("overview");
+            }}
+            onLockedServer={() => notify("info", "Demo mode is enabled. Exit demo mode to access this server.")}
+            emptyState={renderNoManagedServersEmptyState("No managed servers yet")}
+          />
         )}
 
         {activePage === "create" && (
-          <section className="createServerPanel">
-            {currentProvisionOperation && (currentProvisionOperation.status === "queued" || currentProvisionOperation.status === "running") && (
-              <InlineState
-                tone="loading"
-                title="Creating server"
-                message={`${currentProvisionOperation.task || "Server setup is running."} Progress: ${Math.round(currentProvisionOperation.progress)}%.`}
-              />
-            )}
-            {provisioningError && (
-              <section className="inlineState inlineState-error" role="alert">
-                <div className="inlineStateText">
-                  <strong>Server setup failed</strong>
-                  <span>{provisioningError} Review the details below, adjust the form if needed, then try again.</span>
-                  {provisioningErrorDetails && (
-                    <details className="failureDetails">
-                      <summary>Show full API failure log</summary>
-                      <pre>{provisioningErrorDetails}</pre>
-                    </details>
-                  )}
-                </div>
-                <Button variant="secondary" compact onClick={() => {
-                  setProvisioningError("");
-                  setProvisioningErrorDetails("");
-                }}>Clear error</Button>
-              </section>
-            )}
-            <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server form" page="create" />}>
-              <ManagedServerForm
-                nodes={contextNodes}
-                preferredNodeId={preferredCreateNodeId}
-                totalMemory={effectiveAppState.totalMemory}
-                provisioning={isProvisioning || !canCreateServers}
-                disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
-                onRefreshNodes={nodesWorkspace.refreshNodes}
-                onSubmit={createServer}
-              />
-            </Suspense>
-          </section>
+          <ServerCreateTab
+            provisionOperation={currentProvisionOperation}
+            provisioningError={provisioningError}
+            provisioningErrorDetails={provisioningErrorDetails}
+            onClearProvisioningError={() => {
+              setProvisioningError("");
+              setProvisioningErrorDetails("");
+            }}
+            nodes={contextNodes}
+            preferredNodeId={preferredCreateNodeId}
+            totalMemory={effectiveAppState.totalMemory}
+            provisioning={isProvisioning || !canCreateServers}
+            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+            onRefreshNodes={nodesWorkspace.refreshNodes}
+            onSubmit={createServer}
+          />
         )}
 
         {activePage === "settings" && (
@@ -2291,29 +2212,18 @@ export default function App() {
             )}
 
             {activePage === "console" && (
-              <section className="tabPage layoutWide">
-                <Surface className="consolePanel">
-                  <div className="terminal">
-                    {consoleSnapshotReadyServerId !== activeServer.id ? (
-                      <TerminalLoadingSkeleton />
-                    ) : (
-                      <Suspense fallback={<TerminalLoadingSkeleton />}>
-                        <MinecraftTerminal
-                          entries={logs}
-                          canSendCommands={canSendConsoleCommands}
-                          disabledReason={consoleCommandDisabledReason}
-                          commandHistory={commandHistory}
-                          fontSize={consoleFontSize}
-                          scrollback={consoleScrollback}
-                          onCommand={(command) => {
-                            void sendCommand(command);
-                          }}
-                        />
-                      </Suspense>
-                    )}
-                  </div>
-                </Surface>
-              </section>
+              <ServerConsoleTab
+                snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
+                entries={logs}
+                canSendCommands={canSendConsoleCommands}
+                disabledReason={consoleCommandDisabledReason}
+                commandHistory={commandHistory}
+                fontSize={consoleFontSize}
+                scrollback={consoleScrollback}
+                onCommand={(command) => {
+                  void sendCommand(command);
+                }}
+              />
             )}
 
             {activePage === "files" && (
