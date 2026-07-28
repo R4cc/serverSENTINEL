@@ -16,19 +16,17 @@ import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel } from "./components/AuthPanel";
 import { InlineState } from "./components/InlineState";
-import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, ServerTimelineLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
-import { RuntimeControls } from "./components/RuntimeControls";
-import { RestartRequiredBadge } from "./components/RestartRequiredBadge";
-import { ServerRuntimeAlert } from "./components/ServerRuntimeAlert";
-import { Banner, Button, EmptyState, StatusBadge, Surface } from "./components/UiPrimitives";
+import { ActiveServerStripLoadingSkeleton, ApplicationLoadingSkeleton, AuthLoadingSkeleton, FeaturePageLoadingSkeleton, TerminalLoadingSkeleton } from "./components/LoadingSkeletons";
+import { Banner, Button, EmptyState, Surface } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
-import { ActionMenu } from "./components/ActionMenu";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
-import { ActivePlayersPanel, ModHealthPanel, modUpdateRefreshResultMessage, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./pages/OverviewPage";
+import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
+import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -39,7 +37,6 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 
 const loadMinecraftTerminal = () => import("./components/MinecraftTerminal");
-const loadServerTimeline = () => import("./components/ServerTimeline");
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
 const loadServerCreatePage = () => import("./pages/ServerCreatePage");
@@ -49,7 +46,6 @@ const loadFilesPage = () => import("./features/files/FilesPage");
 const loadSettingsPage = () => import("./pages/SettingsPage");
 
 const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
-const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
 const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
 const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
@@ -2679,186 +2675,66 @@ export default function App() {
 
         {isServerWorkspacePage(activePage) && activeServer && (
           <Fragment key={`server-workspace-${activeServer.id}`}>
-            <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
-              <div className="serverStripPrimary">
-                <div className="serverStripLeft">
-                  <div className="serverStripIcon">
-                    <svg className="server-icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                  </div>
-                  <div className="serverStripInfo">
-                    <div className="serverStripTitleRow">
-                      <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
-                      <strong>{activeServer.displayName}</strong>
-                      <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
-                        {lastKnownRuntimeLabel}
-                      </StatusBadge>
-                      {activeServer.restartRequiredSince && <RestartRequiredBadge changes={activeServer.restartRequiredChanges} runtimeType={activeServer.runtimeProfile.runtimeType} />}
-                    </div>
-                    <div className="serverStripMetaRow">
-                      {serverStripHealth ? (
-                        <small className={`serverStripHealth ${serverStripHealth.tone}`} role={serverStripHealth.tone === "error" ? "alert" : "status"} title={consoleError || statusError || serverStripHealth.message}>
-                          {serverStripHealth.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
-                          {serverStripHealth.message}
-                        </small>
-                      ) : (
-                        <>
-                          <small className="serverStripMeta">
-                            {activeNode.name}
-                          </small>
-                          <span aria-hidden="true" className="serverStripSeparator">·</span>
-                          <small className="serverStripMeta">
-                            {activeRuntimeDefinition?.displayName ?? "Runtime"} {activeServer.runtimeProfile.runtimeVersion || "unknown"}
-                          </small>
-                          <span aria-hidden="true" className="serverStripSeparator">·</span>
-                          <small className="serverStripMeta">
-                            MC {activeMinecraftVersion === "Unknown" ? "unknown" : activeMinecraftVersion}
-                          </small>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="serverStripRight">
-                  {confirmedNodeOffline && <ServerRuntimeAlert title="Node offline" compact />}
-                  <RuntimeControls
-                    status={activeStatus}
-                    controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
-                    isProvisioning={isProvisioning || !canBasic || dockerOperationalLock}
-                    disabledReason={runtimeControlsDisabledReason}
-                    busyAction={runtimeAction}
-                    onAction={runContainerAction}
-                    className="runtimeControlsCompact"
-                  />
-                  <Button
-                    variant="secondary"
-                    className={`quickActionButton consoleLink ${activePage === "console" ? "active" : ""}`}
-                    onClick={() => setActivePage("console")}
-                    title="Open console"
-                  >
-                    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="4 17 10 11 4 5" />
-                      <line x1="12" y1="19" x2="20" y2="19" />
-                    </svg>
-                    <span>Console</span>
-                  </Button>
-                  <ActionMenu
-                    label="More server actions"
-                    className="overflowMenuContainer"
-                    triggerClassName="iconButton overflowButton"
-                    menuClassName="overflowDropdown"
-                    items={[
-                      {
-                        id: "refresh",
-                        label: serverStripHealth || serverStripAlert ? "Retry connection" : "Refresh status",
-                        onSelect: () => { void retryActiveConnection(); },
-                        disabled: isProvisioning,
-                        title: isProvisioning ? provisioningNavigationReason : "Refresh server status"
-                      }
-                    ]}
-                    trigger={
-                      <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                        <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-                        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                        <circle cx="12" cy="19" r="1.5" fill="currentColor" />
-                      </svg>
-                    }
-                  />
-                </div>
-              </div>
-              {serverStripAlert && <ServerRuntimeAlert title={serverStripAlert.title} message={serverStripAlert.message} />}
-            </div>
+            <ActiveServerStrip
+              server={activeServer}
+              runtimeAction={runtimeAction}
+              runtimeFeedbackAction={runtimeFeedbackAction}
+              serverCommandTone={serverCommandTone}
+              lastKnownRuntimeLabel={lastKnownRuntimeLabel}
+              health={serverStripHealth}
+              healthDetail={consoleError || statusError || ""}
+              alert={serverStripAlert}
+              nodeName={activeNode.name}
+              runtimeDisplayName={activeRuntimeDefinition?.displayName ?? "Runtime"}
+              runtimeVersion={activeServer.runtimeProfile.runtimeVersion}
+              minecraftVersion={activeMinecraftVersion}
+              nodeOffline={confirmedNodeOffline}
+              status={activeStatus}
+              controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
+              controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock}
+              controlsDisabledReason={runtimeControlsDisabledReason}
+              onRuntimeAction={runContainerAction}
+              consoleActive={activePage === "console"}
+              onOpenConsole={() => setActivePage("console")}
+              onRetryConnection={() => { void retryActiveConnection(); }}
+              refreshDisabled={isProvisioning}
+              refreshDisabledReason={provisioningNavigationReason}
+            />
 
             {activePage === "overview" && (
-              <section className="tabPage overviewPage layoutDashboard">
-                {overviewError && (
-                  <InlineState
-                    tone="warning"
-                    title="Overview is not up to date"
-                    message={`${overviewError} Previously loaded activity is still shown when available.`}
-                    actionLabel="Retry"
-                    onAction={() => {
-                      void refreshOverviewData(activeServer.id, { showLoading: true });
-                    }}
-                    busy={overviewLoading}
-                  />
-                )}
-                <div className={`overviewDashboardGrid ${overviewTimelineVisible ? "overviewDashboardGrid--timeline" : "overviewDashboardGrid--chartless"}`}>
-                  <OverviewSummary
-                    server={activeServer}
-                    status={activeStatus}
-                    dockerSocketMounted={activeServerDockerSocketMounted}
-                    activity={overviewData.activity}
-                    latestResourceSample={overviewTimelineVisible ? timelineLatestSample : undefined}
-                    loading={overviewInitialLoading}
-                  />
-
-                  {overviewTimelineVisible && (
-                    <Suspense fallback={<ServerTimelineLoadingSkeleton />}>
-                      <ServerTimeline
-                        key={activeServer.id}
-                        loadTimeline={loadActiveTimeline}
-                        formatTime={formatDisplayTime}
-                        formatShortTime={formatDisplayShortTime}
-                        formatDate={formatDisplayDate}
-                        serverId={activeServer.id}
-                        playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                        onLatestSample={setTimelineLatestSample}
-                        onOpenSchedules={(target) => {
-                          setScheduleNavigationTarget(target ?? null);
-                          setActivePage("schedule");
-                        }}
-                      />
-                    </Suspense>
-                  )}
-
-                  {!overviewTimelineVisible && (
-                    <ActivePlayersPanel
-                      snapshot={playerSnapshots[activeServer.id]}
-                      running={Boolean(activeStatus?.docker.running)}
-                      loading={overviewInitialLoading}
-                      serverId={activeServer.id}
-                      playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                    />
-                  )}
-                  <div className="overviewSupportStack">
-                    <ModHealthPanel
-                      updatePlan={modsWorkspace.data.updatePlan}
-                      loading={modsWorkspace.state.updatePlanLoading}
-                      canView={canViewMods && supportsManagedMods}
-                      onOpenMods={() => setActivePage("mods")}
-                      onRefresh={() => void refreshOverviewModUpdates()}
-                      contentPlural={managedContent.plural}
-                      contentPluralTitle={managedContent.pluralTitle}
-                    />
-                    <SchedulePanel
-                      schedules={activeServer.schedules ?? []}
-                      canView={canViewSchedules}
-                      formatDate={formatDisplayDate}
-                      relativeTimestamps={relativeTimestamps}
-                      onOpenSchedules={(target) => {
-                        setScheduleNavigationTarget(target ?? null);
-                        setActivePage("schedule");
-                      }}
-                    />
-                  </div>
-                  <RecentEventsPanel
-                    events={overviewData.events}
-                    eventsStatus={overviewData.eventsStatus}
-                    formatDate={formatDisplayDate}
-                    relativeTimestamps={relativeTimestamps}
-                    serverId={activeServer.id}
-                    playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                    onOpenConsole={() => setActivePage("console")}
-                    requestConfirmation={requestConfirmation}
-                    loading={overviewLoading && overviewData.events.length === 0}
-                  />
-                </div>
-
-              </section>
+              <ServerOverviewTab
+                server={activeServer}
+                status={activeStatus}
+                dockerSocketMounted={activeServerDockerSocketMounted}
+                overviewData={overviewData}
+                overviewError={overviewError}
+                overviewLoading={overviewLoading}
+                overviewInitialLoading={overviewInitialLoading}
+                onRetryOverview={() => { void refreshOverviewData(activeServer.id, { showLoading: true }); }}
+                timelineVisible={overviewTimelineVisible}
+                timelineLatestSample={timelineLatestSample}
+                onTimelineLatestSample={setTimelineLatestSample}
+                loadTimeline={loadActiveTimeline}
+                playerSnapshot={playerSnapshots[activeServer.id]}
+                playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                modUpdatePlan={modsWorkspace.data.updatePlan}
+                modUpdatePlanLoading={modsWorkspace.state.updatePlanLoading}
+                canViewMods={canViewMods && supportsManagedMods}
+                onOpenMods={() => setActivePage("mods")}
+                onRefreshModUpdates={() => void refreshOverviewModUpdates()}
+                managedContent={managedContent}
+                canViewSchedules={canViewSchedules}
+                onOpenSchedules={(target) => {
+                  setScheduleNavigationTarget(target ?? null);
+                  setActivePage("schedule");
+                }}
+                onOpenConsole={() => setActivePage("console")}
+                requestConfirmation={requestConfirmation}
+                relativeTimestamps={relativeTimestamps}
+                formatDate={formatDisplayDate}
+                formatTime={formatDisplayTime}
+                formatShortTime={formatDisplayShortTime}
+              />
             )}
 
             {activePage === "console" && (
