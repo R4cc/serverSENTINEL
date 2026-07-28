@@ -137,6 +137,11 @@ async function waitForConsoleTerminal(page) {
   await page.locator(".minecraftTerminal:not(.initializing) .xterm-screen").waitFor();
 }
 
+async function waitForSettingsPage(page) {
+  await page.locator('.settingsHub[aria-busy="false"]').waitFor();
+  await page.getByLabel("Theme", { exact: true }).waitFor();
+}
+
 try {
   if (process.env.SERVERSENTINEL_SCREENSHOT_SKIP_BUILD !== "true") {
     await runNpm(["run", "build"]);
@@ -217,6 +222,7 @@ try {
   await capture(page, "properties.png");
 
   await openPage(page, "settings", "Settings");
+  await waitForSettingsPage(page);
   await capture(page, "settings.png");
 
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
