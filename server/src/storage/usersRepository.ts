@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
 import type { ServerAccess, Session, StoredUser } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
+import { badRequest, notFound, throwHttp } from "../http/errors.js";
 import type { StorageDatabase } from "./database.js";
 
 type UserRow = {
@@ -17,9 +18,7 @@ type UserRow = {
 };
 
 function badUserRequest(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 400;
-  throw error;
+  badRequest(message);
 }
 
 export function validateUsername(username?: string) {
@@ -98,9 +97,7 @@ export class UsersRepository {
   createFirst(user: StoredUser, session: Session) {
     this.storage.transaction((database) => {
       if (database.prepare("SELECT 1 FROM users LIMIT 1").get()) {
-        const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
-        error.statusCode = 403;
-        throw error;
+        throwHttp(403, "Initial registration is already complete", { code: "PERMISSION_DENIED" });
       }
       this.save(database, user, false);
       this.assertHasAdmin();
@@ -207,8 +204,6 @@ export class UsersRepository {
   }
 
   private notFound(): never {
-    const error = new Error("User not found") as Error & { statusCode?: number };
-    error.statusCode = 404;
-    throw error;
+    notFound("User not found");
   }
 }

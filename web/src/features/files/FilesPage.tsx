@@ -606,30 +606,26 @@ export function FilesPage({
       )}
 
       {zipDestinationListing && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) actions.setZipDestinationListing(null);
-        }}>
-          <DialogSurface className="modalPanel zipDestinationModal" labelledBy="zip-destination-title" onClose={() => actions.setZipDestinationListing(null)}>
-            <header className="modalHeader">
-              <div><h2 id="zip-destination-title">Choose extraction folder</h2><p>Extract into {zipDestinationListing.path}</p></div>
-              <Button iconOnly variant="secondary" onClick={() => actions.setZipDestinationListing(null)} aria-label="Close destination picker"><AppIcon name="x" /></Button>
-            </header>
-            <div className="modalBody zipDestinationBody">
-              <div className="zipDestinationPath">{zipDestinationListing.path}</div>
-              {zipDestinationListing.path !== "/" && <button type="button" className="zipFolderChoice" onClick={() => actions.loadZipDestination(zipDestinationListing.path.split("/").slice(0, -1).join("/") || "/")}><AppIcon name="arrowUp" /> Parent folder</button>}
-              {zipDestinationLoading && <LoadingLabel>Loading extraction folders</LoadingLabel>}
-              {zipDestinationLoading && Array.from({ length: 4 }, (_, index) => <div className="zipFolderChoice zipFolderSkeleton" key={index} aria-hidden="true"><SkeletonBlock className="uiSkeleton--icon" /><SkeletonBlock className="uiSkeleton--text" /></div>)}
-              {zipDestinationListing.entries.filter((entry) => entry.type === "directory").map((entry) => (
-                <button type="button" className="zipFolderChoice" key={entry.path} onClick={() => actions.loadZipDestination(entry.path)}><FileTypeIcon entry={entry} /> {entry.name}</button>
-              ))}
-              {!zipDestinationLoading && !zipDestinationListing.entries.some((entry) => entry.type === "directory") && <p className="muted">This folder has no subfolders.</p>}
-            </div>
-            <footer className="modalFooter">
-              <Button variant="secondary" onClick={() => actions.setZipDestinationListing(null)}>Cancel</Button>
-              <Button onClick={actions.confirmZipDestination} disabled={zipDestinationLoading}>{zipDestinationLoading ? "Loading" : "Extract here"}</Button>
-            </footer>
-          </DialogSurface>
-        </div>
+        <DialogSurface backdrop className="modalPanel zipDestinationModal" labelledBy="zip-destination-title" onClose={() => actions.setZipDestinationListing(null)}>
+          <header className="modalHeader">
+            <div><h2 id="zip-destination-title">Choose extraction folder</h2><p>Extract into {zipDestinationListing.path}</p></div>
+            <Button iconOnly variant="secondary" onClick={() => actions.setZipDestinationListing(null)} aria-label="Close destination picker"><AppIcon name="x" /></Button>
+          </header>
+          <div className="modalBody zipDestinationBody">
+            <div className="zipDestinationPath">{zipDestinationListing.path}</div>
+            {zipDestinationListing.path !== "/" && <button type="button" className="zipFolderChoice" onClick={() => actions.loadZipDestination(zipDestinationListing.path.split("/").slice(0, -1).join("/") || "/")}><AppIcon name="arrowUp" /> Parent folder</button>}
+            {zipDestinationLoading && <LoadingLabel>Loading extraction folders</LoadingLabel>}
+            {zipDestinationLoading && Array.from({ length: 4 }, (_, index) => <div className="zipFolderChoice zipFolderSkeleton" key={index} aria-hidden="true"><SkeletonBlock className="uiSkeleton--icon" /><SkeletonBlock className="uiSkeleton--text" /></div>)}
+            {zipDestinationListing.entries.filter((entry) => entry.type === "directory").map((entry) => (
+              <button type="button" className="zipFolderChoice" key={entry.path} onClick={() => actions.loadZipDestination(entry.path)}><FileTypeIcon entry={entry} /> {entry.name}</button>
+            ))}
+            {!zipDestinationLoading && !zipDestinationListing.entries.some((entry) => entry.type === "directory") && <p className="muted">This folder has no subfolders.</p>}
+          </div>
+          <footer className="modalFooter">
+            <Button variant="secondary" onClick={() => actions.setZipDestinationListing(null)}>Cancel</Button>
+            <Button onClick={actions.confirmZipDestination} disabled={zipDestinationLoading}>{zipDestinationLoading ? "Loading" : "Extract here"}</Button>
+          </footer>
+        </DialogSurface>
       )}
 
       <FileEditorModal
@@ -726,51 +722,47 @@ export function FileActionModal({
   const files = dialog.kind === "delete" ? dialog.entries.length - folders : 0;
 
   return (
-    <div className="modalBackdrop fileActionBackdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !busy) onCancel();
-    }}>
-      <DialogSurface className="modalPanel fileActionModal" labelledBy="file-action-title" describedBy="file-action-description" onClose={() => { if (!busy) onCancel(); }}>
-        <form onSubmit={handleSubmit}>
-          <header className="modalHeader">
-            <div>
-              <h2 id="file-action-title">{title}</h2>
-              <p id="file-action-description">
-                {dialog.kind === "create" ? "Add a folder to the current location."
-                  : dialog.kind === "rename" ? "Choose a new name for this item."
-                    : dialog.kind === "duplicate" ? "Choose a name for the copied file."
-                      : "Review the affected items before continuing."}
-              </p>
-            </div>
-            <Button iconOnly variant="secondary" onClick={onCancel} disabled={busy} aria-label="Close file action dialog"><AppIcon name="x" /></Button>
-          </header>
-          <div className="modalBody fileActionBody">
-            {dialog.kind !== "delete" ? (
-              <label className="fileNameField">
-                <span>{dialog.kind === "create" ? "Folder name" : "Name"}</span>
-                <input autoFocus value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : undefined} />
-              </label>
-            ) : (
-              <>
-                <div className="deleteSummary" aria-label="Items to delete">
-                  <span><strong>{files}</strong> {files === 1 ? "file" : "files"}</span>
-                  <span><strong>{folders}</strong> {folders === 1 ? "folder" : "folders"}</span>
-                </div>
-                <ul className="deletePathList">
-                  {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
-                  {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
-                </ul>
-                {folders > 0 && <p className="fileActionWarning">Selected folders and everything inside them will be deleted.</p>}
-                <p className="fileActionDanger">This action cannot be undone.</p>
-              </>
-            )}
-            {error && <p className="fileActionError" id="file-action-error" role="alert">{error}</p>}
+    <DialogSurface backdrop="fileActionBackdrop" dismissible={!busy} className="modalPanel fileActionModal" labelledBy="file-action-title" describedBy="file-action-description" onClose={onCancel}>
+      <form onSubmit={handleSubmit}>
+        <header className="modalHeader">
+          <div>
+            <h2 id="file-action-title">{title}</h2>
+            <p id="file-action-description">
+              {dialog.kind === "create" ? "Add a folder to the current location."
+                : dialog.kind === "rename" ? "Choose a new name for this item."
+                  : dialog.kind === "duplicate" ? "Choose a name for the copied file."
+                    : "Review the affected items before continuing."}
+            </p>
           </div>
-          <footer className="modalFooter">
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
-            <Button variant={dialog.kind === "delete" ? "critical" : "primary"} type="submit" disabled={busy || (dialog.kind !== "delete" && !dialog.value.trim())} reserveLabel={busyLabel}>{busy ? busyLabel : submitLabel}</Button>
-          </footer>
-        </form>
-      </DialogSurface>
-    </div>
+          <Button iconOnly variant="secondary" onClick={onCancel} disabled={busy} aria-label="Close file action dialog"><AppIcon name="x" /></Button>
+        </header>
+        <div className="modalBody fileActionBody">
+          {dialog.kind !== "delete" ? (
+            <label className="fileNameField">
+              <span>{dialog.kind === "create" ? "Folder name" : "Name"}</span>
+              <input autoFocus value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : undefined} />
+            </label>
+          ) : (
+            <>
+              <div className="deleteSummary" aria-label="Items to delete">
+                <span><strong>{files}</strong> {files === 1 ? "file" : "files"}</span>
+                <span><strong>{folders}</strong> {folders === 1 ? "folder" : "folders"}</span>
+              </div>
+              <ul className="deletePathList">
+                {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
+                {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
+              </ul>
+              {folders > 0 && <p className="fileActionWarning">Selected folders and everything inside them will be deleted.</p>}
+              <p className="fileActionDanger">This action cannot be undone.</p>
+            </>
+          )}
+          {error && <p className="fileActionError" id="file-action-error" role="alert">{error}</p>}
+        </div>
+        <footer className="modalFooter">
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button variant={dialog.kind === "delete" ? "critical" : "primary"} type="submit" disabled={busy || (dialog.kind !== "delete" && !dialog.value.trim())} reserveLabel={busyLabel}>{busy ? busyLabel : submitLabel}</Button>
+        </footer>
+      </form>
+    </DialogSurface>
   );
 }

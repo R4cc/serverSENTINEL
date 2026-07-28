@@ -119,112 +119,104 @@ export function FileEditorModal({
   return (
     <>
       {selectedPath && (
-        <div className="modalBackdrop fileEditorBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && canCloseEditor) onRequestClose();
-        }}>
-          <DialogSurface className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={() => { if (canCloseEditor) onRequestClose(); }}>
-            <header className="fileEditorHeader">
-              <div>
-                <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
-                <p className="fileEditorLocation">{editorLocation}</p>
-              </div>
-              <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
-                <AppIcon name="x" />
-              </Button>
-            </header>
-            <div className="fileEditorBody">
-              <div className="fileEditorMetaRow">
-                <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}${editingRestriction ? " unavailable" : ""}`} title={editingRestriction || undefined}>
-                  <span className="fileEditorModeDot" aria-hidden="true" />
-                  {editing ? "Editing" : "Read-only"}
-                </span>
-                <span className="fileEditorMetaDivider" aria-hidden="true" />
-                <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
-                {dirty && <span className="dirty">Unsaved changes</span>}
-                <div className="fileEditorMetaActions">
-                  {editingRestriction && (
-                    <span className="fileEditorRestriction" role="status" title={editingRestriction} aria-label={`Editing unavailable: ${editingRestriction}`}>
-                      Editing unavailable
-                    </span>
-                  )}
-                  <Button iconOnly compact variant="ghost" className="fileEditorCopyButton" onClick={onCopy} aria-label="Copy entire file" title="Copy entire file">
-                    <AppIcon name="copy" />
-                  </Button>
-                </div>
-              </div>
-              <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
-                {fileOpening ? (
-                  <div className="fileEditorStateFill">
-                    <CodeLoadingSkeleton label="Opening file" />
-                  </div>
-                ) : (
-                  <>
-                    {fileReadError && (
-                      <div className={fileOpenFailed ? "fileEditorStateFill" : ""}>
-                        <InlineState
-                          tone="error"
-                          title="Could not open this file"
-                          message={`${fileReadError} Close the editor or retry if the file should still be available.`}
-                          actionLabel={fileOpenFailed ? "Retry" : undefined}
-                          onAction={fileOpenFailed ? onRetryOpen : undefined}
-                        />
-                      </div>
-                    )}
-                    {!fileOpenFailed && (
-                      <EditorLoadBoundary key={selectedPath}>
-                        <Suspense fallback={<EditorLoadingState />}>
-                          <CodeEditor
-                            selectedPath={selectedPath}
-                            fileName={editorFileName}
-                            value={editorText}
-                            disabled={editorDisabled}
-                            saveDisabled={saveDisabled}
-                            onChange={onTextChange}
-                            onSave={onSave}
-                          />
-                        </Suspense>
-                      </EditorLoadBoundary>
-                    )}
-                  </>
+        <DialogSurface backdrop="fileEditorBackdrop" dismissible={canCloseEditor} className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={onRequestClose}>
+          <header className="fileEditorHeader">
+            <div>
+              <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
+              <p className="fileEditorLocation">{editorLocation}</p>
+            </div>
+            <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
+              <AppIcon name="x" />
+            </Button>
+          </header>
+          <div className="fileEditorBody">
+            <div className="fileEditorMetaRow">
+              <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}${editingRestriction ? " unavailable" : ""}`} title={editingRestriction || undefined}>
+                <span className="fileEditorModeDot" aria-hidden="true" />
+                {editing ? "Editing" : "Read-only"}
+              </span>
+              <span className="fileEditorMetaDivider" aria-hidden="true" />
+              <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
+              {dirty && <span className="dirty">Unsaved changes</span>}
+              <div className="fileEditorMetaActions">
+                {editingRestriction && (
+                  <span className="fileEditorRestriction" role="status" title={editingRestriction} aria-label={`Editing unavailable: ${editingRestriction}`}>
+                    Editing unavailable
+                  </span>
                 )}
+                <Button iconOnly compact variant="ghost" className="fileEditorCopyButton" onClick={onCopy} aria-label="Copy entire file" title="Copy entire file">
+                  <AppIcon name="copy" />
+                </Button>
               </div>
             </div>
-            <footer className="fileEditorFooter">
-              <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
-              {editing ? (
-                <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
-                  {fileSaving ? "Saving" : "Save"}
-                </Button>
+            <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
+              {fileOpening ? (
+                <div className="fileEditorStateFill">
+                  <CodeLoadingSkeleton label="Opening file" />
+                </div>
               ) : (
-                <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"} reserveLabel="Requesting edit access">
-                  {editBusy ? "Requesting edit access" : "Edit file"}
-                </Button>
+                <>
+                  {fileReadError && (
+                    <div className={fileOpenFailed ? "fileEditorStateFill" : ""}>
+                      <InlineState
+                        tone="error"
+                        title="Could not open this file"
+                        message={`${fileReadError} Close the editor or retry if the file should still be available.`}
+                        actionLabel={fileOpenFailed ? "Retry" : undefined}
+                        onAction={fileOpenFailed ? onRetryOpen : undefined}
+                      />
+                    </div>
+                  )}
+                  {!fileOpenFailed && (
+                    <EditorLoadBoundary key={selectedPath}>
+                      <Suspense fallback={<EditorLoadingState />}>
+                        <CodeEditor
+                          selectedPath={selectedPath}
+                          fileName={editorFileName}
+                          value={editorText}
+                          disabled={editorDisabled}
+                          saveDisabled={saveDisabled}
+                          onChange={onTextChange}
+                          onSave={onSave}
+                        />
+                      </Suspense>
+                    </EditorLoadBoundary>
+                  )}
+                </>
               )}
-            </footer>
-          </DialogSurface>
-        </div>
+            </div>
+          </div>
+          <footer className="fileEditorFooter">
+            <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
+            {editing ? (
+              <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
+                {fileSaving ? "Saving" : "Save"}
+              </Button>
+            ) : (
+              <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"} reserveLabel="Requesting edit access">
+                {editBusy ? "Requesting edit access" : "Edit file"}
+              </Button>
+            )}
+          </footer>
+        </DialogSurface>
       )}
 
       {discardRequestOpen && (
-        <div className="modalBackdrop discardEditorBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onKeepEditing();
-        }}>
-          <DialogSurface className="modalPanel discardEditorModal" labelledBy="discard-editor-title" onClose={onKeepEditing}>
-            <header className="modalHeader">
-              <h2 id="discard-editor-title">Discard unsaved changes?</h2>
-              <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
-                <AppIcon name="x" />
-              </Button>
-            </header>
-            <div className="modalBody">
-              <p>Discard this editor session and lose the unsaved file changes?</p>
-            </div>
-            <footer className="modalFooter discardEditorActions">
-              <Button variant="secondary" onClick={onKeepEditing}>Keep Editing</Button>
-              <Button variant="critical" onClick={onDiscardChanges}>Discard Changes</Button>
-            </footer>
-          </DialogSurface>
-        </div>
+        <DialogSurface backdrop="discardEditorBackdrop" className="modalPanel discardEditorModal" labelledBy="discard-editor-title" onClose={onKeepEditing}>
+          <header className="modalHeader">
+            <h2 id="discard-editor-title">Discard unsaved changes?</h2>
+            <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onKeepEditing} aria-label="Close discard dialog" title="Close dialog">
+              <AppIcon name="x" />
+            </Button>
+          </header>
+          <div className="modalBody">
+            <p>Discard this editor session and lose the unsaved file changes?</p>
+          </div>
+          <footer className="modalFooter discardEditorActions">
+            <Button variant="secondary" onClick={onKeepEditing}>Keep Editing</Button>
+            <Button variant="critical" onClick={onDiscardChanges}>Discard Changes</Button>
+          </footer>
+        </DialogSurface>
       )}
     </>
   );

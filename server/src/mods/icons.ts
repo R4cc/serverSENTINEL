@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { badRequest } from "../http/validation.js";
+import { notFound } from "../http/errors.js";
 import { createHash } from "node:crypto";
 import { extname, join } from "node:path";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -130,9 +131,7 @@ export function modrinthIconProxyUrl(iconUrl?: string | null) {
 }
 
 export function modrinthIconNotFound(): never {
-  const error = new Error("Icon not found") as Error & { statusCode?: number };
-  error.statusCode = 404;
-  throw error;
+  notFound("Icon not found");
 }
 
 export async function readCachedModrinthIcon(url: string, options: { allowStale?: boolean } = {}) {

@@ -3,6 +3,7 @@ import { currentUserForRequest, type AuthenticatedRequest } from "./requestAuthe
 import { inferRolePreset, permissionsForRolePreset, requirePermission as requireUserPermission, rolePresetFromUnknown, ROLE_PRESETS, normalizePermissions } from "../permissions.js";
 import { normalizeStoredUser } from "../storage/usersRepository.js";
 import { config } from "../config.js";
+import { badRequest, unauthorized } from "../http/errors.js";
 import { isDemoUser } from "../demoMode.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 
@@ -59,9 +60,7 @@ export function buildUserPermissions(input: { rolePreset?: RolePreset; permissio
 
 export function validatePassword(password?: string) {
   if (!password || password.length < 8 || password.length > 256) {
-    const error = new Error("Password must be 8-256 characters") as Error & { statusCode?: number };
-    error.statusCode = 400;
-    throw error;
+    badRequest("Password must be 8-256 characters", { code: "VALIDATION_ERROR" });
   }
   return password;
 }
@@ -108,9 +107,7 @@ export async function currentUserFromCookie(cookieHeader?: string) {
 export async function requireAuthenticated(request: AuthenticatedRequest) {
   const user = await currentUserForRequest(request, currentUserFromCookie);
   if (!user) {
-    const error = new Error("Authentication required") as Error & { statusCode?: number };
-    error.statusCode = 401;
-    throw error;
+    unauthorized("Authentication required");
   }
   return user;
 }

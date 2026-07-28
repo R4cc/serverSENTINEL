@@ -4,8 +4,10 @@ import { logWarn, errorLogFields } from "../logging.js";
 
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 
+import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason, stoppedLikeDockerStates, stoppedServerMutationMessage } from "./mutableConfigurationGate.js";
+
 import type { ForegroundOperationInput } from "../operations/operationService.js";
-import type { ManagedServer, OperationRecord, OperationType } from "../types.js";
+import type { ManagedServer, OperationRecord } from "../types.js";
 export function operationErrorMessage(error: unknown, fallback = "Operation failed") {
   return error instanceof Error ? error.message : fallback;
 }
@@ -17,31 +19,10 @@ export async function recordOperation<T>(
   return services.operationService.run(input, action);
 }
 
-export const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-export const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "server.stop", "server.restart"]);
-export const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
+export { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason, stoppedLikeDockerStates, stoppedServerMutationMessage };
 
 export function blockingRuntimeOperations(serverId: string) {
   return services.operationsRepository.listActive(serverId).filter((operation) => blockingRuntimeOperationTypes.has(operation.type));
-}
-
-export function mutableServerConfigurationBlockedReason(status: unknown, operations: Array<{ type?: string }> = []) {
-  if (operations.some((operation) => blockingRuntimeOperationTypes.has(operation.type as OperationType))) {
-    return stoppedServerMutationMessage;
-  }
-  const docker = status && typeof status === "object" && "docker" in status
-    ? (status as { docker?: { configured?: unknown; available?: unknown; running?: unknown; state?: unknown; message?: unknown } }).docker
-    : status as { configured?: unknown; available?: unknown; running?: unknown; state?: unknown; message?: unknown } | undefined;
-  if (docker?.running === true) return stoppedServerMutationMessage;
-  const state = typeof docker?.state === "string" ? docker.state : "";
-  const message = typeof docker?.message === "string" ? docker.message : "";
-  if (state === "unknown") {
-    return docker?.configured === false || (docker?.available === true && /container (?:will be created|not found|does not exist)|configured container does not exist/i.test(message))
-      ? ""
-      : stoppedServerMutationMessage;
-  }
-  if (state && !stoppedLikeDockerStates.has(state)) return stoppedServerMutationMessage;
-  return "";
 }
 
 export async function requireServerStoppedForMutableConfiguration(server: ManagedServer) {

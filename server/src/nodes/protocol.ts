@@ -1,3 +1,4 @@
+import { httpError } from "../http/errors.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
 export const nodeProtocolVersion = "3.1";
@@ -419,11 +420,7 @@ export function normalizeNodeToPanelMessage(value: unknown): NodeToPanelMessage 
 }
 
 export function structuredNodeProtocolError(code: string, message: string, details?: string) {
-  const error = new Error(message) as Error & { code?: string; statusCode?: number; details?: string };
-  error.code = code;
-  error.statusCode = 400;
-  if (details) error.details = details;
-  return error;
+  return httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string };
 }
 
 function optionalWireError(value: unknown): NodeWireError | undefined {

@@ -61,6 +61,7 @@ export const PERMISSION_GROUPS: Array<{ title: string; permissions: Array<{ key:
 ];
 
 const knownPermissions = new Set<string>(ALL_PERMISSIONS);
+const permissionOrder = new Map(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
 
 export function isPermissionKey(value: unknown): value is PermissionKey {
   return typeof value === "string" && knownPermissions.has(value);
@@ -81,24 +82,53 @@ export function normalizePermissions(permissions: readonly string[]) {
   return expandPermissions(permissions.filter(isPermissionKey));
 }
 
+const ROLE_PRESET_ORDER = ["admin", "manager", "maintainer", "operator", "viewer"] as const;
+
+/** `ROLE_PRESETS` is constant, so normalize each preset once instead of on every comparison. */
+const normalizedRolePresets = new Map<RolePreset, PermissionKey[]>(
+  ROLE_PRESET_ORDER.map((preset) => [preset, normalizePermissions(ROLE_PRESETS[preset])])
+);
+
 export function inferRolePreset(permissions: readonly PermissionKey[]): RolePreset {
   const normalized = normalizePermissions(permissions);
-  for (const preset of ["admin", "manager", "maintainer", "operator", "viewer"] as const) {
-    if (samePermissions(normalized, ROLE_PRESETS[preset])) return preset;
+  for (const preset of ROLE_PRESET_ORDER) {
+    if (samePermissions(normalized, normalizedRolePresets.get(preset)!)) return preset;
   }
   return "custom";
 }
 
 export function permissionsForPreset(preset: RolePreset) {
-  return preset === "custom" ? [] : normalizePermissions(ROLE_PRESETS[preset]);
+  return preset === "custom" ? [] : [...normalizedRolePresets.get(preset)!];
+}
+
+/**
+ * Derived permissions are read many times per render (every `can*` flag on every page), so cache the
+ * expansion per user object. The entry is invalidated when `user.permissions` is replaced, and the
+ * cached array is never handed out directly — callers get a copy so they stay free to mutate it.
+ */
+const derivedPermissionsCache = new WeakMap<PublicUser, {
+  source: readonly string[];
+  ordered: PermissionKey[];
+  lookup: Set<PermissionKey>;
+}>();
+
+function derivedPermissions(user?: PublicUser | null) {
+  if (!user) return { ordered: [] as PermissionKey[], lookup: new Set<PermissionKey>() };
+  const source = user.permissions ?? [];
+  const cached = derivedPermissionsCache.get(user);
+  if (cached && cached.source === source) return cached;
+  const ordered = normalizePermissions(source);
+  const entry = { source, ordered, lookup: new Set(ordered) };
+  derivedPermissionsCache.set(user, entry);
+  return entry;
 }
 
 export function userPermissions(user?: PublicUser | null) {
-  return normalizePermissions(user?.permissions ?? []);
+  return [...derivedPermissions(user).ordered];
 }
 
 export function hasPermission(user: PublicUser | null | undefined, permission: PermissionKey) {
-  return userPermissions(user).includes(permission);
+  return derivedPermissions(user).lookup.has(permission);
 }
 
 export type FileManagerPermission = "view" | "download" | "edit" | "rename" | "upload" | "duplicate" | "delete";
@@ -160,8 +190,7 @@ export function dependentPermissions(basePermission: PermissionKey) {
 }
 
 function sortPermissions(permissions: PermissionKey[]) {
-  const order = new Map(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
-  return permissions.sort((a, b) => order.get(a)! - order.get(b)!);
+  return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
 function samePermissions(a: readonly PermissionKey[], b: readonly PermissionKey[]) {

@@ -21,7 +21,7 @@
   min-width: 0;
   max-width: var(--workspace-max-width);
   justify-self: center;
-  padding: var(--space-4) var(--page-gutter);
+  padding: var(--space-5) var(--page-gutter);
   display: grid;
   gap: var(--space-4);
   align-content: start;

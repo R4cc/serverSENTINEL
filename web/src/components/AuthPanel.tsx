@@ -308,111 +308,110 @@ function UserPermissionModal({
     setSelectedPreset(inferRolePreset(normalized));
   }
 
+  // Escape closes this form, but a stray backdrop click must not discard in-progress edits.
   return (
-    <div className="modalBackdrop" role="presentation">
-      <DialogSurface className="modalPanel userModalPanel" labelledBy="user-modal-title" onClose={() => { if (!busy) onClose(); }}>
-        <form onSubmit={onSubmit} className="userModalForm">
-          <div className="userModalHeader">
-            <h2 id="user-modal-title">{user ? "Edit user" : "New user"}</h2>
-            <Button
-              variant="secondary"
-              iconOnly
-              className="iconButton modalCloseButton"
-              onClick={onClose}
-              disabled={busy}
-              aria-label="Close user dialog"
-              title={busy ? "User changes are still saving" : "Close user dialog"}
-            >
-              <AppIcon name="x" />
-            </Button>
-          </div>
+    <DialogSurface backdrop dismissible={!busy} backdropDismiss={false} className="modalPanel userModalPanel" labelledBy="user-modal-title" onClose={onClose}>
+      <form onSubmit={onSubmit} className="userModalForm">
+        <div className="userModalHeader">
+          <h2 id="user-modal-title">{user ? "Edit user" : "New user"}</h2>
+          <Button
+            variant="secondary"
+            iconOnly
+            className="iconButton modalCloseButton"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close user dialog"
+            title={busy ? "User changes are still saving" : "Close user dialog"}
+          >
+            <AppIcon name="x" />
+          </Button>
+        </div>
 
-          <fieldset disabled={busy} className="userModalBody">
-            <input type="hidden" name="rolePreset" value={inferredPreset} />
-            <input type="hidden" name="permissions" value={JSON.stringify(permissions)} />
+        <fieldset disabled={busy} className="userModalBody">
+          <input type="hidden" name="rolePreset" value={inferredPreset} />
+          <input type="hidden" name="permissions" value={JSON.stringify(permissions)} />
 
-            <div className="userModalFields">
+          <div className="userModalFields">
+            <label>
+              Username
+              <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={user?.username ?? ""} />
+            </label>
+            {!user && (
               <label>
-                Username
-                <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={user?.username ?? ""} />
+                Password
+                <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
               </label>
-              {!user && (
-                <label>
-                  Password
-                  <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
-                </label>
-              )}
-              <label>
-                Role preset
-                <select name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
-                  <option value="viewer">Viewer</option>
-                  <option value="operator">Operator</option>
-                  <option value="maintainer">Maintainer</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </label>
-              <div className="presetSummary" aria-live="polite">
-                Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong>
-              </div>
-            </div>
-
-            {unknownPermissions.length > 0 && (
-              <div className="permissionWarning">
-                This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
-              </div>
             )}
-
-            <div className="permissionsSection">
-              <div className="permissionsHeader">
-                <h3>Permissions</h3>
-                {adminPermissionsLocked && <span>Admin permissions are locked.</span>}
-                {!canSave && <span>Choose at least one permission.</span>}
-              </div>
-              <div className="permissionGrid">
-                {PERMISSION_GROUPS.map((group) => (
-                  <section className="permissionGroup" key={group.title}>
-                    <h4>{group.title}</h4>
-                    <div className="permissionRows">
-                      {group.permissions.map(({ key, label }) => {
-                        const dependency = PERMISSION_DEPENDENCIES[key][0];
-                        const dependents = dependentPermissions(key);
-                        const title = dependency
-                          ? `Requires ${permissionShortLabel(dependency)}`
-                          : dependents.length > 0
-                            ? "Disabling this also disables dependent actions"
-                            : undefined;
-                        return (
-                          <label className={`permissionRow ${dependency ? "dependent" : ""}`} key={key} title={title}>
-                            <input
-                              type="checkbox"
-                              checked={displayedPermissions.has(key)}
-                              disabled={adminPermissionsLocked}
-                              onChange={(event) => togglePermission(key, event.target.checked)}
-                            />
-                            <span>
-                              {label}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-              </div>
+            <label>
+              Role preset
+              <select name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
+                <option value="viewer">Viewer</option>
+                <option value="operator">Operator</option>
+                <option value="maintainer">Maintainer</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <div className="presetSummary" aria-live="polite">
+              Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong>
             </div>
-          </fieldset>
-
-          <div className="userModalFooter">
-            <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
-            <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
-              {busy ? "Saving..." : user ? "Save changes" : "Create user"}
-            </Button>
           </div>
-        </form>
-      </DialogSurface>
-    </div>
+
+          {unknownPermissions.length > 0 && (
+            <div className="permissionWarning">
+              This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
+            </div>
+          )}
+
+          <div className="permissionsSection">
+            <div className="permissionsHeader">
+              <h3>Permissions</h3>
+              {adminPermissionsLocked && <span>Admin permissions are locked.</span>}
+              {!canSave && <span>Choose at least one permission.</span>}
+            </div>
+            <div className="permissionGrid">
+              {PERMISSION_GROUPS.map((group) => (
+                <section className="permissionGroup" key={group.title}>
+                  <h4>{group.title}</h4>
+                  <div className="permissionRows">
+                    {group.permissions.map(({ key, label }) => {
+                      const dependency = PERMISSION_DEPENDENCIES[key][0];
+                      const dependents = dependentPermissions(key);
+                      const title = dependency
+                        ? `Requires ${permissionShortLabel(dependency)}`
+                        : dependents.length > 0
+                          ? "Disabling this also disables dependent actions"
+                          : undefined;
+                      return (
+                        <label className={`permissionRow ${dependency ? "dependent" : ""}`} key={key} title={title}>
+                          <input
+                            type="checkbox"
+                            checked={displayedPermissions.has(key)}
+                            disabled={adminPermissionsLocked}
+                            onChange={(event) => togglePermission(key, event.target.checked)}
+                          />
+                          <span>
+                            {label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </fieldset>
+
+        <div className="userModalFooter">
+          <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
+          <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
+            {busy ? "Saving..." : user ? "Save changes" : "Create user"}
+          </Button>
+        </div>
+      </form>
+    </DialogSurface>
   );
 }
 
@@ -427,47 +426,46 @@ function ResetPasswordModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  // Escape closes this form, but a stray backdrop click must not discard in-progress edits.
   return (
-    <div className="modalBackdrop" role="presentation">
-      <DialogSurface className="modalPanel userModalPanel" labelledBy="reset-password-title" onClose={() => { if (!busy) onClose(); }}>
-        <form onSubmit={onSubmit} className="userModalForm">
-          <div className="userModalHeader">
-            <h2 id="reset-password-title">Reset password</h2>
-            <Button
-              variant="secondary"
-              iconOnly
-              className="iconButton modalCloseButton"
-              onClick={onClose}
-              disabled={busy}
-              aria-label="Close reset password dialog"
-              title={busy ? "Password reset is still saving" : "Close reset password dialog"}
-            >
-              <AppIcon name="x" />
-            </Button>
+    <DialogSurface backdrop dismissible={!busy} backdropDismiss={false} className="modalPanel userModalPanel" labelledBy="reset-password-title" onClose={onClose}>
+      <form onSubmit={onSubmit} className="userModalForm">
+        <div className="userModalHeader">
+          <h2 id="reset-password-title">Reset password</h2>
+          <Button
+            variant="secondary"
+            iconOnly
+            className="iconButton modalCloseButton"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close reset password dialog"
+            title={busy ? "Password reset is still saving" : "Close reset password dialog"}
+          >
+            <AppIcon name="x" />
+          </Button>
+        </div>
+        <fieldset disabled={busy} className="userModalBody">
+          <div className="userModalFields">
+            <label>
+              User
+              <input value={user.username} readOnly />
+            </label>
+            <label>
+              New password
+              <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
+            </label>
+            <label>
+              Confirm password
+              <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="Repeat password" />
+            </label>
           </div>
-          <fieldset disabled={busy} className="userModalBody">
-            <div className="userModalFields">
-              <label>
-                User
-                <input value={user.username} readOnly />
-              </label>
-              <label>
-                New password
-                <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
-              </label>
-              <label>
-                Confirm password
-                <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="Repeat password" />
-              </label>
-            </div>
-          </fieldset>
-          <div className="userModalFooter">
-            <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</Button>
-            <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving..." : "Reset password"}</Button>
-          </div>
-        </form>
-      </DialogSurface>
-    </div>
+        </fieldset>
+        <div className="userModalFooter">
+          <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</Button>
+          <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving..." : "Reset password"}</Button>
+        </div>
+      </form>
+    </DialogSurface>
   );
 }
 

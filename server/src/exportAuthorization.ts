@@ -1,12 +1,11 @@
+import { forbidden } from "./http/errors.js";
 import { hasPermission } from "./permissions.js";
 import type { StoredUser } from "./types.js";
 
 type ExportUser = Pick<StoredUser, "permissions" | "serverAccess">;
 
 function exportForbidden(message: string): never {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = 403;
-  throw error;
+  forbidden(message);
 }
 
 function uniqueServerIds(serverIds: readonly string[]) {

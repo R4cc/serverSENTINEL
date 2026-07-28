@@ -330,105 +330,101 @@ export function AddNodeModal({
   const canClose = !busy;
 
   return (
-    <div className="modalBackdrop nodeModalBackdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && canClose) onClose();
-    }}>
-      <DialogSurface className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
-        <header className="nodeModalHeader">
-          <div>
-            <h2 id="add-node-title">Add node</h2>
-            <p>Connect another computer to this ServerSentinel panel.</p>
-          </div>
-          <Button
-            variant="secondary"
-            iconOnly
-            className="iconButton modalCloseButton"
-            onClick={onClose}
-            disabled={!canClose}
-            aria-label="Close add node modal"
-            title={canClose ? "Close add node modal" : "Node creation is still in progress"}
-          >
-            <AppIcon name="x" />
-          </Button>
-        </header>
+    <DialogSurface backdrop="nodeModalBackdrop" backdropDismiss={canClose} className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
+      <header className="nodeModalHeader">
+        <div>
+          <h2 id="add-node-title">Add node</h2>
+          <p>Connect another computer to this ServerSentinel panel.</p>
+        </div>
+        <Button
+          variant="secondary"
+          iconOnly
+          className="iconButton modalCloseButton"
+          onClick={onClose}
+          disabled={!canClose}
+          aria-label="Close add node modal"
+          title={canClose ? "Close add node modal" : "Node creation is still in progress"}
+        >
+          <AppIcon name="x" />
+        </Button>
+      </header>
 
-        {!created ? (
-          <form className="appForm nodeModalBody" onSubmit={submit}>
-            <fieldset disabled={busy}>
-              {formError && <InlineState tone="error" title="Check node details" message={formError} />}
-              <label>
-                Node name
-                <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
-                <span className="fieldHint">A friendly name for the computer that will run your Minecraft servers.</span>
+      {!created ? (
+        <form className="appForm nodeModalBody" onSubmit={submit}>
+          <fieldset disabled={busy}>
+            {formError && <InlineState tone="error" title="Check node details" message={formError} />}
+            <label>
+              Node name
+              <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
+              <span className="fieldHint">A friendly name for the computer that will run your Minecraft servers.</span>
+            </label>
+            <section className="nodeConnectionSetup" aria-labelledby="node-connection-title">
+              <div className="nodeConnectionIntro">
+                <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
+                  <span>Node computer</span>
+                  <b aria-hidden="true">→</b>
+                  <span>This panel</span>
+                </div>
+                <div>
+                  <h3 id="node-connection-title">How the node connects</h3>
+                  <p>The node opens a connection to this panel so you can manage servers on that computer. It needs an address for this panel that works from the node computer.</p>
+                </div>
+              </div>
+              <label htmlFor="node-panel-address">
+                Panel address for this node
+                <input
+                  id="node-panel-address"
+                  name="panelUrl"
+                  value={panelUrl}
+                  onChange={(event) => setPanelUrl(event.target.value)}
+                  placeholder="https://panel.example.com or http://192.168.1.50:8080"
+                  aria-describedby="node-panel-address-hint"
+                  required
+                />
+                <span className="fieldHint" id="node-panel-address-hint">This is the panel's address, not the new node's address. Include the port when your panel uses one.</span>
               </label>
-              <section className="nodeConnectionSetup" aria-labelledby="node-connection-title">
-                <div className="nodeConnectionIntro">
-                  <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
-                    <span>Node computer</span>
-                    <b aria-hidden="true">→</b>
-                    <span>This panel</span>
-                  </div>
-                  <div>
-                    <h3 id="node-connection-title">How the node connects</h3>
-                    <p>The node opens a connection to this panel so you can manage servers on that computer. It needs an address for this panel that works from the node computer.</p>
-                  </div>
+              <div className={`panelAddressSuggestion ${browserAddressUsable ? "" : "warning"}`}>
+                <div>
+                  <span className="panelAddressSuggestionLabel">Address used by this browser</span>
+                  <code>{browserPanelUrl}</code>
+                  <p>{browserAddressUsable
+                    ? "This may work if the node computer can open the same address."
+                    : "This browser is using a local-only address. A Docker node would point that address back at itself, not at this panel."}</p>
                 </div>
-                <label htmlFor="node-panel-address">
-                  Panel address for this node
-                  <input
-                    id="node-panel-address"
-                    name="panelUrl"
-                    value={panelUrl}
-                    onChange={(event) => setPanelUrl(event.target.value)}
-                    placeholder="https://panel.example.com or http://192.168.1.50:8080"
-                    aria-describedby="node-panel-address-hint"
-                    required
-                  />
-                  <span className="fieldHint" id="node-panel-address-hint">This is the panel's address, not the new node's address. Include the port when your panel uses one.</span>
-                </label>
-                <div className={`panelAddressSuggestion ${browserAddressUsable ? "" : "warning"}`}>
-                  <div>
-                    <span className="panelAddressSuggestionLabel">Address used by this browser</span>
-                    <code>{browserPanelUrl}</code>
-                    <p>{browserAddressUsable
-                      ? "This may work if the node computer can open the same address."
-                      : "This browser is using a local-only address. A Docker node would point that address back at itself, not at this panel."}</p>
-                  </div>
-                  {browserAddressUsable && (
-                    <Button type="button" variant="secondary" compact onClick={() => setPanelUrl(browserPanelUrl)}>Use this address</Button>
-                  )}
-                </div>
-              </section>
-              <label>
-                <span className="fieldLabelWithInfo">
-                  Data folder on node
-                  <span className="roleInfoWrap">
-                    <Button variant="ghost" iconOnly className="roleInfoButton" aria-label="About the node data folder" aria-describedby="node-data-folder-tip">i</Button>
-                    <span id="node-data-folder-tip" role="tooltip" className="roleTooltip fieldTooltip">
-                      Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts this folder into the node container.
-                    </span>
+                {browserAddressUsable && (
+                  <Button type="button" variant="secondary" compact onClick={() => setPanelUrl(browserPanelUrl)}>Use this address</Button>
+                )}
+              </div>
+            </section>
+            <label>
+              <span className="fieldLabelWithInfo">
+                Data folder on node
+                <span className="roleInfoWrap">
+                  <Button variant="ghost" iconOnly className="roleInfoButton" aria-label="About the node data folder" aria-describedby="node-data-folder-tip">i</Button>
+                  <span id="node-data-folder-tip" role="tooltip" className="roleTooltip fieldTooltip">
+                    Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts this folder into the node container.
                   </span>
                 </span>
-                <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
-              </label>
-              <div className="nodeModalFooter inline">
-                <Button type="submit" reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
-                <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
-              </div>
-            </fieldset>
-          </form>
-        ) : (
-          <div className="nodeModalBody">
-            <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
-            <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
-            {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
-            <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-              <Button onClick={isSuccess ? onDone : onClose} disabled={!canClose} title={canClose ? (isSuccess ? "Finish node setup" : "Close and finish later") : "Node creation is still in progress"}>{isSuccess ? "Done" : "Finish later"}</Button>
+              </span>
+              <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
+            </label>
+            <div className="nodeModalFooter inline">
+              <Button type="submit" reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
+              <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
             </div>
+          </fieldset>
+        </form>
+      ) : (
+        <div className="nodeModalBody">
+          <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
+          <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
+          {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
+          <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
+            <Button onClick={isSuccess ? onDone : onClose} disabled={!canClose} title={canClose ? (isSuccess ? "Finish node setup" : "Close and finish later") : "Node creation is still in progress"}>{isSuccess ? "Done" : "Finish later"}</Button>
           </div>
-        )}
-      </DialogSurface>
-    </div>
+        </div>
+      )}
+    </DialogSurface>
   );
 }
 
@@ -762,22 +758,18 @@ export function NodesPage({
       )}
 
       {installResult && (
-        <div className="modalBackdrop nodeModalBackdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClearInstall();
-        }}>
-          <DialogSurface className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
-            <header className="nodeModalHeader">
-              <div>
-                <h2 id="install-node-title">Node Install</h2>
-                <p>Use this on the host that should run the node agent.</p>
-              </div>
-              <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
-            </header>
-            <div className="nodeModalBody">
-              <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />
+        <DialogSurface backdrop="nodeModalBackdrop" className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
+          <header className="nodeModalHeader">
+            <div>
+              <h2 id="install-node-title">Node Install</h2>
+              <p>Use this on the host that should run the node agent.</p>
             </div>
-          </DialogSurface>
-        </div>
+            <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
+          </header>
+          <div className="nodeModalBody">
+            <InstallInstructions result={installResult} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />
+          </div>
+        </DialogSurface>
       )}
 
       {addNodeOpen && (

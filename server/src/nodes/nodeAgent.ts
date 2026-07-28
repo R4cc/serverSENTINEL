@@ -8,6 +8,7 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
+import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
@@ -143,8 +144,6 @@ export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   const ceiling = Math.min(reconnectMaxDelayMs, reconnectBaseDelayMs * (2 ** Math.min(Math.max(0, attempt), 5)));
   return Math.round(reconnectBaseDelayMs + (ceiling - reconnectBaseDelayMs) * Math.min(1, Math.max(0, random())));
 }
-const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
-const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
 
 function detailedError(error: Error, details: string) {
@@ -748,14 +747,8 @@ async function playerObservation(server: ManagedServer, details?: NodeContainerI
 }
 
 async function requireStoppedForMutableConfiguration(server: ManagedServer) {
-  const status = await runtimeStatus(server) as { docker?: { configured?: boolean; available?: boolean; running?: boolean; state?: string; message?: string } };
-  if (status.docker?.running) throw new Error(stoppedServerMutationMessage);
-  const state = status.docker?.state || "";
-  if (state === "unknown") {
-    if (status.docker?.configured === false) return;
-    throw new Error(stoppedServerMutationMessage);
-  }
-  if (state && !stoppedLikeDockerStates.has(state)) throw new Error(stoppedServerMutationMessage);
+  const reason = mutableServerConfigurationBlockedReason(await runtimeStatus(server));
+  if (reason) throw new Error(reason);
 }
 
 function isMutableConfigurationPath(path: unknown) {

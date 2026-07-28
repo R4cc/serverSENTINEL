@@ -5,6 +5,7 @@ import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "..
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
 import { setRequestLogActor } from "../logging.js";
+import { throwHttp } from "../http/errors.js";
 
 type UserPermissionData = {
   permissions: Permission[];
@@ -70,14 +71,11 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   app.post<{ Body: { username?: string; password?: string; setupToken?: string } }>("/api/auth/register-first", context.authRateLimit, async (request, reply) => {
     const body = request.body ?? {};
     if (!context.verifySetupToken(body.setupToken)) {
-      const error = new Error("Invalid initial setup token") as Error & { statusCode?: number };
-      error.statusCode = 403;
-      throw error;
+      // Code kept as VALIDATION_ERROR to match what stableErrorCode already returned for this message.
+      throwHttp(403, "Invalid initial setup token", { code: "VALIDATION_ERROR" });
     }
     if (context.users.list().length !== 0) {
-      const error = new Error("Initial registration is already complete") as Error & { statusCode?: number };
-      error.statusCode = 409;
-      throw error;
+      throwHttp(409, "Initial registration is already complete", { code: "CONFLICT" });
     }
     const username = context.validateUsername(body.username);
     const password = context.validatePassword(body.password);
@@ -123,9 +121,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         action: "login",
         status: "failed"
       }, "Login failed");
-      const error = new Error("Invalid username or password") as Error & { statusCode?: number };
-      error.statusCode = 401;
-      throw error;
+      throwHttp(401, "Invalid username or password", { code: "INVALID_CREDENTIALS" });
     }
     const sessionId = randomBytes(32).toString("base64url");
     const now = new Date().toISOString();
@@ -194,9 +190,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     await context.requireRequestPermission(request, "users.manage");
     const target = context.users.list().find((user) => user.id === request.params.id);
     if (context.demoEnabled && context.isDemoUser(target)) {
-      const error = new Error("The demo user is managed by demo-mode startup and cannot be changed") as Error & { statusCode?: number };
-      error.statusCode = 403;
-      throw error;
+      // Code kept as VALIDATION_ERROR to match what stableErrorCode already returned for this message.
+      throwHttp(403, "The demo user is managed by demo-mode startup and cannot be changed", { code: "VALIDATION_ERROR" });
     }
     const body = request.body ?? {};
     const passwordChanged = typeof body.password === "string" && Boolean(body.password.trim());
@@ -245,9 +240,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     await context.requireRequestPermission(request, "users.manage");
     const target = context.users.list().find((user) => user.id === request.params.id);
     if (context.demoEnabled && context.isDemoUser(target)) {
-      const error = new Error("The demo user is managed by demo-mode startup and cannot be deleted") as Error & { statusCode?: number };
-      error.statusCode = 403;
-      throw error;
+      // Code kept as VALIDATION_ERROR to match what stableErrorCode already returned for this message.
+      throwHttp(403, "The demo user is managed by demo-mode startup and cannot be deleted", { code: "VALIDATION_ERROR" });
     }
     const deletedUser = context.users.delete(request.params.id);
     context.logInfo({

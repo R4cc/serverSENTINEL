@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { ManagedNode } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
+import { throwHttp } from "../http/errors.js";
 import type { StorageDatabase } from "./database.js";
 
 type NodeRow = {
@@ -167,9 +168,6 @@ export class NodesRepository {
   }
 
   private notFound(id: string): never {
-    const error = new Error(`Node ${id} not found`) as Error & { statusCode?: number; code?: string };
-    error.statusCode = 404;
-    error.code = "node_not_found";
-    throw error;
+    throwHttp(404, `Node ${id} not found`, { code: "node_not_found" });
   }
 }

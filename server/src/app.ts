@@ -62,7 +62,7 @@ import { OperationsRepository } from "./storage/operationsRepository.js";
 import { PlayerHeadService } from "./playerHeadService.js";
 import { OperationService } from "./operations/operationService.js";
 import { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
-import { errorStatusCode, publicApiError } from "./http/errors.js";
+import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
 import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
 import { ensureWritableResolvedInsideServer } from "./core.js";
 import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, stopServerWithIntent, withLifecycleLock } from "./servers/lifecycle.js";
@@ -323,9 +323,7 @@ app.addHook("preHandler", async (request) => {
     if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/fabric/versions") || request.raw.url.startsWith("/api/runtime/"))) {
       return;
     }
-    const error = new Error("Demo mode is active. Disable demo mode before managing real servers.") as Error & { statusCode?: number };
-    error.statusCode = 403;
-    throw error;
+    throwHttp(403, "Demo mode is active. Disable demo mode before managing real servers.", { code: "DEMO_MODE_ACTIVE" });
   }
   await requireRequestPermission(request);
 });
