@@ -114,7 +114,8 @@ function sortPermissions(permissions: Permission[]) {
   return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
-function samePermissions(a: readonly Permission[], b: readonly Permission[]) {
+/** Both sides must come from normalizePermissions, which sorts into a stable order. */
+export function samePermissions(a: readonly Permission[], b: readonly Permission[]) {
   return a.length === b.length && a.every((permission, index) => permission === b[index]);
 }
 

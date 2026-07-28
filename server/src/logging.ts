@@ -116,7 +116,7 @@ export function logOperationFailure(fields: LogFields, message: string, error: u
 export function routeLogFields(request: FastifyRequest, statusCode?: number): LogFields {
   return {
     method: request.method,
-    route: request.routeOptions.url ?? request.raw.url?.split("?")[0] ?? request.url.split("?")[0],
+    route: request.routeOptions.url ?? request.url.split("?")[0],
     statusCode
   };
 }

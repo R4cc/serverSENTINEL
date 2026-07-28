@@ -1,6 +1,6 @@
 import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import { randomBytes, randomUUID } from "node:crypto";
-import { ROLE_PRESETS, normalizePermissions } from "../permissions.js";
+import { ROLE_PRESETS, normalizePermissions, samePermissions } from "../permissions.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
@@ -50,10 +50,6 @@ type AuthRoutesContext = {
 
 function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
   context.sessions.deleteExpired(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
-}
-
-function samePermissions(left: readonly Permission[], right: readonly Permission[]) {
-  return left.length === right.length && left.every((permission, index) => permission === right[index]);
 }
 
 export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesContext) {
@@ -222,12 +218,13 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       };
     });
     const sessionsRevoked = passwordChanged ? context.sessions.deleteForUser(updatedUser.id) : 0;
-    const changedFields = [
-      target && target.username !== updatedUser.username ? "username" : undefined,
-      target && target.rolePreset !== updatedUser.rolePreset ? "rolePreset" : undefined,
-      target && !samePermissions(target.permissions, updatedUser.permissions) ? "permissions" : undefined,
-      passwordChanged ? "password" : undefined
-    ].filter((field): field is string => Boolean(field));
+    const changedFields: string[] = [];
+    if (target) {
+      if (target.username !== updatedUser.username) changedFields.push("username");
+      if (target.rolePreset !== updatedUser.rolePreset) changedFields.push("rolePreset");
+      if (!samePermissions(target.permissions, updatedUser.permissions)) changedFields.push("permissions");
+    }
+    if (passwordChanged) changedFields.push("password");
     context.logInfo({
       userId: updatedUser.id,
       username: updatedUser.username,

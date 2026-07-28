@@ -42,7 +42,7 @@ import {
   type TimelinePalette
 } from "./serverTimelineChart";
 import { Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
-import { playerHeadSource } from "../utils/playerHeads";
+import { playerHeadSource, playerHeadVersion } from "../utils/playerHeads";
 
 const timelineRanges = [
   { label: "5m", milliseconds: 5 * 60 * 1000 },
@@ -765,7 +765,7 @@ export function ServerTimeline({
   const hoverFrameRef = useRef<number | undefined>(undefined);
   const palette = useTimelinePresentation(panelRef);
   const navigationPendingRef = useRef(false);
-  const headVersion = Math.floor(clockNow / (60 * 60 * 1000));
+  const headVersion = playerHeadVersion(clockNow);
   const playerHeadSourceFor = useCallback(
     (player: string) => playerHeadSource(serverId, player, headVersion),
     [headVersion, serverId]

@@ -808,7 +808,8 @@ button.overviewCardRow:focus-visible {
 .timelineAnnotationClusterIcon.tone-planned { --cluster-icon-color: var(--timeline-schedule); }
 .timelineAnnotationClusterIcon.tone-planned { border-style: dashed; background: var(--surface-muted); }
 
-.timelineAnnotationClusterIcon svg {
+.timelineAnnotationClusterIcon svg,
+.serverTimelineAnnotationPopoverGlyph svg {
   display: block;
   width: 14px;
   height: 14px;
@@ -820,7 +821,9 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineAnnotationClusterIcon .controlGlyph-start,
-.timelineAnnotationClusterIcon .controlGlyph-stop {
+.timelineAnnotationClusterIcon .controlGlyph-stop,
+.serverTimelineAnnotationPopoverGlyph .controlGlyph-start,
+.serverTimelineAnnotationPopoverGlyph .controlGlyph-stop {
   fill: currentColor;
   stroke: none;
 }
@@ -992,23 +995,6 @@ button.overviewCardRow:focus-visible {
   color: var(--annotation-color);
   font-size: 12px;
   font-weight: var(--weight-title);
-}
-
-.serverTimelineAnnotationPopoverGlyph svg {
-  display: block;
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.serverTimelineAnnotationPopoverGlyph .controlGlyph-start,
-.serverTimelineAnnotationPopoverGlyph .controlGlyph-stop {
-  fill: currentColor;
-  stroke: none;
 }
 
 .serverTimelineAnnotationPopoverItemBody {
@@ -1451,49 +1437,30 @@ button.overviewCardRow:focus-visible {
   color: var(--sentinel-success);
 }
 
+.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected,
 .overviewPage .eventsPanel .eventRow.warning {
   border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
 }
 
+.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected::before,
 .overviewPage .eventsPanel .eventRow.warning::before { background: var(--sentinel-warning); }
+.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventIcon,
 .overviewPage .eventsPanel .eventRow.warning .eventIcon {
   background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface-raised));
   color: var(--sentinel-warning);
 }
 
+.overviewPage .eventsPanel .eventRow.eventKind--player_left,
 .overviewPage .eventsPanel .eventRow.error {
   border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
 }
 
+.overviewPage .eventsPanel .eventRow.eventKind--player_left::before,
 .overviewPage .eventsPanel .eventRow.error::before { background: var(--sentinel-danger); }
+.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventIcon,
 .overviewPage .eventsPanel .eventRow.error .eventIcon {
-  background: color-mix(in srgb, var(--sentinel-danger) 14%, var(--surface-raised));
-  color: var(--sentinel-danger);
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected::before { background: var(--sentinel-warning); }
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventIcon {
-  background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface-raised));
-  color: var(--sentinel-warning);
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_left {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_left::before {
-  background: var(--sentinel-danger);
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventIcon {
   background: color-mix(in srgb, var(--sentinel-danger) 14%, var(--surface-raised));
   color: var(--sentinel-danger);
 }
@@ -2191,11 +2158,7 @@ button.overviewCardRow:focus-visible {
     background: transparent;
   }
 
-  .overviewPage .eventsPanel .eventRow.eventKind--player_left {
-    border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
-    background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));
-  }
-
+  .overviewPage .eventsPanel .eventRow.eventKind--player_left,
   .overviewPage .eventsPanel .eventRow.error {
     border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
     background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));

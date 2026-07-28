@@ -19,7 +19,7 @@ import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
-import { playerHeadSource } from '../utils/playerHeads';
+import { playerHeadSource, playerHeadVersion } from '../utils/playerHeads';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
@@ -211,7 +211,7 @@ export function ActivePlayersPanel({
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
     const rosterCanExpand = snapshot.names.length > activePlayerPreviewLimit;
-    const headVersion = Math.floor(Date.now() / (60 * 60 * 1000));
+    const headVersion = playerHeadVersion();
 
     content = (
       <div className="activePlayerRoster">
@@ -267,6 +267,14 @@ export function ActivePlayersPanel({
   );
 }
 
+/** Player head image state, falling back to the caller's own icon once a head fails to load. */
+function usePlayerHead(serverId: string, playerName: string | undefined, version: number, enabled: boolean) {
+  const source = playerName && serverId ? playerHeadSource(serverId, playerName, version) : "";
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [source, enabled]);
+  return { source, showHead: enabled && Boolean(source) && !failed, onHeadError: () => setFailed(true) };
+}
+
 function ActivePlayerRow({
   serverId,
   playerName,
@@ -278,15 +286,12 @@ function ActivePlayerRow({
   playerHeadsEnabled: boolean;
   version: number;
 }) {
-  const source = playerHeadSource(serverId, playerName, version);
-  const [failed, setFailed] = useState(false);
-  const showHead = playerHeadsEnabled && Boolean(serverId) && !failed;
-  useEffect(() => setFailed(false), [source, playerHeadsEnabled]);
+  const { source, showHead, onHeadError } = usePlayerHead(serverId, playerName, version, playerHeadsEnabled);
   return (
     <div className={`activePlayer ${showHead ? "activePlayer--withHead" : ""}`.trim()}>
       {showHead ? (
         <span className="activePlayerHead" aria-hidden="true">
-          <img src={source} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+          <img src={source} alt="" loading="lazy" decoding="async" onError={onHeadError} />
           <span className="activePlayerHeadStatus" />
         </span>
       ) : <span className="activePlayerDot" aria-hidden="true" />}
@@ -562,6 +567,11 @@ export function formatRelativeEventTime(value: string | undefined, now = new Dat
 
 type RecentEventKind = EventIconKind;
 
+/** Event kinds whose subject is a player name, so the row can show that player's head. */
+const playerHeadEventKinds = new Set<RecentEventKind>(["player_joined", "player_left", "player_reconnected"]);
+/** Kinds that always collapse into one row, so an occurrence count would be misleading. */
+const uncountedEventKinds = new Set<RecentEventKind>(["player_reconnected", "server_restarted"]);
+
 export type RecentEventGroup = {
   id: string;
   kind: RecentEventKind;
@@ -756,6 +766,7 @@ export function RecentEventsPanel({
   const visibleEvents = useMemo(() => events.filter((event) => !hiddenSignatureSet.has(event.signature)), [events, hiddenSignatureSet]);
   const displayEvents = useMemo(() => groupRecentEvents(visibleEvents, now).slice(0, 8), [visibleEvents, now]);
   const eventSections = useMemo(() => groupRecentEventsByTime(displayEvents, now), [displayEvents, now]);
+  const headVersion = playerHeadVersion(now.getTime());
   const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
 
   useEffect(() => {
@@ -811,11 +822,8 @@ export function RecentEventsPanel({
                 const timestamp = eventDate(group.timestamp, now);
                 const presentation = recentEventPresentation(group);
                 const relatedLabel = relatedEventLabel(group);
-                const playerName = group.kind === "player_joined"
-                  || group.kind === "player_left"
-                  || group.kind === "player_reconnected"
-                  ? presentation.subject
-                  : undefined;
+                const playerName = playerHeadEventKinds.has(group.kind) ? presentation.subject : undefined;
+                const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
                 return (
                   <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
                     <RecentEventMarker
@@ -823,18 +831,14 @@ export function RecentEventsPanel({
                       playerName={playerName}
                       serverId={serverId}
                       playerHeadsEnabled={playerHeadsEnabled}
-                      version={Math.floor(now.getTime() / (60 * 60 * 1000))}
+                      version={headVersion}
                     >
-                      {group.events.length > 1 && group.kind !== "player_reconnected" && group.kind !== "server_restarted" && (
-                        <span className="eventOccurrenceBadge">×{group.events.length}</span>
-                      )}
+                      {occurrenceCount > 0 && <span className="eventOccurrenceBadge">×{occurrenceCount}</span>}
                     </RecentEventMarker>
                     <div className="eventCopy">
                       <strong>{presentation.title}</strong>
                       {presentation.subject && <span className="eventSubject">{presentation.subject}</span>}
-                      {group.events.length > 1 && group.kind !== "player_reconnected" && group.kind !== "server_restarted" && (
-                        <span className="srOnly">{group.events.length} occurrences</span>
-                      )}
+                      {occurrenceCount > 0 && <span className="srOnly">{occurrenceCount} occurrences</span>}
                       {(presentation.details || relatedLabel) && (
                         <span className="eventDetailLine">
                           {presentation.details && <span>{presentation.details}</span>}
@@ -888,12 +892,7 @@ function RecentEventMarker({
   version: number;
   children?: ReactNode;
 }) {
-  const source = playerName ? playerHeadSource(serverId, playerName, version) : "";
-  const [failed, setFailed] = useState(false);
-  const showHead = playerHeadsEnabled && Boolean(serverId) && Boolean(playerName) && !failed;
-
-  useEffect(() => setFailed(false), [source, playerHeadsEnabled]);
-
+  const { source, showHead, onHeadError } = usePlayerHead(serverId, playerName, version, playerHeadsEnabled);
   return (
     <span className={`eventIcon${showHead ? " eventIcon--withPlayerHead" : ""}`} aria-hidden="true">
       {showHead ? (
@@ -904,7 +903,7 @@ function RecentEventMarker({
             alt=""
             loading="lazy"
             decoding="async"
-            onError={() => setFailed(true)}
+            onError={onHeadError}
           />
           <span className="eventPlayerIconBadge">
             <EventIcon kind={kind} />

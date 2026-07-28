@@ -78,6 +78,7 @@ const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
 const exportMaintenanceIntervalMs = 15 * 60 * 1000;
+const readOnlyHttpMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 let activeAppReservation: symbol | undefined;
 
@@ -122,17 +123,17 @@ app.setErrorHandler((error, request, reply) => {
   }
   reply.code(statusCode).send(publicApiError(error, statusCode));
 });
-app.addHook("onResponse", async (request, reply) => {
-  if (!request.raw.url?.startsWith("/api/") || request.headers.upgrade?.toLowerCase() === "websocket") {
-    return;
+app.addHook("onResponse", (request, reply, done) => {
+  if (request.raw.url?.startsWith("/api/") && request.headers.upgrade?.toLowerCase() !== "websocket") {
+    logInfo({
+      ...routeLogFields(request, reply.statusCode),
+      action: "api_request",
+      category: "http",
+      requestKind: readOnlyHttpMethods.has(request.method) ? "read" : "mutation",
+      durationMs: Math.round(reply.elapsedTime * 100) / 100
+    }, "API request completed");
   }
-  logInfo({
-    ...routeLogFields(request, reply.statusCode),
-    action: "api_request",
-    category: "http",
-    requestKind: ["GET", "HEAD", "OPTIONS"].includes(request.method) ? "read" : "mutation",
-    durationMs: Math.round(reply.elapsedTime * 100) / 100
-  }, "API request completed");
+  done();
 });
 app.addHook("onClose", async () => {
   if (activeAppReservation === reservation) activeAppReservation = undefined;
