@@ -2501,7 +2501,7 @@
 }
 
 
-/* Nodes cohesion migrated from the former adoption layer */
+/* Nodes layout cohesion */
 
 .installTabs .uiButton {
   min-height: var(--control-height-compact);

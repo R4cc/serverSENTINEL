@@ -269,8 +269,8 @@
 }
 
 
-/* Mods cohesion migrated from the former adoption layer */
-/* Mods and Nodes adoption -------------------------------------------------- */
+/* Mods layout cohesion */
+/* Mods and Nodes shared layout -------------------------------------------- */
 
 .nodeWarnings span {
   border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 36%, var(--border-row));

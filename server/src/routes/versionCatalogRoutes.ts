@@ -60,7 +60,7 @@ app.post<{ Params: { runtimeType: string }; Body: { minecraftVersion?: string; r
   return { runtimeProfile, warnings: [] };
 });
 
-// Legacy Fabric endpoints remain available while older web clients roll forward.
+// Legacy Fabric endpoints remain available for supported older web clients.
 app.get<{ Querystring: { minecraftVersion?: string; refresh?: string } }>("/api/runtime/fabric/loader-versions", async (request) => {
   await requireVersionCatalogAccess(request);
   const minecraftVersion = request.query.minecraftVersion?.trim();

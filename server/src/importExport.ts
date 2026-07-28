@@ -236,7 +236,7 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (!isPlainObject(value)) throw new Error("Import artifact must be an object");
   rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "instance", "servers"], "artifact");
   if (value.artifactType !== exportArtifactType) throw new Error("Unsupported import artifact type");
-  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; serverSENTINEL 1.3 requires export schema ${exportArtifactSchemaVersion}`);
+  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; this serverSENTINEL release requires export schema ${exportArtifactSchemaVersion}`);
   if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
   if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
   rejectUnsupportedKeys(value.instance, ["settings", "nodes"], "instance");

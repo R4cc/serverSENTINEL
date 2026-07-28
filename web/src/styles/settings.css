@@ -711,7 +711,7 @@
 }
 
 
-/* Settings cohesion migrated from the former adoption layer */
+/* Settings layout cohesion */
 .keyForm fieldset,
 .keyFormConfigured {
   display: grid;
@@ -822,8 +822,8 @@
 }
 
 
-/* Responsive settings cohesion migrated from the former adoption layer */
-/* Responsive settings layout pass: keep labels, helpers, and controls readable on phones. */
+/* Responsive settings layout */
+/* Responsive settings layout keeps labels, helpers, and controls readable on phones. */
 @media (max-width: 860px) {
   .keyForm fieldset,
   .keyFormConfigured {

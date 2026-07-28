@@ -150,7 +150,7 @@ With the server stopped:
 1. Open Files.
 2. List the root directory.
 3. Preview `server.properties`.
-4. Click Edit, change `motd` to `serverSENTINEL 1.0 smoke`, save, and close the editor.
+4. Click Edit, change `motd` to `serverSENTINEL release smoke`, save, and close the editor.
 5. Reopen the file and confirm the saved value is present.
 
 Expected:

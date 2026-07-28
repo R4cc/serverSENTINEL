@@ -437,7 +437,7 @@ function recordCurrentSchema(database: Database.Database) {
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
-      throw new Error("Malformed SQLite schema: schema_migrations is missing. Restore a valid backup before starting serverSENTINEL 1.3.");
+      throw new Error("Malformed SQLite schema: schema_migrations is missing. Restore a valid backup before starting this serverSENTINEL release.");
     }
     database.transaction(() => {
       database.exec(`
@@ -513,12 +513,12 @@ function initializeSchema(database: Database.Database) {
 
   const version = history.at(-1)?.version;
   if (version !== undefined && version < 16) {
-    throw new Error(`SQLite schema ${version} is too old for serverSENTINEL 1.3. Upgrade this data root with serverSENTINEL 1.2.1 first, then start 1.3 again.`);
+    throw new Error(`SQLite schema ${version} is too old. Upgrade this data root with serverSENTINEL 1.2.1 first, then start the current release again.`);
   }
   if (version !== undefined && version > currentSchemaVersion) {
-    throw new Error(`SQLite schema ${version} is newer than serverSENTINEL 1.3 supports. Install a matching newer release or restore a schema-16 backup.`);
+    throw new Error(`SQLite schema ${version} is newer than this serverSENTINEL release supports. Install a release that supports this data root or restore a compatible backup.`);
   }
-  throw new Error("Unsupported SQLite schema. Restore a matching backup or upgrade the data root with serverSENTINEL 1.2.1 before starting 1.3.");
+  throw new Error("Unsupported SQLite schema. Restore a matching backup or upgrade the data root with serverSENTINEL 1.2.1 before starting the current release.");
 }
 
 export class StorageDatabase {

@@ -369,9 +369,9 @@ export type ServerRuntimeProfile = {
   minecraftVersion: string;
   runtimeType: ServerRuntimeType;
   runtimeVersion: string;
-  /** @deprecated Legacy Fabric profile field, emitted temporarily for older nodes and exports. */
+  /** @deprecated Legacy Fabric profile field retained for supported older nodes and exports. */
   loader?: LoaderType;
-  /** @deprecated Legacy Fabric profile field, emitted temporarily for older nodes and exports. */
+  /** @deprecated Legacy Fabric profile field retained for supported older nodes and exports. */
   loaderVersion?: string;
   javaMajorVersion: JavaMajorVersion;
   jarProvider: ServerJarProviderId;
@@ -608,7 +608,7 @@ export type VersionResolution = {
 export type ResolvedServerVersions = {
   minecraftVersion: VersionResolution;
   runtimeVersion: VersionResolution;
-  /** @deprecated Legacy Fabric response field, emitted temporarily for older web clients. */
+  /** @deprecated Legacy Fabric response field retained for supported older web clients. */
   fabricLoaderVersion?: VersionResolution;
 };
 

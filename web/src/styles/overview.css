@@ -1821,8 +1821,8 @@ button.overviewCardRow:focus-visible {
 }
 
 
-/* Overview cohesion migrated from the former adoption layer */
-/* Core application adoption ------------------------------------------------ */
+/* Overview layout cohesion */
+/* Overview shared layout --------------------------------------------------- */
 
 .overviewSummary .summaryTile {
   min-height: 64px;
