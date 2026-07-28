@@ -14,8 +14,6 @@ export type VersionMetadata = {
   minecraftVersion?: string;
   runtimeType?: ServerRuntimeType;
   runtimeVersion?: string;
-  /** Legacy Fabric metadata field. */
-  fabricLoaderVersion?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -47,7 +45,6 @@ export async function writeVersionMetadataFile(server: ManagedServer) {
     minecraftVersion: targetRuntime.minecraftVersion,
     runtimeType: targetRuntime.runtimeType,
     runtimeVersion: targetRuntime.runtimeVersion,
-    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: targetRuntime.runtimeVersion } : {}),
     createdAt: now,
     updatedAt: now
   };
@@ -96,8 +93,7 @@ export async function detectVersionsFromLauncherJar(server: ManagedServer): Prom
     return {
       minecraftVersion: values["game-version"],
       runtimeType: "fabric",
-      runtimeVersion: values["fabric-loader-version"],
-      fabricLoaderVersion: values["fabric-loader-version"]
+      runtimeVersion: values["fabric-loader-version"]
     };
   } catch {
     return {};
@@ -115,8 +111,7 @@ export function detectVersionsFromLogText(logText: string, runtimeType: ServerRu
   return {
     minecraftVersion: minecraftMatches.at(-1)?.[1],
     runtimeType,
-    runtimeVersion,
-    ...(runtimeType === "fabric" ? { fabricLoaderVersion: runtimeVersion } : {})
+    runtimeVersion
   };
 }
 
@@ -175,7 +170,6 @@ export async function resolveServerVersions(server: ManagedServer): Promise<Reso
   const runtimeVersion = versionResolution(detected.runtimeVersion || logs.runtimeVersion || targetRuntime.runtimeVersion, runtimeSource, lastCheckedAt);
   return {
     minecraftVersion: versionResolution(detected.minecraftVersion || logs.minecraftVersion || targetRuntime.minecraftVersion, minecraftSource, lastCheckedAt),
-    runtimeVersion,
-    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: runtimeVersion } : {})
+    runtimeVersion
   };
 }

@@ -40,10 +40,8 @@ import {
   publicZipExtractionPlan,
   readServerTextFile,
   renameServerEntry,
-  resolveUploadTarget,
   safeFileManagerName,
   toPublicServerPath,
-  writeRuntimeUpload,
   writeServerTextFile
 } from "../runtime/local/fileService.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
@@ -115,9 +113,7 @@ type CreateInput = {
   runtime?: {
     runtimeType?: string;
     runtimeVersion?: string;
-    loader?: string;
     minecraftVersion?: string;
-    loaderVersion?: string;
     serverJar?: string;
   };
   dockerContainer?: string;
@@ -234,13 +230,6 @@ function publicPath(root: string, target: string) {
   return toPublicServerPath({ serverDir: root }, target);
 }
 
-function validateBase64Content(value: unknown, allowEmpty = false) {
-  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    throw new Error("Uploaded content must be valid base64");
-  }
-  return value;
-}
-
 function assertJarBuffer(buffer: Buffer, contentName = "managed-content file") {
   if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b || ![0x03, 0x05, 0x07].includes(buffer[2])) {
     throw new Error(`Uploaded ${contentName} must be a valid .jar file`);
@@ -347,7 +336,6 @@ async function writeVersionMetadata(server: ManagedServer) {
     minecraftVersion: targetRuntime.minecraftVersion,
     runtimeType: targetRuntime.runtimeType,
     runtimeVersion: targetRuntime.runtimeVersion,
-    ...(targetRuntime.runtimeType === "fabric" ? { fabricLoaderVersion: targetRuntime.runtimeVersion } : {}),
     createdAt,
     updatedAt: now
   }, null, 2)}\n`, "utf8");
@@ -1198,13 +1186,6 @@ async function observeServers(payload: unknown): Promise<ServerObservationRespon
   return { observedAt: new Date().toISOString(), items: results };
 }
 
-async function fileDownload(server: ManagedServer, path: unknown) {
-  const target = await inside(server, path);
-  const st = await stat(target);
-  if (!st.isFile() || st.size > uploadLimit) throw new Error("Only files up to the transfer limit can be downloaded");
-  return { filename: basename(target), size: st.size, contentBase64: (await readFile(target)).toString("base64") };
-}
-
 function publicExtractionPlan(root: string, plan: ZipExtractionPlan): ZipExtractionPlan {
   return publicZipExtractionPlan({ serverDir: root }, plan);
 }
@@ -1271,18 +1252,6 @@ async function writeEditableFile(server: ManagedServer, path: unknown, content: 
   return writeServerTextFile(scope, await inside(server, path), content);
 }
 
-async function uploadFile(server: ManagedServer, parentInput: unknown, filenameInput: unknown, contentBase64Input: unknown) {
-  const scope = { serverDir: await serverRoot(server) };
-  const target = await resolveUploadTarget(scope, await inside(server, parentInput), filenameInput);
-  const size = await writeRuntimeUpload(target, contentBase64Input, {
-    maximumBytes: fileUploadSizeLimit,
-    allowEmpty: true,
-    label: "Uploaded file content",
-    decodeBase64: (value, allowEmpty) => validateBase64Content(value, allowEmpty)
-  });
-  return { ok: true, path: publicPath(scope.serverDir, target), size };
-}
-
 async function modsList(server: ManagedServer) {
   const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
   await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
@@ -1313,12 +1282,11 @@ async function modsList(server: ManagedServer) {
   return { mods };
 }
 
-async function modUpload(server: ManagedServer, filename: unknown, contentBase64: unknown) {
+async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
   const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
   const singular = runtime.contentKind === "plugins" ? "Plugin" : "Mod";
   const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
   if (!name.endsWith(".jar")) throw new Error(`${singular} uploads must be .jar files`);
-  const content = Buffer.from(validateBase64Content(contentBase64), "base64");
   if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular.toLowerCase()} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
   assertJarBuffer(content, singular.toLowerCase());
   await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
@@ -1415,7 +1383,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const response = await modrinthFetch(file.url, { signal });
     if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
-    const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
+    const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
 
@@ -1448,7 +1416,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const response = await modrinthFetch(file.url, { signal });
   if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
-  const written = await modUpload(server, safeModFilename(file.filename), content.toString("base64"));
+  const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
   return {
     ...written,
     filename: file.filename,
@@ -1520,14 +1488,9 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   if (command === "files.list") return fileList(server, payload?.path);
   if (command === "files.archive.plan") return archivePlan(server, payload?.path, payload?.destinationPath);
   if (command === "files.read") return fileRead(server, payload?.path, Boolean(payload?.preview));
-  if (command === "files.download") return fileDownload(server, payload?.path);
   if (command === "files.write") {
     if (isMutableConfigurationPath(payload?.path)) await requireStoppedForMutableConfiguration(server);
     return writeEditableFile(server, payload?.path, payload?.content);
-  }
-  if (command === "files.upload") {
-    if (isMutableConfigurationPath(posix.join(safeRelative(payload?.parent), safeName(payload?.filename)))) await requireStoppedForMutableConfiguration(server);
-    return uploadFile(server, payload?.parent, payload?.filename, payload?.contentBase64);
   }
   if (command === "files.mkdir") {
     if (isMutableConfigurationPath(payload?.parent)) await requireStoppedForMutableConfiguration(server);
@@ -1579,9 +1542,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     }
   }
   if (command === "mods.list" || command === "content.list") return modsList(server);
-  if (command === "mods.upload" || command === "content.upload") {
-    return modUpload(server, payload?.filename, payload?.contentBase64);
-  }
   if (command === "mods.install" || command === "content.install") {
     return modInstall(server, payload, signal);
   }
@@ -1617,6 +1577,7 @@ export const __nodeAgentTestHooks = {
   minecraftContainerCommand,
   runtimeConfigHash,
   nodeReconnectDelayMs,
+  prepareBinaryUpload,
   selfUpdateContainer
 };
 

@@ -61,8 +61,6 @@ function paperServer(): ManagedServer {
       ...server.runtimeProfile,
       runtimeType: "paper",
       runtimeVersion: "232",
-      loader: undefined,
-      loaderVersion: undefined,
       jarProvider: "papermc",
       jarArtifact: { filename: "paper.jar" }
     }
@@ -73,11 +71,19 @@ function runtimeWithRecorder(result: unknown = { ok: true }) {
   const calls: Array<{ command: string; timeoutMs?: number }> = [];
   const node = testNode();
   const connections = {
-    connectedNode: () => undefined,
+    connectedNode: () => ({ ...node, features: [...nodeFeatures] }),
     request: async (_node: ManagedNode, command: string, _payload: unknown, timeoutMs?: number) => {
       calls.push({ command, timeoutMs });
       return result;
-    }
+    },
+    upload: async (_node: ManagedNode, command: string, _payload: unknown, _stream: Readable, _size: number, timeoutMs?: number) => {
+      calls.push({ command, timeoutMs });
+      return result;
+    },
+    download: async (_node: ManagedNode, command: string, _payload: unknown, _maxBytes: number, timeoutMs?: number) => {
+      calls.push({ command, timeoutMs });
+      return result;
+    },
   } as unknown as PanelNodeConnections;
   const runtime = new RemoteNodeRuntime(
     node.id,
@@ -131,7 +137,7 @@ describe("RemoteNodeRuntime command timeouts", () => {
     expect(uploaded[0].content.equals(content)).toBe(true);
   });
 
-  it("uses canonical managed-content commands for Paper and legacy mod commands for Fabric", async () => {
+  it("uses canonical managed-content commands for Paper and mod commands for Fabric", async () => {
     const { runtime, calls } = runtimeWithRecorder({ mods: [] });
 
     await runtime.listMods(testServer());
@@ -373,11 +379,11 @@ describe("RemoteNodeRuntime command timeouts", () => {
 
   it("uses longer timeouts for remote transfers and Modrinth-backed commands", async () => {
     const server = testServer();
-    const { runtime, calls } = runtimeWithRecorder({ filename: "mods.zip", size: 0, contentBase64: "" });
+    const { runtime, calls } = runtimeWithRecorder({ filename: "mods.zip", size: 0, stream: Readable.from([]) });
 
     await runtime.downloadFile(server, "mods.zip");
-    await runtime.uploadFile(server, ".", "mods.zip", "");
-    await runtime.uploadMod(server, "fabric-api.jar", "UEsDBA==");
+    await runtime.uploadFile(server, ".", "mods.zip", { stream: Readable.from([]), size: 0 });
+    await runtime.uploadMod(server, "fabric-api.jar", { stream: Readable.from([Buffer.from("PK\u0003\u0004")]), size: 4 });
     await runtime.listMods(server, { forceRefresh: true });
     await runtime.installMod(server, { projectId: "fabric-api" });
 
@@ -392,7 +398,7 @@ describe("RemoteNodeRuntime command timeouts", () => {
 
   it("uses existing remote file downloads when streaming archives", async () => {
     const server = testServer();
-    const { runtime, calls } = runtimeWithRecorder({ filename: "a.txt", size: 1, contentBase64: Buffer.from("a").toString("base64") });
+    const { runtime, calls } = runtimeWithRecorder({ filename: "a.txt", size: 1, stream: Readable.from([Buffer.from("a")]) });
 
     const archive = await runtime.downloadArchive(server, [
       { sourcePath: "a.txt", archivePath: "a.txt", type: "file", size: 1 }

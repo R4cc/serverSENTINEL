@@ -308,8 +308,6 @@ export type RestartRequiredChange = {
 export const serverRuntimeTypes = ["fabric", "paper"] as const;
 export type ServerRuntimeType = typeof serverRuntimeTypes[number];
 
-/** @deprecated Use ServerRuntimeType. Kept for rolling compatibility with older integrations. */
-export type LoaderType = "fabric";
 export type RuntimeContentKind = "mods" | "plugins";
 
 export type ServerRuntimeDefinition = {
@@ -369,10 +367,6 @@ export type ServerRuntimeProfile = {
   minecraftVersion: string;
   runtimeType: ServerRuntimeType;
   runtimeVersion: string;
-  /** @deprecated Legacy Fabric profile field retained for supported older nodes and exports. */
-  loader?: LoaderType;
-  /** @deprecated Legacy Fabric profile field retained for supported older nodes and exports. */
-  loaderVersion?: string;
   javaMajorVersion: JavaMajorVersion;
   jarProvider: ServerJarProviderId;
   jarArtifact: {
@@ -470,8 +464,6 @@ export type NodeType = "local" | "remote";
 
 export type NodeStatus = "online" | "offline" | "unknown";
 
-export type NodeProtocolMode = "current" | "fallback" | "update-only" | "incompatible";
-
 export type RestartPhase = "stopping" | "starting";
 
 export type RestartRequiredModSnapshot = {
@@ -523,7 +515,6 @@ export type ManagedNodeCore = {
 /** A managed node exactly as the panel API serializes it. */
 export type PublicNode = ManagedNodeCore & {
   hasPendingJoinToken?: boolean;
-  protocolMode?: NodeProtocolMode;
 };
 
 /**
@@ -608,8 +599,6 @@ export type VersionResolution = {
 export type ResolvedServerVersions = {
   minecraftVersion: VersionResolution;
   runtimeVersion: VersionResolution;
-  /** @deprecated Legacy Fabric response field retained for supported older web clients. */
-  fabricLoaderVersion?: VersionResolution;
 };
 
 export type ServerEvent = {

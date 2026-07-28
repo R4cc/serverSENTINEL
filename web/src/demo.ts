@@ -557,8 +557,6 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
       minecraftVersion: "1.21.4",
       runtimeType: "fabric",
       runtimeVersion: "0.16.10",
-      loader: "fabric",
-      loaderVersion: "0.16.10",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       jarArtifact: {
@@ -589,11 +587,6 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
         lastCheckedAt: new Date(demoStartedAt).toISOString()
       },
       runtimeVersion: {
-        version: "0.16.10",
-        source: "demo",
-        lastCheckedAt: new Date(demoStartedAt).toISOString()
-      },
-      fabricLoaderVersion: {
         version: "0.16.10",
         source: "demo",
         lastCheckedAt: new Date(demoStartedAt).toISOString()

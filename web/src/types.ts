@@ -22,7 +22,6 @@ export type {
   ModUpdatePlanEntry,
   ModUpdatePlanStatus,
   NodeInstallInstructions,
-  NodeProtocolMode,
   NodeStatus,
   NodeType,
   OperationRecord,
@@ -67,15 +66,6 @@ export type {
  */
 export type ManagedServer = PublicServer;
 export type ManagedNode = PublicNode;
-
-/** @deprecated Legacy Fabric endpoint response. */
-export type RuntimeLoaderVersion = {
-  id: string;
-  loaderVersion: string;
-  stable?: boolean;
-  recommended?: boolean;
-  buildId?: string;
-};
 
 /**
  * A synthetic node the UI shows before the API has described a real one: the
@@ -345,12 +335,6 @@ export type InstalledMod = {
     latestChannel?: ReleaseChannel;
     upToDate?: boolean;
   } | null;
-};
-
-export type FabricVersions = {
-  game: Array<{ version: string; stable: boolean; recommended?: boolean; type?: "release" | "snapshot" | "unknown" }>;
-  loader: Array<{ version: string; stable: boolean }>;
-  installer: Array<{ version: string; stable: boolean }>;
 };
 
 export type GeneralJob = {

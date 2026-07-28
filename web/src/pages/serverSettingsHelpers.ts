@@ -1,4 +1,4 @@
-import type { ContextNode, FabricVersions, ManagedServer, RuntimeLoaderVersion } from "../types";
+import type { ContextNode, ManagedServer, RuntimeVersion } from "../types";
 import {
   defaultQueryPort,
   defaultServerPort,
@@ -23,7 +23,12 @@ export type CreateWizardPortBinding = {
   description: string;
 };
 
-export type CreateWizardMinecraftVersion = FabricVersions["game"][number];
+export type CreateWizardMinecraftVersion = {
+  version: string;
+  stable: boolean;
+  recommended?: boolean;
+  type?: "release" | "snapshot" | "unknown";
+};
 
 export type MemoryBounds = {
   min: number;
@@ -32,7 +37,7 @@ export type MemoryBounds = {
   recommendedMax: number;
 };
 
-const fallbackMinecraftVersions = [
+export const fallbackMinecraftVersions: CreateWizardMinecraftVersion[] = [
   { version: "1.21.6", stable: true },
   { version: "1.21.4", stable: true },
   { version: "1.21.1", stable: true },
@@ -44,10 +49,10 @@ const fallbackMinecraftVersions = [
   { version: "1.18", stable: true }
 ];
 
-export const fallbackFabricLoaderVersions: RuntimeLoaderVersion[] = [
-  { id: "0.16.14", loaderVersion: "0.16.14", stable: true, recommended: true },
-  { id: "0.16.13", loaderVersion: "0.16.13", stable: true },
-  { id: "0.16.10", loaderVersion: "0.16.10", stable: true }
+export const fallbackFabricRuntimeVersions: RuntimeVersion[] = [
+  { id: "0.16.14", runtimeVersion: "0.16.14", stable: true, recommended: true },
+  { id: "0.16.13", runtimeVersion: "0.16.13", stable: true },
+  { id: "0.16.10", runtimeVersion: "0.16.10", stable: true }
 ];
 
 export function portBindingId() {
@@ -136,8 +141,8 @@ export function formatManagedPortBindings(serverPort: string, queryPort: string,
   ].filter(Boolean).join(",");
 }
 
-export function runtimeMinecraftOptions(versions: FabricVersions, showSnapshots: boolean): CreateWizardMinecraftVersion[] {
-  const source: CreateWizardMinecraftVersion[] = versions.game.length > 0 ? versions.game : fallbackMinecraftVersions;
+export function runtimeMinecraftOptions(versions: CreateWizardMinecraftVersion[], showSnapshots: boolean): CreateWizardMinecraftVersion[] {
+  const source = versions.length > 0 ? versions : fallbackMinecraftVersions;
   const filtered = showSnapshots ? source : source.filter((version) => version.type === undefined || version.type === "release");
   return filtered.length > 0 ? filtered : source;
 }

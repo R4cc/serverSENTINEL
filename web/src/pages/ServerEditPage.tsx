@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { api } from "../api";
-import type { FabricVersions, ManagedServer, RuntimeVersion } from "../types";
+import type { ManagedServer, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
   isValidServerPort,
@@ -19,6 +19,8 @@ import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, FormField, PanelHeader, Toolbar } from "../components/UiPrimitives";
 import {
   clampNumber,
+  fallbackFabricRuntimeVersions,
+  fallbackMinecraftVersions,
   formatManagedPortBindings,
   memoryBoundsForNode,
   parseAdditionalPortBindings,
@@ -166,7 +168,6 @@ function MinecraftPortsSection({
 
 export function ServerEditForm({
   server,
-  versions,
   totalMemory,
   onSubmit,
   dangerZone,
@@ -174,7 +175,6 @@ export function ServerEditForm({
   disabled = false
 }: {
   server: ManagedServer;
-  versions: FabricVersions;
   totalMemory: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   dangerZone?: ReactNode;
@@ -190,12 +190,12 @@ export function ServerEditForm({
   const [displayName, setDisplayName] = useState(server.displayName);
   const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
   const [minecraftVersion, setMinecraftVersion] = useState(server.runtimeProfile.minecraftVersion);
-  const [runtimeVersion, setRuntimeVersion] = useState(server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion ?? "");
+  const [runtimeVersion, setRuntimeVersion] = useState(server.runtimeProfile.runtimeVersion);
   const [availableMinecraftVersions, setAvailableMinecraftVersions] = useState(() => runtime.type === "fabric"
-    ? versions.game
+    ? fallbackMinecraftVersions
     : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" as const }]);
   const [availableRuntimeVersions, setAvailableRuntimeVersions] = useState<RuntimeVersion[]>(() => runtime.type === "fabric"
-    ? versions.loader.map((version) => ({ id: version.version, runtimeVersion: version.version, stable: version.stable }))
+    ? fallbackFabricRuntimeVersions
     : []);
   const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
   const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename);
@@ -237,13 +237,13 @@ export function ServerEditForm({
       })
       .catch(() => {
         if (!cancelled) setAvailableMinecraftVersions(runtime.type === "fabric"
-          ? versions.game
+          ? fallbackMinecraftVersions
           : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" }]);
       });
     return () => {
       cancelled = true;
     };
-  }, [runtime.type, server.id, server.runtimeProfile.minecraftVersion, versions.game]);
+  }, [runtime.type, server.id, server.runtimeProfile.minecraftVersion]);
 
   useEffect(() => {
     if (!minecraftVersion) {
@@ -257,13 +257,13 @@ export function ServerEditForm({
       })
       .catch(() => {
         if (!cancelled) setAvailableRuntimeVersions(runtime.type === "fabric"
-          ? versions.loader.map((version) => ({ id: version.version, runtimeVersion: version.version, stable: version.stable }))
+          ? fallbackFabricRuntimeVersions
           : []);
       });
     return () => {
       cancelled = true;
     };
-  }, [minecraftVersion, runtime.type, versions.loader]);
+  }, [minecraftVersion, runtime.type]);
 
   useEffect(() => {
     setServerPort(serverPortForServer(server));
@@ -282,7 +282,7 @@ export function ServerEditForm({
     const nextMinimum = clampNumber(nextMemory.xmsGb ?? nextMaximum, memoryBounds.min, nextMaximum);
     setDisplayName(server.displayName);
     setMinecraftVersion(server.runtimeProfile.minecraftVersion);
-    setRuntimeVersion(server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion ?? "");
+    setRuntimeVersion(server.runtimeProfile.runtimeVersion);
     setDockerImage(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
     setServerJar(server.runtimeProfile.jarArtifact.filename);
     setDockerContainer(server.dockerContainer || "");

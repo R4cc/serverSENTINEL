@@ -59,7 +59,7 @@ function isNodeDockerUsable(node: NodeView) {
 export function isNodeRuntimeUsable(node: NodeView) {
   return node.status === "online"
     && isNodeDockerUsable(node)
-    && (node.isInternal || node.protocolMode === "current" || node.protocolMode === "fallback" || node.protocolVersion === "3.1" || node.protocolVersion === "3.0");
+    && (node.isInternal || node.protocolVersion === "3.1");
 }
 
 export function nodeRestartImpactMessage(node: NodeView) {
@@ -90,8 +90,7 @@ export function nodeWarnings(node: NodeView) {
   else if (node.hasPendingJoinToken) warnings.push("Join token pending. Run the install command before it expires.");
   if (node.status === "offline") warnings.push("Node is offline.");
   if (node.status === "unknown") warnings.push("Node has not connected yet.");
-  if (!node.isInternal && node.status === "online" && node.protocolMode === "fallback") warnings.push("This node is using protocol 3.0 fallback. Update it to enable optimized monitoring and transfers.");
-  if (!node.isInternal && node.status === "online" && node.protocolMode !== "fallback" && !isNodeRuntimeUsable({ ...node, dockerStatus: "available" })) warnings.push("Update this node before managing its servers.");
+  if (!node.isInternal && node.status === "online" && !isNodeRuntimeUsable({ ...node, dockerStatus: "available" })) warnings.push("Update this node before managing its servers.");
   if (node.dockerStatus === "unavailable") warnings.push("Docker is unavailable.");
   if (!node.dockerStatus || node.dockerStatus === "unknown") warnings.push("Docker availability is unknown.");
   if (node.dataPathStatus && node.dataPathStatus !== "ready") warnings.push(nodeDataPathLabel(node));

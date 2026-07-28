@@ -10,10 +10,7 @@ export type CreateServerInput = {
   runtime?: {
     runtimeType?: string;
     runtimeVersion?: string;
-    /** Legacy Fabric request fields. */
-    loader?: string;
     minecraftVersion?: string;
-    loaderVersion?: string;
     serverJar?: string;
   };
   dockerContainer?: string;

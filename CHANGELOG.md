@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Set the direct upgrade floor to panel/node 1.6.2, SQLite schema 20, export schema 3, and panel-node protocol 3.1.
+- Removed protocol 2.0/3.0 handshake modes, JSON/base64 upload fallbacks, pre-schema-20 migrations, deprecated Fabric catalog routes, runtime-profile response aliases, and old flat API-error handling.
+- Require binary transfer features for remote nodes and multipart form data for browser file and managed-content uploads.
+
 ## 1.6.3 - 2026-07-28
 
 - Added structured API request and audit logging with authenticated actor context, normalized routes, durations, and redaction of sensitive request data.

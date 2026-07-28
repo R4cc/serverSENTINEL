@@ -20,7 +20,6 @@ import { copyServerFile, createServerFolder, deleteServerEntry, fileUploadSizeLi
 import { assertDownloadSize, filePreviewSizeLimit, fileZipLimits, toPublicPath } from "../files/fileService.js";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
 import { extractZipArchive, planZipExtraction } from "../zipArchive.js";
-import { validateBase64Content } from "../mods/managedContent.js";
 import { deleteModIcon } from "../mods/icons.js";
 import { downloadServerJar, serverJarProvider } from "./provisioning.js";
 import { stoppedServerMutationMessage } from "./lifecycle.js";
@@ -301,13 +300,12 @@ export async function localCreateFolder(server: ManagedServer, parent: string, n
   return result;
 }
 
-export async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, contentBase64: unknown | RuntimeUploadSource) {
+export async function localUploadFile(server: ManagedServer, parent: string, filenameInput: unknown, content: RuntimeUploadSource) {
   const target = await resolveUploadTarget(server, parent, filenameInput);
-  const size = await writeRuntimeUpload(target, contentBase64, {
+  const size = await writeRuntimeUpload(target, content, {
     maximumBytes: fileUploadSizeLimit,
     allowEmpty: true,
-    label: "Uploaded file content",
-    decodeBase64: validateBase64Content
+    label: "Uploaded file content"
   });
   const path = toPublicPath(server, target);
   logInfo({ ...serverLogFields(server), path, size, action: "upload_file" }, "Server file uploaded");

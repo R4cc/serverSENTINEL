@@ -11,25 +11,6 @@ type AppliedMigration = {
 export const currentSchemaVersion = 20;
 export const currentSchemaName = "current-schema-baseline";
 
-const legacySchema16Migrations = [
-  "sqlite-foundation",
-  "users-nodes-settings-sessions",
-  "managed-servers-schedules",
-  "file-edit-leases",
-  "resource-stats-history",
-  "mod-preferences",
-  "operations",
-  "server-restart-required",
-  "node-build-id",
-  "schedule-command-delays",
-  "schedule-command-delay-seconds",
-  "server-restart-required-mods",
-  "server-desired-runtime-state",
-  "schedule-steps",
-  "runtime-lifecycle-intent",
-  "scheduled-run-details"
-] as const;
-
 const applicationTableNames = [
   "storage_metadata",
   "users",
@@ -47,11 +28,9 @@ const applicationTableNames = [
   "operations",
   "player_head_cache"
 ] as const;
-const schema19ApplicationTableNames = applicationTableNames.filter((name) => name !== "player_head_cache");
 
 const currentNodeColumns = ["id", "name", "type", "status", "is_internal", "created_at", "updated_at", "last_seen_at", "connected_at", "agent_version", "protocol_version", "capabilities_json", "docker_status", "data_path_status", "total_memory", "secret_hash", "join_token_hash", "join_token_expires_at", "build_id"];
 const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "start_on_node_start", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since"];
-const schema17ServerColumns = currentServerColumns.filter((column) => column !== "start_on_node_start");
 const currentScheduleColumns = ["server_id", "id", "name", "cron", "steps_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message"];
 const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   storage_metadata: ["key", "value"],
@@ -66,10 +45,8 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
 const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed"];
-const schema19AppSettingsColumns = ["id", "modrinth_api_key"];
 const playerHeadCacheColumns = ["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"];
 const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx"];
-const preTimelineIndexNames = applicationIndexNames.filter((name) => name !== "timeline_events_occurred_at_idx");
 
 function createCurrentSchema(database: Database.Database) {
   database.exec(`
@@ -283,29 +260,6 @@ function isCurrentSchema(history: AppliedMigration[]) {
     && history[0].name === currentSchemaName;
 }
 
-function isSchema17Baseline(history: AppliedMigration[]) {
-  return history.length === 1
-    && history[0].version === 17
-    && history[0].name === currentSchemaName;
-}
-
-function isSchema18Baseline(history: AppliedMigration[]) {
-  return history.length === 1
-    && history[0].version === 18
-    && history[0].name === currentSchemaName;
-}
-
-function isSchema19Baseline(history: AppliedMigration[]) {
-  return history.length === 1
-    && history[0].version === 19
-    && history[0].name === currentSchemaName;
-}
-
-function isLegacySchema16(history: AppliedMigration[]) {
-  return history.length === legacySchema16Migrations.length
-    && history.every((migration, index) => migration.version === index + 1 && migration.name === legacySchema16Migrations[index]);
-}
-
 function applicationTables(database: Database.Database) {
   return database.prepare<[], { name: string }>(`
     SELECT name FROM sqlite_master
@@ -329,23 +283,21 @@ function sameNameSet(actual: string[], expected: readonly string[]) {
   return sameNames([...actual].sort(), [...expected].sort());
 }
 
-function assertApplicationTables(database: Database.Database, includesTimeline = true, includesPlayerHeads = true) {
+function assertApplicationTables(database: Database.Database) {
   const actual = applicationTables(database).map((table) => table.name).sort();
-  const baseTables = includesPlayerHeads ? applicationTableNames : schema19ApplicationTableNames;
-  const expected = [...(includesTimeline ? baseTables : baseTables.filter((name) => name !== "timeline_events"))].sort();
+  const expected = [...applicationTableNames].sort();
   if (!sameNames(actual, expected)) throw new Error("Malformed SQLite schema: application table layout does not match the supported baseline.");
   for (const [table, columns] of Object.entries(unchangedTableColumns)) {
-    if (!includesTimeline && table === "timeline_events") continue;
     if (!sameNames(tableColumns(database, table), columns)) throw new Error(`Malformed SQLite schema: ${table} columns do not match the supported baseline.`);
   }
-  if (!sameNames(tableColumns(database, "app_settings"), includesPlayerHeads ? currentAppSettingsColumns : schema19AppSettingsColumns)) {
+  if (!sameNames(tableColumns(database, "app_settings"), currentAppSettingsColumns)) {
     throw new Error("Malformed SQLite schema: app_settings columns do not match the supported baseline.");
   }
-  if (includesPlayerHeads && !sameNames(tableColumns(database, "player_head_cache"), playerHeadCacheColumns)) {
+  if (!sameNames(tableColumns(database, "player_head_cache"), playerHeadCacheColumns)) {
     throw new Error("Malformed SQLite schema: player_head_cache columns do not match the supported baseline.");
   }
   const indexes = database.prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all().map(({ name }) => name);
-  if (!sameNameSet(indexes, includesTimeline ? applicationIndexNames : preTimelineIndexNames)) throw new Error("Malformed SQLite schema: application indexes do not match the supported baseline.");
+  if (!sameNameSet(indexes, applicationIndexNames)) throw new Error("Malformed SQLite schema: application indexes do not match the supported baseline.");
 }
 
 function assertCurrentSchemaLayout(database: Database.Database) {
@@ -353,78 +305,7 @@ function assertCurrentSchemaLayout(database: Database.Database) {
   if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
     || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
     || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
-    throw new Error("Malformed SQLite schema: compact schema-18 columns do not match the supported baseline.");
-  }
-}
-
-function assertSchema19Layout(database: Database.Database) {
-  assertApplicationTables(database, true, false);
-  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
-    || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
-    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
-    throw new Error("Malformed SQLite schema: compact schema-19 columns do not match the supported baseline.");
-  }
-}
-
-function assertSchema17Layout(database: Database.Database) {
-  assertApplicationTables(database, false, false);
-  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
-    || !sameNameSet(tableColumns(database, "servers"), schema17ServerColumns)
-    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
-    throw new Error("Malformed SQLite schema: compact schema-17 columns do not match the supported baseline.");
-  }
-}
-
-function assertLegacySchema16Layout(database: Database.Database) {
-  assertApplicationTables(database, false, false);
-  if (!sameNameSet(tableColumns(database, "nodes"), [...currentNodeColumns.slice(0, 15), "compatibility", ...currentNodeColumns.slice(15)])
-    || !sameNameSet(tableColumns(database, "servers"), [...schema17ServerColumns.slice(0, 17), "desired_runtime_state", ...schema17ServerColumns.slice(17)])
-    || !sameNameSet(tableColumns(database, "schedules"), ["server_id", "id", "name", "cron", "commands_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message", "command_delays_json", "command_delays_seconds_json", "steps_json"])) {
-    throw new Error("Malformed SQLite schema: schema-16 columns do not match the supported 1.2.1 layout.");
-  }
-}
-
-function assertSchema18Layout(database: Database.Database) {
-  assertApplicationTables(database, false, false);
-  if (!sameNameSet(tableColumns(database, "nodes"), currentNodeColumns)
-    || !sameNameSet(tableColumns(database, "servers"), currentServerColumns)
-    || !sameNameSet(tableColumns(database, "schedules"), currentScheduleColumns)) {
-    throw new Error("Malformed SQLite schema: compact schema-18 columns do not match the supported baseline.");
-  }
-}
-
-function createTimelineEventsSchema(database: Database.Database) {
-  database.exec(`
-    CREATE TABLE timeline_events (
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      event_key TEXT NOT NULL,
-      occurred_at INTEGER NOT NULL,
-      event_json TEXT NOT NULL,
-      PRIMARY KEY (server_id, event_key)
-    );
-    CREATE INDEX timeline_events_occurred_at_idx ON timeline_events(server_id, occurred_at);
-  `);
-}
-
-function createPlayerHeadsSchema(database: Database.Database, upgradedInstance: boolean) {
-  database.exec(`
-    ALTER TABLE app_settings ADD COLUMN player_heads_enabled INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_enabled IN (0, 1));
-    ALTER TABLE app_settings ADD COLUMN player_heads_onboarding_completed INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_onboarding_completed IN (0, 1));
-    CREATE TABLE player_head_cache (
-      cache_key TEXT PRIMARY KEY COLLATE NOCASE,
-      player_name TEXT NOT NULL,
-      png_bytes BLOB NOT NULL,
-      etag TEXT,
-      fetched_at INTEGER NOT NULL,
-      refresh_after INTEGER NOT NULL,
-      last_accessed_at INTEGER NOT NULL
-    ) WITHOUT ROWID;
-  `);
-  if (upgradedInstance) {
-    database.prepare(`
-      INSERT INTO app_settings (id, player_heads_enabled, player_heads_onboarding_completed) VALUES (1, 0, 1)
-      ON CONFLICT(id) DO UPDATE SET player_heads_enabled = 0, player_heads_onboarding_completed = 1
-    `).run();
+    throw new Error("Malformed SQLite schema: current columns do not match the supported baseline.");
   }
 }
 
@@ -463,62 +344,14 @@ function initializeSchema(database: Database.Database) {
     return;
   }
 
-  if (isSchema19Baseline(history)) {
-    assertSchema19Layout(database);
-    database.transaction(() => {
-      createPlayerHeadsSchema(database, true);
-      recordCurrentSchema(database);
-    }).immediate();
-    return;
-  }
-
-  if (isSchema18Baseline(history)) {
-    assertSchema18Layout(database);
-    database.transaction(() => {
-      createTimelineEventsSchema(database);
-      createPlayerHeadsSchema(database, true);
-      recordCurrentSchema(database);
-    }).immediate();
-    return;
-  }
-
-  if (isSchema17Baseline(history)) {
-    assertSchema17Layout(database);
-    database.transaction(() => {
-      database.exec("ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;");
-      createTimelineEventsSchema(database);
-      createPlayerHeadsSchema(database, true);
-      recordCurrentSchema(database);
-    }).immediate();
-    return;
-  }
-
-  if (isLegacySchema16(history)) {
-    assertLegacySchema16Layout(database);
-    database.transaction(() => {
-      database.exec(`
-        ALTER TABLE nodes DROP COLUMN compatibility;
-        ALTER TABLE schedules DROP COLUMN commands_json;
-        ALTER TABLE schedules DROP COLUMN command_delays_json;
-        ALTER TABLE schedules DROP COLUMN command_delays_seconds_json;
-        ALTER TABLE servers DROP COLUMN desired_runtime_state;
-        ALTER TABLE servers ADD COLUMN start_on_node_start INTEGER NOT NULL DEFAULT 0;
-      `);
-      createTimelineEventsSchema(database);
-      createPlayerHeadsSchema(database, true);
-      recordCurrentSchema(database);
-    }).immediate();
-    return;
-  }
-
   const version = history.at(-1)?.version;
-  if (version !== undefined && version < 16) {
-    throw new Error(`SQLite schema ${version} is too old. Upgrade this data root with serverSENTINEL 1.2.1 first, then start the current release again.`);
+  if (version !== undefined && version < currentSchemaVersion) {
+    throw new Error(`SQLite schema ${version} is too old. Upgrade this data root with serverSENTINEL 1.6.2 first, then start the current release again.`);
   }
   if (version !== undefined && version > currentSchemaVersion) {
     throw new Error(`SQLite schema ${version} is newer than this serverSENTINEL release supports. Install a release that supports this data root or restore a compatible backup.`);
   }
-  throw new Error("Unsupported SQLite schema. Restore a matching backup or upgrade the data root with serverSENTINEL 1.2.1 before starting the current release.");
+  throw new Error("Unsupported SQLite schema. Restore a matching backup or upgrade the data root with serverSENTINEL 1.6.2 before starting the current release.");
 }
 
 export class StorageDatabase {

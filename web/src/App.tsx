@@ -3,7 +3,7 @@ import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { Toaster, toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, FabricVersions, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ContextNode, CreateNodeResponse, ManagedNode, ManagedServer, NodeView, NodeInstallResponse, NodeManualRecovery, NodeOperation, NodeUpdateResponse, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { detectedBrowserTimeZone, minecraftVersionInfo, resolveDisplayTimeZone, resolveRegionalFormatLocale, runtimeTone, versionValue } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -162,7 +162,6 @@ export default function App() {
   const [nodeOfflineNoticeVisible, setNodeOfflineNoticeVisible] = useState(false);
   const [commandSending, setCommandSending] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>(() => readCommandHistory(readConsoleHistoryEnabled()));
-  const [fabricVersions, setFabricVersions] = useState<FabricVersions>({ game: [], loader: [], installer: [] });
   const [notice, setNotice] = useState("");
   const [activeJobs, setActiveJobs] = useState<GeneralJob[]>([]);
   const [provisioningError, setProvisioningError] = useState("");
@@ -834,13 +833,6 @@ export default function App() {
   useEffect(() => {
     if (!authSession || (!authSession.authenticated && !demoMode)) return;
     refreshApp();
-    api<FabricVersions>("/api/fabric/versions").then(setFabricVersions).catch(() => {
-      setFabricVersions({
-        game: [{ version: "1.21.4", stable: true }, { version: "1.21.1", stable: true }, { version: "1.20.1", stable: true }],
-        loader: [],
-        installer: []
-      });
-    });
   }, [authSession?.authenticated, authSession?.user?.rolePreset, demoMode]);
 
   useEffect(() => {
@@ -1718,10 +1710,6 @@ export default function App() {
             runtimeType: requestedRuntimeType,
             runtimeVersion: form.get("runtimeVersion"),
             minecraftVersion: form.get("minecraftVersion"),
-            ...(requestedRuntimeType === "fabric" ? {
-              loader: "fabric",
-              loaderVersion: form.get("runtimeVersion")
-            } : {}),
             serverJar: form.get("serverJar")
           },
           dockerContainer: form.get("dockerContainer"),
@@ -1802,7 +1790,6 @@ export default function App() {
           runtime: {
             runtimeType: editRuntimeType,
             runtimeVersion: editRuntimeVersion,
-            ...(editRuntimeType === "fabric" ? { loader: "fabric", loaderVersion: editRuntimeVersion } : {}),
             minecraftVersion: form.get("minecraftVersion"),
             serverJar: form.get("serverJar")
           },
@@ -2541,7 +2528,6 @@ export default function App() {
               <ManagedServerForm
                 nodes={contextNodes}
                 preferredNodeId={preferredCreateNodeId}
-                versions={fabricVersions}
                 totalMemory={effectiveAppState.totalMemory}
                 provisioning={isProvisioning || !canCreateServers}
                 disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
@@ -2831,7 +2817,6 @@ export default function App() {
                 <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading server properties" page="properties" />}>
                   <ServerEditForm
                     server={activeServer}
-                    versions={fabricVersions}
                     totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}

@@ -121,7 +121,6 @@ export class McJarsProvider implements ServerJarProvider {
       minecraftVersion,
       runtimeType: adapter.runtimeType,
       runtimeVersion,
-      ...(adapter.runtimeType === "fabric" ? { loader: "fabric" as const, loaderVersion: runtimeVersion } : {}),
       javaMajorVersion,
       jarProvider: this.id,
       jarArtifact: {

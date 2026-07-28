@@ -30,10 +30,7 @@ export async function publicServer(server: ManagedServer, nodes?: ManagedNode[])
     runtimeProfile: runtimeProfileForServer(server),
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
       minecraftVersion: versionResolution(target.minecraftVersion, target.minecraftVersion ? "profile" : "unknown", resolvedAt),
-      runtimeVersion: versionResolution(target.runtimeVersion, target.runtimeVersion ? "profile" : "unknown", resolvedAt),
-      ...(target.runtimeType === "fabric" ? {
-        fabricLoaderVersion: versionResolution(target.runtimeVersion, target.runtimeVersion ? "profile" : "unknown", resolvedAt)
-      } : {})
+      runtimeVersion: versionResolution(target.runtimeVersion, target.runtimeVersion ? "profile" : "unknown", resolvedAt)
     }
   };
 }

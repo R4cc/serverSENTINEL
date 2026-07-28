@@ -94,12 +94,6 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
     throw new RuntimeResolutionError("unsupported_runtime", "server.runtimeProfile.runtimeType must be fabric or paper");
   }
   const runtimeVersion = stringField(profile.runtimeVersion ?? profile.loaderVersion, "server.runtimeProfile.runtimeVersion");
-  if (profile.runtimeType !== undefined && profile.loader !== undefined && profile.runtimeType !== profile.loader) {
-    throw new Error("server.runtimeProfile legacy loader does not match runtimeType");
-  }
-  if (profile.runtimeVersion !== undefined && profile.loaderVersion !== undefined && profile.runtimeVersion !== profile.loaderVersion) {
-    throw new Error("server.runtimeProfile legacy loaderVersion does not match runtimeVersion");
-  }
   const jarProvider = profile.jarProvider;
   if (jarProvider !== "mcjars" && jarProvider !== "papermc") {
     throw new Error("server.runtimeProfile.jarProvider must be mcjars or papermc");
@@ -120,7 +114,6 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
     minecraftVersion: stringField(profile.minecraftVersion, "server.runtimeProfile.minecraftVersion"),
     runtimeType,
     runtimeVersion,
-    ...(runtimeType === "fabric" ? { loader: "fabric" as const, loaderVersion: runtimeVersion } : {}),
     javaMajorVersion,
     jarProvider,
     jarArtifact: {
@@ -138,17 +131,11 @@ export function normalizeRuntimeProfile(value: unknown): ServerRuntimeProfile {
 
 export function runtimeTarget(server: Pick<ManagedServer, "runtimeProfile">) {
   const profile = runtimeProfileForServer(server);
-  const runtimeType = profile.runtimeType ?? profile.loader ?? "fabric";
-  const runtimeVersion = profile.runtimeVersion ?? profile.loaderVersion ?? "";
   return {
     profile,
     minecraftVersion: profile.minecraftVersion,
-    runtimeType,
-    runtimeVersion,
-    // Compatibility aliases keep existing Fabric-only call sites and older node payloads working
-    // while the rest of the application moves to runtime-neutral terminology.
-    loader: runtimeType,
-    loaderVersion: runtimeVersion,
+    runtimeType: profile.runtimeType,
+    runtimeVersion: profile.runtimeVersion,
     serverJar: profile.jarArtifact.filename
   };
 }

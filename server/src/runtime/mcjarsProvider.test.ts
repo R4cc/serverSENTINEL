@@ -51,8 +51,6 @@ describe("MCJars runtime provider", () => {
       minecraftVersion: "1.21.4",
       runtimeType: "fabric",
       runtimeVersion: "0.16.10",
-      loader: "fabric",
-      loaderVersion: "0.16.10",
       javaMajorVersion: 21,
       jarProvider: "mcjars",
       compatibilityStatus: "compatible",

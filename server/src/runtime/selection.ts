@@ -5,28 +5,16 @@ import type { ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
 
 export function runtimeSelection(input: unknown) {
   const runtime = asObject(input, "runtime");
-  const canonicalRuntimeType = optionalString(runtime.runtimeType, "runtime.runtimeType");
-  const legacyLoader = optionalString(runtime.loader, "runtime.loader");
-  if (canonicalRuntimeType && legacyLoader && canonicalRuntimeType !== legacyLoader) {
-    throw new Error("runtime.loader must match runtime.runtimeType");
-  }
-  const runtimeTypeValue = canonicalRuntimeType || legacyLoader || "fabric";
+  const runtimeTypeValue = optionalString(runtime.runtimeType, "runtime.runtimeType") || "fabric";
   if (runtimeTypeValue !== "fabric" && runtimeTypeValue !== "paper") {
     throw new Error("runtime.runtimeType must be fabric or paper");
   }
   const runtimeType: ServerRuntimeType = runtimeTypeValue;
-  const canonicalRuntimeVersion = optionalString(runtime.runtimeVersion, "runtime.runtimeVersion");
-  const legacyLoaderVersion = optionalString(runtime.loaderVersion, "runtime.loaderVersion");
-  if (canonicalRuntimeVersion && legacyLoaderVersion && canonicalRuntimeVersion !== legacyLoaderVersion) {
-    throw new Error("runtime.loaderVersion must match runtime.runtimeVersion");
-  }
-  const runtimeVersion = canonicalRuntimeVersion || legacyLoaderVersion;
+  const runtimeVersion = optionalString(runtime.runtimeVersion, "runtime.runtimeVersion");
   return {
     runtimeType,
     runtimeVersion,
-    loader: runtimeType,
     minecraftVersion: optionalString(runtime.minecraftVersion, "runtime.minecraftVersion"),
-    loaderVersion: runtimeVersion,
     serverJar: runtime.serverJar === undefined ? undefined : validateRuntimeJarFilename(runtime.serverJar)
   };
 }

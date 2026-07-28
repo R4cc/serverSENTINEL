@@ -4,11 +4,8 @@ import {
   assertNodeSupports,
   nodeAdvertisesCapability,
   nodeCapabilities,
-  nodeFallbackProtocolVersion,
   nodeFeatures,
-  nodeProtocolMode,
   nodeProtocolVersion,
-  nodeUpgradeProtocolVersion,
   normalizeNodeHello,
   normalizeNodeToPanelMessage,
   normalizePanelWelcome,
@@ -59,35 +56,12 @@ describe("node protocol v3.1", () => {
     });
   });
 
-  it("accepts the current v2 node only as a self-update bridge", () => {
-    const capabilities = [...nodeCapabilities.filter((capability) => capability !== "server.players.read" && capability !== "server.observe"), "server.queryMetrics"];
-    const legacy = normalizeNodeHello(hello({
-      protocolVersion: nodeUpgradeProtocolVersion,
-      agentVersion: "1.5.0",
-      capabilities
-    }));
-    expect(legacy.protocolVersion).toBe("2.0");
-
-    const legacyNode = node({ protocolVersion: "2.0", capabilities });
-    expect(() => assertNodeSupports(legacyNode, "node.update")).not.toThrow();
-    expect(() => assertNodeSupports(legacyNode, "server.start")).toThrow("protocol 3.1 or 3.0 is required");
-    expect(nodeAdvertisesCapability(legacyNode, "node.update")).toBe(true);
-    expect(nodeAdvertisesCapability(legacyNode, "server.start")).toBe(false);
-  });
-
-  it("rejects older protocols, incomplete hellos, and unsupported capabilities", () => {
-    expect(() => normalizeNodeHello(hello({ protocolVersion: "1.2" }))).toThrow("protocol 3.1 or 3.0 is required");
+  it("rejects non-current protocols, incomplete hellos, capabilities, and features", () => {
+    expect(() => normalizeNodeHello(hello({ protocolVersion: "3.0" }))).toThrow("protocol 3.1 is required");
+    expect(() => normalizeNodeHello(hello({ protocolVersion: "2.0" }))).toThrow("protocol 3.1 is required");
     expect(() => normalizeNodeHello({ type: "hello", protocolVersion: "3.1" })).toThrow("capabilities must be an array");
     expect(() => normalizeNodeHello(hello({ capabilities: ["server.start", "legacy.thing"] }))).toThrow("unsupported capabilities");
-    expect(() => normalizeNodeHello(hello({ protocolVersion: "2.0", capabilities: ["server.start"] }))).toThrow("must advertise node.update");
-  });
-
-  it("keeps protocol 3.0 operational without 3.1 transport features", () => {
-    const capabilities = [...nodeCapabilities.filter((capability) => capability !== "server.observe"), "node.health", "docker.info"];
-    const fallback = normalizeNodeHello(hello({ protocolVersion: nodeFallbackProtocolVersion, capabilities, features: undefined }));
-    expect(fallback.features).toEqual([]);
-    expect(nodeProtocolMode(fallback.protocolVersion)).toBe("fallback");
-    expect(() => assertNodeSupports(node({ protocolVersion: nodeFallbackProtocolVersion, capabilities }), "server.start")).not.toThrow();
+    expect(() => normalizeNodeHello(hello({ features: ["binary-transfer"] }))).toThrow("missing required protocol features");
   });
 
   it("centralizes full capability checks for v3 nodes", () => {

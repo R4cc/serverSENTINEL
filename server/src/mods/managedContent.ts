@@ -19,13 +19,6 @@ export async function withModMutationLock<T>(serverId: string, operation: () => 
   }
 }
 
-export function validateBase64Content(value: unknown, allowEmpty = false, label = "Uploaded mod content") {
-  if (typeof value !== "string" || (!allowEmpty && !value) || !/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    badRequest(`${label} must be valid base64`);
-  }
-  return value;
-}
-
 export function uploadManagedContentBuffer(
   runtime: Pick<NodeRuntime, "uploadMod">,
   server: ManagedServer,

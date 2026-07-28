@@ -142,8 +142,8 @@ export function minecraftVersionInfo(server: ManagedServer) {
 
 export function runtimeVersionInfo(server: ManagedServer) {
   return bestVersion(
-    server.resolvedVersions?.runtimeVersion ?? server.resolvedVersions?.fabricLoaderVersion,
-    server.runtimeProfile.runtimeVersion ?? server.runtimeProfile.loaderVersion
+    server.resolvedVersions?.runtimeVersion,
+    server.runtimeProfile.runtimeVersion
   );
 }
 

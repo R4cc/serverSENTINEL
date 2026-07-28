@@ -22,7 +22,7 @@ import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.
 import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modIconUrl, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
-import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, validateBase64Content, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
+import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
 import { managedContentRuntime } from "../servers/versions.js";
 
 import { blockingRuntimeOperations } from "../servers/lifecycle.js";
@@ -676,7 +676,7 @@ export async function localRemoveMod(server: ManagedServer, filenameInput: unkno
   return { ok: true, filename };
 }
 
-export async function localUploadMod(server: ManagedServer, filenameInput: unknown, contentBase64Input: unknown | RuntimeUploadSource) {
+export async function localUploadMod(server: ManagedServer, filenameInput: unknown, content: RuntimeUploadSource) {
   const { directory, singular } = managedContentRuntime(server);
   const startedAt = Date.now();
   let filename: string | undefined;
@@ -689,11 +689,10 @@ export async function localUploadMod(server: ManagedServer, filenameInput: unkno
     if (existsSync(destination)) {
       throw new Error(`A ${singular} with that filename already exists`);
     }
-    const size = await writeRuntimeUpload(destination, contentBase64Input, {
+    const size = await writeRuntimeUpload(destination, content, {
       maximumBytes: modFileSizeLimit,
       allowEmpty: false,
       label: `Uploaded ${singular}`,
-      decodeBase64: validateBase64Content,
       validateTemporary: async (temporary) => {
         const headerHandle = await open(temporary, "r");
         try {

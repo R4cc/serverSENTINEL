@@ -19,7 +19,6 @@ export type {
   ModUpdatePlanEntry,
   ModUpdatePlanStatus,
   NodeInstallInstructions,
-  NodeProtocolMode,
   NodeStatus,
   NodeType,
   OperationRecord,

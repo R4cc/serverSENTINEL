@@ -22,13 +22,6 @@ describe("serverConfigValidation runtime fields", () => {
     })).toEqual([]);
   });
 
-  it("keeps the legacy Fabric loader version field compatible", () => {
-    const form = validCreateForm();
-    form.set("loaderVersion", "0.16.10");
-
-    expect(serverConfigValidation(form, [], undefined, { requireRuntime: true })).toEqual([]);
-  });
-
   it("reports a runtime-neutral error when no runtime version is selected", () => {
     const errors = serverConfigValidation(validCreateForm(), [], undefined, { requireRuntime: true });
 

@@ -8,7 +8,7 @@ import type { NodeInstallInstructions } from "./apiTypes.js";
 import { totalmem } from "node:os";
 import { badRequest } from "../http/validation.js";
 import { throwHttp } from "../http/errors.js";
-import { nodeCapabilities, nodeFeatures, nodeProtocolMode, nodeProtocolVersion } from "./protocol.js";
+import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { normalizeNode } from "../storage/nodesRepository.js";
 import type { ManagedNode, ManagedServer, PublicNode } from "../types.js";
 
@@ -103,7 +103,6 @@ export function publicNode(node: ManagedNode): PublicNode {
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
     ...publicFields,
-    protocolMode: normalized.isInternal ? "current" : nodeProtocolMode(normalized.protocolVersion),
     hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
   };
 }
