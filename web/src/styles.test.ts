@@ -136,15 +136,15 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toContain(".overviewDashboardGrid > .serverTimelinePanel { grid-area: timeline;");
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\s*\{[^}]*max-height:\s*270px;[^}]*touch-action:\s*pan-y;/s);
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerChart\.is-expanded\s*\{\s*max-height:\s*none;\s*\}/s);
-    // The player card carries no green wash of its own; it shares metric-band chrome.
+    // The card chrome stays consistent, while the player header gets a green segment cue.
     expect(overviewStyles).toMatch(/\.serverTimelinePlayers,\s*\.serverTimelineMetricBand\s*\{[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*var\(--surface-raised\);/s);
     expect(overviewStyles).not.toMatch(/\.serverTimelinePlayers\s*\{/s);
     expect(overviewStyles).not.toContain("serverTimelinePlayerScrollHint");
-    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*transparent;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelinePlayerHeader\s*\{[^}]*border-bottom:\s*var\(--border-subtle\) solid color-mix\(in srgb, var\(--timeline-join\) 38%, var\(--border-muted\)\);[^}]*background:\s*color-mix\(in srgb, var\(--timeline-join\) 14%, var\(--surface-raised\)\);[^}]*box-shadow:\s*inset 3px 0 0 color-mix\(in srgb, var\(--timeline-join\) 78%, transparent\);/s);
     expect(overviewStyles).toMatch(/\.serverTimelinePlayerCount\.tone-offline\s*\{\s*--player-count-color:\s*var\(--timeline-leave\);\s*\}/s);
     expect(overviewStyles).toMatch(/\.serverTimelineMetricBand\.is-prominent\s*\{\s*height:\s*clamp\(172px, 11vw, 190px\);\s*\}/s);
     expect(overviewStyles).toMatch(/@media \(min-width: 981px\) and \(max-width: 1180px\)[\s\S]*?\.serverTimelinePlayerChart\s*\{\s*max-height:\s*228px;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineEventRail\s*\{[^}]*min-height:\s*48px;[^}]*display:\s*flex;/s);
+    expect(overviewStyles).toMatch(/\.serverTimelineEventRail\s*\{[^}]*min-height:\s*48px;[^}]*display:\s*flex;[^}]*border:\s*var\(--border-subtle\) solid var\(--border-muted\);[^}]*background:\s*var\(--surface-raised\);/s);
     expect(overviewStyles).not.toContain("serverTimelineAnnotationStage");
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster\s*\{[^}]*height:\s*30px;[^}]*min-height:\s*30px;/s);
     expect(overviewStyles).toMatch(/\.timelineAnnotationCluster:hover:not\(:disabled\)[\s\S]*?background:\s*transparent;[\s\S]*?transform:\s*translateX\(-14px\);/s);
@@ -155,7 +155,7 @@ describe("global stylesheet entry point", () => {
     expect(overviewStyles).toMatch(/\.serverTimelineEChart\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
     expect(overviewStyles).not.toContain(".serverTimelineChart .recharts-");
     expect(overviewStyles).toMatch(/\.serverTimelineAnnotations\s*\{[^}]*inset:\s*0;/s);
-    expect(overviewStyles).toMatch(/\.serverTimelineEventRailLine\s*\{[^}]*bottom:\s*8px;[^}]*height:\s*1px;/s);
+    expect(overviewStyles).not.toContain("serverTimelineEventRailLine");
     expect(overviewStyles).not.toContain("timelineAnnotationConnector");
     expect(overviewStyles).not.toContain("resourcePanel");
     expect(overviewStyles).not.toContain("recharts-");

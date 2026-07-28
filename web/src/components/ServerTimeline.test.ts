@@ -17,6 +17,7 @@ import {
   timelineMarkers,
   timelineHorizontalWheelPixels,
   timelineMarkerDisplayLabel,
+  timelineMarkerGlyph,
   timelineMarkerIsImportant,
   timelinePlayerRows,
   timelineSessionGeometry
@@ -40,7 +41,7 @@ describe("server timeline controls", () => {
     expect(html).not.toContain("serverTimelineSummary");
   });
 
-  it("renders server events as a gutter-labelled rail instead of a standalone card", () => {
+  it("renders server events inside a gutter-labelled band without a baseline", () => {
     const html = renderToStaticMarkup(createElement(ServerTimeline, {
       loadTimeline: vi.fn(),
       formatTime: String,
@@ -51,7 +52,7 @@ describe("server timeline controls", () => {
 
     expect(html).toContain("serverTimelineEventRail");
     expect(html).toContain("serverTimelineEventRailTrack");
-    expect(html).toContain("serverTimelineEventRailLine");
+    expect(html).not.toContain("serverTimelineEventRailLine");
     expect(html).toContain("None in this range");
     expect(html).not.toContain("serverTimelineAnnotationStage");
   });
@@ -181,6 +182,14 @@ describe("server timeline markers", () => {
     expect(cluster.markers.map((marker) => marker.label)).toEqual(["Server started", "Restart scheduled"]);
     expect(timelineClusterOccurrenceCount(cluster)).toBe(2);
     expect(timelineClusterIconMarkers(cluster).map((marker) => marker.tone)).toEqual(["server", "planned"]);
+  });
+
+  it("uses a calendar glyph for scheduled runs", () => {
+    const scheduleMarker = timelineMarkers(response()).find((marker) => marker.schedule)!;
+    const html = renderToStaticMarkup(timelineMarkerGlyph(scheduleMarker));
+
+    expect(html).toContain('<rect x="4" y="5" width="16" height="15" rx="2"></rect>');
+    expect(html).toContain('d="M8 3v4M16 3v4M4 10h16"');
   });
 
   it("does not chain adjacent markers into a cluster spanning multiple buckets", () => {

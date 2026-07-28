@@ -527,14 +527,15 @@ button.overviewCardRow:focus-visible {
   gap: var(--space-3);
 }
 
-/* The event rail is chrome-free on purpose: it reads as the shared time axis that
-   the player and metric cards hang from rather than as a fourth, mostly empty card. */
 .serverTimelineEventRail {
   position: relative;
   min-height: 48px;
   min-width: 0;
   display: flex;
   align-items: stretch;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
 }
 
 .serverTimelineEventRailGutter {
@@ -564,24 +565,6 @@ button.overviewCardRow:focus-visible {
   min-width: 0;
 }
 
-.serverTimelineEventRailLine {
-  position: absolute;
-  right: 0;
-  bottom: 8px;
-  left: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--border) 60%, transparent) 8%,
-    color-mix(in srgb, var(--border) 60%, transparent) 92%,
-    transparent
-  );
-  pointer-events: none;
-}
-
-.serverTimelineEventRail.is-empty .serverTimelineEventRailLine { opacity: 0.55; }
-
 .serverTimelineEventRailEmpty {
   position: absolute;
   bottom: 15px;
@@ -607,8 +590,9 @@ button.overviewCardRow:focus-visible {
   justify-content: space-between;
   gap: var(--space-3);
   padding: 0 var(--space-2) 0 18px;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  background: transparent;
+  border-bottom: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--timeline-join) 14%, var(--surface-raised));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--timeline-join) 78%, transparent);
   color: var(--text);
   font-size: 12px;
 }
@@ -825,6 +809,7 @@ button.overviewCardRow:focus-visible {
 .timelineAnnotationClusterIcon.tone-planned { border-style: dashed; background: var(--surface-muted); }
 
 .timelineAnnotationClusterIcon svg {
+  display: block;
   width: 14px;
   height: 14px;
   fill: none;
