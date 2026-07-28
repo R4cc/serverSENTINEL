@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { groupNearbyRepeatedEvents } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
-import { EventIcon } from "./EventIcon";
+import { EventIcon, ScheduleEventIcon } from "./EventIcon";
 import {
   buildPlayerTimelineChartOption,
   formatTimelineDuration,
@@ -514,12 +514,13 @@ export function timelineClusterOccurrenceCount(cluster: MarkerCluster) {
   return cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
 }
 
-function timelineMarkerGlyph(marker: TimelineMarker) {
+export function timelineMarkerGlyph(marker: TimelineMarker) {
   if (marker.restart) return <RuntimeControlIcon action="restart" />;
   if (marker.event?.eventType === "server_started") return <RuntimeControlIcon action="start" />;
   if (marker.event?.eventType === "server_stopped") return <RuntimeControlIcon action="stop" />;
   if (marker.event) return <EventIcon kind={marker.event.eventType} />;
-  return marker.tone === "planned" ? "○" : "▶";
+  if (marker.schedule) return <ScheduleEventIcon />;
+  return null;
 }
 
 function readTimelinePalette(element: HTMLElement): TimelinePalette {
@@ -1208,7 +1209,6 @@ export function ServerTimeline({
             <span>{visibleEventCount ? `${visibleEventCount} in this range` : "None in this range"}</span>
           </div>
           <div className="serverTimelineEventRailTrack" style={{ marginRight: metricGrid.right }}>
-            <span className="serverTimelineEventRailLine" aria-hidden="true" />
             <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
               {positionedClusters.map((cluster) => {
                 const occurrenceCount = timelineClusterOccurrenceCount(cluster);
