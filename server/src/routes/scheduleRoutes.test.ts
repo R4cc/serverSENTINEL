@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import type { ManagedServer, Permission, ScheduledActiveRun, ScheduledExecution } from "../types.js";
+import type { ManagedServer, Permission, ScheduledActiveRun, ScheduledExecution, ScheduledRun } from "../types.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
 
 const serverId = "11111111-1111-1111-1111-111111111111";
@@ -17,6 +17,31 @@ function schedule(overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
     enabled: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides
+  };
+}
+
+function completedRun(overrides: Partial<ScheduledRun> = {}): ScheduledRun {
+  return {
+    id: runId,
+    scheduleId,
+    scheduleName: "Nightly restart",
+    status: "success",
+    ranAt: "2026-01-01T04:00:00.000Z",
+    details: {
+      stepCount: 1,
+      completedStepCount: 1,
+      steps: [{
+        stepIndex: 0,
+        type: "command",
+        command: "save-all",
+        delaySeconds: 0,
+        status: "success",
+        startedAt: "2026-01-01T04:00:00.000Z",
+        logs: ["[12:00:00] [Server thread/INFO]: Saved the game"],
+        logCaptureStatus: "captured"
+      }]
+    },
     ...overrides
   };
 }
@@ -50,6 +75,8 @@ function testApp(options: {
   const deleteSchedule = vi.fn();
   const parseSchedule = vi.fn(() => parsedSchedule);
   const publicSchedule = vi.fn((_serverId: string, value: ScheduledExecution) => ({ ...value, activeRuns: [] }));
+  const findScheduledRun = vi.fn((_server: ManagedServer, scheduleId: string, runId: string) =>
+    (options.schedules ?? [schedule()]).find((candidate) => candidate.id === scheduleId)?.recentRuns?.find((run) => run.id === runId));
   const startScheduleExecution = vi.fn(() => options.startResult === false ? undefined : options.startResult ?? activeRun());
   const cancelActiveScheduleRun = vi.fn(() => options.cancelResult === false ? undefined : options.cancelResult === null ? null : options.cancelResult ?? activeRun());
   const logInfo = vi.fn();
@@ -66,6 +93,7 @@ function testApp(options: {
     getServer: vi.fn(async () => server),
     parseSchedule,
     publicSchedule,
+    findScheduledRun,
     createSchedule,
     updateSchedule,
     deleteSchedule,
@@ -81,6 +109,7 @@ function testApp(options: {
     server,
     parseSchedule,
     publicSchedule,
+    findScheduledRun,
     createSchedule,
     updateSchedule,
     deleteSchedule,
@@ -111,7 +140,9 @@ describe("schedule routes", () => {
     const response = await harness.app.inject({ method: "POST", url: `/api/servers/${serverId}/schedules`, payload: body });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(created);
+    // Projected, not echoed: the parsed schedule can carry retained run history with captured logs.
+    expect(response.json()).toEqual({ ...created, activeRuns: [] });
+    expect(harness.publicSchedule).toHaveBeenCalledWith(serverId, created);
     expect(harness.destructiveRateLimitCalls()).toBe(1);
     expect(harness.permissions).toEqual(["schedules.manage"]);
     expect(harness.parseSchedule).toHaveBeenCalledWith(body);
@@ -128,7 +159,8 @@ describe("schedule routes", () => {
     const response = await harness.app.inject({ method: "PUT", url: `/api/servers/${serverId}/schedules/${scheduleId}`, payload: body });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(updated);
+    expect(response.json()).toEqual({ ...updated, activeRuns: [] });
+    expect(harness.publicSchedule).toHaveBeenCalledWith(serverId, updated);
     expect(harness.parseSchedule).toHaveBeenCalledWith(body, existing);
     expect(harness.updateSchedule).toHaveBeenCalledWith(serverId, updated, updated.updatedAt);
   });
@@ -192,5 +224,26 @@ describe("schedule routes", () => {
     const missingResponse = await missing.app.inject({ method: "POST", url: `/api/servers/${serverId}/schedules/${scheduleId}/runs/${runId}/cancel` });
     expect(missingResponse.statusCode).toBe(404);
     expect(missingResponse.json()).toEqual({ error: { code: "SCHEDULE_RUN_NOT_FOUND", message: "Active schedule run not found", details: {} } });
+  });
+
+  it("serves the captured console output the run lists omit", async () => {
+    const run = completedRun();
+    const harness = testApp({ schedules: [schedule({ recentRuns: [run] })] });
+
+    const response = await harness.app.inject({ method: "GET", url: `/api/servers/${serverId}/schedules/${scheduleId}/runs/${runId}` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ run });
+    expect(response.json().run.details.steps[0].logs).toEqual(["[12:00:00] [Server thread/INFO]: Saved the game"]);
+    expect(harness.permissions).toEqual(["schedules.view"]);
+  });
+
+  it("reports a missing run rather than an empty detail payload", async () => {
+    const harness = testApp({ schedules: [schedule({ recentRuns: [] })] });
+
+    const response = await harness.app.inject({ method: "GET", url: `/api/servers/${serverId}/schedules/${scheduleId}/runs/${runId}` });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: { code: "SCHEDULE_RUN_NOT_FOUND", message: "Schedule run not found", details: {} } });
   });
 });

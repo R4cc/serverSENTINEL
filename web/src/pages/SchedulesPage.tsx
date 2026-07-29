@@ -69,6 +69,7 @@ export function SchedulePage({
   onDelete,
   onRunNow,
   onCancelRun,
+  onLoadRunLogs,
   disabled,
   disabledReason,
   formatDate,
@@ -89,6 +90,7 @@ export function SchedulePage({
   onDelete: (schedule: ScheduledExecution) => void;
   onRunNow: (schedule: ScheduledExecution) => boolean | Promise<boolean>;
   onCancelRun: (run: ScheduledActiveRun) => boolean | Promise<boolean>;
+  onLoadRunLogs?: (run: ScheduledRun) => Promise<ScheduledRun>;
   disabled: boolean;
   disabledReason?: string;
 }) {
@@ -762,22 +764,64 @@ export function SchedulePage({
       )}
 
       {selectedRun && (
-        <ScheduleRunDetailsDialog run={selectedRun} formatDate={formatDate} onClose={() => setSelectedRun(null)} />
+        <ScheduleRunDetailsDialog run={selectedRun} formatDate={formatDate} onLoadRunLogs={onLoadRunLogs} onClose={() => setSelectedRun(null)} />
       )}
     </section>
   );
 }
 
+/**
+ * Whether this run still needs its captured console output fetched. Run lists carry every field
+ * except `logs`, so a command step that reported captured output but arrived without it is the
+ * signal — which also means a run whose steps captured nothing never triggers a request.
+ */
+export function scheduleRunLogsPending(run: ScheduledRun) {
+  return (run.details?.steps ?? []).some((step) => (
+    step.type === "command" && step.logCaptureStatus === "captured" && step.logs === undefined
+  ));
+}
+
 export function ScheduleRunDetailsDialog({
   run,
   formatDate,
+  onLoadRunLogs,
   onClose
 }: {
   run: ScheduledRun;
   formatDate: (value: string | number | Date) => string;
+  onLoadRunLogs?: (run: ScheduledRun) => Promise<ScheduledRun>;
   onClose: () => void;
 }) {
-  const steps = run.details?.steps;
+  const [resolved, setResolved] = useState(run);
+  // Seeded rather than defaulted to false so the first paint already reads as loading; otherwise
+  // the dialog would flash "unavailable" for the frame before the effect starts the request.
+  const [logsLoading, setLogsLoading] = useState(() => Boolean(onLoadRunLogs) && scheduleRunLogsPending(run));
+  const [logsError, setLogsError] = useState("");
+  // Held in a ref because the workspace rebuilds its action callbacks on every app render, and
+  // the status and schedule polls force one every few seconds. Depending on the callback identity
+  // would refetch the logs on each of those and blank the dialog back to its loading state; the
+  // selected run object, by contrast, is stable for as long as the dialog stays open.
+  const loadRunLogsRef = useRef(onLoadRunLogs);
+  loadRunLogsRef.current = onLoadRunLogs;
+
+  useEffect(() => {
+    const loadRunLogs = loadRunLogsRef.current;
+    setResolved(run);
+    setLogsError("");
+    if (!loadRunLogs || !scheduleRunLogsPending(run)) {
+      setLogsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLogsLoading(true);
+    void loadRunLogs(run)
+      .then((detailed) => { if (!cancelled) setResolved(detailed); })
+      .catch(() => { if (!cancelled) setLogsError("Console output for this run could not be loaded."); })
+      .finally(() => { if (!cancelled) setLogsLoading(false); });
+    return () => { cancelled = true; };
+  }, [run]);
+
+  const steps = resolved.details?.steps;
   return (
     <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
       <div className="userModalHeader scheduleRunModalHeader">
@@ -808,7 +852,14 @@ export function ScheduleRunDetailsDialog({
             <EmptyState compact className="scheduleRunStepsEmpty" title="No steps executed" message={run.status === "skipped" ? run.message : "The run ended before its first step started."} />
           ) : (
             <div className="scheduleRunStepList">
-              {steps.map((step) => <ScheduleRunStep key={`${step.stepIndex}:${step.startedAt}`} step={step} />)}
+              {steps.map((step) => (
+                <ScheduleRunStep
+                  key={`${step.stepIndex}:${step.startedAt}`}
+                  step={step}
+                  logsLoading={logsLoading}
+                  logsError={logsError}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -820,12 +871,17 @@ export function ScheduleRunDetailsDialog({
   );
 }
 
-function ScheduleRunStep({ step }: { step: ScheduledRunStepDetails }) {
+function ScheduleRunStep({ step, logsLoading, logsError }: { step: ScheduledRunStepDetails; logsLoading?: boolean; logsError?: string }) {
   const isCommand = step.type === "command";
   const logs = step.logs ?? [];
-  const logMessage = step.logCaptureStatus === "empty"
-    ? "No follow-up log entries were captured."
-    : "Console logs were unavailable when this command ran.";
+  // `logs` arriving undefined for a captured step means the payload is the trimmed list shape and
+  // the fetch is still in flight, which is a different state from a step that captured nothing.
+  const pending = step.logCaptureStatus === "captured" && step.logs === undefined;
+  const logMessage = pending
+    ? logsError || (logsLoading ? "Loading console output…" : "Console output is unavailable.")
+    : step.logCaptureStatus === "empty"
+      ? "No follow-up log entries were captured."
+      : "Console logs were unavailable when this command ran.";
   return (
     <article className={`scheduleRunStep ${step.status}`}>
       <header>
@@ -841,7 +897,7 @@ function ScheduleRunStep({ step }: { step: ScheduledRunStepDetails }) {
         <details className="scheduleRunLogs">
           <summary>
             <span>Logs</span>
-            <small>{logs.length ? `${logs.length} ${logs.length === 1 ? "entry" : "entries"}` : "No entries"}</small>
+            <small>{logs.length ? `${logs.length} ${logs.length === 1 ? "entry" : "entries"}` : pending ? "Loading…" : "No entries"}</small>
             <AppIcon name="chevronDown" />
           </summary>
           {logs.length ? <pre>{logs.join("\n")}</pre> : <p>{logMessage}</p>}
