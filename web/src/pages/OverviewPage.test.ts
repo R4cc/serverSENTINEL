@@ -16,8 +16,7 @@ import {
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
-  SchedulePanel,
-  statusGlowGeometry
+  SchedulePanel
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -153,22 +152,9 @@ describe("overview summary", () => {
       activity: demoOverviewData(running).activity
     }));
 
-    expect(html).toContain(`statusGlowTile ${stateClass}`);
+    expect(html).toContain(`statusTile ${stateClass}`);
     expect(html).toContain(`uiMetricTile--${metricTone}`);
     expect(html).toContain(`>${label}</span>`);
-  });
-
-  it("maps pointer position to a clamped glow origin and subtle card tilt", () => {
-    expect(statusGlowGeometry(150, 75, { left: 100, top: 50, width: 200, height: 100 })).toEqual({
-      xPercent: 25,
-      yPercent: 25,
-      rotateX: 0.375,
-      rotateY: -0.375
-    });
-    expect(statusGlowGeometry(600, -20, { left: 100, top: 50, width: 200, height: 100 })).toMatchObject({
-      xPercent: 100,
-      yPercent: 0
-    });
   });
 });
 

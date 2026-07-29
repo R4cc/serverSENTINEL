@@ -7,6 +7,7 @@ import {
   formatTimelineDuration,
   mergeTimelineResponses,
   panTimelineWindowByPixels,
+  readTimelineMetricLayers,
   zoomTimelineWindowAtPixel,
   positionTimelineClusters,
   ServerTimeline,
@@ -20,7 +21,8 @@ import {
   timelineMarkerGlyph,
   timelineMarkerIsImportant,
   timelinePlayerRows,
-  timelineSessionGeometry
+  timelineSessionGeometry,
+  writeTimelineMetricLayers
 } from "./ServerTimeline";
 
 describe("server timeline controls", () => {
@@ -39,6 +41,43 @@ describe("server timeline controls", () => {
     expect(html).toContain("Player activity");
     expect(html).toContain("Server events");
     expect(html).not.toContain("serverTimelineSummary");
+  });
+
+  it("round-trips metric layer visibility and fills missing preferences from the defaults", () => {
+    let saved = "";
+    const storage = {
+      getItem: () => saved || null,
+      setItem: (_key: string, value: string) => { saved = value; }
+    };
+    const enabled = {
+      cpuUtilizationPercent: false,
+      memoryUsageBytes: true,
+      networkRxBytesPerSecond: true,
+      networkTxBytesPerSecond: false,
+      playersOnline: true
+    };
+
+    writeTimelineMetricLayers(enabled, storage);
+    expect(readTimelineMetricLayers(storage)).toEqual(enabled);
+
+    saved = JSON.stringify({ cpuUtilizationPercent: false });
+    expect(readTimelineMetricLayers(storage)).toEqual({
+      cpuUtilizationPercent: false,
+      memoryUsageBytes: true,
+      networkRxBytesPerSecond: false,
+      networkTxBytesPerSecond: false,
+      playersOnline: false
+    });
+  });
+
+  it("falls back to the default metric layers when the saved preference is invalid", () => {
+    expect(readTimelineMetricLayers({ getItem: () => "not-json" })).toEqual({
+      cpuUtilizationPercent: true,
+      memoryUsageBytes: true,
+      networkRxBytesPerSecond: false,
+      networkTxBytesPerSecond: false,
+      playersOnline: false
+    });
   });
 
   it("renders server events inside a gutter-labelled band without a baseline", () => {
